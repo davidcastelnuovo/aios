@@ -246,8 +246,8 @@ export default function Clients() {
               )}
               {client.monthly_budget && (
                 <div className="flex items-center gap-2 text-sm">
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium">₪{Number(client.monthly_budget).toLocaleString()}</span>
+                  <span className="text-muted-foreground font-semibold">₪</span>
+                  <span className="font-medium">{Number(client.monthly_budget).toLocaleString()}</span>
                   <span className="text-muted-foreground">לחודש</span>
                 </div>
               )}
@@ -390,8 +390,8 @@ export default function Clients() {
                   <TableCell>
                     {client.monthly_budget ? (
                       <div className="flex items-center gap-1">
-                        <DollarSign className="h-3 w-3 text-muted-foreground" />
-                        ₪{Number(client.monthly_budget).toLocaleString()}
+                        <span className="text-muted-foreground font-semibold">₪</span>
+                        {Number(client.monthly_budget).toLocaleString()}
                       </div>
                     ) : "-"}
                   </TableCell>
