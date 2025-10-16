@@ -117,29 +117,57 @@ export function ImportClientsCSV() {
 
       const agencyMap = new Map(agencies?.map(a => [a.name.toLowerCase(), a.id]) || []);
 
-      // Fetch existing clients to check for duplicates
+      // Fetch existing clients to prepare updates and avoid duplicates
       const { data: existingClients, error: existingError } = await supabase
         .from("clients")
-        .select("name, phone");
+        .select("id, name, agency_id, phone, email");
 
       if (existingError) throw existingError;
 
-      const existingSet = new Set(
-        existingClients?.map(c => 
-          `${c.name.toLowerCase()}|${c.phone || ''}`
-        ) || []
+      const existingMap = new Map(
+        (existingClients || []).map((c) => [
+          `${c.name.toLowerCase()}|${c.agency_id}`,
+          c,
+        ])
       );
 
-      const clientsData = validRows
-        .map(row => {
-          // Try to find agency by name if not a UUID
-          let agencyId = row.agency;
-          if (!row.agency.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-            agencyId = agencyMap.get(row.agency.toLowerCase()) || row.agency;
-          }
+      const updates: Array<{ id: string; phone?: string | null; email?: string | null }> = [];
+      const inserts: Array<{ 
+        name: string;
+        agency_id: string;
+        phone: string | null;
+        email: string | null;
+        folder_link: string | null;
+        industry: string | null;
+        monthly_budget: number | null;
+        website: string | null;
+        notes: string | null;
+      }> = [];
 
-          return {
-            name: row.name,
+      validRows.forEach((row) => {
+        // Try to find agency by name if not a UUID
+        let agencyId = row.agency;
+        if (!row.agency.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          agencyId = agencyMap.get(row.agency.toLowerCase()) || row.agency;
+        }
+
+        const name = row.name?.trim();
+        if (!name || !agencyId) return;
+
+        const existing = existingMap.get(`${name.toLowerCase()}|${agencyId}`);
+
+        if (existing) {
+          const next: { id: string; phone?: string | null; email?: string | null } = { id: existing.id };
+          // Overwrite existing fields if CSV provides values
+          if (row.phone) next.phone = row.phone;
+          if (row.email) next.email = row.email;
+
+          if (typeof next.phone !== "undefined" || typeof next.email !== "undefined") {
+            updates.push(next);
+          }
+        } else {
+          inserts.push({
+            name,
             agency_id: agencyId,
             phone: row.phone || null,
             email: row.email || null,
@@ -148,41 +176,64 @@ export function ImportClientsCSV() {
             monthly_budget: row.monthly_budget ? parseFloat(row.monthly_budget) : null,
             website: row.website || null,
             notes: row.notes || null,
-          };
-        })
-        .filter(row => {
-          // Filter out rows without valid agency_id
-          if (!row.agency_id) return false;
-          
-          // Filter out duplicates
-          const key = `${row.name.toLowerCase()}|${row.phone || ''}`;
-          return !existingSet.has(key);
-        });
+          });
+        }
+      });
 
-      if (clientsData.length === 0) {
-        throw new Error("כל הלקוחות בקובץ כבר קיימים במערכת");
+      // Apply updates
+      let updatedCount = 0;
+      if (updates.length > 0) {
+        const results = await Promise.all(
+          updates.map((u) =>
+            supabase
+              .from("clients")
+              .update(
+                {
+                  ...(u.phone !== undefined ? { phone: u.phone } : {}),
+                  ...(u.email !== undefined ? { email: u.email } : {}),
+                  updated_at: new Date().toISOString(),
+                }
+              )
+              .eq("id", u.id)
+              .select("id")
+          )
+        );
+        updatedCount = results.reduce((acc, r) => acc + (r.error ? 0 : (r.data?.length || 0)), 0);
       }
 
-      const { data, error } = await supabase
-        .from("clients")
-        .insert(clientsData)
-        .select();
+      // Insert new rows
+      let insertedCount = 0;
+      if (inserts.length > 0) {
+        const { data: inserted, error: insertError } = await supabase
+          .from("clients")
+          .insert(inserts)
+          .select("id");
 
-      if (error) throw error;
+        if (insertError) throw insertError;
+        insertedCount = inserted?.length || 0;
+      }
 
       return {
-        imported: data?.length || 0,
-        total: rows.length,
-        skipped: rows.length - clientsData.length,
+        imported: insertedCount,
+        updated: updatedCount,
+        total: validRows.length,
+        skipped: validRows.length - insertedCount - updatedCount,
       };
     },
     onSuccess: (data) => {
-      if (data.skipped > 0) {
-        toast.warning(`יובאו ${data.imported} לקוחות`, {
-          description: `דולגו על ${data.skipped} שורות ללא שם או מזהה סוכנות`,
-        });
-      } else {
-        toast.success(`יובאו ${data.imported} לקוחות בהצלחה`);
+      if (data) {
+        const parts: string[] = [];
+        if (data.imported > 0) parts.push(`יובאו ${data.imported}`);
+        if (data.updated > 0) parts.push(`עודכנו ${data.updated}`);
+        const title = parts.length ? parts.join(" ו") + " לקוחות" : "לא בוצעו שינויים";
+
+        if (data.skipped > 0) {
+          toast.warning(title, {
+            description: `דולגו ${data.skipped} שורות (חסרים שדות חובה או ללא שינוי)`,
+          });
+        } else {
+          toast.success(title);
+        }
       }
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       setOpen(false);
