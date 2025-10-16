@@ -2,10 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Truck, Phone, Mail, Coins } from "lucide-react";
+import { Truck, Phone, Mail, Coins, Pencil } from "lucide-react";
 import { AddSupplierForm } from "@/components/forms/AddSupplierForm";
+import { EditSupplierDialog } from "@/components/forms/EditSupplierDialog";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
 
 export default function Suppliers() {
+  const [editingSupplier, setEditingSupplier] = useState<any>(null);
   const { data: suppliers, isLoading } = useQuery({
     queryKey: ["suppliers"],
     queryFn: async () => {
@@ -94,9 +98,18 @@ export default function Suppliers() {
                   </div>
                   <CardTitle className="text-lg">{supplier.name}</CardTitle>
                 </div>
-                <Badge variant="outline" className={getTypeColor(supplier.type)}>
-                  {getTypeText(supplier.type)}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className={getTypeColor(supplier.type)}>
+                    {getTypeText(supplier.type)}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setEditingSupplier(supplier)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -139,6 +152,14 @@ export default function Suppliers() {
             <p className="text-sm text-muted-foreground">התחל בהוספת ספק ראשון</p>
           </CardContent>
         </Card>
+      )}
+
+      {editingSupplier && (
+        <EditSupplierDialog
+          supplier={editingSupplier}
+          open={!!editingSupplier}
+          onOpenChange={(open) => !open && setEditingSupplier(null)}
+        />
       )}
     </div>
   );
