@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, DollarSign, Phone, Mail } from "lucide-react";
+import { Users, Building2, Globe, DollarSign, Phone, Mail, LayoutGrid, Table as TableIcon } from "lucide-react";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
@@ -14,9 +14,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 
 export default function Clients() {
   const [selectedAgency, setSelectedAgency] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
   const { data: clients, isLoading } = useQuery({
     queryKey: ["clients"],
@@ -90,6 +100,22 @@ export default function Clients() {
           <p className="text-muted-foreground mt-1">ניהול לקוחות סוכנויות</p>
         </div>
         <div className="flex gap-2 items-center">
+          <div className="flex gap-1 border rounded-md p-1">
+            <Button
+              variant={viewMode === "grid" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("grid")}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === "table" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("table")}
+            >
+              <TableIcon className="h-4 w-4" />
+            </Button>
+          </div>
           <Select value={selectedAgency} onValueChange={setSelectedAgency}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="כל הסוכנויות" />
@@ -109,8 +135,9 @@ export default function Clients() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filteredClients?.map((client) => (
+      {viewMode === "grid" ? (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {filteredClients?.map((client) => (
           <Card key={client.id} className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02]">
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -188,7 +215,95 @@ export default function Clients() {
             </CardContent>
           </Card>
         ))}
-      </div>
+        </div>
+      ) : (
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-right">שם</TableHead>
+                <TableHead className="text-right">סוכנות</TableHead>
+                <TableHead className="text-right">סטטוס</TableHead>
+                <TableHead className="text-right">תעשייה</TableHead>
+                <TableHead className="text-right">תקציב חודשי</TableHead>
+                <TableHead className="text-right">טלפון</TableHead>
+                <TableHead className="text-right">אימייל</TableHead>
+                <TableHead className="text-right">אתר</TableHead>
+                <TableHead className="text-right">קמפיינרים</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredClients?.map((client) => (
+                <TableRow key={client.id}>
+                  <TableCell className="font-medium">{client.name}</TableCell>
+                  <TableCell>
+                    {client.agencies ? (
+                      <div className="flex items-center gap-1">
+                        <Building2 className="h-3 w-3 text-muted-foreground" />
+                        {client.agencies.name}
+                      </div>
+                    ) : "-"}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={getStatusColor(client.status)}>
+                      {getStatusText(client.status)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{client.industry || "-"}</TableCell>
+                  <TableCell>
+                    {client.monthly_budget ? (
+                      <div className="flex items-center gap-1">
+                        <DollarSign className="h-3 w-3 text-muted-foreground" />
+                        ₪{Number(client.monthly_budget).toLocaleString()}
+                      </div>
+                    ) : "-"}
+                  </TableCell>
+                  <TableCell>
+                    {client.phone ? (
+                      <a href={`tel:${client.phone}`} className="flex items-center gap-1 hover:text-primary">
+                        <Phone className="h-3 w-3" />
+                        {client.phone}
+                      </a>
+                    ) : "-"}
+                  </TableCell>
+                  <TableCell>
+                    {client.email ? (
+                      <a href={`mailto:${client.email}`} className="flex items-center gap-1 hover:text-primary">
+                        <Mail className="h-3 w-3" />
+                        {client.email}
+                      </a>
+                    ) : "-"}
+                  </TableCell>
+                  <TableCell>
+                    {client.website ? (
+                      <a 
+                        href={client.website} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="flex items-center gap-1 hover:text-primary"
+                      >
+                        <Globe className="h-3 w-3" />
+                        קישור
+                      </a>
+                    ) : "-"}
+                  </TableCell>
+                  <TableCell>
+                    {client.client_team && client.client_team.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {client.client_team.map((ct: any, idx: number) => (
+                          <Badge key={idx} variant="secondary" className="text-xs">
+                            {ct.campaigners.full_name}
+                          </Badge>
+                        ))}
+                      </div>
+                    ) : "-"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       {filteredClients?.length === 0 && (
         <Card className="shadow-card">
