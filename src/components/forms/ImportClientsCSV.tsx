@@ -17,15 +17,7 @@ import { Upload } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface CSVRow {
-  name: string;
-  agency_id: string;
-  phone?: string;
-  email?: string;
-  folder_link?: string;
-  industry?: string;
-  monthly_budget?: string;
-  website?: string;
-  notes?: string;
+  [key: string]: string;
 }
 
 export function ImportClientsCSV() {
@@ -33,11 +25,37 @@ export function ImportClientsCSV() {
   const [file, setFile] = useState<File | null>(null);
   const queryClient = useQueryClient();
 
+  const normalizeHeaders = (header: string): string => {
+    const mappings: { [key: string]: string } = {
+      'שם טלפון': 'name',
+      'שם': 'name',
+      'name': 'name',
+      'טלפון': 'phone',
+      'phone': 'phone',
+      'אימייל': 'email',
+      'email': 'email',
+      'סוכנות': 'agency',
+      'agency': 'agency',
+      'agency_id': 'agency',
+      'תעשייה': 'industry',
+      'industry': 'industry',
+      'תקציב חודשי': 'monthly_budget',
+      'monthly_budget': 'monthly_budget',
+      'אתר': 'website',
+      'website': 'website',
+      'הערות': 'notes',
+      'notes': 'notes',
+      'קישור לתיקייה': 'folder_link',
+      'folder_link': 'folder_link',
+    };
+    return mappings[header.trim()] || header.trim();
+  };
+
   const parseCSV = (text: string): CSVRow[] => {
     const lines = text.split("\n").filter(line => line.trim());
     if (lines.length < 2) return [];
 
-    const headers = lines[0].split(",").map(h => h.trim());
+    const headers = lines[0].split(",").map(h => normalizeHeaders(h));
     const rows: CSVRow[] = [];
 
     for (let i = 1; i < lines.length; i++) {
@@ -64,23 +82,42 @@ export function ImportClientsCSV() {
         throw new Error("לא נמצאו נתונים בקובץ");
       }
 
-      const validRows = rows.filter(row => row.name && row.agency_id);
+      const validRows = rows.filter(row => row.name && row.agency);
       
       if (validRows.length === 0) {
-        throw new Error("לא נמצאו שורות תקינות עם שם ומזהה סוכנות");
+        throw new Error("לא נמצאו שורות תקינות עם שם וסוכנות");
       }
 
-      const clientsData = validRows.map(row => ({
-        name: row.name,
-        agency_id: row.agency_id,
-        phone: row.phone || null,
-        email: row.email || null,
-        folder_link: row.folder_link || null,
-        industry: row.industry || null,
-        monthly_budget: row.monthly_budget ? parseFloat(row.monthly_budget) : null,
-        website: row.website || null,
-        notes: row.notes || null,
-      }));
+      // Fetch all agencies to map names to IDs
+      const { data: agencies, error: agenciesError } = await supabase
+        .from("agencies")
+        .select("id, name");
+
+      if (agenciesError) throw agenciesError;
+
+      const agencyMap = new Map(agencies?.map(a => [a.name.toLowerCase(), a.id]) || []);
+
+      const clientsData = validRows
+        .map(row => {
+          // Try to find agency by name if not a UUID
+          let agencyId = row.agency;
+          if (!row.agency.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+            agencyId = agencyMap.get(row.agency.toLowerCase()) || row.agency;
+          }
+
+          return {
+            name: row.name,
+            agency_id: agencyId,
+            phone: row.phone || null,
+            email: row.email || null,
+            folder_link: row.folder_link || null,
+            industry: row.industry || null,
+            monthly_budget: row.monthly_budget ? parseFloat(row.monthly_budget) : null,
+            website: row.website || null,
+            notes: row.notes || null,
+          };
+        })
+        .filter(row => row.agency_id); // Only include rows with valid agency_id
 
       const { data, error } = await supabase
         .from("clients")
@@ -92,7 +129,7 @@ export function ImportClientsCSV() {
       return {
         imported: data?.length || 0,
         total: rows.length,
-        skipped: rows.length - validRows.length,
+        skipped: rows.length - clientsData.length,
       };
     },
     onSuccess: (data) => {
@@ -148,12 +185,14 @@ export function ImportClientsCSV() {
         <div className="space-y-4">
           <Alert>
             <AlertDescription>
-              <strong>פורמט נדרש:</strong> הקובץ צריך לכלול עמודות עם הכותרות הבאות:
+              <strong>פורמט נדרש:</strong> הקובץ צריך לכלול עמודות עם הכותרות הבאות (בעברית או באנגלית):
               <br />
-              name, agency_id, phone, email, folder_link, industry, monthly_budget, website, notes
+              שם טלפון / name, טלפון / phone, אימייל / email, סוכנות / agency
               <br />
               <br />
-              <strong>שדות חובה:</strong> name, agency_id
+              <strong>שדות חובה:</strong> שם, סוכנות
+              <br />
+              <strong>הערה:</strong> ניתן לציין שם סוכנות או מזהה סוכנות
             </AlertDescription>
           </Alert>
 
