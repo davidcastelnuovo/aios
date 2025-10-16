@@ -232,21 +232,9 @@ export default function Clients() {
                     )}
                   </div>
                 </div>
-                <Select
-                  value={client.status}
-                  onValueChange={(value: "active" | "paused" | "ended") => 
-                    updateStatusMutation.mutate({ clientId: client.id, status: value })
-                  }
-                >
-                  <SelectTrigger className="w-[110px]" onClick={(e) => e.stopPropagation()}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background">
-                    <SelectItem value="active">פעיל</SelectItem>
-                    <SelectItem value="paused">מושהה</SelectItem>
-                    <SelectItem value="ended">הסתיים</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Badge variant="outline" className={getStatusColor(client.status)}>
+                  {getStatusText(client.status)}
+                </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -289,6 +277,27 @@ export default function Clients() {
                   </a>
                 </div>
               )}
+              
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">הוסף קמפיינר:</p>
+                <p className="text-sm text-muted-foreground mb-2">סטטוס:</p>
+                <Select
+                  value={client.status}
+                  onValueChange={(value: "active" | "paused" | "ended") => 
+                    updateStatusMutation.mutate({ clientId: client.id, status: value })
+                  }
+                >
+                  <SelectTrigger onClick={(e) => e.stopPropagation()}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background" align="end">
+                    <SelectItem value="active">פעיל</SelectItem>
+                    <SelectItem value="paused">מושהה</SelectItem>
+                    <SelectItem value="ended">הסתיים</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
               {client.client_team && client.client_team.length > 0 && (
                 <div className="pt-2 border-t">
                   <p className="text-sm text-muted-foreground mb-1">קמפיינרים:</p>
