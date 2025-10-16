@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Truck, Phone, Mail, Coins, Pencil } from "lucide-react";
 import { AddSupplierForm } from "@/components/forms/AddSupplierForm";
 import { EditSupplierDialog } from "@/components/forms/EditSupplierDialog";
+import { AddSupplierPaymentForm } from "@/components/forms/AddSupplierPaymentForm";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
@@ -139,6 +140,9 @@ export default function Suppliers() {
                   {supplier.notes}
                 </p>
               )}
+              <div className="mt-4 pt-4 border-t">
+                <AddSupplierPaymentForm supplierId={supplier.id} supplierName={supplier.name} />
+              </div>
             </CardContent>
           </Card>
         ))}
