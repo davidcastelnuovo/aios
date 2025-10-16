@@ -127,13 +127,11 @@ export function AddSupplierForm() {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="graphic_design">עיצוב גרפי</SelectItem>
-                      <SelectItem value="content_creation">יצירת תוכן</SelectItem>
-                      <SelectItem value="video_production">הפקת וידאו</SelectItem>
-                      <SelectItem value="photography">צילום</SelectItem>
-                      <SelectItem value="website_development">פיתוח אתרים</SelectItem>
-                      <SelectItem value="consulting">ייעוץ</SelectItem>
-                      <SelectItem value="media_buying">קניית מדיה</SelectItem>
+                      <SelectItem value="campaigner">קמפיינר</SelectItem>
+                      <SelectItem value="media">מדיה</SelectItem>
+                      <SelectItem value="design">עיצוב</SelectItem>
+                      <SelectItem value="creative">קריאייטיב</SelectItem>
+                      <SelectItem value="dev">פיתוח</SelectItem>
                       <SelectItem value="other">אחר</SelectItem>
                     </SelectContent>
                   </Select>
