@@ -117,6 +117,19 @@ export function ImportClientsCSV() {
 
       const agencyMap = new Map(agencies?.map(a => [a.name.toLowerCase(), a.id]) || []);
 
+      // Fetch existing clients to check for duplicates
+      const { data: existingClients, error: existingError } = await supabase
+        .from("clients")
+        .select("name, phone");
+
+      if (existingError) throw existingError;
+
+      const existingSet = new Set(
+        existingClients?.map(c => 
+          `${c.name.toLowerCase()}|${c.phone || ''}`
+        ) || []
+      );
+
       const clientsData = validRows
         .map(row => {
           // Try to find agency by name if not a UUID
@@ -137,7 +150,18 @@ export function ImportClientsCSV() {
             notes: row.notes || null,
           };
         })
-        .filter(row => row.agency_id); // Only include rows with valid agency_id
+        .filter(row => {
+          // Filter out rows without valid agency_id
+          if (!row.agency_id) return false;
+          
+          // Filter out duplicates
+          const key = `${row.name.toLowerCase()}|${row.phone || ''}`;
+          return !existingSet.has(key);
+        });
+
+      if (clientsData.length === 0) {
+        throw new Error("כל הלקוחות בקובץ כבר קיימים במערכת");
+      }
 
       const { data, error } = await supabase
         .from("clients")
