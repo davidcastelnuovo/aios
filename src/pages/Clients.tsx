@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Users, Building2, Globe, DollarSign } from "lucide-react";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
+import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
 
 export default function Clients() {
   const { data: clients, isLoading } = useQuery({
@@ -63,6 +64,7 @@ export default function Clients() {
           <p className="text-muted-foreground mt-1">ניהול לקוחות סוכנויות</p>
         </div>
         <div className="flex gap-2">
+          <ImportClientsCSV />
           <ImportClientsSheet />
           <AddClientForm />
         </div>
