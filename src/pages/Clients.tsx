@@ -188,7 +188,7 @@ export default function Clients() {
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="כל הסוכנויות" />
             </SelectTrigger>
-            <SelectContent className="bg-background">
+                    <SelectContent className="bg-background" side="top">
               <SelectItem value="all">כל הסוכנויות</SelectItem>
               {agencies?.map((agency) => (
                 <SelectItem key={agency.id} value={agency.id}>
@@ -242,7 +242,7 @@ export default function Clients() {
                     <SelectTrigger className="w-[140px]" onClick={(e) => e.stopPropagation()}>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="bg-background">
+                  <SelectContent className="bg-background" side="top">
                       <SelectItem value="active">
                         <Badge variant="outline" className="bg-success/10 text-success border-success/20">
                           פעיל
