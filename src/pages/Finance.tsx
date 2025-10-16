@@ -1,0 +1,171 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { TrendingUp, TrendingDown, Calendar, Building2, Users, Truck } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+export default function Finance() {
+  const { data: financeRecords, isLoading } = useQuery({
+    queryKey: ["finance"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("finance")
+        .select(`
+          *,
+          agencies (name),
+          clients (name),
+          suppliers (name)
+        `)
+        .order("date", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const totalIncome = financeRecords?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
+  const totalExpense = financeRecords?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
+
+  if (isLoading) {
+    return <div className="flex justify-center p-8">טוען...</div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-bold">כספים</h2>
+        <p className="text-muted-foreground mt-1">ניהול הכנסות והוצאות</p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="shadow-card">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">סך הכנסות</p>
+                <p className="text-2xl font-bold text-success">₪{totalIncome.toLocaleString()}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-success/10">
+                <TrendingUp className="h-6 w-6 text-success" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-card">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">סך הוצאות</p>
+                <p className="text-2xl font-bold text-destructive">₪{totalExpense.toLocaleString()}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-destructive/10">
+                <TrendingDown className="h-6 w-6 text-destructive" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-card">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">רווח</p>
+                <p className={`text-2xl font-bold ${totalIncome - totalExpense >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  ₪{(totalIncome - totalExpense).toLocaleString()}
+                </p>
+              </div>
+              <div className={`p-3 rounded-lg ${totalIncome - totalExpense >= 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
+                <TrendingUp className={`h-6 w-6 ${totalIncome - totalExpense >= 0 ? 'text-success' : 'text-destructive'}`} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="shadow-card">
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>תאריך</TableHead>
+                <TableHead>סוג</TableHead>
+                <TableHead>סוכנות</TableHead>
+                <TableHead>לקוח</TableHead>
+                <TableHead>ספק</TableHead>
+                <TableHead>קטגוריה</TableHead>
+                <TableHead className="text-left">סכום</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {financeRecords?.map((record) => (
+                <TableRow key={record.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      {new Date(record.date).toLocaleDateString("he-IL")}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={record.type === "income" ? "bg-success/10 text-success border-success/20" : "bg-destructive/10 text-destructive border-destructive/20"}
+                    >
+                      {record.type === "income" ? (
+                        <><TrendingUp className="h-3 w-3 ml-1" />הכנסה</>
+                      ) : (
+                        <><TrendingDown className="h-3 w-3 ml-1" />הוצאה</>
+                      )}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      {record.agencies?.name}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                      {record.clients?.name}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    {record.suppliers ? (
+                      <div className="flex items-center gap-2">
+                        <Truck className="h-4 w-4 text-muted-foreground" />
+                        {record.suppliers.name}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {record.category && (
+                      <Badge variant="secondary" className="text-xs">
+                        {record.category}
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-left font-medium">
+                    ₪{Number(record.amount).toLocaleString()}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      {financeRecords?.length === 0 && (
+        <Card className="shadow-card">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <TrendingUp className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold mb-1">אין תנועות כספיות</h3>
+            <p className="text-sm text-muted-foreground">התחל בהוספת תנועה כספית</p>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
