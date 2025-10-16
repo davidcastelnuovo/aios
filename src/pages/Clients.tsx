@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,8 +7,17 @@ import { Users, Building2, Globe, DollarSign, Phone, Mail } from "lucide-react";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function Clients() {
+  const [selectedAgency, setSelectedAgency] = useState<string>("all");
+
   const { data: clients, isLoading } = useQuery({
     queryKey: ["clients"],
     queryFn: async () => {
@@ -25,6 +35,22 @@ export default function Clients() {
       return data;
     },
   });
+
+  const { data: agencies } = useQuery({
+    queryKey: ["agencies"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const filteredClients = selectedAgency === "all" 
+    ? clients 
+    : clients?.filter(client => client.agency_id === selectedAgency);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -58,12 +84,25 @@ export default function Clients() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-3xl font-bold">לקוחות</h2>
           <p className="text-muted-foreground mt-1">ניהול לקוחות סוכנויות</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="כל הסוכנויות" />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="all">כל הסוכנויות</SelectItem>
+              {agencies?.map((agency) => (
+                <SelectItem key={agency.id} value={agency.id}>
+                  {agency.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <ImportClientsCSV />
           <ImportClientsSheet />
           <AddClientForm />
@@ -71,7 +110,7 @@ export default function Clients() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {clients?.map((client) => (
+        {filteredClients?.map((client) => (
           <Card key={client.id} className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02]">
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -151,7 +190,7 @@ export default function Clients() {
         ))}
       </div>
 
-      {clients?.length === 0 && (
+      {filteredClients?.length === 0 && (
         <Card className="shadow-card">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Users className="h-12 w-12 text-muted-foreground mb-4" />
