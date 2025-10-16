@@ -23,6 +23,19 @@ export default function Finance() {
     },
   });
 
+  const { data: clients } = useQuery({
+    queryKey: ["clients"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("monthly_budget")
+        .eq("status", "active");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const totalRetainers = clients?.reduce((sum, client) => sum + Number(client.monthly_budget || 0), 0) || 0;
   const totalIncome = financeRecords?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
   const totalExpense = financeRecords?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
 
@@ -44,6 +57,7 @@ export default function Finance() {
               <div>
                 <p className="text-sm text-muted-foreground">סך הכנסות</p>
                 <p className="text-2xl font-bold text-success">₪{totalIncome.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">ריטיינרים: ₪{totalRetainers.toLocaleString()}</p>
               </div>
               <div className="p-3 rounded-lg bg-success/10">
                 <TrendingUp className="h-6 w-6 text-success" />
