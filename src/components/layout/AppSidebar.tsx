@@ -37,7 +37,7 @@ export function AppSidebar() {
   const isCollapsed = state === "collapsed";
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar side="right" collapsible="icon">
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>תפריט ראשי</SidebarGroupLabel>
