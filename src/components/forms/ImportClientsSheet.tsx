@@ -23,7 +23,7 @@ export function ImportClientsSheet() {
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ sheetId, range }: { sheetId: string; range: string }) => {
       const { data, error } = await supabase.functions.invoke(
         "import-clients-from-sheets",
         {
@@ -64,7 +64,7 @@ export function ImportClientsSheet() {
       toast.error("נא להזין URL או ID תקין של Google Sheet");
       return;
     }
-    mutation.mutate();
+    mutation.mutateAsync({ sheetId: id, range });
   };
 
   return (
