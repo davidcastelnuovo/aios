@@ -3,10 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, DollarSign, Phone, Mail, LayoutGrid, Table as TableIcon } from "lucide-react";
+import { Users, Building2, Globe, DollarSign, Phone, Mail, LayoutGrid, Table as TableIcon, Edit } from "lucide-react";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
+import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import {
   Select,
   SelectContent,
@@ -27,6 +28,7 @@ import { Button } from "@/components/ui/button";
 export default function Clients() {
   const [selectedAgency, setSelectedAgency] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+  const [editingClient, setEditingClient] = useState<any>(null);
 
   const { data: clients, isLoading } = useQuery({
     queryKey: ["clients"],
@@ -138,7 +140,16 @@ export default function Clients() {
       {viewMode === "grid" ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredClients?.map((client) => (
-          <Card key={client.id} className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02]">
+          <Card 
+            key={client.id} 
+            className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02] cursor-pointer group relative"
+            onClick={() => setEditingClient(client)}
+          >
+            <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button size="sm" variant="secondary">
+                <Edit className="h-4 w-4" />
+              </Button>
+            </div>
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -221,6 +232,7 @@ export default function Clients() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="text-right">פעולות</TableHead>
                 <TableHead className="text-right">שם</TableHead>
                 <TableHead className="text-right">סוכנות</TableHead>
                 <TableHead className="text-right">סטטוס</TableHead>
@@ -235,6 +247,15 @@ export default function Clients() {
             <TableBody>
               {filteredClients?.map((client) => (
                 <TableRow key={client.id}>
+                  <TableCell>
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      onClick={() => setEditingClient(client)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                   <TableCell className="font-medium">{client.name}</TableCell>
                   <TableCell>
                     {client.agencies ? (
@@ -313,6 +334,14 @@ export default function Clients() {
             <p className="text-sm text-muted-foreground">התחל בהוספת לקוח ראשון</p>
           </CardContent>
         </Card>
+      )}
+
+      {editingClient && (
+        <EditClientDialog
+          client={editingClient}
+          open={!!editingClient}
+          onOpenChange={(open) => !open && setEditingClient(null)}
+        />
       )}
     </div>
   );
