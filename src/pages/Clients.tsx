@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,11 +24,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export default function Clients() {
   const [selectedAgency, setSelectedAgency] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [editingClient, setEditingClient] = useState<any>(null);
+  const queryClient = useQueryClient();
 
   const { data: clients, isLoading } = useQuery({
     queryKey: ["clients"],
@@ -57,6 +59,70 @@ export default function Clients() {
         .order("name");
       if (error) throw error;
       return data;
+    },
+  });
+
+  const { data: campaigners } = useQuery({
+    queryKey: ["campaigners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaigners")
+        .select("id, full_name")
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ clientId, status }: { clientId: string; status: "active" | "paused" | "ended" }) => {
+      const { error } = await supabase
+        .from("clients")
+        .update({ status })
+        .eq("id", clientId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("הסטטוס עודכן בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון הסטטוס");
+    },
+  });
+
+  const assignCampaignerMutation = useMutation({
+    mutationFn: async ({ clientId, campaignerId }: { clientId: string; campaignerId: string }) => {
+      // First, check if already assigned
+      const { data: existing } = await supabase
+        .from("client_team")
+        .select("id")
+        .eq("client_id", clientId)
+        .eq("campaigner_id", campaignerId)
+        .maybeSingle();
+
+      if (existing) {
+        toast.info("הקמפיינר כבר משויך ללקוח");
+        return;
+      }
+
+      // Add new assignment
+      const { error } = await supabase
+        .from("client_team")
+        .insert({
+          client_id: clientId,
+          campaigner_id: campaignerId,
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("הקמפיינר שויך בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+    },
+    onError: () => {
+      toast.error("שגיאה בשיוך הקמפיינר");
     },
   });
 
@@ -166,9 +232,35 @@ export default function Clients() {
                     )}
                   </div>
                 </div>
-                <Badge variant="outline" className={getStatusColor(client.status)}>
-                  {getStatusText(client.status)}
-                </Badge>
+                <div className="flex flex-col gap-2">
+                  <Select
+                    value={client.status}
+                    onValueChange={(value: "active" | "paused" | "ended") => 
+                      updateStatusMutation.mutate({ clientId: client.id, status: value })
+                    }
+                  >
+                    <SelectTrigger className="w-[140px]" onClick={(e) => e.stopPropagation()}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background">
+                      <SelectItem value="active">
+                        <Badge variant="outline" className="bg-success/10 text-success border-success/20">
+                          פעיל
+                        </Badge>
+                      </SelectItem>
+                      <SelectItem value="paused">
+                        <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20">
+                          מושהה
+                        </Badge>
+                      </SelectItem>
+                      <SelectItem value="ended">
+                        <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
+                          הסתיים
+                        </Badge>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -223,6 +315,23 @@ export default function Clients() {
                   </div>
                 </div>
               )}
+              
+              <div className="pt-2 border-t">
+                <Select
+                  onValueChange={(value) => assignCampaignerMutation.mutate({ clientId: client.id, campaignerId: value })}
+                >
+                  <SelectTrigger onClick={(e) => e.stopPropagation()}>
+                    <SelectValue placeholder="הוסף קמפיינר" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background">
+                    {campaigners?.map((campaigner) => (
+                      <SelectItem key={campaigner.id} value={campaigner.id}>
+                        {campaigner.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -266,9 +375,21 @@ export default function Clients() {
                     ) : "-"}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={getStatusColor(client.status)}>
-                      {getStatusText(client.status)}
-                    </Badge>
+                    <Select
+                      value={client.status}
+                      onValueChange={(value: "active" | "paused" | "ended") => 
+                        updateStatusMutation.mutate({ clientId: client.id, status: value })
+                      }
+                    >
+                      <SelectTrigger className="w-[120px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background">
+                        <SelectItem value="active">פעיל</SelectItem>
+                        <SelectItem value="paused">מושהה</SelectItem>
+                        <SelectItem value="ended">הסתיים</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell>{client.industry || "-"}</TableCell>
                   <TableCell>
@@ -309,15 +430,31 @@ export default function Clients() {
                     ) : "-"}
                   </TableCell>
                   <TableCell>
-                    {client.client_team && client.client_team.length > 0 ? (
-                      <div className="flex flex-wrap gap-1">
-                        {client.client_team.map((ct: any, idx: number) => (
-                          <Badge key={idx} variant="secondary" className="text-xs">
-                            {ct.campaigners.full_name}
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : "-"}
+                    <div className="flex flex-col gap-2">
+                      {client.client_team && client.client_team.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {client.client_team.map((ct: any, idx: number) => (
+                            <Badge key={idx} variant="secondary" className="text-xs">
+                              {ct.campaigners.full_name}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                      <Select
+                        onValueChange={(value) => assignCampaignerMutation.mutate({ clientId: client.id, campaignerId: value })}
+                      >
+                        <SelectTrigger className="w-[160px]">
+                          <SelectValue placeholder="הוסף קמפיינר" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-background">
+                          {campaigners?.map((campaigner) => (
+                            <SelectItem key={campaigner.id} value={campaigner.id}>
+                              {campaigner.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
