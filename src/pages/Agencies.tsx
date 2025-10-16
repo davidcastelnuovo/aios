@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Building2, Phone, Mail, Calendar } from "lucide-react";
+import { AddAgencyForm } from "@/components/forms/AddAgencyForm";
 
 export default function Agencies() {
   const { data: agencies, isLoading } = useQuery({
@@ -49,9 +50,12 @@ export default function Agencies() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold">סוכנויות</h2>
-        <p className="text-muted-foreground mt-1">ניהול סוכנויות לקוחות</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold">סוכנויות</h2>
+          <p className="text-muted-foreground mt-1">ניהול סוכנויות לקוחות</p>
+        </div>
+        <AddAgencyForm />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
