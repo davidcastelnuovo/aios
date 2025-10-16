@@ -58,6 +58,7 @@ export type Database = {
           active: boolean
           created_at: string
           email: string | null
+          folder_link: string | null
           full_name: string
           id: string
           notes: string | null
@@ -69,6 +70,7 @@ export type Database = {
           active?: boolean
           created_at?: string
           email?: string | null
+          folder_link?: string | null
           full_name: string
           id?: string
           notes?: string | null
@@ -80,6 +82,7 @@ export type Database = {
           active?: boolean
           created_at?: string
           email?: string | null
+          folder_link?: string | null
           full_name?: string
           id?: string
           notes?: string | null
@@ -144,6 +147,7 @@ export type Database = {
         Row: {
           agency_id: string
           created_at: string
+          folder_link: string | null
           id: string
           industry: string | null
           monthly_budget: number | null
@@ -157,6 +161,7 @@ export type Database = {
         Insert: {
           agency_id: string
           created_at?: string
+          folder_link?: string | null
           id?: string
           industry?: string | null
           monthly_budget?: number | null
@@ -170,6 +175,7 @@ export type Database = {
         Update: {
           agency_id?: string
           created_at?: string
+          folder_link?: string | null
           id?: string
           industry?: string | null
           monthly_budget?: number | null
@@ -261,6 +267,7 @@ export type Database = {
         Row: {
           created_at: string
           email: string | null
+          folder_link: string | null
           id: string
           name: string
           notes: string | null
@@ -272,6 +279,7 @@ export type Database = {
         Insert: {
           created_at?: string
           email?: string | null
+          folder_link?: string | null
           id?: string
           name: string
           notes?: string | null
@@ -283,6 +291,7 @@ export type Database = {
         Update: {
           created_at?: string
           email?: string | null
+          folder_link?: string | null
           id?: string
           name?: string
           notes?: string | null

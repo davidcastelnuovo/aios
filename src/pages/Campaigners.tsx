@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Megaphone, Phone, Mail, Briefcase } from "lucide-react";
+import { AddCampaignerForm } from "@/components/forms/AddCampaignerForm";
 
 export default function Campaigners() {
   const { data: campaigners, isLoading } = useQuery({
@@ -23,9 +24,12 @@ export default function Campaigners() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold">קמפיינרים</h2>
-        <p className="text-muted-foreground mt-1">ניהול צוות קמפיינרים ופרילנסרים</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold">קמפיינרים</h2>
+          <p className="text-muted-foreground mt-1">ניהול צוות קמפיינרים ופרילנסרים</p>
+        </div>
+        <AddCampaignerForm />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

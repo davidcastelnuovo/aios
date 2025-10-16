@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Truck, Phone, Mail } from "lucide-react";
+import { AddSupplierForm } from "@/components/forms/AddSupplierForm";
 
 export default function Suppliers() {
   const { data: suppliers, isLoading } = useQuery({
@@ -52,9 +53,12 @@ export default function Suppliers() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold">ספקים</h2>
-        <p className="text-muted-foreground mt-1">ניהול ספקים ונותני שירותים</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold">ספקים</h2>
+          <p className="text-muted-foreground mt-1">ניהול ספקים ונותני שירותים</p>
+        </div>
+        <AddSupplierForm />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
