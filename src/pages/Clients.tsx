@@ -25,11 +25,14 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 export default function Clients() {
   const [selectedAgency, setSelectedAgency] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [editingClient, setEditingClient] = useState<any>(null);
+  const [hideInactive, setHideInactive] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: clients, isLoading } = useQuery({
@@ -130,6 +133,10 @@ export default function Clients() {
     ? clients 
     : clients?.filter(client => client.agency_id === selectedAgency);
 
+  const visibleClients = hideInactive 
+    ? filteredClients?.filter(client => client.status === "active")
+    : filteredClients;
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
@@ -184,6 +191,16 @@ export default function Clients() {
               <TableIcon className="h-4 w-4" />
             </Button>
           </div>
+          <div className="flex items-center gap-2">
+            <Switch
+              id="hide-inactive"
+              checked={hideInactive}
+              onCheckedChange={setHideInactive}
+            />
+            <Label htmlFor="hide-inactive" className="cursor-pointer">
+              הסתר לא פעילים
+            </Label>
+          </div>
           <Select value={selectedAgency} onValueChange={setSelectedAgency}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="כל הסוכנויות" />
@@ -205,7 +222,7 @@ export default function Clients() {
 
       {viewMode === "grid" ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredClients?.map((client) => (
+          {visibleClients?.map((client) => (
           <Card 
             key={client.id} 
             className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02] cursor-pointer group relative"
@@ -349,7 +366,7 @@ export default function Clients() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredClients?.map((client) => (
+              {visibleClients?.map((client) => (
                 <TableRow key={client.id}>
                   <TableCell>
                     <Button 
@@ -458,7 +475,7 @@ export default function Clients() {
         </div>
       )}
 
-      {filteredClients?.length === 0 && (
+      {visibleClients?.length === 0 && (
         <Card className="shadow-card">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Users className="h-12 w-12 text-muted-foreground mb-4" />
