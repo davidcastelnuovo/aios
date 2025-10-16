@@ -345,7 +345,7 @@ export default function Clients() {
                 <TableHead className="text-right">שם</TableHead>
                 <TableHead className="text-right">סוכנות</TableHead>
                 <TableHead className="text-right">סטטוס</TableHead>
-                <TableHead className="text-right">תעשייה</TableHead>
+                <TableHead className="text-right">ריטיינר</TableHead>
                 <TableHead className="text-right">תקציב חודשי</TableHead>
                 <TableHead className="text-right">טלפון</TableHead>
                 <TableHead className="text-right">אימייל</TableHead>
