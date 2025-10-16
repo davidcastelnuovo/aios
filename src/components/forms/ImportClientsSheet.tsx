@@ -64,7 +64,8 @@ export function ImportClientsSheet() {
       toast.error("נא להזין URL או ID תקין של Google Sheet");
       return;
     }
-    mutation.mutateAsync({ sheetId: id, range });
+    const finalRange = (range || '').trim() || 'Sheet1!A:I';
+    mutation.mutateAsync({ sheetId: id, range: finalRange });
   };
 
   return (

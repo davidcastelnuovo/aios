@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { sheetId, range = 'Sheet1!A:I' } = await req.json()
+    const { sheetId, range } = await req.json()
     
     if (!sheetId) {
       throw new Error('Sheet ID is required')
@@ -35,10 +35,11 @@ Deno.serve(async (req) => {
       throw new Error('Google API key not configured')
     }
 
-    console.log('Fetching data from Google Sheets:', sheetId, range)
+    const sheetRange = !range || String(range).trim() === '' ? 'Sheet1!A:I' : String(range).trim()
+    console.log('Fetching data from Google Sheets:', sheetId, sheetRange)
 
     // Fetch data from Google Sheets
-    const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?key=${googleApiKey}`
+    const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${sheetRange}?key=${googleApiKey}`
     const sheetsResponse = await fetch(sheetsUrl)
     
     if (!sheetsResponse.ok) {
