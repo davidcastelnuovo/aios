@@ -158,6 +158,7 @@ export type Database = {
           name: string
           notes: string | null
           phone: string | null
+          retainer: number | null
           start_date: string | null
           status: Database["public"]["Enums"]["client_status"]
           updated_at: string
@@ -174,6 +175,7 @@ export type Database = {
           name: string
           notes?: string | null
           phone?: string | null
+          retainer?: number | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["client_status"]
           updated_at?: string
@@ -190,6 +192,7 @@ export type Database = {
           name?: string
           notes?: string | null
           phone?: string | null
+          retainer?: number | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["client_status"]
           updated_at?: string

@@ -39,6 +39,7 @@ const formSchema = z.object({
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   folder_link: z.string().url("קישור לא תקין").optional().or(z.literal("")),
   industry: z.string().optional(),
+  retainer: z.string().optional(),
   monthly_budget: z.string().optional(),
   website: z.string().url("כתובת אתר לא תקינה").optional().or(z.literal("")),
   notes: z.string().optional(),
@@ -75,6 +76,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       email: client.email || "",
       folder_link: client.folder_link || "",
       industry: client.industry || "",
+      retainer: client.retainer?.toString() || "",
       monthly_budget: client.monthly_budget?.toString() || "",
       website: client.website || "",
       notes: client.notes || "",
@@ -93,6 +95,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
           email: values.email || null,
           folder_link: values.folder_link || null,
           industry: values.industry || null,
+          retainer: values.retainer ? parseFloat(values.retainer) : null,
           monthly_budget: values.monthly_budget ? parseFloat(values.monthly_budget) : null,
           website: values.website || null,
           notes: values.notes || null,
@@ -217,7 +220,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                 name="industry"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>ריטיינר</FormLabel>
+                    <FormLabel>תעשייה</FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
@@ -228,10 +231,10 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
 
               <FormField
                 control={form.control}
-                name="monthly_budget"
+                name="retainer"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>תקציב חודשי (₪)</FormLabel>
+                    <FormLabel>ריטיינר (₪)</FormLabel>
                     <FormControl>
                       <Input {...field} type="number" />
                     </FormControl>
@@ -240,6 +243,20 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="monthly_budget"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>תקציב חודשי (₪)</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="number" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

@@ -45,7 +45,7 @@ export default function Finance() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("monthly_budget, agency_id")
+        .select("retainer, agency_id")
         .eq("status", "active");
       if (error) throw error;
       return data;
@@ -56,7 +56,7 @@ export default function Finance() {
     ? clients 
     : clients?.filter(c => c.agency_id === selectedAgency);
 
-  const totalRetainers = filteredClients?.reduce((sum, client) => sum + Number(client.monthly_budget || 0), 0) || 0;
+  const totalRetainers = filteredClients?.reduce((sum, client) => sum + Number(client.retainer || 0), 0) || 0;
 
   const filteredFinanceRecords = selectedAgency === "all"
     ? financeRecords
