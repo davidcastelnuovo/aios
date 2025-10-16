@@ -217,12 +217,12 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="industry"
+                name="retainer"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>תעשייה</FormLabel>
+                    <FormLabel>ריטיינר (₪)</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input {...field} type="number" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -231,12 +231,12 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
 
               <FormField
                 control={form.control}
-                name="retainer"
+                name="industry"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>ריטיינר (₪)</FormLabel>
+                    <FormLabel>תעשייה</FormLabel>
                     <FormControl>
-                      <Input {...field} type="number" />
+                      <Input {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
