@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Users, Building2, Globe, DollarSign } from "lucide-react";
 import { AddClientForm } from "@/components/forms/AddClientForm";
+import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 
 export default function Clients() {
   const { data: clients, isLoading } = useQuery({
@@ -61,7 +62,10 @@ export default function Clients() {
           <h2 className="text-3xl font-bold">לקוחות</h2>
           <p className="text-muted-foreground mt-1">ניהול לקוחות סוכנויות</p>
         </div>
-        <AddClientForm />
+        <div className="flex gap-2">
+          <ImportClientsSheet />
+          <AddClientForm />
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
