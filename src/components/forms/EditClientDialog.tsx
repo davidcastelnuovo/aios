@@ -177,7 +177,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                 name="industry"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>תעשייה</FormLabel>
+                    <FormLabel>ריטיינר</FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
