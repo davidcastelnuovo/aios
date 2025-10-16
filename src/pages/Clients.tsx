@@ -255,17 +255,14 @@ export default function Clients() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {client.industry && (
-                <div className="text-sm">
-                  <span className="text-muted-foreground">ריטיינר:</span>
-                  <span className="font-medium mr-2">{client.industry}</span>
-                </div>
-              )}
               {client.monthly_budget && (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="text-muted-foreground font-semibold">₪</span>
-                  <span className="font-medium">{Number(client.monthly_budget).toLocaleString()}</span>
-                  <span className="text-muted-foreground">לחודש</span>
+                <div className="flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">ריטיינר:</span>
+                    <span className="font-medium mr-2">₪{Number(client.monthly_budget).toLocaleString()}</span>
+                    <span className="text-muted-foreground">לחודש</span>
+                  </div>
                 </div>
               )}
               {client.website && (
