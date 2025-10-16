@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Truck, Phone, Mail } from "lucide-react";
+import { Truck, Phone, Mail, Coins } from "lucide-react";
 import { AddSupplierForm } from "@/components/forms/AddSupplierForm";
 
 export default function Suppliers() {
@@ -15,6 +15,28 @@ export default function Suppliers() {
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
+    },
+  });
+
+  const { data: supplierExpenses } = useQuery({
+    queryKey: ["supplier-expenses"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("finance")
+        .select("supplier_id, amount")
+        .eq("type", "expense")
+        .not("supplier_id", "is", null);
+      if (error) throw error;
+      
+      // Group by supplier_id and sum amounts
+      const grouped = data.reduce((acc, item) => {
+        if (item.supplier_id) {
+          acc[item.supplier_id] = (acc[item.supplier_id] || 0) + Number(item.amount);
+        }
+        return acc;
+      }, {} as Record<string, number>);
+      
+      return grouped;
     },
   });
 
@@ -88,6 +110,15 @@ export default function Suppliers() {
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Mail className="h-4 w-4" />
                   <span>{supplier.email}</span>
+                </div>
+              )}
+              {supplierExpenses?.[supplier.id] && (
+                <div className="flex items-center gap-2 text-sm">
+                  <Coins className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <span className="text-muted-foreground">סה"כ הוצאות:</span>
+                    <span className="font-medium mr-2">₪{supplierExpenses[supplier.id].toLocaleString()}</span>
+                  </div>
                 </div>
               )}
               {supplier.notes && (
