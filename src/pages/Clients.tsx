@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, DollarSign } from "lucide-react";
+import { Users, Building2, Globe, DollarSign, Phone, Mail } from "lucide-react";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
@@ -113,6 +113,24 @@ export default function Clients() {
                   <Globe className="h-4 w-4" />
                   <a href={client.website} target="_blank" rel="noopener noreferrer" className="hover:text-primary">
                     {client.website}
+                  </a>
+                </div>
+              )}
+
+              {client.phone && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Phone className="h-4 w-4" />
+                  <a href={`tel:${client.phone}`} className="hover:text-primary">
+                    {client.phone}
+                  </a>
+                </div>
+              )}
+
+              {client.email && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Mail className="h-4 w-4" />
+                  <a href={`mailto:${client.email}`} className="hover:text-primary">
+                    {client.email}
                   </a>
                 </div>
               )}
