@@ -98,7 +98,7 @@ export default function Finance() {
               <div>
                 <p className="text-sm text-muted-foreground">סך הכנסות</p>
                 <p className="text-2xl font-bold text-success">₪{totalIncome.toLocaleString()}</p>
-                <p className="text-xs text-muted-foreground mt-1">ריטיינרים: ₪{totalRetainers.toLocaleString()}</p>
+                <p className="text-sm text-success font-medium mt-1">ריטיינרים: ₪{totalRetainers.toLocaleString()}</p>
               </div>
               <div className="p-3 rounded-lg bg-success/10">
                 <TrendingUp className="h-6 w-6 text-success" />
