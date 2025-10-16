@@ -150,12 +150,14 @@ export type Database = {
         Row: {
           agency_id: string
           created_at: string
+          email: string | null
           folder_link: string | null
           id: string
           industry: string | null
           monthly_budget: number | null
           name: string
           notes: string | null
+          phone: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["client_status"]
           updated_at: string
@@ -164,12 +166,14 @@ export type Database = {
         Insert: {
           agency_id: string
           created_at?: string
+          email?: string | null
           folder_link?: string | null
           id?: string
           industry?: string | null
           monthly_budget?: number | null
           name: string
           notes?: string | null
+          phone?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["client_status"]
           updated_at?: string
@@ -178,12 +182,14 @@ export type Database = {
         Update: {
           agency_id?: string
           created_at?: string
+          email?: string | null
           folder_link?: string | null
           id?: string
           industry?: string | null
           monthly_budget?: number | null
           name?: string
           notes?: string | null
+          phone?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["client_status"]
           updated_at?: string
