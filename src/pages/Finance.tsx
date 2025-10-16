@@ -4,8 +4,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, Calendar, Building2, Users, Truck } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useState } from "react";
 
 export default function Finance() {
+  const [selectedAgency, setSelectedAgency] = useState<string>("all");
+
+  const { data: agencies } = useQuery({
+    queryKey: ["agencies"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("status", "active")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const { data: financeRecords, isLoading } = useQuery({
     queryKey: ["finance"],
     queryFn: async () => {
@@ -28,16 +45,25 @@ export default function Finance() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("monthly_budget")
+        .select("monthly_budget, agency_id")
         .eq("status", "active");
       if (error) throw error;
       return data;
     },
   });
 
-  const totalRetainers = clients?.reduce((sum, client) => sum + Number(client.monthly_budget || 0), 0) || 0;
-  const totalIncome = financeRecords?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
-  const totalExpense = financeRecords?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
+  const filteredClients = selectedAgency === "all" 
+    ? clients 
+    : clients?.filter(c => c.agency_id === selectedAgency);
+
+  const totalRetainers = filteredClients?.reduce((sum, client) => sum + Number(client.monthly_budget || 0), 0) || 0;
+
+  const filteredFinanceRecords = selectedAgency === "all"
+    ? financeRecords
+    : financeRecords?.filter(f => f.agency_id === selectedAgency);
+
+  const totalIncome = filteredFinanceRecords?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
+  const totalExpense = filteredFinanceRecords?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
 
   if (isLoading) {
     return <div className="flex justify-center p-8">טוען...</div>;
@@ -45,9 +71,24 @@ export default function Finance() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold">כספים</h2>
-        <p className="text-muted-foreground mt-1">ניהול הכנסות והוצאות</p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h2 className="text-3xl font-bold">כספים</h2>
+          <p className="text-muted-foreground mt-1">ניהול הכנסות והוצאות</p>
+        </div>
+        <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="בחר סוכנות" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">כל הסוכנויות</SelectItem>
+            {agencies?.map((agency) => (
+              <SelectItem key={agency.id} value={agency.id}>
+                {agency.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -112,7 +153,7 @@ export default function Finance() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {financeRecords?.map((record) => (
+              {filteredFinanceRecords?.map((record) => (
                 <TableRow key={record.id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
@@ -171,7 +212,7 @@ export default function Finance() {
         </CardContent>
       </Card>
 
-      {financeRecords?.length === 0 && (
+      {filteredFinanceRecords?.length === 0 && (
         <Card className="shadow-card">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <TrendingUp className="h-12 w-12 text-muted-foreground mb-4" />
