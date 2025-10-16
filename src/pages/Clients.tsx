@@ -257,7 +257,7 @@ export default function Clients() {
             <CardContent className="space-y-3">
               {client.industry && (
                 <div className="text-sm">
-                  <span className="text-muted-foreground">תעשייה:</span>
+                  <span className="text-muted-foreground">ריטיינר:</span>
                   <span className="font-medium mr-2">{client.industry}</span>
                 </div>
               )}
