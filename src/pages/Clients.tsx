@@ -188,7 +188,7 @@ export default function Clients() {
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="כל הסוכנויות" />
             </SelectTrigger>
-                    <SelectContent className="bg-background" side="top">
+                    <SelectContent className="bg-background" align="end">
               <SelectItem value="all">כל הסוכנויות</SelectItem>
               {agencies?.map((agency) => (
                 <SelectItem key={agency.id} value={agency.id}>
@@ -232,35 +232,21 @@ export default function Clients() {
                     )}
                   </div>
                 </div>
-                <div className="flex flex-col gap-2">
-                  <Select
-                    value={client.status}
-                    onValueChange={(value: "active" | "paused" | "ended") => 
-                      updateStatusMutation.mutate({ clientId: client.id, status: value })
-                    }
-                  >
-                    <SelectTrigger className="w-[140px]" onClick={(e) => e.stopPropagation()}>
-                      <SelectValue />
-                    </SelectTrigger>
-                  <SelectContent className="bg-background" side="top">
-                      <SelectItem value="active">
-                        <Badge variant="outline" className="bg-success/10 text-success border-success/20">
-                          פעיל
-                        </Badge>
-                      </SelectItem>
-                      <SelectItem value="paused">
-                        <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20">
-                          מושהה
-                        </Badge>
-                      </SelectItem>
-                      <SelectItem value="ended">
-                        <Badge variant="outline" className="bg-muted text-muted-foreground border-border">
-                          הסתיים
-                        </Badge>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                <Select
+                  value={client.status}
+                  onValueChange={(value: "active" | "paused" | "ended") => 
+                    updateStatusMutation.mutate({ clientId: client.id, status: value })
+                  }
+                >
+                  <SelectTrigger className="w-[110px]" onClick={(e) => e.stopPropagation()}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background">
+                    <SelectItem value="active">פעיל</SelectItem>
+                    <SelectItem value="paused">מושהה</SelectItem>
+                    <SelectItem value="ended">הסתיים</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
