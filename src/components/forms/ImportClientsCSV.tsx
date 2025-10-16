@@ -25,6 +25,14 @@ export function ImportClientsCSV() {
   const [file, setFile] = useState<File | null>(null);
   const queryClient = useQueryClient();
 
+  const isPhoneNumber = (value: string): boolean => {
+    return /^[\+]?[0-9]{9,15}$/.test(value.replace(/[\s\-\(\)]/g, ''));
+  };
+
+  const isEmail = (value: string): boolean => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  };
+
   const normalizeHeaders = (header: string): string => {
     const mappings: { [key: string]: string } = {
       'שם טלפון': 'name',
@@ -32,7 +40,7 @@ export function ImportClientsCSV() {
       'name': 'name',
       'טלפון': 'phone',
       'phone': 'phone',
-      'אימייל': 'email',
+      'אימייל': 'contact',  // Changed to generic 'contact' to handle mixed data
       'email': 'email',
       'סוכנות': 'agency',
       'agency': 'agency',
@@ -64,7 +72,19 @@ export function ImportClientsCSV() {
       
       headers.forEach((header, index) => {
         const value = values[index] || "";
-        row[header] = value;
+        
+        // Smart detection: if header is 'contact', check if value is phone or email
+        if (header === 'contact' && value) {
+          if (isPhoneNumber(value)) {
+            row['phone'] = value;
+          } else if (isEmail(value)) {
+            row['email'] = value;
+          } else {
+            row[header] = value;
+          }
+        } else {
+          row[header] = value;
+        }
       });
 
       rows.push(row as CSVRow);
