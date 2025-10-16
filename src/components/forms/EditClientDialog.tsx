@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
@@ -34,6 +34,7 @@ import { Loader2 } from "lucide-react";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח נדרש"),
+  agency_id: z.string().min(1, "סוכנות נדרשת"),
   phone: z.string().optional(),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   folder_link: z.string().url("קישור לא תקין").optional().or(z.literal("")),
@@ -53,10 +54,23 @@ interface EditClientDialogProps {
 export function EditClientDialog({ client, open, onOpenChange }: EditClientDialogProps) {
   const queryClient = useQueryClient();
 
+  const { data: agencies } = useQuery({
+    queryKey: ["agencies"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: client.name || "",
+      agency_id: client.agency_id || "",
       phone: client.phone || "",
       email: client.email || "",
       folder_link: client.folder_link || "",
@@ -74,6 +88,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         .from("clients")
         .update({
           name: values.name,
+          agency_id: values.agency_id,
           phone: values.phone || null,
           email: values.email || null,
           folder_link: values.folder_link || null,
@@ -113,6 +128,31 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="agency_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>סוכנות *</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר סוכנות" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-background">
+                      {agencies?.map((agency) => (
+                        <SelectItem key={agency.id} value={agency.id}>
+                          {agency.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="name"
