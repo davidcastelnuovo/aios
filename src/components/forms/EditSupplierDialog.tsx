@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
@@ -38,13 +37,8 @@ const formSchema = z.object({
   phone: z.string().optional(),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   folder_link: z.string().url("קישור לא תקין").optional().or(z.literal("")),
+  payment: z.string().optional(),
   notes: z.string().optional(),
-});
-
-const paymentSchema = z.object({
-  amount: z.string().min(1, "סכום נדרש"),
-  client_id: z.string().min(1, "בחר לקוח"),
-  agency_id: z.string().min(1, "בחר סוכנות"),
 });
 
 interface EditSupplierDialogProps {
@@ -55,7 +49,6 @@ interface EditSupplierDialogProps {
 
 export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplierDialogProps) {
   const queryClient = useQueryClient();
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -65,42 +58,11 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
       phone: supplier.phone || "",
       email: supplier.email || "",
       folder_link: supplier.folder_link || "",
+      payment: supplier.payment?.toString() || "",
       notes: supplier.notes || "",
     },
   });
 
-  const paymentForm = useForm<z.infer<typeof paymentSchema>>({
-    resolver: zodResolver(paymentSchema),
-    defaultValues: {
-      amount: "",
-      client_id: "",
-      agency_id: "",
-    },
-  });
-
-  const { data: clients } = useQuery({
-    queryKey: ["clients"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("clients")
-        .select("id, name")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("id, name")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
@@ -112,6 +74,7 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
           phone: values.phone || null,
           email: values.email || null,
           folder_link: values.folder_link || null,
+          payment: values.payment ? parseFloat(values.payment) : null,
           notes: values.notes || null,
         })
         .eq("id", supplier.id);
@@ -128,36 +91,8 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
     },
   });
 
-  const paymentMutation = useMutation({
-    mutationFn: async (values: z.infer<typeof paymentSchema>) => {
-      const { error } = await supabase.from("finance").insert({
-        type: "expense",
-        amount: parseFloat(values.amount),
-        date: new Date().toISOString().split("T")[0],
-        client_id: values.client_id,
-        agency_id: values.agency_id,
-        supplier_id: supplier.id,
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("התשלום נרשם בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["supplier-expenses"] });
-      setShowPaymentForm(false);
-      paymentForm.reset();
-    },
-    onError: (error) => {
-      toast.error("שגיאה ברישום התשלום");
-      console.error(error);
-    },
-  });
-
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     mutation.mutate(values);
-  };
-
-  const onPaymentSubmit = (values: z.infer<typeof paymentSchema>) => {
-    paymentMutation.mutate(values);
   };
 
   return (
@@ -258,6 +193,20 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
 
             <FormField
               control={form.control}
+              name="payment"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>תשלום לספק (₪)</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="number" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name="notes"
               render={({ field }) => (
                 <FormItem>
@@ -270,102 +219,7 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
               )}
             />
 
-            <div className="border-t pt-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium">רישום תשלום</h3>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowPaymentForm(!showPaymentForm)}
-                >
-                  {showPaymentForm ? "ביטול" : "+ הוסף תשלום"}
-                </Button>
-              </div>
-
-              {showPaymentForm && (
-                <Form {...paymentForm}>
-                  <form onSubmit={paymentForm.handleSubmit(onPaymentSubmit)} className="space-y-4 p-4 bg-muted/30 rounded-lg">
-                    <FormField
-                      control={paymentForm.control}
-                      name="amount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>סכום *</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.01" placeholder="0.00" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={paymentForm.control}
-                      name="client_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>לקוח *</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="בחר לקוח" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="bg-background">
-                              {clients?.map((client) => (
-                                <SelectItem key={client.id} value={client.id}>
-                                  {client.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={paymentForm.control}
-                      name="agency_id"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>סוכנות *</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="בחר סוכנות" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent className="bg-background">
-                              {agencies?.map((agency) => (
-                                <SelectItem key={agency.id} value={agency.id}>
-                                  {agency.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <Button 
-                      type="submit" 
-                      disabled={paymentMutation.isPending}
-                      className="w-full"
-                    >
-                      {paymentMutation.isPending && (
-                        <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                      )}
-                      רשום תשלום
-                    </Button>
-                  </form>
-                </Form>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4 border-t">
+            <div className="flex justify-end gap-2 pt-4">
               <Button
                 type="button"
                 variant="outline"

@@ -283,6 +283,7 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          payment: number | null
           phone: string | null
           related_campaigner_id: string | null
           type: Database["public"]["Enums"]["supplier_type"]
@@ -295,6 +296,7 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          payment?: number | null
           phone?: string | null
           related_campaigner_id?: string | null
           type: Database["public"]["Enums"]["supplier_type"]
@@ -307,6 +309,7 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          payment?: number | null
           phone?: string | null
           related_campaigner_id?: string | null
           type?: Database["public"]["Enums"]["supplier_type"]
