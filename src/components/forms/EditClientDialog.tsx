@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח נדרש"),
@@ -54,6 +55,7 @@ interface EditClientDialogProps {
 
 export function EditClientDialog({ client, open, onOpenChange }: EditClientDialogProps) {
   const queryClient = useQueryClient();
+  const { isOwner } = useUserRole();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -215,19 +217,21 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
             />
 
             <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="retainer"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>ריטיינר (₪)</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="number" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {isOwner && (
+                <FormField
+                  control={form.control}
+                  name="retainer"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ריטיינר (₪)</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="number" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}
@@ -244,19 +248,21 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="monthly_budget"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>תקציב חודשי (₪)</FormLabel>
-                  <FormControl>
-                    <Input {...field} type="number" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {isOwner && (
+              <FormField
+                control={form.control}
+                name="monthly_budget"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>תקציב חודשי (₪)</FormLabel>
+                    <FormControl>
+                      <Input {...field} type="number" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}
