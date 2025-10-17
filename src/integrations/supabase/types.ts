@@ -102,7 +102,6 @@ export type Database = {
           id: string
           notes: string | null
           supplier_id: string
-          supplier_payment: number | null
         }
         Insert: {
           client_id: string
@@ -110,7 +109,6 @@ export type Database = {
           id?: string
           notes?: string | null
           supplier_id: string
-          supplier_payment?: number | null
         }
         Update: {
           client_id?: string
@@ -118,7 +116,6 @@ export type Database = {
           id?: string
           notes?: string | null
           supplier_id?: string
-          supplier_payment?: number | null
         }
         Relationships: [
           {
