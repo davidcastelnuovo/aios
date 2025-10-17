@@ -34,6 +34,7 @@ import { Loader2 } from "lucide-react";
 const formSchema = z.object({
   name: z.string().min(1, "שם הספק נדרש"),
   type: z.enum(["campaigner", "media", "design", "creative", "dev", "other"]),
+  related_campaigner_id: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   folder_link: z.string().url("קישור לא תקין").optional().or(z.literal("")),
@@ -68,11 +69,25 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
     },
   });
 
+  const { data: campaigners } = useQuery({
+    queryKey: ["campaigners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaigners")
+        .select("id, full_name")
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: supplier.name || "",
       type: supplier.type || "other",
+      related_campaigner_id: supplier.related_campaigner_id || "",
       phone: supplier.phone || "",
       email: supplier.email || "",
       folder_link: supplier.folder_link || "",
@@ -85,7 +100,6 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
       notes: supplier.notes || "",
     },
   });
-
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
       const { error } = await supabase
@@ -93,6 +107,7 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
         .update({
           name: values.name,
           type: values.type,
+          related_campaigner_id: values.related_campaigner_id || null,
           phone: values.phone || null,
           email: values.email || null,
           folder_link: values.folder_link || null,
@@ -167,6 +182,32 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
                       <SelectItem value="creative">קריאייטיב</SelectItem>
                       <SelectItem value="dev">פיתוח</SelectItem>
                       <SelectItem value="other">אחר</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="related_campaigner_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>קמפיינר קשור</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר קמפיינר" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-background">
+                      <SelectItem value="">ללא קמפיינר</SelectItem>
+                      {campaigners?.map((campaigner) => (
+                        <SelectItem key={campaigner.id} value={campaigner.id}>
+                          {campaigner.full_name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />
