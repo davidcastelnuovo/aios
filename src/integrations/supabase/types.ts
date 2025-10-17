@@ -99,6 +99,7 @@ export type Database = {
         Row: {
           allocation_percent: number | null
           campaigner_id: string
+          campaigner_payment: number | null
           client_id: string
           created_at: string
           end_date: string | null
@@ -110,6 +111,7 @@ export type Database = {
         Insert: {
           allocation_percent?: number | null
           campaigner_id: string
+          campaigner_payment?: number | null
           client_id: string
           created_at?: string
           end_date?: string | null
@@ -121,6 +123,7 @@ export type Database = {
         Update: {
           allocation_percent?: number | null
           campaigner_id?: string
+          campaigner_payment?: number | null
           client_id?: string
           created_at?: string
           end_date?: string | null
