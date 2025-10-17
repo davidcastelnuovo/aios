@@ -15,7 +15,12 @@ export default function Suppliers() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("suppliers")
-        .select("*")
+        .select(`
+          *,
+          agency_1:agencies!suppliers_agency_id_1_fkey(name),
+          agency_2:agencies!suppliers_agency_id_2_fkey(name),
+          agency_3:agencies!suppliers_agency_id_3_fkey(name)
+        `)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -125,15 +130,36 @@ export default function Suppliers() {
                   <span>{supplier.email}</span>
                 </div>
               )}
-              {supplierExpenses?.[supplier.id] && (
-                <div className="flex items-center gap-2 text-sm">
-                  <Coins className="h-4 w-4 text-muted-foreground" />
-                  <div>
-                    <span className="text-muted-foreground">סה"כ הוצאות:</span>
-                    <span className="font-medium mr-2">₪{supplierExpenses[supplier.id].toLocaleString()}</span>
+              
+              {/* תשלומים לפי סוכנויות */}
+              {(supplier.payment_1 || supplier.payment_2 || supplier.payment_3) && (
+                <div className="pt-2 border-t space-y-1">
+                  <p className="text-sm font-semibold mb-2">תשלומים:</p>
+                  {supplier.payment_1 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{supplier.agency_1?.name || 'ללא סוכנות'}</span>
+                      <span className="font-medium">₪{Number(supplier.payment_1).toLocaleString()}</span>
+                    </div>
+                  )}
+                  {supplier.payment_2 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{supplier.agency_2?.name || 'ללא סוכנות'}</span>
+                      <span className="font-medium">₪{Number(supplier.payment_2).toLocaleString()}</span>
+                    </div>
+                  )}
+                  {supplier.payment_3 && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{supplier.agency_3?.name || 'ללא סוכנות'}</span>
+                      <span className="font-medium">₪{Number(supplier.payment_3).toLocaleString()}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between text-sm pt-2 border-t font-semibold">
+                    <span>סה"כ</span>
+                    <span>₪{((Number(supplier.payment_1) || 0) + (Number(supplier.payment_2) || 0) + (Number(supplier.payment_3) || 0)).toLocaleString()}</span>
                   </div>
                 </div>
               )}
+              
               {supplier.notes && (
                 <p className="text-sm text-muted-foreground mt-2 pt-2 border-t">
                   {supplier.notes}
