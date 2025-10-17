@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { CheckSquare, Calendar, Building2, Users, Megaphone, AlertCircle } from "lucide-react";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useState } from "react";
 import {
   Select,
@@ -17,6 +18,7 @@ import {
 export default function Tasks() {
   const [editingTask, setEditingTask] = useState<any>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
+  const { isAdmin, isOwner } = useUserRole();
   const { data: tasks, isLoading } = useQuery({
     queryKey: ["tasks"],
     queryFn: async () => {
@@ -176,21 +178,23 @@ export default function Tasks() {
         </div>
         
         <div className="flex gap-3">
-          <div className="w-48">
-            <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
-              <SelectTrigger>
-                <SelectValue placeholder="כל הקמפיינרים" />
-              </SelectTrigger>
-              <SelectContent className="bg-background">
-                <SelectItem value="all">כל הקמפיינרים</SelectItem>
-                {campaigners?.map((campaigner) => (
-                  <SelectItem key={campaigner.id} value={campaigner.id}>
-                    {campaigner.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {(isAdmin || isOwner) && (
+            <div className="w-48">
+              <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
+                <SelectTrigger>
+                  <SelectValue placeholder="כל הקמפיינרים" />
+                </SelectTrigger>
+                <SelectContent className="bg-background">
+                  <SelectItem value="all">כל הקמפיינרים</SelectItem>
+                  {campaigners?.map((campaigner) => (
+                    <SelectItem key={campaigner.id} value={campaigner.id}>
+                      {campaigner.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <AddTaskForm />
         </div>
       </div>

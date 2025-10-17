@@ -8,6 +8,7 @@ import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
+import { useUserRole } from "@/hooks/useUserRole";
 import {
   Select,
   SelectContent,
@@ -34,6 +35,7 @@ export default function Clients() {
   const [editingClient, setEditingClient] = useState<any>(null);
   const [hideInactive, setHideInactive] = useState(true);
   const queryClient = useQueryClient();
+  const { isAdmin, isOwner } = useUserRole();
 
   const { data: clients, isLoading } = useQuery({
     queryKey: ["clients"],
@@ -207,21 +209,25 @@ export default function Clients() {
           
           <div className="h-8 w-px bg-border"></div>
           
-          <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="כל הסוכנויות" />
-            </SelectTrigger>
-                    <SelectContent className="bg-background" align="end">
-              <SelectItem value="all">כל הסוכנויות</SelectItem>
-              {agencies?.map((agency) => (
-                <SelectItem key={agency.id} value={agency.id}>
-                  {agency.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <ImportClientsCSV />
-          <ImportClientsSheet />
+          {(isAdmin || isOwner) && (
+            <>
+              <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="כל הסוכנויות" />
+                </SelectTrigger>
+                        <SelectContent className="bg-background" align="end">
+                  <SelectItem value="all">כל הסוכנויות</SelectItem>
+                  {agencies?.map((agency) => (
+                    <SelectItem key={agency.id} value={agency.id}>
+                      {agency.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <ImportClientsCSV />
+              <ImportClientsSheet />
+            </>
+          )}
           <AddClientForm />
         </div>
       </div>
