@@ -8,6 +8,7 @@ import {
   CheckSquare,
   Truck,
   BarChart3,
+  UserCog,
 } from "lucide-react";
 import {
   Sidebar,
@@ -30,6 +31,7 @@ const menuItems = [
   { title: "כספים", url: "/finance", icon: DollarSign },
   { title: "משימות", url: "/tasks", icon: CheckSquare },
   { title: "דוחות", url: "/reports", icon: BarChart3 },
+  { title: "משתמשים", url: "/users", icon: UserCog },
 ];
 
 export function AppSidebar() {
