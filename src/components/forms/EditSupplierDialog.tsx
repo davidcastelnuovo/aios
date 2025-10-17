@@ -87,7 +87,7 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
     defaultValues: {
       name: supplier.name || "",
       type: supplier.type || "other",
-      related_campaigner_id: supplier.related_campaigner_id || "",
+      related_campaigner_id: supplier.related_campaigner_id || "none",
       phone: supplier.phone || "",
       email: supplier.email || "",
       folder_link: supplier.folder_link || "",
@@ -107,7 +107,7 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
         .update({
           name: values.name,
           type: values.type,
-          related_campaigner_id: values.related_campaigner_id || null,
+          related_campaigner_id: (values.related_campaigner_id && values.related_campaigner_id !== "none") ? values.related_campaigner_id : null,
           phone: values.phone || null,
           email: values.email || null,
           folder_link: values.folder_link || null,
@@ -202,7 +202,7 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="bg-background">
-                      <SelectItem value="">ללא קמפיינר</SelectItem>
+                      <SelectItem value="none">ללא קמפיינר</SelectItem>
                       {campaigners?.map((campaigner) => (
                         <SelectItem key={campaigner.id} value={campaigner.id}>
                           {campaigner.full_name}
