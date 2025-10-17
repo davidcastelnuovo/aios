@@ -57,54 +57,74 @@ export default function Dashboard() {
       let clientQuery = supabase.from("clients").select("*", { count: "exact", head: true });
       let campaignerQuery = supabase.from("campaigners").select("*", { count: "exact", head: true });
       let taskQuery = supabase.from("tasks").select("*").eq("status", "open");
-      let financeQuery = supabase.from("finance").select("type, amount, client_id");
       let activeClientsQuery = supabase.from("clients").select("id, retainer, agency_id").eq("status", "active");
       let suppliersQuery = supabase.from("suppliers").select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3, related_campaigner_id");
-      let clientTeamQuery = supabase.from("client_team").select("client_id, campaigner_id");
+      
+      // קודם כל מביאים את client_team אם צריך לסנן לפי קמפיינר
+      let clientTeamData = null;
+      if (selectedCampaigner !== "all") {
+        const { data } = await supabase
+          .from("client_team")
+          .select("client_id")
+          .eq("campaigner_id", selectedCampaigner);
+        clientTeamData = data;
+      }
 
+      // עכשיו אנחנו יכולים לסנן את הקווריז בהתאם
       if (selectedAgency !== "all") {
         agencyQuery = agencyQuery.eq("id", selectedAgency);
         clientQuery = clientQuery.eq("agency_id", selectedAgency);
         taskQuery = taskQuery.eq("agency_id", selectedAgency);
-        financeQuery = financeQuery.eq("agency_id", selectedAgency);
         activeClientsQuery = activeClientsQuery.eq("agency_id", selectedAgency);
       }
 
       if (selectedClient !== "all") {
         taskQuery = taskQuery.eq("client_id", selectedClient);
-        financeQuery = financeQuery.eq("client_id", selectedClient);
         activeClientsQuery = activeClientsQuery.eq("id", selectedClient);
       }
 
       if (selectedCampaigner !== "all") {
         taskQuery = taskQuery.eq("campaigner_id", selectedCampaigner);
-        clientTeamQuery = clientTeamQuery.eq("campaigner_id", selectedCampaigner);
         suppliersQuery = suppliersQuery.eq("related_campaigner_id", selectedCampaigner);
+        
+        // סינון לקוחות לפי client_team
+        if (clientTeamData && clientTeamData.length > 0) {
+          const campaignerClientIds = clientTeamData.map(ct => ct.client_id);
+          activeClientsQuery = activeClientsQuery.in("id", campaignerClientIds);
+        }
       }
 
-      const [agenciesData, clientsData, campaignersData, tasks, finance, activeClients, suppliers, clientTeam] = await Promise.all([
+      const [agenciesData, clientsData, campaignersData, tasks, activeClients, suppliers] = await Promise.all([
         agencyQuery,
         clientQuery,
         campaignerQuery,
         taskQuery,
-        financeQuery,
         activeClientsQuery,
         suppliersQuery,
-        clientTeamQuery,
       ]);
 
-      // סינון לקוחות לפי קמפיינר
-      let filteredClients = activeClients.data || [];
-      if (selectedCampaigner !== "all" && clientTeam.data) {
-        const campaignerClientIds = clientTeam.data.map(ct => ct.client_id);
-        filteredClients = filteredClients.filter(client => campaignerClientIds.includes(client.id));
+      // עכשיו שואלים את finance עם הסינון הנכון
+      let financeQuery = supabase.from("finance").select("type, amount, client_id");
+      
+      if (selectedAgency !== "all") {
+        financeQuery = financeQuery.eq("agency_id", selectedAgency);
       }
+      
+      if (selectedClient !== "all") {
+        financeQuery = financeQuery.eq("client_id", selectedClient);
+      } else if (selectedCampaigner !== "all" && clientTeamData && clientTeamData.length > 0) {
+        // אם מסננים לפי קמפיינר, מסננים לפי הלקוחות שלו
+        const campaignerClientIds = clientTeamData.map(ct => ct.client_id);
+        financeQuery = financeQuery.in("client_id", campaignerClientIds);
+      }
+      
+      const { data: financeData } = await financeQuery;
 
-      const financeIncome = finance.data?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
-      const retainers = filteredClients.reduce((sum, client) => sum + Number(client.retainer || 0), 0);
+      const financeIncome = financeData?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
+      const retainers = activeClients.data?.reduce((sum, client) => sum + Number(client.retainer || 0), 0) || 0;
       const totalIncome = financeIncome + retainers;
       
-      const financeExpense = finance.data?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
+      const financeExpense = financeData?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
       
       let supplierPayments = 0;
       suppliers.data?.forEach(supplier => {
