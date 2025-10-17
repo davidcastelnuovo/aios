@@ -208,36 +208,38 @@ export default function Tasks() {
             </div>
           </CardHeader>
           <CardContent className="space-y-2 min-w-0">
-            <Select
-              value={task.status}
-              onValueChange={(value: "open" | "in_progress" | "done") => {
-                updateTaskStatusMutation.mutate({ taskId: task.id, status: value });
-              }}
-            >
-              <SelectTrigger onClick={(e) => e.stopPropagation()} className="h-8 w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-background">
-                <SelectItem value="open">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-primary"></div>
-                    פתוח
-                  </div>
-                </SelectItem>
-                <SelectItem value="in_progress">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
-                    בעבודה
-                  </div>
-                </SelectItem>
-                <SelectItem value="done">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-success"></div>
-                    הושלם
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
+            <div onClick={(e) => e.stopPropagation()}>
+              <Select
+                value={task.status}
+                onValueChange={(value: "open" | "in_progress" | "done") => {
+                  updateTaskStatusMutation.mutate({ taskId: task.id, status: value });
+                }}
+              >
+                <SelectTrigger className="h-8 w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-background">
+                  <SelectItem value="open">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-primary"></div>
+                      פתוח
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="in_progress">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+                      בעבודה
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="done">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-success"></div>
+                      הושלם
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             
             <div className="space-y-1 text-sm min-w-0">
               <div className="flex items-center gap-2 text-muted-foreground min-w-0">
