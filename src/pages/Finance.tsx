@@ -52,11 +52,23 @@ export default function Finance() {
     },
   });
 
+  const { data: suppliers } = useQuery({
+    queryKey: ["suppliers"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("suppliers")
+        .select("payment");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const filteredClients = selectedAgency === "all" 
     ? clients 
     : clients?.filter(c => c.agency_id === selectedAgency);
 
   const totalRetainers = filteredClients?.reduce((sum, client) => sum + Number(client.retainer || 0), 0) || 0;
+  const totalSupplierPayments = suppliers?.reduce((sum, supplier) => sum + Number(supplier.payment || 0), 0) || 0;
 
   const filteredFinanceRecords = selectedAgency === "all"
     ? financeRecords
@@ -111,7 +123,7 @@ export default function Finance() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">סך הוצאות</p>
-                <p className="text-2xl font-bold text-destructive">₪{totalExpense.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-destructive">₪{(totalExpense + totalSupplierPayments).toLocaleString()}</p>
               </div>
               <div className="p-3 rounded-lg bg-destructive/10">
                 <TrendingDown className="h-6 w-6 text-destructive" />
@@ -125,12 +137,12 @@ export default function Finance() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">רווח</p>
-                <p className={`text-2xl font-bold ${totalIncome - totalExpense >= 0 ? 'text-success' : 'text-destructive'}`}>
-                  ₪{(totalIncome - totalExpense).toLocaleString()}
+                <p className={`text-2xl font-bold ${(totalIncome + totalRetainers) - (totalExpense + totalSupplierPayments) >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  ₪{((totalIncome + totalRetainers) - (totalExpense + totalSupplierPayments)).toLocaleString()}
                 </p>
               </div>
-              <div className={`p-3 rounded-lg ${totalIncome - totalExpense >= 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
-                <TrendingUp className={`h-6 w-6 ${totalIncome - totalExpense >= 0 ? 'text-success' : 'text-destructive'}`} />
+              <div className={`p-3 rounded-lg ${(totalIncome + totalRetainers) - (totalExpense + totalSupplierPayments) >= 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
+                <TrendingUp className={`h-6 w-6 ${(totalIncome + totalRetainers) - (totalExpense + totalSupplierPayments) >= 0 ? 'text-success' : 'text-destructive'}`} />
               </div>
             </div>
           </CardContent>
