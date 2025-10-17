@@ -1,0 +1,394 @@
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
+import { useState } from "react";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+
+const formSchema = z.object({
+  title: z.string().min(1, "שם המשימה הוא שדה חובה"),
+  notes: z.string().optional(),
+  campaigner_id: z.string().min(1, "יש לבחור קמפיינר"),
+  client_id: z.string().min(1, "יש לבחור לקוח"),
+  agency_id: z.string().min(1, "יש לבחור סוכנות"),
+  due_date: z.string().optional(),
+  status: z.enum(["open", "in_progress", "done"]),
+  priority: z.enum(["low", "medium", "high"]),
+  task_type: z.enum(["campaign", "collection", "creative", "other"]),
+});
+
+interface EditTaskDialogProps {
+  task: any;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDialogProps) {
+  const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  const { data: campaigners } = useQuery({
+    queryKey: ["campaigners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaigners")
+        .select("*")
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: clients } = useQuery({
+    queryKey: ["clients"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("*")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: agencies } = useQuery({
+    queryKey: ["agencies"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("*")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      title: task.title || "",
+      notes: task.notes || "",
+      campaigner_id: task.campaigner_id || "",
+      client_id: task.client_id || "",
+      agency_id: task.agency_id || "",
+      due_date: task.due_date || "",
+      status: task.status || "open",
+      priority: task.priority || "medium",
+      task_type: task.task_type || "other",
+    },
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (values: z.infer<typeof formSchema>) => {
+      const { error } = await supabase
+        .from("tasks")
+        .update({
+          title: values.title,
+          notes: values.notes || null,
+          campaigner_id: values.campaigner_id,
+          client_id: values.client_id,
+          agency_id: values.agency_id,
+          due_date: values.due_date || null,
+          status: values.status,
+          priority: values.priority,
+          task_type: values.task_type,
+        })
+        .eq("id", task.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.success("המשימה עודכנה בהצלחה");
+      onOpenChange(false);
+    },
+    onError: (error: Error) => {
+      toast.error(`שגיאה בעדכון משימה: ${error.message}`);
+    },
+  });
+
+  const onSubmit = (values: z.infer<typeof formSchema>) => {
+    mutation.mutate(values);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>עריכת משימה</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>כותרת המשימה</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="campaigner_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>קמפיינר</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="בחר קמפיינר" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background">
+                        {campaigners?.map((campaigner) => (
+                          <SelectItem key={campaigner.id} value={campaigner.id}>
+                            {campaigner.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="client_id"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>לקוח</FormLabel>
+                    <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className={cn(
+                              "justify-between",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value
+                              ? clients?.find((client) => client.id === field.value)?.name
+                              : "בחר לקוח"}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0 bg-background" align="start">
+                        <Command>
+                          <CommandInput placeholder="חפש לקוח..." />
+                          <CommandList>
+                            <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
+                            <CommandGroup>
+                              {clients?.map((client) => (
+                                <CommandItem
+                                  key={client.id}
+                                  value={client.name}
+                                  onSelect={() => {
+                                    form.setValue("client_id", client.id);
+                                    setClientPopoverOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      field.value === client.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {client.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="agency_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>סוכנות</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר סוכנות" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-background">
+                      {agencies?.map((agency) => (
+                        <SelectItem key={agency.id} value={agency.id}>
+                          {agency.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>סטטוס</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background">
+                        <SelectItem value="open">פתוח</SelectItem>
+                        <SelectItem value="in_progress">בעבודה</SelectItem>
+                        <SelectItem value="done">הושלם</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="priority"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>עדיפות</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background">
+                        <SelectItem value="low">נמוך</SelectItem>
+                        <SelectItem value="medium">בינוני</SelectItem>
+                        <SelectItem value="high">גבוה</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="task_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>סוג משימה</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background">
+                        <SelectItem value="campaign">קמפיין</SelectItem>
+                        <SelectItem value="collection">אוסף</SelectItem>
+                        <SelectItem value="creative">קריאייטיב</SelectItem>
+                        <SelectItem value="other">אחר</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="due_date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>תאריך יעד</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>הערות</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <Button type="submit" disabled={mutation.isPending} className="w-full">
+              {mutation.isPending ? "מעדכן..." : "עדכן משימה"}
+            </Button>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}

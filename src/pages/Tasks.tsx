@@ -4,8 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckSquare, Calendar, Building2, Users, Megaphone, AlertCircle } from "lucide-react";
 import AddTaskForm from "@/components/forms/AddTaskForm";
+import EditTaskDialog from "@/components/forms/EditTaskDialog";
+import { useState } from "react";
 
 export default function Tasks() {
+  const [editingTask, setEditingTask] = useState<any>(null);
   const { data: tasks, isLoading } = useQuery({
     queryKey: ["tasks"],
     queryFn: async () => {
@@ -87,7 +90,10 @@ export default function Tasks() {
   };
 
   const TaskCard = ({ task }: { task: any }) => (
-    <Card className="shadow-card hover:shadow-lg transition-all">
+    <Card 
+      className="shadow-card hover:shadow-lg transition-all cursor-pointer"
+      onClick={() => setEditingTask(task)}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <CardTitle className="text-base">{task.title}</CardTitle>
@@ -200,6 +206,14 @@ export default function Tasks() {
           )}
         </div>
       </div>
+
+      {editingTask && (
+        <EditTaskDialog
+          task={editingTask}
+          open={!!editingTask}
+          onOpenChange={(open) => !open && setEditingTask(null)}
+        />
+      )}
     </div>
   );
 }
