@@ -57,9 +57,10 @@ export default function Dashboard() {
       let clientQuery = supabase.from("clients").select("*", { count: "exact", head: true });
       let campaignerQuery = supabase.from("campaigners").select("*", { count: "exact", head: true });
       let taskQuery = supabase.from("tasks").select("*").eq("status", "open");
-      let financeQuery = supabase.from("finance").select("type, amount");
-      let activeClientsQuery = supabase.from("clients").select("retainer, agency_id").eq("status", "active");
-      let suppliersQuery = supabase.from("suppliers").select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3");
+      let financeQuery = supabase.from("finance").select("type, amount, client_id");
+      let activeClientsQuery = supabase.from("clients").select("id, retainer, agency_id").eq("status", "active");
+      let suppliersQuery = supabase.from("suppliers").select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3, related_campaigner_id");
+      let clientTeamQuery = supabase.from("client_team").select("client_id, campaigner_id");
 
       if (selectedAgency !== "all") {
         agencyQuery = agencyQuery.eq("id", selectedAgency);
@@ -77,9 +78,11 @@ export default function Dashboard() {
 
       if (selectedCampaigner !== "all") {
         taskQuery = taskQuery.eq("campaigner_id", selectedCampaigner);
+        clientTeamQuery = clientTeamQuery.eq("campaigner_id", selectedCampaigner);
+        suppliersQuery = suppliersQuery.eq("related_campaigner_id", selectedCampaigner);
       }
 
-      const [agenciesData, clientsData, campaignersData, tasks, finance, activeClients, suppliers] = await Promise.all([
+      const [agenciesData, clientsData, campaignersData, tasks, finance, activeClients, suppliers, clientTeam] = await Promise.all([
         agencyQuery,
         clientQuery,
         campaignerQuery,
@@ -87,10 +90,18 @@ export default function Dashboard() {
         financeQuery,
         activeClientsQuery,
         suppliersQuery,
+        clientTeamQuery,
       ]);
 
+      // סינון לקוחות לפי קמפיינר
+      let filteredClients = activeClients.data || [];
+      if (selectedCampaigner !== "all" && clientTeam.data) {
+        const campaignerClientIds = clientTeam.data.map(ct => ct.client_id);
+        filteredClients = filteredClients.filter(client => campaignerClientIds.includes(client.id));
+      }
+
       const financeIncome = finance.data?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
-      const retainers = activeClients.data?.reduce((sum, client) => sum + Number(client.retainer || 0), 0) || 0;
+      const retainers = filteredClients.reduce((sum, client) => sum + Number(client.retainer || 0), 0);
       const totalIncome = financeIncome + retainers;
       
       const financeExpense = finance.data?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
