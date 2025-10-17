@@ -27,7 +27,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
-          <Route path="/" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute allowedRoles={["admin", "owner"]}><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
           <Route path="/agencies" element={<ProtectedRoute><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
           <Route path="/clients" element={<ProtectedRoute><AppLayout><Clients /></AppLayout></ProtectedRoute>} />
           <Route path="/campaigners" element={<ProtectedRoute><AppLayout><Campaigners /></AppLayout></ProtectedRoute>} />
