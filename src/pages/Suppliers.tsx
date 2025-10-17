@@ -71,9 +71,9 @@ export default function Suppliers() {
         <AddSupplierForm />
       </div>
 
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {suppliers?.map((supplier) => (
-          <Card key={supplier.id} className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02] min-w-0 overflow-hidden">
+          <Card key={supplier.id} className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02]">
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -96,17 +96,17 @@ export default function Suppliers() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-2 min-w-0">
+            <CardContent className="space-y-2">
               {supplier.phone && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
-                  <Phone className="h-4 w-4 flex-shrink-0" />
-                  <span dir="ltr" className="truncate">{supplier.phone}</span>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Phone className="h-4 w-4" />
+                  <span dir="ltr">{supplier.phone}</span>
                 </div>
               )}
               {supplier.email && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
-                  <Mail className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{supplier.email}</span>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Mail className="h-4 w-4" />
+                  <span>{supplier.email}</span>
                 </div>
               )}
               

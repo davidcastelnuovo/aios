@@ -135,8 +135,8 @@ export default function Finance() {
         </Card>
       </div>
 
-      <Card className="shadow-card overflow-hidden">
-        <CardContent className="p-0 overflow-x-auto">
+      <Card className="shadow-card">
+        <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>

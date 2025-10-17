@@ -58,9 +58,9 @@ export default function Agencies() {
         <AddAgencyForm />
       </div>
 
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {agencies?.map((agency) => (
-          <Card key={agency.id} className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02] min-w-0 overflow-hidden">
+          <Card key={agency.id} className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02]">
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -79,17 +79,17 @@ export default function Agencies() {
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-2 min-w-0">
+            <CardContent className="space-y-2">
               {agency.phone && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
-                  <Phone className="h-4 w-4 flex-shrink-0" />
-                  <span dir="ltr" className="truncate">{agency.phone}</span>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Phone className="h-4 w-4" />
+                  <span dir="ltr">{agency.phone}</span>
                 </div>
               )}
               {agency.email && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
-                  <Mail className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{agency.email}</span>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Mail className="h-4 w-4" />
+                  <span>{agency.email}</span>
                 </div>
               )}
               {agency.start_date && (
