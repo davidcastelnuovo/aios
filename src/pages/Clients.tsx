@@ -172,12 +172,12 @@ export default function Clients() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold">לקוחות</h2>
           <p className="text-muted-foreground mt-1">ניהול לקוחות סוכנויות</p>
         </div>
-        <div className="flex gap-4 items-center">
+        <div className="flex flex-wrap gap-2 md:gap-4 items-center">
           <div className="flex gap-1 border rounded-md p-1">
             <Button
               variant={viewMode === "grid" ? "default" : "ghost"}
@@ -361,7 +361,7 @@ export default function Clients() {
         ))}
         </div>
       ) : (
-        <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border shadow-sm overflow-hidden overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50 border-b">

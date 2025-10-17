@@ -57,16 +57,16 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <header className="h-16 border-b bg-card flex items-center justify-between px-6">
-            <div className="flex items-center gap-4">
+          <header className="h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 gap-2 md:gap-4">
+            <div className="flex items-center gap-2 md:gap-4 min-w-0">
               <SidebarTrigger />
-              <h1 className="text-xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+              <h1 className="text-sm md:text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
                 מערכת ניהול סוכנויות
               </h1>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
               <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-                <SelectTrigger className="w-[200px] bg-background">
+                <SelectTrigger className="w-[140px] md:w-[200px] bg-background">
                   <Building2 className="h-4 w-4 ml-2" />
                   <SelectValue placeholder="כל הסוכנויות" />
                 </SelectTrigger>

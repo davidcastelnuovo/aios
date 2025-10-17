@@ -213,9 +213,9 @@ export default function Dashboard() {
         <p className="text-muted-foreground mt-1">מבט על על המערכת</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
         <Select value={selectedClient} onValueChange={setSelectedClient}>
-          <SelectTrigger>
+          <SelectTrigger className="w-full">
             <SelectValue placeholder="כל הלקוחות" />
           </SelectTrigger>
           <SelectContent className="bg-background">
@@ -229,7 +229,7 @@ export default function Dashboard() {
         </Select>
 
         <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
-          <SelectTrigger>
+          <SelectTrigger className="w-full">
             <SelectValue placeholder="כל הספקים" />
           </SelectTrigger>
           <SelectContent className="bg-background">
