@@ -57,17 +57,17 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <header className="h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 gap-2 md:gap-4">
-            <div className="flex items-center gap-2 md:gap-4 min-w-0">
+          <header className="h-16 border-b bg-card flex items-center justify-between px-2 md:px-6 gap-1 md:gap-4">
+            <div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1">
               <SidebarTrigger />
-              <h1 className="text-sm md:text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
+              <h1 className="hidden md:block text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
                 מערכת ניהול סוכנויות
               </h1>
             </div>
-            <div className="flex items-center gap-2 md:gap-4 min-w-0">
+            <div className="flex items-center gap-1 md:gap-4 flex-shrink-0">
               <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-                <SelectTrigger className="min-w-0 w-32 md:w-48 max-w-[60vw] bg-background">
-                  <Building2 className="h-4 w-4 ml-2" />
+                <SelectTrigger className="w-28 md:w-48 bg-background text-xs md:text-sm">
+                  <Building2 className="h-3 w-3 md:h-4 md:w-4 ml-1 md:ml-2 flex-shrink-0" />
                   <SelectValue placeholder="כל הסוכנויות" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
