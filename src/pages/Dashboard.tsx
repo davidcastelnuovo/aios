@@ -1,20 +1,92 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Megaphone, DollarSign, TrendingUp, TrendingDown, CheckSquare } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 
 export default function Dashboard() {
-  const { data: stats } = useQuery({
-    queryKey: ["dashboard-stats"],
+  const [selectedAgency, setSelectedAgency] = useState<string>("all");
+  const [selectedClient, setSelectedClient] = useState<string>("all");
+  const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
+
+  const { data: agencies } = useQuery({
+    queryKey: ["agencies"],
     queryFn: async () => {
-      const [agencies, clientsData, campaigners, tasks, finance, activeClients, suppliers] = await Promise.all([
-        supabase.from("agencies").select("*", { count: "exact", head: true }),
-        supabase.from("clients").select("*", { count: "exact", head: true }),
-        supabase.from("campaigners").select("*", { count: "exact", head: true }),
-        supabase.from("tasks").select("*").eq("status", "open"),
-        supabase.from("finance").select("type, amount"),
-        supabase.from("clients").select("retainer").eq("status", "active"),
-        supabase.from("suppliers").select("payment"),
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("status", "active")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: clients } = useQuery({
+    queryKey: ["clients"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, name, agency_id")
+        .eq("status", "active")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: campaigners } = useQuery({
+    queryKey: ["campaigners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaigners")
+        .select("id, full_name")
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: stats } = useQuery({
+    queryKey: ["dashboard-stats", selectedAgency, selectedClient, selectedCampaigner],
+    queryFn: async () => {
+      let agencyQuery = supabase.from("agencies").select("*", { count: "exact", head: true });
+      let clientQuery = supabase.from("clients").select("*", { count: "exact", head: true });
+      let campaignerQuery = supabase.from("campaigners").select("*", { count: "exact", head: true });
+      let taskQuery = supabase.from("tasks").select("*").eq("status", "open");
+      let financeQuery = supabase.from("finance").select("type, amount");
+      let activeClientsQuery = supabase.from("clients").select("retainer, agency_id").eq("status", "active");
+      let suppliersQuery = supabase.from("suppliers").select("payment");
+
+      if (selectedAgency !== "all") {
+        agencyQuery = agencyQuery.eq("id", selectedAgency);
+        clientQuery = clientQuery.eq("agency_id", selectedAgency);
+        taskQuery = taskQuery.eq("agency_id", selectedAgency);
+        financeQuery = financeQuery.eq("agency_id", selectedAgency);
+        activeClientsQuery = activeClientsQuery.eq("agency_id", selectedAgency);
+      }
+
+      if (selectedClient !== "all") {
+        taskQuery = taskQuery.eq("client_id", selectedClient);
+        financeQuery = financeQuery.eq("client_id", selectedClient);
+        activeClientsQuery = activeClientsQuery.eq("id", selectedClient);
+      }
+
+      if (selectedCampaigner !== "all") {
+        taskQuery = taskQuery.eq("campaigner_id", selectedCampaigner);
+      }
+
+      const [agenciesData, clientsData, campaignersData, tasks, finance, activeClients, suppliers] = await Promise.all([
+        agencyQuery,
+        clientQuery,
+        campaignerQuery,
+        taskQuery,
+        financeQuery,
+        activeClientsQuery,
+        suppliersQuery,
       ]);
 
       const financeIncome = finance.data?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
@@ -26,9 +98,9 @@ export default function Dashboard() {
       const totalExpense = financeExpense + supplierPayments;
 
       return {
-        agenciesCount: agencies.count || 0,
+        agenciesCount: agenciesData.count || 0,
         clientsCount: clientsData.count || 0,
-        campaignersCount: campaigners.count || 0,
+        campaignersCount: campaignersData.count || 0,
         openTasksCount: tasks.data?.length || 0,
         income: totalIncome,
         expense: totalExpense,
@@ -68,11 +140,59 @@ export default function Dashboard() {
     },
   ];
 
+  const filteredClients = selectedAgency === "all" 
+    ? clients 
+    : clients?.filter(c => c.agency_id === selectedAgency);
+
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold">דשבורד</h2>
         <p className="text-muted-foreground mt-1">מבט על על המערכת</p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+          <SelectTrigger>
+            <SelectValue placeholder="כל הסוכנויות" />
+          </SelectTrigger>
+          <SelectContent className="bg-background">
+            <SelectItem value="all">כל הסוכנויות</SelectItem>
+            {agencies?.map((agency) => (
+              <SelectItem key={agency.id} value={agency.id}>
+                {agency.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedClient} onValueChange={setSelectedClient}>
+          <SelectTrigger>
+            <SelectValue placeholder="כל הלקוחות" />
+          </SelectTrigger>
+          <SelectContent className="bg-background">
+            <SelectItem value="all">כל הלקוחות</SelectItem>
+            {filteredClients?.map((client) => (
+              <SelectItem key={client.id} value={client.id}>
+                {client.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
+          <SelectTrigger>
+            <SelectValue placeholder="כל הקמפיינרים" />
+          </SelectTrigger>
+          <SelectContent className="bg-background">
+            <SelectItem value="all">כל הקמפיינרים</SelectItem>
+            {campaigners?.map((campaigner) => (
+              <SelectItem key={campaigner.id} value={campaigner.id}>
+                {campaigner.full_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
