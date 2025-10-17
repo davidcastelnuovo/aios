@@ -15,35 +15,51 @@ export default function Suppliers() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("suppliers")
-        .select(`
-          *,
-          agency_1:agencies!suppliers_agency_id_1_fkey(name),
-          agency_2:agencies!suppliers_agency_id_2_fkey(name),
-          agency_3:agencies!suppliers_agency_id_3_fkey(name)
-        `)
+        .select("*")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
   });
 
-  const { data: supplierExpenses } = useQuery({
-    queryKey: ["supplier-expenses"],
+  // Query to get campaigner payments from client_team
+  const { data: campaignerPayments } = useQuery({
+    queryKey: ["campaigner-payments"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("finance")
-        .select("supplier_id, amount")
-        .eq("type", "expense")
-        .not("supplier_id", "is", null);
+        .from("client_team")
+        .select(`
+          campaigner_id,
+          campaigner_payment,
+          clients!inner(
+            agency_id,
+            agencies(name)
+          )
+        `)
+        .not("campaigner_payment", "is", null);
+      
       if (error) throw error;
       
-      // Group by supplier_id and sum amounts
-      const grouped = data.reduce((acc, item) => {
-        if (item.supplier_id) {
-          acc[item.supplier_id] = (acc[item.supplier_id] || 0) + Number(item.amount);
+      // Group by campaigner_id and agency
+      const grouped: Record<string, { byAgency: Record<string, { name: string; total: number }>; total: number }> = {};
+      
+      data?.forEach((item: any) => {
+        const campaignerId = item.campaigner_id;
+        const agencyId = item.clients?.agency_id;
+        const agencyName = item.clients?.agencies?.name || 'ללא סוכנות';
+        const payment = Number(item.campaigner_payment) || 0;
+        
+        if (!grouped[campaignerId]) {
+          grouped[campaignerId] = { byAgency: {}, total: 0 };
         }
-        return acc;
-      }, {} as Record<string, number>);
+        
+        if (!grouped[campaignerId].byAgency[agencyId]) {
+          grouped[campaignerId].byAgency[agencyId] = { name: agencyName, total: 0 };
+        }
+        
+        grouped[campaignerId].byAgency[agencyId].total += payment;
+        grouped[campaignerId].total += payment;
+      });
       
       return grouped;
     },
@@ -131,31 +147,19 @@ export default function Suppliers() {
                 </div>
               )}
               
-              {/* תשלומים לפי סוכנויות */}
-              {(supplier.payment_1 || supplier.payment_2 || supplier.payment_3) && (
+              {/* תשלומים מלקוחות (לפי סוכנויות) */}
+              {supplier.related_campaigner_id && campaignerPayments?.[supplier.related_campaigner_id] && (
                 <div className="pt-2 border-t space-y-1">
-                  <p className="text-sm font-semibold mb-2">תשלומים:</p>
-                  {supplier.payment_1 && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">{supplier.agency_1?.name || 'ללא סוכנות'}</span>
-                      <span className="font-medium">₪{Number(supplier.payment_1).toLocaleString()}</span>
+                  <p className="text-sm font-semibold mb-2">תשלומים מלקוחות:</p>
+                  {Object.entries(campaignerPayments[supplier.related_campaigner_id].byAgency).map(([agencyId, data]: [string, any]) => (
+                    <div key={agencyId} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{data.name}</span>
+                      <span className="font-medium">₪{data.total.toLocaleString()}</span>
                     </div>
-                  )}
-                  {supplier.payment_2 && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">{supplier.agency_2?.name || 'ללא סוכנות'}</span>
-                      <span className="font-medium">₪{Number(supplier.payment_2).toLocaleString()}</span>
-                    </div>
-                  )}
-                  {supplier.payment_3 && (
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">{supplier.agency_3?.name || 'ללא סוכנות'}</span>
-                      <span className="font-medium">₪{Number(supplier.payment_3).toLocaleString()}</span>
-                    </div>
-                  )}
+                  ))}
                   <div className="flex items-center justify-between text-sm pt-2 border-t font-semibold">
                     <span>סה"כ</span>
-                    <span>₪{((Number(supplier.payment_1) || 0) + (Number(supplier.payment_2) || 0) + (Number(supplier.payment_3) || 0)).toLocaleString()}</span>
+                    <span>₪{campaignerPayments[supplier.related_campaigner_id].total.toLocaleString()}</span>
                   </div>
                 </div>
               )}
