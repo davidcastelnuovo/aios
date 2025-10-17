@@ -36,13 +36,13 @@ const menuItems = [
 ];
 
 export function AppSidebar() {
-  const { state, setOpen, isMobile } = useSidebar();
+  const { state, setOpenMobile, isMobile } = useSidebar();
   const { role, isLoading } = useUserRole();
   const isCollapsed = state === "collapsed";
 
   const handleLinkClick = () => {
     if (isMobile) {
-      setOpen(false);
+      setOpenMobile(false);
     }
   };
 
