@@ -45,14 +45,14 @@ const formSchema = z.object({
   website: z.string().url("כתובת אתר לא תקינה").optional().or(z.literal("")),
   notes: z.string().optional(),
   status: z.enum(["active", "paused", "ended"]),
-  campaigner1_id: z.string().optional(),
-  campaigner1_payment: z.string().optional(),
-  campaigner2_id: z.string().optional(),
-  campaigner2_payment: z.string().optional(),
-  campaigner3_id: z.string().optional(),
-  campaigner3_payment: z.string().optional(),
-  campaigner4_id: z.string().optional(),
-  campaigner4_payment: z.string().optional(),
+  supplier1_id: z.string().optional(),
+  supplier1_payment: z.string().optional(),
+  supplier2_id: z.string().optional(),
+  supplier2_payment: z.string().optional(),
+  supplier3_id: z.string().optional(),
+  supplier3_payment: z.string().optional(),
+  supplier4_id: z.string().optional(),
+  supplier4_payment: z.string().optional(),
 });
 
 interface EditClientDialogProps {
@@ -77,24 +77,23 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
     },
   });
 
-  const { data: campaigners } = useQuery({
-    queryKey: ["campaigners"],
+  const { data: suppliers } = useQuery({
+    queryKey: ["suppliers"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("campaigners")
-        .select("id, full_name")
-        .eq("active", true)
-        .order("full_name");
+        .from("suppliers")
+        .select("id, name")
+        .order("name");
       if (error) throw error;
       return data;
     },
   });
 
-  const { data: clientTeam } = useQuery({
-    queryKey: ["client-team", client.id],
+  const { data: clientSuppliers } = useQuery({
+    queryKey: ["client-suppliers", client.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("client_team")
+        .from("client_suppliers")
         .select("*")
         .eq("client_id", client.id);
       if (error) throw error;
@@ -117,20 +116,20 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       website: client.website || "",
       notes: client.notes || "",
       status: client.status || "active",
-      campaigner1_id: "",
-      campaigner1_payment: "",
-      campaigner2_id: "",
-      campaigner2_payment: "",
-      campaigner3_id: "",
-      campaigner3_payment: "",
-      campaigner4_id: "",
-      campaigner4_payment: "",
+      supplier1_id: "",
+      supplier1_payment: "",
+      supplier2_id: "",
+      supplier2_payment: "",
+      supplier3_id: "",
+      supplier3_payment: "",
+      supplier4_id: "",
+      supplier4_payment: "",
     },
   });
 
-  // עדכון הערכים כשה-clientTeam מתקבל
+  // עדכון הערכים כשה-clientSuppliers מתקבל
   useEffect(() => {
-    if (clientTeam && clientTeam.length > 0) {
+    if (clientSuppliers && clientSuppliers.length > 0) {
       form.reset({
         name: client.name || "",
         agency_id: client.agency_id || "",
@@ -143,17 +142,17 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         website: client.website || "",
         notes: client.notes || "",
         status: client.status || "active",
-        campaigner1_id: clientTeam[0]?.campaigner_id || "",
-        campaigner1_payment: clientTeam[0]?.campaigner_payment?.toString() || "",
-        campaigner2_id: clientTeam[1]?.campaigner_id || "",
-        campaigner2_payment: clientTeam[1]?.campaigner_payment?.toString() || "",
-        campaigner3_id: clientTeam[2]?.campaigner_id || "",
-        campaigner3_payment: clientTeam[2]?.campaigner_payment?.toString() || "",
-        campaigner4_id: clientTeam[3]?.campaigner_id || "",
-        campaigner4_payment: clientTeam[3]?.campaigner_payment?.toString() || "",
+        supplier1_id: clientSuppliers[0]?.supplier_id || "",
+        supplier1_payment: clientSuppliers[0]?.supplier_payment?.toString() || "",
+        supplier2_id: clientSuppliers[1]?.supplier_id || "",
+        supplier2_payment: clientSuppliers[1]?.supplier_payment?.toString() || "",
+        supplier3_id: clientSuppliers[2]?.supplier_id || "",
+        supplier3_payment: clientSuppliers[2]?.supplier_payment?.toString() || "",
+        supplier4_id: clientSuppliers[3]?.supplier_id || "",
+        supplier4_payment: clientSuppliers[3]?.supplier_payment?.toString() || "",
       });
     }
-  }, [clientTeam, client, form]);
+  }, [clientSuppliers, client, form]);
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
@@ -177,54 +176,54 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
 
       if (clientError) throw clientError;
 
-      // Update client_team data
-      const teamUpdates = [];
+      // Update client_suppliers data
+      const supplierUpdates = [];
       
-      if (values.campaigner1_id) {
-        teamUpdates.push({
+      if (values.supplier1_id) {
+        supplierUpdates.push({
           client_id: client.id,
-          campaigner_id: values.campaigner1_id,
-          campaigner_payment: values.campaigner1_payment ? parseFloat(values.campaigner1_payment) : 0,
+          supplier_id: values.supplier1_id,
+          supplier_payment: values.supplier1_payment ? parseFloat(values.supplier1_payment) : 0,
         });
       }
       
-      if (values.campaigner2_id) {
-        teamUpdates.push({
+      if (values.supplier2_id) {
+        supplierUpdates.push({
           client_id: client.id,
-          campaigner_id: values.campaigner2_id,
-          campaigner_payment: values.campaigner2_payment ? parseFloat(values.campaigner2_payment) : 0,
+          supplier_id: values.supplier2_id,
+          supplier_payment: values.supplier2_payment ? parseFloat(values.supplier2_payment) : 0,
         });
       }
       
-      if (values.campaigner3_id) {
-        teamUpdates.push({
+      if (values.supplier3_id) {
+        supplierUpdates.push({
           client_id: client.id,
-          campaigner_id: values.campaigner3_id,
-          campaigner_payment: values.campaigner3_payment ? parseFloat(values.campaigner3_payment) : 0,
+          supplier_id: values.supplier3_id,
+          supplier_payment: values.supplier3_payment ? parseFloat(values.supplier3_payment) : 0,
         });
       }
       
-      if (values.campaigner4_id) {
-        teamUpdates.push({
+      if (values.supplier4_id) {
+        supplierUpdates.push({
           client_id: client.id,
-          campaigner_id: values.campaigner4_id,
-          campaigner_payment: values.campaigner4_payment ? parseFloat(values.campaigner4_payment) : 0,
+          supplier_id: values.supplier4_id,
+          supplier_payment: values.supplier4_payment ? parseFloat(values.supplier4_payment) : 0,
         });
       }
 
-      // Delete existing team members
+      // Delete existing supplier assignments
       await supabase
-        .from("client_team")
+        .from("client_suppliers")
         .delete()
         .eq("client_id", client.id);
 
-      // Insert new team members
-      if (teamUpdates.length > 0) {
-        const { error: teamError } = await supabase
-          .from("client_team")
-          .insert(teamUpdates);
+      // Insert new supplier assignments
+      if (supplierUpdates.length > 0) {
+        const { error: supplierError } = await supabase
+          .from("client_suppliers")
+          .insert(supplierUpdates);
 
-        if (teamError) throw teamError;
+        if (supplierError) throw supplierError;
       }
     },
     onSuccess: () => {
@@ -422,26 +421,26 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
             />
 
             <div className="space-y-4 pt-4 border-t">
-              <h3 className="font-semibold text-lg">קמפיינרים ותשלומים</h3>
+              <h3 className="font-semibold text-lg">ספקים ותשלומים</h3>
               
               {[1, 2, 3, 4].map((num) => (
                 <div key={num} className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name={`campaigner${num}_id` as any}
+                    name={`supplier${num}_id` as any}
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>קמפיינר {num}</FormLabel>
+                        <FormLabel>ספק {num}</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value || undefined}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="בחר קמפיינר" />
+                              <SelectValue placeholder="בחר ספק" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent className="bg-background z-50">
-                            {campaigners?.map((campaigner) => (
-                              <SelectItem key={campaigner.id} value={campaigner.id}>
-                                {campaigner.full_name}
+                            {suppliers?.map((supplier) => (
+                              <SelectItem key={supplier.id} value={supplier.id}>
+                                {supplier.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -453,7 +452,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
 
                   <FormField
                     control={form.control}
-                    name={`campaigner${num}_payment` as any}
+                    name={`supplier${num}_payment` as any}
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>תשלום (₪)</FormLabel>

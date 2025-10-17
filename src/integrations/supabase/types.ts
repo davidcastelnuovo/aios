@@ -95,6 +95,48 @@ export type Database = {
         }
         Relationships: []
       }
+      client_suppliers: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          notes: string | null
+          supplier_id: string
+          supplier_payment: number | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          supplier_id: string
+          supplier_payment?: number | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          notes?: string | null
+          supplier_id?: string
+          supplier_payment?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_suppliers_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_suppliers_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_team: {
         Row: {
           allocation_percent: number | null
