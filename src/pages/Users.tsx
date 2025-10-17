@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users as UsersIcon, Mail, Shield, UserCircle } from "lucide-react";
+import { Users as UsersIcon, Mail, Shield, UserCircle, Edit, Trash2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -27,6 +27,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
@@ -48,8 +58,15 @@ const inviteSchema = z.object({
   role: z.enum(["admin", "user"]),
 });
 
+const editSchema = z.object({
+  fullName: z.string().min(1, "שם מלא הוא שדה חובה"),
+});
+
 export default function Users() {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
   const queryClient = useQueryClient();
 
   const form = useForm<z.infer<typeof inviteSchema>>({
@@ -58,6 +75,13 @@ export default function Users() {
       email: "",
       fullName: "",
       role: "user",
+    },
+  });
+
+  const editForm = useForm<z.infer<typeof editSchema>>({
+    resolver: zodResolver(editSchema),
+    defaultValues: {
+      fullName: "",
     },
   });
 
@@ -176,6 +200,51 @@ export default function Users() {
     },
   });
 
+  const updateUserMutation = useMutation({
+    mutationFn: async ({ userId, fullName }: { userId: string; fullName: string }) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ full_name: fullName })
+        .eq("id", userId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("המשתמש עודכן בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      setEditDialogOpen(false);
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון המשתמש");
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      // Delete user roles
+      await supabase
+        .from("user_roles")
+        .delete()
+        .eq("user_id", userId);
+
+      // Delete profile
+      const { error } = await supabase
+        .from("profiles")
+        .delete()
+        .eq("id", userId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("המשתמש נמחק בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      setDeleteDialogOpen(false);
+    },
+    onError: () => {
+      toast.error("שגיאה במחיקת המשתמש");
+    },
+  });
+
   const getRoleText = (role: string) => {
     return role === "admin" ? "מנהל" : "משתמש";
   };
@@ -279,6 +348,7 @@ export default function Users() {
               <TableHead className="text-right font-semibold">קמפיינר</TableHead>
               <TableHead className="text-right font-semibold">הרשאה</TableHead>
               <TableHead className="text-right font-semibold">תאריך הצטרפות</TableHead>
+              <TableHead className="text-right font-semibold">פעולות</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -352,6 +422,31 @@ export default function Users() {
                   <TableCell className="py-4 text-sm text-muted-foreground">
                     {new Date(user.created_at).toLocaleDateString("he-IL")}
                   </TableCell>
+                  <TableCell className="py-4">
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedUser(user);
+                          editForm.setValue("fullName", user.full_name || "");
+                          setEditDialogOpen(true);
+                        }}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setDeleteDialogOpen(true);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               );
             })}
@@ -368,6 +463,65 @@ export default function Users() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>ערוך משתמש</DialogTitle>
+          </DialogHeader>
+          <Form {...editForm}>
+            <form onSubmit={editForm.handleSubmit((values) => {
+              if (selectedUser) {
+                updateUserMutation.mutate({ 
+                  userId: selectedUser.id, 
+                  fullName: values.fullName 
+                });
+              }
+            })} className="space-y-4">
+              <FormField
+                control={editForm.control}
+                name="fullName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>שם מלא</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button type="submit" disabled={updateUserMutation.isPending} className="w-full">
+                {updateUserMutation.isPending ? "שומר..." : "שמור שינויים"}
+              </Button>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>האם אתה בטוח?</AlertDialogTitle>
+            <AlertDialogDescription>
+              פעולה זו תמחק את המשתמש לצמיתות. לא ניתן לשחזר את הנתונים.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (selectedUser) {
+                  deleteUserMutation.mutate(selectedUser.id);
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              מחק
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
