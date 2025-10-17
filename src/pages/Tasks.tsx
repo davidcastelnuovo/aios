@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckSquare, Calendar, Building2, Users, Megaphone, AlertCircle } from "lucide-react";
+import AddTaskForm from "@/components/forms/AddTaskForm";
 
 export default function Tasks() {
   const { data: tasks, isLoading } = useQuery({
@@ -141,6 +142,8 @@ export default function Tasks() {
         <h2 className="text-3xl font-bold">משימות</h2>
         <p className="text-muted-foreground mt-1">ניהול משימות וקמפיינים</p>
       </div>
+
+      <AddTaskForm />
 
       <div className="grid gap-6 md:grid-cols-3">
         <div className="space-y-4">
