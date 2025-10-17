@@ -174,7 +174,7 @@ export default function Clients() {
           <h2 className="text-3xl font-bold">לקוחות</h2>
           <p className="text-muted-foreground mt-1">ניהול לקוחות סוכנויות</p>
         </div>
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-4 items-center">
           <div className="flex gap-1 border rounded-md p-1">
             <Button
               variant={viewMode === "grid" ? "default" : "ghost"}
@@ -191,6 +191,9 @@ export default function Clients() {
               <TableIcon className="h-4 w-4" />
             </Button>
           </div>
+          
+          <div className="h-8 w-px bg-border"></div>
+          
           <div className="flex items-center gap-2">
             <Switch
               id="hide-inactive"
@@ -201,6 +204,9 @@ export default function Clients() {
               הסתר לא פעילים
             </Label>
           </div>
+          
+          <div className="h-8 w-px bg-border"></div>
+          
           <Select value={selectedAgency} onValueChange={setSelectedAgency}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="כל הסוכנויות" />
