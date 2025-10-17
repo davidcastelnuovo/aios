@@ -346,113 +346,120 @@ export default function Clients() {
         ))}
         </div>
       ) : (
-        <div className="rounded-md border">
+        <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="text-right">פעולות</TableHead>
-                <TableHead className="text-right">שם</TableHead>
-                <TableHead className="text-right">סוכנות</TableHead>
-                <TableHead className="text-right">סטטוס</TableHead>
-                <TableHead className="text-right">תעשייה</TableHead>
-                <TableHead className="text-right">ריטיינר</TableHead>
-                <TableHead className="text-right">תקציב חודשי</TableHead>
-                <TableHead className="text-right">טלפון</TableHead>
-                <TableHead className="text-right">אימייל</TableHead>
-                <TableHead className="text-right">אתר</TableHead>
-                <TableHead className="text-right">קמפיינרים</TableHead>
+              <TableRow className="bg-muted/50 hover:bg-muted/50 border-b">
+                <TableHead className="text-right font-semibold h-12">פעולות</TableHead>
+                <TableHead className="text-right font-semibold">שם</TableHead>
+                <TableHead className="text-right font-semibold">סוכנות</TableHead>
+                <TableHead className="text-right font-semibold">סטטוס</TableHead>
+                <TableHead className="text-right font-semibold">תעשייה</TableHead>
+                <TableHead className="text-right font-semibold">ריטיינר</TableHead>
+                <TableHead className="text-right font-semibold">תקציב חודשי</TableHead>
+                <TableHead className="text-right font-semibold">טלפון</TableHead>
+                <TableHead className="text-right font-semibold">אימייל</TableHead>
+                <TableHead className="text-right font-semibold">אתר</TableHead>
+                <TableHead className="text-right font-semibold">קמפיינרים</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visibleClients?.map((client) => (
-                <TableRow key={client.id}>
-                  <TableCell>
+                <TableRow 
+                  key={client.id}
+                  className="hover:bg-accent/5 transition-colors border-b border-border/50"
+                >
+                  <TableCell className="py-4">
                     <Button 
                       size="sm" 
                       variant="ghost"
                       onClick={() => setEditingClient(client)}
+                      className="h-8 w-8 p-0 hover:bg-accent/20"
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
                   </TableCell>
-                  <TableCell className="font-medium">{client.name}</TableCell>
-                  <TableCell>
+                  <TableCell className="font-semibold py-4">{client.name}</TableCell>
+                  <TableCell className="py-4">
                     {client.agencies ? (
-                      <div className="flex items-center gap-1">
-                        <Building2 className="h-3 w-3 text-muted-foreground" />
-                        {client.agencies.name}
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Building2 className="h-4 w-4" />
+                        <span>{client.agencies.name}</span>
                       </div>
-                    ) : "-"}
+                    ) : <span className="text-muted-foreground">-</span>}
                   </TableCell>
-                  <TableCell>
-                    <Select
-                      value={client.status}
-                      onValueChange={(value: "active" | "paused" | "ended") => 
-                        updateStatusMutation.mutate({ clientId: client.id, status: value })
-                      }
+                  <TableCell className="py-4">
+                    <Badge 
+                      variant="outline" 
+                      className={`${getStatusColor(client.status)} font-medium`}
                     >
-                      <SelectTrigger className="w-[120px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-background">
-                        <SelectItem value="active">פעיל</SelectItem>
-                        <SelectItem value="paused">מושהה</SelectItem>
-                        <SelectItem value="ended">הסתיים</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      {getStatusText(client.status)}
+                    </Badge>
                   </TableCell>
-                  <TableCell>{client.industry || "-"}</TableCell>
-                  <TableCell>
+                  <TableCell className="py-4">
+                    <span className="text-sm">{client.industry || <span className="text-muted-foreground">-</span>}</span>
+                  </TableCell>
+                  <TableCell className="py-4">
                     {client.retainer ? (
-                      <div className="flex items-center gap-1">
-                        <span className="text-muted-foreground font-semibold">₪</span>
-                        {Number(client.retainer).toLocaleString()}
+                      <div className="flex items-center gap-1 font-medium">
+                        <Coins className="h-4 w-4 text-muted-foreground" />
+                        <span>₪{Number(client.retainer).toLocaleString()}</span>
                       </div>
-                    ) : "-"}
+                    ) : <span className="text-muted-foreground">-</span>}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-4">
                     {client.monthly_budget ? (
-                      <div className="flex items-center gap-1">
-                        <span className="text-muted-foreground font-semibold">₪</span>
-                        {Number(client.monthly_budget).toLocaleString()}
+                      <div className="flex items-center gap-1 font-medium">
+                        <Coins className="h-4 w-4 text-muted-foreground" />
+                        <span>₪{Number(client.monthly_budget).toLocaleString()}</span>
                       </div>
-                    ) : "-"}
+                    ) : <span className="text-muted-foreground">-</span>}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-4">
                     {client.phone ? (
-                      <a href={`tel:${client.phone}`} className="flex items-center gap-1 hover:text-primary">
-                        <Phone className="h-3 w-3" />
-                        {client.phone}
+                      <a 
+                        href={`tel:${client.phone}`} 
+                        className="flex items-center gap-2 hover:text-primary transition-colors text-sm"
+                      >
+                        <Phone className="h-4 w-4" />
+                        <span>{client.phone}</span>
                       </a>
-                    ) : "-"}
+                    ) : <span className="text-muted-foreground">-</span>}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-4">
                     {client.email ? (
-                      <a href={`mailto:${client.email}`} className="flex items-center gap-1 hover:text-primary">
-                        <Mail className="h-3 w-3" />
-                        {client.email}
+                      <a 
+                        href={`mailto:${client.email}`} 
+                        className="flex items-center gap-2 hover:text-primary transition-colors text-sm"
+                      >
+                        <Mail className="h-4 w-4" />
+                        <span>{client.email}</span>
                       </a>
-                    ) : "-"}
+                    ) : <span className="text-muted-foreground">-</span>}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="py-4">
                     {client.website ? (
                       <a 
                         href={client.website} 
                         target="_blank" 
                         rel="noopener noreferrer" 
-                        className="flex items-center gap-1 hover:text-primary"
+                        className="flex items-center gap-2 hover:text-primary transition-colors text-sm"
                       >
-                        <Globe className="h-3 w-3" />
-                        קישור
+                        <Globe className="h-4 w-4" />
+                        <span>קישור</span>
                       </a>
-                    ) : "-"}
+                    ) : <span className="text-muted-foreground">-</span>}
                   </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-2">
+                  <TableCell className="py-4">
+                    <div className="flex flex-col gap-2 min-w-[180px]">
                       {client.client_team && client.client_team.length > 0 && (
                         <div className="flex flex-wrap gap-1">
                           {client.client_team.map((ct: any, idx: number) => (
-                            <Badge key={idx} variant="secondary" className="text-xs">
+                            <Badge 
+                              key={idx} 
+                              variant="secondary" 
+                              className="text-xs bg-primary/10 text-primary hover:bg-primary/20"
+                            >
                               {ct.campaigners.full_name}
                             </Badge>
                           ))}
@@ -461,8 +468,8 @@ export default function Clients() {
                       <Select
                         onValueChange={(value) => assignCampaignerMutation.mutate({ clientId: client.id, campaignerId: value })}
                       >
-                        <SelectTrigger className="w-[160px]">
-                          <SelectValue placeholder="הוסף קמפיינר" />
+                        <SelectTrigger className="h-8 text-xs bg-background hover:bg-accent/10 transition-colors">
+                          <SelectValue placeholder="+ הוסף קמפיינר" />
                         </SelectTrigger>
                         <SelectContent className="bg-background">
                           {campaigners?.map((campaigner) => (
@@ -482,15 +489,15 @@ export default function Clients() {
       )}
 
       {visibleClients?.length === 0 && (
-        <Card className="shadow-card">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Users className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-1">אין לקוחות</h3>
-            <p className="text-sm text-muted-foreground">התחל בהוספת לקוח ראשון</p>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <Users className="h-16 w-16 text-muted-foreground mb-4" />
+            <p className="text-lg font-medium mb-2">לא נמצאו לקוחות</p>
+            <p className="text-muted-foreground">התחל בהוספת לקוח חדש</p>
           </CardContent>
         </Card>
       )}
-
+      
       {editingClient && (
         <EditClientDialog
           client={editingClient}
