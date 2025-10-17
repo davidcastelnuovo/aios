@@ -123,7 +123,7 @@ export default function Dashboard() {
       
       const financeExpense = financeData?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
       
-      // משיכת הוצאות מ-client_team
+      // משיכת הוצאות מ-client_team (תשלומי קמפיינרים)
       let clientTeamQuery = supabase
         .from("client_team")
         .select(`
@@ -147,7 +147,25 @@ export default function Dashboard() {
       const { data: campaignerPaymentsData } = await clientTeamQuery;
       const campaignerPayments = campaignerPaymentsData?.reduce((sum, item) => sum + Number(item.campaigner_payment || 0), 0) || 0;
       
-      const totalExpense = financeExpense + campaignerPayments;
+      // משיכת תשלומים ידניים מספקים
+      let suppliersQuery = supabase
+        .from("suppliers")
+        .select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3");
+      
+      const { data: suppliersData } = await suppliersQuery;
+      let manualSupplierPayments = 0;
+      
+      suppliersData?.forEach(supplier => {
+        if (selectedAgency === "all") {
+          manualSupplierPayments += Number(supplier.payment_1 || 0) + Number(supplier.payment_2 || 0) + Number(supplier.payment_3 || 0);
+        } else {
+          if (supplier.agency_id_1 === selectedAgency) manualSupplierPayments += Number(supplier.payment_1 || 0);
+          if (supplier.agency_id_2 === selectedAgency) manualSupplierPayments += Number(supplier.payment_2 || 0);
+          if (supplier.agency_id_3 === selectedAgency) manualSupplierPayments += Number(supplier.payment_3 || 0);
+        }
+      });
+      
+      const totalExpense = financeExpense + campaignerPayments + manualSupplierPayments;
 
       return {
         agenciesCount: agenciesData.count || 0,

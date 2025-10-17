@@ -75,6 +75,31 @@ export default function Finance() {
     },
   });
 
+  // משיכת תשלומים ידניים מספקים
+  const { data: manualSupplierPayments } = useQuery({
+    queryKey: ["manual-supplier-payments", selectedAgency],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("suppliers")
+        .select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3");
+      
+      if (error) throw error;
+      
+      let total = 0;
+      data?.forEach(supplier => {
+        if (selectedAgency === "all") {
+          total += Number(supplier.payment_1 || 0) + Number(supplier.payment_2 || 0) + Number(supplier.payment_3 || 0);
+        } else {
+          if (supplier.agency_id_1 === selectedAgency) total += Number(supplier.payment_1 || 0);
+          if (supplier.agency_id_2 === selectedAgency) total += Number(supplier.payment_2 || 0);
+          if (supplier.agency_id_3 === selectedAgency) total += Number(supplier.payment_3 || 0);
+        }
+      });
+      
+      return total;
+    },
+  });
+
   const filteredClients = selectedAgency === "all" 
     ? clients 
     : clients?.filter(c => c.agency_id === selectedAgency);
@@ -134,7 +159,7 @@ export default function Finance() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">סך הוצאות</p>
-                <p className="text-2xl font-bold text-destructive">₪{(totalExpense + (campaignerPayments || 0)).toLocaleString()}</p>
+                <p className="text-2xl font-bold text-destructive">₪{(totalExpense + (campaignerPayments || 0) + (manualSupplierPayments || 0)).toLocaleString()}</p>
               </div>
               <div className="p-3 rounded-lg bg-destructive/10">
                 <TrendingDown className="h-6 w-6 text-destructive" />
@@ -148,12 +173,12 @@ export default function Finance() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">רווח</p>
-                <p className={`text-2xl font-bold ${(totalIncome + totalRetainers) - (totalExpense + (campaignerPayments || 0)) >= 0 ? 'text-success' : 'text-destructive'}`}>
-                  ₪{((totalIncome + totalRetainers) - (totalExpense + (campaignerPayments || 0))).toLocaleString()}
+                <p className={`text-2xl font-bold ${(totalIncome + totalRetainers) - (totalExpense + (campaignerPayments || 0) + (manualSupplierPayments || 0)) >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  ₪{((totalIncome + totalRetainers) - (totalExpense + (campaignerPayments || 0) + (manualSupplierPayments || 0))).toLocaleString()}
                 </p>
               </div>
-              <div className={`p-3 rounded-lg ${(totalIncome + totalRetainers) - (totalExpense + (campaignerPayments || 0)) >= 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
-                <TrendingUp className={`h-6 w-6 ${(totalIncome + totalRetainers) - (totalExpense + (campaignerPayments || 0)) >= 0 ? 'text-success' : 'text-destructive'}`} />
+              <div className={`p-3 rounded-lg ${(totalIncome + totalRetainers) - (totalExpense + (campaignerPayments || 0) + (manualSupplierPayments || 0)) >= 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
+                <TrendingUp className={`h-6 w-6 ${(totalIncome + totalRetainers) - (totalExpense + (campaignerPayments || 0) + (manualSupplierPayments || 0)) >= 0 ? 'text-success' : 'text-destructive'}`} />
               </div>
             </div>
           </CardContent>
