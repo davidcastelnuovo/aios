@@ -64,22 +64,25 @@ export default function Users() {
   const { data: users, isLoading } = useQuery({
     queryKey: ["users-with-roles"],
     queryFn: async () => {
+      // Get all profiles
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select(`
-          id,
-          email,
-          full_name,
-          created_at,
-          updated_at,
-          campaigner_id,
-          user_roles!inner (role)
-        `)
+        .select("id, email, full_name, created_at, updated_at, campaigner_id")
         .order("created_at", { ascending: false });
 
       if (profilesError) throw profilesError;
       
-      // Transform the data to include role at the top level
+      // Get all user roles
+      const { data: userRoles, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("user_id, role");
+
+      if (rolesError) throw rolesError;
+
+      // Create a map of user_id to role
+      const rolesMap = new Map(userRoles?.map(r => [r.user_id, r.role]) || []);
+      
+      // Combine the data
       return profiles.map((profile: any) => ({
         id: profile.id,
         email: profile.email,
@@ -87,7 +90,7 @@ export default function Users() {
         created_at: profile.created_at,
         updated_at: profile.updated_at,
         campaigner_id: profile.campaigner_id,
-        role: (profile.user_roles?.[0]?.role || "user") as "admin" | "user"
+        role: (rolesMap.get(profile.id) || "user") as "admin" | "user" | "owner"
       }));
     },
   });
