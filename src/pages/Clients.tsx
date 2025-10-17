@@ -194,15 +194,15 @@ export default function Clients() {
           
           <div className="h-8 w-px bg-border"></div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" dir="ltr">
+            <Label htmlFor="hide-inactive" className="cursor-pointer">
+              הסתר לא פעילים
+            </Label>
             <Switch
               id="hide-inactive"
               checked={hideInactive}
               onCheckedChange={setHideInactive}
             />
-            <Label htmlFor="hide-inactive" className="cursor-pointer">
-              הסתר לא פעילים
-            </Label>
           </div>
           
           <div className="h-8 w-px bg-border"></div>
