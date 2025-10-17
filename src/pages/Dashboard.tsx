@@ -7,25 +7,28 @@ export default function Dashboard() {
   const { data: stats } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: async () => {
-      const [agencies, clients, campaigners, tasks, finance] = await Promise.all([
+      const [agencies, clientsData, campaigners, tasks, finance, activeClients] = await Promise.all([
         supabase.from("agencies").select("*", { count: "exact", head: true }),
         supabase.from("clients").select("*", { count: "exact", head: true }),
         supabase.from("campaigners").select("*", { count: "exact", head: true }),
         supabase.from("tasks").select("*").eq("status", "open"),
         supabase.from("finance").select("type, amount"),
+        supabase.from("clients").select("retainer").eq("status", "active"),
       ]);
 
-      const income = finance.data?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
+      const financeIncome = finance.data?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
+      const retainers = activeClients.data?.reduce((sum, client) => sum + Number(client.retainer || 0), 0) || 0;
+      const totalIncome = financeIncome + retainers;
       const expense = finance.data?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
 
       return {
         agenciesCount: agencies.count || 0,
-        clientsCount: clients.count || 0,
+        clientsCount: clientsData.count || 0,
         campaignersCount: campaigners.count || 0,
         openTasksCount: tasks.data?.length || 0,
-        income,
+        income: totalIncome,
         expense,
-        profit: income - expense,
+        profit: totalIncome - expense,
       };
     },
   });
