@@ -27,48 +27,6 @@ export default function Suppliers() {
     },
   });
 
-  // Query to get campaigner payments from client_team
-  const { data: campaignerPayments } = useQuery({
-    queryKey: ["campaigner-payments"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("client_team")
-        .select(`
-          campaigner_id,
-          campaigner_payment,
-          clients!inner(
-            agency_id,
-            agencies(name)
-          )
-        `)
-        .not("campaigner_payment", "is", null);
-      
-      if (error) throw error;
-      
-      // Group by campaigner_id and agency
-      const grouped: Record<string, { byAgency: Record<string, { name: string; total: number }>; total: number }> = {};
-      
-      data?.forEach((item: any) => {
-        const campaignerId = item.campaigner_id;
-        const agencyId = item.clients?.agency_id;
-        const agencyName = item.clients?.agencies?.name || 'ללא סוכנות';
-        const payment = Number(item.campaigner_payment) || 0;
-        
-        if (!grouped[campaignerId]) {
-          grouped[campaignerId] = { byAgency: {}, total: 0 };
-        }
-        
-        if (!grouped[campaignerId].byAgency[agencyId]) {
-          grouped[campaignerId].byAgency[agencyId] = { name: agencyName, total: 0 };
-        }
-        
-        grouped[campaignerId].byAgency[agencyId].total += payment;
-        grouped[campaignerId].total += payment;
-      });
-      
-      return grouped;
-    },
-  });
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -153,8 +111,7 @@ export default function Suppliers() {
               )}
               
               {/* תשלומים */}
-              {((supplier.payment_1 || supplier.payment_2 || supplier.payment_3) || 
-                (supplier.related_campaigner_id && campaignerPayments?.[supplier.related_campaigner_id])) && (
+              {(supplier.payment_1 || supplier.payment_2 || supplier.payment_3) && (
                 <div className="pt-2 border-t space-y-1">
                   <p className="text-sm font-semibold mb-2">תשלומים:</p>
                   
@@ -178,25 +135,12 @@ export default function Suppliers() {
                     </div>
                   )}
                   
-                  {/* תשלומים מלקוחות */}
-                  {supplier.related_campaigner_id && campaignerPayments?.[supplier.related_campaigner_id] && (
-                    <>
-                      {Object.entries(campaignerPayments[supplier.related_campaigner_id].byAgency).map(([agencyId, data]: [string, any]) => (
-                        <div key={agencyId} className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">{data.name} (לקוחות)</span>
-                          <span className="font-medium">₪{data.total.toLocaleString()}</span>
-                        </div>
-                      ))}
-                    </>
-                  )}
-                  
                   <div className="flex items-center justify-between text-sm pt-2 border-t font-semibold">
                     <span>סה"כ</span>
                     <span>₪{(
                       (Number(supplier.payment_1) || 0) + 
                       (Number(supplier.payment_2) || 0) + 
-                      (Number(supplier.payment_3) || 0) +
-                      (supplier.related_campaigner_id && campaignerPayments?.[supplier.related_campaigner_id]?.total || 0)
+                      (Number(supplier.payment_3) || 0)
                     ).toLocaleString()}</span>
                   </div>
                 </div>

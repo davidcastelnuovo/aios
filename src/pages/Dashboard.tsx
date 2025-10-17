@@ -134,34 +134,6 @@ export default function Dashboard() {
       
       const financeExpense = financeData?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
       
-      // משיכת הוצאות מ-client_team (תשלומי קמפיינרים)
-      let clientTeamQuery = supabase
-        .from("client_team")
-        .select(`
-          campaigner_payment,
-          clients!inner(agency_id)
-        `)
-        .not("campaigner_payment", "is", null);
-      
-      if (selectedAgency !== "all") {
-        clientTeamQuery = clientTeamQuery.eq("clients.agency_id", selectedAgency);
-      }
-      
-      if (selectedClient !== "all") {
-        clientTeamQuery = clientTeamQuery.eq("client_id", selectedClient);
-      }
-      
-      if (selectedSupplier !== "all") {
-        if (relatedCampaignerId) {
-          clientTeamQuery = clientTeamQuery.eq("campaigner_id", relatedCampaignerId);
-        } else {
-          // אם אין קמפיינר קשור, נאלץ את השאילתה להחזיר תוצאה ריקה
-          clientTeamQuery = clientTeamQuery.eq("campaigner_id", "00000000-0000-0000-0000-000000000000");
-        }
-      }
-      
-      const { data: campaignerPaymentsData } = await clientTeamQuery;
-      const campaignerPayments = campaignerPaymentsData?.reduce((sum, item) => sum + Number(item.campaigner_payment || 0), 0) || 0;
       
       // משיכת תשלומים ידניים מספקים
       let suppliersQuery = supabase
@@ -185,7 +157,7 @@ export default function Dashboard() {
         }
       });
       
-      const totalExpense = financeExpense + campaignerPayments + manualSupplierPayments;
+      const totalExpense = financeExpense + manualSupplierPayments;
 
       return {
         agenciesCount: agenciesData.count || 0,
