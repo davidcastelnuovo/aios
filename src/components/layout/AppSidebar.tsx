@@ -29,7 +29,7 @@ const menuItems = [
   { title: "לקוחות", url: "/clients", icon: Users, roles: ["admin", "user", "owner"] },
   { title: "משימות", url: "/tasks", icon: CheckSquare, roles: ["admin", "user", "owner"] },
   { title: "קמפיינרים", url: "/campaigners", icon: Megaphone, roles: ["admin", "owner"] },
-  { title: "ספקים", url: "/suppliers", icon: Truck, roles: ["admin", "owner"] },
+  { title: "ספקים", url: "/suppliers", icon: Truck, roles: ["owner"] },
   { title: "כספים", url: "/finance", icon: DollarSign, roles: ["owner"] },
   { title: "דוחות", url: "/reports", icon: BarChart3, roles: ["admin", "owner"] },
   { title: "משתמשים", url: "/users", icon: UserCog, roles: ["admin", "owner"] },

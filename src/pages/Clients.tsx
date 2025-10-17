@@ -267,7 +267,7 @@ export default function Clients() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {client.retainer && (
+              {isOwner && client.retainer && (
                 <div className="flex items-center gap-2">
                   <Coins className="h-4 w-4 text-muted-foreground" />
                   <div className="text-sm">
@@ -382,8 +382,8 @@ export default function Clients() {
                 <TableHead className="text-right font-semibold">סוכנות</TableHead>
                 <TableHead className="text-right font-semibold">סטטוס</TableHead>
                 <TableHead className="text-right font-semibold">תעשייה</TableHead>
-                <TableHead className="text-right font-semibold">ריטיינר</TableHead>
-                <TableHead className="text-right font-semibold">תקציב חודשי</TableHead>
+                {isOwner && <TableHead className="text-right font-semibold">ריטיינר</TableHead>}
+                {isOwner && <TableHead className="text-right font-semibold">תקציב חודשי</TableHead>}
                 <TableHead className="text-right font-semibold">טלפון</TableHead>
                 <TableHead className="text-right font-semibold">אימייל</TableHead>
                 <TableHead className="text-right font-semibold">אתר</TableHead>
@@ -450,22 +450,26 @@ export default function Clients() {
                   <TableCell className="py-4">
                     <span className="text-sm">{client.industry || <span className="text-muted-foreground">-</span>}</span>
                   </TableCell>
-                  <TableCell className="py-4">
-                    {client.retainer ? (
-                      <div className="flex items-center gap-1 font-medium">
-                        <Coins className="h-4 w-4 text-muted-foreground" />
-                        <span>₪{Number(client.retainer).toLocaleString()}</span>
-                      </div>
-                    ) : <span className="text-muted-foreground">-</span>}
-                  </TableCell>
-                  <TableCell className="py-4">
-                    {client.monthly_budget ? (
-                      <div className="flex items-center gap-1 font-medium">
-                        <Coins className="h-4 w-4 text-muted-foreground" />
-                        <span>₪{Number(client.monthly_budget).toLocaleString()}</span>
-                      </div>
-                    ) : <span className="text-muted-foreground">-</span>}
-                  </TableCell>
+                  {isOwner && (
+                    <TableCell className="py-4">
+                      {client.retainer ? (
+                        <div className="flex items-center gap-1 font-medium">
+                          <Coins className="h-4 w-4 text-muted-foreground" />
+                          <span>₪{Number(client.retainer).toLocaleString()}</span>
+                        </div>
+                      ) : <span className="text-muted-foreground">-</span>}
+                    </TableCell>
+                  )}
+                  {isOwner && (
+                    <TableCell className="py-4">
+                      {client.monthly_budget ? (
+                        <div className="flex items-center gap-1 font-medium">
+                          <Coins className="h-4 w-4 text-muted-foreground" />
+                          <span>₪{Number(client.monthly_budget).toLocaleString()}</span>
+                        </div>
+                      ) : <span className="text-muted-foreground">-</span>}
+                    </TableCell>
+                  )}
                   <TableCell className="py-4">
                     {client.phone ? (
                       <a 
