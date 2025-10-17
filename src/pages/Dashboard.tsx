@@ -4,10 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Megaphone, DollarSign, TrendingUp, TrendingDown, CheckSquare } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
+import { useAgency } from "@/contexts/AgencyContext";
 
 export default function Dashboard() {
-  const [selectedAgency, setSelectedAgency] = useState<string>("all");
+  const { selectedAgency } = useAgency();
   const [selectedClient, setSelectedClient] = useState<string>("all");
   const [selectedSupplier, setSelectedSupplier] = useState<string>("all");
 
@@ -241,21 +241,7 @@ export default function Dashboard() {
         <p className="text-muted-foreground mt-1">מבט על על המערכת</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-          <SelectTrigger>
-            <SelectValue placeholder="כל הסוכנויות" />
-          </SelectTrigger>
-          <SelectContent className="bg-background">
-            <SelectItem value="all">כל הסוכנויות</SelectItem>
-            {agencies?.map((agency) => (
-              <SelectItem key={agency.id} value={agency.id}>
-                {agency.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
+      <div className="grid gap-4 md:grid-cols-2">
         <Select value={selectedClient} onValueChange={setSelectedClient}>
           <SelectTrigger>
             <SelectValue placeholder="כל הלקוחות" />

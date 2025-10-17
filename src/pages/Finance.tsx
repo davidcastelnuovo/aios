@@ -4,24 +4,11 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, Calendar, Building2, Users, Truck } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState } from "react";
+import { useAgency } from "@/contexts/AgencyContext";
 
 export default function Finance() {
-  const [selectedAgency, setSelectedAgency] = useState<string>("all");
+  const { selectedAgency } = useAgency();
 
-  const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("id, name")
-        .eq("status", "active")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
 
   const { data: financeRecords, isLoading } = useQuery({
     queryKey: ["finance"],
@@ -119,24 +106,9 @@ export default function Finance() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-start">
-        <div>
-          <h2 className="text-3xl font-bold">כספים</h2>
-          <p className="text-muted-foreground mt-1">ניהול הכנסות והוצאות</p>
-        </div>
-        <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="בחר סוכנות" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">כל הסוכנויות</SelectItem>
-            {agencies?.map((agency) => (
-              <SelectItem key={agency.id} value={agency.id}>
-                {agency.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div>
+        <h2 className="text-3xl font-bold">כספים</h2>
+        <p className="text-muted-foreground mt-1">ניהול הכנסות והוצאות</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

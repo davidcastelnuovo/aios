@@ -9,6 +9,7 @@ import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useAgency } from "@/contexts/AgencyContext";
 import {
   Select,
   SelectContent,
@@ -30,7 +31,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
 export default function Clients() {
-  const [selectedAgency, setSelectedAgency] = useState<string>("all");
+  const { selectedAgency } = useAgency();
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [editingClient, setEditingClient] = useState<any>(null);
   const [hideInactive, setHideInactive] = useState(true);
@@ -211,19 +212,6 @@ export default function Clients() {
           
           {(isAdmin || isOwner) && (
             <>
-              <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-                <SelectTrigger className="w-[200px]">
-                  <SelectValue placeholder="כל הסוכנויות" />
-                </SelectTrigger>
-                        <SelectContent className="bg-background" align="end">
-                  <SelectItem value="all">כל הסוכנויות</SelectItem>
-                  {agencies?.map((agency) => (
-                    <SelectItem key={agency.id} value={agency.id}>
-                      {agency.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
               <ImportClientsCSV />
               <ImportClientsSheet />
             </>
