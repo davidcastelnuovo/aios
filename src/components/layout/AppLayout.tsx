@@ -81,8 +81,8 @@ export function AppLayout({ children }: AppLayoutProps) {
               </Select>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <User className="h-5 w-5" />
+                  <Button variant="ghost" size="icon" className="h-8 w-8 md:h-10 md:w-10">
+                    <User className="h-4 w-4 md:h-5 md:w-5" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-background z-50">
