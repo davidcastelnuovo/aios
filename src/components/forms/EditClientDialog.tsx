@@ -405,14 +405,13 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>קמפיינר {num}</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select onValueChange={field.onChange} value={field.value || undefined}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="בחר קמפיינר" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent className="bg-background z-50">
-                            <SelectItem value="">ללא</SelectItem>
                             {campaigners?.map((campaigner) => (
                               <SelectItem key={campaigner.id} value={campaigner.id}>
                                 {campaigner.full_name}
