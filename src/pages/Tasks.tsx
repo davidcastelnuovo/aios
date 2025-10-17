@@ -264,7 +264,7 @@ export default function Tasks() {
             </div>
 
             {task.notes && (
-              <p className="text-sm text-muted-foreground pt-2 border-t">
+              <p className="text-sm text-muted-foreground pt-2 border-t break-words">
                 {task.notes}
               </p>
             )}
@@ -285,7 +285,7 @@ export default function Tasks() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="space-y-3 md:space-y-6 overflow-x-hidden">
+      <div className="space-y-3 md:space-y-6 overflow-x-hidden min-w-0">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">משימות</h2>
@@ -314,9 +314,9 @@ export default function Tasks() {
           </div>
         </div>
 
-        <div className="grid gap-3 md:gap-6 grid-cols-1 md:grid-cols-3">
+        <div className="grid gap-3 md:gap-6 grid-cols-1 md:grid-cols-3 min-w-0">
           <SortableContext id="open" items={tasksByStatus.open.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-3 md:space-y-4 min-h-[400px] p-2 md:p-4 rounded-lg bg-muted/20">
+            <div className="space-y-3 md:space-y-4 min-h-[400px] p-2 md:p-4 rounded-lg bg-muted/20 min-w-0">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-1 rounded-full bg-primary"></div>
                 <h3 className="text-base md:text-lg font-semibold">פתוח ({tasksByStatus.open.length})</h3>
@@ -336,7 +336,7 @@ export default function Tasks() {
           </SortableContext>
 
           <SortableContext id="in_progress" items={tasksByStatus.in_progress.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-3 md:space-y-4 min-h-[400px] p-2 md:p-4 rounded-lg bg-muted/20">
+            <div className="space-y-3 md:space-y-4 min-h-[400px] p-2 md:p-4 rounded-lg bg-muted/20 min-w-0">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-1 rounded-full bg-yellow-500"></div>
                 <h3 className="text-base md:text-lg font-semibold">בעבודה ({tasksByStatus.in_progress.length})</h3>
@@ -356,7 +356,7 @@ export default function Tasks() {
           </SortableContext>
 
           <SortableContext id="done" items={tasksByStatus.done.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-3 md:space-y-4 min-h-[400px] p-2 md:p-4 rounded-lg bg-muted/20">
+            <div className="space-y-3 md:space-y-4 min-h-[400px] p-2 md:p-4 rounded-lg bg-muted/20 min-w-0">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-1 rounded-full bg-success"></div>
                 <h3 className="text-base md:text-lg font-semibold">הושלם ({tasksByStatus.done.length})</h3>
