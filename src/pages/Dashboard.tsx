@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 export default function Dashboard() {
   const [selectedAgency, setSelectedAgency] = useState<string>("all");
   const [selectedClient, setSelectedClient] = useState<string>("all");
-  const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
+  const [selectedSupplier, setSelectedSupplier] = useState<string>("all");
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -37,21 +37,20 @@ export default function Dashboard() {
     },
   });
 
-  const { data: campaigners } = useQuery({
-    queryKey: ["campaigners"],
+  const { data: suppliers } = useQuery({
+    queryKey: ["suppliers"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("campaigners")
-        .select("id, full_name")
-        .eq("active", true)
-        .order("full_name");
+        .from("suppliers")
+        .select("id, name, related_campaigner_id")
+        .order("name");
       if (error) throw error;
       return data;
     },
   });
 
   const { data: stats } = useQuery({
-    queryKey: ["dashboard-stats", selectedAgency, selectedClient, selectedCampaigner],
+    queryKey: ["dashboard-stats", selectedAgency, selectedClient, selectedSupplier],
     queryFn: async () => {
       let agencyQuery = supabase.from("agencies").select("*", { count: "exact", head: true });
       let clientQuery = supabase.from("clients").select("*", { count: "exact", head: true });
@@ -59,13 +58,20 @@ export default function Dashboard() {
       let taskQuery = supabase.from("tasks").select("*").eq("status", "open");
       let activeClientsQuery = supabase.from("clients").select("id, retainer, agency_id").eq("status", "active");
       
-      // קודם כל מביאים את client_team אם צריך לסנן לפי קמפיינר
+      // אם בחרנו ספק, נמצא את הקמפיינר הקשור אליו
+      let relatedCampaignerId = null;
+      if (selectedSupplier !== "all") {
+        const selectedSupplierData = suppliers?.find(s => s.id === selectedSupplier);
+        relatedCampaignerId = selectedSupplierData?.related_campaigner_id;
+      }
+      
+      // קודם כל מביאים את client_team אם צריך לסנן לפי ספק (דרך הקמפיינר)
       let clientTeamData = null;
-      if (selectedCampaigner !== "all") {
+      if (relatedCampaignerId) {
         const { data } = await supabase
           .from("client_team")
           .select("client_id")
-          .eq("campaigner_id", selectedCampaigner);
+          .eq("campaigner_id", relatedCampaignerId);
         clientTeamData = data;
       }
 
@@ -82,11 +88,11 @@ export default function Dashboard() {
         activeClientsQuery = activeClientsQuery.eq("id", selectedClient);
       }
 
-      if (selectedCampaigner !== "all") {
-        taskQuery = taskQuery.eq("campaigner_id", selectedCampaigner);
+      if (selectedSupplier !== "all" && clientTeamData) {
+        taskQuery = taskQuery.eq("campaigner_id", relatedCampaignerId);
         
         // סינון לקוחות לפי client_team
-        if (clientTeamData && clientTeamData.length > 0) {
+        if (clientTeamData.length > 0) {
           const campaignerClientIds = clientTeamData.map(ct => ct.client_id);
           activeClientsQuery = activeClientsQuery.in("id", campaignerClientIds);
         }
@@ -109,10 +115,14 @@ export default function Dashboard() {
       
       if (selectedClient !== "all") {
         financeQuery = financeQuery.eq("client_id", selectedClient);
-      } else if (selectedCampaigner !== "all" && clientTeamData && clientTeamData.length > 0) {
-        // אם מסננים לפי קמפיינר, מסננים לפי הלקוחות שלו
-        const campaignerClientIds = clientTeamData.map(ct => ct.client_id);
-        financeQuery = financeQuery.in("client_id", campaignerClientIds);
+      } else if (selectedSupplier !== "all") {
+        // אם מסננים לפי ספק, מסננים לפי supplier_id או לפי לקוחות הקמפיינר
+        if (clientTeamData && clientTeamData.length > 0) {
+          const campaignerClientIds = clientTeamData.map(ct => ct.client_id);
+          financeQuery = financeQuery.or(`supplier_id.eq.${selectedSupplier},client_id.in.(${campaignerClientIds.join(',')})`);
+        } else {
+          financeQuery = financeQuery.eq("supplier_id", selectedSupplier);
+        }
       }
       
       const { data: financeData } = await financeQuery;
@@ -140,8 +150,13 @@ export default function Dashboard() {
         clientTeamQuery = clientTeamQuery.eq("client_id", selectedClient);
       }
       
-      if (selectedCampaigner !== "all") {
-        clientTeamQuery = clientTeamQuery.eq("campaigner_id", selectedCampaigner);
+      if (selectedSupplier !== "all") {
+        if (relatedCampaignerId) {
+          clientTeamQuery = clientTeamQuery.eq("campaigner_id", relatedCampaignerId);
+        } else {
+          // אם אין קמפיינר קשור, נאלץ את השאילתה להחזיר תוצאה ריקה
+          clientTeamQuery = clientTeamQuery.eq("campaigner_id", "00000000-0000-0000-0000-000000000000");
+        }
       }
       
       const { data: campaignerPaymentsData } = await clientTeamQuery;
@@ -150,8 +165,12 @@ export default function Dashboard() {
       // משיכת תשלומים ידניים מספקים
       let suppliersQuery = supabase
         .from("suppliers")
-        .select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3");
+        .select("id, payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3");
       
+      if (selectedSupplier !== "all") {
+        suppliersQuery = suppliersQuery.eq("id", selectedSupplier);
+      }
+
       const { data: suppliersData } = await suppliersQuery;
       let manualSupplierPayments = 0;
       
@@ -250,15 +269,15 @@ export default function Dashboard() {
           </SelectContent>
         </Select>
 
-        <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
+        <Select value={selectedSupplier} onValueChange={setSelectedSupplier}>
           <SelectTrigger>
-            <SelectValue placeholder="כל הקמפיינרים" />
+            <SelectValue placeholder="כל הספקים" />
           </SelectTrigger>
           <SelectContent className="bg-background">
-            <SelectItem value="all">כל הקמפיינרים</SelectItem>
-            {campaigners?.map((campaigner) => (
-              <SelectItem key={campaigner.id} value={campaigner.id}>
-                {campaigner.full_name}
+            <SelectItem value="all">כל הספקים</SelectItem>
+            {suppliers?.map((supplier) => (
+              <SelectItem key={supplier.id} value={supplier.id}>
+                {supplier.name}
               </SelectItem>
             ))}
           </SelectContent>
