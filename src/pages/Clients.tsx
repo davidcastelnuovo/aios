@@ -292,22 +292,36 @@ export default function Clients() {
                 </div>
               )}
               
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">הוסף קמפיינר:</p>
-                <p className="text-sm text-muted-foreground mb-2">סטטוס:</p>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">שנה סטטוס:</p>
                 <Select
                   value={client.status}
                   onValueChange={(value: "active" | "paused" | "ended") => 
                     updateStatusMutation.mutate({ clientId: client.id, status: value })
                   }
                 >
-                  <SelectTrigger onClick={(e) => e.stopPropagation()}>
+                  <SelectTrigger onClick={(e) => e.stopPropagation()} className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-background" align="end">
-                    <SelectItem value="active">פעיל</SelectItem>
-                    <SelectItem value="paused">מושהה</SelectItem>
-                    <SelectItem value="ended">הסתיים</SelectItem>
+                    <SelectItem value="active">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full bg-success"></div>
+                        פעיל
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="paused">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+                        מושהה
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="ended">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full bg-muted-foreground"></div>
+                        הסתיים
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -325,12 +339,13 @@ export default function Clients() {
                 </div>
               )}
               
-              <div className="pt-2 border-t">
+              <div className="pt-2 border-t space-y-2">
+                <p className="text-sm text-muted-foreground">הוסף קמפיינר:</p>
                 <Select
                   onValueChange={(value) => assignCampaignerMutation.mutate({ clientId: client.id, campaignerId: value })}
                 >
-                  <SelectTrigger onClick={(e) => e.stopPropagation()}>
-                    <SelectValue placeholder="הוסף קמפיינר" />
+                  <SelectTrigger onClick={(e) => e.stopPropagation()} className="h-9">
+                    <SelectValue placeholder="בחר קמפיינר" />
                   </SelectTrigger>
                   <SelectContent className="bg-background">
                     {campaigners?.map((campaigner) => (
@@ -389,12 +404,36 @@ export default function Clients() {
                     ) : <span className="text-muted-foreground">-</span>}
                   </TableCell>
                   <TableCell className="py-4">
-                    <Badge 
-                      variant="outline" 
-                      className={`${getStatusColor(client.status)} font-medium`}
+                    <Select
+                      value={client.status}
+                      onValueChange={(value: "active" | "paused" | "ended") => 
+                        updateStatusMutation.mutate({ clientId: client.id, status: value })
+                      }
                     >
-                      {getStatusText(client.status)}
-                    </Badge>
+                      <SelectTrigger className="w-[140px] h-9 bg-background hover:bg-accent/10 transition-colors">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background">
+                        <SelectItem value="active">
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-success"></div>
+                            פעיל
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="paused">
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+                            מושהה
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="ended">
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-muted-foreground"></div>
+                            הסתיים
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell className="py-4">
                     <span className="text-sm">{client.industry || <span className="text-muted-foreground">-</span>}</span>
