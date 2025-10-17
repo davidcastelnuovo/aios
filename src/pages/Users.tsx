@@ -72,6 +72,7 @@ export default function Users() {
           full_name,
           created_at,
           updated_at,
+          campaigner_id,
           user_roles!inner (role)
         `)
         .order("created_at", { ascending: false });
@@ -85,8 +86,22 @@ export default function Users() {
         full_name: profile.full_name,
         created_at: profile.created_at,
         updated_at: profile.updated_at,
+        campaigner_id: profile.campaigner_id,
         role: (profile.user_roles?.[0]?.role || "user") as "admin" | "user"
       }));
+    },
+  });
+
+  const { data: campaigners } = useQuery({
+    queryKey: ["campaigners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaigners")
+        .select("id, full_name")
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
     },
   });
 
@@ -114,6 +129,24 @@ export default function Users() {
     },
   });
 
+  const assignCampaignerMutation = useMutation({
+    mutationFn: async ({ userId, campaignerId }: { userId: string; campaignerId: string | null }) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ campaigner_id: campaignerId })
+        .eq("id", userId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("הקמפיינר שויך בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+    },
+    onError: () => {
+      toast.error("שגיאה בשיוך הקמפיינר");
+    },
+  });
+
   const inviteUserMutation = useMutation({
     mutationFn: async (values: z.infer<typeof inviteSchema>) => {
       const redirectUrl = `${window.location.origin}/`;
@@ -129,9 +162,6 @@ export default function Users() {
       });
 
       if (error) throw error;
-
-      // Note: The role will be set to 'user' by default via trigger
-      // Admin should manually update if needed after user confirms email
     },
     onSuccess: () => {
       toast.success("הזמנה נשלחה בהצלחה");
@@ -243,6 +273,7 @@ export default function Users() {
             <TableRow className="bg-muted/50 hover:bg-muted/50 border-b">
               <TableHead className="text-right font-semibold h-12">שם</TableHead>
               <TableHead className="text-right font-semibold">אימייל</TableHead>
+              <TableHead className="text-right font-semibold">קמפיינר</TableHead>
               <TableHead className="text-right font-semibold">הרשאה</TableHead>
               <TableHead className="text-right font-semibold">תאריך הצטרפות</TableHead>
             </TableRow>
@@ -265,6 +296,29 @@ export default function Users() {
                       <Mail className="h-4 w-4" />
                       <span>{user.email}</span>
                     </div>
+                  </TableCell>
+                  <TableCell className="py-4">
+                    <Select
+                      value={user.campaigner_id || "none"}
+                      onValueChange={(value) => 
+                        assignCampaignerMutation.mutate({ 
+                          userId: user.id, 
+                          campaignerId: value === "none" ? null : value 
+                        })
+                      }
+                    >
+                      <SelectTrigger className="w-[180px] h-9 bg-background hover:bg-accent/10 transition-colors">
+                        <SelectValue placeholder="בחר קמפיינר" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background">
+                        <SelectItem value="none">ללא קמפיינר</SelectItem>
+                        {campaigners?.map((campaigner) => (
+                          <SelectItem key={campaigner.id} value={campaigner.id}>
+                            {campaigner.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell className="py-4">
                     <Select

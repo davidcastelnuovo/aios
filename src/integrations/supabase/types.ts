@@ -277,6 +277,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          campaigner_id: string | null
           created_at: string
           email: string
           full_name: string | null
@@ -284,6 +285,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          campaigner_id?: string | null
           created_at?: string
           email: string
           full_name?: string | null
@@ -291,13 +293,22 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          campaigner_id?: string | null
           created_at?: string
           email?: string
           full_name?: string | null
           id?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_campaigner_id_fkey"
+            columns: ["campaigner_id"]
+            isOneToOne: false
+            referencedRelation: "campaigners"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       suppliers: {
         Row: {
