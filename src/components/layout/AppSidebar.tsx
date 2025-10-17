@@ -21,22 +21,32 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useUserRole } from "@/hooks/useUserRole";
 
 const menuItems = [
-  { title: "דשבורד", url: "/", icon: LayoutDashboard },
-  { title: "סוכנויות", url: "/agencies", icon: Building2 },
-  { title: "לקוחות", url: "/clients", icon: Users },
-  { title: "קמפיינרים", url: "/campaigners", icon: Megaphone },
-  { title: "ספקים", url: "/suppliers", icon: Truck },
-  { title: "כספים", url: "/finance", icon: DollarSign },
-  { title: "משימות", url: "/tasks", icon: CheckSquare },
-  { title: "דוחות", url: "/reports", icon: BarChart3 },
-  { title: "משתמשים", url: "/users", icon: UserCog },
+  { title: "סוכנויות", url: "/agencies", icon: Building2, roles: ["admin", "user"] },
+  { title: "לקוחות", url: "/clients", icon: Users, roles: ["admin", "user"] },
+  { title: "משימות", url: "/tasks", icon: CheckSquare, roles: ["admin", "user"] },
+  { title: "קמפיינרים", url: "/campaigners", icon: Megaphone, roles: ["admin"] },
+  { title: "ספקים", url: "/suppliers", icon: Truck, roles: ["admin"] },
+  { title: "כספים", url: "/finance", icon: DollarSign, roles: [] }, // Hidden for all
+  { title: "דוחות", url: "/reports", icon: BarChart3, roles: ["admin"] },
+  { title: "משתמשים", url: "/users", icon: UserCog, roles: ["admin"] },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
+  const { role, isLoading } = useUserRole();
   const isCollapsed = state === "collapsed";
+
+  // Filter menu items based on user role
+  const filteredMenuItems = menuItems.filter(item => 
+    role && item.roles.includes(role)
+  );
+
+  if (isLoading) {
+    return null;
+  }
 
   return (
     <Sidebar side="right" collapsible="icon">
@@ -45,7 +55,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>תפריט ראשי</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {filteredMenuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink
