@@ -32,7 +32,7 @@ export default function Clients() {
   const [selectedAgency, setSelectedAgency] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [editingClient, setEditingClient] = useState<any>(null);
-  const [hideInactive, setHideInactive] = useState(false);
+  const [hideInactive, setHideInactive] = useState(true);
   const queryClient = useQueryClient();
 
   const { data: clients, isLoading } = useQuery({
