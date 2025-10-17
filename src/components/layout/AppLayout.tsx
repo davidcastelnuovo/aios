@@ -64,7 +64,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 מערכת ניהול סוכנויות
               </h1>
             </div>
-            <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+            <div className="flex items-center gap-2 md:gap-4 min-w-0 max-w-full">
               <Select value={selectedAgency} onValueChange={setSelectedAgency}>
                 <SelectTrigger className="w-[140px] md:w-[200px] bg-background">
                   <Building2 className="h-4 w-4 ml-2" />
