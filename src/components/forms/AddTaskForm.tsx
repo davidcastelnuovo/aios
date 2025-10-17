@@ -23,8 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronDown, ChevronUp, Check, ChevronsUpDown } from "lucide-react";
+import { ChevronDown, ChevronUp, Check, ChevronsUpDown, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Command,
@@ -39,6 +38,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const formSchema = z.object({
   title: z.string().min(1, "שם המשימה הוא שדה חובה"),
@@ -53,7 +59,7 @@ const formSchema = z.object({
 });
 
 export default function AddTaskForm() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [open, setOpen] = useState(false);
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
   const queryClient = useQueryClient();
 
@@ -128,7 +134,7 @@ export default function AddTaskForm() {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.success("המשימה נוספה בהצלחה");
       form.reset();
-      setIsOpen(false);
+      setOpen(false);
     },
     onError: (error: Error) => {
       toast.error(`שגיאה בהוספת משימה: ${error.message}`);
@@ -140,135 +146,50 @@ export default function AddTaskForm() {
   };
 
   return (
-    <Card>
-      <CardHeader
-        className="cursor-pointer hover:bg-accent/50 transition-colors"
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg">הוספת משימה חדשה</CardTitle>
-          {isOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-        </div>
-      </CardHeader>
-      {isOpen && (
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button className="gap-2">
+          <Plus className="h-4 w-4" />
+          משימה חדשה
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>הוספת משימה חדשה</DialogTitle>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <FormField
+              control={form.control}
+              name="title"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>כותרת המשימה</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
-                name="title"
+                name="campaigner_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>כותרת המשימה</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="campaigner_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>קמפיינר</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="בחר קמפיינר" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-background">
-                          {campaigners?.map((campaigner) => (
-                            <SelectItem key={campaigner.id} value={campaigner.id}>
-                              {campaigner.full_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="client_id"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>לקוח</FormLabel>
-                      <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              role="combobox"
-                              className={cn(
-                                "justify-between",
-                                !field.value && "text-muted-foreground"
-                              )}
-                            >
-                              {field.value
-                                ? clients?.find((client) => client.id === field.value)?.name
-                                : "בחר לקוח"}
-                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[300px] p-0 bg-background" align="start">
-                          <Command>
-                            <CommandInput placeholder="חפש לקוח..." />
-                            <CommandList>
-                              <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
-                              <CommandGroup>
-                                {clients?.map((client) => (
-                                  <CommandItem
-                                    key={client.id}
-                                    value={client.name}
-                                    onSelect={() => {
-                                      form.setValue("client_id", client.id);
-                                      setClientPopoverOpen(false);
-                                    }}
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        field.value === client.id ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    {client.name}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <FormField
-                control={form.control}
-                name="agency_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>סוכנות</FormLabel>
+                    <FormLabel>קמפיינר</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="בחר סוכנות" />
+                          <SelectValue placeholder="בחר קמפיינר" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-background">
-                        {agencies?.map((agency) => (
-                          <SelectItem key={agency.id} value={agency.id}>
-                            {agency.name}
+                        {campaigners?.map((campaigner) => (
+                          <SelectItem key={campaigner.id} value={campaigner.id}>
+                            {campaigner.full_name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -278,87 +199,109 @@ export default function AddTaskForm() {
                 )}
               />
 
-              <div className="grid gap-4 md:grid-cols-3">
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>סטטוס</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-background">
-                          <SelectItem value="open">פתוח</SelectItem>
-                          <SelectItem value="in_progress">בעבודה</SelectItem>
-                          <SelectItem value="done">הושלם</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="priority"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>עדיפות</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-background">
-                          <SelectItem value="low">נמוך</SelectItem>
-                          <SelectItem value="medium">בינוני</SelectItem>
-                          <SelectItem value="high">גבוה</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="task_type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>סוג משימה</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-background">
-                          <SelectItem value="campaign">קמפיין</SelectItem>
-                          <SelectItem value="collection">אוסף</SelectItem>
-                          <SelectItem value="creative">קריאייטיב</SelectItem>
-                          <SelectItem value="other">אחר</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
               <FormField
                 control={form.control}
-                name="due_date"
+                name="client_id"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>לקוח</FormLabel>
+                    <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className={cn(
+                              "justify-between",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value
+                              ? clients?.find((client) => client.id === field.value)?.name
+                              : "בחר לקוח"}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0 bg-background" align="start">
+                        <Command>
+                          <CommandInput placeholder="חפש לקוח..." />
+                          <CommandList>
+                            <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
+                            <CommandGroup>
+                              {clients?.map((client) => (
+                                <CommandItem
+                                  key={client.id}
+                                  value={client.name}
+                                  onSelect={() => {
+                                    form.setValue("client_id", client.id);
+                                    setClientPopoverOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      field.value === client.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {client.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="agency_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>סוכנות</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר סוכנות" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-background">
+                      {agencies?.map((agency) => (
+                        <SelectItem key={agency.id} value={agency.id}>
+                          {agency.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <FormField
+                control={form.control}
+                name="status"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>תאריך יעד</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
+                    <FormLabel>סטטוס</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background">
+                        <SelectItem value="open">פתוח</SelectItem>
+                        <SelectItem value="in_progress">בעבודה</SelectItem>
+                        <SelectItem value="done">הושלם</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -366,25 +309,86 @@ export default function AddTaskForm() {
 
               <FormField
                 control={form.control}
-                name="notes"
+                name="priority"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>הערות</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} />
-                    </FormControl>
+                    <FormLabel>עדיפות</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background">
+                        <SelectItem value="low">נמוך</SelectItem>
+                        <SelectItem value="medium">בינוני</SelectItem>
+                        <SelectItem value="high">גבוה</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
-              <Button type="submit" disabled={mutation.isPending} className="w-full">
-                {mutation.isPending ? "מוסיף..." : "הוסף משימה"}
-              </Button>
-            </form>
-          </Form>
-        </CardContent>
-      )}
-    </Card>
+              <FormField
+                control={form.control}
+                name="task_type"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>סוג משימה</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background">
+                        <SelectItem value="campaign">קמפיין</SelectItem>
+                        <SelectItem value="collection">אוסף</SelectItem>
+                        <SelectItem value="creative">קריאייטיב</SelectItem>
+                        <SelectItem value="other">אחר</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="due_date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>תאריך יעד</FormLabel>
+                  <FormControl>
+                    <Input type="date" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>הערות</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <Button type="submit" disabled={mutation.isPending} className="w-full">
+              {mutation.isPending ? "מוסיף..." : "הוסף משימה"}
+            </Button>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }

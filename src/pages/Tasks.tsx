@@ -169,30 +169,29 @@ export default function Tasks() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold">משימות</h2>
-        <p className="text-muted-foreground mt-1">ניהול משימות וקמפיינים</p>
-      </div>
-
-      <div className="flex gap-4 items-end">
-        <div className="flex-1">
-          <AddTaskForm />
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold">משימות</h2>
+          <p className="text-muted-foreground mt-1">ניהול משימות וקמפיינים</p>
         </div>
-        <div className="w-64">
-          <label className="text-sm font-medium mb-2 block">סינון לפי קמפיינר</label>
-          <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-background">
-              <SelectItem value="all">כל הקמפיינרים</SelectItem>
-              {campaigners?.map((campaigner) => (
-                <SelectItem key={campaigner.id} value={campaigner.id}>
-                  {campaigner.full_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        
+        <div className="flex gap-3">
+          <div className="w-48">
+            <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
+              <SelectTrigger>
+                <SelectValue placeholder="כל הקמפיינרים" />
+              </SelectTrigger>
+              <SelectContent className="bg-background">
+                <SelectItem value="all">כל הקמפיינרים</SelectItem>
+                {campaigners?.map((campaigner) => (
+                  <SelectItem key={campaigner.id} value={campaigner.id}>
+                    {campaigner.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <AddTaskForm />
         </div>
       </div>
 
