@@ -57,17 +57,17 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <header className="h-16 border-b bg-card flex items-center justify-between px-2 md:px-6 gap-1 md:gap-4">
-            <div className="flex items-center gap-2 md:gap-4 min-w-0 flex-1">
+          <header className="h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 gap-2 md:gap-4">
+            <div className="flex items-center gap-2 md:gap-4 min-w-0">
               <SidebarTrigger />
-              <h1 className="hidden md:block text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
+              <h1 className="text-sm md:text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
                 מערכת ניהול סוכנויות
               </h1>
             </div>
-            <div className="flex items-center gap-1 md:gap-4 flex-shrink-0">
+            <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
               <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-                <SelectTrigger className="w-28 md:w-48 bg-background text-xs md:text-sm">
-                  <Building2 className="h-3 w-3 md:h-4 md:w-4 ml-1 md:ml-2 flex-shrink-0" />
+                <SelectTrigger className="w-[140px] md:w-[200px] bg-background">
+                  <Building2 className="h-4 w-4 ml-2" />
                   <SelectValue placeholder="כל הסוכנויות" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
@@ -81,8 +81,8 @@ export function AppLayout({ children }: AppLayoutProps) {
               </Select>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 md:h-10 md:w-10">
-                    <User className="h-4 w-4 md:h-5 md:w-5" />
+                  <Button variant="ghost" size="icon">
+                    <User className="h-5 w-5" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-background z-50">
