@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -117,16 +117,43 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       website: client.website || "",
       notes: client.notes || "",
       status: client.status || "active",
-      campaigner1_id: clientTeam?.[0]?.campaigner_id || "",
-      campaigner1_payment: clientTeam?.[0]?.campaigner_payment?.toString() || "",
-      campaigner2_id: clientTeam?.[1]?.campaigner_id || "",
-      campaigner2_payment: clientTeam?.[1]?.campaigner_payment?.toString() || "",
-      campaigner3_id: clientTeam?.[2]?.campaigner_id || "",
-      campaigner3_payment: clientTeam?.[2]?.campaigner_payment?.toString() || "",
-      campaigner4_id: clientTeam?.[3]?.campaigner_id || "",
-      campaigner4_payment: clientTeam?.[3]?.campaigner_payment?.toString() || "",
+      campaigner1_id: "",
+      campaigner1_payment: "",
+      campaigner2_id: "",
+      campaigner2_payment: "",
+      campaigner3_id: "",
+      campaigner3_payment: "",
+      campaigner4_id: "",
+      campaigner4_payment: "",
     },
   });
+
+  // עדכון הערכים כשה-clientTeam מתקבל
+  useEffect(() => {
+    if (clientTeam && clientTeam.length > 0) {
+      form.reset({
+        name: client.name || "",
+        agency_id: client.agency_id || "",
+        phone: client.phone || "",
+        email: client.email || "",
+        folder_link: client.folder_link || "",
+        industry: client.industry || "",
+        retainer: client.retainer?.toString() || "",
+        monthly_budget: client.monthly_budget?.toString() || "",
+        website: client.website || "",
+        notes: client.notes || "",
+        status: client.status || "active",
+        campaigner1_id: clientTeam[0]?.campaigner_id || "",
+        campaigner1_payment: clientTeam[0]?.campaigner_payment?.toString() || "",
+        campaigner2_id: clientTeam[1]?.campaigner_id || "",
+        campaigner2_payment: clientTeam[1]?.campaigner_payment?.toString() || "",
+        campaigner3_id: clientTeam[2]?.campaigner_id || "",
+        campaigner3_payment: clientTeam[2]?.campaigner_payment?.toString() || "",
+        campaigner4_id: clientTeam[3]?.campaigner_id || "",
+        campaigner4_payment: clientTeam[3]?.campaigner_payment?.toString() || "",
+      });
+    }
+  }, [clientTeam, client, form]);
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
