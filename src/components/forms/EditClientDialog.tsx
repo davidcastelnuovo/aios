@@ -45,6 +45,14 @@ const formSchema = z.object({
   website: z.string().url("כתובת אתר לא תקינה").optional().or(z.literal("")),
   notes: z.string().optional(),
   status: z.enum(["active", "paused", "ended"]),
+  campaigner1_id: z.string().optional(),
+  campaigner1_payment: z.string().optional(),
+  campaigner2_id: z.string().optional(),
+  campaigner2_payment: z.string().optional(),
+  campaigner3_id: z.string().optional(),
+  campaigner3_payment: z.string().optional(),
+  campaigner4_id: z.string().optional(),
+  campaigner4_payment: z.string().optional(),
 });
 
 interface EditClientDialogProps {
@@ -69,6 +77,32 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
     },
   });
 
+  const { data: campaigners } = useQuery({
+    queryKey: ["campaigners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaigners")
+        .select("id, full_name")
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: clientTeam } = useQuery({
+    queryKey: ["client-team", client.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("client_team")
+        .select("*")
+        .eq("client_id", client.id);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!client.id,
+  });
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -83,12 +117,21 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       website: client.website || "",
       notes: client.notes || "",
       status: client.status || "active",
+      campaigner1_id: clientTeam?.[0]?.campaigner_id || "",
+      campaigner1_payment: clientTeam?.[0]?.campaigner_payment?.toString() || "",
+      campaigner2_id: clientTeam?.[1]?.campaigner_id || "",
+      campaigner2_payment: clientTeam?.[1]?.campaigner_payment?.toString() || "",
+      campaigner3_id: clientTeam?.[2]?.campaigner_id || "",
+      campaigner3_payment: clientTeam?.[2]?.campaigner_payment?.toString() || "",
+      campaigner4_id: clientTeam?.[3]?.campaigner_id || "",
+      campaigner4_payment: clientTeam?.[3]?.campaigner_payment?.toString() || "",
     },
   });
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
-      const { error } = await supabase
+      // Update client data
+      const { error: clientError } = await supabase
         .from("clients")
         .update({
           name: values.name,
@@ -105,7 +148,57 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         })
         .eq("id", client.id);
 
-      if (error) throw error;
+      if (clientError) throw clientError;
+
+      // Update client_team data
+      const teamUpdates = [];
+      
+      if (values.campaigner1_id) {
+        teamUpdates.push({
+          client_id: client.id,
+          campaigner_id: values.campaigner1_id,
+          campaigner_payment: values.campaigner1_payment ? parseFloat(values.campaigner1_payment) : 0,
+        });
+      }
+      
+      if (values.campaigner2_id) {
+        teamUpdates.push({
+          client_id: client.id,
+          campaigner_id: values.campaigner2_id,
+          campaigner_payment: values.campaigner2_payment ? parseFloat(values.campaigner2_payment) : 0,
+        });
+      }
+      
+      if (values.campaigner3_id) {
+        teamUpdates.push({
+          client_id: client.id,
+          campaigner_id: values.campaigner3_id,
+          campaigner_payment: values.campaigner3_payment ? parseFloat(values.campaigner3_payment) : 0,
+        });
+      }
+      
+      if (values.campaigner4_id) {
+        teamUpdates.push({
+          client_id: client.id,
+          campaigner_id: values.campaigner4_id,
+          campaigner_payment: values.campaigner4_payment ? parseFloat(values.campaigner4_payment) : 0,
+        });
+      }
+
+      // Delete existing team members
+      await supabase
+        .from("client_team")
+        .delete()
+        .eq("client_id", client.id);
+
+      // Insert new team members
+      if (teamUpdates.length > 0) {
+        const { error: teamError } = await supabase
+          .from("client_team")
+          .insert(teamUpdates);
+
+        if (teamError) throw teamError;
+      }
     },
     onSuccess: () => {
       toast.success("הלקוח עודכן בהצלחה");
@@ -300,6 +393,54 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                 </FormItem>
               )}
             />
+
+            <div className="space-y-4 pt-4 border-t">
+              <h3 className="font-semibold text-lg">קמפיינרים ותשלומים</h3>
+              
+              {[1, 2, 3, 4].map((num) => (
+                <div key={num} className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name={`campaigner${num}_id` as any}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>קמפיינר {num}</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="בחר קמפיינר" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-background z-50">
+                            <SelectItem value="">ללא</SelectItem>
+                            {campaigners?.map((campaigner) => (
+                              <SelectItem key={campaigner.id} value={campaigner.id}>
+                                {campaigner.full_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name={`campaigner${num}_payment` as any}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>תשלום (₪)</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="number" placeholder="0" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              ))}
+            </div>
 
             <FormField
               control={form.control}
