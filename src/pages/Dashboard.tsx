@@ -116,12 +116,13 @@ export default function Dashboard() {
       if (selectedClient !== "all") {
         financeQuery = financeQuery.eq("client_id", selectedClient);
       } else if (selectedSupplier !== "all") {
-        // אם מסננים לפי ספק, מסננים לפי supplier_id או לפי לקוחות הקמפיינר
+        // אם מסננים לפי ספק, ההכנסות מסוננות לפי לקוחות הקמפיינר וההוצאות לפי supplier_id
         if (clientTeamData && clientTeamData.length > 0) {
           const campaignerClientIds = clientTeamData.map(ct => ct.client_id);
-          financeQuery = financeQuery.or(`supplier_id.eq.${selectedSupplier},client_id.in.(${campaignerClientIds.join(',')})`);
+          financeQuery = financeQuery.in("client_id", campaignerClientIds);
         } else {
-          financeQuery = financeQuery.eq("supplier_id", selectedSupplier);
+          // אם אין לקוחות קשורים, לא להציג שום finance
+          financeQuery = financeQuery.eq("client_id", "00000000-0000-0000-0000-000000000000");
         }
       }
       
