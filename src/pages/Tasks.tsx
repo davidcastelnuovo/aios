@@ -218,7 +218,7 @@ export default function Tasks() {
                 <SelectTrigger className="h-8 w-full">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-background">
+                <SelectContent className="bg-background z-50">
                   <SelectItem value="open">
                     <div className="flex items-center gap-2">
                       <div className="h-2 w-2 rounded-full bg-primary"></div>
@@ -285,21 +285,21 @@ export default function Tasks() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-bold">משימות</h2>
+            <h2 className="text-2xl md:text-3xl font-bold">משימות</h2>
             <p className="text-muted-foreground mt-1 text-sm md:text-base">ניהול משימות וקמפיינים - גרור משימות בין העמודות לשינוי סטטוס</p>
           </div>
           
-          <div className="flex gap-3 flex-wrap md:flex-nowrap w-full md:w-auto">
+          <div className="flex gap-3 flex-wrap md:flex-nowrap w-full md:w-auto items-stretch">
             {(isAdmin || isOwner) && (
               <div className="w-full md:w-48">
                 <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="כל הקמפיינרים" />
                   </SelectTrigger>
-                  <SelectContent className="bg-background">
+                  <SelectContent className="bg-background z-50">
                     <SelectItem value="all">כל הקמפיינרים</SelectItem>
                     {campaigners?.map((campaigner) => (
                       <SelectItem key={campaigner.id} value={campaigner.id}>
@@ -310,7 +310,7 @@ export default function Tasks() {
                 </Select>
               </div>
             )}
-            <AddTaskForm />
+            <div className="w-full md:w-auto"><AddTaskForm /></div>
           </div>
         </div>
 
@@ -319,7 +319,7 @@ export default function Tasks() {
             <div className="space-y-4 min-h-[400px] p-4 rounded-lg bg-muted/20">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-1 rounded-full bg-primary"></div>
-                <h3 className="text-lg font-semibold">פתוח ({tasksByStatus.open.length})</h3>
+                <h3 className="text-base md:text-lg font-semibold">פתוח ({tasksByStatus.open.length})</h3>
               </div>
               {tasksByStatus.open.map(task => (
                 <DraggableTaskCard key={task.id} task={task} />
@@ -339,7 +339,7 @@ export default function Tasks() {
             <div className="space-y-4 min-h-[400px] p-4 rounded-lg bg-muted/20">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-1 rounded-full bg-yellow-500"></div>
-                <h3 className="text-lg font-semibold">בעבודה ({tasksByStatus.in_progress.length})</h3>
+                <h3 className="text-base md:text-lg font-semibold">בעבודה ({tasksByStatus.in_progress.length})</h3>
               </div>
               {tasksByStatus.in_progress.map(task => (
                 <DraggableTaskCard key={task.id} task={task} />
@@ -359,7 +359,7 @@ export default function Tasks() {
             <div className="space-y-4 min-h-[400px] p-4 rounded-lg bg-muted/20">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-1 rounded-full bg-success"></div>
-                <h3 className="text-lg font-semibold">הושלם ({tasksByStatus.done.length})</h3>
+                <h3 className="text-base md:text-lg font-semibold">הושלם ({tasksByStatus.done.length})</h3>
               </div>
               {tasksByStatus.done.map(task => (
                 <DraggableTaskCard key={task.id} task={task} />
