@@ -63,6 +63,7 @@ export default function Dashboard() {
       if (selectedSupplier !== "all") {
         const selectedSupplierData = suppliers?.find(s => s.id === selectedSupplier);
         relatedCampaignerId = selectedSupplierData?.related_campaigner_id;
+        console.log("Selected supplier:", selectedSupplierData?.name, "Related campaigner ID:", relatedCampaignerId);
       }
       
       // קודם כל מביאים את client_team אם צריך לסנן לפי ספק (דרך הקמפיינר)
@@ -73,6 +74,7 @@ export default function Dashboard() {
           .select("client_id")
           .eq("campaigner_id", relatedCampaignerId);
         clientTeamData = data;
+        console.log("Client team data for campaigner:", clientTeamData);
       }
 
       // עכשיו אנחנו יכולים לסנן את הקווריז בהתאם
