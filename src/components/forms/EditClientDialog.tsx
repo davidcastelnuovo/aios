@@ -46,13 +46,9 @@ const formSchema = z.object({
   notes: z.string().optional(),
   status: z.enum(["active", "paused", "ended"]),
   supplier1_id: z.string().optional(),
-  supplier1_payment: z.string().optional(),
   supplier2_id: z.string().optional(),
-  supplier2_payment: z.string().optional(),
   supplier3_id: z.string().optional(),
-  supplier3_payment: z.string().optional(),
   supplier4_id: z.string().optional(),
-  supplier4_payment: z.string().optional(),
 });
 
 interface EditClientDialogProps {
@@ -117,13 +113,9 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       notes: client.notes || "",
       status: client.status || "active",
       supplier1_id: "",
-      supplier1_payment: "",
       supplier2_id: "",
-      supplier2_payment: "",
       supplier3_id: "",
-      supplier3_payment: "",
       supplier4_id: "",
-      supplier4_payment: "",
     },
   });
 
@@ -143,13 +135,9 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         notes: client.notes || "",
         status: client.status || "active",
         supplier1_id: clientSuppliers[0]?.supplier_id || "",
-        supplier1_payment: clientSuppliers[0]?.supplier_payment?.toString() || "",
         supplier2_id: clientSuppliers[1]?.supplier_id || "",
-        supplier2_payment: clientSuppliers[1]?.supplier_payment?.toString() || "",
         supplier3_id: clientSuppliers[2]?.supplier_id || "",
-        supplier3_payment: clientSuppliers[2]?.supplier_payment?.toString() || "",
         supplier4_id: clientSuppliers[3]?.supplier_id || "",
-        supplier4_payment: clientSuppliers[3]?.supplier_payment?.toString() || "",
       });
     }
   }, [clientSuppliers, client, form]);
@@ -183,7 +171,6 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         supplierUpdates.push({
           client_id: client.id,
           supplier_id: values.supplier1_id,
-          supplier_payment: values.supplier1_payment ? parseFloat(values.supplier1_payment) : 0,
         });
       }
       
@@ -191,7 +178,6 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         supplierUpdates.push({
           client_id: client.id,
           supplier_id: values.supplier2_id,
-          supplier_payment: values.supplier2_payment ? parseFloat(values.supplier2_payment) : 0,
         });
       }
       
@@ -199,7 +185,6 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         supplierUpdates.push({
           client_id: client.id,
           supplier_id: values.supplier3_id,
-          supplier_payment: values.supplier3_payment ? parseFloat(values.supplier3_payment) : 0,
         });
       }
       
@@ -207,7 +192,6 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         supplierUpdates.push({
           client_id: client.id,
           supplier_id: values.supplier4_id,
-          supplier_payment: values.supplier4_payment ? parseFloat(values.supplier4_payment) : 0,
         });
       }
 
@@ -421,49 +405,34 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
             />
 
             <div className="space-y-4 pt-4 border-t">
-              <h3 className="font-semibold text-lg">ספקים ותשלומים</h3>
+              <h3 className="font-semibold text-lg">ספקים</h3>
               
               {[1, 2, 3, 4].map((num) => (
-                <div key={num} className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name={`supplier${num}_id` as any}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>ספק {num}</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || undefined}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="בחר ספק" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-background z-50">
-                            {suppliers?.map((supplier) => (
-                              <SelectItem key={supplier.id} value={supplier.id}>
-                                {supplier.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name={`supplier${num}_payment` as any}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>תשלום (₪)</FormLabel>
+                <FormField
+                  key={num}
+                  control={form.control}
+                  name={`supplier${num}_id` as any}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>ספק {num}</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || undefined}>
                         <FormControl>
-                          <Input {...field} type="number" placeholder="0" />
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר ספק" />
+                          </SelectTrigger>
                         </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                        <SelectContent className="bg-background z-50">
+                          {suppliers?.map((supplier) => (
+                            <SelectItem key={supplier.id} value={supplier.id}>
+                              {supplier.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               ))}
             </div>
 
