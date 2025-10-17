@@ -314,7 +314,7 @@ export default function Tasks() {
 
         <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
           <SortableContext id="open" items={tasksByStatus.open.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-4 min-h-[400px] p-4 rounded-lg bg-muted/20">
+            <div className="space-y-4 min-h-[400px] p-3 md:p-4 rounded-lg bg-muted/20">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-1 rounded-full bg-primary"></div>
                 <h3 className="text-lg font-semibold">פתוח ({tasksByStatus.open.length})</h3>
@@ -334,7 +334,7 @@ export default function Tasks() {
           </SortableContext>
 
           <SortableContext id="in_progress" items={tasksByStatus.in_progress.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-4 min-h-[400px] p-4 rounded-lg bg-muted/20">
+            <div className="space-y-4 min-h-[400px] p-3 md:p-4 rounded-lg bg-muted/20">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-1 rounded-full bg-yellow-500"></div>
                 <h3 className="text-lg font-semibold">בעבודה ({tasksByStatus.in_progress.length})</h3>
@@ -354,7 +354,7 @@ export default function Tasks() {
           </SortableContext>
 
           <SortableContext id="done" items={tasksByStatus.done.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-4 min-h-[400px] p-4 rounded-lg bg-muted/20">
+            <div className="space-y-4 min-h-[400px] p-3 md:p-4 rounded-lg bg-muted/20">
               <div className="flex items-center gap-2">
                 <div className="h-8 w-1 rounded-full bg-success"></div>
                 <h3 className="text-lg font-semibold">הושלם ({tasksByStatus.done.length})</h3>
