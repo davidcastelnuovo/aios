@@ -36,9 +36,15 @@ const menuItems = [
 ];
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, setOpen, isMobile } = useSidebar();
   const { role, isLoading } = useUserRole();
   const isCollapsed = state === "collapsed";
+
+  const handleLinkClick = () => {
+    if (isMobile) {
+      setOpen(false);
+    }
+  };
 
   // Filter menu items based on user role
   const filteredMenuItems = menuItems.filter(item => 
@@ -62,6 +68,7 @@ export function AppSidebar() {
                     <NavLink
                       to={item.url}
                       end
+                      onClick={handleLinkClick}
                       className={({ isActive }) =>
                         isActive
                           ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
