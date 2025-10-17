@@ -13,6 +13,7 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resetMode, setResetMode] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -52,6 +53,28 @@ export default function Auth() {
     setLoading(false);
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth`,
+    });
+    if (error) {
+      toast({
+        title: "שגיאה",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "נשלח מייל",
+        description: "בדוק את תיבת המייל שלך לאיפוס הסיסמה",
+      });
+      setResetMode(false);
+    }
+    setLoading(false);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary p-4">
       <Card className="w-full max-w-md shadow-lg">
@@ -73,33 +96,69 @@ export default function Auth() {
               <TabsTrigger value="signup">הרשמה</TabsTrigger>
             </TabsList>
             <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email-signin">אימייל</Label>
-                  <Input
-                    id="email-signin"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    disabled={loading}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password-signin">סיסמה</Label>
-                  <Input
-                    id="password-signin"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={loading}
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "מתחבר..." : "התחבר"}
-                </Button>
-              </form>
+              {resetMode ? (
+                <form onSubmit={handleResetPassword} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email-reset">אימייל</Label>
+                    <Input
+                      id="email-reset"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={loading}
+                      placeholder="הכנס את כתובת המייל שלך"
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "שולח..." : "שלח קישור לאיפוס סיסמה"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => setResetMode(false)}
+                  >
+                    חזור להתחברות
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handleSignIn} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email-signin">אימייל</Label>
+                    <Input
+                      id="email-signin"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password-signin">סיסמה</Label>
+                    <Input
+                      id="password-signin"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      disabled={loading}
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "מתחבר..." : "התחבר"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="w-full"
+                    onClick={() => setResetMode(true)}
+                  >
+                    שכחתי סיסמה
+                  </Button>
+                </form>
+              )}
             </TabsContent>
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
