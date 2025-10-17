@@ -24,14 +24,15 @@ import {
 import { useUserRole } from "@/hooks/useUserRole";
 
 const menuItems = [
-  { title: "סוכנויות", url: "/agencies", icon: Building2, roles: ["admin", "user"] },
-  { title: "לקוחות", url: "/clients", icon: Users, roles: ["admin", "user"] },
-  { title: "משימות", url: "/tasks", icon: CheckSquare, roles: ["admin", "user"] },
-  { title: "קמפיינרים", url: "/campaigners", icon: Megaphone, roles: ["admin"] },
-  { title: "ספקים", url: "/suppliers", icon: Truck, roles: ["admin"] },
-  { title: "כספים", url: "/finance", icon: DollarSign, roles: [] }, // Hidden for all
-  { title: "דוחות", url: "/reports", icon: BarChart3, roles: ["admin"] },
-  { title: "משתמשים", url: "/users", icon: UserCog, roles: ["admin"] },
+  { title: "דשבורד", url: "/", icon: LayoutDashboard, roles: ["admin", "owner"] },
+  { title: "סוכנויות", url: "/agencies", icon: Building2, roles: ["admin", "user", "owner"] },
+  { title: "לקוחות", url: "/clients", icon: Users, roles: ["admin", "user", "owner"] },
+  { title: "משימות", url: "/tasks", icon: CheckSquare, roles: ["admin", "user", "owner"] },
+  { title: "קמפיינרים", url: "/campaigners", icon: Megaphone, roles: ["admin", "owner"] },
+  { title: "ספקים", url: "/suppliers", icon: Truck, roles: ["admin", "owner"] },
+  { title: "כספים", url: "/finance", icon: DollarSign, roles: ["owner"] },
+  { title: "דוחות", url: "/reports", icon: BarChart3, roles: ["admin", "owner"] },
+  { title: "משתמשים", url: "/users", icon: UserCog, roles: ["admin", "owner"] },
 ];
 
 export function AppSidebar() {
