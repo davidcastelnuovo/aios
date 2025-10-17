@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -45,10 +44,6 @@ const formSchema = z.object({
   website: z.string().url("כתובת אתר לא תקינה").optional().or(z.literal("")),
   notes: z.string().optional(),
   status: z.enum(["active", "paused", "ended"]),
-  supplier1_id: z.string().optional(),
-  supplier2_id: z.string().optional(),
-  supplier3_id: z.string().optional(),
-  supplier4_id: z.string().optional(),
 });
 
 interface EditClientDialogProps {
@@ -73,30 +68,6 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
     },
   });
 
-  const { data: suppliers } = useQuery({
-    queryKey: ["suppliers"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("suppliers")
-        .select("id, name")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  const { data: clientSuppliers } = useQuery({
-    queryKey: ["client-suppliers", client.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("client_suppliers")
-        .select("*")
-        .eq("client_id", client.id);
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!client.id,
-  });
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -112,35 +83,9 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       website: client.website || "",
       notes: client.notes || "",
       status: client.status || "active",
-      supplier1_id: "",
-      supplier2_id: "",
-      supplier3_id: "",
-      supplier4_id: "",
     },
   });
 
-  // עדכון הערכים כשה-clientSuppliers מתקבל
-  useEffect(() => {
-    if (clientSuppliers && clientSuppliers.length > 0) {
-      form.reset({
-        name: client.name || "",
-        agency_id: client.agency_id || "",
-        phone: client.phone || "",
-        email: client.email || "",
-        folder_link: client.folder_link || "",
-        industry: client.industry || "",
-        retainer: client.retainer?.toString() || "",
-        monthly_budget: client.monthly_budget?.toString() || "",
-        website: client.website || "",
-        notes: client.notes || "",
-        status: client.status || "active",
-        supplier1_id: clientSuppliers[0]?.supplier_id || "",
-        supplier2_id: clientSuppliers[1]?.supplier_id || "",
-        supplier3_id: clientSuppliers[2]?.supplier_id || "",
-        supplier4_id: clientSuppliers[3]?.supplier_id || "",
-      });
-    }
-  }, [clientSuppliers, client, form]);
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
@@ -163,52 +108,6 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         .eq("id", client.id);
 
       if (clientError) throw clientError;
-
-      // Update client_suppliers data
-      const supplierUpdates = [];
-      
-      if (values.supplier1_id) {
-        supplierUpdates.push({
-          client_id: client.id,
-          supplier_id: values.supplier1_id,
-        });
-      }
-      
-      if (values.supplier2_id) {
-        supplierUpdates.push({
-          client_id: client.id,
-          supplier_id: values.supplier2_id,
-        });
-      }
-      
-      if (values.supplier3_id) {
-        supplierUpdates.push({
-          client_id: client.id,
-          supplier_id: values.supplier3_id,
-        });
-      }
-      
-      if (values.supplier4_id) {
-        supplierUpdates.push({
-          client_id: client.id,
-          supplier_id: values.supplier4_id,
-        });
-      }
-
-      // Delete existing supplier assignments
-      await supabase
-        .from("client_suppliers")
-        .delete()
-        .eq("client_id", client.id);
-
-      // Insert new supplier assignments
-      if (supplierUpdates.length > 0) {
-        const { error: supplierError } = await supabase
-          .from("client_suppliers")
-          .insert(supplierUpdates);
-
-        if (supplierError) throw supplierError;
-      }
     },
     onSuccess: () => {
       toast.success("הלקוח עודכן בהצלחה");
@@ -403,38 +302,6 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                 </FormItem>
               )}
             />
-
-            <div className="space-y-4 pt-4 border-t">
-              <h3 className="font-semibold text-lg">ספקים</h3>
-              
-              {[1, 2, 3, 4].map((num) => (
-                <FormField
-                  key={num}
-                  control={form.control}
-                  name={`supplier${num}_id` as any}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>ספק {num}</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || undefined}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="בחר ספק" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-background z-50">
-                          {suppliers?.map((supplier) => (
-                            <SelectItem key={supplier.id} value={supplier.id}>
-                              {supplier.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              ))}
-            </div>
 
             <FormField
               control={form.control}
