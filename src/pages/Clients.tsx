@@ -221,11 +221,11 @@ export default function Clients() {
       </div>
 
       {viewMode === "grid" ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {visibleClients?.map((client) => (
           <Card 
             key={client.id} 
-            className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02] cursor-pointer group relative"
+            className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02] cursor-pointer group relative min-w-0 overflow-hidden"
             onClick={() => setEditingClient(client)}
           >
             <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -254,7 +254,7 @@ export default function Clients() {
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 min-w-0">
               {isOwner && client.retainer && (
                 <div className="flex items-center gap-2">
                   <Coins className="h-4 w-4 text-muted-foreground" />
@@ -266,27 +266,27 @@ export default function Clients() {
                 </div>
               )}
               {client.website && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Globe className="h-4 w-4" />
-                  <a href={client.website} target="_blank" rel="noopener noreferrer" className="hover:text-primary">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
+                  <Globe className="h-4 w-4 flex-shrink-0" />
+                  <a href={client.website} target="_blank" rel="noopener noreferrer" className="hover:text-primary truncate">
                     {client.website}
                   </a>
                 </div>
               )}
 
               {client.phone && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Phone className="h-4 w-4" />
-                  <a href={`tel:${client.phone}`} className="hover:text-primary">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
+                  <Phone className="h-4 w-4 flex-shrink-0" />
+                  <a href={`tel:${client.phone}`} className="hover:text-primary truncate">
                     {client.phone}
                   </a>
                 </div>
               )}
 
               {client.email && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Mail className="h-4 w-4" />
-                  <a href={`mailto:${client.email}`} className="hover:text-primary">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
+                  <Mail className="h-4 w-4 flex-shrink-0" />
+                  <a href={`mailto:${client.email}`} className="hover:text-primary truncate">
                     {client.email}
                   </a>
                 </div>

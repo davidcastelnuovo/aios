@@ -32,9 +32,9 @@ export default function Campaigners() {
         <AddCampaignerForm />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {campaigners?.map((campaigner) => (
-          <Card key={campaigner.id} className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02]">
+          <Card key={campaigner.id} className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02] min-w-0 overflow-hidden">
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -56,17 +56,17 @@ export default function Campaigners() {
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-2 min-w-0">
               {campaigner.phone && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Phone className="h-4 w-4" />
-                  <span dir="ltr">{campaigner.phone}</span>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
+                  <Phone className="h-4 w-4 flex-shrink-0" />
+                  <span dir="ltr" className="truncate">{campaigner.phone}</span>
                 </div>
               )}
               {campaigner.email && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Mail className="h-4 w-4" />
-                  <span>{campaigner.email}</span>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
+                  <Mail className="h-4 w-4 flex-shrink-0" />
+                  <span className="truncate">{campaigner.email}</span>
                 </div>
               )}
               {campaigner.notes && (

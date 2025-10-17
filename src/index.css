@@ -109,12 +109,15 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
-  html {
-    direction: rtl;
-  }
+html {
+  direction: rtl;
+  overflow-x: hidden;
+}
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    overflow-x: hidden;
+    max-width: 100vw;
   }
   
   h1, h2, h3, h4, h5, h6 {

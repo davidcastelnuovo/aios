@@ -243,9 +243,9 @@ export default function Dashboard() {
         </Select>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {statCards.map((stat) => (
-          <Card key={stat.title} className="shadow-card hover:shadow-lg transition-shadow">
+          <Card key={stat.title} className="shadow-card hover:shadow-lg transition-shadow min-w-0">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
               <div className={`p-2 rounded-lg ${stat.bg}`}>
@@ -259,8 +259,8 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="shadow-card">
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+        <Card className="shadow-card min-w-0">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">הכנסות חודשיות</CardTitle>
             <TrendingUp className="h-4 w-4 text-success" />

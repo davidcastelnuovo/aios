@@ -191,39 +191,39 @@ export default function Tasks() {
     return (
       <div ref={setNodeRef} style={style}>
         <Card 
-          className="shadow-card hover:shadow-lg transition-all cursor-pointer"
+          className="shadow-card hover:shadow-lg transition-all cursor-pointer min-w-0"
           onClick={() => setEditingTask(task)}
         >
           <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2 flex-1">
-                <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+            <div className="flex items-start justify-between gap-2 min-w-0">
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing flex-shrink-0">
                   <GripVertical className="h-4 w-4 text-muted-foreground" />
                 </div>
-                <CardTitle className="text-base">{task.title}</CardTitle>
+                <CardTitle className="text-base truncate">{task.title}</CardTitle>
               </div>
               <Badge variant="outline" className={getPriorityColor(task.priority)}>
                 {getPriorityText(task.priority)}
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-2">
+          <CardContent className="space-y-2 min-w-0">
             <Badge variant="outline" className={getStatusColor(task.status)}>
               {getStatusText(task.status)}
             </Badge>
             
-            <div className="space-y-1 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Building2 className="h-3 w-3" />
-                {task.agencies?.name}
+            <div className="space-y-1 text-sm min-w-0">
+              <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                <Building2 className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate">{task.agencies?.name}</span>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Users className="h-3 w-3" />
-                {task.clients?.name}
+              <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                <Users className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate">{task.clients?.name}</span>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Megaphone className="h-3 w-3" />
-                {task.campaigners?.full_name}
+              <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                <Megaphone className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate">{task.campaigners?.full_name}</span>
               </div>
               {task.due_date && (
                 <div className={`flex items-center gap-2 ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive' : 'text-muted-foreground'}`}>
@@ -257,17 +257,17 @@ export default function Tasks() {
       onDragEnd={handleDragEnd}
     >
       <div className="space-y-6">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
             <h2 className="text-3xl font-bold">משימות</h2>
-            <p className="text-muted-foreground mt-1">ניהול משימות וקמפיינים - גרור משימות בין העמודות לשינוי סטטוס</p>
+            <p className="text-muted-foreground mt-1 text-sm md:text-base">ניהול משימות וקמפיינים - גרור משימות בין העמודות לשינוי סטטוס</p>
           </div>
           
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap md:flex-nowrap w-full md:w-auto">
             {(isAdmin || isOwner) && (
-              <div className="w-48">
+              <div className="w-full md:w-48">
                 <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="כל הקמפיינרים" />
                   </SelectTrigger>
                   <SelectContent className="bg-background">
@@ -285,7 +285,7 @@ export default function Tasks() {
           </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
           <SortableContext id="open" items={tasksByStatus.open.map(t => t.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-4 min-h-[400px] p-4 rounded-lg bg-muted/20">
               <div className="flex items-center gap-2">
