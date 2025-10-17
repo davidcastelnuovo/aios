@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useForm } from "react-hook-form";
@@ -37,7 +37,12 @@ const formSchema = z.object({
   phone: z.string().optional(),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   folder_link: z.string().url("קישור לא תקין").optional().or(z.literal("")),
-  payment: z.string().optional(),
+  payment_1: z.string().optional(),
+  agency_id_1: z.string().optional(),
+  payment_2: z.string().optional(),
+  agency_id_2: z.string().optional(),
+  payment_3: z.string().optional(),
+  agency_id_3: z.string().optional(),
   notes: z.string().optional(),
 });
 
@@ -50,6 +55,19 @@ interface EditSupplierDialogProps {
 export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplierDialogProps) {
   const queryClient = useQueryClient();
 
+  const { data: agencies } = useQuery({
+    queryKey: ["agencies"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("status", "active")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -58,11 +76,15 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
       phone: supplier.phone || "",
       email: supplier.email || "",
       folder_link: supplier.folder_link || "",
-      payment: supplier.payment?.toString() || "",
+      payment_1: supplier.payment_1?.toString() || "",
+      agency_id_1: supplier.agency_id_1 || "",
+      payment_2: supplier.payment_2?.toString() || "",
+      agency_id_2: supplier.agency_id_2 || "",
+      payment_3: supplier.payment_3?.toString() || "",
+      agency_id_3: supplier.agency_id_3 || "",
       notes: supplier.notes || "",
     },
   });
-
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
@@ -74,7 +96,12 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
           phone: values.phone || null,
           email: values.email || null,
           folder_link: values.folder_link || null,
-          payment: values.payment ? parseFloat(values.payment) : null,
+          payment_1: values.payment_1 ? parseFloat(values.payment_1) : null,
+          agency_id_1: values.agency_id_1 || null,
+          payment_2: values.payment_2 ? parseFloat(values.payment_2) : null,
+          agency_id_2: values.agency_id_2 || null,
+          payment_3: values.payment_3 ? parseFloat(values.payment_3) : null,
+          agency_id_3: values.agency_id_3 || null,
           notes: values.notes || null,
         })
         .eq("id", supplier.id);
@@ -191,33 +218,131 @@ export function EditSupplierDialog({ supplier, open, onOpenChange }: EditSupplie
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="payment"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>תשלום לספק (₪)</FormLabel>
-                  <FormControl>
-                    <Input {...field} type="number" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="border-t pt-4 mt-4">
+              <h3 className="text-sm font-semibold mb-4">תשלומים</h3>
+              
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
+                  <FormField
+                    control={form.control}
+                    name="payment_1"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>תשלום 1 (₪)</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="agency_id_1"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>סוכנות</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="בחר סוכנות" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-background">
+                            {agencies?.map((agency) => (
+                              <SelectItem key={agency.id} value={agency.id}>
+                                {agency.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>הערות</FormLabel>
-                  <FormControl>
-                    <Textarea {...field} rows={4} placeholder="הוסף הערות כאן..." />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
+                  <FormField
+                    control={form.control}
+                    name="payment_2"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>תשלום 2 (₪)</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="agency_id_2"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>סוכנות</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="בחר סוכנות" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-background">
+                            {agencies?.map((agency) => (
+                              <SelectItem key={agency.id} value={agency.id}>
+                                {agency.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
+                  <FormField
+                    control={form.control}
+                    name="payment_3"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>תשלום 3 (₪)</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="number" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="agency_id_3"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>סוכנות</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="בחר סוכנות" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-background">
+                            {agencies?.map((agency) => (
+                              <SelectItem key={agency.id} value={agency.id}>
+                                {agency.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </div>
 
             <div className="flex justify-end gap-2 pt-4">
               <Button

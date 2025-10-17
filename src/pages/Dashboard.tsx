@@ -59,7 +59,7 @@ export default function Dashboard() {
       let taskQuery = supabase.from("tasks").select("*").eq("status", "open");
       let financeQuery = supabase.from("finance").select("type, amount");
       let activeClientsQuery = supabase.from("clients").select("retainer, agency_id").eq("status", "active");
-      let suppliersQuery = supabase.from("suppliers").select("payment");
+      let suppliersQuery = supabase.from("suppliers").select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3");
 
       if (selectedAgency !== "all") {
         agencyQuery = agencyQuery.eq("id", selectedAgency);
@@ -94,7 +94,18 @@ export default function Dashboard() {
       const totalIncome = financeIncome + retainers;
       
       const financeExpense = finance.data?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
-      const supplierPayments = suppliers.data?.reduce((sum, supplier) => sum + Number(supplier.payment || 0), 0) || 0;
+      
+      let supplierPayments = 0;
+      suppliers.data?.forEach(supplier => {
+        if (selectedAgency === "all") {
+          supplierPayments += Number(supplier.payment_1 || 0) + Number(supplier.payment_2 || 0) + Number(supplier.payment_3 || 0);
+        } else {
+          if (supplier.agency_id_1 === selectedAgency) supplierPayments += Number(supplier.payment_1 || 0);
+          if (supplier.agency_id_2 === selectedAgency) supplierPayments += Number(supplier.payment_2 || 0);
+          if (supplier.agency_id_3 === selectedAgency) supplierPayments += Number(supplier.payment_3 || 0);
+        }
+      });
+      
       const totalExpense = financeExpense + supplierPayments;
 
       return {

@@ -277,45 +277,81 @@ export type Database = {
       }
       suppliers: {
         Row: {
+          agency_id_1: string | null
+          agency_id_2: string | null
+          agency_id_3: string | null
           created_at: string
           email: string | null
           folder_link: string | null
           id: string
           name: string
           notes: string | null
-          payment: number | null
+          payment_1: number | null
+          payment_2: number | null
+          payment_3: number | null
           phone: string | null
           related_campaigner_id: string | null
           type: Database["public"]["Enums"]["supplier_type"]
           updated_at: string
         }
         Insert: {
+          agency_id_1?: string | null
+          agency_id_2?: string | null
+          agency_id_3?: string | null
           created_at?: string
           email?: string | null
           folder_link?: string | null
           id?: string
           name: string
           notes?: string | null
-          payment?: number | null
+          payment_1?: number | null
+          payment_2?: number | null
+          payment_3?: number | null
           phone?: string | null
           related_campaigner_id?: string | null
           type: Database["public"]["Enums"]["supplier_type"]
           updated_at?: string
         }
         Update: {
+          agency_id_1?: string | null
+          agency_id_2?: string | null
+          agency_id_3?: string | null
           created_at?: string
           email?: string | null
           folder_link?: string | null
           id?: string
           name?: string
           notes?: string | null
-          payment?: number | null
+          payment_1?: number | null
+          payment_2?: number | null
+          payment_3?: number | null
           phone?: string | null
           related_campaigner_id?: string | null
           type?: Database["public"]["Enums"]["supplier_type"]
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "suppliers_agency_id_1_fkey"
+            columns: ["agency_id_1"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suppliers_agency_id_2_fkey"
+            columns: ["agency_id_2"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "suppliers_agency_id_3_fkey"
+            columns: ["agency_id_3"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "suppliers_related_campaigner_id_fkey"
             columns: ["related_campaigner_id"]

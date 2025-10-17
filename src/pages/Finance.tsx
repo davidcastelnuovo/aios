@@ -57,7 +57,7 @@ export default function Finance() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("suppliers")
-        .select("payment");
+        .select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3");
       if (error) throw error;
       return data;
     },
@@ -68,7 +68,17 @@ export default function Finance() {
     : clients?.filter(c => c.agency_id === selectedAgency);
 
   const totalRetainers = filteredClients?.reduce((sum, client) => sum + Number(client.retainer || 0), 0) || 0;
-  const totalSupplierPayments = suppliers?.reduce((sum, supplier) => sum + Number(supplier.payment || 0), 0) || 0;
+  
+  let totalSupplierPayments = 0;
+  suppliers?.forEach(supplier => {
+    if (selectedAgency === "all") {
+      totalSupplierPayments += Number(supplier.payment_1 || 0) + Number(supplier.payment_2 || 0) + Number(supplier.payment_3 || 0);
+    } else {
+      if (supplier.agency_id_1 === selectedAgency) totalSupplierPayments += Number(supplier.payment_1 || 0);
+      if (supplier.agency_id_2 === selectedAgency) totalSupplierPayments += Number(supplier.payment_2 || 0);
+      if (supplier.agency_id_3 === selectedAgency) totalSupplierPayments += Number(supplier.payment_3 || 0);
+    }
+  });
 
   const filteredFinanceRecords = selectedAgency === "all"
     ? financeRecords
