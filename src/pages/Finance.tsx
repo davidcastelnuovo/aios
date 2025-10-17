@@ -52,14 +52,26 @@ export default function Finance() {
     },
   });
 
-  const { data: suppliers } = useQuery({
-    queryKey: ["suppliers"],
+  // משיכת תשלומים לקמפיינרים מ-client_team
+  const { data: campaignerPayments } = useQuery({
+    queryKey: ["campaigner-payments-finance", selectedAgency],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("suppliers")
-        .select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3");
+      let query = supabase
+        .from("client_team")
+        .select(`
+          campaigner_payment,
+          clients!inner(agency_id)
+        `)
+        .not("campaigner_payment", "is", null);
+      
+      if (selectedAgency !== "all") {
+        query = query.eq("clients.agency_id", selectedAgency);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
-      return data;
+      
+      return data?.reduce((sum, item) => sum + Number(item.campaigner_payment || 0), 0) || 0;
     },
   });
 
@@ -68,17 +80,6 @@ export default function Finance() {
     : clients?.filter(c => c.agency_id === selectedAgency);
 
   const totalRetainers = filteredClients?.reduce((sum, client) => sum + Number(client.retainer || 0), 0) || 0;
-  
-  let totalSupplierPayments = 0;
-  suppliers?.forEach(supplier => {
-    if (selectedAgency === "all") {
-      totalSupplierPayments += Number(supplier.payment_1 || 0) + Number(supplier.payment_2 || 0) + Number(supplier.payment_3 || 0);
-    } else {
-      if (supplier.agency_id_1 === selectedAgency) totalSupplierPayments += Number(supplier.payment_1 || 0);
-      if (supplier.agency_id_2 === selectedAgency) totalSupplierPayments += Number(supplier.payment_2 || 0);
-      if (supplier.agency_id_3 === selectedAgency) totalSupplierPayments += Number(supplier.payment_3 || 0);
-    }
-  });
 
   const filteredFinanceRecords = selectedAgency === "all"
     ? financeRecords
@@ -133,7 +134,7 @@ export default function Finance() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">סך הוצאות</p>
-                <p className="text-2xl font-bold text-destructive">₪{(totalExpense + totalSupplierPayments).toLocaleString()}</p>
+                <p className="text-2xl font-bold text-destructive">₪{(totalExpense + (campaignerPayments || 0)).toLocaleString()}</p>
               </div>
               <div className="p-3 rounded-lg bg-destructive/10">
                 <TrendingDown className="h-6 w-6 text-destructive" />
@@ -147,12 +148,12 @@ export default function Finance() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">רווח</p>
-                <p className={`text-2xl font-bold ${(totalIncome + totalRetainers) - (totalExpense + totalSupplierPayments) >= 0 ? 'text-success' : 'text-destructive'}`}>
-                  ₪{((totalIncome + totalRetainers) - (totalExpense + totalSupplierPayments)).toLocaleString()}
+                <p className={`text-2xl font-bold ${(totalIncome + totalRetainers) - (totalExpense + (campaignerPayments || 0)) >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  ₪{((totalIncome + totalRetainers) - (totalExpense + (campaignerPayments || 0))).toLocaleString()}
                 </p>
               </div>
-              <div className={`p-3 rounded-lg ${(totalIncome + totalRetainers) - (totalExpense + totalSupplierPayments) >= 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
-                <TrendingUp className={`h-6 w-6 ${(totalIncome + totalRetainers) - (totalExpense + totalSupplierPayments) >= 0 ? 'text-success' : 'text-destructive'}`} />
+              <div className={`p-3 rounded-lg ${(totalIncome + totalRetainers) - (totalExpense + (campaignerPayments || 0)) >= 0 ? 'bg-success/10' : 'bg-destructive/10'}`}>
+                <TrendingUp className={`h-6 w-6 ${(totalIncome + totalRetainers) - (totalExpense + (campaignerPayments || 0)) >= 0 ? 'text-success' : 'text-destructive'}`} />
               </div>
             </div>
           </CardContent>

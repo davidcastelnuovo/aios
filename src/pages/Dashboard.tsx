@@ -58,7 +58,6 @@ export default function Dashboard() {
       let campaignerQuery = supabase.from("campaigners").select("*", { count: "exact", head: true });
       let taskQuery = supabase.from("tasks").select("*").eq("status", "open");
       let activeClientsQuery = supabase.from("clients").select("id, retainer, agency_id").eq("status", "active");
-      let suppliersQuery = supabase.from("suppliers").select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3, related_campaigner_id");
       
       // קודם כל מביאים את client_team אם צריך לסנן לפי קמפיינר
       let clientTeamData = null;
@@ -85,7 +84,6 @@ export default function Dashboard() {
 
       if (selectedCampaigner !== "all") {
         taskQuery = taskQuery.eq("campaigner_id", selectedCampaigner);
-        suppliersQuery = suppliersQuery.eq("related_campaigner_id", selectedCampaigner);
         
         // סינון לקוחות לפי client_team
         if (clientTeamData && clientTeamData.length > 0) {
@@ -94,13 +92,12 @@ export default function Dashboard() {
         }
       }
 
-      const [agenciesData, clientsData, campaignersData, tasks, activeClients, suppliers] = await Promise.all([
+      const [agenciesData, clientsData, campaignersData, tasks, activeClients] = await Promise.all([
         agencyQuery,
         clientQuery,
         campaignerQuery,
         taskQuery,
         activeClientsQuery,
-        suppliersQuery,
       ]);
 
       // עכשיו שואלים את finance עם הסינון הנכון
@@ -126,18 +123,31 @@ export default function Dashboard() {
       
       const financeExpense = financeData?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
       
-      let supplierPayments = 0;
-      suppliers.data?.forEach(supplier => {
-        if (selectedAgency === "all") {
-          supplierPayments += Number(supplier.payment_1 || 0) + Number(supplier.payment_2 || 0) + Number(supplier.payment_3 || 0);
-        } else {
-          if (supplier.agency_id_1 === selectedAgency) supplierPayments += Number(supplier.payment_1 || 0);
-          if (supplier.agency_id_2 === selectedAgency) supplierPayments += Number(supplier.payment_2 || 0);
-          if (supplier.agency_id_3 === selectedAgency) supplierPayments += Number(supplier.payment_3 || 0);
-        }
-      });
+      // משיכת הוצאות מ-client_team
+      let clientTeamQuery = supabase
+        .from("client_team")
+        .select(`
+          campaigner_payment,
+          clients!inner(agency_id)
+        `)
+        .not("campaigner_payment", "is", null);
       
-      const totalExpense = financeExpense + supplierPayments;
+      if (selectedAgency !== "all") {
+        clientTeamQuery = clientTeamQuery.eq("clients.agency_id", selectedAgency);
+      }
+      
+      if (selectedClient !== "all") {
+        clientTeamQuery = clientTeamQuery.eq("client_id", selectedClient);
+      }
+      
+      if (selectedCampaigner !== "all") {
+        clientTeamQuery = clientTeamQuery.eq("campaigner_id", selectedCampaigner);
+      }
+      
+      const { data: campaignerPaymentsData } = await clientTeamQuery;
+      const campaignerPayments = campaignerPaymentsData?.reduce((sum, item) => sum + Number(item.campaigner_payment || 0), 0) || 0;
+      
+      const totalExpense = financeExpense + campaignerPayments;
 
       return {
         agenciesCount: agenciesData.count || 0,
