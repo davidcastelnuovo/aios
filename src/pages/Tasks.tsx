@@ -6,9 +6,17 @@ import { CheckSquare, Calendar, Building2, Users, Megaphone, AlertCircle } from 
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useState } from "react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function Tasks() {
   const [editingTask, setEditingTask] = useState<any>(null);
+  const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const { data: tasks, isLoading } = useQuery({
     queryKey: ["tasks"],
     queryFn: async () => {
@@ -26,10 +34,27 @@ export default function Tasks() {
     },
   });
 
+  const { data: campaigners } = useQuery({
+    queryKey: ["campaigners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaigners")
+        .select("*")
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const filteredTasks = selectedCampaigner === "all" 
+    ? tasks 
+    : tasks?.filter(t => t.campaigner_id === selectedCampaigner);
+
   const tasksByStatus = {
-    open: tasks?.filter(t => t.status === "open") || [],
-    in_progress: tasks?.filter(t => t.status === "in_progress") || [],
-    done: tasks?.filter(t => t.status === "done") || [],
+    open: filteredTasks?.filter(t => t.status === "open") || [],
+    in_progress: filteredTasks?.filter(t => t.status === "in_progress") || [],
+    done: filteredTasks?.filter(t => t.status === "done") || [],
   };
 
   const getPriorityColor = (priority: string) => {
@@ -149,7 +174,27 @@ export default function Tasks() {
         <p className="text-muted-foreground mt-1">ניהול משימות וקמפיינים</p>
       </div>
 
-      <AddTaskForm />
+      <div className="flex gap-4 items-end">
+        <div className="flex-1">
+          <AddTaskForm />
+        </div>
+        <div className="w-64">
+          <label className="text-sm font-medium mb-2 block">סינון לפי קמפיינר</label>
+          <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="all">כל הקמפיינרים</SelectItem>
+              {campaigners?.map((campaigner) => (
+                <SelectItem key={campaigner.id} value={campaigner.id}>
+                  {campaigner.full_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
 
       <div className="grid gap-6 md:grid-cols-3">
         <div className="space-y-4">
