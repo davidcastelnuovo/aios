@@ -54,7 +54,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full overflow-x-hidden">
+      <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
           <header className="h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 gap-2 md:gap-4">
@@ -64,7 +64,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 מערכת ניהול סוכנויות
               </h1>
             </div>
-            <div className="flex items-center gap-2 md:gap-4 min-w-0 max-w-full">
+            <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
               <Select value={selectedAgency} onValueChange={setSelectedAgency}>
                 <SelectTrigger className="w-[140px] md:w-[200px] bg-background">
                   <Building2 className="h-4 w-4 ml-2" />
@@ -94,7 +94,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </DropdownMenu>
             </div>
           </header>
-          <main className="flex-1 pr-[31px] pl-[21px] py-3 md:p-6 overflow-y-auto overflow-x-hidden">
+          <main className="flex-1 p-6 overflow-auto">
             {children}
           </main>
         </div>

@@ -207,13 +207,13 @@ export default function Dashboard() {
     : clients?.filter(c => c.agency_id === selectedAgency);
 
   return (
-    <div className="space-y-4 md:space-y-6 min-w-0">
+    <div className="space-y-6">
       <div>
-        <h2 className="text-2xl md:text-3xl font-bold">דשבורד</h2>
+        <h2 className="text-3xl font-bold">דשבורד</h2>
         <p className="text-muted-foreground mt-1">מבט על על המערכת</p>
       </div>
 
-      <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2">
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
         <Select value={selectedClient} onValueChange={setSelectedClient}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder="כל הלקוחות" />
@@ -243,7 +243,7 @@ export default function Dashboard() {
         </Select>
       </div>
 
-      <div className="grid gap-3 md:gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statCards.map((stat) => (
           <Card key={stat.title} className="shadow-card hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -259,7 +259,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-3">
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
         <Card className="shadow-card min-w-0">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">הכנסות חודשיות</CardTitle>
@@ -272,7 +272,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-card min-w-0">
+        <Card className="shadow-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">הוצאות חודשיות</CardTitle>
             <TrendingDown className="h-4 w-4 text-destructive" />
@@ -284,7 +284,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-card min-w-0">
+        <Card className="shadow-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">רווח</CardTitle>
             <DollarSign className="h-4 w-4 text-primary" />
