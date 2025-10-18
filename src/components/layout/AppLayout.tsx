@@ -57,49 +57,45 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <header className="h-16 border-b bg-card px-4 md:px-6">
-            <div className="mx-auto w-full max-w-screen-xl flex items-center justify-between gap-2 md:gap-4">
-              <div className="flex items-center gap-2 md:gap-4 min-w-0">
-                <SidebarTrigger />
-                <h1 className="text-sm md:text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
-                  מערכת ניהול סוכנויות
-                </h1>
-              </div>
-              <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
-                <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-                  <SelectTrigger className="w-[140px] md:w-[200px] bg-background">
-                    <Building2 className="h-4 w-4 ml-2" />
-                    <SelectValue placeholder="כל הסוכנויות" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-50">
-                    <SelectItem value="all">כל הסוכנויות</SelectItem>
-                    {agencies?.map((agency) => (
-                      <SelectItem key={agency.id} value={agency.id}>
-                        {agency.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <User className="h-5 w-5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="bg-background z-50">
-                    <DropdownMenuItem onClick={handleLogout}>
-                      <LogOut className="ml-2 h-4 w-4" />
-                      התנתק
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+          <header className="h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 gap-2 md:gap-4">
+            <div className="flex items-center gap-2 md:gap-4 min-w-0">
+              <SidebarTrigger />
+              <h1 className="text-sm md:text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
+                מערכת ניהול סוכנויות
+              </h1>
+            </div>
+            <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+              <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                <SelectTrigger className="w-[140px] md:w-[200px] bg-background">
+                  <Building2 className="h-4 w-4 ml-2" />
+                  <SelectValue placeholder="כל הסוכנויות" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="all">כל הסוכנויות</SelectItem>
+                  {agencies?.map((agency) => (
+                    <SelectItem key={agency.id} value={agency.id}>
+                      {agency.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <User className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-background z-50">
+                  <DropdownMenuItem onClick={handleLogout}>
+                    <LogOut className="ml-2 h-4 w-4" />
+                    התנתק
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto overflow-x-hidden">
-            <div className="mx-auto w-full max-w-screen-xl px-4 md:px-6 py-6">
-              {children}
-            </div>
+          <main className="flex-1 p-6 overflow-auto">
+            {children}
           </main>
         </div>
       </div>
