@@ -285,7 +285,7 @@ export default function Tasks() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="space-y-3 md:space-y-6 overflow-x-hidden min-w-0 pl-3 md:px-0">
+      <div className="space-y-3 md:space-y-6 overflow-x-hidden min-w-0 pl-4 md:px-0">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">משימות</h2>
