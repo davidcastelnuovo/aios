@@ -94,7 +94,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </DropdownMenu>
             </div>
           </header>
-          <main className="flex-1 pr-4 pl-[21px] py-3 md:p-6 overflow-y-auto overflow-x-hidden">
+          <main className="flex-1 pr-[31px] pl-[21px] py-3 md:p-6 overflow-y-auto overflow-x-hidden">
             {children}
           </main>
         </div>
