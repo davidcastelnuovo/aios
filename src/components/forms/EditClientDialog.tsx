@@ -29,7 +29,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, X } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 
 const formSchema = z.object({
@@ -65,6 +66,85 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         .order("name");
       if (error) throw error;
       return data;
+    },
+  });
+
+  const { data: campaigners } = useQuery({
+    queryKey: ["campaigners"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaigners")
+        .select("id, full_name")
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: assignedCampaigners, refetch: refetchAssigned } = useQuery({
+    queryKey: ["client-campaigners", client.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("client_team")
+        .select(`
+          id,
+          campaigner_id,
+          campaigners (full_name)
+        `)
+        .eq("client_id", client.id);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const assignCampaignerMutation = useMutation({
+    mutationFn: async (campaignerId: string) => {
+      const { data: existing } = await supabase
+        .from("client_team")
+        .select("id")
+        .eq("client_id", client.id)
+        .eq("campaigner_id", campaignerId)
+        .maybeSingle();
+
+      if (existing) {
+        toast.info("הקמפיינר כבר משויך ללקוח");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("client_team")
+        .insert({
+          client_id: client.id,
+          campaigner_id: campaignerId,
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("הקמפיינר שויך בהצלחה");
+      refetchAssigned();
+    },
+    onError: () => {
+      toast.error("שגיאה בשיוך הקמפיינר");
+    },
+  });
+
+  const removeCampaignerMutation = useMutation({
+    mutationFn: async (assignmentId: string) => {
+      const { error } = await supabase
+        .from("client_team")
+        .delete()
+        .eq("id", assignmentId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("הקמפיינר הוסר בהצלחה");
+      refetchAssigned();
+    },
+    onError: () => {
+      toast.error("שגיאה בהסרת הקמפיינר");
     },
   });
 
@@ -316,6 +396,48 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                 </FormItem>
               )}
             />
+
+            <div className="space-y-3 pt-4 border-t">
+              <div>
+                <FormLabel>קמפיינרים משויכים</FormLabel>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {assignedCampaigners && assignedCampaigners.length > 0 ? (
+                    assignedCampaigners.map((assignment: any) => (
+                      <Badge key={assignment.id} variant="secondary" className="text-sm flex items-center gap-1">
+                        {assignment.campaigners.full_name}
+                        <button
+                          type="button"
+                          onClick={() => removeCampaignerMutation.mutate(assignment.id)}
+                          className="hover:bg-destructive/20 rounded-full p-0.5"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">אין קמפיינרים משויכים</p>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <FormLabel>הוסף קמפיינר</FormLabel>
+                <Select
+                  onValueChange={(value) => assignCampaignerMutation.mutate(value)}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder="בחר קמפיינר" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background">
+                    {campaigners?.map((campaigner) => (
+                      <SelectItem key={campaigner.id} value={campaigner.id}>
+                        {campaigner.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
             <div className="flex justify-end gap-2 pt-4">
               <Button
