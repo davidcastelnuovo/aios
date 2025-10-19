@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, Edit, Search, Plus } from "lucide-react";
+import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, Edit, Search, Plus, Trash2 } from "lucide-react";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
@@ -31,6 +31,16 @@ import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function Clients() {
   const { selectedAgency } = useAgency();
@@ -38,6 +48,7 @@ export default function Clients() {
   const [editingClient, setEditingClient] = useState<any>(null);
   const [hideInactive, setHideInactive] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [deletingClient, setDeletingClient] = useState<any>(null);
   const queryClient = useQueryClient();
   const { isAdmin, isOwner } = useUserRole();
 
@@ -132,6 +143,24 @@ export default function Clients() {
     },
     onError: () => {
       toast.error("שגיאה בשיוך הקמפיינר");
+    },
+  });
+
+  const deleteClientMutation = useMutation({
+    mutationFn: async (clientId: string) => {
+      const { error } = await supabase
+        .from("clients")
+        .delete()
+        .eq("id", clientId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("הלקוח נמחק בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      setDeletingClient(null);
+    },
+    onError: () => {
+      toast.error("שגיאה במחיקת הלקוח");
     },
   });
 
@@ -249,10 +278,22 @@ export default function Clients() {
             className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02] cursor-pointer group relative"
             onClick={() => setEditingClient(client)}
           >
-            <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="absolute top-4 left-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
               <Button size="sm" variant="secondary">
                 <Edit className="h-4 w-4" />
               </Button>
+              {(isAdmin || isOwner) && (
+                <Button 
+                  size="sm" 
+                  variant="destructive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeletingClient(client);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
             </div>
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -424,14 +465,26 @@ export default function Clients() {
                   className="hover:bg-accent/5 transition-colors border-b border-border/50"
                 >
                   <TableCell className="py-4">
-                    <Button 
-                      size="sm" 
-                      variant="ghost"
-                      onClick={() => setEditingClient(client)}
-                      className="h-8 w-8 p-0 hover:bg-accent/20"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        onClick={() => setEditingClient(client)}
+                        className="h-8 w-8 p-0 hover:bg-accent/20"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      {(isAdmin || isOwner) && (
+                        <Button 
+                          size="sm" 
+                          variant="ghost"
+                          onClick={() => setDeletingClient(client)}
+                          className="h-8 w-8 p-0 hover:bg-destructive/20 hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="font-semibold py-4">{client.name}</TableCell>
                   <TableCell className="py-4">
@@ -587,6 +640,27 @@ export default function Clients() {
           onOpenChange={(open) => !open && setEditingClient(null)}
         />
       )}
+
+      <AlertDialog open={!!deletingClient} onOpenChange={(open) => !open && setDeletingClient(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>אישור מחיקת לקוח</AlertDialogTitle>
+            <AlertDialogDescription>
+              האם אתה בטוח שברצונך למחוק את הלקוח <strong>{deletingClient?.name}</strong>?
+              פעולה זו תמחק גם את כל המשימות והנתונים הקשורים ללקוח זה ולא ניתן לבטל אותה.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => deletingClient && deleteClientMutation.mutate(deletingClient.id)}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              מחק לקוח
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
