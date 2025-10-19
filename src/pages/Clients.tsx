@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, Edit, Search, Plus, Trash2 } from "lucide-react";
+import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink } from "lucide-react";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
@@ -49,6 +49,7 @@ export default function Clients() {
   const [hideInactive, setHideInactive] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [deletingClient, setDeletingClient] = useState<any>(null);
+  const [editingFolderLink, setEditingFolderLink] = useState<{ clientId: string; link: string } | null>(null);
   const queryClient = useQueryClient();
   const { isAdmin, isOwner } = useUserRole();
 
@@ -161,6 +162,24 @@ export default function Clients() {
     },
     onError: () => {
       toast.error("שגיאה במחיקת הלקוח");
+    },
+  });
+
+  const updateFolderLinkMutation = useMutation({
+    mutationFn: async ({ clientId, folderLink }: { clientId: string; folderLink: string }) => {
+      const { error } = await supabase
+        .from("clients")
+        .update({ folder_link: folderLink })
+        .eq("id", clientId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("קישור התיקיה עודכן בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      setEditingFolderLink(null);
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון קישור התיקיה");
     },
   });
 
@@ -388,6 +407,40 @@ export default function Clients() {
                 </Select>
               </div>
               
+              <div className="pt-2 border-t space-y-2">
+                <p className="text-sm text-muted-foreground">קישור לתיקיה:</p>
+                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                  <Input
+                    type="text"
+                    placeholder="הזן קישור לתיקיה..."
+                    value={editingFolderLink?.clientId === client.id ? editingFolderLink.link : (client.folder_link || "")}
+                    onChange={(e) => setEditingFolderLink({ clientId: client.id, link: e.target.value })}
+                    className="h-9 text-sm"
+                  />
+                  {editingFolderLink?.clientId === client.id && editingFolderLink.link !== (client.folder_link || "") && (
+                    <Button
+                      size="sm"
+                      onClick={() => updateFolderLinkMutation.mutate({ 
+                        clientId: client.id, 
+                        folderLink: editingFolderLink.link 
+                      })}
+                      disabled={updateFolderLinkMutation.isPending}
+                    >
+                      שמור
+                    </Button>
+                  )}
+                  {client.folder_link && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(client.folder_link, "_blank")}
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+
               {client.client_team && client.client_team.length > 0 && (
                 <div className="pt-2 border-t">
                   <p className="text-sm text-muted-foreground mb-1">קמפיינרים:</p>
@@ -455,6 +508,7 @@ export default function Clients() {
                 <TableHead className="text-right font-semibold">טלפון</TableHead>
                 <TableHead className="text-right font-semibold">אימייל</TableHead>
                 <TableHead className="text-right font-semibold">אתר</TableHead>
+                <TableHead className="text-right font-semibold">תיקיה</TableHead>
                 <TableHead className="text-right font-semibold">קמפיינרים</TableHead>
               </TableRow>
             </TableHeader>
@@ -584,6 +638,40 @@ export default function Clients() {
                         <span>קישור</span>
                       </a>
                     ) : <span className="text-muted-foreground">-</span>}
+                  </TableCell>
+                  <TableCell className="py-4">
+                    <div className="flex gap-2 min-w-[200px]">
+                      <Input
+                        type="text"
+                        placeholder="קישור לתיקיה..."
+                        value={editingFolderLink?.clientId === client.id ? editingFolderLink.link : (client.folder_link || "")}
+                        onChange={(e) => setEditingFolderLink({ clientId: client.id, link: e.target.value })}
+                        className="h-8 text-sm"
+                      />
+                      {editingFolderLink?.clientId === client.id && editingFolderLink.link !== (client.folder_link || "") && (
+                        <Button
+                          size="sm"
+                          onClick={() => updateFolderLinkMutation.mutate({ 
+                            clientId: client.id, 
+                            folderLink: editingFolderLink.link 
+                          })}
+                          disabled={updateFolderLinkMutation.isPending}
+                          className="h-8"
+                        >
+                          שמור
+                        </Button>
+                      )}
+                      {client.folder_link && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.open(client.folder_link, "_blank")}
+                          className="h-8 w-8 p-0"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="py-4">
                     <div className="flex flex-col gap-2 min-w-[180px]">
