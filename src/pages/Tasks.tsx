@@ -7,7 +7,7 @@ import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useState } from "react";
-import { DndContext, DragOverlay, closestCorners, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor } from "@dnd-kit/core";
+import { DndContext, DragOverlay, closestCorners, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
@@ -172,6 +172,18 @@ export default function Tasks() {
     setActiveTask(null);
   };
 
+  const DroppableColumn = ({ status, children }: { status: "open" | "in_progress" | "done", children: React.ReactNode }) => {
+    const { setNodeRef } = useDroppable({
+      id: status,
+    });
+
+    return (
+      <div ref={setNodeRef} className="space-y-4 min-h-[400px] p-4 rounded-lg bg-muted/20">
+        {children}
+      </div>
+    );
+  };
+
   const DraggableTaskCard = ({ task }: { task: any }) => {
     const {
       attributes,
@@ -315,8 +327,8 @@ export default function Tasks() {
         </div>
 
         <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-3">
-          <SortableContext id="open" items={tasksByStatus.open.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-4 min-h-[400px] p-4 rounded-lg bg-muted/20">
+          <DroppableColumn status="open">
+            <SortableContext items={tasksByStatus.open.map(t => t.id)} strategy={verticalListSortingStrategy}>
               <div className="flex items-center gap-2">
                 <div className="h-8 w-1 rounded-full bg-primary"></div>
                 <h3 className="text-base md:text-lg font-semibold">פתוח ({tasksByStatus.open.length})</h3>
@@ -332,11 +344,11 @@ export default function Tasks() {
                   </CardContent>
                 </Card>
               )}
-            </div>
-          </SortableContext>
+            </SortableContext>
+          </DroppableColumn>
 
-          <SortableContext id="in_progress" items={tasksByStatus.in_progress.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-4 min-h-[400px] p-4 rounded-lg bg-muted/20">
+          <DroppableColumn status="in_progress">
+            <SortableContext items={tasksByStatus.in_progress.map(t => t.id)} strategy={verticalListSortingStrategy}>
               <div className="flex items-center gap-2">
                 <div className="h-8 w-1 rounded-full bg-yellow-500"></div>
                 <h3 className="text-base md:text-lg font-semibold">בעבודה ({tasksByStatus.in_progress.length})</h3>
@@ -352,11 +364,11 @@ export default function Tasks() {
                   </CardContent>
                 </Card>
               )}
-            </div>
-          </SortableContext>
+            </SortableContext>
+          </DroppableColumn>
 
-          <SortableContext id="done" items={tasksByStatus.done.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-4 min-h-[400px] p-4 rounded-lg bg-muted/20">
+          <DroppableColumn status="done">
+            <SortableContext items={tasksByStatus.done.map(t => t.id)} strategy={verticalListSortingStrategy}>
               <div className="flex items-center gap-2">
                 <div className="h-8 w-1 rounded-full bg-success"></div>
                 <h3 className="text-base md:text-lg font-semibold">הושלם ({tasksByStatus.done.length})</h3>
@@ -372,8 +384,8 @@ export default function Tasks() {
                   </CardContent>
                 </Card>
               )}
-            </div>
-          </SortableContext>
+            </SortableContext>
+          </DroppableColumn>
         </div>
 
         {editingTask && (
