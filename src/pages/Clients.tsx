@@ -3,11 +3,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, Edit, Search } from "lucide-react";
+import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, Edit, Search, Plus } from "lucide-react";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
+import AddTaskForm from "@/components/forms/AddTaskForm";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAgency } from "@/contexts/AgencyContext";
 import {
@@ -375,6 +376,24 @@ export default function Clients() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              
+              <div className="pt-2 border-t">
+                <AddTaskForm 
+                  clientId={client.id} 
+                  agencyId={client.agency_id}
+                  triggerButton={
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-full gap-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Plus className="h-4 w-4" />
+                      הוסף משימה
+                    </Button>
+                  }
+                />
               </div>
             </CardContent>
           </Card>

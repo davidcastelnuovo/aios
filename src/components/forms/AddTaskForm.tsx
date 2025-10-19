@@ -1,5 +1,5 @@
 import { useForm } from "react-hook-form";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -58,7 +58,13 @@ const formSchema = z.object({
   task_type: z.enum(["campaign", "collection", "creative", "other"]),
 });
 
-export default function AddTaskForm() {
+interface AddTaskFormProps {
+  clientId?: string;
+  agencyId?: string;
+  triggerButton?: React.ReactNode;
+}
+
+export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTaskFormProps) {
   const [open, setOpen] = useState(false);
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -69,14 +75,24 @@ export default function AddTaskForm() {
       title: "",
       notes: "",
       campaigner_id: "",
-      client_id: "",
-      agency_id: "",
+      client_id: clientId || "",
+      agency_id: agencyId || "",
       due_date: "",
       status: "open",
       priority: "medium",
       task_type: "other",
     },
   });
+
+  // Update form when clientId or agencyId changes
+  useEffect(() => {
+    if (clientId) {
+      form.setValue("client_id", clientId);
+    }
+    if (agencyId) {
+      form.setValue("agency_id", agencyId);
+    }
+  }, [clientId, agencyId, form]);
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners"],
@@ -148,10 +164,12 @@ export default function AddTaskForm() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Plus className="h-4 w-4" />
-          משימה חדשה
-        </Button>
+        {triggerButton || (
+          <Button className="gap-2">
+            <Plus className="h-4 w-4" />
+            משימה חדשה
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -211,6 +229,7 @@ export default function AddTaskForm() {
                           <Button
                             variant="outline"
                             role="combobox"
+                            disabled={!!clientId}
                             className={cn(
                               "justify-between",
                               !field.value && "text-muted-foreground"
@@ -264,7 +283,7 @@ export default function AddTaskForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>סוכנות</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={!!agencyId}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="בחר סוכנות" />
