@@ -13,6 +13,7 @@ import { toast } from "sonner";
 
 export default function Campaigners() {
   const [expandedCampaigner, setExpandedCampaigner] = useState<string | null>(null);
+  const [tempAmounts, setTempAmounts] = useState<Record<string, number>>({});
   const queryClient = useQueryClient();
   
   const { data: campaigners, isLoading } = useQuery({
@@ -57,7 +58,14 @@ export default function Campaigners() {
 
   const handleAmountChange = (clientTeamId: string, value: string) => {
     const amount = parseFloat(value) || 0;
-    updatePaymentMutation.mutate({ clientTeamId, amount });
+    setTempAmounts(prev => ({ ...prev, [clientTeamId]: amount }));
+  };
+
+  const handleAmountBlur = (clientTeamId: string, originalAmount: number) => {
+    const newAmount = tempAmounts[clientTeamId];
+    if (newAmount !== undefined && newAmount !== originalAmount) {
+      updatePaymentMutation.mutate({ clientTeamId, amount: newAmount });
+    }
   };
 
   const calculateTotal = (campaignerId: string) => {
@@ -165,8 +173,9 @@ export default function Campaigners() {
                                 <Input
                                   type="number"
                                   placeholder="0"
-                                  value={assignment.campaigner_payment || ''}
+                                  value={tempAmounts[assignment.id] ?? assignment.campaigner_payment ?? ''}
                                   onChange={(e) => handleAmountChange(assignment.id, e.target.value)}
+                                  onBlur={() => handleAmountBlur(assignment.id, assignment.campaigner_payment || 0)}
                                   className="max-w-[150px]"
                                 />
                               </TableCell>
