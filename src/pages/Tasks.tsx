@@ -6,6 +6,7 @@ import { CheckSquare, Calendar, Building2, Users, Megaphone, AlertCircle, GripVe
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useAgency } from "@/contexts/AgencyContext";
 import { useState } from "react";
 import { DndContext, DragOverlay, closestCorners, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
@@ -24,6 +25,7 @@ export default function Tasks() {
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [activeTask, setActiveTask] = useState<any>(null);
   const { isAdmin, isOwner } = useUserRole();
+  const { selectedAgency } = useAgency();
   const queryClient = useQueryClient();
 
   const sensors = useSensors(
@@ -80,9 +82,11 @@ export default function Tasks() {
     },
   });
 
-  const filteredTasks = selectedCampaigner === "all" 
-    ? tasks 
-    : tasks?.filter(t => t.campaigner_id === selectedCampaigner);
+  const filteredTasks = tasks?.filter(t => {
+    const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
+    const matchesAgency = selectedAgency === "all" || t.agency_id === selectedAgency;
+    return matchesCampaigner && matchesAgency;
+  });
 
   const tasksByStatus = {
     open: filteredTasks?.filter(t => t.status === "open") || [],
