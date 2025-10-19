@@ -494,8 +494,8 @@ export default function Clients() {
         ))}
         </div>
       ) : (
-        <div className="bg-card rounded-lg border shadow-sm overflow-hidden">
-          <Table>
+        <div className="bg-card rounded-lg border shadow-sm overflow-x-auto">
+          <Table className="relative">
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50 border-b">
                 <TableHead className="text-right font-semibold h-12">פעולות</TableHead>
