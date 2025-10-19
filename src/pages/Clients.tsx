@@ -499,7 +499,7 @@ export default function Clients() {
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50 border-b">
                 <TableHead className="text-right font-semibold h-12">פעולות</TableHead>
-                <TableHead className="text-right font-semibold">שם</TableHead>
+                <TableHead className="text-right font-semibold sticky right-0 bg-muted/50 z-10">שם</TableHead>
                 <TableHead className="text-right font-semibold">סוכנות</TableHead>
                 <TableHead className="text-right font-semibold">סטטוס</TableHead>
                 <TableHead className="text-right font-semibold">תעשייה</TableHead>
@@ -540,7 +540,7 @@ export default function Clients() {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="font-semibold py-4">{client.name}</TableCell>
+                  <TableCell className="font-semibold py-4 sticky right-0 bg-card z-10 shadow-[2px_0_8px_-2px_rgba(0,0,0,0.1)]">{client.name}</TableCell>
                   <TableCell className="py-4">
                     {client.agencies ? (
                       <div className="flex items-center gap-2 text-muted-foreground">
