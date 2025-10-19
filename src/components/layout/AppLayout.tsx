@@ -54,10 +54,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full" dir="rtl">
         <AppSidebar />
         <div className="flex-1 flex flex-col">
-          <header className="sticky top-0 z-50 h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 gap-2 md:gap-4 flex-shrink-0">
+          <header className="sticky top-0 z-50 h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 gap-2 md:gap-4 flex-shrink-0 pt-[env(safe-area-inset-top)]">
             <div className="flex items-center gap-2 md:gap-4 min-w-0">
               <SidebarTrigger />
               <h1 className="text-sm md:text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
@@ -67,7 +67,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
               <Select value={selectedAgency} onValueChange={setSelectedAgency}>
                 <SelectTrigger className="w-[140px] md:w-[200px] bg-background">
-                  <Building2 className="h-4 w-4 ml-2" />
+                  <Building2 className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="כל הסוכנויות" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
@@ -87,14 +87,14 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-background z-50">
                   <DropdownMenuItem onClick={handleLogout}>
-                    <LogOut className="ml-2 h-4 w-4" />
+                    <LogOut className="mr-2 h-4 w-4" />
                     התנתק
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </header>
-          <main className="flex-1 overflow-auto">
+          <main className="flex-1">
             <div className="p-6">
               {children}
             </div>
