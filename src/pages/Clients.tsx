@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, Edit } from "lucide-react";
+import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, Edit, Search } from "lucide-react";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
@@ -29,12 +29,14 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 export default function Clients() {
   const { selectedAgency } = useAgency();
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [editingClient, setEditingClient] = useState<any>(null);
   const [hideInactive, setHideInactive] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
   const queryClient = useQueryClient();
   const { isAdmin, isOwner } = useUserRole();
 
@@ -136,9 +138,15 @@ export default function Clients() {
     ? clients 
     : clients?.filter(client => client.agency_id === selectedAgency);
 
-  const visibleClients = hideInactive 
-    ? filteredClients?.filter(client => client.status === "active")
+  const searchedClients = searchTerm 
+    ? filteredClients?.filter(client => 
+        client.name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
     : filteredClients;
+
+  const visibleClients = hideInactive 
+    ? searchedClients?.filter(client => client.status === "active")
+    : searchedClients;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -178,6 +186,18 @@ export default function Clients() {
           <p className="text-muted-foreground mt-1">ניהול לקוחות סוכנויות</p>
         </div>
         <div className="flex flex-wrap gap-2 md:gap-4 items-center">
+          <div className="relative min-w-[200px]">
+            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="חפש לקוח..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pr-9"
+            />
+          </div>
+          
+          <div className="h-8 w-px bg-border"></div>
           <div className="flex gap-1 border rounded-md p-1">
             <Button
               variant={viewMode === "grid" ? "default" : "ghost"}
