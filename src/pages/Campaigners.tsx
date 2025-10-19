@@ -23,14 +23,15 @@ export default function Campaigners() {
         .from("campaigners")
         .select(`
           *,
-          client_team(
+          client_team!inner(
             id,
             role_on_account,
             allocation_percent,
             campaigner_payment,
-            clients(id, name, status)
+            clients!inner(id, name, status)
           )
         `)
+        .eq("client_team.clients.status", "active")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
