@@ -456,20 +456,22 @@ export default function Clients() {
               
               <div className="pt-2 border-t space-y-2">
                 <p className="text-sm text-muted-foreground">הוסף קמפיינר:</p>
-                <Select
-                  onValueChange={(value) => assignCampaignerMutation.mutate({ clientId: client.id, campaignerId: value })}
-                >
-                  <SelectTrigger onClick={(e) => e.stopPropagation()} className="h-9">
-                    <SelectValue placeholder="בחר קמפיינר" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background">
-                    {campaigners?.map((campaigner) => (
-                      <SelectItem key={campaigner.id} value={campaigner.id}>
-                        {campaigner.full_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <Select
+                    onValueChange={(value) => assignCampaignerMutation.mutate({ clientId: client.id, campaignerId: value })}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="בחר קמפיינר" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background">
+                      {campaigners?.map((campaigner) => (
+                        <SelectItem key={campaigner.id} value={campaigner.id}>
+                          {campaigner.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               
               <div className="pt-2 border-t">
