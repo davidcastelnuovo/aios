@@ -166,11 +166,21 @@ export default function Tasks() {
     }
 
     const taskId = active.id as string;
-    const newStatus = over.id as "open" | "in_progress" | "done";
 
-    const task = tasks?.find(t => t.id === taskId);
-    if (task && task.status !== newStatus) {
-      updateTaskStatusMutation.mutate({ taskId, status: newStatus });
+    // Determine destination status:
+    // - If dropped on a column, over.id is the column id (open | in_progress | done)
+    // - If dropped over another task card, over.id is that task id → use its status (column)
+    let targetStatus: "open" | "in_progress" | "done" | undefined;
+    if (over.id === "open" || over.id === "in_progress" || over.id === "done") {
+      targetStatus = over.id as "open" | "in_progress" | "done";
+    } else {
+      const overTask = tasks?.find((t) => t.id === over.id);
+      targetStatus = overTask?.status as "open" | "in_progress" | "done" | undefined;
+    }
+
+    const task = tasks?.find((t) => t.id === taskId);
+    if (task && targetStatus && task.status !== targetStatus) {
+      updateTaskStatusMutation.mutate({ taskId, status: targetStatus });
     }
     
     setActiveTask(null);
