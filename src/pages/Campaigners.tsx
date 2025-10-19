@@ -60,14 +60,10 @@ export default function Campaigners() {
         <AddCampaignerForm />
       </div>
 
-      <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {campaigners?.map((campaigner) => (
-          <div key={campaigner.id} className="space-y-3">
-            <Card className="shadow-card hover:shadow-lg transition-all hover:scale-[1.01]"
-                  onClick={() => setSelectedCampaigner(selectedCampaigner === campaigner.id ? null : campaigner.id)}
-                  role="button"
-                  tabIndex={0}>
-              <CardHeader>
+          <Card key={campaigner.id} className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02]">
+            <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`p-2 rounded-lg ${campaigner.active ? 'bg-success/10' : 'bg-muted'}`}>
@@ -109,46 +105,44 @@ export default function Campaigners() {
                   {campaigner.notes}
                 </p>
               )}
+              
+              {campaigner.client_team && campaigner.client_team.length > 0 && (
+                <div className="mt-3 pt-3 border-t">
+                  <h4 className="text-sm font-semibold mb-2">לקוחות משויכים</h4>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">שם לקוח</TableHead>
+                          <TableHead className="text-right">סכום</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {campaigner.client_team.map((assignment: any) => (
+                          <TableRow key={assignment.clients.id}>
+                            <TableCell className="font-medium">{assignment.clients.name}</TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                placeholder="0"
+                                value={clientAmounts[assignment.clients.id] || ''}
+                                onChange={(e) => handleAmountChange(assignment.clients.id, e.target.value)}
+                                className="max-w-[150px]"
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow className="font-semibold bg-muted/50">
+                          <TableCell>סה"כ</TableCell>
+                          <TableCell>{calculateTotal(campaigner.id).toLocaleString('he-IL')} ₪</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
-          
-          {selectedCampaigner === campaigner.id && campaigner.client_team && campaigner.client_team.length > 0 && (
-            <Card className="shadow-sm">
-              <CardContent className="p-4">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-right">שם לקוח</TableHead>
-                        <TableHead className="text-right">סכום</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {campaigner.client_team.map((assignment: any) => (
-                        <TableRow key={assignment.clients.id}>
-                          <TableCell className="font-medium">{assignment.clients.name}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              placeholder="0"
-                              value={clientAmounts[assignment.clients.id] || ''}
-                              onChange={(e) => handleAmountChange(assignment.clients.id, e.target.value)}
-                              className="max-w-[150px]"
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      <TableRow className="font-semibold bg-muted/50">
-                        <TableCell>סה"כ</TableCell>
-                        <TableCell>{calculateTotal(campaigner.id).toLocaleString('he-IL')} ₪</TableCell>
-                      </TableRow>
-                    </TableBody>
-                  </Table>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
         ))}
       </div>
 
