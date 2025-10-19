@@ -12,7 +12,10 @@ import { Button } from "@/components/ui/button";
 
 export default function Campaigners() {
   const [expandedCampaigner, setExpandedCampaigner] = useState<string | null>(null);
-  const [clientAmounts, setClientAmounts] = useState<Record<string, number>>({});
+  const [clientAmounts, setClientAmounts] = useState<Record<string, number>>(() => {
+    const saved = localStorage.getItem('campaignerClientAmounts');
+    return saved ? JSON.parse(saved) : {};
+  });
   const { data: campaigners, isLoading } = useQuery({
     queryKey: ["campaigners"],
     queryFn: async () => {
@@ -35,7 +38,11 @@ export default function Campaigners() {
 
   const handleAmountChange = (clientId: string, value: string) => {
     const amount = parseFloat(value) || 0;
-    setClientAmounts(prev => ({ ...prev, [clientId]: amount }));
+    setClientAmounts(prev => {
+      const updated = { ...prev, [clientId]: amount };
+      localStorage.setItem('campaignerClientAmounts', JSON.stringify(updated));
+      return updated;
+    });
   };
 
   const calculateTotal = (campaignerId: string) => {
