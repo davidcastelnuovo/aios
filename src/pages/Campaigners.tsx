@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Megaphone, Phone, Mail, Briefcase } from "lucide-react";
 import { AddCampaignerForm } from "@/components/forms/AddCampaignerForm";
+import { EditCampaignerDialog } from "@/components/forms/EditCampaignerDialog";
 
 export default function Campaigners() {
   const { data: campaigners, isLoading } = useQuery({
@@ -51,9 +52,12 @@ export default function Campaigners() {
                     )}
                   </div>
                 </div>
-                <Badge variant="outline" className={campaigner.active ? "bg-success/10 text-success border-success/20" : "bg-muted"}>
-                  {campaigner.active ? "פעיל" : "לא פעיל"}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <EditCampaignerDialog campaigner={campaigner} />
+                  <Badge variant="outline" className={campaigner.active ? "bg-success/10 text-success border-success/20" : "bg-muted"}>
+                    {campaigner.active ? "פעיל" : "לא פעיל"}
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
