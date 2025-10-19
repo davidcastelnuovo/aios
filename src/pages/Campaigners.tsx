@@ -5,12 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Megaphone, Phone, Mail, Briefcase } from "lucide-react";
+import { Megaphone, Phone, Mail, Briefcase, ChevronDown, ChevronUp } from "lucide-react";
 import { AddCampaignerForm } from "@/components/forms/AddCampaignerForm";
 import { EditCampaignerDialog } from "@/components/forms/EditCampaignerDialog";
+import { Button } from "@/components/ui/button";
 
 export default function Campaigners() {
-  const [selectedCampaigner, setSelectedCampaigner] = useState<string | null>(null);
+  const [expandedCampaigner, setExpandedCampaigner] = useState<string | null>(null);
   const [clientAmounts, setClientAmounts] = useState<Record<string, number>>({});
   const { data: campaigners, isLoading } = useQuery({
     queryKey: ["campaigners"],
@@ -44,6 +45,11 @@ export default function Campaigners() {
     return campaigner.client_team.reduce((total: number, assignment: any) => {
       return total + (clientAmounts[assignment.clients.id] || 0);
     }, 0);
+  };
+
+
+  const toggleCampaigner = (campaignerId: string) => {
+    setExpandedCampaigner(expandedCampaigner === campaignerId ? null : campaignerId);
   };
 
   if (isLoading) {
@@ -108,37 +114,51 @@ export default function Campaigners() {
               
               {campaigner.client_team && campaigner.client_team.length > 0 && (
                 <div className="mt-3 pt-3 border-t">
-                  <h4 className="text-sm font-semibold mb-2">לקוחות משויכים</h4>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-right">שם לקוח</TableHead>
-                          <TableHead className="text-right">סכום</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {campaigner.client_team.map((assignment: any) => (
-                          <TableRow key={assignment.clients.id}>
-                            <TableCell className="font-medium">{assignment.clients.name}</TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                placeholder="0"
-                                value={clientAmounts[assignment.clients.id] || ''}
-                                onChange={(e) => handleAmountChange(assignment.clients.id, e.target.value)}
-                                className="max-w-[150px]"
-                              />
-                            </TableCell>
+                  <Button
+                    variant="ghost"
+                    className="w-full flex items-center justify-between p-2 hover:bg-muted/50"
+                    onClick={() => toggleCampaigner(campaigner.id)}
+                  >
+                    <span className="text-sm font-semibold">לקוחות משויכים ({campaigner.client_team.length})</span>
+                    {expandedCampaigner === campaigner.id ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                  
+                  {expandedCampaigner === campaigner.id && (
+                    <div className="overflow-x-auto mt-2">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="text-right">שם לקוח</TableHead>
+                            <TableHead className="text-right">סכום</TableHead>
                           </TableRow>
-                        ))}
-                        <TableRow className="font-semibold bg-muted/50">
-                          <TableCell>סה"כ</TableCell>
-                          <TableCell>{calculateTotal(campaigner.id).toLocaleString('he-IL')} ₪</TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </div>
+                        </TableHeader>
+                        <TableBody>
+                          {campaigner.client_team.map((assignment: any) => (
+                            <TableRow key={assignment.clients.id}>
+                              <TableCell className="font-medium">{assignment.clients.name}</TableCell>
+                              <TableCell>
+                                <Input
+                                  type="number"
+                                  placeholder="0"
+                                  value={clientAmounts[assignment.clients.id] || ''}
+                                  onChange={(e) => handleAmountChange(assignment.clients.id, e.target.value)}
+                                  className="max-w-[150px]"
+                                />
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                          <TableRow className="font-semibold bg-muted/50">
+                            <TableCell>סה"כ</TableCell>
+                            <TableCell>{calculateTotal(campaigner.id).toLocaleString('he-IL')} ₪</TableCell>
+                          </TableRow>
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
                 </div>
               )}
             </CardContent>
