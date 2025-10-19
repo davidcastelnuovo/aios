@@ -114,9 +114,8 @@ export default function Campaigners() {
               
               {campaigner.client_team && campaigner.client_team.length > 0 && (
                 <div className="mt-3 pt-3 border-t">
-                  <Button
-                    variant="ghost"
-                    className="w-full flex items-center justify-between p-2 hover:bg-muted/50"
+                  <button
+                    className="w-full flex items-center justify-between p-2 hover:bg-muted/50 rounded text-foreground"
                     onClick={() => toggleCampaigner(campaigner.id)}
                   >
                     <span className="text-sm font-semibold">לקוחות משויכים ({campaigner.client_team.length})</span>
@@ -125,7 +124,7 @@ export default function Campaigners() {
                     ) : (
                       <ChevronDown className="h-4 w-4" />
                     )}
-                  </Button>
+                  </button>
                   
                   {expandedCampaigner === campaigner.id && (
                     <div className="overflow-x-auto mt-2">
