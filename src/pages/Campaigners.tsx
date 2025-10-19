@@ -12,7 +12,14 @@ export default function Campaigners() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("campaigners")
-        .select("*")
+        .select(`
+          *,
+          client_team(
+            role_on_account,
+            allocation_percent,
+            clients(id, name, status)
+          )
+        `)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -60,7 +67,7 @@ export default function Campaigners() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-3">
               {campaigner.phone && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Phone className="h-4 w-4" />
@@ -77,6 +84,36 @@ export default function Campaigners() {
                 <p className="text-sm text-muted-foreground mt-2 pt-2 border-t">
                   {campaigner.notes}
                 </p>
+              )}
+              
+              {campaigner.client_team && campaigner.client_team.length > 0 && (
+                <div className="mt-3 pt-3 border-t">
+                  <h4 className="text-sm font-semibold mb-2">לקוחות משויכים</h4>
+                  <div className="space-y-2">
+                    {campaigner.client_team.map((assignment: any) => (
+                      <div key={assignment.clients.id} className="flex items-center justify-between text-sm bg-muted/50 p-2 rounded">
+                        <span className="font-medium">{assignment.clients.name}</span>
+                        <div className="flex items-center gap-2">
+                          {assignment.role_on_account && (
+                            <span className="text-xs text-muted-foreground">{assignment.role_on_account}</span>
+                          )}
+                          {assignment.allocation_percent && (
+                            <Badge variant="outline" className="text-xs">
+                              {assignment.allocation_percent}%
+                            </Badge>
+                          )}
+                          <Badge variant="outline" className={
+                            assignment.clients.status === 'active' 
+                              ? 'bg-success/10 text-success border-success/20' 
+                              : 'bg-muted'
+                          }>
+                            {assignment.clients.status === 'active' ? 'פעיל' : 'לא פעיל'}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </CardContent>
           </Card>
