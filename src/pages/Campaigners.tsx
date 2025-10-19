@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,13 +9,12 @@ import { Megaphone, Phone, Mail, Briefcase, ChevronDown, ChevronUp } from "lucid
 import { AddCampaignerForm } from "@/components/forms/AddCampaignerForm";
 import { EditCampaignerDialog } from "@/components/forms/EditCampaignerDialog";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 export default function Campaigners() {
   const [expandedCampaigner, setExpandedCampaigner] = useState<string | null>(null);
-  const [clientAmounts, setClientAmounts] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem('campaignerClientAmounts');
-    return saved ? JSON.parse(saved) : {};
-  });
+  const queryClient = useQueryClient();
+  
   const { data: campaigners, isLoading } = useQuery({
     queryKey: ["campaigners"],
     queryFn: async () => {
@@ -24,8 +23,10 @@ export default function Campaigners() {
         .select(`
           *,
           client_team(
+            id,
             role_on_account,
             allocation_percent,
+            campaigner_payment,
             clients(id, name, status)
           )
         `)
@@ -35,14 +36,28 @@ export default function Campaigners() {
     },
   });
 
+  const updatePaymentMutation = useMutation({
+    mutationFn: async ({ clientTeamId, amount }: { clientTeamId: string; amount: number }) => {
+      const { error } = await supabase
+        .from("client_team")
+        .update({ campaigner_payment: amount })
+        .eq("id", clientTeamId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["campaigners"] });
+      toast.success("הסכום עודכן בהצלחה");
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון הסכום");
+    },
+  });
 
-  const handleAmountChange = (clientId: string, value: string) => {
+
+  const handleAmountChange = (clientTeamId: string, value: string) => {
     const amount = parseFloat(value) || 0;
-    setClientAmounts(prev => {
-      const updated = { ...prev, [clientId]: amount };
-      localStorage.setItem('campaignerClientAmounts', JSON.stringify(updated));
-      return updated;
-    });
+    updatePaymentMutation.mutate({ clientTeamId, amount });
   };
 
   const calculateTotal = (campaignerId: string) => {
@@ -50,7 +65,7 @@ export default function Campaigners() {
     if (!campaigner?.client_team) return 0;
     
     return campaigner.client_team.reduce((total: number, assignment: any) => {
-      return total + (clientAmounts[assignment.clients.id] || 0);
+      return total + (assignment.campaigner_payment || 0);
     }, 0);
   };
 
@@ -144,14 +159,14 @@ export default function Campaigners() {
                         </TableHeader>
                         <TableBody>
                           {campaigner.client_team.map((assignment: any) => (
-                            <TableRow key={assignment.clients.id}>
+                            <TableRow key={assignment.id}>
                               <TableCell className="font-medium">{assignment.clients.name}</TableCell>
                               <TableCell>
                                 <Input
                                   type="number"
                                   placeholder="0"
-                                  value={clientAmounts[assignment.clients.id] || ''}
-                                  onChange={(e) => handleAmountChange(assignment.clients.id, e.target.value)}
+                                  value={assignment.campaigner_payment || ''}
+                                  onChange={(e) => handleAmountChange(assignment.id, e.target.value)}
                                   className="max-w-[150px]"
                                 />
                               </TableCell>
