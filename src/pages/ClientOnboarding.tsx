@@ -209,7 +209,7 @@ export default function ClientOnboarding() {
         {...listeners}
         className="cursor-move hover:shadow-md transition-shadow"
         onClick={(e) => {
-          if ((e.target as HTMLElement).closest("button")) return;
+          if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("[role='combobox']")) return;
           setEditingItem(item);
         }}
       >
@@ -230,6 +230,46 @@ export default function ClientOnboarding() {
               <span>{format(new Date(item.due_date), "dd/MM/yyyy")}</span>
             </div>
           )}
+          
+          <div className="pt-2 border-t" onClick={(e) => e.stopPropagation()}>
+            <p className="text-xs text-muted-foreground mb-1">שנה סטטוס:</p>
+            <Select
+              value={item.status}
+              onValueChange={(value: OnboardingStatus) => 
+                updateStatusMutation.mutate({ id: item.id, status: value })
+              }
+            >
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="research_meeting">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                    פגישת מחקר
+                  </div>
+                </SelectItem>
+                <SelectItem value="receiving_access">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+                    קבלת גישות וחומרים
+                  </div>
+                </SelectItem>
+                <SelectItem value="setup_and_content">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-orange-500"></div>
+                    הקמות ויצירת תוכן
+                  </div>
+                </SelectItem>
+                <SelectItem value="campaign_live">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                    קמפיין באוויר
+                  </div>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardContent>
       </Card>
     );
