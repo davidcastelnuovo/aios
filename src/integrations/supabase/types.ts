@@ -505,6 +505,44 @@ export type Database = {
           },
         ]
       }
+      time_entries: {
+        Row: {
+          campaigner_id: string
+          created_at: string
+          end_time: string | null
+          id: string
+          notes: string | null
+          start_time: string
+          updated_at: string
+        }
+        Insert: {
+          campaigner_id: string
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          notes?: string | null
+          start_time: string
+          updated_at?: string
+        }
+        Update: {
+          campaigner_id?: string
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          notes?: string | null
+          start_time?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_entries_campaigner_id_fkey"
+            columns: ["campaigner_id"]
+            isOneToOne: false
+            referencedRelation: "campaigners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
