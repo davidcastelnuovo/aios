@@ -7,6 +7,7 @@ import {
   DragOverlay,
   DragStartEvent,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
 } from "@dnd-kit/core";
@@ -15,7 +16,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Clock, User, Plus } from "lucide-react";
+import { Clock, User, Plus, GripVertical } from "lucide-react";
 import { format } from "date-fns";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAgency } from "@/contexts/AgencyContext";
@@ -60,6 +61,12 @@ export default function ClientOnboarding() {
     useSensor(PointerSensor, {
       activationConstraint: {
         distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 5,
       },
     })
   );
@@ -193,7 +200,7 @@ export default function ClientOnboarding() {
   };
 
   const DraggableCard = ({ item }: { item: OnboardingItem }) => {
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
       id: item.id,
     });
 
@@ -206,10 +213,9 @@ export default function ClientOnboarding() {
     return (
       <Card
         ref={setNodeRef}
-        style={style}
+        style={{ ...style, touchAction: "manipulation" }}
         {...attributes}
-        {...listeners}
-        className="cursor-move hover:shadow-md transition-shadow"
+        className="hover:shadow-md transition-shadow"
       >
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-2">
@@ -217,9 +223,21 @@ export default function ClientOnboarding() {
               <CardTitle className="text-base">{item.title}</CardTitle>
               {item.clients && <CardDescription>{item.clients.name}</CardDescription>}
             </div>
-            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setEditingItem(item); }}>
-              ערוך
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                ref={setActivatorNodeRef}
+                {...listeners}
+                onClick={(e) => e.preventDefault()}
+                aria-label="גרור"
+              >
+                <GripVertical className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setEditingItem(item); }}>
+                ערוך
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-2">
