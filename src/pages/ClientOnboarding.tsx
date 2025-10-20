@@ -211,7 +211,9 @@ export default function ClientOnboarding() {
         {...listeners}
         className="cursor-move hover:shadow-md transition-shadow"
         onClick={(e) => {
-          if ((e.target as HTMLElement).closest("button") || (e.target as HTMLElement).closest("[role='combobox']")) return;
+          if ((e.target as HTMLElement).closest("[role='combobox']") || 
+              (e.target as HTMLElement).closest("[role='dialog']") ||
+              (e.target as HTMLElement).closest("button")) return;
           setEditingItem(item);
         }}
       >
@@ -273,7 +275,7 @@ export default function ClientOnboarding() {
             </Select>
           </div>
 
-          <div className="pt-2 border-t mt-2">
+          <div className="pt-2 border-t mt-2" onClick={(e) => e.stopPropagation()}>
             <AddTaskForm 
               clientId={item.client_id}
               agencyId={item.agency_id}
@@ -282,7 +284,6 @@ export default function ClientOnboarding() {
                   size="sm" 
                   variant="outline" 
                   className="w-full gap-2"
-                  onClick={(e) => e.stopPropagation()}
                 >
                   <Plus className="h-4 w-4" />
                   הוסף משימה
