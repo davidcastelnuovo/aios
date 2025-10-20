@@ -242,88 +242,91 @@ export default function TimeTracking() {
       </div>
 
       {selectedCampaigner === "me" && (
-        <Card className="shadow-card">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              שעון עבודה
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {activeEntry ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-success/10 rounded-lg border border-success/20">
-                  <div>
-                    <p className="text-sm text-muted-foreground">התחלה</p>
-                    <p className="text-lg font-semibold">
-                      {format(new Date(activeEntry.start_time), "HH:mm:ss", { locale: he })}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm text-muted-foreground">זמן עבודה</p>
-                    <p className="text-2xl font-bold text-success">
-                      {calculateDuration(activeEntry.start_time, null)}
-                    </p>
-                  </div>
-                  <Button
-                    onClick={() => stopTimerMutation.mutate(activeEntry.id)}
-                    variant="destructive"
-                    size="lg"
-                  >
-                    <Square className="h-5 w-5 ml-2" />
-                    עצור
-                  </Button>
+      <Card className="shadow-card border-primary/20">
+        <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5">
+          <CardTitle className="flex items-center gap-2 text-primary">
+            <Clock className="h-5 w-5" />
+            שעון עבודה
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-6">
+          {activeEntry ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-6 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg border-2 border-green-400/50">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">התחלה</p>
+                  <p className="text-lg font-semibold text-foreground">
+                    {format(new Date(activeEntry.start_time), "HH:mm:ss", { locale: he })}
+                  </p>
                 </div>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Clock className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-4">לא פעיל כרגע</p>
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground mb-1">זמן עבודה</p>
+                  <p className="text-3xl font-bold text-green-600 dark:text-green-400">
+                    {calculateDuration(activeEntry.start_time, null)}
+                  </p>
+                </div>
                 <Button
-                  onClick={() => startTimerMutation.mutate()}
+                  onClick={() => stopTimerMutation.mutate(activeEntry.id)}
+                  variant="destructive"
                   size="lg"
-                  className="gap-2"
+                  className="shadow-lg"
                 >
-                  <Play className="h-5 w-5" />
-                  התחל עבודה
+                  <Square className="h-5 w-5 ml-2" />
+                  עצור
                 </Button>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-primary/10 mb-6">
+                <Clock className="h-12 w-12 text-primary" />
+              </div>
+              <p className="text-muted-foreground mb-6 text-lg">לא פעיל כרגע</p>
+              <Button
+                onClick={() => startTimerMutation.mutate()}
+                size="lg"
+                className="gap-2 shadow-lg px-8 py-6 text-lg"
+              >
+                <Play className="h-6 w-6" />
+                התחל עבודה
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
       )}
 
-      <Card className="shadow-card">
-        <CardHeader>
+      <Card className="shadow-card border-primary/20">
+        <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5">
           <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 text-primary">
               <Calendar className="h-5 w-5" />
               היסטוריית שעות
             </CardTitle>
-            <Badge variant="outline" className="text-base">
+            <Badge variant="outline" className="text-base font-semibold border-primary/30 bg-primary/5">
               סה"כ: {calculateTotalHours()} שעות
             </Badge>
           </div>
         </CardHeader>
         <CardContent>
           {timeEntries && timeEntries.length > 0 ? (
-            <div className="rounded-md border">
+            <div className="rounded-lg border border-primary/20 overflow-hidden">
               <Table>
-                <TableHeader>
-                  <TableRow>
+                <TableHeader className="bg-primary/5">
+                  <TableRow className="border-primary/20">
                     {(isAdmin || isOwner) && selectedCampaigner !== "me" && (
-                      <TableHead className="text-right">קמפיינר</TableHead>
+                      <TableHead className="text-right font-semibold">קמפיינר</TableHead>
                     )}
-                    <TableHead className="text-right">תאריך</TableHead>
-                    <TableHead className="text-right">התחלה</TableHead>
-                    <TableHead className="text-right">סיום</TableHead>
-                    <TableHead className="text-right">משך</TableHead>
-                    <TableHead className="text-right">פעולות</TableHead>
+                    <TableHead className="text-right font-semibold">תאריך</TableHead>
+                    <TableHead className="text-right font-semibold">התחלה</TableHead>
+                    <TableHead className="text-right font-semibold">סיום</TableHead>
+                    <TableHead className="text-right font-semibold">משך</TableHead>
+                    <TableHead className="text-right font-semibold">פעולות</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {timeEntries.map((entry) => (
-                    <TableRow key={entry.id}>
+                    <TableRow key={entry.id} className="border-primary/10 hover:bg-primary/5">
                       {(isAdmin || isOwner) && selectedCampaigner !== "me" && (
                         <TableCell className="font-medium">
                           {entry.campaigners?.full_name}
@@ -339,12 +342,12 @@ export default function TimeTracking() {
                         {entry.end_time ? (
                           format(new Date(entry.end_time), "HH:mm", { locale: he })
                         ) : (
-                          <Badge variant="outline" className="bg-success/10 text-success">
+                          <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300 dark:bg-green-900/20 dark:text-green-400">
                             פעיל
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium text-primary">
                         {calculateDuration(entry.start_time, entry.end_time)}
                       </TableCell>
                       <TableCell>
@@ -379,9 +382,9 @@ export default function TimeTracking() {
               </Table>
             </div>
           ) : (
-            <div className="text-center py-8 text-muted-foreground">
-              <Clock className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p>אין רשומות שעון עדיין</p>
+            <div className="text-center py-12 text-muted-foreground bg-muted/30 rounded-lg">
+              <Clock className="h-16 w-16 mx-auto mb-4 opacity-50 text-primary" />
+              <p className="text-lg">אין רשומות שעון עדיין</p>
             </div>
           )}
         </CardContent>
