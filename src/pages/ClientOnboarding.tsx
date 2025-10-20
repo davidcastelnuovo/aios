@@ -210,16 +210,17 @@ export default function ClientOnboarding() {
         {...attributes}
         {...listeners}
         className="cursor-move hover:shadow-md transition-shadow"
-        onClick={(e) => {
-          if ((e.target as HTMLElement).closest("[role='combobox']") || 
-              (e.target as HTMLElement).closest("[role='dialog']") ||
-              (e.target as HTMLElement).closest("button")) return;
-          setEditingItem(item);
-        }}
       >
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">{item.title}</CardTitle>
-          {item.clients && <CardDescription>{item.clients.name}</CardDescription>}
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <CardTitle className="text-base">{item.title}</CardTitle>
+              {item.clients && <CardDescription>{item.clients.name}</CardDescription>}
+            </div>
+            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setEditingItem(item); }}>
+              ערוך
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           {item.campaigners && (
