@@ -221,7 +221,7 @@ export default function Tasks() {
           onClick={() => setEditingTask(task)}
         >
           <CardContent className="p-4">
-            <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="flex items-start justify-between gap-2 mb-3">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                   <GripVertical className="h-4 w-4 text-muted-foreground" />
@@ -231,6 +231,11 @@ export default function Tasks() {
               <Badge variant="outline" className={`text-xs flex-shrink-0 ${getPriorityColor(task.priority)}`}>
                 {getPriorityText(task.priority)}
               </Badge>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+              <Megaphone className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate">{task.campaigners?.full_name}</span>
             </div>
             
             {task.due_date && (
