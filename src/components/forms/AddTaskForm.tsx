@@ -135,7 +135,8 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      toast.success("המשימה נוספה בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["client-onboarding"] });
+      toast.success("המשימה נוספה בהצלחה ותופיע במודול משימות");
       form.reset();
       setOpen(false);
     },
