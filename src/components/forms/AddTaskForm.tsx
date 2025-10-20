@@ -227,17 +227,19 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger className={cn(
-                          field.value === "high" && "border-red-500 text-red-600",
-                          field.value === "medium" && "border-orange-500 text-orange-600",
-                          field.value === "low" && "border-purple-500 text-purple-600"
+                          "border-0 text-white font-medium",
+                          field.value === "high" && "bg-red-400 hover:bg-red-500",
+                          field.value === "medium" && "bg-orange-400 hover:bg-orange-500",
+                          field.value === "low" && "bg-purple-400 hover:bg-purple-500",
+                          !field.value && "bg-muted text-muted-foreground"
                         )}>
-                          <SelectValue />
+                          <SelectValue placeholder="בחר דחיפות" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-background z-50">
-                        <SelectItem value="high" className="text-red-600 focus:text-red-600">גבוה</SelectItem>
-                        <SelectItem value="medium" className="text-orange-600 focus:text-orange-600">בינוני</SelectItem>
-                        <SelectItem value="low" className="text-purple-600 focus:text-purple-600">נמוך</SelectItem>
+                        <SelectItem value="high" className="text-red-600 focus:text-red-600 focus:bg-red-50">גבוה</SelectItem>
+                        <SelectItem value="medium" className="text-orange-600 focus:text-orange-600 focus:bg-orange-50">בינוני</SelectItem>
+                        <SelectItem value="low" className="text-purple-600 focus:text-purple-600 focus:bg-purple-50">נמוך</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
