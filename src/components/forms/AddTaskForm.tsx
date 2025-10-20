@@ -329,14 +329,19 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
                   <FormLabel>סטטוס</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <SelectTrigger>
+                      <SelectTrigger className={cn(
+                        "border-0 text-white font-medium",
+                        field.value === "open" && "bg-blue-400 hover:bg-blue-500",
+                        field.value === "in_progress" && "bg-yellow-400 hover:bg-yellow-500",
+                        field.value === "done" && "bg-green-400 hover:bg-green-500"
+                      )}>
                         <SelectValue />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="bg-background z-50">
-                      <SelectItem value="open">פתוח</SelectItem>
-                      <SelectItem value="in_progress">בעבודה</SelectItem>
-                      <SelectItem value="done">הושלם</SelectItem>
+                      <SelectItem value="open" className="text-blue-600 focus:text-blue-600 focus:bg-blue-50">פתוח</SelectItem>
+                      <SelectItem value="in_progress" className="text-yellow-600 focus:text-yellow-600 focus:bg-yellow-50">בעבודה</SelectItem>
+                      <SelectItem value="done" className="text-green-600 focus:text-green-600 focus:bg-green-50">הושלם</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
