@@ -161,12 +161,12 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
-              name="notes"
+              name="title"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>תיאור משימה</FormLabel>
+                  <FormLabel>כותרת משימה</FormLabel>
                   <FormControl>
-                    <Textarea {...field} rows={4} />
+                    <Input {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -175,12 +175,12 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
 
             <FormField
               control={form.control}
-              name="title"
+              name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>כותרת משימה</FormLabel>
+                  <FormLabel>תיאור משימה</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Textarea {...field} rows={4} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
