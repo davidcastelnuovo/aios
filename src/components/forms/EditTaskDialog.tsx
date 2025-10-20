@@ -164,7 +164,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
               name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>תיאור המשימה</FormLabel>
+                  <FormLabel>תיאור משימה</FormLabel>
                   <FormControl>
                     <Textarea {...field} rows={4} />
                   </FormControl>
@@ -178,7 +178,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
               name="title"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>כותרת המשימה</FormLabel>
+                  <FormLabel>כותרת משימה</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
