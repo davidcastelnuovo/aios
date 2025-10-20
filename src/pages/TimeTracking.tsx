@@ -50,7 +50,7 @@ export default function TimeTracking() {
         .from("profiles")
         .select("campaigner_id")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
       
       if (error) throw error;
       return data;
