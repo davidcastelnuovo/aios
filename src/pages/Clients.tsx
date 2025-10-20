@@ -377,7 +377,7 @@ export default function Clients() {
                 </div>
               )}
               
-              <div className="space-y-2">
+              <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
                 <p className="text-sm text-muted-foreground">שנה סטטוס:</p>
                 <Select
                   value={client.status}
@@ -385,7 +385,7 @@ export default function Clients() {
                     updateStatusMutation.mutate({ clientId: client.id, status: value })
                   }
                 >
-                  <SelectTrigger onClick={(e) => e.stopPropagation()} className="h-9">
+                  <SelectTrigger className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-background" align="end">
