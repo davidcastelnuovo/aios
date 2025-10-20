@@ -74,7 +74,8 @@ export default function ClientOnboarding() {
         `)
         .order("created_at", { ascending: false });
 
-      if (role !== "admin" && role !== "owner" && selectedAgency) {
+      // Filter by selected agency
+      if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
       }
 
