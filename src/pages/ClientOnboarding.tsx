@@ -239,25 +239,24 @@ export default function ClientOnboarding() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">לקוחות בקליטה</h1>
-        <div className="flex gap-4">
-          <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="סנן לפי איש צוות" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">כל אנשי הצוות</SelectItem>
-              {campaigners?.map((campaigner) => (
-                <SelectItem key={campaigner.id} value={campaigner.id}>
-                  {campaigner.full_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <AddOnboardingForm />
-        </div>
+    <div className="container mx-auto py-4 space-y-4">
+      <h1 className="text-2xl font-bold">לקוחות בקליטה</h1>
+      
+      <div className="flex items-center justify-end gap-4">
+        <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="סנן לפי איש צוות" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">כל אנשי הצוות</SelectItem>
+            {campaigners?.map((campaigner) => (
+              <SelectItem key={campaigner.id} value={campaigner.id}>
+                {campaigner.full_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <AddOnboardingForm />
       </div>
 
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
