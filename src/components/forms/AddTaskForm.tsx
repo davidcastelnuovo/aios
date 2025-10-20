@@ -59,10 +59,11 @@ const formSchema = z.object({
 interface AddTaskFormProps {
   clientId?: string;
   agencyId?: string;
+  defaultCampaignerId?: string;
   triggerButton?: React.ReactNode;
 }
 
-export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTaskFormProps) {
+export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, triggerButton }: AddTaskFormProps) {
   const [open, setOpen] = useState(false);
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -72,7 +73,7 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
     defaultValues: {
       title: "",
       notes: "",
-      campaigner_id: "",
+      campaigner_id: defaultCampaignerId || "",
       client_id: clientId || "",
       due_date: "",
       status: "open",
@@ -80,12 +81,15 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
     },
   });
 
-  // Update form when clientId changes
+  // Update form when clientId or defaultCampaignerId changes
   useEffect(() => {
     if (clientId) {
       form.setValue("client_id", clientId);
     }
-  }, [clientId, form]);
+    if (defaultCampaignerId) {
+      form.setValue("campaigner_id", defaultCampaignerId);
+    }
+  }, [clientId, defaultCampaignerId, form]);
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners"],

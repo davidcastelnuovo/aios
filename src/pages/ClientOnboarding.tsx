@@ -279,6 +279,7 @@ export default function ClientOnboarding() {
             <AddTaskForm 
               clientId={item.client_id}
               agencyId={item.agency_id}
+              defaultCampaignerId={item.campaigner_id}
               triggerButton={
                 <Button 
                   size="sm" 
