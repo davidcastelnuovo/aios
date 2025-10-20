@@ -402,20 +402,23 @@ export default function TimeTracking() {
                         {calculateDuration(entry.start_time, entry.end_time)}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-1">
+                        <div className="flex gap-2">
                           {entry.end_time && (
                             <Button
-                              variant="ghost"
-                              size="icon"
+                              variant="outline"
+                              size="sm"
                               onClick={() => handleEditClick(entry)}
+                              className="gap-2"
                             >
-                              <Pencil className="h-4 w-4 text-primary" />
+                              <Pencil className="h-4 w-4" />
+                              ערוך
                             </Button>
                           )}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <Trash2 className="h-4 w-4 text-destructive" />
+                              <Button variant="outline" size="sm" className="gap-2">
+                                <Trash2 className="h-4 w-4" />
+                                מחק
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
