@@ -252,28 +252,32 @@ export default function TimeTracking() {
         <CardContent className="space-y-4 pt-6">
           {activeEntry ? (
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-6 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg border-2 border-green-400/50">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">התחלה</p>
-                  <p className="text-lg font-semibold text-foreground">
-                    {format(new Date(activeEntry.start_time), "HH:mm:ss", { locale: he })}
-                  </p>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg border-2 border-green-400/50 p-6">
+                <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700/30">
+                      <span className="text-sm text-muted-foreground">התחלה</span>
+                      <span className="text-lg font-semibold text-foreground">
+                        {format(new Date(activeEntry.start_time), "HH:mm:ss", { locale: he })}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-2">
+                      <span className="text-sm text-muted-foreground">זמן עבודה</span>
+                      <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                        {calculateDuration(activeEntry.start_time, null)}
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => stopTimerMutation.mutate(activeEntry.id)}
+                    variant="destructive"
+                    size="sm"
+                    className="shadow-lg"
+                  >
+                    <Square className="h-4 w-4 ml-2" />
+                    עצור
+                  </Button>
                 </div>
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground mb-1">זמן עבודה</p>
-                  <p className="text-3xl font-bold text-green-600 dark:text-green-400">
-                    {calculateDuration(activeEntry.start_time, null)}
-                  </p>
-                </div>
-                <Button
-                  onClick={() => stopTimerMutation.mutate(activeEntry.id)}
-                  variant="destructive"
-                  size="lg"
-                  className="shadow-lg"
-                >
-                  <Square className="h-5 w-5 ml-2" />
-                  עצור
-                </Button>
               </div>
             </div>
           ) : (
