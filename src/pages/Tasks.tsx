@@ -218,7 +218,10 @@ export default function Tasks() {
       <div ref={setNodeRef} style={style}>
         <Card 
           className="shadow-card hover:shadow-lg transition-all cursor-pointer"
-          onClick={() => setEditingTask(task)}
+          onClick={(e) => {
+            if ((e.target as HTMLElement).closest("[role='combobox']")) return;
+            setEditingTask(task);
+          }}
         >
           <CardContent className="p-4">
             <div className="flex items-start justify-between gap-2 mb-3">
@@ -239,12 +242,46 @@ export default function Tasks() {
             </div>
             
             {task.due_date && (
-              <div className={`flex items-center gap-1.5 text-xs ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+              <div className={`flex items-center gap-1.5 text-xs mb-2 ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
                 {isOverdue(task.due_date) && task.status !== 'done' && <AlertCircle className="h-3 w-3" />}
                 <Calendar className="h-3 w-3" />
                 <span>{new Date(task.due_date).toLocaleDateString("he-IL")}</span>
               </div>
             )}
+
+            <div className="pt-2 border-t mt-2" onClick={(e) => e.stopPropagation()}>
+              <p className="text-xs text-muted-foreground mb-1">שנה סטטוס:</p>
+              <Select
+                value={task.status}
+                onValueChange={(value: "open" | "in_progress" | "done") => 
+                  updateTaskStatusMutation.mutate({ taskId: task.id, status: value })
+                }
+              >
+                <SelectTrigger className="h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="open">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                      פתוח
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="in_progress">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+                      בתהליך
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="done">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                      בוצע
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </CardContent>
         </Card>
       </div>
