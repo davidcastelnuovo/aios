@@ -241,9 +241,7 @@ export default function ClientOnboarding() {
   return (
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">לקוחות בקליטה</h1>
-        </div>
+        <h1 className="text-2xl font-bold">לקוחות בקליטה</h1>
         <div className="flex gap-4">
           <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
             <SelectTrigger className="w-[200px]">
