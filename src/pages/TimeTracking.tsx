@@ -122,14 +122,25 @@ export default function TimeTracking() {
 
   const startTimerMutation = useMutation({
     mutationFn: async () => {
-      if (!profile?.campaigner_id) {
-        throw new Error("לא נמצא קמפיינר משויך");
+      // Ensure we have a campaigner_id, fetch if missing
+      let campaignerId = profile?.campaigner_id as string | null | undefined;
+      if (!campaignerId) {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("campaigner_id")
+          .maybeSingle();
+        if (error) throw error;
+        campaignerId = data?.campaigner_id;
+      }
+
+      if (!campaignerId) {
+        throw new Error("לא נמצא קמפיינר משויך למשתמש. יש לשייך קמפיינר בפרופיל.");
       }
 
       const { error } = await supabase
         .from("time_entries")
         .insert({
-          campaigner_id: profile.campaigner_id,
+          campaigner_id: campaignerId,
           start_time: new Date().toISOString(),
         });
 
@@ -140,8 +151,8 @@ export default function TimeTracking() {
       queryClient.invalidateQueries({ queryKey: ["time-entries"] });
       toast.success("השעון התחיל");
     },
-    onError: () => {
-      toast.error("שגיאה בהתחלת השעון");
+    onError: (err) => {
+      toast.error(`שגיאה בהתחלת השעון: ${err instanceof Error ? err.message : ""}`);
     },
   });
 
