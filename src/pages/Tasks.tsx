@@ -217,82 +217,28 @@ export default function Tasks() {
     return (
       <div ref={setNodeRef} style={style}>
         <Card 
-          className="shadow-card hover:shadow-lg transition-all cursor-pointer min-w-0"
+          className="shadow-card hover:shadow-lg transition-all cursor-pointer"
           onClick={() => setEditingTask(task)}
         >
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-2 min-w-0">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between gap-2 mb-2">
               <div className="flex items-center gap-2 flex-1 min-w-0">
-                <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing flex-shrink-0">
+                <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                   <GripVertical className="h-4 w-4 text-muted-foreground" />
                 </div>
-                <CardTitle className="text-base truncate">{task.title}</CardTitle>
+                <h4 className="font-medium text-sm truncate">{task.title}</h4>
               </div>
-              <Badge variant="outline" className={getPriorityColor(task.priority)}>
+              <Badge variant="outline" className={`text-xs flex-shrink-0 ${getPriorityColor(task.priority)}`}>
                 {getPriorityText(task.priority)}
               </Badge>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-2 min-w-0">
-            <div onClick={(e) => e.stopPropagation()}>
-              <Select
-                value={task.status}
-                onValueChange={(value: "open" | "in_progress" | "done") => {
-                  updateTaskStatusMutation.mutate({ taskId: task.id, status: value });
-                }}
-              >
-                <SelectTrigger className="h-8 w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="open">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-primary"></div>
-                      פתוח
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="in_progress">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
-                      בעבודה
-                    </div>
-                  </SelectItem>
-                  <SelectItem value="done">
-                    <div className="flex items-center gap-2">
-                      <div className="h-2 w-2 rounded-full bg-success"></div>
-                      הושלם
-                    </div>
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             
-            <div className="space-y-1 text-sm min-w-0">
-              <div className="flex items-center gap-2 text-muted-foreground min-w-0">
-                <Building2 className="h-3 w-3 flex-shrink-0" />
-                <span className="truncate">{task.agencies?.name}</span>
+            {task.due_date && (
+              <div className={`flex items-center gap-1.5 text-xs ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+                {isOverdue(task.due_date) && task.status !== 'done' && <AlertCircle className="h-3 w-3" />}
+                <Calendar className="h-3 w-3" />
+                <span>{new Date(task.due_date).toLocaleDateString("he-IL")}</span>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground min-w-0">
-                <Users className="h-3 w-3 flex-shrink-0" />
-                <span className="truncate">{task.clients?.name}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground min-w-0">
-                <Megaphone className="h-3 w-3 flex-shrink-0" />
-                <span className="truncate">{task.campaigners?.full_name}</span>
-              </div>
-              {task.due_date && (
-                <div className={`flex items-center gap-2 ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive' : 'text-muted-foreground'}`}>
-                  {isOverdue(task.due_date) && task.status !== 'done' && <AlertCircle className="h-3 w-3" />}
-                  <Calendar className="h-3 w-3" />
-                  {new Date(task.due_date).toLocaleDateString("he-IL")}
-                </div>
-              )}
-            </div>
-
-            {task.notes && (
-              <p className="text-sm text-muted-foreground pt-2 border-t">
-                {task.notes}
-              </p>
             )}
           </CardContent>
         </Card>
