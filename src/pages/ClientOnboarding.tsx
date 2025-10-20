@@ -243,7 +243,6 @@ export default function ClientOnboarding() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">לקוחות בקליטה</h1>
-          <p className="text-muted-foreground">מעקב אחר תהליך קליטת לקוחות חדשים</p>
         </div>
         <div className="flex gap-4">
           <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
