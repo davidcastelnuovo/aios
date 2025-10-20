@@ -50,7 +50,6 @@ const formSchema = z.object({
   notes: z.string().optional(),
   campaigner_id: z.string().min(1, "יש לבחור קמפיינר"),
   client_id: z.string().min(1, "יש לבחור לקוח"),
-  agency_id: z.string().min(1, "יש לבחור סוכנות"),
   due_date: z.string().optional(),
   status: z.enum(["open", "in_progress", "done"]),
   priority: z.enum(["low", "medium", "high"]),
@@ -92,18 +91,6 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     },
   });
 
-  const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("*")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
-
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -111,7 +98,6 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       notes: task.notes || "",
       campaigner_id: task.campaigner_id || "",
       client_id: task.client_id || "",
-      agency_id: task.agency_id || "",
       due_date: task.due_date || "",
       status: task.status || "open",
       priority: task.priority || "medium",
@@ -121,6 +107,12 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
+      // Get agency_id from the selected client
+      const selectedClient = clients?.find(c => c.id === values.client_id);
+      if (!selectedClient?.agency_id) {
+        throw new Error("הלקוח שנבחר לא משויך לסוכנות");
+      }
+
       const { error } = await supabase
         .from("tasks")
         .update({
@@ -128,7 +120,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
           notes: values.notes || null,
           campaigner_id: values.campaigner_id,
           client_id: values.client_id,
-          agency_id: values.agency_id,
+          agency_id: selectedClient.agency_id,
           due_date: values.due_date || null,
           status: values.status,
           priority: values.priority,
@@ -272,33 +264,6 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                   )}
                 />
               </div>
-            </div>
-
-            <div className="p-4 rounded-lg bg-muted/30">
-              <FormField
-                control={form.control}
-                name="agency_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>סוכנות</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="בחר סוכנות" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-background">
-                        {agencies?.map((agency) => (
-                          <SelectItem key={agency.id} value={agency.id}>
-                            {agency.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
 
             <div className="p-4 rounded-lg bg-muted/30 space-y-4">

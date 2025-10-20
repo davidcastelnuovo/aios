@@ -51,7 +51,6 @@ const formSchema = z.object({
   notes: z.string().optional(),
   campaigner_id: z.string().min(1, "יש לבחור קמפיינר"),
   client_id: z.string().min(1, "יש לבחור לקוח"),
-  agency_id: z.string().min(1, "יש לבחור סוכנות"),
   due_date: z.string().optional(),
   status: z.enum(["open", "in_progress", "done"]),
   priority: z.enum(["low", "medium", "high"]),
@@ -76,7 +75,6 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
       notes: "",
       campaigner_id: "",
       client_id: clientId || "",
-      agency_id: agencyId || "",
       due_date: "",
       status: "open",
       priority: "medium",
@@ -84,15 +82,12 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
     },
   });
 
-  // Update form when clientId or agencyId changes
+  // Update form when clientId changes
   useEffect(() => {
     if (clientId) {
       form.setValue("client_id", clientId);
     }
-    if (agencyId) {
-      form.setValue("agency_id", agencyId);
-    }
-  }, [clientId, agencyId, form]);
+  }, [clientId, form]);
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners"],
@@ -119,26 +114,20 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
     },
   });
 
-  const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("*")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
-
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
+      // Get agency_id from the selected client
+      const selectedClient = clients?.find(c => c.id === values.client_id);
+      if (!selectedClient?.agency_id) {
+        throw new Error("הלקוח שנבחר לא משויך לסוכנות");
+      }
+
       const { error } = await supabase.from("tasks").insert([{
         title: values.title,
         notes: values.notes || null,
         campaigner_id: values.campaigner_id,
         client_id: values.client_id,
-        agency_id: values.agency_id,
+        agency_id: selectedClient.agency_id,
         due_date: values.due_date || null,
         status: values.status,
         priority: values.priority,
@@ -276,31 +265,6 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-              name="agency_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>סוכנות</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={!!agencyId}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="בחר סוכנות" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent className="bg-background">
-                      {agencies?.map((agency) => (
-                        <SelectItem key={agency.id} value={agency.id}>
-                          {agency.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <div className="grid gap-4 md:grid-cols-3">
               <FormField
