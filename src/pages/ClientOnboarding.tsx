@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Clock, User } from "lucide-react";
+import { Clock, User, Plus } from "lucide-react";
 import { format } from "date-fns";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useAgency } from "@/contexts/AgencyContext";
@@ -23,6 +23,8 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import AddOnboardingForm from "@/components/forms/AddOnboardingForm";
 import EditOnboardingDialog from "@/components/forms/EditOnboardingDialog";
+import AddTaskForm from "@/components/forms/AddTaskForm";
+import { Button } from "@/components/ui/button";
 
 type OnboardingStatus = "research_meeting" | "receiving_access" | "setup_and_content" | "campaign_live";
 
@@ -269,6 +271,24 @@ export default function ClientOnboarding() {
                 </SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="pt-2 border-t mt-2">
+            <AddTaskForm 
+              clientId={item.client_id}
+              agencyId={item.agency_id}
+              triggerButton={
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="w-full gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Plus className="h-4 w-4" />
+                  הוסף משימה
+                </Button>
+              }
+            />
           </div>
         </CardContent>
       </Card>
