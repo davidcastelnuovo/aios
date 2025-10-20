@@ -4,12 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Clock, Play, Square, Trash2, Calendar } from "lucide-react";
+import { Clock, Play, Square, Trash2, Calendar, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
-import { format, differenceInMinutes } from "date-fns";
+import { format, differenceInMinutes, parse } from "date-fns";
 import { he } from "date-fns/locale";
 import { useUserRole } from "@/hooks/useUserRole";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -32,6 +34,9 @@ import {
 export default function TimeTracking() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("me");
+  const [editingEntry, setEditingEntry] = useState<any>(null);
+  const [editStartTime, setEditStartTime] = useState("");
+  const [editEndTime, setEditEndTime] = useState("");
   const queryClient = useQueryClient();
   const { isAdmin, isOwner } = useUserRole();
 
@@ -192,6 +197,48 @@ export default function TimeTracking() {
       toast.error("שגיאה במחיקת הרשומה");
     },
   });
+
+  const editEntryMutation = useMutation({
+    mutationFn: async ({ entryId, startTime, endTime }: { entryId: string; startTime: string; endTime: string }) => {
+      const { error } = await supabase
+        .from("time_entries")
+        .update({
+          start_time: startTime,
+          end_time: endTime,
+        })
+        .eq("id", entryId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["active-time-entry"] });
+      setEditingEntry(null);
+      toast.success("הרשומה עודכנה");
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון הרשומה");
+    },
+  });
+
+  const handleEditClick = (entry: any) => {
+    setEditingEntry(entry);
+    setEditStartTime(format(new Date(entry.start_time), "yyyy-MM-dd'T'HH:mm"));
+    setEditEndTime(entry.end_time ? format(new Date(entry.end_time), "yyyy-MM-dd'T'HH:mm") : "");
+  };
+
+  const handleEditSubmit = () => {
+    if (!editingEntry || !editStartTime || !editEndTime) {
+      toast.error("יש למלא את כל השדות");
+      return;
+    }
+
+    editEntryMutation.mutate({
+      entryId: editingEntry.id,
+      startTime: new Date(editStartTime).toISOString(),
+      endTime: new Date(editEndTime).toISOString(),
+    });
+  };
 
   const calculateDuration = (start: string, end: string | null) => {
     const startDate = new Date(start);
@@ -355,30 +402,41 @@ export default function TimeTracking() {
                         {calculateDuration(entry.start_time, entry.end_time)}
                       </TableCell>
                       <TableCell>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <Trash2 className="h-4 w-4 text-destructive" />
+                        <div className="flex gap-1">
+                          {entry.end_time && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEditClick(entry)}
+                            >
+                              <Pencil className="h-4 w-4 text-primary" />
                             </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>מחיקת רשומה</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                האם אתה בטוח שברצונך למחוק רשומה זו? פעולה זו לא ניתנת לביטול.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>ביטול</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deleteEntryMutation.mutate(entry.id)}
-                                className="bg-destructive hover:bg-destructive/90"
-                              >
-                                מחק
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                          )}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>מחיקת רשומה</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  האם אתה בטוח שברצונך למחוק רשומה זו? פעולה זו לא ניתנת לביטול.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>ביטול</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => deleteEntryMutation.mutate(entry.id)}
+                                  className="bg-destructive hover:bg-destructive/90"
+                                >
+                                  מחק
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -393,6 +451,43 @@ export default function TimeTracking() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!editingEntry} onOpenChange={(open) => !open && setEditingEntry(null)}>
+        <AlertDialogContent className="bg-background">
+          <AlertDialogHeader>
+            <AlertDialogTitle>עריכת זמני עבודה</AlertDialogTitle>
+            <AlertDialogDescription>
+              ערוך את זמני ההתחלה והסיום של הרשומה
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="start-time">זמן התחלה</Label>
+              <Input
+                id="start-time"
+                type="datetime-local"
+                value={editStartTime}
+                onChange={(e) => setEditStartTime(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="end-time">זמן סיום</Label>
+              <Input
+                id="end-time"
+                type="datetime-local"
+                value={editEndTime}
+                onChange={(e) => setEditEndTime(e.target.value)}
+              />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction onClick={handleEditSubmit}>
+              שמור
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
