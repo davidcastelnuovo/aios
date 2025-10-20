@@ -97,7 +97,7 @@ export default function Clients() {
   });
 
   const updateStatusMutation = useMutation({
-    mutationFn: async ({ clientId, status }: { clientId: string; status: "active" | "paused" | "ended" }) => {
+    mutationFn: async ({ clientId, status }: { clientId: string; status: "active" | "paused" | "ended" | "onboarding" }) => {
       const { error } = await supabase
         .from("clients")
         .update({ status })
@@ -201,6 +201,8 @@ export default function Clients() {
     switch (status) {
       case "active":
         return "bg-success/10 text-success border-success/20";
+      case "onboarding":
+        return "bg-blue-500/10 text-blue-600 border-blue-500/20";
       case "paused":
         return "bg-yellow-500/10 text-yellow-600 border-yellow-500/20";
       case "ended":
@@ -214,6 +216,8 @@ export default function Clients() {
     switch (status) {
       case "active":
         return "פעיל";
+      case "onboarding":
+        return "בקליטה";
       case "paused":
         return "מושהה";
       case "ended":
@@ -377,7 +381,7 @@ export default function Clients() {
                 <p className="text-sm text-muted-foreground">שנה סטטוס:</p>
                 <Select
                   value={client.status}
-                  onValueChange={(value: "active" | "paused" | "ended") => 
+                  onValueChange={(value: "active" | "paused" | "ended" | "onboarding") => 
                     updateStatusMutation.mutate({ clientId: client.id, status: value })
                   }
                 >
@@ -389,6 +393,12 @@ export default function Clients() {
                       <div className="flex items-center gap-2">
                         <div className="h-2 w-2 rounded-full bg-success"></div>
                         פעיל
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="onboarding">
+                      <div className="flex items-center gap-2">
+                        <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                        בקליטה
                       </div>
                     </SelectItem>
                     <SelectItem value="paused">
@@ -554,7 +564,7 @@ export default function Clients() {
                   <TableCell className="py-4">
                     <Select
                       value={client.status}
-                      onValueChange={(value: "active" | "paused" | "ended") => 
+                      onValueChange={(value: "active" | "paused" | "ended" | "onboarding") => 
                         updateStatusMutation.mutate({ clientId: client.id, status: value })
                       }
                     >
@@ -566,6 +576,12 @@ export default function Clients() {
                           <div className="flex items-center gap-2">
                             <div className="h-2 w-2 rounded-full bg-success"></div>
                             פעיל
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="onboarding">
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                            בקליטה
                           </div>
                         </SelectItem>
                         <SelectItem value="paused">

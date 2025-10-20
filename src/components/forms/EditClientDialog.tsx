@@ -44,7 +44,7 @@ const formSchema = z.object({
   monthly_budget: z.string().optional(),
   website: z.string().url("כתובת אתר לא תקינה").optional().or(z.literal("")),
   notes: z.string().optional(),
-  status: z.enum(["active", "paused", "ended"]),
+  status: z.enum(["active", "paused", "ended", "onboarding"]),
 });
 
 interface EditClientDialogProps {
@@ -374,6 +374,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                     </FormControl>
                     <SelectContent className="bg-background">
                       <SelectItem value="active">פעיל</SelectItem>
+                      <SelectItem value="onboarding">בקליטה</SelectItem>
                       <SelectItem value="paused">מושהה</SelectItem>
                       <SelectItem value="ended">הסתיים</SelectItem>
                     </SelectContent>
