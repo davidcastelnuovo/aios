@@ -53,7 +53,6 @@ const formSchema = z.object({
   due_date: z.string().optional(),
   status: z.enum(["open", "in_progress", "done"]),
   priority: z.enum(["low", "medium", "high"]),
-  task_type: z.enum(["campaign", "collection", "creative", "other"]),
 });
 
 interface EditTaskDialogProps {
@@ -101,7 +100,6 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       due_date: task.due_date || "",
       status: task.status || "open",
       priority: task.priority || "medium",
-      task_type: task.task_type || "other",
     },
   });
 
@@ -124,7 +122,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
           due_date: values.due_date || null,
           status: values.status,
           priority: values.priority,
-          task_type: values.task_type,
+          task_type: "other",
         })
         .eq("id", task.id);
       if (error) throw error;
@@ -193,7 +191,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                             <SelectValue placeholder="בחר קמפיינר" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent className="bg-background">
+                        <SelectContent className="bg-background z-50">
                           {campaigners?.map((campaigner) => (
                             <SelectItem key={campaigner.id} value={campaigner.id}>
                               {campaigner.full_name}
@@ -208,95 +206,10 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
 
                 <FormField
                   control={form.control}
-                  name="client_id"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>לקוח</FormLabel>
-                      <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              role="combobox"
-                              className={cn(
-                                "justify-between",
-                                !field.value && "text-muted-foreground"
-                              )}
-                            >
-                              {field.value
-                                ? clients?.find((client) => client.id === field.value)?.name
-                                : "בחר לקוח"}
-                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[300px] p-0 bg-background" align="start">
-                          <Command>
-                            <CommandInput placeholder="חפש לקוח..." />
-                            <CommandList>
-                              <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
-                              <CommandGroup>
-                                {clients?.map((client) => (
-                                  <CommandItem
-                                    key={client.id}
-                                    value={client.name}
-                                    onSelect={() => {
-                                      form.setValue("client_id", client.id);
-                                      setClientPopoverOpen(false);
-                                    }}
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        field.value === client.id ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    {client.name}
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-
-            <div className="p-4 rounded-lg bg-muted/30 space-y-4">
-              <div className="grid gap-4 md:grid-cols-3">
-                <FormField
-                  control={form.control}
-                  name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>סטטוס</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-background z-50">
-                          <SelectItem value="open">פתוח</SelectItem>
-                          <SelectItem value="in_progress">בעבודה</SelectItem>
-                          <SelectItem value="done">הושלם</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="priority"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>עדיפות</FormLabel>
+                      <FormLabel>דחיפות</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger className={cn(
@@ -317,31 +230,67 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                     </FormItem>
                   )}
                 />
-
-                <FormField
-                  control={form.control}
-                  name="task_type"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>סוג משימה</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-background z-50">
-                          <SelectItem value="campaign">קמפיין</SelectItem>
-                          <SelectItem value="collection">אוסף</SelectItem>
-                          <SelectItem value="creative">קריאייטיב</SelectItem>
-                          <SelectItem value="other">אחר</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
               </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-muted/30">
+              <FormField
+                control={form.control}
+                name="client_id"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>לקוח</FormLabel>
+                    <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className={cn(
+                              "justify-between",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value
+                              ? clients?.find((client) => client.id === field.value)?.name
+                              : "בחר לקוח"}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0 bg-background" align="start">
+                        <Command>
+                          <CommandInput placeholder="חפש לקוח..." />
+                          <CommandList>
+                            <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
+                            <CommandGroup>
+                              {clients?.map((client) => (
+                                <CommandItem
+                                  key={client.id}
+                                  value={client.name}
+                                  onSelect={() => {
+                                    form.setValue("client_id", client.id);
+                                    setClientPopoverOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      field.value === client.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {client.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             <div className="p-4 rounded-lg bg-muted/30">
@@ -354,6 +303,31 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="p-4 rounded-lg bg-muted/30">
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>סטטוס</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background z-50">
+                        <SelectItem value="open">פתוח</SelectItem>
+                        <SelectItem value="in_progress">בעבודה</SelectItem>
+                        <SelectItem value="done">הושלם</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

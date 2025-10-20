@@ -54,7 +54,6 @@ const formSchema = z.object({
   due_date: z.string().optional(),
   status: z.enum(["open", "in_progress", "done"]),
   priority: z.enum(["low", "medium", "high"]),
-  task_type: z.enum(["campaign", "collection", "creative", "other"]),
 });
 
 interface AddTaskFormProps {
@@ -78,7 +77,6 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
       due_date: "",
       status: "open",
       priority: "medium",
-      task_type: "other",
     },
   });
 
@@ -131,7 +129,7 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
         due_date: values.due_date || null,
         status: values.status,
         priority: values.priority,
-        task_type: values.task_type,
+        task_type: "other",
       }]);
       if (error) throw error;
     },
@@ -180,6 +178,20 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
               )}
             />
 
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>תיאור משימה</FormLabel>
+                  <FormControl>
+                    <Textarea {...field} rows={4} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
@@ -193,7 +205,7 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
                           <SelectValue placeholder="בחר קמפיינר" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent className="bg-background">
+                      <SelectContent className="bg-background z-50">
                         {campaigners?.map((campaigner) => (
                           <SelectItem key={campaigner.id} value={campaigner.id}>
                             {campaigner.full_name}
@@ -208,128 +220,24 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
 
               <FormField
                 control={form.control}
-                name="client_id"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>לקוח</FormLabel>
-                    <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            disabled={!!clientId}
-                            className={cn(
-                              "justify-between",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value
-                              ? clients?.find((client) => client.id === field.value)?.name
-                              : "בחר לקוח"}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[300px] p-0 bg-background" align="start">
-                        <Command>
-                          <CommandInput placeholder="חפש לקוח..." />
-                          <CommandList>
-                            <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
-                            <CommandGroup>
-                              {clients?.map((client) => (
-                                <CommandItem
-                                  key={client.id}
-                                  value={client.name}
-                                  onSelect={() => {
-                                    form.setValue("client_id", client.id);
-                                    setClientPopoverOpen(false);
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      field.value === client.id ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                  {client.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>סטטוס</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-background">
-                        <SelectItem value="open">פתוח</SelectItem>
-                        <SelectItem value="in_progress">בעבודה</SelectItem>
-                        <SelectItem value="done">הושלם</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
                 name="priority"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>עדיפות</FormLabel>
+                    <FormLabel>דחיפות</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className={cn(
+                          field.value === "high" && "border-red-500 text-red-600",
+                          field.value === "medium" && "border-orange-500 text-orange-600",
+                          field.value === "low" && "border-purple-500 text-purple-600"
+                        )}>
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent className="bg-background">
-                        <SelectItem value="low">נמוך</SelectItem>
-                        <SelectItem value="medium">בינוני</SelectItem>
-                        <SelectItem value="high">גבוה</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="task_type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>סוג משימה</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-background">
-                        <SelectItem value="campaign">קמפיין</SelectItem>
-                        <SelectItem value="collection">אוסף</SelectItem>
-                        <SelectItem value="creative">קריאייטיב</SelectItem>
-                        <SelectItem value="other">אחר</SelectItem>
+                      <SelectContent className="bg-background z-50">
+                        <SelectItem value="high" className="text-red-600 focus:text-red-600">גבוה</SelectItem>
+                        <SelectItem value="medium" className="text-orange-600 focus:text-orange-600">בינוני</SelectItem>
+                        <SelectItem value="low" className="text-purple-600 focus:text-purple-600">נמוך</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -337,6 +245,65 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="client_id"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>לקוח</FormLabel>
+                  <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          disabled={!!clientId}
+                          className={cn(
+                            "justify-between",
+                            !field.value && "text-muted-foreground"
+                          )}
+                        >
+                          {field.value
+                            ? clients?.find((client) => client.id === field.value)?.name
+                            : "בחר לקוח"}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0 bg-background" align="start">
+                      <Command>
+                        <CommandInput placeholder="חפש לקוח..." />
+                        <CommandList>
+                          <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
+                          <CommandGroup>
+                            {clients?.map((client) => (
+                              <CommandItem
+                                key={client.id}
+                                value={client.name}
+                                onSelect={() => {
+                                  form.setValue("client_id", client.id);
+                                  setClientPopoverOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    field.value === client.id ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {client.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
@@ -354,13 +321,22 @@ export default function AddTaskForm({ clientId, agencyId, triggerButton }: AddTa
 
             <FormField
               control={form.control}
-              name="notes"
+              name="status"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>הערות</FormLabel>
-                  <FormControl>
-                    <Textarea {...field} />
-                  </FormControl>
+                  <FormLabel>סטטוס</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-background z-50">
+                      <SelectItem value="open">פתוח</SelectItem>
+                      <SelectItem value="in_progress">בעבודה</SelectItem>
+                      <SelectItem value="done">הושלם</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
