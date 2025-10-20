@@ -14,6 +14,7 @@ import Campaigners from "./pages/Campaigners";
 import Suppliers from "./pages/Suppliers";
 import Finance from "./pages/Finance";
 import Tasks from "./pages/Tasks";
+import ClientOnboarding from "./pages/ClientOnboarding";
 import TimeTracking from "./pages/TimeTracking";
 import Reports from "./pages/Reports";
 import Users from "./pages/Users";
@@ -37,6 +38,7 @@ const App = () => (
           <Route path="/suppliers" element={<ProtectedRoute allowedRoles={["owner"]}><AppLayout><Suppliers /></AppLayout></ProtectedRoute>} />
           <Route path="/finance" element={<ProtectedRoute allowedRoles={["owner"]}><AppLayout><Finance /></AppLayout></ProtectedRoute>} />
           <Route path="/tasks" element={<ProtectedRoute><AppLayout><Tasks /></AppLayout></ProtectedRoute>} />
+          <Route path="/client-onboarding" element={<ProtectedRoute><AppLayout><ClientOnboarding /></AppLayout></ProtectedRoute>} />
           <Route path="/time-tracking" element={<ProtectedRoute><AppLayout><TimeTracking /></AppLayout></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><AppLayout><Users /></AppLayout></ProtectedRoute>} />

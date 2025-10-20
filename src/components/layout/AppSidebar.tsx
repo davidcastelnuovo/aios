@@ -10,6 +10,7 @@ import {
   Truck,
   BarChart3,
   UserCog,
+  UserPlus,
 } from "lucide-react";
 import {
   Sidebar,
@@ -29,6 +30,7 @@ const menuItems = [
   { title: "סוכנויות", url: "/agencies", icon: Building2, roles: ["admin", "user", "owner"] },
   { title: "לקוחות", url: "/clients", icon: Users, roles: ["admin", "user", "owner"] },
   { title: "משימות", url: "/tasks", icon: CheckSquare, roles: ["admin", "user", "owner"] },
+  { title: "לקוחות בקליטה", url: "/client-onboarding", icon: UserPlus, roles: ["admin", "user", "owner"] },
   { title: "שעון נוכחות", url: "/time-tracking", icon: Clock, roles: ["admin", "user", "owner"] },
   { title: "קמפיינרים", url: "/campaigners", icon: Megaphone, roles: ["admin", "owner"] },
   { title: "ספקים", url: "/suppliers", icon: Truck, roles: ["owner"] },

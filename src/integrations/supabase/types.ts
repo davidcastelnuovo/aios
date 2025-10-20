@@ -95,6 +95,67 @@ export type Database = {
         }
         Relationships: []
       }
+      client_onboarding: {
+        Row: {
+          agency_id: string
+          campaigner_id: string
+          client_id: string
+          created_at: string
+          due_date: string | null
+          id: string
+          notes: string | null
+          status: Database["public"]["Enums"]["onboarding_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          agency_id: string
+          campaigner_id: string
+          client_id: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["onboarding_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          agency_id?: string
+          campaigner_id?: string
+          client_id?: string
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["onboarding_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_onboarding_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_onboarding_campaigner_id_fkey"
+            columns: ["campaigner_id"]
+            isOneToOne: false
+            referencedRelation: "campaigners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_onboarding_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_suppliers: {
         Row: {
           client_id: string
@@ -588,8 +649,13 @@ export type Database = {
     Enums: {
       agency_status: "active" | "paused" | "former"
       app_role: "admin" | "user" | "owner"
-      client_status: "active" | "paused" | "ended"
+      client_status: "active" | "paused" | "ended" | "onboarding"
       finance_type: "income" | "expense"
+      onboarding_status:
+        | "research_meeting"
+        | "receiving_access"
+        | "setup_and_content"
+        | "campaign_live"
       payment_method: "cash" | "card" | "wire" | "check"
       priority_level: "high" | "medium" | "low"
       supplier_type:
@@ -730,8 +796,14 @@ export const Constants = {
     Enums: {
       agency_status: ["active", "paused", "former"],
       app_role: ["admin", "user", "owner"],
-      client_status: ["active", "paused", "ended"],
+      client_status: ["active", "paused", "ended", "onboarding"],
       finance_type: ["income", "expense"],
+      onboarding_status: [
+        "research_meeting",
+        "receiving_access",
+        "setup_and_content",
+        "campaign_live",
+      ],
       payment_method: ["cash", "card", "wire", "check"],
       priority_level: ["high", "medium", "low"],
       supplier_type: [
