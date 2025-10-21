@@ -59,6 +59,7 @@ export type Database = {
       campaigners: {
         Row: {
           active: boolean
+          agency_id: string | null
           created_at: string
           email: string | null
           folder_link: string | null
@@ -71,6 +72,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          agency_id?: string | null
           created_at?: string
           email?: string | null
           folder_link?: string | null
@@ -83,6 +85,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          agency_id?: string | null
           created_at?: string
           email?: string | null
           folder_link?: string | null
@@ -93,7 +96,15 @@ export type Database = {
           role?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "campaigners_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       client_onboarding: {
         Row: {
@@ -632,6 +643,10 @@ export type Database = {
     Functions: {
       assign_role_by_email: {
         Args: { _email: string; _role: Database["public"]["Enums"]["app_role"] }
+        Returns: string
+      }
+      get_user_agency_id: {
+        Args: { _user_id: string }
         Returns: string
       }
       get_user_campaigner_id: {

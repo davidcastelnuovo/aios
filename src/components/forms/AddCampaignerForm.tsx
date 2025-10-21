@@ -2,9 +2,10 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useUserRole } from "@/hooks/useUserRole";
 import {
   Dialog,
   DialogContent,
@@ -24,9 +25,17 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const formSchema = z.object({
   full_name: z.string().min(1, "שם מלא הוא שדה חובה"),
+  agency_id: z.string().min(1, "סוכנות היא שדה חובה"),
   role: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
@@ -39,11 +48,40 @@ type FormValues = z.infer<typeof formSchema>;
 export function AddCampaignerForm() {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
+  const { isAdmin, isOwner, userId } = useUserRole();
+
+  const { data: agencies } = useQuery({
+    queryKey: ["agencies"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: userAgency } = useQuery({
+    queryKey: ["user-agency", userId],
+    queryFn: async () => {
+      if (!userId) return null;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("campaigner_id, campaigners!inner(agency_id)")
+        .eq("id", userId)
+        .single();
+      if (error) throw error;
+      return data?.campaigners?.agency_id;
+    },
+    enabled: !!userId && !isAdmin && !isOwner,
+  });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       full_name: "",
+      agency_id: "",
       role: "",
       phone: "",
       email: "",
@@ -54,8 +92,15 @@ export function AddCampaignerForm() {
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
+      const agencyId = (isAdmin || isOwner) ? values.agency_id : userAgency;
+      
+      if (!agencyId) {
+        throw new Error("לא נמצאה סוכנות עבור משתמש זה");
+      }
+
       const { error } = await supabase.from("campaigners").insert({
         full_name: values.full_name,
+        agency_id: agencyId,
         role: values.role || null,
         phone: values.phone || null,
         email: values.email || null,
@@ -107,6 +152,33 @@ export function AddCampaignerForm() {
                 </FormItem>
               )}
             />
+
+            {(isAdmin || isOwner) && (
+              <FormField
+                control={form.control}
+                name="agency_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>סוכנות</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="בחר סוכנות" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {agencies?.map((agency) => (
+                          <SelectItem key={agency.id} value={agency.id}>
+                            {agency.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}

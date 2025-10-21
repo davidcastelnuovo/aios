@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, X } from "lucide-react";
+import { useUserRole } from "@/hooks/useUserRole";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface EditCampaignerDialogProps {
   campaigner: {
     id: string;
     full_name: string;
+    agency_id: string | null;
     role: string | null;
     phone: string | null;
     email: string | null;
@@ -27,6 +36,7 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState({
     full_name: campaigner.full_name,
+    agency_id: campaigner.agency_id || "",
     role: campaigner.role || "",
     phone: campaigner.phone || "",
     email: campaigner.email || "",
@@ -36,6 +46,20 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
   });
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { isAdmin, isOwner } = useUserRole();
+
+  const { data: agencies } = useQuery({
+    queryKey: ["agencies"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+    enabled: isAdmin || isOwner,
+  });
 
   const updateMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -91,6 +115,24 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
               required
             />
           </div>
+
+          {(isAdmin || isOwner) && (
+            <div className="space-y-2">
+              <Label htmlFor="agency_id">סוכנות *</Label>
+              <Select value={formData.agency_id} onValueChange={(value) => setFormData({ ...formData, agency_id: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="בחר סוכנות" />
+                </SelectTrigger>
+                <SelectContent>
+                  {agencies?.map((agency) => (
+                    <SelectItem key={agency.id} value={agency.id}>
+                      {agency.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="role">תפקיד</Label>

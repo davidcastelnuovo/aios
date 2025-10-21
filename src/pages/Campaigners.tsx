@@ -23,6 +23,7 @@ export default function Campaigners() {
         .from("campaigners")
         .select(`
           *,
+          agencies(name),
           client_team!inner(
             id,
             role_on_account,
@@ -112,6 +113,11 @@ export default function Campaigners() {
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
                         <Briefcase className="h-3 w-3" />
                         {campaigner.role}
+                      </p>
+                    )}
+                    {campaigner.agencies && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {campaigner.agencies.name}
                       </p>
                     )}
                   </div>
