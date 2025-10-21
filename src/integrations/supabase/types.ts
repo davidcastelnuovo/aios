@@ -56,10 +56,45 @@ export type Database = {
         }
         Relationships: []
       }
+      campaigner_agencies: {
+        Row: {
+          agency_id: string
+          campaigner_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          agency_id: string
+          campaigner_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          agency_id?: string
+          campaigner_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaigner_agencies_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaigner_agencies_campaigner_id_fkey"
+            columns: ["campaigner_id"]
+            isOneToOne: false
+            referencedRelation: "campaigners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaigners: {
         Row: {
           active: boolean
-          agency_id: string | null
           created_at: string
           email: string | null
           folder_link: string | null
@@ -72,7 +107,6 @@ export type Database = {
         }
         Insert: {
           active?: boolean
-          agency_id?: string | null
           created_at?: string
           email?: string | null
           folder_link?: string | null
@@ -85,7 +119,6 @@ export type Database = {
         }
         Update: {
           active?: boolean
-          agency_id?: string | null
           created_at?: string
           email?: string | null
           folder_link?: string | null
@@ -96,15 +129,7 @@ export type Database = {
           role?: string | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "campaigners_agency_id_fkey"
-            columns: ["agency_id"]
-            isOneToOne: false
-            referencedRelation: "agencies"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       client_onboarding: {
         Row: {
@@ -645,9 +670,9 @@ export type Database = {
         Args: { _email: string; _role: Database["public"]["Enums"]["app_role"] }
         Returns: string
       }
-      get_user_agency_id: {
+      get_user_agency_ids: {
         Args: { _user_id: string }
-        Returns: string
+        Returns: string[]
       }
       get_user_campaigner_id: {
         Args: { _user_id: string }
@@ -658,6 +683,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      user_has_agency_access: {
+        Args: { _agency_id: string; _user_id: string }
         Returns: boolean
       }
     }

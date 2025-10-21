@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
@@ -22,7 +22,7 @@ interface EditCampaignerDialogProps {
   campaigner: {
     id: string;
     full_name: string;
-    agency_id: string | null;
+    campaigner_agencies?: { agencies: { name: string } }[];
     role: string | null;
     phone: string | null;
     email: string | null;
@@ -36,7 +36,7 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState({
     full_name: campaigner.full_name,
-    agency_id: campaigner.agency_id || "",
+    agency_ids: [] as string[],
     role: campaigner.role || "",
     phone: campaigner.phone || "",
     email: campaigner.email || "",
@@ -44,6 +44,21 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
     notes: campaigner.notes || "",
     active: campaigner.active,
   });
+
+  // טעינת הסוכנויות הקיימות
+  useEffect(() => {
+    const loadAgencies = async () => {
+      const { data } = await supabase
+        .from("campaigner_agencies")
+        .select("agency_id")
+        .eq("campaigner_id", campaigner.id);
+      if (data) {
+        setFormData(prev => ({ ...prev, agency_ids: data.map(ca => ca.agency_id) }));
+      }
+    };
+    if (open) loadAgencies();
+  }, [open, campaigner.id]);
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isAdmin, isOwner } = useUserRole();
@@ -63,11 +78,35 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
 
   const updateMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const { error } = await supabase
+      // עדכון פרטי הקמפיינר הבסיסיים
+      const { agency_ids, ...campaignerData } = data;
+      const { error: campaignerError } = await supabase
         .from("campaigners")
-        .update(data)
+        .update(campaignerData)
         .eq("id", campaigner.id);
-      if (error) throw error;
+      if (campaignerError) throw campaignerError;
+
+      // עדכון הקשרים לסוכנויות
+      if (isAdmin || isOwner) {
+        // מחיקת הקשרים הישנים
+        const { error: deleteError } = await supabase
+          .from("campaigner_agencies")
+          .delete()
+          .eq("campaigner_id", campaigner.id);
+        if (deleteError) throw deleteError;
+
+        // הוספת הקשרים החדשים
+        if (agency_ids.length > 0) {
+          const agencyLinks = agency_ids.map(agencyId => ({
+            campaigner_id: campaigner.id,
+            agency_id: agencyId,
+          }));
+          const { error: insertError } = await supabase
+            .from("campaigner_agencies")
+            .insert(agencyLinks);
+          if (insertError) throw insertError;
+        }
+      }
     },
     onSuccess: () => {
       toast({
@@ -118,19 +157,28 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
 
           {(isAdmin || isOwner) && (
             <div className="space-y-2">
-              <Label htmlFor="agency_id">סוכנות *</Label>
-              <Select value={formData.agency_id} onValueChange={(value) => setFormData({ ...formData, agency_id: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="בחר סוכנות" />
-                </SelectTrigger>
-                <SelectContent>
-                  {agencies?.map((agency) => (
-                    <SelectItem key={agency.id} value={agency.id}>
+              <Label>סוכנויות *</Label>
+              <div className="space-y-2">
+                {agencies?.map((agency) => (
+                  <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
+                    <input
+                      type="checkbox"
+                      id={`agency-${agency.id}`}
+                      checked={formData.agency_ids.includes(agency.id)}
+                      onChange={(e) => {
+                        const newValue = e.target.checked
+                          ? [...formData.agency_ids, agency.id]
+                          : formData.agency_ids.filter(id => id !== agency.id);
+                        setFormData({ ...formData, agency_ids: newValue });
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <label htmlFor={`agency-${agency.id}`} className="text-sm cursor-pointer">
                       {agency.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    </label>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

@@ -35,7 +35,7 @@ import {
 
 const formSchema = z.object({
   full_name: z.string().min(1, "שם מלא הוא שדה חובה"),
-  agency_id: z.string().min(1, "סוכנות היא שדה חובה"),
+  agency_ids: z.array(z.string()).min(1, "יש לבחור לפחות סוכנות אחת"),
   role: z.string().optional(),
   phone: z.string().optional(),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
@@ -62,17 +62,23 @@ export function AddCampaignerForm() {
     },
   });
 
-  const { data: userAgency } = useQuery({
-    queryKey: ["user-agency", userId],
+  const { data: userAgencies } = useQuery({
+    queryKey: ["user-agencies", userId],
     queryFn: async () => {
-      if (!userId) return null;
+      if (!userId) return [];
       const { data, error } = await supabase
         .from("profiles")
-        .select("campaigner_id, campaigners!inner(agency_id)")
+        .select(`
+          campaigner_id,
+          campaigners!inner(
+            campaigner_agencies(agency_id)
+          )
+        `)
         .eq("id", userId)
-        .single();
+        .maybeSingle();
       if (error) throw error;
-      return data?.campaigners?.agency_id;
+      const agencies = data?.campaigners?.campaigner_agencies || [];
+      return Array.isArray(agencies) ? agencies.map((ca: any) => ca.agency_id) : [];
     },
     enabled: !!userId && !isAdmin && !isOwner,
   });
@@ -81,7 +87,7 @@ export function AddCampaignerForm() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       full_name: "",
-      agency_id: "",
+      agency_ids: [],
       role: "",
       phone: "",
       email: "",
@@ -92,23 +98,40 @@ export function AddCampaignerForm() {
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
-      const agencyId = (isAdmin || isOwner) ? values.agency_id : userAgency;
+      const agencyIds = (isAdmin || isOwner) ? values.agency_ids : (userAgencies || []);
       
-      if (!agencyId) {
+      if (!agencyIds || agencyIds.length === 0) {
         throw new Error("לא נמצאה סוכנות עבור משתמש זה");
       }
 
-      const { error } = await supabase.from("campaigners").insert({
-        full_name: values.full_name,
+      // יצירת הקמפיינר
+      const { data: campaigner, error: campaignerError } = await supabase
+        .from("campaigners")
+        .insert({
+          full_name: values.full_name,
+          role: values.role || null,
+          phone: values.phone || null,
+          email: values.email || null,
+          folder_link: values.folder_link || null,
+          notes: values.notes || null,
+          active: true,
+        })
+        .select()
+        .single();
+
+      if (campaignerError) throw campaignerError;
+
+      // קישור הקמפיינר לסוכנויות
+      const agencyLinks = agencyIds.map(agencyId => ({
+        campaigner_id: campaigner.id,
         agency_id: agencyId,
-        role: values.role || null,
-        phone: values.phone || null,
-        email: values.email || null,
-        folder_link: values.folder_link || null,
-        notes: values.notes || null,
-        active: true,
-      });
-      if (error) throw error;
+      }));
+
+      const { error: linksError } = await supabase
+        .from("campaigner_agencies")
+        .insert(agencyLinks);
+
+      if (linksError) throw linksError;
     },
     onSuccess: () => {
       toast.success("הקמפיינר נוסף בהצלחה");
@@ -156,24 +179,31 @@ export function AddCampaignerForm() {
             {(isAdmin || isOwner) && (
               <FormField
                 control={form.control}
-                name="agency_id"
+                name="agency_ids"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>סוכנות</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="בחר סוכנות" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {agencies?.map((agency) => (
-                          <SelectItem key={agency.id} value={agency.id}>
+                    <FormLabel>סוכנויות</FormLabel>
+                    <div className="space-y-2">
+                      {agencies?.map((agency) => (
+                        <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
+                          <input
+                            type="checkbox"
+                            id={agency.id}
+                            checked={field.value?.includes(agency.id)}
+                            onChange={(e) => {
+                              const newValue = e.target.checked
+                                ? [...(field.value || []), agency.id]
+                                : (field.value || []).filter(id => id !== agency.id);
+                              field.onChange(newValue);
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <label htmlFor={agency.id} className="text-sm cursor-pointer">
                             {agency.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          </label>
+                        </div>
+                      ))}
+                    </div>
                     <FormMessage />
                   </FormItem>
                 )}

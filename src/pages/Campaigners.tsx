@@ -23,7 +23,9 @@ export default function Campaigners() {
         .from("campaigners")
         .select(`
           *,
-          agencies(name),
+          campaigner_agencies(
+            agencies(name)
+          ),
           client_team!inner(
             id,
             role_on_account,
@@ -115,9 +117,9 @@ export default function Campaigners() {
                         {campaigner.role}
                       </p>
                     )}
-                    {campaigner.agencies && (
+                    {campaigner.campaigner_agencies && campaigner.campaigner_agencies.length > 0 && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        {campaigner.agencies.name}
+                        {campaigner.campaigner_agencies.map((ca: any) => ca.agencies.name).join(", ")}
                       </p>
                     )}
                   </div>
