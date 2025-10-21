@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Users as UsersIcon, Mail, Shield, UserCircle, Edit, Trash2 } from "lucide-react";
+import EditManagedAgenciesDialog from "@/components/forms/EditManagedAgenciesDialog";
 import {
   Select,
   SelectContent,
@@ -55,7 +56,8 @@ import {
 const inviteSchema = z.object({
   email: z.string().email("אימייל לא תקין"),
   fullName: z.string().min(1, "שם מלא הוא שדה חובה"),
-  role: z.enum(["admin", "user"]),
+  role: z.enum(["admin", "user", "agency_manager"]),
+  agencyIds: z.array(z.string()).optional(),
 });
 
 const editSchema = z.object({
@@ -66,6 +68,7 @@ export default function Users() {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [agenciesDialogOpen, setAgenciesDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const queryClient = useQueryClient();
 
@@ -75,6 +78,7 @@ export default function Users() {
       email: "",
       fullName: "",
       role: "user",
+      agencyIds: [],
     },
   });
 
@@ -103,8 +107,27 @@ export default function Users() {
 
       if (rolesError) throw rolesError;
 
+      // Get user managed agencies
+      const { data: userAgencies, error: agenciesError } = await supabase
+        .from("user_managed_agencies")
+        .select("user_id, agency_id, agencies(name)");
+
+      if (agenciesError) throw agenciesError;
+
       // Create a map of user_id to role
       const rolesMap = new Map(userRoles?.map(r => [r.user_id, r.role]) || []);
+      
+      // Create a map of user_id to managed agencies
+      const agenciesMap = new Map<string, any[]>();
+      userAgencies?.forEach((ua: any) => {
+        if (!agenciesMap.has(ua.user_id)) {
+          agenciesMap.set(ua.user_id, []);
+        }
+        agenciesMap.get(ua.user_id)?.push({
+          id: ua.agency_id,
+          name: ua.agencies?.name
+        });
+      });
       
       // Combine the data
       return profiles.map((profile: any) => ({
@@ -114,7 +137,8 @@ export default function Users() {
         created_at: profile.created_at,
         updated_at: profile.updated_at,
         campaigner_id: profile.campaigner_id,
-        role: (rolesMap.get(profile.id) || "user") as "admin" | "user" | "owner"
+        role: (rolesMap.get(profile.id) || "user") as "admin" | "user" | "owner" | "agency_manager",
+        managed_agencies: agenciesMap.get(profile.id) || []
       }));
     },
   });
@@ -132,8 +156,20 @@ export default function Users() {
     },
   });
 
+  const { data: agencies } = useQuery({
+    queryKey: ["agencies"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const updateRoleMutation = useMutation({
-    mutationFn: async ({ userId, newRole }: { userId: string; newRole: "admin" | "user" }) => {
+    mutationFn: async ({ userId, newRole }: { userId: string; newRole: "admin" | "user" | "agency_manager" }) => {
       // First, delete existing role
       await supabase
         .from("user_roles")
@@ -153,6 +189,32 @@ export default function Users() {
     },
     onError: () => {
       toast.error("שגיאה בעדכון ההרשאה");
+    },
+  });
+
+  const updateManagedAgenciesMutation = useMutation({
+    mutationFn: async ({ userId, agencyIds }: { userId: string; agencyIds: string[] }) => {
+      // First, delete existing managed agencies
+      await supabase
+        .from("user_managed_agencies")
+        .delete()
+        .eq("user_id", userId);
+
+      // Then insert new managed agencies
+      if (agencyIds.length > 0) {
+        const { error } = await supabase
+          .from("user_managed_agencies")
+          .insert(agencyIds.map(agencyId => ({ user_id: userId, agency_id: agencyId })));
+
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success("הסוכנויות עודכנו בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון הסוכנויות");
     },
   });
 
@@ -239,13 +301,21 @@ export default function Users() {
   });
 
   const getRoleText = (role: string) => {
-    return role === "admin" ? "מנהל" : "משתמש";
+    switch (role) {
+      case "admin": return "מנהל";
+      case "agency_manager": return "מנהל סוכנות";
+      case "owner": return "בעלים";
+      default: return "משתמש";
+    }
   };
 
   const getRoleColor = (role: string) => {
-    return role === "admin" 
-      ? "bg-destructive/10 text-destructive border-destructive/20" 
-      : "bg-primary/10 text-primary border-primary/20";
+    switch (role) {
+      case "admin": return "bg-destructive/10 text-destructive border-destructive/20";
+      case "agency_manager": return "bg-accent/10 text-accent-foreground border-accent/20";
+      case "owner": return "bg-primary/10 text-primary border-primary/20";
+      default: return "bg-muted/10 text-muted-foreground border-muted/20";
+    }
   };
 
   if (isLoading) {
@@ -316,12 +386,55 @@ export default function Users() {
                         <SelectContent className="bg-background">
                           <SelectItem value="user">משתמש</SelectItem>
                           <SelectItem value="admin">מנהל</SelectItem>
+                          <SelectItem value="agency_manager">מנהל סוכנות</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                {form.watch("role") === "agency_manager" && (
+                  <FormField
+                    control={form.control}
+                    name="agencyIds"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel>סוכנויות מנוהלות</FormLabel>
+                        <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3">
+                          {agencies?.map((agency) => (
+                            <FormField
+                              key={agency.id}
+                              control={form.control}
+                              name="agencyIds"
+                              render={({ field }) => (
+                                <FormItem className="flex items-center space-x-2 space-x-reverse">
+                                  <FormControl>
+                                    <input
+                                      type="checkbox"
+                                      checked={field.value?.includes(agency.id)}
+                                      onChange={(e) => {
+                                        const newValue = e.target.checked
+                                          ? [...(field.value || []), agency.id]
+                                          : (field.value || []).filter((id) => id !== agency.id);
+                                        field.onChange(newValue);
+                                      }}
+                                      className="h-4 w-4"
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="font-normal cursor-pointer">
+                                    {agency.name}
+                                  </FormLabel>
+                                </FormItem>
+                              )}
+                            />
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <Button type="submit" disabled={inviteUserMutation.isPending} className="w-full">
                   {inviteUserMutation.isPending ? "שולח..." : "שלח הזמנה"}
@@ -340,6 +453,7 @@ export default function Users() {
               <TableHead className="text-right font-semibold">אימייל</TableHead>
               <TableHead className="text-right font-semibold">קמפיינר</TableHead>
               <TableHead className="text-right font-semibold">הרשאה</TableHead>
+              <TableHead className="text-right font-semibold">סוכנויות מנוהלות</TableHead>
               <TableHead className="text-right font-semibold">תאריך הצטרפות</TableHead>
               <TableHead className="text-right font-semibold">פעולות</TableHead>
             </TableRow>
@@ -389,11 +503,11 @@ export default function Users() {
                   <TableCell className="py-4">
                     <Select
                       value={user.role}
-                      onValueChange={(value: "admin" | "user") => 
+                      onValueChange={(value: "admin" | "user" | "agency_manager") => 
                         updateRoleMutation.mutate({ userId: user.id, newRole: value })
                       }
                     >
-                      <SelectTrigger className="w-[140px] h-9 bg-background hover:bg-accent/10 transition-colors">
+                      <SelectTrigger className="w-[160px] h-9 bg-background hover:bg-accent/10 transition-colors">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-background">
@@ -409,8 +523,32 @@ export default function Users() {
                             מנהל
                           </div>
                         </SelectItem>
+                        <SelectItem value="agency_manager">
+                          <div className="flex items-center gap-2">
+                            <Shield className="h-4 w-4" />
+                            מנהל סוכנות
+                          </div>
+                        </SelectItem>
                       </SelectContent>
                     </Select>
+                  </TableCell>
+                  <TableCell className="py-4">
+                    {user.role === "agency_manager" ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedUser(user);
+                          setAgenciesDialogOpen(true);
+                        }}
+                      >
+                        {user.managed_agencies?.length > 0
+                          ? `${user.managed_agencies.length} סוכנויות`
+                          : "בחר סוכנויות"}
+                      </Button>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">-</span>
+                    )}
                   </TableCell>
                   <TableCell className="py-4 text-sm text-muted-foreground">
                     {new Date(user.created_at).toLocaleDateString("he-IL")}
@@ -515,6 +653,14 @@ export default function Users() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {selectedUser && (
+        <EditManagedAgenciesDialog
+          open={agenciesDialogOpen}
+          onOpenChange={setAgenciesDialogOpen}
+          user={selectedUser}
+        />
+      )}
     </div>
   );
 }

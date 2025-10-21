@@ -32,10 +32,11 @@ export function useUserRole() {
   });
 
   return {
-    role: userRole as "admin" | "user" | "owner" | null,
+    role: userRole as "admin" | "user" | "owner" | "agency_manager" | null,
     isAdmin: userRole === "admin",
     isUser: userRole === "user",
     isOwner: userRole === "owner",
+    isAgencyManager: userRole === "agency_manager",
     isLoading,
     userId: session?.user?.id,
   };
