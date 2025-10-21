@@ -1,6 +1,7 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
-import { User, LogOut, Building2 } from "lucide-react";
+import { LogOut, Building2 } from "lucide-react";
+import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -81,8 +82,8 @@ export function AppLayout({ children }: AppLayoutProps) {
               </Select>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
-                    <User className="h-5 w-5" />
+                  <Button variant="ghost" size="icon" className="rounded-full">
+                    <img src={logo} alt="Logo" className="h-8 w-8 object-contain" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="bg-background z-50">
