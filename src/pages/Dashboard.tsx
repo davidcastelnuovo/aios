@@ -266,7 +266,7 @@ export default function Dashboard() {
             <TrendingUp className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-success">
+            <div className="text-2xl font-bold text-primary">
               ₪{stats?.income.toLocaleString() || 0}
             </div>
           </CardContent>
@@ -290,7 +290,7 @@ export default function Dashboard() {
             <DollarSign className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${(stats?.profit || 0) >= 0 ? 'text-success' : 'text-destructive'}`}>
+            <div className={`text-2xl font-bold ${(stats?.profit || 0) >= 0 ? 'text-primary' : 'text-destructive'}`}>
               ₪{stats?.profit.toLocaleString() || 0}
             </div>
           </CardContent>
