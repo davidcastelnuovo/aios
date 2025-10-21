@@ -221,19 +221,12 @@ export default function Users() {
 
   const deleteUserMutation = useMutation({
     mutationFn: async (userId: string) => {
-      // Delete user roles
-      await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", userId);
-
-      // Delete profile
-      const { error } = await supabase
-        .from("profiles")
-        .delete()
-        .eq("id", userId);
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { userId },
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
       toast.success("המשתמש נמחק בהצלחה");
