@@ -115,46 +115,21 @@ serve(async (req: Request) => {
         // Don't throw - the user was created, just log the error
       }
 
-      // Create campaigner profile if agencies are provided
+      // Link campaigner to agencies ONLY if campaigner_id already exists
       if (agencyIds && agencyIds.length > 0) {
-        // First get user profile to get or create campaigner
+        // First get user profile to check if campaigner exists
         const { data: profile } = await supabaseAdmin
           .from("profiles")
           .select("campaigner_id")
           .eq("id", inviteData.user.id)
           .maybeSingle();
 
-        let campaignerId = profile?.campaigner_id as string | undefined;
+        const campaignerId = profile?.campaigner_id;
 
-        // If no campaigner exists, create one
-        if (!campaignerId) {
-          const { data: newCampaigner, error: campaignerError } = await supabaseAdmin
-            .from("campaigners")
-            .insert({
-              full_name: email.split("@")[0],
-              email: email,
-              active: true,
-            })
-            .select("id")
-            .maybeSingle();
-
-          if (campaignerError) {
-            console.error("Error creating campaigner:", campaignerError);
-          } else if (newCampaigner) {
-            campaignerId = (newCampaigner as any).id as string;
-
-            // Link campaigner to profile
-            await supabaseAdmin
-              .from("profiles")
-              .update({ campaigner_id: campaignerId })
-              .eq("id", inviteData.user.id);
-          }
-        }
-
-        // Link campaigner to agencies
+        // Only link to agencies if user is already linked to a campaigner
         if (campaignerId) {
           const agencyLinks = agencyIds.map((agencyId) => ({
-            campaigner_id: campaignerId!,
+            campaigner_id: campaignerId,
             agency_id: agencyId,
           }));
 
@@ -163,8 +138,11 @@ serve(async (req: Request) => {
             .insert(agencyLinks);
 
           if (agencyError) {
-            console.error("Error linking agencies:", agencyError);
+            console.error("Error linking campaigner to agencies:", agencyError);
+            // Don't throw - the user was created, just log the error
           }
+        } else {
+          console.log("User has no campaigner_id, skipping agency links");
         }
       }
     }

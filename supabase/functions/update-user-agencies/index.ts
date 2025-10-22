@@ -65,7 +65,7 @@ serve(async (req: Request) => {
 
     console.log(`Updating agencies for user ${userId}:`, agencyIds);
 
-    // Get or create campaigner for this user
+    // Get user profile to check if they have a campaigner
     const { data: profile, error: profileError } = await supabaseAdmin
       .from("profiles")
       .select("campaigner_id")
@@ -77,48 +77,20 @@ serve(async (req: Request) => {
       throw profileError;
     }
 
-    let campaignerId = profile.campaigner_id;
+    const campaignerId = profile.campaigner_id;
 
-    // If no campaigner_id exists, create a new campaigner
+    // Only update agencies if user has a campaigner_id
     if (!campaignerId) {
-      console.log("No campaigner_id found, creating new campaigner");
-      
-      // Get user email for the campaigner
-      const { data: { user: targetUser }, error: targetUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
-      
-      if (targetUserError || !targetUser) {
-        throw new Error("Could not fetch target user");
-      }
-
-      const { data: newCampaigner, error: campaignerError } = await supabaseAdmin
-        .from("campaigners")
-        .insert({
-          full_name: targetUser.email?.split("@")[0] || "משתמש",
-          email: targetUser.email,
-          active: true,
-        })
-        .select("id")
-        .single();
-
-      if (campaignerError) {
-        console.error("Error creating campaigner:", campaignerError);
-        throw campaignerError;
-      }
-
-      campaignerId = newCampaigner.id;
-
-      // Update profile with new campaigner_id
-      const { error: updateProfileError } = await supabaseAdmin
-        .from("profiles")
-        .update({ campaigner_id: campaignerId })
-        .eq("id", userId);
-
-      if (updateProfileError) {
-        console.error("Error updating profile:", updateProfileError);
-        throw updateProfileError;
-      }
-
-      console.log("Created new campaigner:", campaignerId);
+      console.log("User has no campaigner_id, cannot update agencies");
+      return new Response(
+        JSON.stringify({ 
+          error: "User is not linked to a campaigner. Please link user to a campaigner first." 
+        }),
+        { 
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        }
+      );
     }
 
     // Delete all existing agency links for this campaigner
