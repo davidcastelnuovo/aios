@@ -101,7 +101,13 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
 export function useAgency() {
   const context = useContext(AgencyContext);
   if (context === undefined) {
-    throw new Error("useAgency must be used within an AgencyProvider");
+    // Safe fallback to avoid crashes before AgencyProvider mounts
+    return {
+      selectedAgency: "all",
+      setSelectedAgency: () => {},
+      agencies: undefined,
+      isLoading: true,
+    };
   }
   return context;
 }
