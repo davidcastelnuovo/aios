@@ -8,6 +8,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AgencyProvider } from "./contexts/AgencyContext";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
+import Setup from "./pages/Setup";
 import Agencies from "./pages/Agencies";
 import Clients from "./pages/Clients";
 import Campaigners from "./pages/Campaigners";
@@ -32,6 +33,7 @@ const App = () => (
         <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/setup" element={<Setup />} />
           <Route path="/" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
           <Route path="/agencies" element={<ProtectedRoute><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
           <Route path="/clients" element={<ProtectedRoute><AppLayout><Clients /></AppLayout></ProtectedRoute>} />

@@ -130,7 +130,8 @@ export default function Users() {
         body: { 
           email, 
           role,
-          agencyIds
+          agencyIds,
+          redirectUrl: `${window.location.origin}/setup`
         },
       });
       if (error) throw error;
