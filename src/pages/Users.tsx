@@ -20,8 +20,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Shield, UserPlus, Trash2 } from "lucide-react";
+import { Shield, UserPlus, Trash2, Settings } from "lucide-react";
 import { useState } from "react";
+import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialog";
 import {
   Dialog,
   DialogContent,
@@ -60,6 +61,8 @@ export default function Users() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<UserRole>("campaigner");
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
+  const [editAgenciesUserId, setEditAgenciesUserId] = useState<string | null>(null);
+  const [editAgenciesUserEmail, setEditAgenciesUserEmail] = useState<string>("");
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies-for-invite", currentUserId],
@@ -395,6 +398,17 @@ export default function Users() {
                         </SelectContent>
                       </Select>
                       <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          setEditAgenciesUserId(user.id);
+                          setEditAgenciesUserEmail(user.email);
+                        }}
+                        title="ערוך סוכנויות"
+                      >
+                        <Settings className="h-4 w-4" />
+                      </Button>
+                      <Button
                         variant="destructive"
                         size="icon"
                         onClick={() => {
@@ -452,6 +466,20 @@ export default function Users() {
           </div>
         </div>
       </Card>
+
+      {editAgenciesUserId && (
+        <EditUserAgenciesDialog
+          open={!!editAgenciesUserId}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditAgenciesUserId(null);
+              setEditAgenciesUserEmail("");
+            }
+          }}
+          userId={editAgenciesUserId}
+          userEmail={editAgenciesUserEmail}
+        />
+      )}
     </div>
   );
 }
