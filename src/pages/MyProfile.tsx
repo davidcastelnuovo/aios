@@ -2,13 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Phone, Mail, Folder, Briefcase, Calendar, DollarSign } from "lucide-react";
+import { Phone, Mail, Folder, Briefcase, Calendar, ChevronDown, ChevronUp } from "lucide-react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
+import { useState } from "react";
 
 export default function MyProfile() {
   const { userId } = useUserRole();
+  const [showAssignments, setShowAssignments] = useState(false);
 
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ["my-profile", userId],
@@ -223,16 +225,27 @@ export default function MyProfile() {
           {/* Client Assignments */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-lg">לקוחות משויכים</h3>
-              {totalPayment > 0 && (
-                <div className="flex items-center gap-2 text-primary font-semibold">
-                  <DollarSign className="h-5 w-5" />
-                  <span>₪{totalPayment.toLocaleString()}</span>
-                </div>
-              )}
+              <button
+                className="w-full flex items-center justify-between p-2 hover:bg-muted/50 rounded text-foreground"
+                onClick={() => setShowAssignments(!showAssignments)}
+              >
+                <h3 className="font-semibold text-lg">
+                  לקוחות משויכים ({assignments?.length || 0})
+                </h3>
+                {showAssignments ? (
+                  <ChevronUp className="h-5 w-5" />
+                ) : (
+                  <ChevronDown className="h-5 w-5" />
+                )}
+              </button>
             </div>
+            {totalPayment > 0 && (
+              <div className="flex items-center gap-2 text-primary font-semibold">
+                <span>סה"כ תשלום: ₪{totalPayment.toLocaleString()}</span>
+              </div>
+            )}
             
-            {assignments && assignments.length > 0 ? (
+            {showAssignments && assignments && assignments.length > 0 && (
               <div className="space-y-3">
                 {assignments.map((assignment) => (
                   <Card key={assignment.id} className="bg-muted/30">
@@ -302,7 +315,9 @@ export default function MyProfile() {
                   </Card>
                 ))}
               </div>
-            ) : (
+            )}
+
+            {showAssignments && (!assignments || assignments.length === 0) && (
               <p className="text-sm text-muted-foreground">אין לקוחות משויכים</p>
             )}
           </div>
