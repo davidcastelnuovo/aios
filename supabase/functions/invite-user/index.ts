@@ -88,6 +88,13 @@ serve(async (req: Request) => {
 
     // Assign the role to the user
     if (inviteData.user) {
+      // First delete any existing roles (especially the default "campaigner" from handle_new_user trigger)
+      await supabaseAdmin
+        .from("user_roles")
+        .delete()
+        .eq("user_id", inviteData.user.id);
+
+      // Then insert the correct role
       const { error: roleError } = await supabaseAdmin
         .from("user_roles")
         .insert({
