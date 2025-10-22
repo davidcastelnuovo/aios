@@ -214,7 +214,7 @@ export default function Clients() {
     campaignerClientIds,
   });
 
-  // Filter by role
+  // First filter by role
   let accessibleClients = clients;
 
   if (!isOwner) {
@@ -231,21 +231,14 @@ export default function Clients() {
     }
   }
 
-  // Then filter by selected agency from dropdown
-  const filteredClients = (() => {
-    if (selectedAgency === "all") {
-      return accessibleClients;
-    }
-    
-    // If a specific agency is selected, check if user has access to it
-    if (!isOwner && userAgencyIds && userAgencyIds.length > 0 && !userAgencyIds.includes(selectedAgency)) {
-      // User doesn't have access to this agency, show nothing
-      return [];
-    }
-    
-    // User has access, filter by selected agency
-    return accessibleClients?.filter(client => client.agency_id === selectedAgency);
-  })();
+  // Then apply agency filter (works for all roles including campaigners)
+  if (selectedAgency && selectedAgency !== "all") {
+    accessibleClients = accessibleClients?.filter(
+      (client) => client.agency_id === selectedAgency
+    );
+  }
+
+  const filteredClients = accessibleClients;
 
   const searchedClients = searchTerm 
     ? filteredClients?.filter(client => 

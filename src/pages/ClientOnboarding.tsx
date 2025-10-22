@@ -150,7 +150,7 @@ export default function ClientOnboarding() {
     campaignerClientIds,
   });
 
-  // Filter by role
+  // First filter by role
   let accessibleItems = onboardingItems;
 
   if (!isOwner) {
@@ -167,26 +167,18 @@ export default function ClientOnboarding() {
     }
   }
 
-  // Then filter by selected agency and campaigner
-  const filteredItems = (() => {
-    // If a specific agency is selected, check if user has access to it
-    if (selectedAgency !== "all" && !isOwner && userAgencyIds && userAgencyIds.length > 0 && !userAgencyIds.includes(selectedAgency)) {
-      // User doesn't have access to this agency, show nothing
-      return [];
-    }
-    
-    return accessibleItems?.filter((item) => {
-      // Filter by selected agency
-      if (selectedAgency !== "all" && item.agency_id !== selectedAgency) {
-        return false;
-      }
-      // Filter by selected campaigner
-      if (selectedCampaigner !== "all" && item.campaigner_id !== selectedCampaigner) {
-        return false;
-      }
-      return true;
-    });
-  })();
+  // Then apply agency filter (works for all roles including campaigners)
+  if (selectedAgency && selectedAgency !== "all") {
+    accessibleItems = accessibleItems?.filter(
+      (item) => item.agency_id === selectedAgency
+    );
+  }
+
+  // Then filter by campaigner
+  const filteredItems = accessibleItems?.filter((item) => {
+    const matchesCampaigner = selectedCampaigner === "all" || item.campaigner_id === selectedCampaigner;
+    return matchesCampaigner;
+  }) || [];
 
   const itemsByStatus: Record<OnboardingStatus, OnboardingItem[]> = {
     research_meeting: [],

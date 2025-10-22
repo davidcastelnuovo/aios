@@ -83,7 +83,7 @@ export default function Finance() {
     },
   });
 
-  // Filter by role
+  // First filter by role
   let accessibleClients = clients;
   let accessibleFinanceRecords = financeRecords;
 
@@ -108,38 +108,21 @@ export default function Finance() {
     }
   }
 
-  // Then filter by selected agency
-  const filteredClients = (() => {
-    if (selectedAgency === "all") {
-      return accessibleClients;
-    }
-    
-    // If a specific agency is selected, check if user has access to it
-    if (!isOwner && userAgencyIds && userAgencyIds.length > 0 && !userAgencyIds.includes(selectedAgency)) {
-      // User doesn't have access to this agency, show nothing
-      return [];
-    }
-    
-    // User has access, filter by selected agency
-    return accessibleClients?.filter(c => c.agency_id === selectedAgency);
-  })();
+  // Then apply agency filter (works for all roles including campaigners)
+  if (selectedAgency && selectedAgency !== "all") {
+    accessibleClients = accessibleClients?.filter(
+      (c) => c.agency_id === selectedAgency
+    );
+    accessibleFinanceRecords = accessibleFinanceRecords?.filter(
+      (f) => f.agency_id === selectedAgency
+    );
+  }
+
+  const filteredClients = accessibleClients;
 
   const totalRetainers = filteredClients?.reduce((sum, client) => sum + Number(client.retainer || 0), 0) || 0;
 
-  const filteredFinanceRecords = (() => {
-    if (selectedAgency === "all") {
-      return accessibleFinanceRecords;
-    }
-    
-    // If a specific agency is selected, check if user has access to it
-    if (!isOwner && userAgencyIds && userAgencyIds.length > 0 && !userAgencyIds.includes(selectedAgency)) {
-      // User doesn't have access to this agency, show nothing
-      return [];
-    }
-    
-    // User has access, filter by selected agency
-    return accessibleFinanceRecords?.filter(f => f.agency_id === selectedAgency);
-  })();
+  const filteredFinanceRecords = accessibleFinanceRecords;
 
   const totalIncome = filteredFinanceRecords?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
   const totalExpense = filteredFinanceRecords?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
