@@ -27,7 +27,7 @@ import {
 import { useUserRole } from "@/hooks/useUserRole";
 
 const menuItems = [
-  { title: "דשבורד", url: "/", icon: LayoutDashboard, roles: ["admin", "owner", "agency_manager"] },
+  { title: "דשבורד", url: "/", icon: LayoutDashboard, roles: ["owner", "agency_manager"] },
   { title: "אזור אישי", url: "/my-profile", icon: User, roles: ["user"] },
   { title: "סוכנויות", url: "/agencies", icon: Building2, roles: ["admin", "user", "owner", "agency_manager"] },
   { title: "לקוחות", url: "/clients", icon: Users, roles: ["admin", "user", "owner", "agency_manager"] },
@@ -35,8 +35,8 @@ const menuItems = [
   { title: "לקוחות בקליטה", url: "/client-onboarding", icon: UserPlus, roles: ["admin", "user", "owner", "agency_manager"] },
   { title: "שעון נוכחות", url: "/time-tracking", icon: Clock, roles: ["admin", "user", "owner", "agency_manager"] },
   { title: "קמפיינרים", url: "/campaigners", icon: Megaphone, roles: ["admin", "owner", "agency_manager"] },
-  { title: "ספקים", url: "/suppliers", icon: Truck, roles: ["owner"] },
-  { title: "כספים", url: "/finance", icon: DollarSign, roles: ["owner"] },
+  { title: "ספקים", url: "/suppliers", icon: Truck, roles: ["owner", "agency_manager"] },
+  { title: "כספים", url: "/finance", icon: DollarSign, roles: ["owner", "agency_manager"] },
   { title: "דוחות", url: "/reports", icon: BarChart3, roles: ["admin", "owner", "agency_manager"] },
   { title: "משתמשים", url: "/users", icon: UserCog, roles: ["admin", "owner"] },
 ];

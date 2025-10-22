@@ -37,7 +37,8 @@ export function useUserRole() {
   const isAdmin = roles.includes("admin");
   const isOwner = roles.includes("owner");
   const isAgencyManager = roles.includes("agency_manager");
-  const isUser = roles.includes("user") || roles.length === 0;
+  // Basic user = only 'user' role (no elevated roles)
+  const isUser = roles.length === 1 && roles[0] === "user";
 
   const primaryRole: AppRole =
     (isAdmin && "admin") ||

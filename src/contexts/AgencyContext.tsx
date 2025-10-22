@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useManagedAgencies } from "@/hooks/useManagedAgencies";
 import { useQuery } from "@tanstack/react-query";
@@ -17,6 +17,7 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
   const [selectedAgency, setSelectedAgency] = useState<string>("all");
   const { isAgencyManager, isUser, userId } = useUserRole();
   const { managedAgencies } = useManagedAgencies();
+  const didSetDefault = useRef(false);
 
   // Get agencies for regular users based on their campaigner
   const { data: userAgencies } = useQuery({
@@ -66,7 +67,7 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     userAgencyIds
   });
 
-  // For agency managers and regular users, set the first agency as default if none selected
+  // For agency managers and regular users, set the first agency as default ONCE. If user chooses "all", keep it.
   useEffect(() => {
     console.log("🔄 Agency Context useEffect:", {
       selectedAgency,
@@ -76,13 +77,15 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
       userAgenciesLength: userAgencies?.length
     });
     
-    if (selectedAgency === "all") {
+    if (!didSetDefault.current && selectedAgency === "all") {
       if (isAgencyManager && managedAgencies && managedAgencies.length > 0) {
         console.log("Setting default agency for manager:", managedAgencies[0]);
         setSelectedAgency(managedAgencies[0].id);
+        didSetDefault.current = true;
       } else if (isUser && userAgencies && userAgencies.length > 0) {
         console.log("Setting default agency for user:", userAgencies[0]);
         setSelectedAgency(userAgencies[0].id);
+        didSetDefault.current = true;
       }
     }
   }, [isAgencyManager, isUser, managedAgencies, userAgencies, selectedAgency]);
