@@ -88,39 +88,17 @@ export default function Users() {
 
       if (rolesError) throw rolesError;
 
-      return profiles.map((profile) => ({
-        ...profile,
-        roles: userRoles
-          .filter((r) => r.user_id === profile.id)
-          .map((r) => r.role as UserRole),
-      }));
-    },
-  });
-
-  const assignRoleMutation = useMutation({
-    mutationFn: async ({
-      email,
-      role,
-    }: {
-      email: string;
-      role: UserRole;
-    }) => {
-      const { error } = await supabase.rpc("assign_role_by_email", {
-        _email: email,
-        _role: role,
+      return profiles.map((profile) => {
+        const userRole = userRoles.find((r) => r.user_id === profile.id);
+        return {
+          ...profile,
+          role: userRole?.role as UserRole | undefined,
+        };
       });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-      toast.success("התפקיד נוסף בהצלחה");
-    },
-    onError: (error: Error) => {
-      toast.error("שגיאה בהוספת תפקיד: " + error.message);
     },
   });
 
-  const removeRoleMutation = useMutation({
+  const updateRoleMutation = useMutation({
     mutationFn: async ({
       userId,
       role,
@@ -128,21 +106,30 @@ export default function Users() {
       userId: string;
       role: UserRole;
     }) => {
-      const { error } = await supabase
+      // Delete all existing roles
+      const { error: deleteError } = await supabase
         .from("user_roles")
         .delete()
-        .eq("user_id", userId)
-        .eq("role", role);
-      if (error) throw error;
+        .eq("user_id", userId);
+      
+      if (deleteError) throw deleteError;
+
+      // Insert new role
+      const { error: insertError } = await supabase
+        .from("user_roles")
+        .insert({ user_id: userId, role });
+      
+      if (insertError) throw insertError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-      toast.success("התפקיד הוסר בהצלחה");
+      toast.success("התפקיד עודכן בהצלחה");
     },
     onError: (error: Error) => {
-      toast.error("שגיאה בהסרת תפקיד: " + error.message);
+      toast.error("שגיאה בעדכון תפקיד: " + error.message);
     },
   });
+
 
   const inviteUserMutation = useMutation({
     mutationFn: async ({ email, role, agencyIds }: { email: string; role: UserRole; agencyIds: string[] }) => {
@@ -335,43 +322,33 @@ export default function Users() {
                   <TableCell>{user.full_name || "-"}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
-                    <div className="flex gap-2 flex-wrap">
-                      {user.roles.length === 0 ? (
-                        <span className="text-muted-foreground text-sm">
-                          אין תפקידים
-                        </span>
-                      ) : (
-                        user.roles.map((role) => (
-                          <Badge
-                            key={role}
-                            className={roleBadgeColors[role]}
-                          >
-                            {roleLabels[role]}
-                          </Badge>
-                        ))
-                      )}
-                    </div>
+                    {user.role ? (
+                      <Badge className={roleBadgeColors[user.role]}>
+                        {roleLabels[user.role]}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">
+                        אין תפקיד
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
                       <Select
+                        value={user.role || ""}
                         onValueChange={(role) =>
-                          assignRoleMutation.mutate({
-                            email: user.email,
+                          updateRoleMutation.mutate({
+                            userId: user.id,
                             role: role as UserRole,
                           })
                         }
                       >
                         <SelectTrigger className="w-[140px]">
-                          <SelectValue placeholder="הוסף תפקיד" />
+                          <SelectValue placeholder="בחר תפקיד" />
                         </SelectTrigger>
                         <SelectContent>
                           {Object.entries(roleLabels).map(([value, label]) => (
-                            <SelectItem
-                              key={value}
-                              value={value}
-                              disabled={user.roles.includes(value as UserRole)}
-                            >
+                            <SelectItem key={value} value={value}>
                               {label}
                             </SelectItem>
                           ))}
