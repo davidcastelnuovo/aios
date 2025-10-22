@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +6,7 @@ import { Phone, Mail, Folder, Briefcase, Calendar, ChevronDown, ChevronUp } from
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function MyProfile() {
   const { userId } = useCurrentUser();
@@ -77,6 +77,34 @@ export default function MyProfile() {
     },
     enabled: !!profile?.campaigner_id,
   });
+
+  // Realtime updates: refresh profile and assignments/agencies when data changes
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!userId) return;
+    const channel = supabase
+      .channel('my-profile-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['my-profile', userId] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [userId, queryClient]);
+
+  useEffect(() => {
+    if (!profile?.campaigner_id) return;
+    const channel = supabase
+      .channel('my-campaigner-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'client_team', filter: `campaigner_id=eq.${profile.campaigner_id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['my-assignments', profile.campaigner_id] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'campaigner_agencies', filter: `campaigner_id=eq.${profile.campaigner_id}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['my-agencies', profile.campaigner_id] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [profile?.campaigner_id, queryClient]);
 
   const calculateTotal = () => {
     if (!assignments) return 0;

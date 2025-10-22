@@ -37,7 +37,7 @@ const menuItems = [
   { title: "ספקים", url: "/suppliers", icon: Truck, module: "suppliers" as const },
   { title: "כספים", url: "/finance", icon: DollarSign, module: "finance" as const },
   { title: "דוחות", url: "/reports", icon: BarChart3, module: "reports" as const },
-  { title: "ניהול משתמשים", url: "/users", icon: ShieldCheck, module: null },
+  { title: "ניהול משתמשים", url: "/users", icon: ShieldCheck, module: "users" as const },
   { title: "אזור אישי", url: "/my-profile", icon: User, module: null },
 ];
 
