@@ -10,8 +10,8 @@ import { useUserRole } from "@/hooks/useUserRole";
 
 export default function Finance() {
   const { selectedAgency } = useAgency();
-  const { userAgencyIds, isOwner } = useUserAgencies();
-  const { campaignerId, isCampaigner, isTeamManager } = useUserRole();
+  const { userAgencyIds } = useUserAgencies();
+  const { campaignerId, isCampaigner, isTeamManager, isOwner } = useUserRole();
 
 
   const { data: financeRecords, isLoading } = useQuery({

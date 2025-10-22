@@ -86,12 +86,10 @@ export function useUserPermissions() {
     
     const { permissions, hasAnyPermissions } = permissionsData;
     
-    // If user has no permissions defined at all, allow access (backwards compatibility)
+    // If user has no permissions defined at all, allow access (owner or backwards compatibility)
     if (!hasAnyPermissions) return true;
     
     // If user has permissions defined, only allow access to explicitly granted modules
-    // If permission is explicitly set to true, allow
-    // If permission is explicitly set to false or not defined, deny
     return permissions[module] === true;
   };
 

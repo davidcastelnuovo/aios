@@ -8,7 +8,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 
 export default function Agencies() {
-  const { isOwner, userId } = useUserRole();
+  const { userId, isOwner } = useUserRole();
   const { userAgencyIds } = useUserAgencies();
   
   const { data: agencies, isLoading } = useQuery({

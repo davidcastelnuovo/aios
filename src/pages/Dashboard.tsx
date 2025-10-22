@@ -6,10 +6,12 @@ import { Building2, Users, Megaphone, DollarSign, TrendingUp, TrendingDown, Chec
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
+import { useUserRole } from "@/hooks/useUserRole";
 
 export default function Dashboard() {
   const { selectedAgency } = useAgency();
-  const { userAgencyIds, isOwner } = useUserAgencies();
+  const { userAgencyIds } = useUserAgencies();
+  const { isOwner } = useUserRole();
   const [selectedClient, setSelectedClient] = useState<string>("all");
   const [selectedSupplier, setSelectedSupplier] = useState<string>("all");
 

@@ -46,9 +46,9 @@ import {
 
 export default function Clients() {
   const { selectedAgency } = useAgency();
-  const { userAgencyIds, isOwner } = useUserAgencies();
+  const { userAgencyIds } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
-  const { campaignerId, isCampaigner, isTeamManager } = useUserRole();
+  const { campaignerId, isCampaigner, isTeamManager, isOwner } = useUserRole();
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [editingClient, setEditingClient] = useState<any>(null);
   const [hideInactive, setHideInactive] = useState(true);
@@ -203,18 +203,10 @@ export default function Clients() {
     },
   });
 
-  console.log("🔍 Clients filtering debug:", {
-    selectedAgency,
-    totalClients: clients?.length,
-    userAgencyIds,
-    isOwner,
-    isCampaigner,
-    isTeamManager,
-    campaignerId,
-    campaignerClientIds,
-  });
-
-  // First filter by role
+  // Filter logic:
+  // 1. Role-based access control
+  // 2. Then apply global agency filter (selectedAgency)
+  
   let accessibleClients = clients;
 
   if (!isOwner) {
@@ -230,8 +222,9 @@ export default function Clients() {
       );
     }
   }
+  // Owner sees all clients (no filtering needed)
 
-  // Then apply agency filter (only for owners who selected a specific agency)
+  // Global agency filter applies to ALL roles (including campaigners and team managers)
   if (selectedAgency && selectedAgency !== "all") {
     accessibleClients = accessibleClients?.filter(
       (client) => client.agency_id === selectedAgency

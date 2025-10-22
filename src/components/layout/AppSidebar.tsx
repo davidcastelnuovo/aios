@@ -54,9 +54,10 @@ export function AppSidebar() {
 
   // Filter menu items based on permissions
   const visibleMenuItems = menuItems.filter((item) => {
-    // Items without module are always visible (like my-profile and users)
-    if (!item.module) return true;
-    // Check permission for the module
+    // "My Profile" is always visible (module is null)
+    if (item.url === "/my-profile") return true;
+    // All other items require permission check
+    if (!item.module) return false;
     return hasPermission(item.module);
   });
 

@@ -83,6 +83,5 @@ export function useUserAgencies() {
   return {
     userAgencyIds,
     isLoading,
-    isOwner,
   };
 }

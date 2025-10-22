@@ -53,8 +53,8 @@ interface Campaigner {
 export default function ClientOnboarding() {
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
-  const { userAgencyIds, isOwner } = useUserAgencies();
-  const { campaignerId, isCampaigner, isTeamManager } = useUserRole();
+  const { userAgencyIds } = useUserAgencies();
+  const { campaignerId, isCampaigner, isTeamManager, isOwner } = useUserRole();
   const [editingItem, setEditingItem] = useState<OnboardingItem | null>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -138,19 +138,7 @@ export default function ClientOnboarding() {
     },
   });
 
-  console.log("🔍 Onboarding filtering debug:", {
-    selectedAgency,
-    selectedCampaigner,
-    totalItems: onboardingItems?.length,
-    userAgencyIds,
-    isOwner,
-    isCampaigner,
-    isTeamManager,
-    campaignerId,
-    campaignerClientIds,
-  });
-
-  // First filter by role
+  // Filter logic: Role-based access, then global agency filter
   let accessibleItems = onboardingItems;
 
   if (!isOwner) {

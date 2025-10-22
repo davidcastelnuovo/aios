@@ -39,8 +39,8 @@ export default function Tasks() {
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
   const [hideCompleted, setHideCompleted] = useState(false);
   const { selectedAgency } = useAgency();
-  const { userAgencyIds, isOwner } = useUserAgencies();
-  const { campaignerId, isCampaigner, isTeamManager } = useUserRole();
+  const { userAgencyIds } = useUserAgencies();
+  const { campaignerId, isCampaigner, isTeamManager, isOwner } = useUserRole();
   const queryClient = useQueryClient();
 
   const sensors = useSensors(
@@ -114,19 +114,7 @@ export default function Tasks() {
     },
   });
 
-  console.log("🔍 Tasks filtering debug:", {
-    selectedAgency,
-    selectedCampaigner,
-    totalTasks: tasks?.length,
-    userAgencyIds,
-    isOwner,
-    isCampaigner,
-    isTeamManager,
-    campaignerId,
-    campaignerClientIds,
-  });
-
-  // First filter by role
+  // Filter logic: Role-based access, then global agency filter
   let accessibleTasks = tasks;
 
   if (!isOwner) {

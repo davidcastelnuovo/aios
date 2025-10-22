@@ -35,15 +35,15 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/setup" element={<Setup />} />
             <Route path="/" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
-            <Route path="/agencies" element={<ProtectedRoute><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
-            <Route path="/clients" element={<ProtectedRoute><AppLayout><Clients /></AppLayout></ProtectedRoute>} />
-            <Route path="/campaigners" element={<ProtectedRoute><AppLayout><Campaigners /></AppLayout></ProtectedRoute>} />
-            <Route path="/suppliers" element={<ProtectedRoute><AppLayout><Suppliers /></AppLayout></ProtectedRoute>} />
-            <Route path="/finance" element={<ProtectedRoute><AppLayout><Finance /></AppLayout></ProtectedRoute>} />
-            <Route path="/tasks" element={<ProtectedRoute><AppLayout><Tasks /></AppLayout></ProtectedRoute>} />
-            <Route path="/client-onboarding" element={<ProtectedRoute><AppLayout><ClientOnboarding /></AppLayout></ProtectedRoute>} />
-            <Route path="/time-tracking" element={<ProtectedRoute><AppLayout><TimeTracking /></AppLayout></ProtectedRoute>} />
-            <Route path="/reports" element={<ProtectedRoute><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
+            <Route path="/agencies" element={<ProtectedRoute requiredPermission="agencies"><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
+            <Route path="/clients" element={<ProtectedRoute requiredPermission="clients"><AppLayout><Clients /></AppLayout></ProtectedRoute>} />
+            <Route path="/campaigners" element={<ProtectedRoute requiredPermission="campaigners"><AppLayout><Campaigners /></AppLayout></ProtectedRoute>} />
+            <Route path="/suppliers" element={<ProtectedRoute requiredPermission="suppliers"><AppLayout><Suppliers /></AppLayout></ProtectedRoute>} />
+            <Route path="/finance" element={<ProtectedRoute requiredPermission="finance"><AppLayout><Finance /></AppLayout></ProtectedRoute>} />
+            <Route path="/tasks" element={<ProtectedRoute requiredPermission="tasks"><AppLayout><Tasks /></AppLayout></ProtectedRoute>} />
+            <Route path="/client-onboarding" element={<ProtectedRoute requiredPermission="client_onboarding"><AppLayout><ClientOnboarding /></AppLayout></ProtectedRoute>} />
+            <Route path="/time-tracking" element={<ProtectedRoute requiredPermission="time_tracking"><AppLayout><TimeTracking /></AppLayout></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute requiredPermission="reports"><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
             <Route path="/my-profile" element={<ProtectedRoute><AppLayout><MyProfile /></AppLayout></ProtectedRoute>} />
             <Route path="/users" element={<ProtectedRoute requiredPermission="users"><AppLayout><Users /></AppLayout></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
