@@ -53,11 +53,11 @@ export default function Clients() {
   const queryClient = useQueryClient();
   const { isAdmin, isOwner, isAgencyManager, isUser, userId } = useUserRole();
 
-  // Get user's campaigner_id if they're a regular user
+  // Get user's campaigner_id if they're a regular user (not agency manager)
   const { data: userProfile } = useQuery({
     queryKey: ["user-profile", userId],
     queryFn: async () => {
-      if (!userId || !isUser) return null;
+      if (!userId || !isUser || isAgencyManager) return null;
 
       const { data, error } = await supabase
         .from("profiles")
@@ -68,11 +68,11 @@ export default function Clients() {
       if (error) throw error;
       return data;
     },
-    enabled: !!userId && isUser,
+    enabled: !!userId && isUser && !isAgencyManager,
   });
 
   const { data: clients, isLoading } = useQuery({
-    queryKey: ["clients", isUser, userProfile?.campaigner_id],
+    queryKey: ["clients", isUser, isAgencyManager, userProfile?.campaigner_id],
     queryFn: async () => {
       let query = supabase
         .from("clients")
@@ -85,8 +85,8 @@ export default function Clients() {
         `)
         .order("created_at", { ascending: false });
 
-      // For regular users, filter by their assigned clients
-      if (isUser && userProfile?.campaigner_id) {
+      // For regular users (not agency managers), filter by their assigned clients
+      if (isUser && !isAgencyManager && userProfile?.campaigner_id) {
         const { data: clientTeam } = await supabase
           .from("client_team")
           .select("client_id")
@@ -105,7 +105,7 @@ export default function Clients() {
       if (error) throw error;
       return data;
     },
-    enabled: !isUser || !!userProfile,
+    enabled: (!isUser || !!userProfile) || isAgencyManager,
   });
 
   const { data: agencies } = useQuery({

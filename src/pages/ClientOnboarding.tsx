@@ -51,7 +51,7 @@ interface Campaigner {
 
 export default function ClientOnboarding() {
   const queryClient = useQueryClient();
-  const { role, isUser, userId } = useUserRole();
+  const { role, isUser, isAgencyManager, userId } = useUserRole();
   const { selectedAgency } = useAgency();
   const [editingItem, setEditingItem] = useState<OnboardingItem | null>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
@@ -71,11 +71,11 @@ export default function ClientOnboarding() {
     })
   );
 
-  // Get user's campaigner_id if they're a regular user
+  // Get user's campaigner_id if they're a regular user (not agency manager)
   const { data: userProfile } = useQuery({
     queryKey: ["user-profile", userId],
     queryFn: async () => {
-      if (!userId || !isUser) return null;
+      if (!userId || !isUser || isAgencyManager) return null;
 
       const { data, error } = await supabase
         .from("profiles")
@@ -86,11 +86,11 @@ export default function ClientOnboarding() {
       if (error) throw error;
       return data;
     },
-    enabled: !!userId && isUser,
+    enabled: !!userId && isUser && !isAgencyManager,
   });
 
   const { data: onboardingItems, isLoading } = useQuery({
-    queryKey: ["client-onboarding", selectedAgency, isUser, userProfile?.campaigner_id],
+    queryKey: ["client-onboarding", selectedAgency, isUser, isAgencyManager, userProfile?.campaigner_id],
     queryFn: async () => {
       let query = supabase
         .from("client_onboarding")
@@ -106,8 +106,8 @@ export default function ClientOnboarding() {
         query = query.eq("agency_id", selectedAgency);
       }
 
-      // For regular users, filter by their campaigner_id
-      if (isUser && userProfile?.campaigner_id) {
+      // For regular users (not agency managers), filter by their campaigner_id
+      if (isUser && !isAgencyManager && userProfile?.campaigner_id) {
         query = query.eq("campaigner_id", userProfile.campaigner_id);
       }
 
@@ -115,7 +115,7 @@ export default function ClientOnboarding() {
       if (error) throw error;
       return data as OnboardingItem[];
     },
-    enabled: !isUser || !!userProfile,
+    enabled: (!isUser || !!userProfile) || isAgencyManager,
   });
 
   const { data: campaigners } = useQuery({
