@@ -109,14 +109,30 @@ export default function Tasks() {
     },
   });
 
+  console.log("🔍 Tasks filtering debug:", {
+    selectedAgency,
+    selectedCampaigner,
+    isUser,
+    isAgencyManager,
+    totalTasks: tasks?.length,
+    tasksWithAgencies: tasks?.map(t => ({ 
+      title: t.title, 
+      agency_id: t.agency_id, 
+      campaigner_id: t.campaigner_id 
+    }))
+  });
+
   const filteredTasks = tasks?.filter(t => {
     // For regular users (not agency managers), tasks are already filtered by their campaigner_id in the query
     if (isUser && !isAgencyManager) {
-      return selectedAgency === "all" || t.agency_id === selectedAgency;
+      const agencyMatch = selectedAgency === "all" || t.agency_id === selectedAgency;
+      console.log(`User task ${t.title}: agency match = ${agencyMatch} (${t.agency_id} === ${selectedAgency})`);
+      return agencyMatch;
     }
     
     const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
     const matchesAgency = selectedAgency === "all" || t.agency_id === selectedAgency;
+    console.log(`Admin/Manager task ${t.title}: campaigner match = ${matchesCampaigner}, agency match = ${matchesAgency}`);
     return matchesCampaigner && matchesAgency;
   });
 

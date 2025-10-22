@@ -101,10 +101,7 @@ export default function ClientOnboarding() {
         `)
         .order("created_at", { ascending: false });
 
-      // Filter by selected agency
-      if (selectedAgency && selectedAgency !== "all") {
-        query = query.eq("agency_id", selectedAgency);
-      }
+      // Filter by selected agency is now done in filteredItems, not here
 
       // For regular users (not agency managers), filter by their campaigner_id
       if (isUser && !isAgencyManager && userProfile?.campaigner_id) {
@@ -149,10 +146,29 @@ export default function ClientOnboarding() {
     },
   });
 
+  console.log("🔍 Onboarding filtering debug:", {
+    selectedAgency,
+    selectedCampaigner,
+    totalItems: onboardingItems?.length,
+    itemsWithAgencies: onboardingItems?.map(item => ({ 
+      title: item.title, 
+      agency_id: item.agency_id, 
+      campaigner_id: item.campaigner_id 
+    }))
+  });
+
   const filteredItems = onboardingItems?.filter((item) => {
-    if (selectedCampaigner !== "all" && item.campaigner_id !== selectedCampaigner) {
+    // Filter by selected agency
+    if (selectedAgency !== "all" && item.agency_id !== selectedAgency) {
+      console.log(`❌ Filtering out ${item.title} - agency mismatch: ${item.agency_id} !== ${selectedAgency}`);
       return false;
     }
+    // Filter by selected campaigner
+    if (selectedCampaigner !== "all" && item.campaigner_id !== selectedCampaigner) {
+      console.log(`❌ Filtering out ${item.title} - campaigner mismatch: ${item.campaigner_id} !== ${selectedCampaigner}`);
+      return false;
+    }
+    console.log(`✅ Including ${item.title}`);
     return true;
   });
 

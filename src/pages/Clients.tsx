@@ -220,9 +220,18 @@ export default function Clients() {
     },
   });
 
+  console.log("🔍 Clients filtering debug:", {
+    selectedAgency,
+    totalClients: clients?.length,
+    clientsWithAgencies: clients?.map(c => ({ name: c.name, agency_id: c.agency_id, agency_name: c.agencies?.name }))
+  });
+
   const filteredClients = selectedAgency === "all" 
     ? clients 
-    : clients?.filter(client => client.agency_id === selectedAgency);
+    : clients?.filter(client => {
+        console.log(`Checking client ${client.name}: ${client.agency_id} === ${selectedAgency}?`, client.agency_id === selectedAgency);
+        return client.agency_id === selectedAgency;
+      });
 
   const searchedClients = searchTerm 
     ? filteredClients?.filter(client => 

@@ -56,14 +56,36 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
   const managedAgencyIds = managedAgencies?.map(a => a.id) || [];
   const userAgencyIds = userAgencies?.map(a => a.id) || [];
 
-  // For agency managers and regular users, set the first agency as default
+  console.log("🏢 Agency Context Debug:", {
+    selectedAgency,
+    isAgencyManager,
+    isUser,
+    managedAgencies: managedAgencies?.map(a => ({ id: a.id, name: a.name })),
+    userAgencies: userAgencies?.map(a => ({ id: a.id, name: a.name })),
+    managedAgencyIds,
+    userAgencyIds
+  });
+
+  // For agency managers and regular users, set the first agency as default if none selected
   useEffect(() => {
-    if (isAgencyManager && managedAgencies && managedAgencies.length > 0) {
-      setSelectedAgency(managedAgencies[0].id);
-    } else if (isUser && userAgencies && userAgencies.length > 0) {
-      setSelectedAgency(userAgencies[0].id);
+    console.log("🔄 Agency Context useEffect:", {
+      selectedAgency,
+      isAgencyManager,
+      isUser,
+      managedAgenciesLength: managedAgencies?.length,
+      userAgenciesLength: userAgencies?.length
+    });
+    
+    if (selectedAgency === "all") {
+      if (isAgencyManager && managedAgencies && managedAgencies.length > 0) {
+        console.log("Setting default agency for manager:", managedAgencies[0]);
+        setSelectedAgency(managedAgencies[0].id);
+      } else if (isUser && userAgencies && userAgencies.length > 0) {
+        console.log("Setting default agency for user:", userAgencies[0]);
+        setSelectedAgency(userAgencies[0].id);
+      }
     }
-  }, [isAgencyManager, isUser, managedAgencies, userAgencies]);
+  }, [isAgencyManager, isUser, managedAgencies, userAgencies, selectedAgency]);
 
   return (
     <AgencyContext.Provider value={{ selectedAgency, setSelectedAgency, managedAgencyIds, userAgencyIds }}>
