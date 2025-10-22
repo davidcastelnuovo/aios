@@ -13,9 +13,25 @@ interface AgencyContextType {
 const AgencyContext = createContext<AgencyContextType | undefined>(undefined);
 
 export function AgencyProvider({ children }: { children: ReactNode }) {
-  const [selectedAgency, setSelectedAgency] = useState<string>("all");
+  const storageKey = "selectedAgencyId";
+  const getInitialSelectedAgency = () => {
+    try {
+      return localStorage.getItem(storageKey) || "all";
+    } catch {
+      return "all";
+    }
+  };
+  const [selectedAgency, setSelectedAgency] = useState<string>(getInitialSelectedAgency());
   const didSetDefault = useRef(false);
+
   const { userAgencyIds, isOwner, isLoading: isLoadingUserAgencies } = useUserAgencies();
+
+  // Persist selection
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, selectedAgency);
+    } catch {}
+  }, [selectedAgency]);
 
   // Get all active agencies
   const { data: allAgencies, isLoading: isLoadingAgencies } = useQuery({
@@ -54,20 +70,24 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     filteredAgencies: agencies?.length 
   });
 
-  // Set a default agency for non-owners when agencies are available
+  // Ensure a valid selection and sensible defaults
   useEffect(() => {
-    if (
-      !didSetDefault.current &&
-      selectedAgency === "all" &&
-      agencies &&
-      agencies.length >= 1 &&
-      !isOwner
-    ) {
-      console.log("Setting default agency for non-owner:", agencies[0]);
+    if (!agencies || agencies.length === 0) return;
+
+    const exists = selectedAgency === "all" || agencies.some((a) => a.id === selectedAgency);
+
+    if (!exists) {
+      setSelectedAgency(isOwner ? "all" : agencies[0].id);
+      didSetDefault.current = true;
+      return;
+    }
+
+    // For non-owners, default to first agency (no "all" option)
+    if (!isOwner && selectedAgency === "all") {
       setSelectedAgency(agencies[0].id);
       didSetDefault.current = true;
     }
-  }, [agencies, selectedAgency, isOwner]);
+  }, [agencies, isOwner, selectedAgency]);
 
   return (
     <AgencyContext.Provider value={{ selectedAgency, setSelectedAgency, agencies, isLoading }}>
