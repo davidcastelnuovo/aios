@@ -28,9 +28,16 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 
 const roleLabels: Record<UserRole, string> = {
   owner: "בעלים",
@@ -50,8 +57,11 @@ export default function Users() {
   const { isOwner } = useUserRole();
   const queryClient = useQueryClient();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserRole, setNewUserRole] = useState<UserRole>("campaigner");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<UserRole>("campaigner");
 
   const { data: users, isLoading } = useQuery({
     queryKey: ["users-with-roles"],
@@ -127,6 +137,31 @@ export default function Users() {
     },
   });
 
+  const inviteUserMutation = useMutation({
+    mutationFn: async ({ email, role }: { email: string; role: UserRole }) => {
+      const { data, error } = await supabase.functions.invoke("invite-user", {
+        body: { 
+          email, 
+          role,
+          redirectUrl: `${window.location.origin}/auth?type=recovery`
+        },
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      toast.success("הזמנה נשלחה בהצלחה למייל המשתמש");
+      setIsInviteDialogOpen(false);
+      setInviteEmail("");
+      setInviteRole("campaigner");
+    },
+    onError: (error: Error) => {
+      toast.error("שגיאה בשליחת הזמנה: " + error.message);
+    },
+  });
+
   if (!isOwner) {
     return (
       <div className="container mx-auto py-6">
@@ -152,61 +187,125 @@ export default function Users() {
             ניהול משתמשים ותפקידים במערכת
           </p>
         </div>
-        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <UserPlus className="h-4 w-4 ml-2" />
-              הוסף תפקיד למשתמש
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>הוסף תפקיד למשתמש</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="email">אימייל משתמש</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={newUserEmail}
-                  onChange={(e) => setNewUserEmail(e.target.value)}
-                  placeholder="user@example.com"
-                />
-              </div>
-              <div>
-                <Label htmlFor="role">תפקיד</Label>
-                <Select
-                  value={newUserRole}
-                  onValueChange={(value) => setNewUserRole(value as UserRole)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(roleLabels).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                onClick={() =>
-                  assignRoleMutation.mutate({
-                    email: newUserEmail,
-                    role: newUserRole,
-                  })
-                }
-                disabled={!newUserEmail || assignRoleMutation.isPending}
-                className="w-full"
-              >
-                הוסף תפקיד
+        <div className="flex gap-2">
+          <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <UserPlus className="h-4 w-4 ml-2" />
+                הזמן משתמש חדש
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>הזמן משתמש חדש</DialogTitle>
+                <DialogDescription>
+                  המשתמש יקבל מייל עם קישור ליצירת חשבון והגדרת סיסמה
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="invite-email">אימייל משתמש</Label>
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="user@example.com"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="invite-role">תפקיד</Label>
+                  <Select
+                    value={inviteRole}
+                    onValueChange={(value) => setInviteRole(value as UserRole)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(roleLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  onClick={() =>
+                    inviteUserMutation.mutate({
+                      email: inviteEmail,
+                      role: inviteRole,
+                    })
+                  }
+                  disabled={!inviteEmail || inviteUserMutation.isPending}
+                  className="w-full"
+                >
+                  {inviteUserMutation.isPending ? "שולח..." : "שלח הזמנה"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <UserPlus className="h-4 w-4 ml-2" />
+                הוסף תפקיד למשתמש קיים
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>הוסף תפקיד למשתמש קיים</DialogTitle>
+                <DialogDescription>
+                  הוסף תפקיד נוסף למשתמש שכבר רשום במערכת
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="email">אימייל משתמש</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={newUserEmail}
+                    onChange={(e) => setNewUserEmail(e.target.value)}
+                    placeholder="user@example.com"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="role">תפקיד</Label>
+                  <Select
+                    value={newUserRole}
+                    onValueChange={(value) => setNewUserRole(value as UserRole)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(roleLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  onClick={() =>
+                    assignRoleMutation.mutate({
+                      email: newUserEmail,
+                      role: newUserRole,
+                    })
+                  }
+                  disabled={!newUserEmail || assignRoleMutation.isPending}
+                  className="w-full"
+                >
+                  הוסף תפקיד
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <Card>
