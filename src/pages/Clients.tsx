@@ -46,7 +46,7 @@ import {
 
 export default function Clients() {
   const { selectedAgency } = useAgency();
-  const { userAgencyIds, isOwner, isAgencyOwner } = useUserAgencies();
+  const { userAgencyIds, isOwner } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
   const { campaignerId, isCampaigner, isTeamManager } = useUserRole();
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
@@ -113,7 +113,7 @@ export default function Clients() {
         .eq("campaigner_id", campaignerId);
       return data?.map(ct => ct.client_id) || [];
     },
-    enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner,
+    enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner,
   });
 
   const updateStatusMutation = useMutation({
@@ -218,13 +218,13 @@ export default function Clients() {
   let accessibleClients = clients;
 
   if (!isOwner) {
-    if (isCampaigner && !isTeamManager && !isAgencyOwner && campaignerClientIds) {
+    if (isCampaigner && !isTeamManager && campaignerClientIds) {
       // Pure campaigners see only their assigned clients
       accessibleClients = clients?.filter(client => 
         campaignerClientIds.includes(client.id)
       );
-    } else if ((isAgencyOwner || isTeamManager) && userAgencyIds && userAgencyIds.length > 0) {
-      // Agency owners and team managers see all clients in their agencies
+    } else if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
+      // Team managers see all clients in their agencies
       accessibleClients = clients?.filter(client => 
         userAgencyIds.includes(client.agency_id)
       );
@@ -512,7 +512,7 @@ export default function Clients() {
               )}
               
               {/* Hide add campaigner option for pure campaigners */}
-              {!(isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner) && (
+              {!(isCampaigner && !isTeamManager && !isOwner) && (
                 <div className="pt-2 border-t space-y-2">
                   <p className="text-sm text-muted-foreground">הוסף קמפיינר:</p>
                   <div onClick={(e) => e.stopPropagation()}>
@@ -748,7 +748,7 @@ export default function Clients() {
                         </div>
                       )}
                       {/* Hide add campaigner option for pure campaigners */}
-                      {!(isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner) && (
+                      {!(isCampaigner && !isTeamManager && !isOwner) && (
                         <Select
                           onValueChange={(value) => assignCampaignerMutation.mutate({ clientId: client.id, campaignerId: value })}
                         >

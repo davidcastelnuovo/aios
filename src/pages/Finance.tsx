@@ -10,7 +10,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 
 export default function Finance() {
   const { selectedAgency } = useAgency();
-  const { userAgencyIds, isOwner, isAgencyOwner } = useUserAgencies();
+  const { userAgencyIds, isOwner } = useUserAgencies();
   const { campaignerId, isCampaigner, isTeamManager } = useUserRole();
 
 
@@ -54,7 +54,7 @@ export default function Finance() {
         .eq("campaigner_id", campaignerId);
       return data?.map(ct => ct.client_id) || [];
     },
-    enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner,
+    enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner,
   });
 
 
@@ -88,7 +88,7 @@ export default function Finance() {
   let accessibleFinanceRecords = financeRecords;
 
   if (!isOwner) {
-    if (isCampaigner && !isTeamManager && !isAgencyOwner && campaignerClientIds) {
+    if (isCampaigner && !isTeamManager && campaignerClientIds) {
       // Pure campaigners see only their assigned clients
       accessibleClients = clients?.filter(c => 
         campaignerClientIds.includes(c.id)

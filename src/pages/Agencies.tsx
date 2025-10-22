@@ -7,7 +7,7 @@ import { AddAgencyForm } from "@/components/forms/AddAgencyForm";
 import { useUserRole } from "@/hooks/useUserRole";
 
 export default function Agencies() {
-  const { isOwner, isAgencyOwner, userId } = useUserRole();
+  const { isOwner, userId } = useUserRole();
   
   const { data: agencies, isLoading } = useQuery({
     queryKey: ["agencies-list", userId],
@@ -20,7 +20,6 @@ export default function Agencies() {
       
       const roles = userRoles?.map(r => r.role) || [];
       const isOwnerRole = roles.includes("owner");
-      const isAgencyOwnerRole = roles.includes("agency_owner");
       
       if (isOwnerRole) {
         // Owner sees all agencies
@@ -28,43 +27,6 @@ export default function Agencies() {
           .from("agencies")
           .select("*")
           .order("created_at", { ascending: false });
-        if (error) throw error;
-        return data;
-      } else if (isAgencyOwnerRole) {
-        // Agency owner sees only their agencies
-        // First get campaigner_id from profile
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("campaigner_id")
-          .eq("id", userId)
-          .single();
-        
-        if (!profile?.campaigner_id) {
-          console.log("No campaigner_id found for user");
-          return [];
-        }
-        
-        // Get agency IDs through campaigner_agencies
-        const { data: agencyLinks } = await supabase
-          .from("campaigner_agencies")
-          .select("agency_id")
-          .eq("campaigner_id", profile.campaigner_id);
-        
-        const agencyIds = agencyLinks?.map((link: any) => link.agency_id) || [];
-        
-        console.log("Agency IDs for user:", agencyIds);
-        
-        if (agencyIds.length === 0) {
-          return [];
-        }
-        
-        // Fetch full agency details
-        const { data, error } = await supabase
-          .from("agencies")
-          .select("*")
-          .in("id", agencyIds)
-          .order("created_at", { ascending: false });
-        
         if (error) throw error;
         return data;
       }

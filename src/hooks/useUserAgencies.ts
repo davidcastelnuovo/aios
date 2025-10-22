@@ -3,10 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "./useUserRole";
 
 export function useUserAgencies() {
-  const { isOwner, isAgencyOwner, isTeamManager, isCampaigner, userId } = useUserRole();
+  const { isOwner, isTeamManager, isCampaigner, userId } = useUserRole();
 
   const { data: userAgencyIds, isLoading } = useQuery({
-    queryKey: ["user-agency-ids", userId, isOwner, isAgencyOwner, isTeamManager, isCampaigner],
+    queryKey: ["user-agency-ids", userId, isOwner, isTeamManager, isCampaigner],
     queryFn: async () => {
       if (isOwner) {
         // Owners see all agencies
@@ -17,8 +17,8 @@ export function useUserAgencies() {
 
       const aggregated = new Set<string>();
 
-      // Campaigner, Agency Owner, or Team Manager with campaigner_id: agencies via campaigner_agencies
-      if (isAgencyOwner || isCampaigner || isTeamManager) {
+      // Campaigner or Team Manager with campaigner_id: agencies via campaigner_agencies
+      if (isCampaigner || isTeamManager) {
         const { data: profile } = await supabase
           .from("profiles")
           .select("campaigner_id")
@@ -57,7 +57,7 @@ export function useUserAgencies() {
 
       console.log("useUserAgencies result:", {
         userId,
-        roles: { isOwner, isAgencyOwner, isTeamManager, isCampaigner },
+        roles: { isOwner, isTeamManager, isCampaigner },
         agencyIds: Array.from(aggregated),
       });
 
@@ -70,6 +70,5 @@ export function useUserAgencies() {
     userAgencyIds,
     isLoading,
     isOwner,
-    isAgencyOwner,
   };
 }

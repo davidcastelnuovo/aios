@@ -53,7 +53,7 @@ interface Campaigner {
 export default function ClientOnboarding() {
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
-  const { userAgencyIds, isOwner, isAgencyOwner } = useUserAgencies();
+  const { userAgencyIds, isOwner } = useUserAgencies();
   const { campaignerId, isCampaigner, isTeamManager } = useUserRole();
   const [editingItem, setEditingItem] = useState<OnboardingItem | null>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
@@ -117,7 +117,7 @@ export default function ClientOnboarding() {
         .eq("campaigner_id", campaignerId);
       return data?.map(ct => ct.client_id) || [];
     },
-    enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner,
+    enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner,
   });
 
   const updateStatusMutation = useMutation({
@@ -154,7 +154,7 @@ export default function ClientOnboarding() {
   let accessibleItems = onboardingItems;
 
   if (!isOwner) {
-    if (isCampaigner && !isTeamManager && !isAgencyOwner && campaignerClientIds) {
+    if (isCampaigner && !isTeamManager && campaignerClientIds) {
       // Pure campaigners see only onboarding for their assigned clients
       accessibleItems = onboardingItems?.filter(item => 
         campaignerClientIds.includes(item.client_id)

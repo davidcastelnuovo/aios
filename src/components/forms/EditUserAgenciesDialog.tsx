@@ -26,7 +26,7 @@ export function EditUserAgenciesDialog({
   userId,
   userEmail,
 }: EditUserAgenciesDialogProps) {
-  const { isOwner, isAgencyOwner, userId: currentUserId } = useUserRole();
+  const { isOwner, userId: currentUserId } = useUserRole();
   const queryClient = useQueryClient();
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
 
@@ -41,7 +41,6 @@ export function EditUserAgenciesDialog({
       
       const roles = userRoles?.map(r => r.role) || [];
       const isOwnerRole = roles.includes("owner");
-      const isAgencyOwnerRole = roles.includes("agency_owner");
       
       if (isOwnerRole) {
         const { data, error } = await supabase
@@ -50,26 +49,6 @@ export function EditUserAgenciesDialog({
           .order("name");
         if (error) throw error;
         return data;
-      } else if (isAgencyOwnerRole) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("campaigner_id")
-          .eq("id", currentUserId)
-          .single();
-        
-        if (!profile?.campaigner_id) {
-          return [];
-        }
-        
-        const { data: agencyLinks, error } = await supabase
-          .from("campaigner_agencies")
-          .select("agency_id, agencies(id, name)")
-          .eq("campaigner_id", profile.campaigner_id);
-        
-        if (error) throw error;
-        
-        const agencies = agencyLinks?.map((link: any) => link.agencies).filter((a: any) => a) || [];
-        return agencies;
       }
       return [];
     },

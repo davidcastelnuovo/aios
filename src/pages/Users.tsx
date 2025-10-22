@@ -44,20 +44,18 @@ import {
 
 const roleLabels: Record<UserRole, string> = {
   owner: "בעלים",
-  agency_owner: "בעל סוכנות",
   team_manager: "מנהל צוות",
   campaigner: "קמפיינר",
 };
 
 const roleBadgeColors: Record<UserRole, string> = {
   owner: "bg-purple-500",
-  agency_owner: "bg-blue-500",
   team_manager: "bg-green-500",
   campaigner: "bg-orange-500",
 };
 
 export default function Users() {
-  const { isOwner, isAgencyOwner, userId: currentUserId } = useUserRole();
+  const { isOwner, userId: currentUserId } = useUserRole();
   const queryClient = useQueryClient();
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -81,7 +79,6 @@ export default function Users() {
       
       const roles = userRoles?.map(r => r.role) || [];
       const isOwnerRole = roles.includes("owner");
-      const isAgencyOwnerRole = roles.includes("agency_owner");
       
       if (isOwnerRole) {
         // Owner sees all agencies
@@ -91,37 +88,6 @@ export default function Users() {
           .order("name");
         if (error) throw error;
         return data;
-      } else if (isAgencyOwnerRole) {
-        // Agency owner sees only their agencies
-        // First get campaigner_id from profile
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("campaigner_id")
-          .eq("id", currentUserId)
-          .single();
-        
-        if (!profile?.campaigner_id) {
-          console.log("No campaigner_id found for user");
-          return [];
-        }
-        
-        // Get agencies through campaigner_agencies
-        const { data: agencyLinks, error } = await supabase
-          .from("campaigner_agencies")
-          .select("agency_id, agencies(id, name)")
-          .eq("campaigner_id", profile.campaigner_id);
-        
-        if (error) {
-          console.error("Error fetching agency links:", error);
-          throw error;
-        }
-        
-        console.log("Agency links found:", agencyLinks);
-        
-        // Extract agencies
-        const agencies = agencyLinks?.map((link: any) => link.agencies).filter((a: any) => a) || [];
-        console.log("Filtered agencies:", agencies);
-        return agencies;
       }
       return [];
     },
@@ -236,7 +202,7 @@ export default function Users() {
     },
   });
 
-  if (!isOwner && !isAgencyOwner) {
+  if (!isOwner) {
     return (
       <div className="container mx-auto py-6">
         <Card className="p-6">
@@ -490,11 +456,11 @@ export default function Users() {
             </p>
           </div>
           <div className="flex items-start gap-3">
-            <Badge className={roleBadgeColors.agency_owner}>
-              {roleLabels.agency_owner}
+            <Badge className={roleBadgeColors.team_manager}>
+              {roleLabels.team_manager}
             </Badge>
             <p className="text-sm text-muted-foreground">
-              בעל סוכנות - רואה רק סוכנויות שמשוייכות אליו. חייב להיות משויך לקמפיינר פעיל.
+              מנהל צוות - רואה רק סוכנויות שמשוייכות אליו דרך קישורים לקמפיינר או ניהול ישיר. חייב להיות משויך לקמפיינר פעיל או לסוכנויות ספציפיות.
             </p>
           </div>
           <div className="flex items-start gap-3">

@@ -39,7 +39,7 @@ export default function Tasks() {
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
   const [hideCompleted, setHideCompleted] = useState(false);
   const { selectedAgency } = useAgency();
-  const { userAgencyIds, isOwner, isAgencyOwner } = useUserAgencies();
+  const { userAgencyIds, isOwner } = useUserAgencies();
   const { campaignerId, isCampaigner, isTeamManager } = useUserRole();
   const queryClient = useQueryClient();
 
@@ -94,7 +94,7 @@ export default function Tasks() {
         .eq("campaigner_id", campaignerId);
       return data?.map(ct => ct.client_id) || [];
     },
-    enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner,
+    enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner,
   });
 
   const updateTaskStatusMutation = useMutation({
@@ -130,7 +130,7 @@ export default function Tasks() {
   let accessibleTasks = tasks;
 
   if (!isOwner) {
-    if (isCampaigner && !isTeamManager && !isAgencyOwner && campaignerClientIds) {
+    if (isCampaigner && !isTeamManager && campaignerClientIds) {
       // Pure campaigners see only tasks for their assigned clients
       accessibleTasks = tasks?.filter(task => 
         campaignerClientIds.includes(task.client_id)
@@ -423,7 +423,7 @@ export default function Tasks() {
             <div className="h-8 w-px bg-border"></div>
             
             {/* Hide campaigner filter for pure campaigners */}
-            {!(isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner) && (
+            {!(isCampaigner && !isTeamManager && !isOwner) && (
               <div className="w-full md:w-48">
                 <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
                   <SelectTrigger className="w-full">
