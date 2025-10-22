@@ -86,9 +86,10 @@ export function EditUserCampaignerDialog({
 
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-      queryClient.invalidateQueries({ queryKey: ["user-campaigner"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      await queryClient.invalidateQueries({ queryKey: ["user-campaigner"] });
+      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
       toast.success("הקמפיינר המשויך עודכן בהצלחה");
       onOpenChange(false);
     },

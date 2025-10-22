@@ -135,8 +135,9 @@ export default function Users() {
       if (!data.success) throw new Error(data.error);
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
       toast.success("התפקיד עודכן בהצלחה");
     },
     onError: (error: Error) => {
