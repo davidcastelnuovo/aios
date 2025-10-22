@@ -160,8 +160,10 @@ export default function Users() {
       if (!data.success) throw new Error(data.error);
       return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+    onSuccess: async () => {
+      // Force refetch both queries
+      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
       toast.success("המשתמש נמחק בהצלחה");
     },
     onError: (error: Error) => {
