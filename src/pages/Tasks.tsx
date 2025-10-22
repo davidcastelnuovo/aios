@@ -118,13 +118,18 @@ export default function Tasks() {
   let accessibleTasks = tasks;
 
   if (!isOwner) {
-    if (isCampaigner && !isTeamManager && campaignerClientIds) {
+    if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
+      // Team managers see all tasks in their agencies (including all team members)
+      accessibleTasks = tasks?.filter(task => 
+        userAgencyIds.includes(task.agency_id)
+      );
+    } else if (isCampaigner && campaignerClientIds) {
       // Pure campaigners see only tasks for their assigned clients
       accessibleTasks = tasks?.filter(task => 
         campaignerClientIds.includes(task.client_id)
       );
     } else if (userAgencyIds && userAgencyIds.length > 0) {
-      // Team managers and agency owners see all tasks in their agencies
+      // Fallback: users with agency access see tasks in their agencies
       accessibleTasks = tasks?.filter(task => 
         userAgencyIds.includes(task.agency_id)
       );

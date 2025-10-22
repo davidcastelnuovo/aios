@@ -142,13 +142,18 @@ export default function ClientOnboarding() {
   let accessibleItems = onboardingItems;
 
   if (!isOwner) {
-    if (isCampaigner && !isTeamManager && campaignerClientIds) {
+    if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
+      // Team managers see all onboarding in their agencies (including all team members)
+      accessibleItems = onboardingItems?.filter(item => 
+        userAgencyIds.includes(item.agency_id)
+      );
+    } else if (isCampaigner && campaignerClientIds) {
       // Pure campaigners see only onboarding for their assigned clients
       accessibleItems = onboardingItems?.filter(item => 
         campaignerClientIds.includes(item.client_id)
       );
     } else if (userAgencyIds && userAgencyIds.length > 0) {
-      // Team managers and agency owners see all onboarding in their agencies
+      // Fallback: users with agency access see onboarding in their agencies
       accessibleItems = onboardingItems?.filter(item => 
         userAgencyIds.includes(item.agency_id)
       );
