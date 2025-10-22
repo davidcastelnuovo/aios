@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 export default function Campaigners() {
-  const [expandedCampaigner, setExpandedCampaigner] = useState<string | null>(null);
+  const [expandedCampaigners, setExpandedCampaigners] = useState<Record<string, boolean>>({});
   const [tempAmounts, setTempAmounts] = useState<Record<string, number>>({});
   const queryClient = useQueryClient();
   
@@ -40,6 +40,17 @@ export default function Campaigners() {
       return data;
     },
   });
+
+  // Open all campaigner cards by default
+  useEffect(() => {
+    if (campaigners && campaigners.length > 0) {
+      const allExpanded: Record<string, boolean> = {};
+      campaigners.forEach(campaigner => {
+        allExpanded[campaigner.id] = true;
+      });
+      setExpandedCampaigners(allExpanded);
+    }
+  }, [campaigners?.length]);
 
   const updatePaymentMutation = useMutation({
     mutationFn: async ({ clientTeamId, amount }: { clientTeamId: string; amount: number }) => {
@@ -83,7 +94,10 @@ export default function Campaigners() {
 
 
   const toggleCampaigner = (campaignerId: string) => {
-    setExpandedCampaigner(expandedCampaigner === campaignerId ? null : campaignerId);
+    setExpandedCampaigners(prev => ({
+      ...prev,
+      [campaignerId]: !prev[campaignerId]
+    }));
   };
 
   if (isLoading) {
@@ -158,14 +172,14 @@ export default function Campaigners() {
                     onClick={() => toggleCampaigner(campaigner.id)}
                   >
                     <span className="text-sm font-semibold">לקוחות משויכים ({campaigner.client_team.length})</span>
-                    {expandedCampaigner === campaigner.id ? (
+                    {expandedCampaigners[campaigner.id] ? (
                       <ChevronUp className="h-4 w-4" />
                     ) : (
                       <ChevronDown className="h-4 w-4" />
                     )}
                   </button>
                   
-                  {expandedCampaigner === campaigner.id && (
+                  {expandedCampaigners[campaigner.id] && (
                     <div className="overflow-x-auto mt-2">
                       <Table>
                         <TableHeader>
