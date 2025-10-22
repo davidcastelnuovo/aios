@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "./useCurrentUser";
+import { useEffect } from "react";
 
 export type ModulePermission = 
   | "dashboard"
@@ -17,6 +18,7 @@ export type ModulePermission =
 
 export function useUserPermissions() {
   const { user } = useCurrentUser();
+  const queryClient = useQueryClient();
 
   const { data: permissionsData, isLoading } = useQuery({
     queryKey: ["user-permissions", user?.id],
@@ -46,6 +48,36 @@ export function useUserPermissions() {
     },
     enabled: !!user?.id,
   });
+
+  // Real-time subscription for permission changes
+  useEffect(() => {
+    if (!user?.id) return;
+
+    console.log("🔔 Setting up real-time permissions listener for user:", user.id);
+
+    const channel = supabase
+      .channel('user-permissions-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'user_permissions',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          console.log("🔄 Permission changed:", payload);
+          // Invalidate and refetch permissions
+          queryClient.invalidateQueries({ queryKey: ["user-permissions", user.id] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      console.log("🔕 Cleaning up permissions listener");
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, queryClient]);
 
   const hasPermission = (module: ModulePermission): boolean => {
     // If still loading or no data, allow by default
