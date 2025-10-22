@@ -40,7 +40,6 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase
         .from("agencies")
         .select("id, name")
-        .eq("status", "active")
         .order("name");
       
       if (error) {
