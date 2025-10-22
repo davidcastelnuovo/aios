@@ -11,7 +11,6 @@ interface SheetRow {
   phone?: string | null;
   email?: string | null;
   folder_link?: string | null;
-  industry?: string | null;
   monthly_budget?: string | null;
   website?: string | null;
   notes?: string | null;
@@ -102,10 +101,6 @@ Deno.serve(async (req) => {
           case 'קישור לתיקיה':
             client.folder_link = value
             break
-          case 'industry':
-          case 'תעשייה':
-            client.industry = value
-            break
           case 'monthly_budget':
           case 'תקציב חודשי':
             client.monthly_budget = value
@@ -146,7 +141,6 @@ Deno.serve(async (req) => {
         phone: c.phone || null,
         email: c.email || null,
         folder_link: c.folder_link || null,
-        industry: c.industry || null,
         monthly_budget: c.monthly_budget ? parseFloat(c.monthly_budget) : null,
         website: c.website || null,
         notes: c.notes || null,
