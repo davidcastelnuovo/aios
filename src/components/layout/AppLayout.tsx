@@ -8,6 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { useAgency } from "@/contexts/AgencyContext";
+import { useUserRole } from "@/hooks/useUserRole";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,7 +30,8 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedAgency, setSelectedAgency } = useAgency();
+  const { selectedAgency, setSelectedAgency, managedAgencyIds } = useAgency();
+  const { isAgencyManager } = useUserRole();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -43,6 +45,11 @@ export function AppLayout({ children }: AppLayoutProps) {
       return data;
     },
   });
+
+  // Filter agencies for agency managers
+  const visibleAgencies = isAgencyManager 
+    ? agencies?.filter(a => managedAgencyIds.includes(a.id))
+    : agencies;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -72,8 +79,8 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <SelectValue placeholder="כל הסוכנויות" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
-                  <SelectItem value="all">כל הסוכנויות</SelectItem>
-                  {agencies?.map((agency) => (
+                  {!isAgencyManager && <SelectItem value="all">כל הסוכנויות</SelectItem>}
+                  {visibleAgencies?.map((agency) => (
                     <SelectItem key={agency.id} value={agency.id}>
                       {agency.name}
                     </SelectItem>

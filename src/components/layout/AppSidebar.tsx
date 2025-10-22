@@ -26,16 +26,16 @@ import {
 import { useUserRole } from "@/hooks/useUserRole";
 
 const menuItems = [
-  { title: "דשבורד", url: "/", icon: LayoutDashboard, roles: ["admin", "owner"] },
-  { title: "סוכנויות", url: "/agencies", icon: Building2, roles: ["admin", "user", "owner"] },
-  { title: "לקוחות", url: "/clients", icon: Users, roles: ["admin", "user", "owner"] },
-  { title: "משימות", url: "/tasks", icon: CheckSquare, roles: ["admin", "user", "owner"] },
-  { title: "לקוחות בקליטה", url: "/client-onboarding", icon: UserPlus, roles: ["admin", "user", "owner"] },
-  { title: "שעון נוכחות", url: "/time-tracking", icon: Clock, roles: ["admin", "user", "owner"] },
-  { title: "קמפיינרים", url: "/campaigners", icon: Megaphone, roles: ["admin", "owner"] },
-  { title: "ספקים", url: "/suppliers", icon: Truck, roles: ["owner"] },
-  { title: "כספים", url: "/finance", icon: DollarSign, roles: ["owner"] },
-  { title: "דוחות", url: "/reports", icon: BarChart3, roles: ["admin", "owner"] },
+  { title: "דשבורד", url: "/", icon: LayoutDashboard, roles: ["admin", "owner", "agency_manager"] },
+  { title: "סוכנויות", url: "/agencies", icon: Building2, roles: ["admin", "user", "owner", "agency_manager"] },
+  { title: "לקוחות", url: "/clients", icon: Users, roles: ["admin", "user", "owner", "agency_manager"] },
+  { title: "משימות", url: "/tasks", icon: CheckSquare, roles: ["admin", "user", "owner", "agency_manager"] },
+  { title: "לקוחות בקליטה", url: "/client-onboarding", icon: UserPlus, roles: ["admin", "user", "owner", "agency_manager"] },
+  { title: "שעון נוכחות", url: "/time-tracking", icon: Clock, roles: ["admin", "user", "owner", "agency_manager"] },
+  { title: "קמפיינרים", url: "/campaigners", icon: Megaphone, roles: ["admin", "owner", "agency_manager"] },
+  { title: "ספקים", url: "/suppliers", icon: Truck, roles: ["owner", "agency_manager"] },
+  { title: "כספים", url: "/finance", icon: DollarSign, roles: ["owner", "agency_manager"] },
+  { title: "דוחות", url: "/reports", icon: BarChart3, roles: ["admin", "owner", "agency_manager"] },
   { title: "משתמשים", url: "/users", icon: UserCog, roles: ["admin", "owner"] },
 ];
 

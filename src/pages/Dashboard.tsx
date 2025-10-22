@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Megaphone, DollarSign, TrendingUp, TrendingDown, CheckSquare } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAgency } from "@/contexts/AgencyContext";
+import { useUserRole } from "@/hooks/useUserRole";
 
 export default function Dashboard() {
-  const { selectedAgency } = useAgency();
+  const { selectedAgency, managedAgencyIds } = useAgency();
+  const { isAgencyManager } = useUserRole();
   const [selectedClient, setSelectedClient] = useState<string>("all");
   const [selectedSupplier, setSelectedSupplier] = useState<string>("all");
 
