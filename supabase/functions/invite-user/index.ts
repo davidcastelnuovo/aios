@@ -10,6 +10,7 @@ const corsHeaders = {
 interface InviteUserRequest {
   email: string;
   role: string;
+  agencyIds?: string[];
   redirectUrl?: string;
 }
 
@@ -53,7 +54,7 @@ serve(async (req: Request) => {
       throw new Error("Only owners can invite users");
     }
 
-    const { email, role, redirectUrl }: InviteUserRequest = await req.json();
+    const { email, role, agencyIds, redirectUrl }: InviteUserRequest = await req.json();
 
     if (!email || !role) {
       throw new Error("Email and role are required");
@@ -97,6 +98,59 @@ serve(async (req: Request) => {
       if (roleError) {
         console.error("Error assigning role:", roleError);
         // Don't throw - the user was created, just log the error
+      }
+
+      // Create campaigner profile if agencies are provided
+      if (agencyIds && agencyIds.length > 0) {
+        // First get user profile to get or create campaigner
+        const { data: profile } = await supabaseAdmin
+          .from("profiles")
+          .select("campaigner_id")
+          .eq("id", inviteData.user.id)
+          .single();
+
+        let campaignerId = profile?.campaigner_id;
+
+        // If no campaigner exists, create one
+        if (!campaignerId) {
+          const { data: newCampaigner, error: campaignerError } = await supabaseAdmin
+            .from("campaigners")
+            .insert({
+              full_name: email.split("@")[0],
+              email: email,
+              active: true,
+            })
+            .select()
+            .single();
+
+          if (campaignerError) {
+            console.error("Error creating campaigner:", campaignerError);
+          } else {
+            campaignerId = newCampaigner.id;
+
+            // Link campaigner to profile
+            await supabaseAdmin
+              .from("profiles")
+              .update({ campaigner_id: campaignerId })
+              .eq("id", inviteData.user.id);
+          }
+        }
+
+        // Link campaigner to agencies
+        if (campaignerId) {
+          const agencyLinks = agencyIds.map((agencyId) => ({
+            campaigner_id: campaignerId,
+            agency_id: agencyId,
+          }));
+
+          const { error: agencyError } = await supabaseAdmin
+            .from("campaigner_agencies")
+            .insert(agencyLinks);
+
+          if (agencyError) {
+            console.error("Error linking agencies:", agencyError);
+          }
+        }
       }
     }
 

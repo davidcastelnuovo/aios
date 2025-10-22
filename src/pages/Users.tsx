@@ -59,6 +59,19 @@ export default function Users() {
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<UserRole>("campaigner");
+  const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
+
+  const { data: agencies } = useQuery({
+    queryKey: ["agencies"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
 
   const { data: users, isLoading } = useQuery({
     queryKey: ["users-with-roles"],
@@ -132,11 +145,12 @@ export default function Users() {
   });
 
   const inviteUserMutation = useMutation({
-    mutationFn: async ({ email, role }: { email: string; role: UserRole }) => {
+    mutationFn: async ({ email, role, agencyIds }: { email: string; role: UserRole; agencyIds: string[] }) => {
       const { data, error } = await supabase.functions.invoke("invite-user", {
         body: { 
           email, 
           role,
+          agencyIds,
           redirectUrl: `${window.location.origin}/auth?type=recovery`
         },
       });
@@ -150,6 +164,7 @@ export default function Users() {
       setIsInviteDialogOpen(false);
       setInviteEmail("");
       setInviteRole("campaigner");
+      setSelectedAgencies([]);
     },
     onError: (error: Error) => {
       toast.error("שגיאה בשליחת הזמנה: " + error.message);
@@ -228,7 +243,11 @@ export default function Users() {
                 <Label htmlFor="invite-role">תפקיד</Label>
                 <Select
                   value={inviteRole}
-                  onValueChange={(value) => setInviteRole(value as UserRole)}
+                  onValueChange={(value) => {
+                    setInviteRole(value as UserRole);
+                    // Reset agencies when role changes
+                    setSelectedAgencies([]);
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -242,11 +261,49 @@ export default function Users() {
                   </SelectContent>
                 </Select>
               </div>
+              <div>
+                <Label>סוכנויות</Label>
+                <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
+                  {agencies?.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">אין סוכנויות זמינות</p>
+                  ) : (
+                    agencies?.map((agency) => (
+                      <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
+                        <input
+                          type="checkbox"
+                          id={`agency-${agency.id}`}
+                          checked={selectedAgencies.includes(agency.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedAgencies([...selectedAgencies, agency.id]);
+                            } else {
+                              setSelectedAgencies(selectedAgencies.filter((id) => id !== agency.id));
+                            }
+                          }}
+                          className="rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                        <label
+                          htmlFor={`agency-${agency.id}`}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                          {agency.name}
+                        </label>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {selectedAgencies.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    נבחרו {selectedAgencies.length} סוכנויות
+                  </p>
+                )}
+              </div>
               <Button
                 onClick={() =>
                   inviteUserMutation.mutate({
                     email: inviteEmail,
                     role: inviteRole,
+                    agencyIds: selectedAgencies,
                   })
                 }
                 disabled={!inviteEmail || inviteUserMutation.isPending}
