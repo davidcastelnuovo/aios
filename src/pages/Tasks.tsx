@@ -131,11 +131,19 @@ export default function Tasks() {
   }
 
   // Then filter by selected agency and campaigner
-  const filteredTasks = accessibleTasks?.filter(t => {
-    const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
-    const matchesAgency = selectedAgency === "all" || t.agency_id === selectedAgency;
-    return matchesCampaigner && matchesAgency;
-  });
+  const filteredTasks = (() => {
+    // If a specific agency is selected, check if user has access to it
+    if (selectedAgency !== "all" && !isOwner && userAgencyIds && userAgencyIds.length > 0 && !userAgencyIds.includes(selectedAgency)) {
+      // User doesn't have access to this agency, show nothing
+      return [];
+    }
+    
+    return accessibleTasks?.filter(t => {
+      const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
+      const matchesAgency = selectedAgency === "all" || t.agency_id === selectedAgency;
+      return matchesCampaigner && matchesAgency;
+    });
+  })();
 
   const tasksByStatus = {
     open: filteredTasks?.filter(t => t.status === "open") || [],
