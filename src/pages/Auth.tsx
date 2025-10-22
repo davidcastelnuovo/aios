@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,10 +12,22 @@ import { Building2 } from "lucide-react";
 export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [resetMode, setResetMode] = useState(false);
+  const [updatePasswordMode, setUpdatePasswordMode] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    // Check if this is a password recovery/invite link
+    const type = searchParams.get("type");
+    if (type === "recovery") {
+      setUpdatePasswordMode(true);
+    }
+  }, [searchParams]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,7 +82,7 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth`,
+      redirectTo: `${window.location.origin}/auth?type=recovery`,
     });
     if (error) {
       toast({
@@ -84,6 +96,48 @@ export default function Auth() {
         description: "בדוק את תיבת המייל שלך לאיפוס הסיסמה",
       });
       setResetMode(false);
+    }
+    setLoading(false);
+  };
+
+  const handleUpdatePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "שגיאה",
+        description: "הסיסמאות אינן תואמות",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: "שגיאה",
+        description: "הסיסמה חייבת להכיל לפחות 6 תווים",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      toast({
+        title: "שגיאה",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "הסיסמה עודכנה",
+        description: "הסיסמה שלך עודכנה בהצלחה",
+      });
+      navigate("/");
     }
     setLoading(false);
   };
@@ -103,6 +157,39 @@ export default function Auth() {
           </div>
         </CardHeader>
         <CardContent>
+          {updatePasswordMode ? (
+            <form onSubmit={handleUpdatePassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">סיסמה חדשה</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                  minLength={6}
+                  placeholder="לפחות 6 תווים"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">אימות סיסמה</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                  minLength={6}
+                  placeholder="הקלד שוב את הסיסמה"
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "מעדכן..." : "הגדר סיסמה"}
+              </Button>
+            </form>
+          ) : (
           <Tabs defaultValue="signin" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">התחברות</TabsTrigger>
@@ -204,6 +291,7 @@ export default function Auth() {
               </form>
             </TabsContent>
           </Tabs>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -238,19 +238,17 @@ export default function Users() {
 
   const inviteUserMutation = useMutation({
     mutationFn: async (values: z.infer<typeof inviteSchema>) => {
-      const redirectUrl = `${window.location.origin}/`;
-      
-      const { error } = await supabase.auth.signInWithOtp({
-        email: values.email,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            full_name: values.fullName,
-          },
+      const { data, error } = await supabase.functions.invoke("invite-user", {
+        body: {
+          email: values.email,
+          fullName: values.fullName,
+          role: values.role,
+          agencyIds: values.agencyIds || [],
         },
       });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
       toast.success("הזמנה נשלחה בהצלחה");
