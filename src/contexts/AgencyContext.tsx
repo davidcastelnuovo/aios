@@ -92,6 +92,15 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     }
   }, [agencies, selectedAgency]);
 
+  // Wait for initial loading before rendering children
+  if (isLoading && !agencies) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
     <AgencyContext.Provider value={{ selectedAgency, setSelectedAgency, agencies, isLoading }}>
       {children}
