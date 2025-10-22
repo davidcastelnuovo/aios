@@ -39,7 +39,12 @@ serve(async (req: Request) => {
     const token = authHeader.replace("Bearer ", "");
     const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
 
-    if (userError || !user) {
+    if (userError) {
+      console.error("Error getting user:", userError);
+      throw new Error("Unauthorized");
+    }
+
+    if (!user) {
       throw new Error("Unauthorized");
     }
 

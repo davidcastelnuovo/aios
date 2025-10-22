@@ -174,6 +174,12 @@ export default function Users() {
 
   const inviteUserMutation = useMutation({
     mutationFn: async ({ email, role, agencyIds }: { email: string; role: UserRole; agencyIds: string[] }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error("No active session");
+      }
+
       const { data, error } = await supabase.functions.invoke("invite-user", {
         body: { 
           email, 
@@ -181,7 +187,11 @@ export default function Users() {
           agencyIds,
           redirectUrl: `${window.location.origin}/setup`
         },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
       });
+      
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
       return data;
