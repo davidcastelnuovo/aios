@@ -69,14 +69,19 @@ export function EditUserCampaignerDialog({
   useEffect(() => {
     if (currentCampaigner) {
       setSelectedCampaignerId(currentCampaigner);
+    } else {
+      setSelectedCampaignerId("none");
     }
   }, [currentCampaigner]);
 
   const updateCampaignerMutation = useMutation({
     mutationFn: async (campaignerId: string | null) => {
+      // Convert "none" to null
+      const actualCampaignerId = campaignerId === "none" ? null : campaignerId;
+      
       const { error } = await supabase
         .from("profiles")
-        .update({ campaigner_id: campaignerId })
+        .update({ campaigner_id: actualCampaignerId })
         .eq("id", userId);
 
       if (error) throw error;
@@ -93,7 +98,7 @@ export function EditUserCampaignerDialog({
   });
 
   const handleSave = () => {
-    updateCampaignerMutation.mutate(selectedCampaignerId || null);
+    updateCampaignerMutation.mutate(selectedCampaignerId === "none" ? null : selectedCampaignerId);
   };
 
   return (
@@ -117,7 +122,7 @@ export function EditUserCampaignerDialog({
                 <SelectValue placeholder="בחר קמפיינר" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">ללא קמפיינר משויך</SelectItem>
+                <SelectItem value="none">ללא קמפיינר משויך</SelectItem>
                 {campaigners?.map((campaigner) => (
                   <SelectItem key={campaigner.id} value={campaigner.id}>
                     {campaigner.full_name}
