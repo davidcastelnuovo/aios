@@ -28,7 +28,6 @@ import { useUserPermissions } from "@/hooks/useUserPermissions";
 
 const menuItems = [
   { title: "דשבורד", url: "/", icon: LayoutDashboard, module: "dashboard" as const },
-  { title: "אזור אישי", url: "/my-profile", icon: User, module: null },
   { title: "סוכנויות", url: "/agencies", icon: Building2, module: "agencies" as const },
   { title: "לקוחות", url: "/clients", icon: Users, module: "clients" as const },
   { title: "משימות", url: "/tasks", icon: CheckSquare, module: "tasks" as const },
@@ -39,6 +38,7 @@ const menuItems = [
   { title: "כספים", url: "/finance", icon: DollarSign, module: "finance" as const },
   { title: "דוחות", url: "/reports", icon: BarChart3, module: "reports" as const },
   { title: "ניהול משתמשים", url: "/users", icon: ShieldCheck, module: null },
+  { title: "אזור אישי", url: "/my-profile", icon: User, module: null },
 ];
 
 export function AppSidebar() {

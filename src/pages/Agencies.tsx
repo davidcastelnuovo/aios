@@ -5,32 +5,28 @@ import { Badge } from "@/components/ui/badge";
 import { Building2, Phone, Mail, Calendar } from "lucide-react";
 import { AddAgencyForm } from "@/components/forms/AddAgencyForm";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useUserAgencies } from "@/hooks/useUserAgencies";
 
 export default function Agencies() {
   const { isOwner, userId } = useUserRole();
+  const { userAgencyIds } = useUserAgencies();
   
   const { data: agencies, isLoading } = useQuery({
-    queryKey: ["agencies-list", userId],
+    queryKey: ["agencies-list", userId, userAgencyIds],
     queryFn: async () => {
-      // Get current user's roles
-      const { data: userRoles } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId);
-      
-      const roles = userRoles?.map(r => r.role) || [];
-      const isOwnerRole = roles.includes("owner");
-      
-      if (isOwnerRole) {
-        // Owner sees all agencies
-        const { data, error } = await supabase
-          .from("agencies")
-          .select("*")
-          .order("created_at", { ascending: false });
-        if (error) throw error;
-        return data;
+      let query = supabase
+        .from("agencies")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      // If not owner and has specific agency IDs, filter by them
+      if (!isOwner && userAgencyIds && userAgencyIds.length > 0) {
+        query = query.in("id", userAgencyIds);
       }
-      return [];
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
     },
   });
 
