@@ -14,6 +14,8 @@ import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -35,6 +37,7 @@ export default function Tasks() {
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [activeTask, setActiveTask] = useState<any>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
+  const [hideCompleted, setHideCompleted] = useState(false);
   const { selectedAgency } = useAgency();
   const { userAgencyIds, isOwner, isAgencyOwner } = useUserAgencies();
   const { campaignerId, isCampaigner, isTeamManager } = useUserRole();
@@ -148,10 +151,15 @@ export default function Tasks() {
   }
 
   // Then filter by campaigner
-  const filteredTasks = accessibleTasks?.filter(t => {
+  let filteredTasks = accessibleTasks?.filter(t => {
     const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
     return matchesCampaigner;
   }) || [];
+
+  // Apply hide completed filter
+  if (hideCompleted) {
+    filteredTasks = filteredTasks.filter(t => t.status !== "done");
+  }
 
   const tasksByStatus = {
     open: filteredTasks?.filter(t => t.status === "open") || [],
@@ -396,6 +404,20 @@ export default function Tasks() {
               >
                 <TableIcon className="h-4 w-4" />
               </Button>
+            </div>
+            
+            <div className="h-8 w-px bg-border"></div>
+            
+            {/* Hide completed toggle */}
+            <div className="flex items-center gap-2" dir="ltr">
+              <Label htmlFor="hide-completed" className="cursor-pointer whitespace-nowrap">
+                הסתר הושלמו
+              </Label>
+              <Switch
+                id="hide-completed"
+                checked={hideCompleted}
+                onCheckedChange={setHideCompleted}
+              />
             </div>
             
             <div className="h-8 w-px bg-border"></div>
