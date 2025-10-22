@@ -64,29 +64,52 @@ serve(async (req: Request) => {
 
     console.log(`Deleting user: ${userId}`);
 
+    // First, get the user's profile to check for campaigner_id
+    const { data: profile } = await supabaseAdmin
+      .from("profiles")
+      .select("campaigner_id")
+      .eq("id", userId)
+      .single();
+
+    // Delete from user_managed_agencies
+    const { error: managedError } = await supabaseAdmin
+      .from("user_managed_agencies")
+      .delete()
+      .eq("user_id", userId);
+    
+    if (managedError) {
+      console.error("Error deleting managed agencies:", managedError);
+    }
+
+    // Delete from user_roles
+    const { error: userRolesError } = await supabaseAdmin
+      .from("user_roles")
+      .delete()
+      .eq("user_id", userId);
+    
+    if (userRolesError) {
+      console.error("Error deleting user roles:", userRolesError);
+    }
+
+    // Delete from profiles (this will trigger cascade if set up)
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .delete()
+      .eq("id", userId);
+    
+    if (profileError) {
+      console.error("Error deleting profile:", profileError);
+    }
+
     // Try to delete user from auth
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
     if (deleteError) {
-      // If user not found in auth, it's okay - they might have been deleted already
-      // Just clean up the database records
+      // If user not found in auth, it's okay - we already cleaned up the database
       if (deleteError.message?.includes("User not found") || deleteError.status === 404) {
-        console.log("User not found in auth, cleaning up database records");
-        
-        // Manually delete from profiles (this will cascade to user_roles)
-        const { error: profileError } = await supabaseAdmin
-          .from("profiles")
-          .delete()
-          .eq("id", userId);
-        
-        if (profileError) {
-          console.error("Error deleting profile:", profileError);
-          throw new Error("Failed to clean up user data");
-        }
-        
-        console.log("Database records cleaned up successfully");
+        console.log("User not found in auth, but database records cleaned up");
       } else {
-        console.error("Error deleting user:", deleteError);
+        console.error("Error deleting user from auth:", deleteError);
         throw deleteError;
       }
     } else {
