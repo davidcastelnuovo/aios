@@ -20,9 +20,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Shield, UserPlus, Trash2, Settings } from "lucide-react";
+import { Shield, UserPlus, Trash2, Settings, Lock } from "lucide-react";
 import { useState } from "react";
 import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialog";
+import { EditUserPermissionsDialog } from "@/components/forms/EditUserPermissionsDialog";
 import {
   Dialog,
   DialogContent,
@@ -63,6 +64,8 @@ export default function Users() {
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
   const [editAgenciesUserId, setEditAgenciesUserId] = useState<string | null>(null);
   const [editAgenciesUserEmail, setEditAgenciesUserEmail] = useState<string>("");
+  const [editPermissionsUserId, setEditPermissionsUserId] = useState<string | null>(null);
+  const [editPermissionsUserEmail, setEditPermissionsUserEmail] = useState<string>("");
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies-for-invite", currentUserId],
@@ -419,6 +422,17 @@ export default function Users() {
                         <Settings className="h-4 w-4" />
                       </Button>
                       <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          setEditPermissionsUserId(user.id);
+                          setEditPermissionsUserEmail(user.email);
+                        }}
+                        title="ערוך הרשאות"
+                      >
+                        <Lock className="h-4 w-4" />
+                      </Button>
+                      <Button
                         variant="destructive"
                         size="icon"
                         onClick={() => {
@@ -488,6 +502,20 @@ export default function Users() {
           }}
           userId={editAgenciesUserId}
           userEmail={editAgenciesUserEmail}
+        />
+      )}
+
+      {editPermissionsUserId && (
+        <EditUserPermissionsDialog
+          open={!!editPermissionsUserId}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditPermissionsUserId(null);
+              setEditPermissionsUserEmail("");
+            }
+          }}
+          userId={editPermissionsUserId}
+          userEmail={editPermissionsUserEmail}
         />
       )}
     </div>

@@ -11,6 +11,7 @@ import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 import {
   Select,
   SelectContent,
@@ -45,6 +46,7 @@ import {
 export default function Clients() {
   const { selectedAgency } = useAgency();
   const { userAgencyIds, isOwner } = useUserAgencies();
+  const { canViewFinance } = useUserPermissions();
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [editingClient, setEditingClient] = useState<any>(null);
   const [hideInactive, setHideInactive] = useState(true);
@@ -349,7 +351,7 @@ export default function Clients() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {client.retainer && (
+              {canViewFinance() && client.retainer && (
                 <div className="flex items-center gap-2">
                   <Coins className="h-4 w-4 text-muted-foreground" />
                   <div className="text-sm">
@@ -606,21 +608,21 @@ export default function Clients() {
                     </Select>
                   </TableCell>
                   <TableCell className="py-4">
-                    {client.retainer ? (
+                    {canViewFinance() && client.retainer ? (
                       <div className="flex items-center gap-1 font-medium">
                         <Coins className="h-4 w-4 text-muted-foreground" />
                         <span>₪{Number(client.retainer).toLocaleString()}</span>
                       </div>
-                    ) : <span className="text-muted-foreground">-</span>}
+                    ) : canViewFinance() ? <span className="text-muted-foreground">-</span> : <span className="text-muted-foreground">מוסתר</span>}
                   </TableCell>
 
                   <TableCell className="py-4">
-                    {client.monthly_budget ? (
+                    {canViewFinance() && client.monthly_budget ? (
                       <div className="flex items-center gap-1 font-medium">
                         <Coins className="h-4 w-4 text-muted-foreground" />
                         <span>₪{Number(client.monthly_budget).toLocaleString()}</span>
                       </div>
-                    ) : <span className="text-muted-foreground">-</span>}
+                    ) : canViewFinance() ? <span className="text-muted-foreground">-</span> : <span className="text-muted-foreground">מוסתר</span>}
                   </TableCell>
                   <TableCell className="py-4">
                     {client.phone ? (

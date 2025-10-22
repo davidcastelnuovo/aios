@@ -24,24 +24,26 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 
 const menuItems = [
-  { title: "דשבורד", url: "/", icon: LayoutDashboard },
-  { title: "אזור אישי", url: "/my-profile", icon: User },
-  { title: "סוכנויות", url: "/agencies", icon: Building2 },
-  { title: "לקוחות", url: "/clients", icon: Users },
-  { title: "משימות", url: "/tasks", icon: CheckSquare },
-  { title: "לקוחות בקליטה", url: "/client-onboarding", icon: UserPlus },
-  { title: "שעון נוכחות", url: "/time-tracking", icon: Clock },
-  { title: "קמפיינרים", url: "/campaigners", icon: Megaphone },
-  { title: "ספקים", url: "/suppliers", icon: Truck },
-  { title: "כספים", url: "/finance", icon: DollarSign },
-  { title: "דוחות", url: "/reports", icon: BarChart3 },
-  { title: "ניהול משתמשים", url: "/users", icon: ShieldCheck },
+  { title: "דשבורד", url: "/", icon: LayoutDashboard, module: "dashboard" as const },
+  { title: "אזור אישי", url: "/my-profile", icon: User, module: null },
+  { title: "סוכנויות", url: "/agencies", icon: Building2, module: "agencies" as const },
+  { title: "לקוחות", url: "/clients", icon: Users, module: "clients" as const },
+  { title: "משימות", url: "/tasks", icon: CheckSquare, module: "tasks" as const },
+  { title: "לקוחות בקליטה", url: "/client-onboarding", icon: UserPlus, module: "client_onboarding" as const },
+  { title: "שעון נוכחות", url: "/time-tracking", icon: Clock, module: "time_tracking" as const },
+  { title: "קמפיינרים", url: "/campaigners", icon: Megaphone, module: "campaigners" as const },
+  { title: "ספקים", url: "/suppliers", icon: Truck, module: "suppliers" as const },
+  { title: "כספים", url: "/finance", icon: DollarSign, module: "finance" as const },
+  { title: "דוחות", url: "/reports", icon: BarChart3, module: "reports" as const },
+  { title: "ניהול משתמשים", url: "/users", icon: ShieldCheck, module: null },
 ];
 
 export function AppSidebar() {
   const { state, setOpenMobile, isMobile } = useSidebar();
+  const { hasPermission } = useUserPermissions();
   const isCollapsed = state === "collapsed";
 
   const handleLinkClick = () => {
@@ -50,6 +52,14 @@ export function AppSidebar() {
     }
   };
 
+  // Filter menu items based on permissions
+  const visibleMenuItems = menuItems.filter((item) => {
+    // Items without module are always visible (like my-profile and users)
+    if (!item.module) return true;
+    // Check permission for the module
+    return hasPermission(item.module);
+  });
+
   return (
     <Sidebar side="right" collapsible="icon">
       <SidebarContent>
@@ -57,7 +67,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>תפריט ראשי</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {visibleMenuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink

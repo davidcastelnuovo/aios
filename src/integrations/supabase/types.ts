@@ -669,6 +669,33 @@ export type Database = {
           },
         ]
       }
+      user_permissions: {
+        Row: {
+          can_access: boolean
+          created_at: string
+          id: string
+          module: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          can_access?: boolean
+          created_at?: string
+          id?: string
+          module: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          can_access?: boolean
+          created_at?: string
+          id?: string
+          module?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -699,14 +726,8 @@ export type Database = {
         Args: { _email: string; _role: Database["public"]["Enums"]["app_role"] }
         Returns: string
       }
-      get_user_agency_ids: {
-        Args: { _user_id: string }
-        Returns: string[]
-      }
-      get_user_campaigner_id: {
-        Args: { _user_id: string }
-        Returns: string
-      }
+      get_user_agency_ids: { Args: { _user_id: string }; Returns: string[] }
+      get_user_campaigner_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
