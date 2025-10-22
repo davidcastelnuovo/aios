@@ -8,35 +8,47 @@ export function useUserAgencies() {
   const { data: userAgencyIds, isLoading } = useQuery({
     queryKey: ["user-agency-ids", userId, isOwner, isTeamManager, isCampaigner],
     queryFn: async () => {
+      console.log("🔍 useUserAgencies - Starting:", { userId, isOwner, isTeamManager, isCampaigner });
+      
       if (isOwner) {
-        // Owners see all agencies
+        console.log("✅ User is Owner - returning null (all agencies)");
         return null; // null means "all agencies"
       }
 
-      if (!userId) return [];
+      if (!userId) {
+        console.log("❌ No userId - returning empty array");
+        return [];
+      }
 
       const aggregated = new Set<string>();
 
       // Campaigner or Team Manager with campaigner_id: agencies via campaigner_agencies
       if (isCampaigner || isTeamManager) {
+        console.log("🔍 Fetching profile for campaigner/team_manager");
         const { data: profile } = await supabase
           .from("profiles")
           .select("campaigner_id")
           .eq("id", userId)
           .maybeSingle();
 
+        console.log("📋 Profile data:", profile);
+
         if (profile?.campaigner_id) {
+          console.log("🔍 Fetching agencies for campaigner_id:", profile.campaigner_id);
           const { data: agencyLinks, error } = await supabase
             .from("campaigner_agencies")
             .select("agency_id")
             .eq("campaigner_id", profile.campaigner_id);
 
           if (error) {
-            console.error("Error fetching campaigner agencies:", error);
+            console.error("❌ Error fetching campaigner agencies:", error);
             throw error;
           }
 
+          console.log("📋 Agency links found:", agencyLinks);
           agencyLinks?.forEach((l) => aggregated.add(l.agency_id));
+        } else {
+          console.log("⚠️ No campaigner_id found in profile");
         }
       }
 
@@ -55,13 +67,15 @@ export function useUserAgencies() {
         managed?.forEach((m) => aggregated.add(m.agency_id));
       }
 
-      console.log("useUserAgencies result:", {
+      const finalAgencies = Array.from(aggregated);
+      console.log("✅ useUserAgencies final result:", {
         userId,
         roles: { isOwner, isTeamManager, isCampaigner },
-        agencyIds: Array.from(aggregated),
+        agencyIds: finalAgencies,
+        count: finalAgencies.length,
       });
 
-      return Array.from(aggregated);
+      return finalAgencies;
     },
     enabled: !!userId,
   });

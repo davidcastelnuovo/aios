@@ -62,12 +62,16 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
 
   const isLoading = isLoadingUserAgencies || isLoadingAgencies;
 
-  console.log("AgencyContext - User agencies:", { 
+  console.log("🏢 AgencyContext - Detailed state:", { 
     isOwner, 
-    userAgencyIds, 
+    userAgencyIds,
+    userAgencyIdsType: typeof userAgencyIds,
+    userAgencyIdsIsNull: userAgencyIds === null,
     isLoadingUserAgencies,
+    isLoadingAgencies,
     allAgenciesCount: allAgencies?.length,
-    filteredAgencies: agencies?.length 
+    filteredAgenciesCount: agencies?.length,
+    agencies: agencies?.map(a => ({ id: a.id, name: a.name })),
   });
 
   // Ensure a valid selection and sensible defaults
