@@ -77,17 +77,16 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     const exists = selectedAgency === "all" || agencies.some((a) => a.id === selectedAgency);
 
     if (!exists) {
-      setSelectedAgency(isOwner ? "all" : agencies[0].id);
+      // If current selection is invalid, prefer "all" when multiple agencies exist
+      if (agencies.length > 1) {
+        setSelectedAgency("all");
+      } else {
+        setSelectedAgency(agencies[0].id);
+      }
       didSetDefault.current = true;
       return;
     }
-
-    // For non-owners, default to first agency (no "all" option)
-    if (!isOwner && selectedAgency === "all") {
-      setSelectedAgency(agencies[0].id);
-      didSetDefault.current = true;
-    }
-  }, [agencies, isOwner, selectedAgency]);
+  }, [agencies, selectedAgency]);
 
   return (
     <AgencyContext.Provider value={{ selectedAgency, setSelectedAgency, agencies, isLoading }}>

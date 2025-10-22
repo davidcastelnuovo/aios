@@ -60,7 +60,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <SelectValue placeholder="בחר סוכנות" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
-                  {isOwner && agencies && agencies.length > 1 && (
+                  {agencies && agencies.length > 1 && (
                     <SelectItem value="all">כל הסוכנויות</SelectItem>
                   )}
                   {agencies?.map((agency) => (
