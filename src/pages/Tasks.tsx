@@ -279,6 +279,14 @@ export default function Tasks() {
           }}
         >
           <CardContent className="p-4">
+            {/* Client name above title */}
+            {task.clients && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                <Users className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate font-medium">{task.clients.name}</span>
+              </div>
+            )}
+            
             <div className="flex items-start justify-between gap-2 mb-3">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing flex-shrink-0" onClick={(e) => e.stopPropagation()}>
