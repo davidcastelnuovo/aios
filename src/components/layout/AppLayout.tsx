@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useUserAgencies } from "@/hooks/useUserAgencies";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -29,6 +30,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
+  const { isOwner } = useUserAgencies();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -58,7 +60,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <SelectValue placeholder="בחר סוכנות" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
-                  {agencies && agencies.length > 1 && (
+                  {isOwner && agencies && agencies.length > 1 && (
                     <SelectItem value="all">כל הסוכנויות</SelectItem>
                   )}
                   {agencies?.map((agency) => (

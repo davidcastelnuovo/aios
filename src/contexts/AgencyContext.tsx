@@ -54,14 +54,20 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     filteredAgencies: agencies?.length 
   });
 
-  // Set the first agency as default ONCE if there's only one agency
+  // Set a default agency for non-owners when agencies are available
   useEffect(() => {
-    if (!didSetDefault.current && selectedAgency === "all" && agencies && agencies.length === 1) {
-      console.log("Setting default agency:", agencies[0]);
+    if (
+      !didSetDefault.current &&
+      selectedAgency === "all" &&
+      agencies &&
+      agencies.length >= 1 &&
+      !isOwner
+    ) {
+      console.log("Setting default agency for non-owner:", agencies[0]);
       setSelectedAgency(agencies[0].id);
       didSetDefault.current = true;
     }
-  }, [agencies, selectedAgency]);
+  }, [agencies, selectedAgency, isOwner]);
 
   return (
     <AgencyContext.Provider value={{ selectedAgency, setSelectedAgency, agencies, isLoading }}>
