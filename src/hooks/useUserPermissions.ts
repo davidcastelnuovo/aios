@@ -21,7 +21,7 @@ export function useUserPermissions() {
   const { user } = useCurrentUser();
   const queryClient = useQueryClient();
 
-  const { data: permissionsData, isLoading } = useQuery({
+  const { data: permissionsData, isLoading: queryLoading } = useQuery({
     queryKey: ["user-permissions", user?.id],
     queryFn: async () => {
       if (!user?.id) return { permissions: null, hasAnyPermissions: false };
@@ -36,7 +36,6 @@ export function useUserPermissions() {
         throw error;
       }
 
-      // Convert to a map for easy access
       const permissionsMap: Record<string, boolean> = {};
       data?.forEach((perm) => {
         permissionsMap[perm.module] = perm.can_access;
@@ -44,53 +43,50 @@ export function useUserPermissions() {
 
       return { 
         permissions: permissionsMap, 
-        hasAnyPermissions: data && data.length > 0 
+        hasAnyPermissions: !!data && data.length > 0 
       };
     },
     enabled: !!user?.id,
   });
 
+  // Global loading: until we know the user id OR query finished
+  const isLoading = !user?.id || queryLoading;
+
   // Real-time subscription for permission changes
   useEffect(() => {
     if (!user?.id) return;
-
-    console.log("🔔 Setting up real-time permissions listener for user:", user.id);
 
     const channel = supabase
       .channel('user-permissions-changes')
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          event: '*',
           schema: 'public',
           table: 'user_permissions',
           filter: `user_id=eq.${user.id}`,
         },
-        (payload) => {
-          console.log("🔄 Permission changed:", payload);
-          // Invalidate and refetch permissions
+        () => {
           queryClient.invalidateQueries({ queryKey: ["user-permissions", user.id] });
         }
       )
       .subscribe();
 
     return () => {
-      console.log("🔕 Cleaning up permissions listener");
       supabase.removeChannel(channel);
     };
   }, [user?.id, queryClient]);
 
   const hasPermission = (module: ModulePermission): boolean => {
-    // If still loading or no data, allow by default
-    if (!permissionsData) return true;
-    
-    const { permissions, hasAnyPermissions } = permissionsData;
-    
-    // If user has no permissions defined at all, allow access (owner or backwards compatibility)
+    // While loading or user unknown, do NOT allow (prevents leaks)
+    if (isLoading) return false;
+
+    const { permissions, hasAnyPermissions } = permissionsData || { permissions: null, hasAnyPermissions: false };
+
+    // If user has no permissions defined at all, allow access (owner/backwards compat)
     if (!hasAnyPermissions) return true;
-    
-    // If user has permissions defined, only allow access to explicitly granted modules
-    return permissions[module] === true;
+
+    return permissions?.[module] === true;
   };
 
   const canViewFinance = (): boolean => {
