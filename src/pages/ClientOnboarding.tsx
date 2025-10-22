@@ -18,7 +18,6 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Clock, User, Plus, GripVertical } from "lucide-react";
 import { format } from "date-fns";
-import { useUserRole } from "@/hooks/useUserRole";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -51,7 +50,6 @@ interface Campaigner {
 
 export default function ClientOnboarding() {
   const queryClient = useQueryClient();
-  const { role, isUser, isAgencyManager, userId } = useUserRole();
   const { selectedAgency } = useAgency();
   const [editingItem, setEditingItem] = useState<OnboardingItem | null>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
@@ -71,26 +69,8 @@ export default function ClientOnboarding() {
     })
   );
 
-  // Get user's campaigner_id if they're a regular user (not agency manager)
-  const { data: userProfile } = useQuery({
-    queryKey: ["user-profile", userId],
-    queryFn: async () => {
-      if (!userId || !isUser || isAgencyManager) return null;
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("campaigner_id")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!userId && isUser && !isAgencyManager,
-  });
-
   const { data: onboardingItems, isLoading } = useQuery({
-    queryKey: ["client-onboarding", selectedAgency, isUser, isAgencyManager, userProfile?.campaigner_id],
+    queryKey: ["client-onboarding", selectedAgency],
     queryFn: async () => {
       let query = supabase
         .from("client_onboarding")
@@ -103,16 +83,10 @@ export default function ClientOnboarding() {
 
       // Filter by selected agency is now done in filteredItems, not here
 
-      // For regular users (not agency managers), filter by their campaigner_id
-      if (isUser && !isAgencyManager && userProfile?.campaigner_id) {
-        query = query.eq("campaigner_id", userProfile.campaigner_id);
-      }
-
       const { data, error } = await query;
       if (error) throw error;
       return data as OnboardingItem[];
     },
-    enabled: (!isUser || !!userProfile) || isAgencyManager,
   });
 
   const { data: campaigners } = useQuery({

@@ -9,7 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Pencil, X } from "lucide-react";
-import { useUserRole } from "@/hooks/useUserRole";
 import {
   Select,
   SelectContent,
@@ -61,7 +60,6 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isAdmin, isOwner } = useUserRole();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -73,7 +71,6 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
       if (error) throw error;
       return data;
     },
-    enabled: isAdmin || isOwner,
   });
 
   const updateMutation = useMutation({
@@ -87,25 +84,23 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
       if (campaignerError) throw campaignerError;
 
       // עדכון הקשרים לסוכנויות
-      if (isAdmin || isOwner) {
-        // מחיקת הקשרים הישנים
-        const { error: deleteError } = await supabase
-          .from("campaigner_agencies")
-          .delete()
-          .eq("campaigner_id", campaigner.id);
-        if (deleteError) throw deleteError;
+      // מחיקת הקשרים הישנים
+      const { error: deleteError } = await supabase
+        .from("campaigner_agencies")
+        .delete()
+        .eq("campaigner_id", campaigner.id);
+      if (deleteError) throw deleteError;
 
-        // הוספת הקשרים החדשים
-        if (agency_ids.length > 0) {
-          const agencyLinks = agency_ids.map(agencyId => ({
-            campaigner_id: campaigner.id,
-            agency_id: agencyId,
-          }));
-          const { error: insertError } = await supabase
-            .from("campaigner_agencies")
-            .insert(agencyLinks);
-          if (insertError) throw insertError;
-        }
+      // הוספת הקשרים החדשים
+      if (agency_ids.length > 0) {
+        const agencyLinks = agency_ids.map(agencyId => ({
+          campaigner_id: campaigner.id,
+          agency_id: agencyId,
+        }));
+        const { error: insertError } = await supabase
+          .from("campaigner_agencies")
+          .insert(agencyLinks);
+        if (insertError) throw insertError;
       }
     },
     onSuccess: () => {
@@ -155,7 +150,7 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
             />
           </div>
 
-          {(isAdmin || isOwner) && (
+          {agencies && (
             <div className="space-y-2">
               <Label>סוכנויות *</Label>
               <div className="space-y-2">

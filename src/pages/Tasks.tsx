@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { CheckSquare, Calendar, Building2, Users, Megaphone, AlertCircle, GripVertical } from "lucide-react";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
-import { useUserRole } from "@/hooks/useUserRole";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useState } from "react";
 import { DndContext, DragOverlay, closestCorners, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, useDroppable } from "@dnd-kit/core";
@@ -24,7 +23,6 @@ export default function Tasks() {
   const [editingTask, setEditingTask] = useState<any>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [activeTask, setActiveTask] = useState<any>(null);
-  const { isAdmin, isOwner, isUser, isAgencyManager, userId } = useUserRole();
   const { selectedAgency } = useAgency();
   const queryClient = useQueryClient();
 
@@ -36,26 +34,8 @@ export default function Tasks() {
     })
   );
 
-  // Get user's campaigner_id if they're a regular user (not agency manager)
-  const { data: userProfile } = useQuery({
-    queryKey: ["user-profile", userId],
-    queryFn: async () => {
-      if (!userId || !isUser || isAgencyManager) return null;
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("campaigner_id")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!userId && isUser && !isAgencyManager,
-  });
-
   const { data: tasks, isLoading } = useQuery({
-    queryKey: ["tasks", isUser, isAgencyManager, userProfile?.campaigner_id],
+    queryKey: ["tasks"],
     queryFn: async () => {
       let query = supabase
         .from("tasks")
@@ -67,16 +47,10 @@ export default function Tasks() {
         `)
         .order("due_date", { ascending: true });
 
-      // For regular users (not agency managers), filter by their campaigner_id
-      if (isUser && !isAgencyManager && userProfile?.campaigner_id) {
-        query = query.eq("campaigner_id", userProfile.campaigner_id);
-      }
-
       const { data, error } = await query;
       if (error) throw error;
       return data;
     },
-    enabled: (!isUser || !!userProfile) || isAgencyManager,
   });
 
   const { data: campaigners } = useQuery({
@@ -112,8 +86,6 @@ export default function Tasks() {
   console.log("🔍 Tasks filtering debug:", {
     selectedAgency,
     selectedCampaigner,
-    isUser,
-    isAgencyManager,
     totalTasks: tasks?.length,
     tasksWithAgencies: tasks?.map(t => ({ 
       title: t.title, 
@@ -123,16 +95,9 @@ export default function Tasks() {
   });
 
   const filteredTasks = tasks?.filter(t => {
-    // For regular users (not agency managers), tasks are already filtered by their campaigner_id in the query
-    if (isUser && !isAgencyManager) {
-      const agencyMatch = selectedAgency === "all" || t.agency_id === selectedAgency;
-      console.log(`User task ${t.title}: agency match = ${agencyMatch} (${t.agency_id} === ${selectedAgency})`);
-      return agencyMatch;
-    }
-    
     const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
     const matchesAgency = selectedAgency === "all" || t.agency_id === selectedAgency;
-    console.log(`Admin/Manager task ${t.title}: campaigner match = ${matchesCampaigner}, agency match = ${matchesAgency}`);
+    console.log(`Task ${t.title}: campaigner match = ${matchesCampaigner}, agency match = ${matchesAgency}`);
     return matchesCampaigner && matchesAgency;
   });
 
@@ -355,8 +320,7 @@ export default function Tasks() {
           </div>
           
           <div className="flex gap-3 flex-wrap md:flex-nowrap w-full md:w-auto items-stretch">
-            {(isAdmin || isOwner) && (
-              <div className="w-full md:w-48">
+            <div className="w-full md:w-48">
                 <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="כל הקמפיינרים" />
@@ -368,10 +332,9 @@ export default function Tasks() {
                         {campaigner.full_name}
                       </SelectItem>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="w-full md:w-auto"><AddTaskForm /></div>
           </div>
         </div>

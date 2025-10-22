@@ -5,11 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Megaphone, DollarSign, TrendingUp, TrendingDown, CheckSquare } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAgency } from "@/contexts/AgencyContext";
-import { useUserRole } from "@/hooks/useUserRole";
 
 export default function Dashboard() {
-  const { selectedAgency, managedAgencyIds, userAgencyIds } = useAgency();
-  const { isAgencyManager, isUser, isAdmin, isOwner } = useUserRole();
+  const { selectedAgency } = useAgency();
   const [selectedClient, setSelectedClient] = useState<string>("all");
   const [selectedSupplier, setSelectedSupplier] = useState<string>("all");
 
@@ -261,7 +259,8 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {(isAdmin || isOwner) && (
+      {/* Financial Overview */}
+      {(
         <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
           <Card className="shadow-card min-w-0">
             <CardHeader className="flex flex-row items-center justify-between pb-2">

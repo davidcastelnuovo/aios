@@ -9,7 +9,6 @@ import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import AddTaskForm from "@/components/forms/AddTaskForm";
-import { useUserRole } from "@/hooks/useUserRole";
 import { useAgency } from "@/contexts/AgencyContext";
 import {
   Select,
@@ -51,28 +50,9 @@ export default function Clients() {
   const [deletingClient, setDeletingClient] = useState<any>(null);
   const [editingFolderLink, setEditingFolderLink] = useState<{ clientId: string; link: string } | null>(null);
   const queryClient = useQueryClient();
-  const { isAdmin, isOwner, isAgencyManager, isUser, userId } = useUserRole();
-
-  // Get user's campaigner_id if they're a regular user (not agency manager)
-  const { data: userProfile } = useQuery({
-    queryKey: ["user-profile", userId],
-    queryFn: async () => {
-      if (!userId || !isUser || isAgencyManager) return null;
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("campaigner_id")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!userId && isUser && !isAgencyManager,
-  });
 
   const { data: clients, isLoading } = useQuery({
-    queryKey: ["clients", isUser, isAgencyManager, userProfile?.campaigner_id],
+    queryKey: ["clients"],
     queryFn: async () => {
       let query = supabase
         .from("clients")
@@ -85,27 +65,10 @@ export default function Clients() {
         `)
         .order("created_at", { ascending: false });
 
-      // For regular users (not agency managers), filter by their assigned clients
-      if (isUser && !isAgencyManager && userProfile?.campaigner_id) {
-        const { data: clientTeam } = await supabase
-          .from("client_team")
-          .select("client_id")
-          .eq("campaigner_id", userProfile.campaigner_id);
-
-        if (clientTeam && clientTeam.length > 0) {
-          const clientIds = clientTeam.map(ct => ct.client_id);
-          query = query.in("id", clientIds);
-        } else {
-          // If no clients assigned, return empty array
-          return [];
-        }
-      }
-
       const { data, error } = await query;
       if (error) throw error;
       return data;
     },
-    enabled: (!isUser || !!userProfile) || isAgencyManager,
   });
 
   const { data: agencies } = useQuery({
@@ -329,12 +292,8 @@ export default function Clients() {
           
           <div className="h-8 w-px bg-border"></div>
           
-          {(isAdmin || isOwner || isAgencyManager) && (
-            <>
-              <ImportClientsCSV />
-              <ImportClientsSheet />
-            </>
-          )}
+          <ImportClientsCSV />
+          <ImportClientsSheet />
           <AddClientForm />
         </div>
       </div>
@@ -351,8 +310,7 @@ export default function Clients() {
               <Button size="sm" variant="secondary">
                 <Edit className="h-4 w-4" />
               </Button>
-              {(isAdmin || isOwner || isAgencyManager) && (
-                <Button 
+              <Button
                   size="sm" 
                   variant="destructive"
                   onClick={(e) => {
@@ -362,8 +320,7 @@ export default function Clients() {
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
-              )}
-            </div>
+              </div>
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -386,7 +343,7 @@ export default function Clients() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {isOwner && client.retainer && (
+              {client.retainer && (
                 <div className="flex items-center gap-2">
                   <Coins className="h-4 w-4 text-muted-foreground" />
                   <div className="text-sm">
@@ -560,8 +517,8 @@ export default function Clients() {
                 <TableHead className="text-right font-semibold">שם</TableHead>
                 <TableHead className="text-right font-semibold">סוכנות</TableHead>
                 <TableHead className="text-right font-semibold">סטטוס</TableHead>
-                {isOwner && <TableHead className="text-right font-semibold">ריטיינר</TableHead>}
-                {isOwner && <TableHead className="text-right font-semibold">תקציב חודשי</TableHead>}
+                <TableHead className="text-right font-semibold">ריטיינר</TableHead>
+                <TableHead className="text-right font-semibold">תקציב חודשי</TableHead>
                 <TableHead className="text-right font-semibold">טלפון</TableHead>
                 <TableHead className="text-right font-semibold">אימייל</TableHead>
                 <TableHead className="text-right font-semibold">אתר</TableHead>
@@ -585,16 +542,14 @@ export default function Clients() {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      {(isAdmin || isOwner || isAgencyManager) && (
-                        <Button 
-                          size="sm" 
-                          variant="ghost"
-                          onClick={() => setDeletingClient(client)}
-                          className="h-8 w-8 p-0 hover:bg-destructive/20 hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        size="sm" 
+                        variant="ghost"
+                        onClick={() => setDeletingClient(client)}
+                        className="h-8 w-8 p-0 hover:bg-destructive/20 hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                   <TableCell className="font-semibold py-4">{client.name}</TableCell>
@@ -644,26 +599,23 @@ export default function Clients() {
                       </SelectContent>
                     </Select>
                   </TableCell>
-                  {isOwner && (
-                    <TableCell className="py-4">
-                      {client.retainer ? (
-                        <div className="flex items-center gap-1 font-medium">
-                          <Coins className="h-4 w-4 text-muted-foreground" />
-                          <span>₪{Number(client.retainer).toLocaleString()}</span>
-                        </div>
-                      ) : <span className="text-muted-foreground">-</span>}
-                    </TableCell>
-                  )}
-                  {isOwner && (
-                    <TableCell className="py-4">
-                      {client.monthly_budget ? (
-                        <div className="flex items-center gap-1 font-medium">
-                          <Coins className="h-4 w-4 text-muted-foreground" />
-                          <span>₪{Number(client.monthly_budget).toLocaleString()}</span>
-                        </div>
-                      ) : <span className="text-muted-foreground">-</span>}
-                    </TableCell>
-                  )}
+                  <TableCell className="py-4">
+                    {client.retainer ? (
+                      <div className="flex items-center gap-1 font-medium">
+                        <Coins className="h-4 w-4 text-muted-foreground" />
+                        <span>₪{Number(client.retainer).toLocaleString()}</span>
+                      </div>
+                    ) : <span className="text-muted-foreground">-</span>}
+                  </TableCell>
+
+                  <TableCell className="py-4">
+                    {client.monthly_budget ? (
+                      <div className="flex items-center gap-1 font-medium">
+                        <Coins className="h-4 w-4 text-muted-foreground" />
+                        <span>₪{Number(client.monthly_budget).toLocaleString()}</span>
+                      </div>
+                    ) : <span className="text-muted-foreground">-</span>}
+                  </TableCell>
                   <TableCell className="py-4">
                     {client.phone ? (
                       <a 

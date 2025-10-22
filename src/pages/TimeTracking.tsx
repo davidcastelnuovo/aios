@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { format, differenceInMinutes, parse } from "date-fns";
 import { he } from "date-fns/locale";
-import { useUserRole } from "@/hooks/useUserRole";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -38,7 +37,6 @@ export default function TimeTracking() {
   const [editStartTime, setEditStartTime] = useState("");
   const [editEndTime, setEditEndTime] = useState("");
   const queryClient = useQueryClient();
-  const { isAdmin, isOwner } = useUserRole();
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -73,7 +71,6 @@ export default function TimeTracking() {
       if (error) throw error;
       return data;
     },
-    enabled: isAdmin || isOwner,
   });
 
   const { data: activeEntry } = useQuery({
@@ -97,7 +94,7 @@ export default function TimeTracking() {
       if (error) throw error;
       return data;
     },
-    enabled: !!profile?.campaigner_id || (isAdmin || isOwner),
+    enabled: !!profile?.campaigner_id,
     refetchInterval: 5000,
   });
 
@@ -122,7 +119,7 @@ export default function TimeTracking() {
       if (error) throw error;
       return data;
     },
-    enabled: !!profile?.campaigner_id || (isAdmin || isOwner),
+    enabled: !!profile?.campaigner_id,
   });
 
   const startTimerMutation = useMutation({
@@ -268,7 +265,7 @@ export default function TimeTracking() {
           <p className="text-muted-foreground mt-1">מעקב אחר שעות עבודה</p>
         </div>
 
-        {(isAdmin || isOwner) && (
+        {campaigners && campaigners.length > 0 && (
           <div className="w-full md:w-48">
             <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
               <SelectTrigger>
@@ -365,7 +362,7 @@ export default function TimeTracking() {
               <Table>
                 <TableHeader className="bg-primary/5">
                   <TableRow className="border-primary/20">
-                    {(isAdmin || isOwner) && selectedCampaigner !== "me" && (
+                    {selectedCampaigner !== "me" && (
                       <TableHead className="text-right font-semibold">קמפיינר</TableHead>
                     )}
                     <TableHead className="text-right font-semibold">תאריך</TableHead>
@@ -378,7 +375,7 @@ export default function TimeTracking() {
                 <TableBody>
                   {timeEntries.map((entry) => (
                     <TableRow key={entry.id} className="border-primary/10 hover:bg-primary/5">
-                      {(isAdmin || isOwner) && selectedCampaigner !== "me" && (
+                      {selectedCampaigner !== "me" && (
                         <TableCell className="font-medium">
                           {entry.campaigners?.full_name}
                         </TableCell>
