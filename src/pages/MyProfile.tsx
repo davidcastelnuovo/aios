@@ -136,9 +136,14 @@ export default function MyProfile() {
 
   const calculateTotal = () => {
     if (!assignments) return 0;
-    return assignments.reduce((sum, assignment) => {
-      return sum + Number(assignment.campaigner_payment || 0);
-    }, 0);
+    return assignments
+      .filter(assignment => 
+        assignment.clients?.status === "active" || 
+        assignment.clients?.status === "onboarding"
+      )
+      .reduce((sum, assignment) => {
+        return sum + Number(assignment.campaigner_payment || 0);
+      }, 0);
   };
 
   const getStatusColor = (status: string) => {
@@ -286,7 +291,7 @@ export default function MyProfile() {
                 onClick={() => setShowAssignments(!showAssignments)}
               >
                 <h3 className="font-semibold text-lg">
-                  לקוחות משויכים ({assignments?.length || 0})
+                  לקוחות משויכים ({assignments?.filter(a => a.clients?.status === "active" || a.clients?.status === "onboarding").length || 0})
                 </h3>
                 {showAssignments ? (
                   <ChevronUp className="h-5 w-5" />
@@ -303,7 +308,12 @@ export default function MyProfile() {
             
             {showAssignments && assignments && assignments.length > 0 && (
               <div className="space-y-3">
-                {assignments.map((assignment) => (
+                {assignments
+                  .filter(assignment => 
+                    assignment.clients?.status === "active" || 
+                    assignment.clients?.status === "onboarding"
+                  )
+                  .map((assignment) => (
                   <Card key={assignment.id} className="bg-muted/30">
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between gap-4">
