@@ -52,29 +52,31 @@ export function AppLayout({ children }: AppLayoutProps) {
               </h1>
             </div>
             <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
-              <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-                <SelectTrigger className="w-[140px] md:w-[200px] bg-background">
-                  <Building2 className="h-4 w-4 mr-2" />
-                  <SelectValue placeholder="בחר סוכנות" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  {agencies && agencies.length > 1 && (
-                    <SelectItem value="all">כל הסוכנויות</SelectItem>
-                  )}
-                  {agencies?.map((agency) => (
-                    <SelectItem key={agency.id} value={agency.id}>
-                      {agency.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {agencies && agencies.length > 0 && (
+                <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                  <SelectTrigger className="w-[140px] md:w-[200px] bg-background">
+                    <Building2 className="h-4 w-4 mr-2 flex-shrink-0" />
+                    <SelectValue placeholder="בחר סוכנות" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-[100]">
+                    {agencies.length > 1 && (
+                      <SelectItem value="all">כל הסוכנויות</SelectItem>
+                    )}
+                    {agencies.map((agency) => (
+                      <SelectItem key={agency.id} value={agency.id}>
+                        {agency.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="rounded-full">
                     <img src={logo} alt="Logo" className="h-8 w-8 object-contain" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-background z-50">
+                <DropdownMenuContent align="end" className="bg-background z-[100]">
                   <DropdownMenuItem onClick={handleLogout}>
                     <LogOut className="mr-2 h-4 w-4" />
                     התנתק
