@@ -26,31 +26,31 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <AgencyProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-        <Routes>
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/setup" element={<Setup />} />
-          <Route path="/" element={<ProtectedRoute requiredPermission="dashboard"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
-          <Route path="/agencies" element={<ProtectedRoute><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
-          <Route path="/clients" element={<ProtectedRoute><AppLayout><Clients /></AppLayout></ProtectedRoute>} />
-          <Route path="/campaigners" element={<ProtectedRoute><AppLayout><Campaigners /></AppLayout></ProtectedRoute>} />
-          <Route path="/suppliers" element={<ProtectedRoute><AppLayout><Suppliers /></AppLayout></ProtectedRoute>} />
-          <Route path="/finance" element={<ProtectedRoute><AppLayout><Finance /></AppLayout></ProtectedRoute>} />
-          <Route path="/tasks" element={<ProtectedRoute><AppLayout><Tasks /></AppLayout></ProtectedRoute>} />
-          <Route path="/client-onboarding" element={<ProtectedRoute><AppLayout><ClientOnboarding /></AppLayout></ProtectedRoute>} />
-          <Route path="/time-tracking" element={<ProtectedRoute><AppLayout><TimeTracking /></AppLayout></ProtectedRoute>} />
-          <Route path="/reports" element={<ProtectedRoute><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
-          <Route path="/my-profile" element={<ProtectedRoute><AppLayout><MyProfile /></AppLayout></ProtectedRoute>} />
-          <Route path="/users" element={<ProtectedRoute><AppLayout><Users /></AppLayout></ProtectedRoute>} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <AgencyProvider>
+          <Routes>
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/setup" element={<Setup />} />
+            <Route path="/" element={<ProtectedRoute requiredPermission="dashboard"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+            <Route path="/agencies" element={<ProtectedRoute><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
+            <Route path="/clients" element={<ProtectedRoute><AppLayout><Clients /></AppLayout></ProtectedRoute>} />
+            <Route path="/campaigners" element={<ProtectedRoute><AppLayout><Campaigners /></AppLayout></ProtectedRoute>} />
+            <Route path="/suppliers" element={<ProtectedRoute><AppLayout><Suppliers /></AppLayout></ProtectedRoute>} />
+            <Route path="/finance" element={<ProtectedRoute><AppLayout><Finance /></AppLayout></ProtectedRoute>} />
+            <Route path="/tasks" element={<ProtectedRoute><AppLayout><Tasks /></AppLayout></ProtectedRoute>} />
+            <Route path="/client-onboarding" element={<ProtectedRoute><AppLayout><ClientOnboarding /></AppLayout></ProtectedRoute>} />
+            <Route path="/time-tracking" element={<ProtectedRoute><AppLayout><TimeTracking /></AppLayout></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
+            <Route path="/my-profile" element={<ProtectedRoute><AppLayout><MyProfile /></AppLayout></ProtectedRoute>} />
+            <Route path="/users" element={<ProtectedRoute><AppLayout><Users /></AppLayout></ProtectedRoute>} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AgencyProvider>
       </BrowserRouter>
     </TooltipProvider>
-    </AgencyProvider>
   </QueryClientProvider>
 );
 
