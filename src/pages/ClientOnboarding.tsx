@@ -20,6 +20,7 @@ import { Clock, User, Plus, GripVertical } from "lucide-react";
 import { format } from "date-fns";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import AddOnboardingForm from "@/components/forms/AddOnboardingForm";
@@ -52,7 +53,8 @@ interface Campaigner {
 export default function ClientOnboarding() {
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
-  const { userAgencyIds, isOwner } = useUserAgencies();
+  const { userAgencyIds, isOwner, isAgencyOwner } = useUserAgencies();
+  const { campaignerId, isCampaigner, isTeamManager } = useUserRole();
   const [editingItem, setEditingItem] = useState<OnboardingItem | null>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -104,6 +106,20 @@ export default function ClientOnboarding() {
     },
   });
 
+  // Get client IDs for the campaigner
+  const { data: campaignerClientIds } = useQuery({
+    queryKey: ["campaigner-client-ids", campaignerId],
+    queryFn: async () => {
+      if (!campaignerId) return null;
+      const { data } = await supabase
+        .from("client_team")
+        .select("client_id")
+        .eq("campaigner_id", campaignerId);
+      return data?.map(ct => ct.client_id) || [];
+    },
+    enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner,
+  });
+
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: OnboardingStatus }) => {
       const { error } = await supabase
@@ -128,12 +144,28 @@ export default function ClientOnboarding() {
     totalItems: onboardingItems?.length,
     userAgencyIds,
     isOwner,
+    isCampaigner,
+    isTeamManager,
+    campaignerId,
+    campaignerClientIds,
   });
 
-  // First filter by user's accessible agencies
-  const accessibleItems = !isOwner && userAgencyIds && userAgencyIds.length > 0
-    ? onboardingItems?.filter(item => userAgencyIds.includes(item.agency_id))
-    : onboardingItems;
+  // Filter by role
+  let accessibleItems = onboardingItems;
+
+  if (!isOwner) {
+    if (isCampaigner && !isTeamManager && !isAgencyOwner && campaignerClientIds) {
+      // Pure campaigners see only onboarding for their assigned clients
+      accessibleItems = onboardingItems?.filter(item => 
+        campaignerClientIds.includes(item.client_id)
+      );
+    } else if (userAgencyIds && userAgencyIds.length > 0) {
+      // Team managers and agency owners see all onboarding in their agencies
+      accessibleItems = onboardingItems?.filter(item => 
+        userAgencyIds.includes(item.agency_id)
+      );
+    }
+  }
 
   // Then filter by selected agency and campaigner
   const filteredItems = accessibleItems?.filter((item) => {

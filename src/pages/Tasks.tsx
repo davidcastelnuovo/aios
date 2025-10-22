@@ -7,6 +7,7 @@ import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
+import { useUserRole } from "@/hooks/useUserRole";
 import { useState } from "react";
 import { DndContext, DragOverlay, closestCorners, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
@@ -25,7 +26,8 @@ export default function Tasks() {
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [activeTask, setActiveTask] = useState<any>(null);
   const { selectedAgency } = useAgency();
-  const { userAgencyIds, isOwner } = useUserAgencies();
+  const { userAgencyIds, isOwner, isAgencyOwner } = useUserAgencies();
+  const { campaignerId, isCampaigner, isTeamManager } = useUserRole();
   const queryClient = useQueryClient();
 
   const sensors = useSensors(
@@ -68,6 +70,20 @@ export default function Tasks() {
     },
   });
 
+  // Get client IDs for the campaigner
+  const { data: campaignerClientIds } = useQuery({
+    queryKey: ["campaigner-client-ids", campaignerId],
+    queryFn: async () => {
+      if (!campaignerId) return null;
+      const { data } = await supabase
+        .from("client_team")
+        .select("client_id")
+        .eq("campaigner_id", campaignerId);
+      return data?.map(ct => ct.client_id) || [];
+    },
+    enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner,
+  });
+
   const updateTaskStatusMutation = useMutation({
     mutationFn: async ({ taskId, status }: { taskId: string; status: "open" | "in_progress" | "done" }) => {
       const { error } = await supabase
@@ -91,12 +107,28 @@ export default function Tasks() {
     totalTasks: tasks?.length,
     userAgencyIds,
     isOwner,
+    isCampaigner,
+    isTeamManager,
+    campaignerId,
+    campaignerClientIds,
   });
 
-  // First filter by user's accessible agencies
-  const accessibleTasks = !isOwner && userAgencyIds && userAgencyIds.length > 0
-    ? tasks?.filter(t => userAgencyIds.includes(t.agency_id))
-    : tasks;
+  // Filter by role
+  let accessibleTasks = tasks;
+
+  if (!isOwner) {
+    if (isCampaigner && !isTeamManager && !isAgencyOwner && campaignerClientIds) {
+      // Pure campaigners see only tasks for their assigned clients
+      accessibleTasks = tasks?.filter(task => 
+        campaignerClientIds.includes(task.client_id)
+      );
+    } else if (userAgencyIds && userAgencyIds.length > 0) {
+      // Team managers and agency owners see all tasks in their agencies
+      accessibleTasks = tasks?.filter(task => 
+        userAgencyIds.includes(task.agency_id)
+      );
+    }
+  }
 
   // Then filter by selected agency and campaigner
   const filteredTasks = accessibleTasks?.filter(t => {

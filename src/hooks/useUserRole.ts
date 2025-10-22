@@ -28,6 +28,20 @@ export function useUserRole() {
     enabled: !!session?.user?.id,
   });
 
+  const { data: campaignerId } = useQuery({
+    queryKey: ["user-campaigner-id", session?.user?.id],
+    queryFn: async () => {
+      if (!session?.user?.id) return null;
+      const { data } = await supabase
+        .from("profiles")
+        .select("campaigner_id")
+        .eq("id", session.user.id)
+        .maybeSingle();
+      return data?.campaigner_id || null;
+    },
+    enabled: !!session?.user?.id,
+  });
+
   const hasRole = (role: UserRole) => roles?.includes(role) || false;
 
   return {
@@ -39,5 +53,6 @@ export function useUserRole() {
     isLoading,
     userId: session?.user?.id,
     userEmail: session?.user?.email,
+    campaignerId,
   };
 }

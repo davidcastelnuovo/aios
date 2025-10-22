@@ -12,6 +12,7 @@ import AddTaskForm from "@/components/forms/AddTaskForm";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { useUserRole } from "@/hooks/useUserRole";
 import {
   Select,
   SelectContent,
@@ -45,8 +46,9 @@ import {
 
 export default function Clients() {
   const { selectedAgency } = useAgency();
-  const { userAgencyIds, isOwner } = useUserAgencies();
+  const { userAgencyIds, isOwner, isAgencyOwner } = useUserAgencies();
   const { canViewFinance } = useUserPermissions();
+  const { campaignerId, isCampaigner, isTeamManager } = useUserRole();
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [editingClient, setEditingClient] = useState<any>(null);
   const [hideInactive, setHideInactive] = useState(true);
@@ -98,6 +100,20 @@ export default function Clients() {
       if (error) throw error;
       return data;
     },
+  });
+
+  // Get client IDs for the campaigner
+  const { data: campaignerClientIds } = useQuery({
+    queryKey: ["campaigner-client-ids", campaignerId],
+    queryFn: async () => {
+      if (!campaignerId) return null;
+      const { data } = await supabase
+        .from("client_team")
+        .select("client_id")
+        .eq("campaigner_id", campaignerId);
+      return data?.map(ct => ct.client_id) || [];
+    },
+    enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner,
   });
 
   const updateStatusMutation = useMutation({
@@ -192,12 +208,28 @@ export default function Clients() {
     totalClients: clients?.length,
     userAgencyIds,
     isOwner,
+    isCampaigner,
+    isTeamManager,
+    campaignerId,
+    campaignerClientIds,
   });
 
-  // First filter by user's accessible agencies
-  const accessibleClients = !isOwner && userAgencyIds && userAgencyIds.length > 0
-    ? clients?.filter(client => userAgencyIds.includes(client.agency_id))
-    : clients;
+  // Filter by role
+  let accessibleClients = clients;
+
+  if (!isOwner) {
+    if (isCampaigner && !isTeamManager && !isAgencyOwner && campaignerClientIds) {
+      // Pure campaigners see only their assigned clients
+      accessibleClients = clients?.filter(client => 
+        campaignerClientIds.includes(client.id)
+      );
+    } else if (userAgencyIds && userAgencyIds.length > 0) {
+      // Team managers and agency owners see all clients in their agencies
+      accessibleClients = clients?.filter(client => 
+        userAgencyIds.includes(client.agency_id)
+      );
+    }
+  }
 
   // Then filter by selected agency from dropdown
   const filteredClients = selectedAgency === "all" 

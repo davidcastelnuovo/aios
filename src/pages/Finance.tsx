@@ -6,10 +6,12 @@ import { TrendingUp, TrendingDown, Calendar, Building2, Users, Truck } from "luc
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
+import { useUserRole } from "@/hooks/useUserRole";
 
 export default function Finance() {
   const { selectedAgency } = useAgency();
-  const { userAgencyIds, isOwner } = useUserAgencies();
+  const { userAgencyIds, isOwner, isAgencyOwner } = useUserAgencies();
+  const { campaignerId, isCampaigner, isTeamManager } = useUserRole();
 
 
   const { data: financeRecords, isLoading } = useQuery({
@@ -34,11 +36,25 @@ export default function Finance() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("clients")
-        .select("retainer, agency_id")
+        .select("id, retainer, agency_id")
         .eq("status", "active");
       if (error) throw error;
       return data;
     },
+  });
+
+  // Get client IDs for the campaigner
+  const { data: campaignerClientIds } = useQuery({
+    queryKey: ["campaigner-client-ids", campaignerId],
+    queryFn: async () => {
+      if (!campaignerId) return null;
+      const { data } = await supabase
+        .from("client_team")
+        .select("client_id")
+        .eq("campaigner_id", campaignerId);
+      return data?.map(ct => ct.client_id) || [];
+    },
+    enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner,
   });
 
 
@@ -67,14 +83,30 @@ export default function Finance() {
     },
   });
 
-  // First filter by user's accessible agencies
-  const accessibleClients = !isOwner && userAgencyIds && userAgencyIds.length > 0
-    ? clients?.filter(c => userAgencyIds.includes(c.agency_id))
-    : clients;
+  // Filter by role
+  let accessibleClients = clients;
+  let accessibleFinanceRecords = financeRecords;
 
-  const accessibleFinanceRecords = !isOwner && userAgencyIds && userAgencyIds.length > 0
-    ? financeRecords?.filter(f => userAgencyIds.includes(f.agency_id))
-    : financeRecords;
+  if (!isOwner) {
+    if (isCampaigner && !isTeamManager && !isAgencyOwner && campaignerClientIds) {
+      // Pure campaigners see only their assigned clients
+      accessibleClients = clients?.filter(c => 
+        campaignerClientIds.includes(c.id)
+      );
+      // Finance records only for their clients
+      accessibleFinanceRecords = financeRecords?.filter(f => 
+        campaignerClientIds.includes(f.client_id)
+      );
+    } else if (userAgencyIds && userAgencyIds.length > 0) {
+      // Team managers and agency owners see all in their agencies
+      accessibleClients = clients?.filter(c => 
+        userAgencyIds.includes(c.agency_id)
+      );
+      accessibleFinanceRecords = financeRecords?.filter(f => 
+        userAgencyIds.includes(f.agency_id)
+      );
+    }
+  }
 
   // Then filter by selected agency
   const filteredClients = selectedAgency === "all" 
