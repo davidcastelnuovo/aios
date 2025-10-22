@@ -51,7 +51,7 @@ export default function Clients() {
   const [deletingClient, setDeletingClient] = useState<any>(null);
   const [editingFolderLink, setEditingFolderLink] = useState<{ clientId: string; link: string } | null>(null);
   const queryClient = useQueryClient();
-  const { isAdmin, isOwner } = useUserRole();
+  const { isAdmin, isOwner, isAgencyManager } = useUserRole();
 
   const { data: clients, isLoading } = useQuery({
     queryKey: ["clients"],
@@ -283,7 +283,7 @@ export default function Clients() {
           
           <div className="h-8 w-px bg-border"></div>
           
-          {(isAdmin || isOwner) && (
+          {(isAdmin || isOwner || isAgencyManager) && (
             <>
               <ImportClientsCSV />
               <ImportClientsSheet />
@@ -305,7 +305,7 @@ export default function Clients() {
               <Button size="sm" variant="secondary">
                 <Edit className="h-4 w-4" />
               </Button>
-              {(isAdmin || isOwner) && (
+              {(isAdmin || isOwner || isAgencyManager) && (
                 <Button 
                   size="sm" 
                   variant="destructive"
@@ -540,7 +540,7 @@ export default function Clients() {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      {(isAdmin || isOwner) && (
+                      {(isAdmin || isOwner || isAgencyManager) && (
                         <Button 
                           size="sm" 
                           variant="ghost"

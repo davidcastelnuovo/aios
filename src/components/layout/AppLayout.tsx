@@ -30,8 +30,8 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedAgency, setSelectedAgency, managedAgencyIds } = useAgency();
-  const { isAgencyManager } = useUserRole();
+  const { selectedAgency, setSelectedAgency, managedAgencyIds, userAgencyIds } = useAgency();
+  const { isAgencyManager, isUser } = useUserRole();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -46,9 +46,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     },
   });
 
-  // Filter agencies for agency managers
+  // Filter agencies based on user role
   const visibleAgencies = isAgencyManager 
     ? agencies?.filter(a => managedAgencyIds.includes(a.id))
+    : isUser
+    ? agencies?.filter(a => userAgencyIds.includes(a.id))
     : agencies;
 
   const handleLogout = async () => {
@@ -79,7 +81,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <SelectValue placeholder="כל הסוכנויות" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
-                  {!isAgencyManager && <SelectItem value="all">כל הסוכנויות</SelectItem>}
+                  {!isAgencyManager && !isUser && <SelectItem value="all">כל הסוכנויות</SelectItem>}
                   {visibleAgencies?.map((agency) => (
                     <SelectItem key={agency.id} value={agency.id}>
                       {agency.name}

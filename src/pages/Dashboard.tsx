@@ -8,8 +8,8 @@ import { useAgency } from "@/contexts/AgencyContext";
 import { useUserRole } from "@/hooks/useUserRole";
 
 export default function Dashboard() {
-  const { selectedAgency, managedAgencyIds } = useAgency();
-  const { isAgencyManager } = useUserRole();
+  const { selectedAgency, managedAgencyIds, userAgencyIds } = useAgency();
+  const { isAgencyManager, isUser } = useUserRole();
   const [selectedClient, setSelectedClient] = useState<string>("all");
   const [selectedSupplier, setSelectedSupplier] = useState<string>("all");
 
