@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Megaphone, DollarSign, TrendingUp, TrendingDown, CheckSquare } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAgency } from "@/contexts/AgencyContext";
+import { useUserAgencies } from "@/hooks/useUserAgencies";
 
 export default function Dashboard() {
   const { selectedAgency } = useAgency();
+  const { userAgencyIds, isOwner } = useUserAgencies();
   const [selectedClient, setSelectedClient] = useState<string>("all");
   const [selectedSupplier, setSelectedSupplier] = useState<string>("all");
 
@@ -202,9 +204,15 @@ export default function Dashboard() {
     },
   ];
 
+  // First filter by user's accessible agencies
+  const accessibleClients = !isOwner && userAgencyIds && userAgencyIds.length > 0
+    ? clients?.filter(c => userAgencyIds.includes(c.agency_id))
+    : clients;
+
+  // Then filter by selected agency
   const filteredClients = selectedAgency === "all" 
-    ? clients 
-    : clients?.filter(c => c.agency_id === selectedAgency);
+    ? accessibleClients 
+    : accessibleClients?.filter(c => c.agency_id === selectedAgency);
 
   return (
     <div className="space-y-6">

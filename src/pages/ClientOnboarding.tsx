@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Clock, User, Plus, GripVertical } from "lucide-react";
 import { format } from "date-fns";
 import { useAgency } from "@/contexts/AgencyContext";
+import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import AddOnboardingForm from "@/components/forms/AddOnboardingForm";
@@ -51,6 +52,7 @@ interface Campaigner {
 export default function ClientOnboarding() {
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
+  const { userAgencyIds, isOwner } = useUserAgencies();
   const [editingItem, setEditingItem] = useState<OnboardingItem | null>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -124,25 +126,25 @@ export default function ClientOnboarding() {
     selectedAgency,
     selectedCampaigner,
     totalItems: onboardingItems?.length,
-    itemsWithAgencies: onboardingItems?.map(item => ({ 
-      title: item.title, 
-      agency_id: item.agency_id, 
-      campaigner_id: item.campaigner_id 
-    }))
+    userAgencyIds,
+    isOwner,
   });
 
-  const filteredItems = onboardingItems?.filter((item) => {
+  // First filter by user's accessible agencies
+  const accessibleItems = !isOwner && userAgencyIds && userAgencyIds.length > 0
+    ? onboardingItems?.filter(item => userAgencyIds.includes(item.agency_id))
+    : onboardingItems;
+
+  // Then filter by selected agency and campaigner
+  const filteredItems = accessibleItems?.filter((item) => {
     // Filter by selected agency
     if (selectedAgency !== "all" && item.agency_id !== selectedAgency) {
-      console.log(`❌ Filtering out ${item.title} - agency mismatch: ${item.agency_id} !== ${selectedAgency}`);
       return false;
     }
     // Filter by selected campaigner
     if (selectedCampaigner !== "all" && item.campaigner_id !== selectedCampaigner) {
-      console.log(`❌ Filtering out ${item.title} - campaigner mismatch: ${item.campaigner_id} !== ${selectedCampaigner}`);
       return false;
     }
-    console.log(`✅ Including ${item.title}`);
     return true;
   });
 

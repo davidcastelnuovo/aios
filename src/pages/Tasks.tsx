@@ -6,6 +6,7 @@ import { CheckSquare, Calendar, Building2, Users, Megaphone, AlertCircle, GripVe
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useAgency } from "@/contexts/AgencyContext";
+import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useState } from "react";
 import { DndContext, DragOverlay, closestCorners, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
@@ -24,6 +25,7 @@ export default function Tasks() {
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [activeTask, setActiveTask] = useState<any>(null);
   const { selectedAgency } = useAgency();
+  const { userAgencyIds, isOwner } = useUserAgencies();
   const queryClient = useQueryClient();
 
   const sensors = useSensors(
@@ -87,17 +89,19 @@ export default function Tasks() {
     selectedAgency,
     selectedCampaigner,
     totalTasks: tasks?.length,
-    tasksWithAgencies: tasks?.map(t => ({ 
-      title: t.title, 
-      agency_id: t.agency_id, 
-      campaigner_id: t.campaigner_id 
-    }))
+    userAgencyIds,
+    isOwner,
   });
 
-  const filteredTasks = tasks?.filter(t => {
+  // First filter by user's accessible agencies
+  const accessibleTasks = !isOwner && userAgencyIds && userAgencyIds.length > 0
+    ? tasks?.filter(t => userAgencyIds.includes(t.agency_id))
+    : tasks;
+
+  // Then filter by selected agency and campaigner
+  const filteredTasks = accessibleTasks?.filter(t => {
     const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
     const matchesAgency = selectedAgency === "all" || t.agency_id === selectedAgency;
-    console.log(`Task ${t.title}: campaigner match = ${matchesCampaigner}, agency match = ${matchesAgency}`);
     return matchesCampaigner && matchesAgency;
   });
 

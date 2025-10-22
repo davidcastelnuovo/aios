@@ -5,9 +5,11 @@ import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, Calendar, Building2, Users, Truck } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAgency } from "@/contexts/AgencyContext";
+import { useUserAgencies } from "@/hooks/useUserAgencies";
 
 export default function Finance() {
   const { selectedAgency } = useAgency();
+  const { userAgencyIds, isOwner } = useUserAgencies();
 
 
   const { data: financeRecords, isLoading } = useQuery({
@@ -65,15 +67,25 @@ export default function Finance() {
     },
   });
 
+  // First filter by user's accessible agencies
+  const accessibleClients = !isOwner && userAgencyIds && userAgencyIds.length > 0
+    ? clients?.filter(c => userAgencyIds.includes(c.agency_id))
+    : clients;
+
+  const accessibleFinanceRecords = !isOwner && userAgencyIds && userAgencyIds.length > 0
+    ? financeRecords?.filter(f => userAgencyIds.includes(f.agency_id))
+    : financeRecords;
+
+  // Then filter by selected agency
   const filteredClients = selectedAgency === "all" 
-    ? clients 
-    : clients?.filter(c => c.agency_id === selectedAgency);
+    ? accessibleClients 
+    : accessibleClients?.filter(c => c.agency_id === selectedAgency);
 
   const totalRetainers = filteredClients?.reduce((sum, client) => sum + Number(client.retainer || 0), 0) || 0;
 
   const filteredFinanceRecords = selectedAgency === "all"
-    ? financeRecords
-    : financeRecords?.filter(f => f.agency_id === selectedAgency);
+    ? accessibleFinanceRecords
+    : accessibleFinanceRecords?.filter(f => f.agency_id === selectedAgency);
 
   const totalIncome = filteredFinanceRecords?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
   const totalExpense = filteredFinanceRecords?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;

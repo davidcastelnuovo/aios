@@ -10,6 +10,7 @@ import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import { useAgency } from "@/contexts/AgencyContext";
+import { useUserAgencies } from "@/hooks/useUserAgencies";
 import {
   Select,
   SelectContent,
@@ -43,6 +44,7 @@ import {
 
 export default function Clients() {
   const { selectedAgency } = useAgency();
+  const { userAgencyIds, isOwner } = useUserAgencies();
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [editingClient, setEditingClient] = useState<any>(null);
   const [hideInactive, setHideInactive] = useState(true);
@@ -186,15 +188,19 @@ export default function Clients() {
   console.log("🔍 Clients filtering debug:", {
     selectedAgency,
     totalClients: clients?.length,
-    clientsWithAgencies: clients?.map(c => ({ name: c.name, agency_id: c.agency_id, agency_name: c.agencies?.name }))
+    userAgencyIds,
+    isOwner,
   });
 
+  // First filter by user's accessible agencies
+  const accessibleClients = !isOwner && userAgencyIds && userAgencyIds.length > 0
+    ? clients?.filter(client => userAgencyIds.includes(client.agency_id))
+    : clients;
+
+  // Then filter by selected agency from dropdown
   const filteredClients = selectedAgency === "all" 
-    ? clients 
-    : clients?.filter(client => {
-        console.log(`Checking client ${client.name}: ${client.agency_id} === ${selectedAgency}?`, client.agency_id === selectedAgency);
-        return client.agency_id === selectedAgency;
-      });
+    ? accessibleClients 
+    : accessibleClients?.filter(client => client.agency_id === selectedAgency);
 
   const searchedClients = searchTerm 
     ? filteredClients?.filter(client => 
