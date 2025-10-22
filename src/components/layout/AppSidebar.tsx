@@ -11,6 +11,7 @@ import {
   BarChart3,
   UserCog,
   UserPlus,
+  User,
 } from "lucide-react";
 import {
   Sidebar,
@@ -27,6 +28,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 
 const menuItems = [
   { title: "דשבורד", url: "/", icon: LayoutDashboard, roles: ["admin", "owner", "agency_manager"] },
+  { title: "אזור אישי", url: "/my-profile", icon: User, roles: ["user"] },
   { title: "סוכנויות", url: "/agencies", icon: Building2, roles: ["admin", "user", "owner", "agency_manager"] },
   { title: "לקוחות", url: "/clients", icon: Users, roles: ["admin", "user", "owner", "agency_manager"] },
   { title: "משימות", url: "/tasks", icon: CheckSquare, roles: ["admin", "user", "owner", "agency_manager"] },

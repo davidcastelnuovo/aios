@@ -18,6 +18,7 @@ import ClientOnboarding from "./pages/ClientOnboarding";
 import TimeTracking from "./pages/TimeTracking";
 import Reports from "./pages/Reports";
 import Users from "./pages/Users";
+import MyProfile from "./pages/MyProfile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,17 +32,18 @@ const App = () => (
         <BrowserRouter>
         <Routes>
           <Route path="/auth" element={<Auth />} />
-          <Route path="/" element={<ProtectedRoute allowedRoles={["admin", "owner"]}><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute allowedRoles={["admin", "owner", "agency_manager"]}><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
           <Route path="/agencies" element={<ProtectedRoute><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
           <Route path="/clients" element={<ProtectedRoute><AppLayout><Clients /></AppLayout></ProtectedRoute>} />
-          <Route path="/campaigners" element={<ProtectedRoute><AppLayout><Campaigners /></AppLayout></ProtectedRoute>} />
-          <Route path="/suppliers" element={<ProtectedRoute allowedRoles={["owner"]}><AppLayout><Suppliers /></AppLayout></ProtectedRoute>} />
-          <Route path="/finance" element={<ProtectedRoute allowedRoles={["owner"]}><AppLayout><Finance /></AppLayout></ProtectedRoute>} />
+          <Route path="/campaigners" element={<ProtectedRoute allowedRoles={["admin", "owner", "agency_manager"]}><AppLayout><Campaigners /></AppLayout></ProtectedRoute>} />
+          <Route path="/suppliers" element={<ProtectedRoute allowedRoles={["owner", "agency_manager"]}><AppLayout><Suppliers /></AppLayout></ProtectedRoute>} />
+          <Route path="/finance" element={<ProtectedRoute allowedRoles={["owner", "agency_manager"]}><AppLayout><Finance /></AppLayout></ProtectedRoute>} />
           <Route path="/tasks" element={<ProtectedRoute><AppLayout><Tasks /></AppLayout></ProtectedRoute>} />
           <Route path="/client-onboarding" element={<ProtectedRoute><AppLayout><ClientOnboarding /></AppLayout></ProtectedRoute>} />
           <Route path="/time-tracking" element={<ProtectedRoute><AppLayout><TimeTracking /></AppLayout></ProtectedRoute>} />
-          <Route path="/reports" element={<ProtectedRoute><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
-          <Route path="/users" element={<ProtectedRoute><AppLayout><Users /></AppLayout></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute allowedRoles={["admin", "owner", "agency_manager"]}><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute allowedRoles={["admin", "owner"]}><AppLayout><Users /></AppLayout></ProtectedRoute>} />
+          <Route path="/my-profile" element={<ProtectedRoute allowedRoles={["user"]}><AppLayout><MyProfile /></AppLayout></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

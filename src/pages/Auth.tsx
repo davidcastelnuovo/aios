@@ -40,7 +40,7 @@ export default function Auth() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error, data } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
       toast({
         title: "שגיאה",
@@ -48,7 +48,18 @@ export default function Auth() {
         variant: "destructive",
       });
     } else {
-      navigate("/");
+      // Check user role and redirect accordingly
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", data.user.id)
+        .maybeSingle();
+      
+      if (roleData?.role === "user") {
+        navigate("/my-profile");
+      } else {
+        navigate("/");
+      }
     }
     setLoading(false);
   };

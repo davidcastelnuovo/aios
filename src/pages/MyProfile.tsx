@@ -1,0 +1,313 @@
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Phone, Mail, Folder, Briefcase, Calendar, DollarSign } from "lucide-react";
+import { useUserRole } from "@/hooks/useUserRole";
+import { format } from "date-fns";
+import { he } from "date-fns/locale";
+
+export default function MyProfile() {
+  const { userId } = useUserRole();
+
+  const { data: profile, isLoading: profileLoading } = useQuery({
+    queryKey: ["my-profile", userId],
+    queryFn: async () => {
+      if (!userId) return null;
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select(`
+          *,
+          campaigners (*)
+        `)
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userId,
+  });
+
+  const { data: assignments } = useQuery({
+    queryKey: ["my-assignments", profile?.campaigner_id],
+    queryFn: async () => {
+      if (!profile?.campaigner_id) return [];
+
+      const { data, error } = await supabase
+        .from("client_team")
+        .select(`
+          *,
+          clients (
+            id,
+            name,
+            status,
+            agencies (name)
+          )
+        `)
+        .eq("campaigner_id", profile.campaigner_id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!profile?.campaigner_id,
+  });
+
+  const { data: agencies } = useQuery({
+    queryKey: ["my-agencies", profile?.campaigner_id],
+    queryFn: async () => {
+      if (!profile?.campaigner_id) return [];
+
+      const { data, error } = await supabase
+        .from("campaigner_agencies")
+        .select(`
+          agencies (
+            id,
+            name
+          )
+        `)
+        .eq("campaigner_id", profile.campaigner_id);
+
+      if (error) throw error;
+      return data?.map(item => item.agencies).filter(Boolean) || [];
+    },
+    enabled: !!profile?.campaigner_id,
+  });
+
+  const calculateTotal = () => {
+    if (!assignments) return 0;
+    return assignments.reduce((sum, assignment) => {
+      return sum + Number(assignment.campaigner_payment || 0);
+    }, 0);
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "active":
+        return "bg-success/10 text-success border-success/20";
+      case "onboarding":
+        return "bg-blue-500/10 text-blue-600 border-blue-500/20";
+      case "paused":
+        return "bg-yellow-500/10 text-yellow-600 border-yellow-500/20";
+      case "ended":
+        return "bg-muted text-muted-foreground border-border";
+      default:
+        return "";
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "active":
+        return "פעיל";
+      case "onboarding":
+        return "בקליטה";
+      case "paused":
+        return "מושהה";
+      case "ended":
+        return "הסתיים";
+      default:
+        return status;
+    }
+  };
+
+  if (profileLoading) {
+    return <div className="flex justify-center p-8">טוען...</div>;
+  }
+
+  if (!profile?.campaigners) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-3xl font-bold">אזור אישי</h2>
+          <p className="text-muted-foreground mt-1">הפרטים האישיים שלך</p>
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground">לא נמצא פרופיל קמפיינר עבור המשתמש שלך.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const campaigner = profile.campaigners;
+  const totalPayment = calculateTotal();
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-bold">אזור אישי</h2>
+        <p className="text-muted-foreground mt-1">הפרטים האישיים שלך</p>
+      </div>
+
+      <Card className="shadow-card">
+        <CardHeader className="border-b bg-muted/30">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-2xl">{campaigner.full_name}</CardTitle>
+            <Badge variant={campaigner.active ? "default" : "secondary"}>
+              {campaigner.active ? "פעיל" : "לא פעיל"}
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="p-6 space-y-6">
+          {/* Contact Information */}
+          <div className="space-y-3">
+            <h3 className="font-semibold text-lg flex items-center gap-2">
+              <Briefcase className="h-5 w-5" />
+              פרטי קשר
+            </h3>
+            <div className="grid gap-3">
+              {campaigner.phone && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span dir="ltr">{campaigner.phone}</span>
+                </div>
+              )}
+              {campaigner.email && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <span>{campaigner.email}</span>
+                </div>
+              )}
+              {campaigner.folder_link && (
+                <div className="flex items-center gap-3 text-sm">
+                  <Folder className="h-4 w-4 text-muted-foreground" />
+                  <a
+                    href={campaigner.folder_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    קישור לתיקיה
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Agencies */}
+          {agencies && agencies.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="font-semibold text-lg">סוכנויות</h3>
+              <div className="flex flex-wrap gap-2">
+                {agencies.map((agency: any) => (
+                  <Badge key={agency.id} variant="outline">
+                    {agency.name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Role */}
+          {campaigner.role && (
+            <div className="space-y-3">
+              <h3 className="font-semibold text-lg">תפקיד</h3>
+              <Badge variant="secondary">{campaigner.role}</Badge>
+            </div>
+          )}
+
+          {/* Notes */}
+          {campaigner.notes && (
+            <div className="space-y-3">
+              <h3 className="font-semibold text-lg">הערות</h3>
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                {campaigner.notes}
+              </p>
+            </div>
+          )}
+
+          {/* Client Assignments */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-lg">לקוחות משויכים</h3>
+              {totalPayment > 0 && (
+                <div className="flex items-center gap-2 text-primary font-semibold">
+                  <DollarSign className="h-5 w-5" />
+                  <span>₪{totalPayment.toLocaleString()}</span>
+                </div>
+              )}
+            </div>
+            
+            {assignments && assignments.length > 0 ? (
+              <div className="space-y-3">
+                {assignments.map((assignment) => (
+                  <Card key={assignment.id} className="bg-muted/30">
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-medium">{assignment.clients?.name}</h4>
+                            <Badge className={getStatusColor(assignment.clients?.status || "")}>
+                              {getStatusText(assignment.clients?.status || "")}
+                            </Badge>
+                          </div>
+                          
+                          {assignment.clients?.agencies && (
+                            <p className="text-sm text-muted-foreground">
+                              {assignment.clients.agencies.name}
+                            </p>
+                          )}
+
+                          {assignment.role_on_account && (
+                            <p className="text-sm">
+                              <span className="text-muted-foreground">תפקיד: </span>
+                              {assignment.role_on_account}
+                            </p>
+                          )}
+
+                          {assignment.allocation_percent && (
+                            <p className="text-sm">
+                              <span className="text-muted-foreground">אחוז הקצאה: </span>
+                              {assignment.allocation_percent}%
+                            </p>
+                          )}
+
+                          {(assignment.start_date || assignment.end_date) && (
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                              {assignment.start_date && (
+                                <div className="flex items-center gap-1">
+                                  <Calendar className="h-3 w-3" />
+                                  <span>התחלה: {format(new Date(assignment.start_date), "dd/MM/yyyy", { locale: he })}</span>
+                                </div>
+                              )}
+                              {assignment.end_date && (
+                                <div className="flex items-center gap-1">
+                                  <Calendar className="h-3 w-3" />
+                                  <span>סיום: {format(new Date(assignment.end_date), "dd/MM/yyyy", { locale: he })}</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {assignment.notes && (
+                            <p className="text-sm text-muted-foreground italic">
+                              {assignment.notes}
+                            </p>
+                          )}
+                        </div>
+
+                        {assignment.campaigner_payment && Number(assignment.campaigner_payment) > 0 && (
+                          <div className="text-left">
+                            <Badge variant="outline" className="text-base font-semibold">
+                              ₪{Number(assignment.campaigner_payment).toLocaleString()}
+                            </Badge>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">אין לקוחות משויכים</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

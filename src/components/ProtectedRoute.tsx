@@ -42,6 +42,10 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
 
   // Check if role restrictions are specified and if user has required role
   if (allowedRoles && role && !allowedRoles.includes(role)) {
+    // Regular users should go to their profile, others to tasks
+    if (role === "user") {
+      return <Navigate to="/my-profile" replace />;
+    }
     return <Navigate to="/tasks" replace />;
   }
 
