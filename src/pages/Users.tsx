@@ -162,6 +162,24 @@ export default function Users() {
     },
   });
 
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { userId },
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      toast.success("המשתמש נמחק בהצלחה");
+    },
+    onError: (error: Error) => {
+      toast.error("שגיאה במחיקת משתמש: " + error.message);
+    },
+  });
+
   if (!isOwner) {
     return (
       <div className="container mx-auto py-6">
@@ -354,7 +372,7 @@ export default function Users() {
                           })
                         }
                       >
-                        <SelectTrigger className="w-[180px]">
+                        <SelectTrigger className="w-[140px]">
                           <SelectValue placeholder="הוסף תפקיד" />
                         </SelectTrigger>
                         <SelectContent>
@@ -378,7 +396,7 @@ export default function Users() {
                             })
                           }
                         >
-                          <SelectTrigger className="w-[180px]">
+                          <SelectTrigger className="w-[140px]">
                             <SelectValue placeholder="הסר תפקיד" />
                           </SelectTrigger>
                           <SelectContent>
@@ -390,6 +408,18 @@ export default function Users() {
                           </SelectContent>
                         </Select>
                       )}
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        onClick={() => {
+                          if (confirm(`האם אתה בטוח שברצונך למחוק את ${user.email}?`)) {
+                            deleteUserMutation.mutate(user.id);
+                          }
+                        }}
+                        disabled={deleteUserMutation.isPending}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
