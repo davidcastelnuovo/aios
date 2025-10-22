@@ -45,8 +45,6 @@ export function ImportClientsCSV() {
       'סוכנות': 'agency',
       'agency': 'agency',
       'agency_id': 'agency',
-      'תעשייה': 'industry',
-      'industry': 'industry',
       'תקציב חודשי': 'monthly_budget',
       'monthly_budget': 'monthly_budget',
       'אתר': 'website',
@@ -138,7 +136,6 @@ export function ImportClientsCSV() {
         phone: string | null;
         email: string | null;
         folder_link: string | null;
-        industry: string | null;
         monthly_budget: number | null;
         website: string | null;
         notes: string | null;
@@ -172,7 +169,6 @@ export function ImportClientsCSV() {
             phone: row.phone || null,
             email: row.email || null,
             folder_link: row.folder_link || null,
-            industry: row.industry || null,
             monthly_budget: row.monthly_budget ? parseFloat(row.monthly_budget) : null,
             website: row.website || null,
             notes: row.notes || null,

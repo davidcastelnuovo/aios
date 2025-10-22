@@ -39,7 +39,6 @@ const formSchema = z.object({
   phone: z.string().optional(),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   folder_link: z.string().url("קישור לא תקין").optional().or(z.literal("")),
-  industry: z.string().optional(),
   retainer: z.string().optional(),
   monthly_budget: z.string().optional(),
   website: z.string().url("כתובת אתר לא תקינה").optional().or(z.literal("")),
@@ -157,7 +156,6 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       phone: client.phone || "",
       email: client.email || "",
       folder_link: client.folder_link || "",
-      industry: client.industry || "",
       retainer: client.retainer?.toString() || "",
       monthly_budget: client.monthly_budget?.toString() || "",
       website: client.website || "",
@@ -178,7 +176,6 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
           phone: values.phone || null,
           email: values.email || null,
           folder_link: values.folder_link || null,
-          industry: values.industry || null,
           retainer: values.retainer ? parseFloat(values.retainer) : null,
           monthly_budget: values.monthly_budget ? parseFloat(values.monthly_budget) : null,
           website: values.website || null,
@@ -315,21 +312,6 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                 />
               )}
 
-              <FormField
-                control={form.control}
-                name="industry"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>תעשייה</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
             {isOwner && (
               <FormField
                 control={form.control}
@@ -345,6 +327,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                 )}
               />
             )}
+            </div>
 
             <FormField
               control={form.control}

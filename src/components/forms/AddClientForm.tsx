@@ -38,7 +38,6 @@ const formSchema = z.object({
   phone: z.string().optional(),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   folder_link: z.string().url("קישור לא תקין").optional().or(z.literal("")),
-  industry: z.string().optional(),
   retainer: z.string().optional(),
   monthly_budget: z.string().optional(),
   website: z.string().url("כתובת אתר לא תקינה").optional().or(z.literal("")),
@@ -72,7 +71,6 @@ export function AddClientForm() {
       phone: "",
       email: "",
       folder_link: "",
-      industry: "",
       retainer: "",
       monthly_budget: "",
       website: "",
@@ -88,7 +86,6 @@ export function AddClientForm() {
         phone: values.phone || null,
         email: values.email || null,
         folder_link: values.folder_link || null,
-        industry: values.industry || null,
         retainer: values.retainer ? parseFloat(values.retainer) : null,
         monthly_budget: values.monthly_budget ? parseFloat(values.monthly_budget) : null,
         website: values.website || null,
@@ -198,20 +195,6 @@ export function AddClientForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>קישור לתיקיה</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="industry"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>תעשייה</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>

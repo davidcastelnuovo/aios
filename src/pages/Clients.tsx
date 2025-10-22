@@ -551,7 +551,6 @@ export default function Clients() {
                 <TableHead className="text-right font-semibold">שם</TableHead>
                 <TableHead className="text-right font-semibold">סוכנות</TableHead>
                 <TableHead className="text-right font-semibold">סטטוס</TableHead>
-                <TableHead className="text-right font-semibold">תעשייה</TableHead>
                 {isOwner && <TableHead className="text-right font-semibold">ריטיינר</TableHead>}
                 {isOwner && <TableHead className="text-right font-semibold">תקציב חודשי</TableHead>}
                 <TableHead className="text-right font-semibold">טלפון</TableHead>
@@ -635,9 +634,6 @@ export default function Clients() {
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                  </TableCell>
-                  <TableCell className="py-4">
-                    <span className="text-sm">{client.industry || <span className="text-muted-foreground">-</span>}</span>
                   </TableCell>
                   {isOwner && (
                     <TableCell className="py-4">
