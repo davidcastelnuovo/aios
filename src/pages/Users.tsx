@@ -106,20 +106,13 @@ export default function Users() {
       userId: string;
       role: UserRole;
     }) => {
-      // Delete all existing roles
-      const { error: deleteError } = await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", userId);
+      const { data, error } = await supabase.functions.invoke("update-user-role", {
+        body: { userId, role },
+      });
       
-      if (deleteError) throw deleteError;
-
-      // Insert new role
-      const { error: insertError } = await supabase
-        .from("user_roles")
-        .insert({ user_id: userId, role });
-      
-      if (insertError) throw insertError;
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
