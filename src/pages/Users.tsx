@@ -320,27 +320,6 @@ export default function Users() {
                           ))}
                         </SelectContent>
                       </Select>
-                      {user.roles.length > 0 && (
-                        <Select
-                          onValueChange={(role) =>
-                            removeRoleMutation.mutate({
-                              userId: user.id,
-                              role: role as UserRole,
-                            })
-                          }
-                        >
-                          <SelectTrigger className="w-[140px]">
-                            <SelectValue placeholder="הסר תפקיד" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {user.roles.map((role) => (
-                              <SelectItem key={role} value={role}>
-                                {roleLabels[role]}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
                       <Button
                         variant="destructive"
                         size="icon"
