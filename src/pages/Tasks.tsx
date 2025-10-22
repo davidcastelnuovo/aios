@@ -24,7 +24,7 @@ export default function Tasks() {
   const [editingTask, setEditingTask] = useState<any>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [activeTask, setActiveTask] = useState<any>(null);
-  const { isAdmin, isOwner } = useUserRole();
+  const { isAdmin, isOwner, isUser, userId } = useUserRole();
   const { selectedAgency } = useAgency();
   const queryClient = useQueryClient();
 
@@ -35,10 +35,29 @@ export default function Tasks() {
       },
     })
   );
-  const { data: tasks, isLoading } = useQuery({
-    queryKey: ["tasks"],
+
+  // Get user's campaigner_id if they're a regular user
+  const { data: userProfile } = useQuery({
+    queryKey: ["user-profile", userId],
     queryFn: async () => {
+      if (!userId || !isUser) return null;
+
       const { data, error } = await supabase
+        .from("profiles")
+        .select("campaigner_id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userId && isUser,
+  });
+
+  const { data: tasks, isLoading } = useQuery({
+    queryKey: ["tasks", isUser, userProfile?.campaigner_id],
+    queryFn: async () => {
+      let query = supabase
         .from("tasks")
         .select(`
           *,
@@ -47,9 +66,17 @@ export default function Tasks() {
           campaigners (full_name)
         `)
         .order("due_date", { ascending: true });
+
+      // For regular users, filter by their campaigner_id
+      if (isUser && userProfile?.campaigner_id) {
+        query = query.eq("campaigner_id", userProfile.campaigner_id);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
+    enabled: !isUser || !!userProfile,
   });
 
   const { data: campaigners } = useQuery({
@@ -83,6 +110,11 @@ export default function Tasks() {
   });
 
   const filteredTasks = tasks?.filter(t => {
+    // For regular users, tasks are already filtered by their campaigner_id in the query
+    if (isUser) {
+      return selectedAgency === "all" || t.agency_id === selectedAgency;
+    }
+    
     const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
     const matchesAgency = selectedAgency === "all" || t.agency_id === selectedAgency;
     return matchesCampaigner && matchesAgency;

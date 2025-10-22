@@ -51,7 +51,7 @@ interface Campaigner {
 
 export default function ClientOnboarding() {
   const queryClient = useQueryClient();
-  const { role } = useUserRole();
+  const { role, isUser, userId } = useUserRole();
   const { selectedAgency } = useAgency();
   const [editingItem, setEditingItem] = useState<OnboardingItem | null>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
@@ -71,8 +71,26 @@ export default function ClientOnboarding() {
     })
   );
 
+  // Get user's campaigner_id if they're a regular user
+  const { data: userProfile } = useQuery({
+    queryKey: ["user-profile", userId],
+    queryFn: async () => {
+      if (!userId || !isUser) return null;
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("campaigner_id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userId && isUser,
+  });
+
   const { data: onboardingItems, isLoading } = useQuery({
-    queryKey: ["client-onboarding", selectedAgency],
+    queryKey: ["client-onboarding", selectedAgency, isUser, userProfile?.campaigner_id],
     queryFn: async () => {
       let query = supabase
         .from("client_onboarding")
@@ -88,10 +106,16 @@ export default function ClientOnboarding() {
         query = query.eq("agency_id", selectedAgency);
       }
 
+      // For regular users, filter by their campaigner_id
+      if (isUser && userProfile?.campaigner_id) {
+        query = query.eq("campaigner_id", userProfile.campaigner_id);
+      }
+
       const { data, error } = await query;
       if (error) throw error;
       return data as OnboardingItem[];
     },
+    enabled: !isUser || !!userProfile,
   });
 
   const { data: campaigners } = useQuery({

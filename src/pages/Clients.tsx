@@ -51,12 +51,30 @@ export default function Clients() {
   const [deletingClient, setDeletingClient] = useState<any>(null);
   const [editingFolderLink, setEditingFolderLink] = useState<{ clientId: string; link: string } | null>(null);
   const queryClient = useQueryClient();
-  const { isAdmin, isOwner, isAgencyManager } = useUserRole();
+  const { isAdmin, isOwner, isAgencyManager, isUser, userId } = useUserRole();
+
+  // Get user's campaigner_id if they're a regular user
+  const { data: userProfile } = useQuery({
+    queryKey: ["user-profile", userId],
+    queryFn: async () => {
+      if (!userId || !isUser) return null;
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("campaigner_id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userId && isUser,
+  });
 
   const { data: clients, isLoading } = useQuery({
-    queryKey: ["clients"],
+    queryKey: ["clients", isUser, userProfile?.campaigner_id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("clients")
         .select(`
           *,
@@ -66,9 +84,28 @@ export default function Clients() {
           )
         `)
         .order("created_at", { ascending: false });
+
+      // For regular users, filter by their assigned clients
+      if (isUser && userProfile?.campaigner_id) {
+        const { data: clientTeam } = await supabase
+          .from("client_team")
+          .select("client_id")
+          .eq("campaigner_id", userProfile.campaigner_id);
+
+        if (clientTeam && clientTeam.length > 0) {
+          const clientIds = clientTeam.map(ct => ct.client_id);
+          query = query.in("id", clientIds);
+        } else {
+          // If no clients assigned, return empty array
+          return [];
+        }
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
+    enabled: !isUser || !!userProfile,
   });
 
   const { data: agencies } = useQuery({
