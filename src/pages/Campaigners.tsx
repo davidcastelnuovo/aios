@@ -10,10 +10,12 @@ import { AddCampaignerForm } from "@/components/forms/AddCampaignerForm";
 import { EditCampaignerDialog } from "@/components/forms/EditCampaignerDialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useUserPermissions } from "@/hooks/useUserPermissions";
 
 export default function Campaigners() {
   const [expandedCampaigner, setExpandedCampaigner] = useState<string | null>(null);
   const [tempAmounts, setTempAmounts] = useState<Record<string, number>>({});
+  const { canViewFinance } = useUserPermissions();
   const queryClient = useQueryClient();
   
   const { data: campaigners, isLoading } = useQuery({
@@ -171,29 +173,33 @@ export default function Campaigners() {
                         <TableHeader>
                           <TableRow>
                             <TableHead className="text-right">שם לקוח</TableHead>
-                            <TableHead className="text-right">סכום</TableHead>
+                            {canViewFinance() && <TableHead className="text-right">סכום</TableHead>}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {campaigner.client_team.map((assignment: any) => (
                             <TableRow key={assignment.id}>
                               <TableCell className="font-medium">{assignment.clients.name}</TableCell>
-                              <TableCell>
-                                <Input
-                                  type="number"
-                                  placeholder="0"
-                                  value={tempAmounts[assignment.id] ?? assignment.campaigner_payment ?? ''}
-                                  onChange={(e) => handleAmountChange(assignment.id, e.target.value)}
-                                  onBlur={() => handleAmountBlur(assignment.id, assignment.campaigner_payment || 0)}
-                                  className="max-w-[150px]"
-                                />
-                              </TableCell>
+                              {canViewFinance() && (
+                                <TableCell>
+                                  <Input
+                                    type="number"
+                                    placeholder="0"
+                                    value={tempAmounts[assignment.id] ?? assignment.campaigner_payment ?? ''}
+                                    onChange={(e) => handleAmountChange(assignment.id, e.target.value)}
+                                    onBlur={() => handleAmountBlur(assignment.id, assignment.campaigner_payment || 0)}
+                                    className="max-w-[150px]"
+                                  />
+                                </TableCell>
+                              )}
                             </TableRow>
                           ))}
-                          <TableRow className="font-semibold bg-muted/50">
-                            <TableCell>סה"כ</TableCell>
-                            <TableCell>{calculateTotal(campaigner.id).toLocaleString('he-IL')} ₪</TableCell>
-                          </TableRow>
+                          {canViewFinance() && (
+                            <TableRow className="font-semibold bg-muted/50">
+                              <TableCell>סה"כ</TableCell>
+                              <TableCell>{calculateTotal(campaigner.id).toLocaleString('he-IL')} ₪</TableCell>
+                            </TableRow>
+                          )}
                         </TableBody>
                       </Table>
                     </div>
