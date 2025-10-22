@@ -362,7 +362,9 @@ export default function Tasks() {
           </div>
           
           <div className="flex gap-3 flex-wrap md:flex-nowrap w-full md:w-auto items-stretch">
-            <div className="w-full md:w-48">
+            {/* Hide campaigner filter for pure campaigners */}
+            {!(isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner) && (
+              <div className="w-full md:w-48">
                 <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="כל הקמפיינרים" />
@@ -374,9 +376,10 @@ export default function Tasks() {
                         {campaigner.full_name}
                       </SelectItem>
                     ))}
-                </SelectContent>
-              </Select>
-            </div>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="w-full md:w-auto"><AddTaskForm /></div>
           </div>
         </div>

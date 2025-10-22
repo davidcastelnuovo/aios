@@ -511,25 +511,28 @@ export default function Clients() {
                 </div>
               )}
               
-              <div className="pt-2 border-t space-y-2">
-                <p className="text-sm text-muted-foreground">הוסף קמפיינר:</p>
-                <div onClick={(e) => e.stopPropagation()}>
-                  <Select
-                    onValueChange={(value) => assignCampaignerMutation.mutate({ clientId: client.id, campaignerId: value })}
-                  >
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="בחר קמפיינר" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background">
-                      {campaigners?.map((campaigner) => (
-                        <SelectItem key={campaigner.id} value={campaigner.id}>
-                          {campaigner.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+              {/* Hide add campaigner option for pure campaigners */}
+              {!(isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner) && (
+                <div className="pt-2 border-t space-y-2">
+                  <p className="text-sm text-muted-foreground">הוסף קמפיינר:</p>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <Select
+                      onValueChange={(value) => assignCampaignerMutation.mutate({ clientId: client.id, campaignerId: value })}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="בחר קמפיינר" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background">
+                        {campaigners?.map((campaigner) => (
+                          <SelectItem key={campaigner.id} value={campaigner.id}>
+                            {campaigner.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
+              )}
               
               <div className="pt-2 border-t">
                 <AddTaskForm 
@@ -744,20 +747,23 @@ export default function Clients() {
                           ))}
                         </div>
                       )}
-                      <Select
-                        onValueChange={(value) => assignCampaignerMutation.mutate({ clientId: client.id, campaignerId: value })}
-                      >
-                        <SelectTrigger className="h-8 text-xs bg-background hover:bg-accent/10 transition-colors">
-                          <SelectValue placeholder="+ הוסף קמפיינר" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-background">
-                          {campaigners?.map((campaigner) => (
-                            <SelectItem key={campaigner.id} value={campaigner.id}>
-                              {campaigner.full_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      {/* Hide add campaigner option for pure campaigners */}
+                      {!(isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner) && (
+                        <Select
+                          onValueChange={(value) => assignCampaignerMutation.mutate({ clientId: client.id, campaignerId: value })}
+                        >
+                          <SelectTrigger className="h-8 text-xs bg-background hover:bg-accent/10 transition-colors">
+                            <SelectValue placeholder="+ הוסף קמפיינר" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background">
+                            {campaigners?.map((campaigner) => (
+                              <SelectItem key={campaigner.id} value={campaigner.id}>
+                                {campaigner.full_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
