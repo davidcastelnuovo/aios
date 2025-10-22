@@ -78,6 +78,34 @@ export default function MyProfile() {
     enabled: !!profile?.campaigner_id,
   });
 
+  // Also fetch agencies managed by the user (team managers)
+  const { data: managedAgencies } = useQuery({
+    queryKey: ["my-managed-agencies", userId],
+    queryFn: async () => {
+      if (!userId) return [];
+      const { data, error } = await supabase
+        .from("user_managed_agencies")
+        .select(`
+          agencies (
+            id,
+            name
+          )
+        `)
+        .eq("user_id", userId);
+      if (error) throw error;
+      return data?.map((item: any) => item.agencies).filter(Boolean) || [];
+    },
+    enabled: !!userId,
+  });
+
+  // Merge agencies from campaigner links and managed agencies
+  const mergedAgencies = (() => {
+    const map = new Map<string, any>();
+    (agencies || []).forEach((a: any) => a && map.set(a.id, a));
+    (managedAgencies || []).forEach((a: any) => a && map.set(a.id, a));
+    return Array.from(map.values());
+  })();
+
   // Realtime updates: refresh profile and assignments/agencies when data changes
   const queryClient = useQueryClient();
 
@@ -219,11 +247,11 @@ export default function MyProfile() {
           </div>
 
           {/* Agencies */}
-          {agencies && agencies.length > 0 && (
+          {mergedAgencies && mergedAgencies.length > 0 && (
             <div className="space-y-3">
               <h3 className="font-semibold text-lg">סוכנויות</h3>
               <div className="flex flex-wrap gap-2">
-                {agencies.map((agency: any) => (
+                {mergedAgencies.map((agency: any) => (
                   <Badge key={agency.id} variant="outline">
                     {agency.name}
                   </Badge>

@@ -43,7 +43,7 @@ const menuItems = [
 
 export function AppSidebar() {
   const { state, setOpenMobile, isMobile } = useSidebar();
-  const { hasPermission } = useUserPermissions();
+  const { hasPermission, isLoading } = useUserPermissions();
   const isCollapsed = state === "collapsed";
 
   const handleLinkClick = () => {
@@ -56,6 +56,10 @@ export function AppSidebar() {
   const visibleMenuItems = menuItems.filter((item) => {
     // "My Profile" is always visible (module is null)
     if (item.url === "/my-profile") return true;
+
+    // While permissions are loading, hide restricted items to avoid leaks
+    if (isLoading) return false;
+
     // All other items require permission check
     if (!item.module) return false;
     return hasPermission(item.module);
