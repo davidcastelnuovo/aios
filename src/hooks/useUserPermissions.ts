@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "./useCurrentUser";
+import { useUserRole } from "./useUserRole";
 import { useEffect } from "react";
 
 export type ModulePermission = 
@@ -19,6 +20,7 @@ export type ModulePermission =
 
 export function useUserPermissions() {
   const { user } = useCurrentUser();
+  const { isOwner } = useUserRole();
   const queryClient = useQueryClient();
 
   const { data: permissionsData, isLoading: queryLoading } = useQuery({
@@ -83,8 +85,8 @@ export function useUserPermissions() {
 
     const { permissions, hasAnyPermissions } = permissionsData || { permissions: null, hasAnyPermissions: false };
 
-    // If user has no permissions defined at all, allow access (owner/backwards compat)
-    if (!hasAnyPermissions) return true;
+    // If user has no permissions defined, only owners get full access
+    if (!hasAnyPermissions) return isOwner;
 
     return permissions?.[module] === true;
   };
