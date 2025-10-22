@@ -11,7 +11,7 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) {
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
-  const { role, isLoading: roleLoading } = useUserRole();
+  const { role, roles, isLoading: roleLoading, isUser } = useUserRole();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -41,12 +41,15 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
   }
 
   // Check if role restrictions are specified and if user has required role
-  if (allowedRoles && role && !allowedRoles.includes(role)) {
-    // Regular users should go to their profile, others to tasks
-    if (role === "user") {
-      return <Navigate to="/my-profile" replace />;
+  if (allowedRoles && roles && roles.length > 0) {
+    const hasAllowedRole = roles.some(userRole => allowedRoles.includes(userRole));
+    if (!hasAllowedRole) {
+      // Regular users should go to their profile, others to tasks
+      if (isUser && roles.length === 1 && roles[0] === "user") {
+        return <Navigate to="/my-profile" replace />;
+      }
+      return <Navigate to="/tasks" replace />;
     }
-    return <Navigate to="/tasks" replace />;
   }
 
   return <>{children}</>;

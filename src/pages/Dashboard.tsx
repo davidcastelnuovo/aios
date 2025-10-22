@@ -9,7 +9,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 
 export default function Dashboard() {
   const { selectedAgency, managedAgencyIds, userAgencyIds } = useAgency();
-  const { isAgencyManager, isUser } = useUserRole();
+  const { isAgencyManager, isUser, isAdmin, isOwner } = useUserRole();
   const [selectedClient, setSelectedClient] = useState<string>("all");
   const [selectedSupplier, setSelectedSupplier] = useState<string>("all");
 
@@ -261,43 +261,45 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
-        <Card className="shadow-card min-w-0">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">הכנסות חודשיות</CardTitle>
-            <TrendingUp className="h-4 w-4 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-primary">
-              ₪{stats?.income.toLocaleString() || 0}
-            </div>
-          </CardContent>
-        </Card>
+      {(isAdmin || isOwner) && (
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+          <Card className="shadow-card min-w-0">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">הכנסות חודשיות</CardTitle>
+              <TrendingUp className="h-4 w-4 text-success" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-primary">
+                ₪{stats?.income.toLocaleString() || 0}
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="shadow-card">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">הוצאות חודשיות</CardTitle>
-            <TrendingDown className="h-4 w-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">
-              ₪{stats?.expense.toLocaleString() || 0}
-            </div>
-          </CardContent>
-        </Card>
+          <Card className="shadow-card">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">הוצאות חודשיות</CardTitle>
+              <TrendingDown className="h-4 w-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-destructive">
+                ₪{stats?.expense.toLocaleString() || 0}
+              </div>
+            </CardContent>
+          </Card>
 
-        <Card className="shadow-card">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">רווח</CardTitle>
-            <DollarSign className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${(stats?.profit || 0) >= 0 ? 'text-primary' : 'text-destructive'}`}>
-              ₪{stats?.profit.toLocaleString() || 0}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          <Card className="shadow-card">
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium">רווח</CardTitle>
+              <DollarSign className="h-4 w-4 text-primary" />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${(stats?.profit || 0) >= 0 ? 'text-primary' : 'text-destructive'}`}>
+                ₪{stats?.profit.toLocaleString() || 0}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

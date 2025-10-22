@@ -36,8 +36,8 @@ const App = () => (
           <Route path="/agencies" element={<ProtectedRoute><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
           <Route path="/clients" element={<ProtectedRoute><AppLayout><Clients /></AppLayout></ProtectedRoute>} />
           <Route path="/campaigners" element={<ProtectedRoute allowedRoles={["admin", "owner", "agency_manager"]}><AppLayout><Campaigners /></AppLayout></ProtectedRoute>} />
-          <Route path="/suppliers" element={<ProtectedRoute allowedRoles={["owner", "agency_manager"]}><AppLayout><Suppliers /></AppLayout></ProtectedRoute>} />
-          <Route path="/finance" element={<ProtectedRoute allowedRoles={["owner", "agency_manager"]}><AppLayout><Finance /></AppLayout></ProtectedRoute>} />
+          <Route path="/suppliers" element={<ProtectedRoute allowedRoles={["owner"]}><AppLayout><Suppliers /></AppLayout></ProtectedRoute>} />
+          <Route path="/finance" element={<ProtectedRoute allowedRoles={["owner"]}><AppLayout><Finance /></AppLayout></ProtectedRoute>} />
           <Route path="/tasks" element={<ProtectedRoute><AppLayout><Tasks /></AppLayout></ProtectedRoute>} />
           <Route path="/client-onboarding" element={<ProtectedRoute><AppLayout><ClientOnboarding /></AppLayout></ProtectedRoute>} />
           <Route path="/time-tracking" element={<ProtectedRoute><AppLayout><TimeTracking /></AppLayout></ProtectedRoute>} />

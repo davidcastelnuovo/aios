@@ -48,14 +48,16 @@ export default function Auth() {
         variant: "destructive",
       });
     } else {
-      // Check user role and redirect accordingly
-      const { data: roleData } = await supabase
+      // Check user roles and redirect accordingly
+      const { data: rolesData } = await supabase
         .from("user_roles")
         .select("role")
-        .eq("user_id", data.user.id)
-        .maybeSingle();
+        .eq("user_id", data.user.id);
       
-      if (roleData?.role === "user") {
+      const roles = rolesData?.map(r => r.role) || [];
+      
+      // If user has only "user" role, redirect to profile
+      if (roles.length === 1 && roles[0] === "user") {
         navigate("/my-profile");
       } else {
         navigate("/");
