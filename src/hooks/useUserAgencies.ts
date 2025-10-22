@@ -3,57 +3,59 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "./useUserRole";
 
 export function useUserAgencies() {
-  const { isOwner, isAgencyOwner, userId } = useUserRole();
+  const { isOwner, isAgencyOwner, isTeamManager, isCampaigner, userId } = useUserRole();
 
   const { data: userAgencyIds, isLoading } = useQuery({
-    queryKey: ["user-agency-ids", userId],
+    queryKey: ["user-agency-ids", userId, isOwner, isAgencyOwner, isTeamManager, isCampaigner],
     queryFn: async () => {
       if (isOwner) {
         // Owners see all agencies
         return null; // null means "all agencies"
       }
 
-      if (isAgencyOwner) {
-        // Get current user's roles
-        const { data: userRoles } = await supabase
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", userId);
+      if (!userId) return [];
 
-        const roles = userRoles?.map((r) => r.role) || [];
-        const hasAgencyOwnerRole = roles.includes("agency_owner");
+      const aggregated = new Set<string>();
 
-        if (hasAgencyOwnerRole) {
-          // Get campaigner_id from profile
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("campaigner_id")
-            .eq("id", userId)
-            .maybeSingle();
+      // Campaigner or Agency Owner: agencies via campaigner_agencies
+      if (isAgencyOwner || isCampaigner) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("campaigner_id")
+          .eq("id", userId)
+          .maybeSingle();
 
-          if (!profile?.campaigner_id) {
-            console.log("No campaigner_id found for agency owner");
-            return [];
-          }
-
-          // Get agencies through campaigner_agencies
+        if (profile?.campaigner_id) {
           const { data: agencyLinks, error } = await supabase
             .from("campaigner_agencies")
             .select("agency_id")
             .eq("campaigner_id", profile.campaigner_id);
 
           if (error) {
-            console.error("Error fetching user agencies:", error);
+            console.error("Error fetching campaigner agencies:", error);
             throw error;
           }
 
-          const agencyIds = agencyLinks?.map((link) => link.agency_id) || [];
-          console.log("User agency IDs:", agencyIds);
-          return agencyIds;
+          agencyLinks?.forEach((l) => aggregated.add(l.agency_id));
         }
       }
 
-      return [];
+      // Team Manager: agencies via user_managed_agencies
+      if (isTeamManager) {
+        const { data: managed, error: managedErr } = await supabase
+          .from("user_managed_agencies")
+          .select("agency_id")
+          .eq("user_id", userId);
+
+        if (managedErr) {
+          console.error("Error fetching managed agencies:", managedErr);
+          throw managedErr;
+        }
+
+        managed?.forEach((m) => aggregated.add(m.agency_id));
+      }
+
+      return Array.from(aggregated);
     },
     enabled: !!userId,
   });
