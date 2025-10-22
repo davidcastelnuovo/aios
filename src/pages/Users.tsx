@@ -24,6 +24,7 @@ import { Shield, UserPlus, Trash2, Settings, Lock } from "lucide-react";
 import { useState } from "react";
 import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialog";
 import { EditUserPermissionsDialog } from "@/components/forms/EditUserPermissionsDialog";
+import { EditUserCampaignerDialog } from "@/components/forms/EditUserCampaignerDialog";
 import {
   Dialog,
   DialogContent,
@@ -66,6 +67,8 @@ export default function Users() {
   const [editAgenciesUserEmail, setEditAgenciesUserEmail] = useState<string>("");
   const [editPermissionsUserId, setEditPermissionsUserId] = useState<string | null>(null);
   const [editPermissionsUserEmail, setEditPermissionsUserEmail] = useState<string>("");
+  const [editCampaignerUserId, setEditCampaignerUserId] = useState<string | null>(null);
+  const [editCampaignerUserEmail, setEditCampaignerUserEmail] = useState<string>("");
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies-for-invite", currentUserId],
@@ -129,7 +132,7 @@ export default function Users() {
     queryFn: async () => {
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, email, full_name");
+        .select("id, email, full_name, campaigner_id, campaigners(full_name)");
 
       if (profilesError) throw profilesError;
 
@@ -139,11 +142,12 @@ export default function Users() {
 
       if (rolesError) throw rolesError;
 
-      return profiles.map((profile) => {
+      return profiles.map((profile: any) => {
         const userRole = userRoles.find((r) => r.user_id === profile.id);
         return {
           ...profile,
           role: userRole?.role as UserRole | undefined,
+          campaigner_name: profile.campaigners?.full_name,
         };
       });
     },
@@ -268,7 +272,9 @@ export default function Users() {
             <DialogHeader>
               <DialogTitle>הזמן משתמש חדש</DialogTitle>
               <DialogDescription>
-                המשתמש יקבל מייל עם קישור ליצירת חשבון והגדרת סיסמה
+                המשתמש יקבל מייל עם קישור ליצירת חשבון והגדרת סיסמה.
+                <br />
+                <strong>חשוב:</strong> אחרי יצירת המשתמש, יש לשייך אותו לקמפיינר פעיל דרך כפתור "ערוך" בעמודת "קמפיינר משויך".
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -369,11 +375,12 @@ export default function Users() {
                 <TableHead className="text-right">שם מלא</TableHead>
                 <TableHead className="text-right">אימייל</TableHead>
                 <TableHead className="text-right">תפקידים</TableHead>
+                <TableHead className="text-right">קמפיינר משויך</TableHead>
                 <TableHead className="text-right">פעולות</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users?.map((user) => (
+              {users?.map((user: any) => (
                 <TableRow key={user.id}>
                   <TableCell>{user.full_name || "-"}</TableCell>
                   <TableCell>{user.email}</TableCell>
@@ -387,6 +394,24 @@ export default function Users() {
                         אין תפקיד
                       </span>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">
+                        {user.campaigner_name || "-"}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditCampaignerUserId(user.id);
+                          setEditCampaignerUserEmail(user.email);
+                        }}
+                        className="h-6 px-2 text-xs"
+                      >
+                        ערוך
+                      </Button>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">
@@ -461,7 +486,7 @@ export default function Users() {
               {roleLabels.owner}
             </Badge>
             <p className="text-sm text-muted-foreground">
-              גישה מלאה למערכת, יכול לנהל משתמשים ותפקידים
+              גישה מלאה למערכת - רואה את כל הסוכנויות והלקוחות, יכול לנהל משתמשים ותפקידים
             </p>
           </div>
           <div className="flex items-start gap-3">
@@ -469,7 +494,7 @@ export default function Users() {
               {roleLabels.agency_owner}
             </Badge>
             <p className="text-sm text-muted-foreground">
-              בעלים של סוכנות, יכול לנהל את הסוכנות שלו ולקוחות
+              בעל סוכנות - רואה רק סוכנויות שמשוייכות אליו. חייב להיות משויך לקמפיינר פעיל.
             </p>
           </div>
           <div className="flex items-start gap-3">
@@ -477,7 +502,7 @@ export default function Users() {
               {roleLabels.team_manager}
             </Badge>
             <p className="text-sm text-muted-foreground">
-              מנהל צוות, יכול לנהל קמפיינרים ומשימות
+              מנהל צוות - רואה רק סוכנויות שמשוייכות אליו. חייב להיות משויך לקמפיינר פעיל.
             </p>
           </div>
           <div className="flex items-start gap-3">
@@ -485,7 +510,7 @@ export default function Users() {
               {roleLabels.campaigner}
             </Badge>
             <p className="text-sm text-muted-foreground">
-              קמפיינר, גישה בסיסית למערכת
+              קמפיינר - רואה רק סוכנויות ולקוחות שמשוייכים לקמפיינר שלו. חייב להיות משויך לקמפיינר פעיל.
             </p>
           </div>
         </div>
@@ -516,6 +541,20 @@ export default function Users() {
           }}
           userId={editPermissionsUserId}
           userEmail={editPermissionsUserEmail}
+        />
+      )}
+
+      {editCampaignerUserId && (
+        <EditUserCampaignerDialog
+          open={!!editCampaignerUserId}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditCampaignerUserId(null);
+              setEditCampaignerUserEmail("");
+            }
+          }}
+          userId={editCampaignerUserId}
+          userEmail={editCampaignerUserEmail}
         />
       )}
     </div>

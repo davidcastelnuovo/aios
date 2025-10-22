@@ -17,8 +17,8 @@ export function useUserAgencies() {
 
       const aggregated = new Set<string>();
 
-      // Campaigner or Agency Owner: agencies via campaigner_agencies
-      if (isAgencyOwner || isCampaigner) {
+      // Campaigner, Agency Owner, or Team Manager with campaigner_id: agencies via campaigner_agencies
+      if (isAgencyOwner || isCampaigner || isTeamManager) {
         const { data: profile } = await supabase
           .from("profiles")
           .select("campaigner_id")
@@ -40,7 +40,7 @@ export function useUserAgencies() {
         }
       }
 
-      // Team Manager: agencies via user_managed_agencies
+      // Team Manager: also get agencies via user_managed_agencies
       if (isTeamManager) {
         const { data: managed, error: managedErr } = await supabase
           .from("user_managed_agencies")
@@ -54,6 +54,12 @@ export function useUserAgencies() {
 
         managed?.forEach((m) => aggregated.add(m.agency_id));
       }
+
+      console.log("useUserAgencies result:", {
+        userId,
+        roles: { isOwner, isAgencyOwner, isTeamManager, isCampaigner },
+        agencyIds: Array.from(aggregated),
+      });
 
       return Array.from(aggregated);
     },
