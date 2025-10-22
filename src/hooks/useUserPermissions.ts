@@ -18,10 +18,10 @@ export type ModulePermission =
 export function useUserPermissions() {
   const { user } = useCurrentUser();
 
-  const { data: permissions, isLoading } = useQuery({
+  const { data: permissionsData, isLoading } = useQuery({
     queryKey: ["user-permissions", user?.id],
     queryFn: async () => {
-      if (!user?.id) return null;
+      if (!user?.id) return { permissions: null, hasAnyPermissions: false };
 
       const { data, error } = await supabase
         .from("user_permissions")
@@ -39,22 +39,27 @@ export function useUserPermissions() {
         permissionsMap[perm.module] = perm.can_access;
       });
 
-      return permissionsMap;
+      return { 
+        permissions: permissionsMap, 
+        hasAnyPermissions: data && data.length > 0 
+      };
     },
     enabled: !!user?.id,
   });
 
   const hasPermission = (module: ModulePermission): boolean => {
-    // If no permissions are set, allow access by default (backwards compatibility)
-    if (!permissions) return true;
+    // If still loading or no data, allow by default
+    if (!permissionsData) return true;
     
-    // If permission is explicitly set, use it
-    if (permissions[module] !== undefined) {
-      return permissions[module];
-    }
+    const { permissions, hasAnyPermissions } = permissionsData;
     
-    // Default to true if not explicitly set
-    return true;
+    // If user has no permissions defined at all, allow access (backwards compatibility)
+    if (!hasAnyPermissions) return true;
+    
+    // If user has permissions defined, only allow access to explicitly granted modules
+    // If permission is explicitly set to true, allow
+    // If permission is explicitly set to false or not defined, deny
+    return permissions[module] === true;
   };
 
   const canViewFinance = (): boolean => {
