@@ -28,21 +28,21 @@ serve(async (req: Request) => {
       },
     });
 
-    // Verify requesting user is an owner or agency_owner
+    // Verify requesting user by decoding the JWT from the Authorization header
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       throw new Error("Missing authorization header");
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-
-    if (userError) {
-      console.error("Error getting user:", userError);
+    const payloadBase64 = token.split(".")[1];
+    if (!payloadBase64) {
       throw new Error("Unauthorized");
     }
+    const payload = JSON.parse(atob(payloadBase64));
+    const requesterId: string | undefined = payload?.sub;
 
-    if (!user) {
+    if (!requesterId) {
       throw new Error("Unauthorized");
     }
 
@@ -50,7 +50,7 @@ serve(async (req: Request) => {
     const { data: roles, error: rolesError } = await supabaseAdmin
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id)
+      .eq("user_id", requesterId)
       .in("role", ["owner", "agency_owner"]);
 
     if (rolesError || !roles || roles.length === 0) {

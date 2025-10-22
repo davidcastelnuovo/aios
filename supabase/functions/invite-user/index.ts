@@ -30,21 +30,22 @@ serve(async (req: Request) => {
       },
     });
 
-    // Get the authorization header to verify the requesting user is an owner
+    // Verify requesting user by decoding the JWT from the Authorization header
     const authHeader = req.headers.get("authorization");
     if (!authHeader) {
       throw new Error("Missing authorization header");
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(token);
-
-    if (userError) {
-      console.error("Error getting user:", userError);
+    const payloadBase64 = token.split(".")[1];
+    if (!payloadBase64) {
       throw new Error("Unauthorized");
     }
+    const payloadJson = atob(payloadBase64);
+    const payload = JSON.parse(payloadJson);
+    const requesterId: string | undefined = payload?.sub;
 
-    if (!user) {
+    if (!requesterId) {
       throw new Error("Unauthorized");
     }
 
@@ -52,7 +53,7 @@ serve(async (req: Request) => {
     const { data: roles, error: rolesError } = await supabaseAdmin
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id)
+      .eq("user_id", requesterId)
       .in("role", ["owner", "agency_owner"]);
 
     if (rolesError || !roles || roles.length === 0) {
@@ -121,9 +122,9 @@ serve(async (req: Request) => {
           .from("profiles")
           .select("campaigner_id")
           .eq("id", inviteData.user.id)
-          .single();
+          .maybeSingle();
 
-        let campaignerId = profile?.campaigner_id;
+        let campaignerId = profile?.campaigner_id as string | undefined;
 
         // If no campaigner exists, create one
         if (!campaignerId) {
@@ -134,13 +135,13 @@ serve(async (req: Request) => {
               email: email,
               active: true,
             })
-            .select()
-            .single();
+            .select("id")
+            .maybeSingle();
 
           if (campaignerError) {
             console.error("Error creating campaigner:", campaignerError);
-          } else {
-            campaignerId = newCampaigner.id;
+          } else if (newCampaigner) {
+            campaignerId = (newCampaigner as any).id as string;
 
             // Link campaigner to profile
             await supabaseAdmin
@@ -153,7 +154,7 @@ serve(async (req: Request) => {
         // Link campaigner to agencies
         if (campaignerId) {
           const agencyLinks = agencyIds.map((agencyId) => ({
-            campaigner_id: campaignerId,
+            campaigner_id: campaignerId!,
             agency_id: agencyId,
           }));
 
