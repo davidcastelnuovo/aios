@@ -43,15 +43,15 @@ serve(async (req: Request) => {
       throw new Error("Unauthorized");
     }
 
-    // Check if the user is an owner
+    // Check if the user is an owner or agency_owner
     const { data: roles, error: rolesError } = await supabaseAdmin
       .from("user_roles")
       .select("role")
       .eq("user_id", user.id)
-      .eq("role", "owner");
+      .in("role", ["owner", "agency_owner"]);
 
     if (rolesError || !roles || roles.length === 0) {
-      throw new Error("Only owners can invite users");
+      throw new Error("Only owners and agency owners can invite users");
     }
 
     const { email, role, agencyIds, redirectUrl }: InviteUserRequest = await req.json();
@@ -182,7 +182,7 @@ serve(async (req: Request) => {
         error: error.message,
       }),
       {
-        status: error.message === "Unauthorized" || error.message === "Only owners can invite users" ? 403 : 500,
+        status: error.message === "Unauthorized" || error.message === "Only owners and agency owners can invite users" ? 403 : 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );

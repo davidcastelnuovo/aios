@@ -54,7 +54,7 @@ const roleBadgeColors: Record<UserRole, string> = {
 };
 
 export default function Users() {
-  const { isOwner } = useUserRole();
+  const { isOwner, isAgencyOwner, userId: currentUserId } = useUserRole();
   const queryClient = useQueryClient();
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -62,14 +62,41 @@ export default function Users() {
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
 
   const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
+    queryKey: ["agencies", currentUserId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("id, name")
-        .order("name");
-      if (error) throw error;
-      return data;
+      if (isOwner) {
+        // Owner sees all agencies
+        const { data, error } = await supabase
+          .from("agencies")
+          .select("id, name")
+          .order("name");
+        if (error) throw error;
+        return data;
+      } else if (isAgencyOwner) {
+        // Agency owner sees only their agencies
+        const { data: userAgencies, error } = await supabase
+          .from("profiles")
+          .select(`
+            campaigner_id,
+            campaigners!inner(
+              campaigner_agencies(
+                agencies(id, name)
+              )
+            )
+          `)
+          .eq("id", currentUserId)
+          .single();
+        
+        if (error) throw error;
+        
+        // Extract agencies from nested structure
+        const agenciesList = userAgencies?.campaigners?.campaigner_agencies
+          ?.map((ca: any) => ca.agencies)
+          .filter((a: any) => a) || [];
+        
+        return agenciesList;
+      }
+      return [];
     },
   });
 
@@ -171,7 +198,7 @@ export default function Users() {
     },
   });
 
-  if (!isOwner) {
+  if (!isOwner && !isAgencyOwner) {
     return (
       <div className="container mx-auto py-6">
         <Card className="p-6">
@@ -179,7 +206,7 @@ export default function Users() {
             <Shield className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
             <h2 className="text-xl font-semibold mb-2">אין הרשאה</h2>
             <p className="text-muted-foreground">
-              רק בעלים יכולים לגשת לדף זה
+              רק בעלים ומנהלי סוכנות יכולים לגשת לדף זה
             </p>
           </div>
         </Card>

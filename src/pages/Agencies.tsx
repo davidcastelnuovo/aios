@@ -4,17 +4,59 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Building2, Phone, Mail, Calendar } from "lucide-react";
 import { AddAgencyForm } from "@/components/forms/AddAgencyForm";
+import { useUserRole } from "@/hooks/useUserRole";
 
 export default function Agencies() {
+  const { isOwner, isAgencyOwner, userId } = useUserRole();
+  
   const { data: agencies, isLoading } = useQuery({
-    queryKey: ["agencies"],
+    queryKey: ["agencies", userId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
+      if (isOwner) {
+        // Owner sees all agencies
+        const { data, error } = await supabase
+          .from("agencies")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        return data;
+      } else if (isAgencyOwner) {
+        // Agency owner sees only their agencies
+        const { data: userProfile, error: profileError } = await supabase
+          .from("profiles")
+          .select(`
+            campaigner_id,
+            campaigners!inner(
+              campaigner_agencies(
+                agency_id
+              )
+            )
+          `)
+          .eq("id", userId)
+          .single();
+        
+        if (profileError) throw profileError;
+        
+        // Extract agency IDs
+        const agencyIds = userProfile?.campaigners?.campaigner_agencies
+          ?.map((ca: any) => ca.agency_id)
+          .filter((id: any) => id) || [];
+        
+        if (agencyIds.length === 0) {
+          return [];
+        }
+        
+        // Fetch agencies
+        const { data, error } = await supabase
+          .from("agencies")
+          .select("*")
+          .in("id", agencyIds)
+          .order("created_at", { ascending: false });
+        
+        if (error) throw error;
+        return data;
+      }
+      return [];
     },
   });
 
