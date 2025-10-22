@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useUserAgencies } from "@/hooks/useUserAgencies";
+
 
 interface AgencyContextType {
   selectedAgency: string;
@@ -24,7 +24,7 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
   const [selectedAgency, setSelectedAgency] = useState<string>(getInitialSelectedAgency());
   const didSetDefault = useRef(false);
 
-  const { userAgencyIds, isOwner, isLoading: isLoadingUserAgencies } = useUserAgencies();
+  
 
   // Persist selection
   useEffect(() => {
@@ -52,25 +52,15 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  // Filter agencies based on user access
-  // Wait for user data to load before filtering
-  const agencies = isLoadingUserAgencies 
-    ? undefined  // Still loading user data, don't show anything yet
-    : (isOwner || userAgencyIds === null
-        ? allAgencies  // Owner sees all (userAgencyIds is null for owners)
-        : allAgencies?.filter(a => userAgencyIds.includes(a.id))); // Filter by user's agencies
+  // Agencies available globally (independent of user role)
+  const agencies = allAgencies;
 
-  const isLoading = isLoadingUserAgencies || isLoadingAgencies;
+  const isLoading = isLoadingAgencies;
 
-  console.log("🏢 AgencyContext - Detailed state:", { 
-    isOwner, 
-    userAgencyIds,
-    userAgencyIdsType: typeof userAgencyIds,
-    userAgencyIdsIsNull: userAgencyIds === null,
-    isLoadingUserAgencies,
+  console.log("🏢 AgencyContext - state:", { 
     isLoadingAgencies,
     allAgenciesCount: allAgencies?.length,
-    filteredAgenciesCount: agencies?.length,
+    agenciesCount: agencies?.length,
     agencies: agencies?.map(a => ({ id: a.id, name: a.name })),
   });
 

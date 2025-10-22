@@ -20,7 +20,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useUserAgencies } from "@/hooks/useUserAgencies";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -30,7 +29,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
-  const { isOwner } = useUserAgencies();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
