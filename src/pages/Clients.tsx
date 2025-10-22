@@ -223,15 +223,15 @@ export default function Clients() {
       accessibleClients = clients?.filter(client => 
         campaignerClientIds.includes(client.id)
       );
-    } else if (userAgencyIds && userAgencyIds.length > 0) {
-      // Team managers and agency owners see all clients in their agencies
+    } else if ((isAgencyOwner || isTeamManager) && userAgencyIds && userAgencyIds.length > 0) {
+      // Agency owners and team managers see all clients in their agencies
       accessibleClients = clients?.filter(client => 
         userAgencyIds.includes(client.agency_id)
       );
     }
   }
 
-  // Then apply agency filter (works for all roles including campaigners)
+  // Then apply agency filter (only for owners who selected a specific agency)
   if (selectedAgency && selectedAgency !== "all") {
     accessibleClients = accessibleClients?.filter(
       (client) => client.agency_id === selectedAgency
