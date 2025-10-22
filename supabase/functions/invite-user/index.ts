@@ -69,14 +69,16 @@ serve(async (req: Request) => {
     console.log(`Inviting user: ${email} with role: ${role}`);
 
     // Invite user via admin API
+    const inviteOptions: { redirectTo?: string; data: Record<string, any> } = {
+      data: { role }
+    };
+    if (redirectUrl) {
+      inviteOptions.redirectTo = redirectUrl;
+    }
+
     const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
       email,
-      {
-        redirectTo: redirectUrl || `${supabaseUrl}/auth?type=recovery`,
-        data: {
-          role: role,
-        },
-      }
+      inviteOptions
     );
 
     if (inviteError) {

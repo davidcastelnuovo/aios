@@ -130,8 +130,7 @@ export default function Users() {
         body: { 
           email, 
           role,
-          agencyIds,
-          redirectUrl: `${window.location.origin}/auth?type=recovery`
+          agencyIds
         },
       });
       if (error) throw error;
