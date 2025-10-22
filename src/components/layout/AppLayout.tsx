@@ -8,7 +8,6 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { useAgency } from "@/contexts/AgencyContext";
-import { useUserRole } from "@/hooks/useUserRole";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,8 +29,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedAgency, setSelectedAgency, managedAgencyIds, userAgencyIds } = useAgency();
-  const { isAgencyManager, isUser } = useUserRole();
+  const { selectedAgency, setSelectedAgency } = useAgency();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -45,13 +43,6 @@ export function AppLayout({ children }: AppLayoutProps) {
       return data;
     },
   });
-
-  // Filter agencies based on user role
-  const visibleAgencies = isAgencyManager 
-    ? agencies?.filter(a => managedAgencyIds.includes(a.id))
-    : isUser
-    ? agencies?.filter(a => userAgencyIds.includes(a.id))
-    : agencies;
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -81,10 +72,10 @@ export function AppLayout({ children }: AppLayoutProps) {
                   <SelectValue placeholder="בחר סוכנות" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
-                  {visibleAgencies && visibleAgencies.length > 1 && (
+                  {agencies && agencies.length > 1 && (
                     <SelectItem value="all">כל הסוכנויות</SelectItem>
                   )}
-                  {visibleAgencies?.map((agency) => (
+                  {agencies?.map((agency) => (
                     <SelectItem key={agency.id} value={agency.id}>
                       {agency.name}
                     </SelectItem>

@@ -5,7 +5,6 @@ import * as z from "zod";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useUserRole } from "@/hooks/useUserRole";
 import {
   Dialog,
   DialogContent,
@@ -25,13 +24,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus } from "lucide-react";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 const formSchema = z.object({
   full_name: z.string().min(1, "שם מלא הוא שדה חובה"),
@@ -48,7 +40,6 @@ type FormValues = z.infer<typeof formSchema>;
 export function AddCampaignerForm() {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
-  const { isAdmin, isOwner, userId } = useUserRole();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -60,27 +51,6 @@ export function AddCampaignerForm() {
       if (error) throw error;
       return data;
     },
-  });
-
-  const { data: userAgencies } = useQuery({
-    queryKey: ["user-agencies", userId],
-    queryFn: async () => {
-      if (!userId) return [];
-      const { data, error } = await supabase
-        .from("profiles")
-        .select(`
-          campaigner_id,
-          campaigners!inner(
-            campaigner_agencies(agency_id)
-          )
-        `)
-        .eq("id", userId)
-        .maybeSingle();
-      if (error) throw error;
-      const agencies = data?.campaigners?.campaigner_agencies || [];
-      return Array.isArray(agencies) ? agencies.map((ca: any) => ca.agency_id) : [];
-    },
-    enabled: !!userId && !isAdmin && !isOwner,
   });
 
   const form = useForm<FormValues>({
@@ -98,12 +68,6 @@ export function AddCampaignerForm() {
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
-      const agencyIds = (isAdmin || isOwner) ? values.agency_ids : (userAgencies || []);
-      
-      if (!agencyIds || agencyIds.length === 0) {
-        throw new Error("לא נמצאה סוכנות עבור משתמש זה");
-      }
-
       // יצירת הקמפיינר
       const { data: campaigner, error: campaignerError } = await supabase
         .from("campaigners")
@@ -122,7 +86,7 @@ export function AddCampaignerForm() {
       if (campaignerError) throw campaignerError;
 
       // קישור הקמפיינר לסוכנויות
-      const agencyLinks = agencyIds.map(agencyId => ({
+      const agencyLinks = values.agency_ids.map(agencyId => ({
         campaigner_id: campaigner.id,
         agency_id: agencyId,
       }));
@@ -176,39 +140,37 @@ export function AddCampaignerForm() {
               )}
             />
 
-            {(isAdmin || isOwner) && (
-              <FormField
-                control={form.control}
-                name="agency_ids"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>סוכנויות</FormLabel>
-                    <div className="space-y-2">
-                      {agencies?.map((agency) => (
-                        <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
-                          <input
-                            type="checkbox"
-                            id={agency.id}
-                            checked={field.value?.includes(agency.id)}
-                            onChange={(e) => {
-                              const newValue = e.target.checked
-                                ? [...(field.value || []), agency.id]
-                                : (field.value || []).filter(id => id !== agency.id);
-                              field.onChange(newValue);
-                            }}
-                            className="rounded border-gray-300"
-                          />
-                          <label htmlFor={agency.id} className="text-sm cursor-pointer">
-                            {agency.name}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
+            <FormField
+              control={form.control}
+              name="agency_ids"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>סוכנויות</FormLabel>
+                  <div className="space-y-2">
+                    {agencies?.map((agency) => (
+                      <div key={agency.id} className="flex items-center space-x-2 space-x-reverse">
+                        <input
+                          type="checkbox"
+                          id={agency.id}
+                          checked={field.value?.includes(agency.id)}
+                          onChange={(e) => {
+                            const newValue = e.target.checked
+                              ? [...(field.value || []), agency.id]
+                              : (field.value || []).filter(id => id !== agency.id);
+                            field.onChange(newValue);
+                          }}
+                          className="rounded border-gray-300"
+                        />
+                        <label htmlFor={agency.id} className="text-sm cursor-pointer">
+                          {agency.name}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

@@ -9,9 +9,8 @@ import {
   Clock,
   Truck,
   BarChart3,
-  UserCog,
-  UserPlus,
   User,
+  UserPlus,
 } from "lucide-react";
 import {
   Sidebar,
@@ -24,26 +23,23 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { useUserRole } from "@/hooks/useUserRole";
 
 const menuItems = [
-  { title: "דשבורד", url: "/", icon: LayoutDashboard, roles: ["owner", "agency_manager"] },
-  { title: "אזור אישי", url: "/my-profile", icon: User, roles: ["user"] },
-  { title: "סוכנויות", url: "/agencies", icon: Building2, roles: ["admin", "user", "owner", "agency_manager"] },
-  { title: "לקוחות", url: "/clients", icon: Users, roles: ["admin", "user", "owner", "agency_manager"] },
-  { title: "משימות", url: "/tasks", icon: CheckSquare, roles: ["admin", "user", "owner", "agency_manager"] },
-  { title: "לקוחות בקליטה", url: "/client-onboarding", icon: UserPlus, roles: ["admin", "user", "owner", "agency_manager"] },
-  { title: "שעון נוכחות", url: "/time-tracking", icon: Clock, roles: ["admin", "user", "owner", "agency_manager"] },
-  { title: "קמפיינרים", url: "/campaigners", icon: Megaphone, roles: ["admin", "owner", "agency_manager"] },
-  { title: "ספקים", url: "/suppliers", icon: Truck, roles: ["owner", "agency_manager"] },
-  { title: "כספים", url: "/finance", icon: DollarSign, roles: ["owner", "agency_manager"] },
-  { title: "דוחות", url: "/reports", icon: BarChart3, roles: ["admin", "owner", "agency_manager"] },
-  { title: "משתמשים", url: "/users", icon: UserCog, roles: ["admin", "owner"] },
+  { title: "דשבורד", url: "/", icon: LayoutDashboard },
+  { title: "אזור אישי", url: "/my-profile", icon: User },
+  { title: "סוכנויות", url: "/agencies", icon: Building2 },
+  { title: "לקוחות", url: "/clients", icon: Users },
+  { title: "משימות", url: "/tasks", icon: CheckSquare },
+  { title: "לקוחות בקליטה", url: "/client-onboarding", icon: UserPlus },
+  { title: "שעון נוכחות", url: "/time-tracking", icon: Clock },
+  { title: "קמפיינרים", url: "/campaigners", icon: Megaphone },
+  { title: "ספקים", url: "/suppliers", icon: Truck },
+  { title: "כספים", url: "/finance", icon: DollarSign },
+  { title: "דוחות", url: "/reports", icon: BarChart3 },
 ];
 
 export function AppSidebar() {
   const { state, setOpenMobile, isMobile } = useSidebar();
-  const { role, isLoading } = useUserRole();
   const isCollapsed = state === "collapsed";
 
   const handleLinkClick = () => {
@@ -52,15 +48,6 @@ export function AppSidebar() {
     }
   };
 
-  // Filter menu items based on user role
-  const filteredMenuItems = menuItems.filter(item => 
-    role && item.roles.includes(role)
-  );
-
-  if (isLoading) {
-    return null;
-  }
-
   return (
     <Sidebar side="right" collapsible="icon">
       <SidebarContent>
@@ -68,7 +55,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>תפריט ראשי</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {filteredMenuItems.map((item) => (
+              {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild tooltip={item.title}>
                     <NavLink

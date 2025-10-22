@@ -3,13 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Phone, Mail, Folder, Briefcase, Calendar, ChevronDown, ChevronUp } from "lucide-react";
-import { useUserRole } from "@/hooks/useUserRole";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useState } from "react";
 
 export default function MyProfile() {
-  const { userId } = useUserRole();
+  const { userId } = useCurrentUser();
   const [showAssignments, setShowAssignments] = useState(false);
 
   const { data: profile, isLoading: profileLoading } = useQuery({

@@ -1,97 +1,48 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
-import { useUserRole } from "@/hooks/useUserRole";
-import { useManagedAgencies } from "@/hooks/useManagedAgencies";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 interface AgencyContextType {
   selectedAgency: string;
   setSelectedAgency: (agencyId: string) => void;
-  managedAgencyIds: string[];
-  userAgencyIds: string[];
 }
 
 const AgencyContext = createContext<AgencyContextType | undefined>(undefined);
 
 export function AgencyProvider({ children }: { children: ReactNode }) {
   const [selectedAgency, setSelectedAgency] = useState<string>("all");
-  const { isAgencyManager, isUser, userId } = useUserRole();
-  const { managedAgencies } = useManagedAgencies();
   const didSetDefault = useRef(false);
 
-  // Get agencies for regular users based on their campaigner
-  const { data: userAgencies } = useQuery({
-    queryKey: ["user-agencies", userId],
+  // Get all active agencies
+  const { data: agencies } = useQuery({
+    queryKey: ["agencies"],
     queryFn: async () => {
-      if (!userId || !isUser) return [];
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("campaigner_id")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (!profile?.campaigner_id) return [];
-
       const { data, error } = await supabase
-        .from("campaigner_agencies")
-        .select(`
-          agency_id,
-          agencies (
-            id,
-            name
-          )
-        `)
-        .eq("campaigner_id", profile.campaigner_id);
-
+        .from("agencies")
+        .select("id, name")
+        .eq("status", "active")
+        .order("name");
+      
       if (error) {
-        console.error("Error fetching user agencies:", error);
+        console.error("Error fetching agencies:", error);
         return [];
       }
-
-      return data?.map(item => item.agencies).filter(Boolean) || [];
+      
+      return data;
     },
-    enabled: !!userId && isUser,
   });
 
-  const managedAgencyIds = managedAgencies?.map(a => a.id) || [];
-  const userAgencyIds = userAgencies?.map(a => a.id) || [];
-
-  console.log("🏢 Agency Context Debug:", {
-    selectedAgency,
-    isAgencyManager,
-    isUser,
-    managedAgencies: managedAgencies?.map(a => ({ id: a.id, name: a.name })),
-    userAgencies: userAgencies?.map(a => ({ id: a.id, name: a.name })),
-    managedAgencyIds,
-    userAgencyIds
-  });
-
-  // For agency managers and regular users, set the first agency as default ONCE. If user chooses "all", keep it.
+  // Set the first agency as default ONCE if there's only one agency
   useEffect(() => {
-    console.log("🔄 Agency Context useEffect:", {
-      selectedAgency,
-      isAgencyManager,
-      isUser,
-      managedAgenciesLength: managedAgencies?.length,
-      userAgenciesLength: userAgencies?.length
-    });
-    
-    if (!didSetDefault.current && selectedAgency === "all") {
-      if (isAgencyManager && managedAgencies && managedAgencies.length > 0) {
-        console.log("Setting default agency for manager:", managedAgencies[0]);
-        setSelectedAgency(managedAgencies[0].id);
-        didSetDefault.current = true;
-      } else if (isUser && userAgencies && userAgencies.length > 0) {
-        console.log("Setting default agency for user:", userAgencies[0]);
-        setSelectedAgency(userAgencies[0].id);
-        didSetDefault.current = true;
-      }
+    if (!didSetDefault.current && selectedAgency === "all" && agencies && agencies.length === 1) {
+      console.log("Setting default agency:", agencies[0]);
+      setSelectedAgency(agencies[0].id);
+      didSetDefault.current = true;
     }
-  }, [isAgencyManager, isUser, managedAgencies, userAgencies, selectedAgency]);
+  }, [agencies, selectedAgency]);
 
   return (
-    <AgencyContext.Provider value={{ selectedAgency, setSelectedAgency, managedAgencyIds, userAgencyIds }}>
+    <AgencyContext.Provider value={{ selectedAgency, setSelectedAgency }}>
       {children}
     </AgencyContext.Provider>
   );
