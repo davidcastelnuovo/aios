@@ -1,10 +1,13 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserAgencies } from "@/hooks/useUserAgencies";
 
 interface AgencyContextType {
   selectedAgency: string;
   setSelectedAgency: (agencyId: string) => void;
+  agencies: Array<{ id: string; name: string }> | undefined;
+  isLoading: boolean;
 }
 
 const AgencyContext = createContext<AgencyContextType | undefined>(undefined);
@@ -12,9 +15,10 @@ const AgencyContext = createContext<AgencyContextType | undefined>(undefined);
 export function AgencyProvider({ children }: { children: ReactNode }) {
   const [selectedAgency, setSelectedAgency] = useState<string>("all");
   const didSetDefault = useRef(false);
+  const { userAgencyIds, isOwner, isLoading: isLoadingUserAgencies } = useUserAgencies();
 
   // Get all active agencies
-  const { data: agencies } = useQuery({
+  const { data: allAgencies, isLoading: isLoadingAgencies } = useQuery({
     queryKey: ["agencies"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -32,6 +36,15 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     },
   });
 
+  // Filter agencies based on user access
+  const agencies = !isOwner && userAgencyIds && userAgencyIds.length > 0
+    ? allAgencies?.filter(a => userAgencyIds.includes(a.id))
+    : allAgencies;
+
+  const isLoading = isLoadingUserAgencies || isLoadingAgencies;
+
+  console.log("AgencyContext - User agencies:", { isOwner, userAgencyIds, filteredAgencies: agencies?.length });
+
   // Set the first agency as default ONCE if there's only one agency
   useEffect(() => {
     if (!didSetDefault.current && selectedAgency === "all" && agencies && agencies.length === 1) {
@@ -42,7 +55,7 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
   }, [agencies, selectedAgency]);
 
   return (
-    <AgencyContext.Provider value={{ selectedAgency, setSelectedAgency }}>
+    <AgencyContext.Provider value={{ selectedAgency, setSelectedAgency, agencies, isLoading }}>
       {children}
     </AgencyContext.Provider>
   );

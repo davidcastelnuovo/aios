@@ -1,8 +1,5 @@
 project_id = "jnzguisakdtcollxmgzd"
 
-[functions.cleanup-duplicate-campaigners]
-verify_jwt = false
-
 [functions.delete-user]
 verify_jwt = true
 

@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { useQuery } from "@tanstack/react-query";
 import { useAgency } from "@/contexts/AgencyContext";
 import {
   DropdownMenu,
@@ -29,20 +28,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { selectedAgency, setSelectedAgency } = useAgency();
-
-  const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("agencies")
-        .select("id, name")
-        .eq("status", "active")
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const { selectedAgency, setSelectedAgency, agencies } = useAgency();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
