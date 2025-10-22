@@ -22,31 +22,30 @@ export default function Agencies() {
         return data;
       } else if (isAgencyOwner) {
         // Agency owner sees only their agencies
-        const { data: userProfile, error: profileError } = await supabase
+        // First get campaigner_id from profile
+        const { data: profile } = await supabase
           .from("profiles")
-          .select(`
-            campaigner_id,
-            campaigners!inner(
-              campaigner_agencies(
-                agency_id
-              )
-            )
-          `)
+          .select("campaigner_id")
           .eq("id", userId)
           .single();
         
-        if (profileError) throw profileError;
+        if (!profile?.campaigner_id) {
+          return [];
+        }
         
-        // Extract agency IDs
-        const agencyIds = userProfile?.campaigners?.campaigner_agencies
-          ?.map((ca: any) => ca.agency_id)
-          .filter((id: any) => id) || [];
+        // Get agency IDs through campaigner_agencies
+        const { data: agencyLinks } = await supabase
+          .from("campaigner_agencies")
+          .select("agency_id")
+          .eq("campaigner_id", profile.campaigner_id);
+        
+        const agencyIds = agencyLinks?.map((link: any) => link.agency_id) || [];
         
         if (agencyIds.length === 0) {
           return [];
         }
         
-        // Fetch agencies
+        // Fetch full agency details
         const { data, error } = await supabase
           .from("agencies")
           .select("*")

@@ -74,27 +74,27 @@ export default function Users() {
         return data;
       } else if (isAgencyOwner) {
         // Agency owner sees only their agencies
-        const { data: userAgencies, error } = await supabase
+        // First get campaigner_id from profile
+        const { data: profile } = await supabase
           .from("profiles")
-          .select(`
-            campaigner_id,
-            campaigners!inner(
-              campaigner_agencies(
-                agencies(id, name)
-              )
-            )
-          `)
+          .select("campaigner_id")
           .eq("id", currentUserId)
           .single();
         
+        if (!profile?.campaigner_id) {
+          return [];
+        }
+        
+        // Get agencies through campaigner_agencies
+        const { data: agencyLinks, error } = await supabase
+          .from("campaigner_agencies")
+          .select("agency_id, agencies(id, name)")
+          .eq("campaigner_id", profile.campaigner_id);
+        
         if (error) throw error;
         
-        // Extract agencies from nested structure
-        const agenciesList = userAgencies?.campaigners?.campaigner_agencies
-          ?.map((ca: any) => ca.agencies)
-          .filter((a: any) => a) || [];
-        
-        return agenciesList;
+        // Extract agencies
+        return agencyLinks?.map((link: any) => link.agencies).filter((a: any) => a) || [];
       }
       return [];
     },
