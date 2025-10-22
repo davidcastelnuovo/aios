@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckSquare, Calendar, Building2, Users, Megaphone, AlertCircle, GripVertical } from "lucide-react";
+import { CheckSquare, Calendar, Building2, Users, Megaphone, AlertCircle, GripVertical, LayoutGrid, Table as TableIcon } from "lucide-react";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useAgency } from "@/contexts/AgencyContext";
@@ -13,6 +13,7 @@ import { DndContext, DragOverlay, closestCorners, DragEndEvent, DragStartEvent, 
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -20,11 +21,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 export default function Tasks() {
   const [editingTask, setEditingTask] = useState<any>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [activeTask, setActiveTask] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
   const { selectedAgency } = useAgency();
   const { userAgencyIds, isOwner, isAgencyOwner } = useUserAgencies();
   const { campaignerId, isCampaigner, isTeamManager } = useUserRole();
@@ -370,6 +380,26 @@ export default function Tasks() {
           </div>
           
           <div className="flex gap-3 flex-wrap md:flex-nowrap w-full md:w-auto items-stretch">
+            {/* View mode toggle */}
+            <div className="flex gap-1 border rounded-md p-1">
+              <Button
+                variant={viewMode === "kanban" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("kanban")}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "table" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("table")}
+              >
+                <TableIcon className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <div className="h-8 w-px bg-border"></div>
+            
             {/* Hide campaigner filter for pure campaigners */}
             {!(isCampaigner && !isTeamManager && !isOwner && !isAgencyOwner) && (
               <div className="w-full md:w-48">
@@ -392,7 +422,8 @@ export default function Tasks() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-3">
+        {viewMode === "kanban" ? (
+          <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-3">
           <DroppableColumn status="open">
             <SortableContext items={tasksByStatus.open.map(t => t.id)} strategy={verticalListSortingStrategy}>
               <div className="flex items-center gap-2">
@@ -453,6 +484,102 @@ export default function Tasks() {
             </SortableContext>
           </DroppableColumn>
         </div>
+        ) : (
+          /* Table View */
+          <Card className="shadow-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>לקוח</TableHead>
+                  <TableHead>משימה</TableHead>
+                  <TableHead>קמפיינר</TableHead>
+                  <TableHead>עדיפות</TableHead>
+                  <TableHead>תאריך יעד</TableHead>
+                  <TableHead>סטטוס</TableHead>
+                  <TableHead>פעולות</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTasks?.map((task) => (
+                  <TableRow 
+                    key={task.id}
+                    className="cursor-pointer hover:bg-accent/50"
+                    onClick={() => setEditingTask(task)}
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{task.clients?.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-medium">{task.title}</span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Megaphone className="h-4 w-4 text-muted-foreground" />
+                        <span>{task.campaigners?.full_name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={getPriorityColor(task.priority)}>
+                        {getPriorityText(task.priority)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {task.due_date ? (
+                        <div className={`flex items-center gap-2 ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive font-medium' : ''}`}>
+                          {isOverdue(task.due_date) && task.status !== 'done' && <AlertCircle className="h-4 w-4" />}
+                          <Calendar className="h-4 w-4" />
+                          <span>{new Date(task.due_date).toLocaleDateString("he-IL")}</span>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Select
+                        value={task.status}
+                        onValueChange={(value: "open" | "in_progress" | "done") => 
+                          updateTaskStatusMutation.mutate({ taskId: task.id, status: value })
+                        }
+                      >
+                        <SelectTrigger className="h-8 w-[130px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="open">
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                              פתוח
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="in_progress">
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+                              בעבודה
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="done">
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                              הושלם
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={getStatusColor(task.status)}>
+                        {getStatusText(task.status)}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        )}
 
         {editingTask && (
           <EditTaskDialog
