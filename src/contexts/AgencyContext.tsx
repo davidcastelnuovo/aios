@@ -37,13 +37,22 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
   });
 
   // Filter agencies based on user access
-  const agencies = !isOwner && userAgencyIds && userAgencyIds.length > 0
-    ? allAgencies?.filter(a => userAgencyIds.includes(a.id))
-    : allAgencies;
+  // Wait for user data to load before filtering
+  const agencies = isLoadingUserAgencies 
+    ? undefined  // Still loading user data, don't show anything yet
+    : (isOwner || !userAgencyIds || userAgencyIds.length === 0
+        ? allAgencies  // Owner sees all, or no restriction
+        : allAgencies?.filter(a => userAgencyIds.includes(a.id))); // Filter by user's agencies
 
   const isLoading = isLoadingUserAgencies || isLoadingAgencies;
 
-  console.log("AgencyContext - User agencies:", { isOwner, userAgencyIds, filteredAgencies: agencies?.length });
+  console.log("AgencyContext - User agencies:", { 
+    isOwner, 
+    userAgencyIds, 
+    isLoadingUserAgencies,
+    allAgenciesCount: allAgencies?.length,
+    filteredAgencies: agencies?.length 
+  });
 
   // Set the first agency as default ONCE if there's only one agency
   useEffect(() => {
