@@ -62,9 +62,19 @@ export default function Users() {
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
 
   const { data: agencies } = useQuery({
-    queryKey: ["agencies", currentUserId],
+    queryKey: ["agencies-for-invite", currentUserId],
     queryFn: async () => {
-      if (isOwner) {
+      // Get current user's roles
+      const { data: userRoles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", currentUserId);
+      
+      const roles = userRoles?.map(r => r.role) || [];
+      const isOwnerRole = roles.includes("owner");
+      const isAgencyOwnerRole = roles.includes("agency_owner");
+      
+      if (isOwnerRole) {
         // Owner sees all agencies
         const { data, error } = await supabase
           .from("agencies")
@@ -72,7 +82,7 @@ export default function Users() {
           .order("name");
         if (error) throw error;
         return data;
-      } else if (isAgencyOwner) {
+      } else if (isAgencyOwnerRole) {
         // Agency owner sees only their agencies
         // First get campaigner_id from profile
         const { data: profile } = await supabase
@@ -82,6 +92,7 @@ export default function Users() {
           .single();
         
         if (!profile?.campaigner_id) {
+          console.log("No campaigner_id found for user");
           return [];
         }
         
@@ -91,10 +102,17 @@ export default function Users() {
           .select("agency_id, agencies(id, name)")
           .eq("campaigner_id", profile.campaigner_id);
         
-        if (error) throw error;
+        if (error) {
+          console.error("Error fetching agency links:", error);
+          throw error;
+        }
+        
+        console.log("Agency links found:", agencyLinks);
         
         // Extract agencies
-        return agencyLinks?.map((link: any) => link.agencies).filter((a: any) => a) || [];
+        const agencies = agencyLinks?.map((link: any) => link.agencies).filter((a: any) => a) || [];
+        console.log("Filtered agencies:", agencies);
+        return agencies;
       }
       return [];
     },

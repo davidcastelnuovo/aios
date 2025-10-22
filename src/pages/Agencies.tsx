@@ -10,9 +10,19 @@ export default function Agencies() {
   const { isOwner, isAgencyOwner, userId } = useUserRole();
   
   const { data: agencies, isLoading } = useQuery({
-    queryKey: ["agencies", userId],
+    queryKey: ["agencies-list", userId],
     queryFn: async () => {
-      if (isOwner) {
+      // Get current user's roles
+      const { data: userRoles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
+      
+      const roles = userRoles?.map(r => r.role) || [];
+      const isOwnerRole = roles.includes("owner");
+      const isAgencyOwnerRole = roles.includes("agency_owner");
+      
+      if (isOwnerRole) {
         // Owner sees all agencies
         const { data, error } = await supabase
           .from("agencies")
@@ -20,7 +30,7 @@ export default function Agencies() {
           .order("created_at", { ascending: false });
         if (error) throw error;
         return data;
-      } else if (isAgencyOwner) {
+      } else if (isAgencyOwnerRole) {
         // Agency owner sees only their agencies
         // First get campaigner_id from profile
         const { data: profile } = await supabase
@@ -30,6 +40,7 @@ export default function Agencies() {
           .single();
         
         if (!profile?.campaigner_id) {
+          console.log("No campaigner_id found for user");
           return [];
         }
         
@@ -40,6 +51,8 @@ export default function Agencies() {
           .eq("campaigner_id", profile.campaigner_id);
         
         const agencyIds = agencyLinks?.map((link: any) => link.agency_id) || [];
+        
+        console.log("Agency IDs for user:", agencyIds);
         
         if (agencyIds.length === 0) {
           return [];
