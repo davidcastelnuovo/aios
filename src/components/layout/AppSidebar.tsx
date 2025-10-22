@@ -11,6 +11,7 @@ import {
   BarChart3,
   User,
   UserPlus,
+  ShieldCheck,
 } from "lucide-react";
 import {
   Sidebar,
@@ -36,6 +37,7 @@ const menuItems = [
   { title: "ספקים", url: "/suppliers", icon: Truck },
   { title: "כספים", url: "/finance", icon: DollarSign },
   { title: "דוחות", url: "/reports", icon: BarChart3 },
+  { title: "ניהול משתמשים", url: "/users", icon: ShieldCheck },
 ];
 
 export function AppSidebar() {
