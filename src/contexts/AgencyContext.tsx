@@ -40,8 +40,8 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
   // Wait for user data to load before filtering
   const agencies = isLoadingUserAgencies 
     ? undefined  // Still loading user data, don't show anything yet
-    : (isOwner || !userAgencyIds || userAgencyIds.length === 0
-        ? allAgencies  // Owner sees all, or no restriction
+    : (isOwner || userAgencyIds === null
+        ? allAgencies  // Owner sees all (userAgencyIds is null for owners)
         : allAgencies?.filter(a => userAgencyIds.includes(a.id))); // Filter by user's agencies
 
   const isLoading = isLoadingUserAgencies || isLoadingAgencies;
