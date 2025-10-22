@@ -33,9 +33,9 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, [selectedAgency]);
 
-  // Get all active agencies
+  // Get all agencies for the filter
   const { data: allAgencies, isLoading: isLoadingAgencies } = useQuery({
-    queryKey: ["agencies"],
+    queryKey: ["agencies-filter"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("agencies")
@@ -47,8 +47,10 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
         return [];
       }
       
-      return data;
+      console.log("🏢 Fetched agencies:", data);
+      return data || [];
     },
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
   });
 
   // Agencies available globally (independent of user role)
