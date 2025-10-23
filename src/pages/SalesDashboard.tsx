@@ -430,6 +430,5 @@ export default function SalesDashboard() {
           </Card>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
