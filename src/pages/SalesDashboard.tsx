@@ -4,6 +4,8 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAgency } from "@/contexts/AgencyContext";
 import { Target, Users, TrendingUp, DollarSign, Clock, CheckCircle2 } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { format, subDays, startOfDay } from "date-fns";
 
 export default function SalesDashboard() {
   const { selectedAgency } = useAgency();
@@ -57,6 +59,63 @@ export default function SalesDashboard() {
         total: data.length,
         active: data.filter(sp => sp.active).length,
       };
+    },
+  });
+
+  const { data: timelineData } = useQuery({
+    queryKey: ["leads-timeline", selectedAgency],
+    queryFn: async () => {
+      let query = supabase
+        .from("leads")
+        .select("created_at, status, updated_at");
+
+      if (selectedAgency && selectedAgency !== "all") {
+        query = query.eq("agency_id", selectedAgency);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      // Group by date for the last 30 days
+      const last30Days = Array.from({ length: 30 }, (_, i) => {
+        const date = startOfDay(subDays(new Date(), 29 - i));
+        return {
+          date: format(date, "dd/MM"),
+          fullDate: date,
+          newLeads: 0,
+          proposals: 0,
+          closed: 0,
+        };
+      });
+
+      data.forEach((lead) => {
+        const createdDate = startOfDay(new Date(lead.created_at));
+        const dayIndex = last30Days.findIndex(
+          (d) => d.fullDate.getTime() === createdDate.getTime()
+        );
+
+        if (dayIndex !== -1) {
+          last30Days[dayIndex].newLeads++;
+        }
+
+        // Count proposals and closed by status
+        if (lead.status === "proposal_sent" || lead.status === "closed") {
+          const updatedDate = startOfDay(new Date(lead.updated_at));
+          const updateIndex = last30Days.findIndex(
+            (d) => d.fullDate.getTime() === updatedDate.getTime()
+          );
+          
+          if (updateIndex !== -1) {
+            if (lead.status === "proposal_sent") {
+              last30Days[updateIndex].proposals++;
+            } else if (lead.status === "closed") {
+              last30Days[updateIndex].closed++;
+            }
+          }
+        }
+      });
+
+      return last30Days;
     },
   });
 
@@ -138,6 +197,56 @@ export default function SalesDashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* גרף ציר זמן */}
+        <Card>
+          <CardHeader>
+            <CardTitle>מעקב זמן - 30 ימים אחרונים</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={timelineData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="date" 
+                  style={{ fontSize: '12px' }}
+                />
+                <YAxis style={{ fontSize: '12px' }} />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'hsl(var(--card))', 
+                    border: '1px solid hsl(var(--border))' 
+                  }}
+                />
+                <Legend />
+                <Line 
+                  type="monotone" 
+                  dataKey="newLeads" 
+                  name="לידים חדשים"
+                  stroke="#3b82f6" 
+                  strokeWidth={2}
+                  dot={{ fill: '#3b82f6' }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="proposals" 
+                  name="הצעות מחיר"
+                  stroke="#f97316" 
+                  strokeWidth={2}
+                  dot={{ fill: '#f97316' }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="closed" 
+                  name="עסקאות שנסגרו"
+                  stroke="#22c55e" 
+                  strokeWidth={2}
+                  dot={{ fill: '#22c55e' }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
         {/* שלבי משפך המכירה */}
         <Card>
