@@ -428,6 +428,7 @@ export type Database = {
           lost_reason: string | null
           notes: string | null
           phone: string | null
+          proposal_sent_date: string | null
           sales_person_id: string | null
           source: Database["public"]["Enums"]["lead_source"]
           status: Database["public"]["Enums"]["lead_status"]
@@ -447,6 +448,7 @@ export type Database = {
           lost_reason?: string | null
           notes?: string | null
           phone?: string | null
+          proposal_sent_date?: string | null
           sales_person_id?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: Database["public"]["Enums"]["lead_status"]
@@ -466,6 +468,7 @@ export type Database = {
           lost_reason?: string | null
           notes?: string | null
           phone?: string | null
+          proposal_sent_date?: string | null
           sales_person_id?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: Database["public"]["Enums"]["lead_status"]
