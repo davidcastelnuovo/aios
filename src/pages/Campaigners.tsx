@@ -40,10 +40,12 @@ export default function Campaigners() {
       
       if (error) throw error;
       
-      // Filter client_team to only show active clients on the frontend
+      // Filter client_team to show active and onboarding clients on the frontend
       const filteredData = data?.map(campaigner => ({
         ...campaigner,
-        client_team: campaigner.client_team?.filter((ct: any) => ct.clients?.status === "active") || []
+        client_team: campaigner.client_team?.filter((ct: any) => 
+          ct.clients?.status === "active" || ct.clients?.status === "onboarding"
+        ) || []
       }));
       
       return filteredData;
