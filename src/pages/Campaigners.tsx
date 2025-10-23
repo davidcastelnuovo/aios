@@ -28,18 +28,25 @@ export default function Campaigners() {
           campaigner_agencies(
             agencies(name)
           ),
-          client_team!inner(
+          client_team(
             id,
             role_on_account,
             allocation_percent,
             campaigner_payment,
-            clients!inner(id, name, status)
+            clients(id, name, status)
           )
         `)
-        .eq("client_team.clients.status", "active")
         .order("created_at", { ascending: false });
+      
       if (error) throw error;
-      return data;
+      
+      // Filter client_team to only show active clients on the frontend
+      const filteredData = data?.map(campaigner => ({
+        ...campaigner,
+        client_team: campaigner.client_team?.filter((ct: any) => ct.clients?.status === "active") || []
+      }));
+      
+      return filteredData;
     },
   });
 
