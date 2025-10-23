@@ -12,6 +12,8 @@ import {
   User,
   UserPlus,
   ShieldCheck,
+  UserCheck,
+  Target,
 } from "lucide-react";
 import {
   Sidebar,
@@ -37,6 +39,8 @@ const menuItems = [
   { title: "ספקים", url: "/suppliers", icon: Truck, module: "suppliers" as const },
   { title: "כספים", url: "/finance", icon: DollarSign, module: "finance" as const },
   { title: "דוחות", url: "/reports", icon: BarChart3, module: "reports" as const },
+  { title: "אנשי מכירות", url: "/sales-people", icon: UserCheck, module: null },
+  { title: "לידים", url: "/leads", icon: Target, module: null },
   { title: "ניהול משתמשים", url: "/users", icon: ShieldCheck, module: "users" as const },
   { title: "אזור אישי", url: "/my-profile", icon: User, module: null },
 ];
@@ -54,14 +58,13 @@ export function AppSidebar() {
 
   // Filter menu items based on permissions
   const visibleMenuItems = menuItems.filter((item) => {
-    // "My Profile" is always visible (module is null)
-    if (item.url === "/my-profile") return true;
+    // Items without module requirement are always visible (My Profile, Sales People, Leads)
+    if (!item.module) return true;
 
     // While permissions are loading, hide restricted items to avoid leaks
     if (isLoading) return false;
 
     // All other items require permission check
-    if (!item.module) return false;
     return hasPermission(item.module);
   });
 

@@ -414,6 +414,81 @@ export type Database = {
           },
         ]
       }
+      leads: {
+        Row: {
+          agency_id: string
+          company_name: string
+          contact_name: string
+          created_at: string
+          email: string | null
+          estimated_deal_value: number | null
+          folder_link: string | null
+          id: string
+          industry: string | null
+          lost_reason: string | null
+          notes: string | null
+          phone: string | null
+          sales_person_id: string
+          source: Database["public"]["Enums"]["lead_source"]
+          status: Database["public"]["Enums"]["lead_status"]
+          updated_at: string
+          won_date: string | null
+        }
+        Insert: {
+          agency_id: string
+          company_name: string
+          contact_name: string
+          created_at?: string
+          email?: string | null
+          estimated_deal_value?: number | null
+          folder_link?: string | null
+          id?: string
+          industry?: string | null
+          lost_reason?: string | null
+          notes?: string | null
+          phone?: string | null
+          sales_person_id: string
+          source?: Database["public"]["Enums"]["lead_source"]
+          status?: Database["public"]["Enums"]["lead_status"]
+          updated_at?: string
+          won_date?: string | null
+        }
+        Update: {
+          agency_id?: string
+          company_name?: string
+          contact_name?: string
+          created_at?: string
+          email?: string | null
+          estimated_deal_value?: number | null
+          folder_link?: string | null
+          id?: string
+          industry?: string | null
+          lost_reason?: string | null
+          notes?: string | null
+          phone?: string | null
+          sales_person_id?: string
+          source?: Database["public"]["Enums"]["lead_source"]
+          status?: Database["public"]["Enums"]["lead_status"]
+          updated_at?: string
+          won_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_sales_person_id_fkey"
+            columns: ["sales_person_id"]
+            isOneToOne: false
+            referencedRelation: "sales_people"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           campaigner_id: string | null
@@ -445,6 +520,53 @@ export type Database = {
             columns: ["campaigner_id"]
             isOneToOne: false
             referencedRelation: "campaigners"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_people: {
+        Row: {
+          active: boolean
+          agency_id: string
+          created_at: string
+          email: string | null
+          folder_link: string | null
+          full_name: string
+          id: string
+          notes: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          agency_id: string
+          created_at?: string
+          email?: string | null
+          folder_link?: string | null
+          full_name: string
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          agency_id?: string
+          created_at?: string
+          email?: string | null
+          folder_link?: string | null
+          full_name?: string
+          id?: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_people_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
             referencedColumns: ["id"]
           },
         ]
@@ -749,6 +871,23 @@ export type Database = {
       app_role: "owner" | "agency_owner" | "team_manager" | "campaigner"
       client_status: "active" | "paused" | "ended" | "onboarding"
       finance_type: "income" | "expense"
+      lead_source:
+        | "website"
+        | "referral"
+        | "social_media"
+        | "paid_ads"
+        | "cold_call"
+        | "email_campaign"
+        | "event"
+        | "other"
+      lead_status:
+        | "new"
+        | "contacted"
+        | "meeting_scheduled"
+        | "proposal_sent"
+        | "negotiation"
+        | "won"
+        | "lost"
       onboarding_status:
         | "research_meeting"
         | "receiving_access"
@@ -896,6 +1035,25 @@ export const Constants = {
       app_role: ["owner", "agency_owner", "team_manager", "campaigner"],
       client_status: ["active", "paused", "ended", "onboarding"],
       finance_type: ["income", "expense"],
+      lead_source: [
+        "website",
+        "referral",
+        "social_media",
+        "paid_ads",
+        "cold_call",
+        "email_campaign",
+        "event",
+        "other",
+      ],
+      lead_status: [
+        "new",
+        "contacted",
+        "meeting_scheduled",
+        "proposal_sent",
+        "negotiation",
+        "won",
+        "lost",
+      ],
       onboarding_status: [
         "research_meeting",
         "receiving_access",
