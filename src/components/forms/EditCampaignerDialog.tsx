@@ -122,6 +122,13 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
+      // מחיקת הקשרים ללקוחות (client_team)
+      const { error: clientTeamError } = await supabase
+        .from("client_team")
+        .delete()
+        .eq("campaigner_id", campaigner.id);
+      if (clientTeamError) throw clientTeamError;
+
       // מחיקת הקשרים לסוכנויות
       const { error: agenciesError } = await supabase
         .from("campaigner_agencies")
