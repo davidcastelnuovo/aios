@@ -116,7 +116,7 @@ export function AppSidebar() {
 
               {/* ניהול - תפריט מתקפל */}
               {visibleManagementItems.length > 0 && (
-                <Collapsible defaultOpen className="group/collapsible">
+                <Collapsible className="group/collapsible">
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton tooltip="ניהול">
@@ -155,7 +155,7 @@ export function AppSidebar() {
               )}
 
               {/* ניהול מכירות - תפריט מתקפל */}
-              <Collapsible defaultOpen className="group/collapsible">
+              <Collapsible className="group/collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton tooltip="ניהול מכירות">
