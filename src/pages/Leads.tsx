@@ -36,11 +36,11 @@ import {
 } from "@/components/ui/collapsible";
 
 const PIPELINE_STAGES = [
-  { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100/50" },
-  { id: "contacted", label: "נוצר קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100/50" },
-  { id: "follow_up", label: "תהליך פולואפ", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100/50" },
-  { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100/50" },
-  { id: "closed", label: "נסגר", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100/50" },
+  { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100/50", borderColor: "border-blue-500" },
+  { id: "contacted", label: "נוצר קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100/50", borderColor: "border-purple-500" },
+  { id: "follow_up", label: "תהליך פולואפ", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100/50", borderColor: "border-yellow-500" },
+  { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100/50", borderColor: "border-orange-500" },
+  { id: "closed", label: "נסגר", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100/50", borderColor: "border-green-500" },
 ];
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -506,7 +506,7 @@ export default function Leads() {
           {PIPELINE_STAGES.map((stage) => {
             const stageLeads = getLeadsByStage(stage.id);
             return (
-              <Card key={stage.id} className={`${stage.color}`}>
+              <Card key={stage.id} className={`border-r-4 ${stage.borderColor} bg-card`}>
                 <CardHeader>
                   <CardTitle className="text-xl">
                     {stage.label} ({stageLeads.length})
