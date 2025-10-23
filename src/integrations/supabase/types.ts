@@ -417,61 +417,76 @@ export type Database = {
       leads: {
         Row: {
           agency_id: string | null
+          closing_date: string | null
           company_name: string
           contact_name: string | null
           created_at: string
           email: string | null
           estimated_deal_value: number | null
           folder_link: string | null
+          general_status: string | null
           id: string
           industry: string | null
           lost_reason: string | null
+          monthly_budget: number | null
           notes: string | null
           phone: string | null
+          proposal_date: string | null
           proposal_sent_date: string | null
           sales_person_id: string | null
           source: Database["public"]["Enums"]["lead_source"]
           status: Database["public"]["Enums"]["lead_status"]
+          three_month_budget: number | null
           updated_at: string
           won_date: string | null
         }
         Insert: {
           agency_id?: string | null
+          closing_date?: string | null
           company_name: string
           contact_name?: string | null
           created_at?: string
           email?: string | null
           estimated_deal_value?: number | null
           folder_link?: string | null
+          general_status?: string | null
           id?: string
           industry?: string | null
           lost_reason?: string | null
+          monthly_budget?: number | null
           notes?: string | null
           phone?: string | null
+          proposal_date?: string | null
           proposal_sent_date?: string | null
           sales_person_id?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: Database["public"]["Enums"]["lead_status"]
+          three_month_budget?: number | null
           updated_at?: string
           won_date?: string | null
         }
         Update: {
           agency_id?: string | null
+          closing_date?: string | null
           company_name?: string
           contact_name?: string | null
           created_at?: string
           email?: string | null
           estimated_deal_value?: number | null
           folder_link?: string | null
+          general_status?: string | null
           id?: string
           industry?: string | null
           lost_reason?: string | null
+          monthly_budget?: number | null
           notes?: string | null
           phone?: string | null
+          proposal_date?: string | null
           proposal_sent_date?: string | null
           sales_person_id?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: Database["public"]["Enums"]["lead_status"]
+          three_month_budget?: number | null
           updated_at?: string
           won_date?: string | null
         }

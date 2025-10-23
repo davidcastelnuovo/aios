@@ -1,0 +1,224 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { Upload, FileSpreadsheet } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+
+export function ImportLeadsCSV() {
+  const [open, setOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.csv')) {
+      toast({
+        title: "שגיאה",
+        description: "יש להעלות קובץ CSV בלבד",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const text = await file.text();
+      const lines = text.split('\n').filter(line => line.trim());
+      const headers = lines[0].split(',').map(h => h.trim());
+
+      // Parse CSV rows
+      const leads = lines.slice(1).map(line => {
+        const values = line.split(',').map(v => v.trim());
+        const lead: any = {};
+
+        headers.forEach((header, index) => {
+          const value = values[index] || null;
+          
+          // Map CSV headers to database columns
+          switch (header) {
+            case 'שם':
+            case 'שם החברה':
+              lead.company_name = value;
+              break;
+            case 'שם השדה':
+            case 'איש קשר':
+              lead.contact_name = value;
+              break;
+            case 'מייל':
+            case 'אימייל':
+              lead.email = value;
+              break;
+            case 'צדד':
+            case 'טלפון':
+              lead.phone = value;
+              break;
+            case 'סטטוס':
+              lead.general_status = value;
+              break;
+            case 'שלב במשפך':
+            case 'שלב':
+              // Map to pipeline stage
+              const stageMap: Record<string, string> = {
+                'ליד חדש': 'new',
+                'נוצר קשר': 'contacted',
+                'פולואפ': 'follow_up',
+                'follow_up': 'follow_up',
+                'הצעה': 'proposal_sent',
+                'נסגר': 'closed',
+              };
+              lead.status = stageMap[value] || 'new';
+              break;
+            case 'פרטים':
+            case 'הערות':
+              lead.notes = value;
+              break;
+            case 'תחום':
+            case 'תחום עיסוק':
+              lead.industry = value;
+              break;
+            case 'שווי משוער העסקה':
+            case 'שווי עסקה':
+              lead.estimated_deal_value = value ? parseFloat(value) : null;
+              break;
+            case 'הצעת חודשית':
+              lead.monthly_budget = value ? parseFloat(value) : null;
+              break;
+            case 'הצעת 3 חודשית':
+              lead.three_month_budget = value ? parseFloat(value) : null;
+              break;
+            case 'תאריך הצעה':
+              lead.proposal_date = value ? new Date(value).toISOString().split('T')[0] : null;
+              break;
+            case 'תאריך סגירה':
+              lead.closing_date = value ? new Date(value).toISOString().split('T')[0] : null;
+              break;
+            case 'מקור':
+            case 'מקורות':
+              // Map source
+              const sourceMap: Record<string, string> = {
+                'אתר': 'website',
+                'הפניה': 'referral',
+                'פייסבוק': 'social_media',
+                'גוגל': 'paid_ads',
+                'אחר': 'other',
+              };
+              lead.source = sourceMap[value] || 'other';
+              break;
+          }
+        });
+
+        // Set default status if not provided
+        if (!lead.status) {
+          lead.status = 'new';
+        }
+
+        // Ensure company_name exists
+        if (!lead.company_name) {
+          lead.company_name = lead.contact_name || 'לא צוין';
+        }
+
+        return lead;
+      });
+
+      // Filter out invalid leads
+      const validLeads = leads.filter(lead => lead.company_name);
+
+      if (validLeads.length === 0) {
+        toast({
+          title: "שגיאה",
+          description: "לא נמצאו לידים תקינים בקובץ",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Insert leads
+      const { error } = await supabase.from("leads").insert(validLeads);
+
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+
+      toast({
+        title: "הצלחה!",
+        description: `${validLeads.length} לידים יובאו בהצלחה`,
+      });
+
+      setOpen(false);
+    } catch (error: any) {
+      console.error("Error importing CSV:", error);
+      toast({
+        title: "שגיאה בייבוא",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="gap-2">
+          <Upload className="h-4 w-4" />
+          ייבוא מ-CSV
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>ייבוא לידים מקובץ CSV</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-8 space-y-4">
+            <FileSpreadsheet className="h-12 w-12 text-muted-foreground" />
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-4">
+                בחר קובץ CSV להעלאה
+              </p>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleFileUpload}
+                className="hidden"
+                id="csv-upload"
+                disabled={isLoading}
+              />
+              <label htmlFor="csv-upload">
+                <Button asChild disabled={isLoading}>
+                  <span className="cursor-pointer">
+                    {isLoading ? "מעלה..." : "בחר קובץ"}
+                  </span>
+                </Button>
+              </label>
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground space-y-1">
+            <p className="font-medium">שדות נתמכים:</p>
+            <ul className="list-disc list-inside space-y-0.5">
+              <li>שם / שם החברה</li>
+              <li>שם השדה / איש קשר</li>
+              <li>מייל / אימייל</li>
+              <li>צדד / טלפון</li>
+              <li>סטטוס</li>
+              <li>שלב במשפך</li>
+              <li>פרטים / הערות</li>
+              <li>שווי משוער העסקה</li>
+              <li>הצעת חודשית</li>
+              <li>הצעת 3 חודשית</li>
+              <li>תאריך הצעה</li>
+              <li>תאריך סגירה</li>
+            </ul>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

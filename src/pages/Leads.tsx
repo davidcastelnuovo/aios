@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { AddLeadForm } from "@/components/forms/AddLeadForm";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
+import { ImportLeadsCSV } from "@/components/forms/ImportLeadsCSV";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/contexts/AgencyContext";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable } from "@dnd-kit/core";
@@ -320,7 +321,10 @@ export default function Leads() {
               <TableIcon className="h-4 w-4" />
             </Button>
           </div>
-          <AddLeadForm />
+          <div className="flex gap-2">
+            <ImportLeadsCSV />
+            <AddLeadForm />
+          </div>
         </div>
       </div>
 
