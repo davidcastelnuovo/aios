@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -11,6 +11,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { AddLeadForm } from "@/components/forms/AddLeadForm";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -201,6 +209,7 @@ export default function Leads() {
   const { selectedAgency } = useAgency();
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
 
   const { data: leads, isLoading, refetch } = useQuery({
     queryKey: ["leads", selectedAgency],
@@ -282,70 +291,216 @@ export default function Leads() {
             גרור כרטיסים בין השלבים לעדכון סטטוס
           </p>
         </div>
-        <AddLeadForm />
+        <div className="flex gap-3 items-center">
+          {/* View mode toggle */}
+          <div className="flex gap-1 border rounded-md p-1">
+            <Button
+              variant={viewMode === "kanban" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("kanban")}
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === "table" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("table")}
+            >
+              <TableIcon className="h-4 w-4" />
+            </Button>
+          </div>
+          <AddLeadForm />
+        </div>
       </div>
 
-        {leads?.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground mb-4">
-                אין עדיין לידים במערכת
-              </p>
-              <AddLeadForm />
-            </CardContent>
-          </Card>
-        ) : (
-          <DndContext
-            collisionDetection={closestCorners}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <div className="grid grid-cols-5 gap-0">
-              {PIPELINE_STAGES.map((stage, index) => {
-                const stageLeads = getLeadsByStage(stage.id);
-                return (
-                  <div 
-                    key={stage.id}
-                    className="relative"
-                    style={{
-                      zIndex: PIPELINE_STAGES.length - index,
-                    }}
-                  >
-                    <DroppableStage stage={stage}>
-                      <SortableContext
-                        id={stage.id}
-                        items={stageLeads.map((l: any) => l.id)}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        {stageLeads.map((lead: any) => (
-                          <LeadCard 
-                            key={lead.id} 
-                            lead={lead}
-                            onStatusChange={(leadId, newStatus) => 
-                              updateLeadStatus.mutate({ 
-                                leadId, 
-                                newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "closed" 
-                              })
-                            }
-                          />
-                        ))}
-                      </SortableContext>
-                    </DroppableStage>
-                  </div>
-                );
-              })}
-            </div>
+      {leads?.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground mb-4">
+              אין עדיין לידים במערכת
+            </p>
+            <AddLeadForm />
+          </CardContent>
+        </Card>
+      ) : viewMode === "kanban" ? (
+        <DndContext
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="grid grid-cols-5 gap-0">
+            {PIPELINE_STAGES.map((stage, index) => {
+              const stageLeads = getLeadsByStage(stage.id);
+              return (
+                <div 
+                  key={stage.id}
+                  className="relative"
+                  style={{
+                    zIndex: PIPELINE_STAGES.length - index,
+                  }}
+                >
+                  <DroppableStage stage={stage}>
+                    <SortableContext
+                      id={stage.id}
+                      items={stageLeads.map((l: any) => l.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {stageLeads.map((lead: any) => (
+                        <LeadCard 
+                          key={lead.id} 
+                          lead={lead}
+                          onStatusChange={(leadId, newStatus) => 
+                            updateLeadStatus.mutate({ 
+                              leadId, 
+                              newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "closed" 
+                            })
+                          }
+                        />
+                      ))}
+                    </SortableContext>
+                  </DroppableStage>
+                </div>
+              );
+            })}
+          </div>
 
-            <DragOverlay>
-              {activeId && activeLead ? (
-                <LeadCard 
-                  lead={activeLead}
-                  onStatusChange={() => {}}
-                />
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        )}
+          <DragOverlay>
+            {activeId && activeLead ? (
+              <LeadCard 
+                lead={activeLead}
+                onStatusChange={() => {}}
+              />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      ) : (
+        <div className="space-y-6">
+          {PIPELINE_STAGES.map((stage) => {
+            const stageLeads = getLeadsByStage(stage.id);
+            return (
+              <Card key={stage.id} className={`${stage.color}`}>
+                <CardHeader>
+                  <CardTitle className="text-xl">
+                    {stage.label} ({stageLeads.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {stageLeads.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>חברה</TableHead>
+                          <TableHead>איש קשר</TableHead>
+                          <TableHead>אימייל</TableHead>
+                          <TableHead>טלפון</TableHead>
+                          <TableHead>שווי משוער</TableHead>
+                          <TableHead>איש מכירות</TableHead>
+                          <TableHead>סטטוס</TableHead>
+                          <TableHead className="text-left">פעולות</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {stageLeads.map((lead: any) => (
+                          <TableRow key={lead.id}>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center gap-2">
+                                <Building2 className="h-4 w-4" />
+                                {lead.company_name}
+                              </div>
+                            </TableCell>
+                            <TableCell>{lead.contact_name || "-"}</TableCell>
+                            <TableCell>
+                              {lead.email ? (
+                                <a href={`mailto:${lead.email}`} className="hover:underline flex items-center gap-1">
+                                  <Mail className="h-3 w-3" />
+                                  {lead.email}
+                                </a>
+                              ) : "-"}
+                            </TableCell>
+                            <TableCell>
+                              {lead.phone ? (
+                                <a href={`tel:${lead.phone}`} className="hover:underline flex items-center gap-1">
+                                  <Phone className="h-3 w-3" />
+                                  {lead.phone}
+                                </a>
+                              ) : "-"}
+                            </TableCell>
+                            <TableCell>
+                              {lead.estimated_deal_value ? (
+                                <span className="font-semibold text-primary">
+                                  ₪{lead.estimated_deal_value.toLocaleString()}
+                                </span>
+                              ) : "-"}
+                            </TableCell>
+                            <TableCell>{lead.sales_people?.full_name || "-"}</TableCell>
+                            <TableCell>
+                              <Select
+                                value={lead.status}
+                                onValueChange={(value) => 
+                                  updateLeadStatus.mutate({ 
+                                    leadId: lead.id, 
+                                    newStatus: value as "new" | "contacted" | "follow_up" | "proposal_sent" | "closed" 
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="h-8 w-[140px]">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {PIPELINE_STAGES.map((s) => (
+                                    <SelectItem key={s.id} value={s.id}>
+                                      {s.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex gap-2">
+                                <EditLeadDialog lead={lead} />
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={async () => {
+                                    try {
+                                      const { error } = await supabase
+                                        .from("leads")
+                                        .delete()
+                                        .eq("id", lead.id);
+
+                                      if (error) throw error;
+
+                                      toast({
+                                        title: "ליד נמחק בהצלחה",
+                                      });
+                                      queryClient.invalidateQueries({ queryKey: ["leads"] });
+                                    } catch (error: any) {
+                                      toast({
+                                        title: "שגיאה במחיקת ליד",
+                                        description: error.message,
+                                        variant: "destructive",
+                                      });
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
