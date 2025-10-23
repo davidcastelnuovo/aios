@@ -165,11 +165,24 @@ export default function Tasks() {
     filteredTasks = filteredTasks.filter(t => t.status !== "done");
   }
 
+  console.log('✅ Final filteredTasks:', filteredTasks?.map(t => ({
+    title: t.title,
+    agency_id: t.agency_id,
+    agency_name: t.agencies?.name,
+    status: t.status
+  })));
+
   const tasksByStatus = {
     open: filteredTasks?.filter(t => t.status === "open") || [],
     in_progress: filteredTasks?.filter(t => t.status === "in_progress") || [],
     done: filteredTasks?.filter(t => t.status === "done") || [],
   };
+
+  console.log('📊 Tasks by status:', {
+    open: tasksByStatus.open.map(t => ({ title: t.title, agency: t.agencies?.name })),
+    in_progress: tasksByStatus.in_progress.map(t => ({ title: t.title, agency: t.agencies?.name })),
+    done: tasksByStatus.done.map(t => ({ title: t.title, agency: t.agencies?.name }))
+  });
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
