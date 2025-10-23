@@ -351,7 +351,7 @@ export default function SalesDashboard() {
         </Card>
 
         {/* שווי פוטנציאלי */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card>
             <CardHeader>
               <CardTitle>שווי כולל משוער</CardTitle>
@@ -362,6 +362,20 @@ export default function SalesDashboard() {
               </div>
               <p className="text-sm text-muted-foreground mt-2">
                 סכום כל הלידים במשפך
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>שווי הצעות מחיר</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-orange-600">
+                ₪{leadsStats?.proposalValue?.toLocaleString() || 0}
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                הצעות מחיר לפני סגירה
               </p>
             </CardContent>
           </Card>
