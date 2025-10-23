@@ -2,13 +2,14 @@ import { useState, useEffect } from "react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Pencil, X } from "lucide-react";
+import { Pencil, X, Trash2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -113,6 +114,38 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
     onError: (error) => {
       toast({
         title: "שגיאה בעדכון קמפיינר",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      // מחיקת הקשרים לסוכנויות
+      const { error: agenciesError } = await supabase
+        .from("campaigner_agencies")
+        .delete()
+        .eq("campaigner_id", campaigner.id);
+      if (agenciesError) throw agenciesError;
+
+      // מחיקת הקמפיינר
+      const { error: campaignerError } = await supabase
+        .from("campaigners")
+        .delete()
+        .eq("id", campaigner.id);
+      if (campaignerError) throw campaignerError;
+    },
+    onSuccess: () => {
+      toast({
+        title: "הקמפיינר נמחק בהצלחה",
+      });
+      queryClient.invalidateQueries({ queryKey: ["campaigners"] });
+      setOpen(false);
+    },
+    onError: (error) => {
+      toast({
+        title: "שגיאה במחיקת קמפיינר",
         description: error.message,
         variant: "destructive",
       });
@@ -232,13 +265,43 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
             />
           </div>
 
-          <div className="flex gap-2 justify-end">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              ביטול
-            </Button>
-            <Button type="submit" disabled={updateMutation.isPending}>
-              {updateMutation.isPending ? "שומר..." : "שמור שינויים"}
-            </Button>
+          <div className="flex gap-2 justify-between">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button type="button" variant="destructive" size="sm">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  מחק
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>האם אתה בטוח?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    פעולה זו תמחק את הקמפיינר "{campaigner.full_name}" לצמיתות.
+                    לא ניתן לבטל פעולה זו.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>ביטול</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => deleteMutation.mutate()}
+                    disabled={deleteMutation.isPending}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    {deleteMutation.isPending ? "מוחק..." : "מחק"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                ביטול
+              </Button>
+              <Button type="submit" disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? "שומר..." : "שמור שינויים"}
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>
