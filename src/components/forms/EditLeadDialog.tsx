@@ -317,6 +317,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                         <SelectItem value="contacted">נוצר קשר</SelectItem>
                         <SelectItem value="follow_up">תהליך פולואפ</SelectItem>
                         <SelectItem value="proposal_sent">נשלחה הצעה</SelectItem>
+                        <SelectItem value="transferred_to_onboarding">הועבר לקליטה</SelectItem>
                         <SelectItem value="closed">נסגר</SelectItem>
                       </SelectContent>
                     </Select>

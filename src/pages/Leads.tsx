@@ -34,6 +34,7 @@ const PIPELINE_STAGES = [
   { id: "contacted", label: "נוצר קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100/50" },
   { id: "follow_up", label: "תהליך פולואפ", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100/50" },
   { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100/50" },
+  { id: "transferred_to_onboarding", label: "הועבר לקליטה", color: "bg-teal-100 dark:bg-teal-900", bgClass: "bg-teal-100/50" },
   { id: "closed", label: "נסגר", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100/50" },
 ];
 
@@ -240,7 +241,7 @@ export default function Leads() {
   });
 
   const updateLeadStatus = useMutation({
-    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "closed" }) => {
+    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" }) => {
       const { error } = await supabase
         .from("leads")
         .update({ status: newStatus })
@@ -274,7 +275,7 @@ export default function Leads() {
     if (!over) return;
 
     const leadId = active.id as string;
-    const newStatus = over.id as "new" | "contacted" | "follow_up" | "proposal_sent" | "closed";
+    const newStatus = over.id as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed";
 
     // Check if dropped on a valid stage
     if (PIPELINE_STAGES.find((stage) => stage.id === newStatus)) {
@@ -362,7 +363,7 @@ export default function Leads() {
                           onStatusChange={(leadId, newStatus) => 
                             updateLeadStatus.mutate({ 
                               leadId, 
-                              newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "closed" 
+                              newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
                             })
                           }
                         />
@@ -451,7 +452,7 @@ export default function Leads() {
                                 onValueChange={(value) => 
                                   updateLeadStatus.mutate({ 
                                     leadId: lead.id, 
-                                    newStatus: value as "new" | "contacted" | "follow_up" | "proposal_sent" | "closed" 
+                                    newStatus: value as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
                                   })
                                 }
                               >

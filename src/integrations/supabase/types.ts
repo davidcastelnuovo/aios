@@ -889,6 +889,7 @@ export type Database = {
         | "follow_up"
         | "proposal_sent"
         | "closed"
+        | "transferred_to_onboarding"
       onboarding_status:
         | "research_meeting"
         | "receiving_access"
@@ -1046,7 +1047,14 @@ export const Constants = {
         "event",
         "other",
       ],
-      lead_status: ["new", "contacted", "follow_up", "proposal_sent", "closed"],
+      lead_status: [
+        "new",
+        "contacted",
+        "follow_up",
+        "proposal_sent",
+        "closed",
+        "transferred_to_onboarding",
+      ],
       onboarding_status: [
         "research_meeting",
         "receiving_access",
