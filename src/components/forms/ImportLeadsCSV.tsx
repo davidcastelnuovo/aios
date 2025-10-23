@@ -43,24 +43,24 @@ export function ImportLeadsCSV() {
           // Map CSV headers to database columns
           switch (header) {
             case 'שם':
+              lead.contact_name = value;
+              break;
+            case 'שם העסק':
             case 'שם החברה':
               lead.company_name = value;
-              break;
-            case 'שם השדה':
-            case 'איש קשר':
-              lead.contact_name = value;
               break;
             case 'מייל':
             case 'אימייל':
               lead.email = value;
               break;
-            case 'צדד':
+            case 'פרוק':
             case 'טלפון':
               lead.phone = value;
               break;
             case 'סטטוס':
               lead.general_status = value;
               break;
+            case 'שלב העסקה':
             case 'שלב במשפך':
             case 'שלב':
               // Map to pipeline stage
@@ -69,41 +69,50 @@ export function ImportLeadsCSV() {
                 'נוצר קשר': 'contacted',
                 'פולואפ': 'follow_up',
                 'follow_up': 'follow_up',
+                'תהליך פולואפ': 'follow_up',
                 'הצעה': 'proposal_sent',
+                'נשלחה הצעה': 'proposal_sent',
                 'נסגר': 'closed',
               };
               lead.status = stageMap[value] || 'new';
               break;
+            case 'הערות/הסכמים/פרטים':
             case 'פרטים':
             case 'הערות':
               lead.notes = value;
               break;
             case 'תחום':
             case 'תחום עיסוק':
+            case 'ארגון קליינט לפי':
               lead.industry = value;
               break;
             case 'שווי משוער העסקה':
             case 'שווי עסקה':
-              lead.estimated_deal_value = value ? parseFloat(value) : null;
+              lead.estimated_deal_value = value ? parseFloat(value.replace(/[^\d.-]/g, '')) : null;
               break;
+            case 'המעת חד"פ':
             case 'הצעת חודשית':
-              lead.monthly_budget = value ? parseFloat(value) : null;
+              lead.monthly_budget = value ? parseFloat(value.replace(/[^\d.-]/g, '')) : null;
               break;
+            case 'המעת 3 חודשים':
             case 'הצעת 3 חודשית':
-              lead.three_month_budget = value ? parseFloat(value) : null;
+              lead.three_month_budget = value ? parseFloat(value.replace(/[^\d.-]/g, '')) : null;
               break;
             case 'תאריך הצעה':
               lead.proposal_date = value ? new Date(value).toISOString().split('T')[0] : null;
               break;
+            case 'תאריך חתימה':
             case 'תאריך סגירה':
               lead.closing_date = value ? new Date(value).toISOString().split('T')[0] : null;
               break;
+            case 'המלצה':
             case 'מקור':
             case 'מקורות':
               // Map source
               const sourceMap: Record<string, string> = {
                 'אתר': 'website',
                 'הפניה': 'referral',
+                'המלצה': 'referral',
                 'פייסבוק': 'social_media',
                 'גוגל': 'paid_ads',
                 'אחר': 'other',
@@ -203,18 +212,19 @@ export function ImportLeadsCSV() {
           <div className="text-xs text-muted-foreground space-y-1">
             <p className="font-medium">שדות נתמכים:</p>
             <ul className="list-disc list-inside space-y-0.5">
-              <li>שם / שם החברה</li>
-              <li>שם השדה / איש קשר</li>
-              <li>מייל / אימייל</li>
-              <li>צדד / טלפון</li>
+              <li>שם (איש קשר)</li>
+              <li>שם העסק</li>
+              <li>מייל</li>
+              <li>פרוק / טלפון</li>
               <li>סטטוס</li>
-              <li>שלב במשפך</li>
-              <li>פרטים / הערות</li>
-              <li>שווי משוער העסקה</li>
-              <li>הצעת חודשית</li>
-              <li>הצעת 3 חודשית</li>
+              <li>שלב העסקה</li>
+              <li>הערות/הסכמים/פרטים</li>
+              <li>המעת חד"פ</li>
+              <li>המעת 3 חודשים</li>
               <li>תאריך הצעה</li>
-              <li>תאריך סגירה</li>
+              <li>תאריך חתימה</li>
+              <li>המלצה (מקור)</li>
+              <li>ארגון קליינט לפי (תחום)</li>
             </ul>
           </div>
         </div>
