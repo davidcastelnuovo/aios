@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -125,14 +125,17 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
     <Card
       ref={setNodeRef}
       style={style}
-      className="mb-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
-      {...attributes}
-      {...listeners}
+      className="mb-3 hover:shadow-md transition-shadow"
     >
       <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
-          <Building2 className="h-4 w-4" />
-          {lead.company_name}
+        <CardTitle className="text-base flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Building2 className="h-4 w-4" />
+            {lead.company_name}
+          </div>
+          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing" aria-label="גרור כרטיס">
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
         </CardTitle>
         {lead.contact_name && (
           <p className="text-sm text-muted-foreground">{lead.contact_name}</p>
