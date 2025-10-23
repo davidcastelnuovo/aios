@@ -8,11 +8,11 @@ import { AddLeadForm } from "@/components/forms/AddLeadForm";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/contexts/AgencyContext";
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners } from "@dnd-kit/core";
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState } from "react";
+import { useState, ReactNode } from "react";
 
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900" },
@@ -32,6 +32,33 @@ const SOURCE_LABELS: Record<string, string> = {
   event: "אירוע",
   other: "אחר",
 };
+
+function DroppableStage({ stage, children }: { stage: any; children: ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({
+    id: stage.id,
+  });
+
+  const leadsCount = Array.isArray(children) 
+    ? children.filter(Boolean).length 
+    : children ? 1 : 0;
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex flex-col min-h-[600px] transition-colors ${
+        isOver ? "ring-2 ring-primary ring-offset-2" : ""
+      }`}
+    >
+      <div className={`${stage.color} rounded-t-lg p-3 font-semibold text-center`}>
+        {stage.label}
+        <span className="mr-2 text-sm">({leadsCount})</span>
+      </div>
+      <div className="bg-muted/30 rounded-b-lg p-3 flex-1 space-y-2">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 function LeadCard({ lead }: { lead: any }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -242,24 +269,17 @@ export default function Leads() {
               {PIPELINE_STAGES.map((stage) => {
                 const stageLeads = getLeadsByStage(stage.id);
                 return (
-                  <SortableContext
-                    key={stage.id}
-                    id={stage.id}
-                    items={stageLeads.map((l: any) => l.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <div className="flex flex-col min-h-[600px]">
-                      <div className={`${stage.color} rounded-t-lg p-3 font-semibold text-center`}>
-                        {stage.label}
-                        <span className="mr-2 text-sm">({stageLeads.length})</span>
-                      </div>
-                      <div className="bg-muted/30 rounded-b-lg p-3 flex-1 space-y-2">
-                        {stageLeads.map((lead: any) => (
-                          <LeadCard key={lead.id} lead={lead} />
-                        ))}
-                      </div>
-                    </div>
-                  </SortableContext>
+                  <DroppableStage key={stage.id} stage={stage}>
+                    <SortableContext
+                      id={stage.id}
+                      items={stageLeads.map((l: any) => l.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {stageLeads.map((lead: any) => (
+                        <LeadCard key={lead.id} lead={lead} />
+                      ))}
+                    </SortableContext>
+                  </DroppableStage>
                 );
               })}
             </div>
