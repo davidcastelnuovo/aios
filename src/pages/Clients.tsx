@@ -504,19 +504,6 @@ export default function Clients() {
                 </div>
               </div>
 
-              {client.client_team && client.client_team.length > 0 && (
-                <div className="pt-2 border-t">
-                  <p className="text-sm text-muted-foreground mb-1">קמפיינרים:</p>
-                  <div className="flex flex-wrap gap-1">
-                    {client.client_team.map((ct: any, idx: number) => (
-                      <Badge key={idx} variant="secondary" className="text-xs">
-                        {ct.campaigners.full_name}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
               {/* Hide add campaigner option for pure campaigners */}
               {!(isCampaigner && !isTeamManager && !isOwner) && (
                 <div className="pt-2 border-t space-y-2">
