@@ -144,132 +144,151 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
           <p className="text-sm text-muted-foreground font-medium">{lead.contact_name}</p>
         )}
       </CardHeader>
-      <CardContent className="space-y-3 text-sm px-4 pb-4 pt-3">
-        {/* Value and Status Section */}
-        <div className="flex flex-wrap gap-2">
+      <CardContent className="space-y-4 px-4 pb-4 pt-3">
+        {/* אזור פרטי העסק */}
+        <div className="space-y-2 pb-3 border-b-2 border-muted">
+          <h4 className="text-xs font-bold text-primary uppercase tracking-wide">פרטי העסק</h4>
+          
+          {/* Contact Info */}
+          <div className="space-y-1.5">
+            {lead.email && (
+              <div className="flex items-center gap-2 text-xs">
+                <Mail className="h-3 w-3 text-primary shrink-0" />
+                <a href={`mailto:${lead.email}`} className="hover:underline truncate">
+                  {lead.email}
+                </a>
+              </div>
+            )}
+            {lead.phone && (
+              <div className="flex items-center gap-2 text-xs">
+                <Phone className="h-3 w-3 text-primary shrink-0" />
+                <a href={`tel:${lead.phone}`} className="hover:underline">
+                  {lead.phone}
+                </a>
+              </div>
+            )}
+          </div>
+          
+          {/* Products */}
+          {lead.products && (
+            <div className="bg-muted/50 p-2 rounded text-xs">
+              <span className="font-semibold text-foreground">מוצרים:</span> {lead.products}
+            </div>
+          )}
+          
+          {/* Deal Value */}
           {lead.estimated_deal_value && (
-            <Badge variant="default" className="flex items-center gap-1 font-semibold">
-              <DollarSign className="h-3 w-3" />
-              ₪{lead.estimated_deal_value.toLocaleString()}
-            </Badge>
+            <div className="bg-primary/10 p-2 rounded">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-semibold">שווי עסקה:</span>
+                <Badge variant="default" className="flex items-center gap-1">
+                  <DollarSign className="h-3 w-3" />
+                  ₪{lead.estimated_deal_value.toLocaleString()}
+                </Badge>
+              </div>
+            </div>
           )}
-
-          {lead.response_status && (
-            <Badge variant="secondary" className="text-xs">
-              {lead.response_status === 'no_answer_1' && 'אין מענה 1'}
-              {lead.response_status === 'no_answer_2' && 'אין מענה 2'}
-              {lead.response_status === 'no_answer_3' && 'אין מענה 3'}
-              {lead.response_status === 'no_answer_4' && 'אין מענה 4'}
-              {lead.response_status === 'denies_contact' && 'מכחיש פניה'}
-              {lead.response_status === 'not_relevant' && 'לא רלוונטי'}
-            </Badge>
+          
+          {/* Budget Section */}
+          {(lead.monthly_budget || lead.three_month_budget) && (
+            <div className="bg-accent/10 p-2 rounded space-y-1">
+              {lead.monthly_budget && (
+                <div className="flex justify-between text-xs">
+                  <span className="font-semibold">הצעה חודשית:</span>
+                  <span className="font-bold text-primary">₪{lead.monthly_budget.toLocaleString()}</span>
+                </div>
+              )}
+              {lead.three_month_budget && (
+                <div className="flex justify-between text-xs">
+                  <span className="font-semibold">הצעת 3 חודשים:</span>
+                  <span className="font-bold text-primary">₪{lead.three_month_budget.toLocaleString()}</span>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
-        {/* Products */}
-        {lead.products && (
-          <div className="bg-muted/50 p-2 rounded text-xs">
-            <span className="font-semibold text-primary">מוצרים:</span> {lead.products}
-          </div>
-        )}
-
-        {/* Budget Section */}
-        {(lead.monthly_budget || lead.three_month_budget) && (
-          <div className="bg-accent/10 p-2 rounded space-y-1 text-xs">
-            {lead.monthly_budget && (
-              <div className="flex justify-between">
-                <span className="font-semibold">הצעה חודשית:</span>
-                <span className="font-bold text-primary">₪{lead.monthly_budget.toLocaleString()}</span>
-              </div>
-            )}
-            {lead.three_month_budget && (
-              <div className="flex justify-between">
-                <span className="font-semibold">הצעת 3 חודשים:</span>
-                <span className="font-bold text-primary">₪{lead.three_month_budget.toLocaleString()}</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Dates Section */}
+        {/* אזור תאריכים */}
         {(lead.proposal_date || lead.sale_date) && (
-          <div className="space-y-1 text-xs border-r-2 border-primary pr-2">
-            {lead.proposal_date && (
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-muted-foreground">תאריך הצעה:</span>
-                <span>{new Date(lead.proposal_date).toLocaleDateString('he-IL')}</span>
-              </div>
-            )}
-            {lead.sale_date && (
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-muted-foreground">תאריך מכירה:</span>
-                <span>{new Date(lead.sale_date).toLocaleDateString('he-IL')}</span>
-              </div>
-            )}
+          <div className="space-y-2 pb-3 border-b-2 border-muted">
+            <h4 className="text-xs font-bold text-primary uppercase tracking-wide">תאריכים</h4>
+            <div className="space-y-1.5 text-xs">
+              {lead.proposal_date && (
+                <div className="flex justify-between items-center bg-muted/30 p-1.5 rounded">
+                  <span className="font-semibold">תאריך הצעה:</span>
+                  <span className="font-medium">{new Date(lead.proposal_date).toLocaleDateString('he-IL')}</span>
+                </div>
+              )}
+              {lead.sale_date && (
+                <div className="flex justify-between items-center bg-muted/30 p-1.5 rounded">
+                  <span className="font-semibold">תאריך מכירה:</span>
+                  <span className="font-medium">{new Date(lead.sale_date).toLocaleDateString('he-IL')}</span>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Contact Info */}
-        <div className="space-y-2 pt-2 border-t">
-          {lead.email && (
-            <div className="flex items-center gap-2">
-              <Mail className="h-3 w-3 text-primary" />
-              <a href={`mailto:${lead.email}`} className="hover:underline truncate text-xs">
-                {lead.email}
-              </a>
-            </div>
-          )}
-
-          {lead.phone && (
-            <div className="flex items-center gap-2">
-              <Phone className="h-3 w-3 text-primary" />
-              <a href={`tel:${lead.phone}`} className="hover:underline text-xs">
-                {lead.phone}
-              </a>
-            </div>
-          )}
-        </div>
-
-        {lead.sales_people?.full_name && (
-          <p className="text-xs text-muted-foreground border-t pt-2">
-            <span className="font-semibold">איש מכירות:</span> {lead.sales_people.full_name}
-          </p>
-        )}
-
-        <div className="pt-2 border-t space-y-2" onClick={(e) => e.stopPropagation()}>
-          <Select
-            value={lead.status}
-            onValueChange={(value) => onStatusChange(lead.id, value)}
-          >
-            <SelectTrigger className="h-8 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-50">
-              {PIPELINE_STAGES.map((stage) => (
-                <SelectItem 
-                  key={stage.id} 
-                  value={stage.id}
-                  className={stage.bgClass}
-                >
-                  {stage.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-            <EditLeadDialog lead={lead} />
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDelete(lead.id);
-              }}
+        {/* אזור ניהול ומעקב */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-bold text-primary uppercase tracking-wide">ניהול ומעקב</h4>
+          
+          {/* Sales Person and Status */}
+          <div className="space-y-2">
+            {lead.sales_people?.full_name && (
+              <div className="bg-muted/30 p-2 rounded text-xs">
+                <span className="font-semibold">איש מכירות:</span> {lead.sales_people.full_name}
+              </div>
+            )}
+            
+            {lead.response_status && (
+              <Badge variant="secondary" className="text-xs w-full justify-center">
+                {lead.response_status === 'no_answer_1' && 'אין מענה 1'}
+                {lead.response_status === 'no_answer_2' && 'אין מענה 2'}
+                {lead.response_status === 'no_answer_3' && 'אין מענה 3'}
+                {lead.response_status === 'no_answer_4' && 'אין מענה 4'}
+                {lead.response_status === 'denies_contact' && 'מכחיש פניה'}
+                {lead.response_status === 'not_relevant' && 'לא רלוונטי'}
+              </Badge>
+            )}
+          </div>
+          
+          {/* Actions */}
+          <div className="space-y-2 pt-2" onClick={(e) => e.stopPropagation()}>
+            <Select
+              value={lead.status}
+              onValueChange={(value) => onStatusChange(lead.id, value)}
             >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                {PIPELINE_STAGES.map((stage) => (
+                  <SelectItem 
+                    key={stage.id} 
+                    value={stage.id}
+                    className={stage.bgClass}
+                  >
+                    {stage.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="flex gap-2">
+              <EditLeadDialog lead={lead} />
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDelete(lead.id);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </CardContent>
