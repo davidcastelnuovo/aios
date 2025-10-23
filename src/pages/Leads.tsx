@@ -152,7 +152,6 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
         )}
 
         <div className="pt-2 border-t space-y-2" onClick={(e) => e.stopPropagation()}>
-          <p className="text-xs text-muted-foreground mb-1">שנה סטטוס:</p>
           <Select
             value={lead.status}
             onValueChange={(value) => onStatusChange(lead.id, value)}
@@ -168,19 +167,18 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
               ))}
             </SelectContent>
           </Select>
-        </div>
 
-        <div className="flex gap-2 pt-2">
-          <EditLeadDialog lead={lead} />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleDelete(lead.id)}
-            className="flex-1"
-          >
-            <Trash2 className="h-4 w-4 ml-2" />
-            מחק
-          </Button>
+          <div className="flex gap-2">
+            <EditLeadDialog lead={lead} />
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => handleDelete(lead.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -144,9 +144,8 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="flex-1">
-          <Pencil className="h-4 w-4 ml-2" />
-          ערוך
+        <Button variant="outline" size="icon" className="h-8 w-8">
+          <Pencil className="h-4 w-4" />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
