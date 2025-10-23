@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -209,25 +208,20 @@ export default function Leads() {
   const activeLead = leads?.find((lead: any) => lead.id === activeId);
 
   if (isLoading) {
-    return (
-      <AppLayout>
-        <div className="p-8">טוען...</div>
-      </AppLayout>
-    );
+    return <div className="flex justify-center p-8">טוען...</div>;
   }
 
   return (
-    <AppLayout>
-      <div className="p-8 space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
-            <p className="text-muted-foreground mt-2">
-              גרור כרטיסים בין השלבים לעדכון סטטוס
-            </p>
-          </div>
-          <AddLeadForm />
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
+          <p className="text-muted-foreground mt-2">
+            גרור כרטיסים בין השלבים לעדכון סטטוס
+          </p>
         </div>
+        <AddLeadForm />
+      </div>
 
         {leads?.length === 0 ? (
           <Card>
@@ -275,7 +269,6 @@ export default function Leads() {
             </DragOverlay>
           </DndContext>
         )}
-      </div>
-    </AppLayout>
+    </div>
   );
 }
