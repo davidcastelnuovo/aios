@@ -59,7 +59,7 @@ export default function Tasks() {
         .select(`
           *,
           agencies (name),
-          clients (name),
+          clients (agency_id, name),
           campaigners (full_name)
         `)
         .order("due_date", { ascending: true });
@@ -115,13 +115,14 @@ export default function Tasks() {
   });
 
   // Filter logic: Role-based access, then global agency filter
+  const getTaskAgencyId = (t: any) => t?.clients?.agency_id ?? t?.agency_id;
   let accessibleTasks = tasks;
 
   if (!isOwner) {
     if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
       // Team managers see all tasks in their agencies (including all team members)
       accessibleTasks = tasks?.filter(task => 
-        userAgencyIds.includes(task.agency_id)
+        userAgencyIds.includes(getTaskAgencyId(task))
       );
     } else if (isCampaigner && campaignerClientIds) {
       // Pure campaigners see only tasks for their assigned clients
@@ -131,7 +132,7 @@ export default function Tasks() {
     } else if (userAgencyIds && userAgencyIds.length > 0) {
       // Fallback: users with agency access see tasks in their agencies
       accessibleTasks = tasks?.filter(task => 
-        userAgencyIds.includes(task.agency_id)
+        userAgencyIds.includes(getTaskAgencyId(task))
       );
     }
   }
@@ -142,14 +143,16 @@ export default function Tasks() {
     console.log('📋 Tasks before agency filter:', accessibleTasks?.map(t => ({
       title: t.title,
       agency_id: t.agency_id,
+      client_agency_id: t.clients?.agency_id,
       agency_name: t.agencies?.name
     })));
     accessibleTasks = accessibleTasks?.filter(
-      (task) => task.agency_id === selectedAgency
+      (task) => getTaskAgencyId(task) === selectedAgency
     );
     console.log('📋 Tasks after agency filter:', accessibleTasks?.map(t => ({
       title: t.title,
       agency_id: t.agency_id,
+      client_agency_id: t.clients?.agency_id,
       agency_name: t.agencies?.name
     })));
   }
@@ -168,6 +171,7 @@ export default function Tasks() {
   console.log('✅ Final filteredTasks:', filteredTasks?.map(t => ({
     title: t.title,
     agency_id: t.agency_id,
+    client_agency_id: t.clients?.agency_id,
     agency_name: t.agencies?.name,
     status: t.status
   })));
@@ -179,9 +183,9 @@ export default function Tasks() {
   };
 
   console.log('📊 Tasks by status:', {
-    open: tasksByStatus.open.map(t => ({ title: t.title, agency: t.agencies?.name })),
-    in_progress: tasksByStatus.in_progress.map(t => ({ title: t.title, agency: t.agencies?.name })),
-    done: tasksByStatus.done.map(t => ({ title: t.title, agency: t.agencies?.name }))
+    open: tasksByStatus.open.map(t => ({ title: t.title, agency: t.agencies?.name, client_agency_id: t.clients?.agency_id })),
+    in_progress: tasksByStatus.in_progress.map(t => ({ title: t.title, agency: t.agencies?.name, client_agency_id: t.clients?.agency_id })),
+    done: tasksByStatus.done.map(t => ({ title: t.title, agency: t.agencies?.name, client_agency_id: t.clients?.agency_id }))
   });
 
   const getPriorityColor = (priority: string) => {
