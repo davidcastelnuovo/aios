@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAgency } from "@/contexts/AgencyContext";
 import { Target, Users, TrendingUp, DollarSign, Clock, CheckCircle2 } from "lucide-react";
@@ -140,11 +139,7 @@ export default function SalesDashboard() {
   });
 
   if (leadsLoading) {
-    return (
-      <AppLayout>
-        <div>טוען...</div>
-      </AppLayout>
-    );
+    return <div className="flex justify-center p-8">טוען...</div>;
   }
 
   const conversionRate = leadsStats?.total 
@@ -152,10 +147,19 @@ export default function SalesDashboard() {
     : "0";
 
   return (
-    <AppLayout>
-      <div className="space-y-6">
-        {/* סטטיסטיקות כלליות */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">דשבורד מכירות</h1>
+          <p className="text-muted-foreground mt-2">
+            סקירה כללית של פעילות המכירות והלידים
+          </p>
+        </div>
+      </div>
+
+      {/* סטטיסטיקות כלליות */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">סה"כ לידים</CardTitle>
@@ -426,6 +430,6 @@ export default function SalesDashboard() {
           </Card>
         </div>
       </div>
-    </AppLayout>
+    </div>
   );
 }
