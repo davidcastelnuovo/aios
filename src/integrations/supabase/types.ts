@@ -433,6 +433,9 @@ export type Database = {
           phone: string | null
           proposal_date: string | null
           proposal_sent_date: string | null
+          response_status:
+            | Database["public"]["Enums"]["lead_response_status"]
+            | null
           sales_person_id: string | null
           source: Database["public"]["Enums"]["lead_source"]
           status: Database["public"]["Enums"]["lead_status"]
@@ -458,6 +461,9 @@ export type Database = {
           phone?: string | null
           proposal_date?: string | null
           proposal_sent_date?: string | null
+          response_status?:
+            | Database["public"]["Enums"]["lead_response_status"]
+            | null
           sales_person_id?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: Database["public"]["Enums"]["lead_status"]
@@ -483,6 +489,9 @@ export type Database = {
           phone?: string | null
           proposal_date?: string | null
           proposal_sent_date?: string | null
+          response_status?:
+            | Database["public"]["Enums"]["lead_response_status"]
+            | null
           sales_person_id?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: Database["public"]["Enums"]["lead_status"]
@@ -889,6 +898,13 @@ export type Database = {
       app_role: "owner" | "agency_owner" | "team_manager" | "campaigner"
       client_status: "active" | "paused" | "ended" | "onboarding"
       finance_type: "income" | "expense"
+      lead_response_status:
+        | "no_answer_1"
+        | "no_answer_2"
+        | "no_answer_3"
+        | "no_answer_4"
+        | "denies_contact"
+        | "not_relevant"
       lead_source:
         | "website"
         | "referral"
@@ -1052,6 +1068,14 @@ export const Constants = {
       app_role: ["owner", "agency_owner", "team_manager", "campaigner"],
       client_status: ["active", "paused", "ended", "onboarding"],
       finance_type: ["income", "expense"],
+      lead_response_status: [
+        "no_answer_1",
+        "no_answer_2",
+        "no_answer_3",
+        "no_answer_4",
+        "denies_contact",
+        "not_relevant",
+      ],
       lead_source: [
         "website",
         "referral",

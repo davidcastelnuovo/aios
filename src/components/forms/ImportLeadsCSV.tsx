@@ -58,6 +58,21 @@ export function ImportLeadsCSV() {
               lead.phone = value;
               break;
             case 'סטטוס':
+              // Map to response status
+              const responseStatusMap: Record<string, string> = {
+                'ללא מענה 1': 'no_answer_1',
+                'אין מענה 1': 'no_answer_1',
+                'ללא מענה 2': 'no_answer_2',
+                'אין מענה 2': 'no_answer_2',
+                'ללא מענה 3': 'no_answer_3',
+                'אין מענה 3': 'no_answer_3',
+                'ללא מענה 4': 'no_answer_4',
+                'אין מענה 4': 'no_answer_4',
+                'מכחיש פניה': 'denies_contact',
+                'לא רלוונטי': 'not_relevant',
+              };
+              lead.response_status = responseStatusMap[value] || null;
+              // Keep general_status for backward compatibility
               lead.general_status = value;
               break;
             case 'שלב העסקה':

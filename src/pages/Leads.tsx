@@ -152,6 +152,19 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
           </div>
         )}
 
+        {lead.response_status && (
+          <div className="flex items-center gap-1">
+            <Badge variant="secondary" className="text-xs">
+              {lead.response_status === 'no_answer_1' && 'אין מענה 1'}
+              {lead.response_status === 'no_answer_2' && 'אין מענה 2'}
+              {lead.response_status === 'no_answer_3' && 'אין מענה 3'}
+              {lead.response_status === 'no_answer_4' && 'אין מענה 4'}
+              {lead.response_status === 'denies_contact' && 'מכחיש פניה'}
+              {lead.response_status === 'not_relevant' && 'לא רלוונטי'}
+            </Badge>
+          </div>
+        )}
+
         {lead.email && (
           <div className="flex items-center gap-2">
             <Mail className="h-3 w-3 text-muted-foreground" />

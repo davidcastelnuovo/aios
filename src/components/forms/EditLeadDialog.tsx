@@ -24,6 +24,7 @@ const formSchema = z.object({
   phone: z.string().optional(),
   source: z.string().optional(),
   status: z.string().optional(),
+  response_status: z.string().optional(),
   estimated_deal_value: z.string().optional(),
   industry: z.string().optional(),
   notes: z.string().optional(),
@@ -54,6 +55,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
       phone: lead.phone || "",
       source: lead.source || "other",
       status: lead.status || "new",
+      response_status: lead.response_status || "",
       estimated_deal_value: lead.estimated_deal_value?.toString() || "",
       industry: lead.industry || "",
       notes: lead.notes || "",
@@ -104,6 +106,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
         phone: values.phone || null,
         source: (values.source as any) || 'other',
         status: (values.status as any) || 'new',
+        response_status: (values.response_status as any) || null,
         estimated_deal_value: values.estimated_deal_value 
           ? parseFloat(values.estimated_deal_value) 
           : null,
@@ -305,7 +308,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                 name="status"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>סטטוס *</FormLabel>
+                    <FormLabel>שלב במשפך *</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -319,6 +322,32 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                         <SelectItem value="proposal_sent">נשלחה הצעה</SelectItem>
                         <SelectItem value="transferred_to_onboarding">הועבר לקליטה</SelectItem>
                         <SelectItem value="closed">נסגר</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="response_status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>סטטוס</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="בחר סטטוס" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="no_answer_1">אין מענה 1</SelectItem>
+                        <SelectItem value="no_answer_2">אין מענה 2</SelectItem>
+                        <SelectItem value="no_answer_3">אין מענה 3</SelectItem>
+                        <SelectItem value="no_answer_4">אין מענה 4</SelectItem>
+                        <SelectItem value="denies_contact">מכחיש פניה</SelectItem>
+                        <SelectItem value="not_relevant">לא רלוונטי</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
