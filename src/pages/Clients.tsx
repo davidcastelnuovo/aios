@@ -73,6 +73,7 @@ export default function Clients() {
 
       const { data, error } = await query;
       if (error) throw error;
+      console.log("Clients data with campaigners:", data);
       return data;
     },
   });
