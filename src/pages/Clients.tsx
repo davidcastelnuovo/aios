@@ -240,7 +240,7 @@ export default function Clients() {
     : filteredClients;
 
   const visibleClients = hideInactive 
-    ? searchedClients?.filter(client => client.status === "active")
+    ? searchedClients?.filter(client => client.status === "active" || client.status === "onboarding")
     : searchedClients;
 
   const getStatusColor = (status: string) => {
