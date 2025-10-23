@@ -142,7 +142,7 @@ export default function SalesDashboard() {
   if (leadsLoading) {
     return (
       <AppLayout>
-        <div className="p-8">טוען...</div>
+        <div>טוען...</div>
       </AppLayout>
     );
   }
@@ -153,14 +153,7 @@ export default function SalesDashboard() {
 
   return (
     <AppLayout>
-      <div className="p-8 space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">דשבורד מכירות</h1>
-          <p className="text-muted-foreground mt-2">
-            סקירה כללית של פעילות המכירות והלידים
-          </p>
-        </div>
-
+      <div className="space-y-6">
         {/* סטטיסטיקות כלליות */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
