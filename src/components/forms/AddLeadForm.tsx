@@ -19,7 +19,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
-  company_name: z.string().min(1, "שם החברה הוא שדה חובה"),
+  company_name: z.string().min(1, "שם העסק הוא שדה חובה"),
   contact_name: z.string().optional(),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   phone: z.string().optional(),
@@ -167,7 +167,7 @@ export function AddLeadForm() {
                 name="company_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>שם החברה *</FormLabel>
+                    <FormLabel>שם העסק *</FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
