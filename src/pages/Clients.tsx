@@ -416,6 +416,19 @@ export default function Clients() {
                   </a>
                 </div>
               )}
+
+              {client.client_team && client.client_team.length > 0 && (
+                <div className="pt-2 border-t">
+                  <p className="text-sm text-muted-foreground mb-1">קמפיינרים משויכים:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {client.client_team.map((ct: any, index: number) => (
+                      <Badge key={index} variant="secondary" className="text-xs">
+                        {ct.campaigners.full_name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
               
               <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
                 <p className="text-sm text-muted-foreground">שנה סטטוס:</p>
