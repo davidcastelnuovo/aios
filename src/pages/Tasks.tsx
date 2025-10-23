@@ -138,9 +138,20 @@ export default function Tasks() {
 
   // Then apply agency filter (works for all roles including campaigners)
   if (selectedAgency && selectedAgency !== "all") {
+    console.log('🔍 Filtering by agency:', selectedAgency);
+    console.log('📋 Tasks before agency filter:', accessibleTasks?.map(t => ({
+      title: t.title,
+      agency_id: t.agency_id,
+      agency_name: t.agencies?.name
+    })));
     accessibleTasks = accessibleTasks?.filter(
       (task) => task.agency_id === selectedAgency
     );
+    console.log('📋 Tasks after agency filter:', accessibleTasks?.map(t => ({
+      title: t.title,
+      agency_id: t.agency_id,
+      agency_name: t.agencies?.name
+    })));
   }
 
   // Then filter by campaigner
@@ -290,7 +301,15 @@ export default function Tasks() {
           }}
         >
           <CardContent className="p-4">
-            {/* Client name above title */}
+            {/* Agency name at top */}
+            {task.agencies && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                <Building2 className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate font-medium">{task.agencies.name}</span>
+              </div>
+            )}
+            
+            {/* Client name */}
             {task.clients && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
                 <Users className="h-3 w-3 flex-shrink-0" />
@@ -505,6 +524,7 @@ export default function Tasks() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>סוכנות</TableHead>
                   <TableHead>לקוח</TableHead>
                   <TableHead>משימה</TableHead>
                   <TableHead>קמפיינר</TableHead>
@@ -521,6 +541,12 @@ export default function Tasks() {
                     className="cursor-pointer hover:bg-accent/50"
                     onClick={() => setEditingTask(task)}
                   >
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{task.agencies?.name}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-muted-foreground" />
