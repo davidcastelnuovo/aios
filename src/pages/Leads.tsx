@@ -165,6 +165,35 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
           </div>
         )}
 
+        {lead.products && (
+          <p className="text-xs">
+            <span className="font-medium">מוצרים:</span> {lead.products}
+          </p>
+        )}
+
+        {(lead.monthly_budget || lead.three_month_budget) && (
+          <div className="text-xs space-y-1">
+            {lead.monthly_budget && (
+              <p><span className="font-medium">הצעה חודשית:</span> ₪{lead.monthly_budget.toLocaleString()}</p>
+            )}
+            {lead.three_month_budget && (
+              <p><span className="font-medium">הצעת 3 חודשים:</span> ₪{lead.three_month_budget.toLocaleString()}</p>
+            )}
+          </div>
+        )}
+
+        {lead.proposal_date && (
+          <p className="text-xs">
+            <span className="font-medium">תאריך הצעה:</span> {new Date(lead.proposal_date).toLocaleDateString('he-IL')}
+          </p>
+        )}
+
+        {lead.sale_date && (
+          <p className="text-xs">
+            <span className="font-medium">תאריך מכירה:</span> {new Date(lead.sale_date).toLocaleDateString('he-IL')}
+          </p>
+        )}
+
         {lead.email && (
           <div className="flex items-center gap-2">
             <Mail className="h-3 w-3 text-muted-foreground" />

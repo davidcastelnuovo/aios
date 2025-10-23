@@ -156,6 +156,11 @@ export function ImportLeadsCSV() {
           lead.status = 'new';
         }
 
+        // If there's a proposal date, set status to proposal_sent
+        if (lead.proposal_date && lead.status === 'new') {
+          lead.status = 'proposal_sent';
+        }
+
         // Ensure company_name exists
         if (!lead.company_name) {
           lead.company_name = lead.contact_name || 'לא צוין';
