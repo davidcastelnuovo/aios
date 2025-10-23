@@ -66,7 +66,11 @@ export default function Clients() {
           *,
           agencies (name),
           client_team (
-            campaigners (full_name)
+            campaigner_id,
+            campaigners!inner (
+              id,
+              full_name
+            )
           )
         `)
         .order("created_at", { ascending: false });
@@ -424,7 +428,7 @@ export default function Clients() {
                   <div className="flex flex-wrap gap-1">
                     {client.client_team.map((ct: any, index: number) => (
                       <Badge key={index} variant="secondary" className="text-xs">
-                        {ct.campaigners.full_name}
+                        {ct?.campaigners?.full_name ?? "—"}
                       </Badge>
                     ))}
                   </div>
