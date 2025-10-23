@@ -79,7 +79,7 @@ export default function SalesDashboard() {
     queryFn: async () => {
       let query = supabase
         .from("leads")
-        .select("created_at, status, updated_at, won_date");
+        .select("created_at, status, updated_at, won_date, proposal_sent_date");
 
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
@@ -110,15 +110,15 @@ export default function SalesDashboard() {
           last30Days[dayIndex].newLeads++;
         }
 
-        // Count proposals by updated_at
-        if (lead.status === "proposal_sent") {
-          const updatedDate = startOfDay(new Date(lead.updated_at));
-          const updateIndex = last30Days.findIndex(
-            (d) => d.fullDate.getTime() === updatedDate.getTime()
+        // Count proposals by proposal_sent_date
+        if (lead.status === "proposal_sent" && lead.proposal_sent_date) {
+          const proposalDate = startOfDay(new Date(lead.proposal_sent_date));
+          const proposalIndex = last30Days.findIndex(
+            (d) => d.fullDate.getTime() === proposalDate.getTime()
           );
           
-          if (updateIndex !== -1) {
-            last30Days[updateIndex].proposals++;
+          if (proposalIndex !== -1) {
+            last30Days[proposalIndex].proposals++;
           }
         }
         
