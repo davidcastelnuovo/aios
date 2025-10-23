@@ -191,13 +191,16 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
             </SelectContent>
           </Select>
 
-          <div className="flex gap-2">
+          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
             <EditLeadDialog lead={lead} />
             <Button
               variant="outline"
               size="icon"
               className="h-8 w-8"
-              onClick={() => handleDelete(lead.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDelete(lead.id);
+              }}
             >
               <Trash2 className="h-4 w-4" />
             </Button>

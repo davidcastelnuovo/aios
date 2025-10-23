@@ -10,8 +10,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Pencil } from "lucide-react";
+import { Pencil, CalendarIcon } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 const formSchema = z.object({
   company_name: z.string().min(1, "שם החברה הוא שדה חובה"),
@@ -27,6 +31,7 @@ const formSchema = z.object({
   agency_id: z.string().optional(),
   folder_link: z.string().optional(),
   lost_reason: z.string().optional(),
+  created_at: z.date().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -56,6 +61,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
       agency_id: lead.agency_id || "",
       folder_link: lead.folder_link || "",
       lost_reason: lead.lost_reason || "",
+      created_at: lead.created_at ? new Date(lead.created_at) : new Date(),
     },
   });
 
@@ -107,6 +113,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
         agency_id: values.agency_id || null,
         folder_link: values.folder_link || null,
         lost_reason: values.lost_reason || null,
+        created_at: values.created_at || new Date(),
       };
 
       const { data, error } = await supabase
@@ -143,7 +150,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+      <DialogTrigger asChild onClick={(e) => e.stopPropagation()}>
         <Button variant="outline" size="icon" className="h-8 w-8">
           <Pencil className="h-4 w-4" />
         </Button>
@@ -332,6 +339,46 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="created_at"
+              render={({ field }) => (
+                <FormItem className="flex flex-col">
+                  <FormLabel>תאריך יצירת ליד</FormLabel>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant={"outline"}
+                          className={cn(
+                            "w-full pl-3 text-right font-normal",
+                            !field.value && "text-muted-foreground"
+                          )}
+                        >
+                          {field.value ? (
+                            format(field.value, "dd/MM/yyyy")
+                          ) : (
+                            <span>בחר תאריך</span>
+                          )}
+                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0 bg-background z-50" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={field.onChange}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {showLostReason && (
               <FormField
