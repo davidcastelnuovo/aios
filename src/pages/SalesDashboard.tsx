@@ -274,84 +274,114 @@ export default function SalesDashboard() {
             <CardTitle>משפך מכירות</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Target className="h-4 w-4 text-blue-500" />
-                  <span className="text-sm font-medium">ליד חדש</span>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold">{leadsStats?.new || 0}</span>
-                    <span className="text-sm text-muted-foreground">לידים</span>
+            <div className="flex gap-2 overflow-x-auto pb-4">
+              {/* ליד חדש */}
+              <div className="relative flex-1 min-w-[200px]">
+                <div 
+                  className="relative bg-blue-50 dark:bg-blue-950/20 p-4 rounded-t-lg shadow-md"
+                  style={{
+                    clipPath: "polygon(0 0, 100% 0, 100% calc(100% - 20px), 50% 100%, 0 calc(100% - 20px))"
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <Target className="h-5 w-5 text-blue-500" />
+                    <span className="text-sm font-medium">ליד חדש</span>
                   </div>
-                  <span className="text-sm text-muted-foreground">
-                    ₪{leadsStats?.newValue?.toLocaleString() || 0}
-                  </span>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-blue-600">{leadsStats?.new || 0}</div>
+                    <div className="text-xs text-muted-foreground mt-1">לידים</div>
+                    <div className="text-sm font-medium mt-2">
+                      ₪{leadsStats?.newValue?.toLocaleString() || 0}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-purple-500" />
-                  <span className="text-sm font-medium">נוצר קשר</span>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold">{leadsStats?.contacted || 0}</span>
-                    <span className="text-sm text-muted-foreground">לידים</span>
+              {/* נוצר קשר */}
+              <div className="relative flex-1 min-w-[200px]">
+                <div 
+                  className="relative bg-purple-50 dark:bg-purple-950/20 p-4 rounded-t-lg shadow-md"
+                  style={{
+                    clipPath: "polygon(0 0, 100% 0, 100% calc(100% - 20px), 50% 100%, 0 calc(100% - 20px))"
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <Clock className="h-5 w-5 text-purple-500" />
+                    <span className="text-sm font-medium">נוצר קשר</span>
                   </div>
-                  <span className="text-sm text-muted-foreground">
-                    ₪{leadsStats?.contactedValue?.toLocaleString() || 0}
-                  </span>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-purple-600">{leadsStats?.contacted || 0}</div>
+                    <div className="text-xs text-muted-foreground mt-1">לידים</div>
+                    <div className="text-sm font-medium mt-2">
+                      ₪{leadsStats?.contactedValue?.toLocaleString() || 0}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-yellow-500" />
-                  <span className="text-sm font-medium">תהליך פולואפ</span>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold">{leadsStats?.followUp || 0}</span>
-                    <span className="text-sm text-muted-foreground">לידים</span>
+              {/* תהליך פולואפ */}
+              <div className="relative flex-1 min-w-[200px]">
+                <div 
+                  className="relative bg-yellow-50 dark:bg-yellow-950/20 p-4 rounded-t-lg shadow-md"
+                  style={{
+                    clipPath: "polygon(0 0, 100% 0, 100% calc(100% - 20px), 50% 100%, 0 calc(100% - 20px))"
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <Users className="h-5 w-5 text-yellow-500" />
+                    <span className="text-sm font-medium">תהליך פולואפ</span>
                   </div>
-                  <span className="text-sm text-muted-foreground">
-                    ₪{leadsStats?.followUpValue?.toLocaleString() || 0}
-                  </span>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-yellow-600">{leadsStats?.followUp || 0}</div>
+                    <div className="text-xs text-muted-foreground mt-1">לידים</div>
+                    <div className="text-sm font-medium mt-2">
+                      ₪{leadsStats?.followUpValue?.toLocaleString() || 0}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4 text-orange-500" />
-                  <span className="text-sm font-medium">נשלחה הצעה</span>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold">{leadsStats?.proposal || 0}</span>
-                    <span className="text-sm text-muted-foreground">לידים</span>
+              {/* נשלחה הצעה */}
+              <div className="relative flex-1 min-w-[200px]">
+                <div 
+                  className="relative bg-orange-50 dark:bg-orange-950/20 p-4 rounded-t-lg shadow-md"
+                  style={{
+                    clipPath: "polygon(0 0, 100% 0, 100% calc(100% - 20px), 50% 100%, 0 calc(100% - 20px))"
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <TrendingUp className="h-5 w-5 text-orange-500" />
+                    <span className="text-sm font-medium">נשלחה הצעה</span>
                   </div>
-                  <span className="text-sm text-muted-foreground">
-                    ₪{leadsStats?.proposalValue?.toLocaleString() || 0}
-                  </span>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-orange-600">{leadsStats?.proposal || 0}</div>
+                    <div className="text-xs text-muted-foreground mt-1">לידים</div>
+                    <div className="text-sm font-medium mt-2">
+                      ₪{leadsStats?.proposalValue?.toLocaleString() || 0}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between border-t pt-4">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  <span className="text-sm font-medium">נסגר</span>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold text-green-600">{leadsStats?.closed || 0}</span>
-                    <span className="text-sm text-muted-foreground">לידים</span>
+              {/* נסגר */}
+              <div className="relative flex-1 min-w-[200px]">
+                <div 
+                  className="relative bg-green-50 dark:bg-green-950/20 p-4 rounded-t-lg shadow-md"
+                  style={{
+                    clipPath: "polygon(0 0, 100% 0, 100% calc(100% - 20px), 50% 100%, 0 calc(100% - 20px))"
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    <span className="text-sm font-medium">נסגר</span>
                   </div>
-                  <span className="text-sm text-green-600 font-medium">
-                    ₪{leadsStats?.closedValue?.toLocaleString() || 0}
-                  </span>
+                  <div className="text-center">
+                    <div className="text-3xl font-bold text-green-600">{leadsStats?.closed || 0}</div>
+                    <div className="text-xs text-muted-foreground mt-1">לידים</div>
+                    <div className="text-sm font-medium text-green-600 mt-2">
+                      ₪{leadsStats?.closedValue?.toLocaleString() || 0}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
