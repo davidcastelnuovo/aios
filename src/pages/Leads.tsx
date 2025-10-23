@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -29,6 +29,11 @@ import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useState, ReactNode } from "react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100/50" },
@@ -101,6 +106,15 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
   };
 
   const { toast } = useToast();
+  const [openSections, setOpenSections] = useState({
+    business: true,
+    dates: true,
+    management: true,
+  });
+
+  const toggleSection = (section: 'business' | 'dates' | 'management') => {
+    setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+  };
 
   const handleDelete = async (id: string) => {
     try {
@@ -144,153 +158,175 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
           <p className="text-sm text-muted-foreground font-medium">{lead.contact_name}</p>
         )}
       </CardHeader>
-      <CardContent className="space-y-4 px-4 pb-4 pt-3">
+      <CardContent className="space-y-3 px-4 pb-4 pt-3">
         {/* אזור פרטי העסק */}
-        <div className="space-y-2 pb-3 border-b-2 border-muted">
-          <h4 className="text-xs font-bold text-primary uppercase tracking-wide">פרטי העסק</h4>
-          
-          {/* Contact Info */}
-          <div className="space-y-1.5">
-            {lead.email && (
-              <div className="flex items-center gap-2 text-xs">
-                <Mail className="h-3 w-3 text-primary shrink-0" />
-                <a href={`mailto:${lead.email}`} className="hover:underline truncate">
-                  {lead.email}
-                </a>
+        <Collapsible open={openSections.business} onOpenChange={() => toggleSection('business')}>
+          <div className="space-y-2 pb-3 border-b-2 border-muted">
+            <CollapsibleTrigger className="flex items-center justify-between w-full hover:opacity-70 transition-opacity">
+              <h4 className="text-xs font-bold text-primary uppercase tracking-wide">פרטי העסק</h4>
+              <ChevronDown className={`h-4 w-4 text-primary transition-transform ${openSections.business ? '' : '-rotate-90'}`} />
+            </CollapsibleTrigger>
+            
+            <CollapsibleContent className="space-y-2 pt-2">
+              {/* Contact Info */}
+              <div className="space-y-1.5">
+                {lead.email && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <Mail className="h-3 w-3 text-primary shrink-0" />
+                    <a href={`mailto:${lead.email}`} className="hover:underline truncate">
+                      {lead.email}
+                    </a>
+                  </div>
+                )}
+                {lead.phone && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <Phone className="h-3 w-3 text-primary shrink-0" />
+                    <a href={`tel:${lead.phone}`} className="hover:underline">
+                      {lead.phone}
+                    </a>
+                  </div>
+                )}
               </div>
-            )}
-            {lead.phone && (
-              <div className="flex items-center gap-2 text-xs">
-                <Phone className="h-3 w-3 text-primary shrink-0" />
-                <a href={`tel:${lead.phone}`} className="hover:underline">
-                  {lead.phone}
-                </a>
-              </div>
-            )}
+              
+              {/* Products */}
+              {lead.products && (
+                <div className="bg-muted/50 p-2 rounded text-xs">
+                  <span className="font-semibold text-foreground">מוצרים:</span> {lead.products}
+                </div>
+              )}
+              
+              {/* Deal Value */}
+              {lead.estimated_deal_value && (
+                <div className="bg-primary/10 p-2 rounded">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-semibold">שווי עסקה:</span>
+                    <Badge variant="default" className="flex items-center gap-1">
+                      <DollarSign className="h-3 w-3" />
+                      ₪{lead.estimated_deal_value.toLocaleString()}
+                    </Badge>
+                  </div>
+                </div>
+              )}
+              
+              {/* Budget Section */}
+              {(lead.monthly_budget || lead.three_month_budget) && (
+                <div className="bg-accent/10 p-2 rounded space-y-1">
+                  {lead.monthly_budget && (
+                    <div className="flex justify-between text-xs">
+                      <span className="font-semibold">הצעה חודשית:</span>
+                      <span className="font-bold text-primary">₪{lead.monthly_budget.toLocaleString()}</span>
+                    </div>
+                  )}
+                  {lead.three_month_budget && (
+                    <div className="flex justify-between text-xs">
+                      <span className="font-semibold">הצעת 3 חודשים:</span>
+                      <span className="font-bold text-primary">₪{lead.three_month_budget.toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CollapsibleContent>
           </div>
-          
-          {/* Products */}
-          {lead.products && (
-            <div className="bg-muted/50 p-2 rounded text-xs">
-              <span className="font-semibold text-foreground">מוצרים:</span> {lead.products}
-            </div>
-          )}
-          
-          {/* Deal Value */}
-          {lead.estimated_deal_value && (
-            <div className="bg-primary/10 p-2 rounded">
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-semibold">שווי עסקה:</span>
-                <Badge variant="default" className="flex items-center gap-1">
-                  <DollarSign className="h-3 w-3" />
-                  ₪{lead.estimated_deal_value.toLocaleString()}
-                </Badge>
-              </div>
-            </div>
-          )}
-          
-          {/* Budget Section */}
-          {(lead.monthly_budget || lead.three_month_budget) && (
-            <div className="bg-accent/10 p-2 rounded space-y-1">
-              {lead.monthly_budget && (
-                <div className="flex justify-between text-xs">
-                  <span className="font-semibold">הצעה חודשית:</span>
-                  <span className="font-bold text-primary">₪{lead.monthly_budget.toLocaleString()}</span>
-                </div>
-              )}
-              {lead.three_month_budget && (
-                <div className="flex justify-between text-xs">
-                  <span className="font-semibold">הצעת 3 חודשים:</span>
-                  <span className="font-bold text-primary">₪{lead.three_month_budget.toLocaleString()}</span>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        </Collapsible>
 
         {/* אזור תאריכים */}
         {(lead.proposal_date || lead.sale_date) && (
-          <div className="space-y-2 pb-3 border-b-2 border-muted">
-            <h4 className="text-xs font-bold text-primary uppercase tracking-wide">תאריכים</h4>
-            <div className="space-y-1.5 text-xs">
-              {lead.proposal_date && (
-                <div className="flex justify-between items-center bg-muted/30 p-1.5 rounded">
-                  <span className="font-semibold">תאריך הצעה:</span>
-                  <span className="font-medium">{new Date(lead.proposal_date).toLocaleDateString('he-IL')}</span>
+          <Collapsible open={openSections.dates} onOpenChange={() => toggleSection('dates')}>
+            <div className="space-y-2 pb-3 border-b-2 border-muted">
+              <CollapsibleTrigger className="flex items-center justify-between w-full hover:opacity-70 transition-opacity">
+                <h4 className="text-xs font-bold text-primary uppercase tracking-wide">תאריכים</h4>
+                <ChevronDown className={`h-4 w-4 text-primary transition-transform ${openSections.dates ? '' : '-rotate-90'}`} />
+              </CollapsibleTrigger>
+              
+              <CollapsibleContent>
+                <div className="space-y-1.5 text-xs pt-2">
+                  {lead.proposal_date && (
+                    <div className="flex justify-between items-center bg-muted/30 p-1.5 rounded">
+                      <span className="font-semibold">תאריך הצעה:</span>
+                      <span className="font-medium">{new Date(lead.proposal_date).toLocaleDateString('he-IL')}</span>
+                    </div>
+                  )}
+                  {lead.sale_date && (
+                    <div className="flex justify-between items-center bg-muted/30 p-1.5 rounded">
+                      <span className="font-semibold">תאריך מכירה:</span>
+                      <span className="font-medium">{new Date(lead.sale_date).toLocaleDateString('he-IL')}</span>
+                    </div>
+                  )}
                 </div>
-              )}
-              {lead.sale_date && (
-                <div className="flex justify-between items-center bg-muted/30 p-1.5 rounded">
-                  <span className="font-semibold">תאריך מכירה:</span>
-                  <span className="font-medium">{new Date(lead.sale_date).toLocaleDateString('he-IL')}</span>
-                </div>
-              )}
+              </CollapsibleContent>
             </div>
-          </div>
+          </Collapsible>
         )}
 
         {/* אזור ניהול ומעקב */}
-        <div className="space-y-2">
-          <h4 className="text-xs font-bold text-primary uppercase tracking-wide">ניהול ומעקב</h4>
-          
-          {/* Sales Person and Status */}
+        <Collapsible open={openSections.management} onOpenChange={() => toggleSection('management')}>
           <div className="space-y-2">
-            {lead.sales_people?.full_name && (
-              <div className="bg-muted/30 p-2 rounded text-xs">
-                <span className="font-semibold">איש מכירות:</span> {lead.sales_people.full_name}
-              </div>
-            )}
+            <CollapsibleTrigger className="flex items-center justify-between w-full hover:opacity-70 transition-opacity">
+              <h4 className="text-xs font-bold text-primary uppercase tracking-wide">ניהול ומעקב</h4>
+              <ChevronDown className={`h-4 w-4 text-primary transition-transform ${openSections.management ? '' : '-rotate-90'}`} />
+            </CollapsibleTrigger>
             
-            {lead.response_status && (
-              <Badge variant="secondary" className="text-xs w-full justify-center">
-                {lead.response_status === 'no_answer_1' && 'אין מענה 1'}
-                {lead.response_status === 'no_answer_2' && 'אין מענה 2'}
-                {lead.response_status === 'no_answer_3' && 'אין מענה 3'}
-                {lead.response_status === 'no_answer_4' && 'אין מענה 4'}
-                {lead.response_status === 'denies_contact' && 'מכחיש פניה'}
-                {lead.response_status === 'not_relevant' && 'לא רלוונטי'}
-              </Badge>
-            )}
-          </div>
-          
-          {/* Actions */}
-          <div className="space-y-2 pt-2" onClick={(e) => e.stopPropagation()}>
-            <Select
-              value={lead.status}
-              onValueChange={(value) => onStatusChange(lead.id, value)}
-            >
-              <SelectTrigger className="h-8 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-50">
-                {PIPELINE_STAGES.map((stage) => (
-                  <SelectItem 
-                    key={stage.id} 
-                    value={stage.id}
-                    className={stage.bgClass}
-                  >
-                    {stage.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <CollapsibleContent className="space-y-2 pt-2">
+              {/* Sales Person and Status */}
+              <div className="space-y-2">
+                {lead.sales_people?.full_name && (
+                  <div className="bg-muted/30 p-2 rounded text-xs">
+                    <span className="font-semibold">איש מכירות:</span> {lead.sales_people.full_name}
+                  </div>
+                )}
+                
+                {lead.response_status && (
+                  <Badge variant="secondary" className="text-xs w-full justify-center">
+                    {lead.response_status === 'no_answer_1' && 'אין מענה 1'}
+                    {lead.response_status === 'no_answer_2' && 'אין מענה 2'}
+                    {lead.response_status === 'no_answer_3' && 'אין מענה 3'}
+                    {lead.response_status === 'no_answer_4' && 'אין מענה 4'}
+                    {lead.response_status === 'denies_contact' && 'מכחיש פניה'}
+                    {lead.response_status === 'not_relevant' && 'לא רלוונטי'}
+                  </Badge>
+                )}
+              </div>
+              
+              {/* Actions */}
+              <div className="space-y-2 pt-2" onClick={(e) => e.stopPropagation()}>
+                <Select
+                  value={lead.status}
+                  onValueChange={(value) => onStatusChange(lead.id, value)}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    {PIPELINE_STAGES.map((stage) => (
+                      <SelectItem 
+                        key={stage.id} 
+                        value={stage.id}
+                        className={stage.bgClass}
+                      >
+                        {stage.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-            <div className="flex gap-2">
-              <EditLeadDialog lead={lead} />
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(lead.id);
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
+                <div className="flex gap-2">
+                  <EditLeadDialog lead={lead} />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(lead.id);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CollapsibleContent>
           </div>
-        </div>
+        </Collapsible>
       </CardContent>
     </Card>
   );
