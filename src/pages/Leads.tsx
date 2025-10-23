@@ -30,11 +30,11 @@ import { CSS } from "@dnd-kit/utilities";
 import { useState, ReactNode } from "react";
 
 const PIPELINE_STAGES = [
-  { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900" },
-  { id: "contacted", label: "נוצר קשר", color: "bg-purple-100 dark:bg-purple-900" },
-  { id: "follow_up", label: "תהליך פולואפ", color: "bg-yellow-100 dark:bg-yellow-900" },
-  { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900" },
-  { id: "closed", label: "נסגר", color: "bg-green-100 dark:bg-green-900" },
+  { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100/50" },
+  { id: "contacted", label: "נוצר קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100/50" },
+  { id: "follow_up", label: "תהליך פולואפ", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100/50" },
+  { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100/50" },
+  { id: "closed", label: "נסגר", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100/50" },
 ];
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -68,9 +68,9 @@ function DroppableStage({ stage, children }: { stage: any; children: ReactNode }
         <div 
           className={`${stage.color} p-3 font-semibold text-center relative`}
           style={{
-            clipPath: "polygon(0 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 0 100%, 20px 50%)",
-            marginLeft: "-10px",
-            marginRight: "10px",
+            clipPath: "polygon(0 50%, 20px 0, 100% 0, 100% 100%, 20px 100%, 0 50%)",
+            marginLeft: "10px",
+            marginRight: "-10px",
           }}
         >
           <div className="relative z-10">
@@ -178,9 +178,13 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
             <SelectTrigger className="h-8 text-sm">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="bg-background z-50">
               {PIPELINE_STAGES.map((stage) => (
-                <SelectItem key={stage.id} value={stage.id}>
+                <SelectItem 
+                  key={stage.id} 
+                  value={stage.id}
+                  className={stage.bgClass}
+                >
                   {stage.label}
                 </SelectItem>
               ))}
@@ -448,9 +452,13 @@ export default function Leads() {
                                 <SelectTrigger className="h-8 w-[140px]">
                                   <SelectValue />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="bg-background z-50">
                                   {PIPELINE_STAGES.map((s) => (
-                                    <SelectItem key={s.id} value={s.id}>
+                                    <SelectItem 
+                                      key={s.id} 
+                                      value={s.id}
+                                      className={s.bgClass}
+                                    >
                                       {s.label}
                                     </SelectItem>
                                   ))}
