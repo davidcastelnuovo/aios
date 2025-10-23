@@ -50,18 +50,29 @@ function DroppableStage({ stage, children }: { stage: any; children: ReactNode }
     : children ? 1 : 0;
 
   return (
-    <div
-      ref={setNodeRef}
-      className={`flex flex-col min-h-[600px] transition-colors ${
-        isOver ? "ring-2 ring-primary ring-offset-2" : ""
-      }`}
-    >
-      <div className={`${stage.color} rounded-t-lg p-3 font-semibold text-center`}>
-        {stage.label}
-        <span className="mr-2 text-sm">({leadsCount})</span>
-      </div>
-      <div className="bg-muted/30 rounded-b-lg p-3 flex-1 space-y-2">
-        {children}
+    <div className="flex flex-col min-h-[600px]">
+      <div
+        ref={setNodeRef}
+        className={`relative transition-all ${
+          isOver ? "ring-2 ring-primary ring-offset-2 rounded-lg" : ""
+        }`}
+      >
+        <div 
+          className={`${stage.color} p-3 font-semibold text-center relative`}
+          style={{
+            clipPath: "polygon(0 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 0 100%, 20px 50%)",
+            marginLeft: "-10px",
+            marginRight: "10px",
+          }}
+        >
+          <div className="relative z-10">
+            {stage.label}
+            <span className="mr-2 text-sm">({leadsCount})</span>
+          </div>
+        </div>
+        <div className="bg-muted/30 rounded-b-lg p-3 flex-1 space-y-2 min-h-[550px]">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -289,30 +300,38 @@ export default function Leads() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="grid grid-cols-5 gap-4">
-              {PIPELINE_STAGES.map((stage) => {
+            <div className="grid grid-cols-5 gap-0">
+              {PIPELINE_STAGES.map((stage, index) => {
                 const stageLeads = getLeadsByStage(stage.id);
                 return (
-                  <DroppableStage key={stage.id} stage={stage}>
-                    <SortableContext
-                      id={stage.id}
-                      items={stageLeads.map((l: any) => l.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      {stageLeads.map((lead: any) => (
-                        <LeadCard 
-                          key={lead.id} 
-                          lead={lead}
-                          onStatusChange={(leadId, newStatus) => 
-                            updateLeadStatus.mutate({ 
-                              leadId, 
-                              newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "closed" 
-                            })
-                          }
-                        />
-                      ))}
-                    </SortableContext>
-                  </DroppableStage>
+                  <div 
+                    key={stage.id}
+                    className="relative"
+                    style={{
+                      zIndex: PIPELINE_STAGES.length - index,
+                    }}
+                  >
+                    <DroppableStage stage={stage}>
+                      <SortableContext
+                        id={stage.id}
+                        items={stageLeads.map((l: any) => l.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {stageLeads.map((lead: any) => (
+                          <LeadCard 
+                            key={lead.id} 
+                            lead={lead}
+                            onStatusChange={(leadId, newStatus) => 
+                              updateLeadStatus.mutate({ 
+                                leadId, 
+                                newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "closed" 
+                              })
+                            }
+                          />
+                        ))}
+                      </SortableContext>
+                    </DroppableStage>
+                  </div>
                 );
               })}
             </div>
