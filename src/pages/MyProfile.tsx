@@ -182,10 +182,9 @@ export default function MyProfile() {
 
   if (!profile?.campaigners) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 p-6">
         <div>
           <h2 className="text-3xl font-bold">אזור אישי</h2>
-          <p className="text-muted-foreground mt-1">הפרטים האישיים שלך</p>
         </div>
         <Card>
           <CardContent className="p-6">
@@ -200,10 +199,9 @@ export default function MyProfile() {
   const totalPayment = calculateTotal();
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div>
         <h2 className="text-3xl font-bold">אזור אישי</h2>
-        <p className="text-muted-foreground mt-1">הפרטים האישיים שלך</p>
       </div>
 
       <Card className="shadow-card">

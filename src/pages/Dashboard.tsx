@@ -217,10 +217,9 @@ export default function Dashboard() {
     : accessibleClients?.filter(c => c.agency_id === selectedAgency);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div>
         <h2 className="text-3xl font-bold">דשבורד</h2>
-        <p className="text-muted-foreground mt-1">מבט על על המערכת</p>
       </div>
 
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2">

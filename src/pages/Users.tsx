@@ -220,13 +220,10 @@ export default function Users() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6" dir="rtl">
+    <div className="container mx-auto py-6 px-6 space-y-6" dir="rtl">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">ניהול משתמשים</h1>
-          <p className="text-muted-foreground">
-            ניהול משתמשים ותפקידים במערכת
-          </p>
         </div>
         <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
           <DialogTrigger asChild>

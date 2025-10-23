@@ -283,11 +283,10 @@ export default function Clients() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold">לקוחות</h2>
-          <p className="text-muted-foreground mt-1">ניהול לקוחות סוכנויות</p>
         </div>
         <div className="flex flex-wrap gap-2 md:gap-4 items-center">
           <div className="relative min-w-[200px]">

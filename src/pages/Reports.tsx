@@ -3,10 +3,9 @@ import { BarChart3 } from "lucide-react";
 
 export default function Reports() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div>
         <h2 className="text-3xl font-bold">דוחות</h2>
-        <p className="text-muted-foreground mt-1">תצוגות וניתוחים מתקדמים</p>
       </div>
 
       <Card className="shadow-card">

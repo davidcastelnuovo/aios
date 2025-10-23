@@ -67,7 +67,7 @@ function DroppableStage({ stage, children }: { stage: any; children: ReactNode }
         }`}
       >
         <div 
-          className={`${stage.color} relative p-4 font-semibold text-center rounded-md shadow-md overflow-visible`}
+          className={`${stage.color} relative p-4 py-3 font-semibold text-center rounded-md shadow-md overflow-visible`}
         >
           <div
             className={`${stage.color} absolute -left-5 top-0 h-full w-5 rounded-l-sm`}
@@ -81,7 +81,7 @@ function DroppableStage({ stage, children }: { stage: any; children: ReactNode }
             <span className="mr-2 text-sm">({leadsCount})</span>
           </div>
         </div>
-        <div className="bg-muted/30 rounded-b-lg p-3 flex-1 space-y-2 min-h-[550px]">
+        <div className="bg-muted/30 rounded-b-lg p-4 flex-1 space-y-3 min-h-[550px]">
           {children}
         </div>
       </div>
@@ -130,7 +130,7 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
       style={style}
       className="mb-3 hover:shadow-md transition-shadow"
     >
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-3 pt-4">
         <CardTitle className="text-base flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Building2 className="h-4 w-4" />
@@ -144,7 +144,7 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
           <p className="text-sm text-muted-foreground">{lead.contact_name}</p>
         )}
       </CardHeader>
-      <CardContent className="space-y-2 text-sm">
+      <CardContent className="space-y-3 text-sm px-4 pb-4">
         {lead.estimated_deal_value && (
           <div className="flex items-center gap-1 font-semibold text-primary">
             <DollarSign className="h-3 w-3" />
@@ -296,14 +296,11 @@ export default function Leads() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
-          <p className="text-muted-foreground mt-2">
-            גרור כרטיסים בין השלבים לעדכון סטטוס
-          </p>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
+      </div>
         <div className="flex gap-3 items-center">
           {/* View mode toggle */}
           <div className="flex gap-1 border rounded-md p-1">

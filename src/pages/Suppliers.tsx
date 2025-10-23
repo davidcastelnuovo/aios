@@ -62,11 +62,10 @@ export default function Suppliers() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold">ספקים</h2>
-          <p className="text-muted-foreground mt-1">ניהול ספקים ונותני שירותים</p>
         </div>
         <AddSupplierForm />
       </div>

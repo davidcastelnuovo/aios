@@ -258,11 +258,10 @@ export default function TimeTracking() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold">שעון נוכחות</h2>
-          <p className="text-muted-foreground mt-1">מעקב אחר שעות עבודה</p>
         </div>
 
         {campaigners && campaigners.length > 0 && (

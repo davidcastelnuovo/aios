@@ -409,11 +409,10 @@ export default function Tasks() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="space-y-4 md:space-y-6">
+      <div className="space-y-4 md:space-y-6 p-6">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
           <div>
             <h2 className="text-2xl md:text-3xl font-bold">משימות</h2>
-            <p className="text-muted-foreground mt-1 text-sm md:text-base">ניהול משימות וקמפיינים - גרור משימות בין העמודות לשינוי סטטוס</p>
           </div>
           
           <div className="flex gap-3 flex-wrap md:flex-nowrap w-full md:w-auto items-stretch">
