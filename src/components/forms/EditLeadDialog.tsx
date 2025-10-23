@@ -15,16 +15,16 @@ import { Pencil } from "lucide-react";
 
 const formSchema = z.object({
   company_name: z.string().min(1, "שם החברה הוא שדה חובה"),
-  contact_name: z.string().min(1, "שם איש קשר הוא שדה חובה"),
+  contact_name: z.string().optional(),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   phone: z.string().optional(),
-  source: z.string().min(1, "מקור הליד הוא שדה חובה"),
-  status: z.string().min(1, "סטטוס הוא שדה חובה"),
+  source: z.string().optional(),
+  status: z.string().optional(),
   estimated_deal_value: z.string().optional(),
   industry: z.string().optional(),
   notes: z.string().optional(),
-  sales_person_id: z.string().min(1, "איש מכירות הוא שדה חובה"),
-  agency_id: z.string().min(1, "סוכנות היא שדה חובה"),
+  sales_person_id: z.string().optional(),
+  agency_id: z.string().optional(),
   folder_link: z.string().optional(),
   lost_reason: z.string().optional(),
 });
@@ -93,18 +93,18 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
     mutationFn: async (values: FormValues) => {
       const submitData: any = {
         company_name: values.company_name,
-        contact_name: values.contact_name,
+        contact_name: values.contact_name || null,
         email: values.email || null,
         phone: values.phone || null,
-        source: values.source as any,
-        status: values.status as any,
+        source: (values.source as any) || 'other',
+        status: (values.status as any) || 'new',
         estimated_deal_value: values.estimated_deal_value 
           ? parseFloat(values.estimated_deal_value) 
           : null,
         industry: values.industry || null,
         notes: values.notes || null,
-        sales_person_id: values.sales_person_id,
-        agency_id: values.agency_id,
+        sales_person_id: values.sales_person_id || null,
+        agency_id: values.agency_id || null,
         folder_link: values.folder_link || null,
         lost_reason: values.lost_reason || null,
       };

@@ -416,9 +416,9 @@ export type Database = {
       }
       leads: {
         Row: {
-          agency_id: string
+          agency_id: string | null
           company_name: string
-          contact_name: string
+          contact_name: string | null
           created_at: string
           email: string | null
           estimated_deal_value: number | null
@@ -428,16 +428,16 @@ export type Database = {
           lost_reason: string | null
           notes: string | null
           phone: string | null
-          sales_person_id: string
+          sales_person_id: string | null
           source: Database["public"]["Enums"]["lead_source"]
           status: Database["public"]["Enums"]["lead_status"]
           updated_at: string
           won_date: string | null
         }
         Insert: {
-          agency_id: string
+          agency_id?: string | null
           company_name: string
-          contact_name: string
+          contact_name?: string | null
           created_at?: string
           email?: string | null
           estimated_deal_value?: number | null
@@ -447,16 +447,16 @@ export type Database = {
           lost_reason?: string | null
           notes?: string | null
           phone?: string | null
-          sales_person_id: string
+          sales_person_id?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: Database["public"]["Enums"]["lead_status"]
           updated_at?: string
           won_date?: string | null
         }
         Update: {
-          agency_id?: string
+          agency_id?: string | null
           company_name?: string
-          contact_name?: string
+          contact_name?: string | null
           created_at?: string
           email?: string | null
           estimated_deal_value?: number | null
@@ -466,7 +466,7 @@ export type Database = {
           lost_reason?: string | null
           notes?: string | null
           phone?: string | null
-          sales_person_id?: string
+          sales_person_id?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: Database["public"]["Enums"]["lead_status"]
           updated_at?: string

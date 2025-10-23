@@ -170,10 +170,12 @@ export default function Leads() {
                   )}
                 </div>
 
-                <div className="text-sm text-muted-foreground border-t pt-3">
-                  <p>איש מכירות: {lead.sales_people?.full_name}</p>
-                  <p className="text-xs mt-1">{lead.agencies?.name}</p>
-                </div>
+                {(lead.sales_people?.full_name || lead.agencies?.name) && (
+                  <div className="text-sm text-muted-foreground border-t pt-3">
+                    {lead.sales_people?.full_name && <p>איש מכירות: {lead.sales_people.full_name}</p>}
+                    {lead.agencies?.name && <p className="text-xs mt-1">{lead.agencies.name}</p>}
+                  </div>
+                )}
 
                 {lead.folder_link && (
                   <a
