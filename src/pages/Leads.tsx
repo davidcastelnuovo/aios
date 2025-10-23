@@ -4,6 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AddLeadForm } from "@/components/forms/AddLeadForm";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -60,7 +67,7 @@ function DroppableStage({ stage, children }: { stage: any; children: ReactNode }
   );
 }
 
-function LeadCard({ lead }: { lead: any }) {
+function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId: string, newStatus: string) => void }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: lead.id,
   });
@@ -144,7 +151,26 @@ function LeadCard({ lead }: { lead: any }) {
           </p>
         )}
 
-        <div className="flex gap-2 pt-2 border-t">
+        <div className="pt-2 border-t space-y-2" onClick={(e) => e.stopPropagation()}>
+          <p className="text-xs text-muted-foreground mb-1">שנה סטטוס:</p>
+          <Select
+            value={lead.status}
+            onValueChange={(value) => onStatusChange(lead.id, value)}
+          >
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PIPELINE_STAGES.map((stage) => (
+                <SelectItem key={stage.id} value={stage.id}>
+                  {stage.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex gap-2 pt-2">
           <EditLeadDialog lead={lead} />
           <Button
             variant="outline"
@@ -276,7 +302,16 @@ export default function Leads() {
                       strategy={verticalListSortingStrategy}
                     >
                       {stageLeads.map((lead: any) => (
-                        <LeadCard key={lead.id} lead={lead} />
+                        <LeadCard 
+                          key={lead.id} 
+                          lead={lead}
+                          onStatusChange={(leadId, newStatus) => 
+                            updateLeadStatus.mutate({ 
+                              leadId, 
+                              newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "closed" 
+                            })
+                          }
+                        />
                       ))}
                     </SortableContext>
                   </DroppableStage>
@@ -285,7 +320,12 @@ export default function Leads() {
             </div>
 
             <DragOverlay>
-              {activeId && activeLead ? <LeadCard lead={activeLead} /> : null}
+              {activeId && activeLead ? (
+                <LeadCard 
+                  lead={activeLead}
+                  onStatusChange={() => {}}
+                />
+              ) : null}
             </DragOverlay>
           </DndContext>
         )}
