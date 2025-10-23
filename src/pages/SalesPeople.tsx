@@ -22,7 +22,7 @@ export default function SalesPeople() {
         .select("*, agencies (name)")
         .order("created_at", { ascending: false });
 
-      if (selectedAgency) {
+      if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
       }
 

@@ -50,7 +50,7 @@ export function AddLeadForm() {
       industry: "",
       notes: "",
       sales_person_id: "",
-      agency_id: selectedAgency || "",
+      agency_id: (selectedAgency && selectedAgency !== "all") ? selectedAgency : "",
       folder_link: "",
     },
   });
@@ -71,7 +71,7 @@ export function AddLeadForm() {
     queryKey: ["sales-people-for-form", form.watch("agency_id")],
     queryFn: async () => {
       const agencyId = form.watch("agency_id");
-      if (!agencyId) return [];
+      if (!agencyId || agencyId === "all") return [];
       
       const { data, error } = await supabase
         .from("sales_people")
@@ -82,7 +82,7 @@ export function AddLeadForm() {
       if (error) throw error;
       return data;
     },
-    enabled: !!form.watch("agency_id"),
+    enabled: !!form.watch("agency_id") && form.watch("agency_id") !== "all",
   });
 
   const createMutation = useMutation({

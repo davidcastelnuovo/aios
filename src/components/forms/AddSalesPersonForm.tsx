@@ -40,7 +40,7 @@ export function AddSalesPersonForm() {
       email: "",
       phone: "",
       active: true,
-      agency_id: selectedAgency || "",
+      agency_id: (selectedAgency && selectedAgency !== "all") ? selectedAgency : "",
       notes: "",
       folder_link: "",
     },
