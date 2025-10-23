@@ -35,6 +35,18 @@ export default function SalesDashboard() {
         closedValue: data
           .filter(l => l.status === "closed")
           .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
+        newValue: data
+          .filter(l => l.status === "new")
+          .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
+        contactedValue: data
+          .filter(l => l.status === "contacted")
+          .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
+        followUpValue: data
+          .filter(l => l.status === "follow_up")
+          .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
+        proposalValue: data
+          .filter(l => l.status === "proposal_sent")
+          .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
       };
 
       return stats;
@@ -260,9 +272,14 @@ export default function SalesDashboard() {
                   <Target className="h-4 w-4 text-blue-500" />
                   <span className="text-sm font-medium">ליד חדש</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold">{leadsStats?.new || 0}</span>
-                  <span className="text-sm text-muted-foreground">לידים</span>
+                <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold">{leadsStats?.new || 0}</span>
+                    <span className="text-sm text-muted-foreground">לידים</span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    ₪{leadsStats?.newValue?.toLocaleString() || 0}
+                  </span>
                 </div>
               </div>
 
@@ -271,9 +288,14 @@ export default function SalesDashboard() {
                   <Clock className="h-4 w-4 text-purple-500" />
                   <span className="text-sm font-medium">נוצר קשר</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold">{leadsStats?.contacted || 0}</span>
-                  <span className="text-sm text-muted-foreground">לידים</span>
+                <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold">{leadsStats?.contacted || 0}</span>
+                    <span className="text-sm text-muted-foreground">לידים</span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    ₪{leadsStats?.contactedValue?.toLocaleString() || 0}
+                  </span>
                 </div>
               </div>
 
@@ -282,9 +304,14 @@ export default function SalesDashboard() {
                   <Users className="h-4 w-4 text-yellow-500" />
                   <span className="text-sm font-medium">תהליך פולואפ</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold">{leadsStats?.followUp || 0}</span>
-                  <span className="text-sm text-muted-foreground">לידים</span>
+                <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold">{leadsStats?.followUp || 0}</span>
+                    <span className="text-sm text-muted-foreground">לידים</span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    ₪{leadsStats?.followUpValue?.toLocaleString() || 0}
+                  </span>
                 </div>
               </div>
 
@@ -293,9 +320,14 @@ export default function SalesDashboard() {
                   <TrendingUp className="h-4 w-4 text-orange-500" />
                   <span className="text-sm font-medium">נשלחה הצעה</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold">{leadsStats?.proposal || 0}</span>
-                  <span className="text-sm text-muted-foreground">לידים</span>
+                <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold">{leadsStats?.proposal || 0}</span>
+                    <span className="text-sm text-muted-foreground">לידים</span>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    ₪{leadsStats?.proposalValue?.toLocaleString() || 0}
+                  </span>
                 </div>
               </div>
 
@@ -304,9 +336,14 @@ export default function SalesDashboard() {
                   <CheckCircle2 className="h-4 w-4 text-green-500" />
                   <span className="text-sm font-medium">נסגר</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold text-green-600">{leadsStats?.closed || 0}</span>
-                  <span className="text-sm text-muted-foreground">לידים</span>
+                <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl font-bold text-green-600">{leadsStats?.closed || 0}</span>
+                    <span className="text-sm text-muted-foreground">לידים</span>
+                  </div>
+                  <span className="text-sm text-green-600 font-medium">
+                    ₪{leadsStats?.closedValue?.toLocaleString() || 0}
+                  </span>
                 </div>
               </div>
             </div>
