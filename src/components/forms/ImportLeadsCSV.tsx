@@ -92,6 +92,7 @@ export function ImportLeadsCSV() {
               lead.status = stageMap[value] || 'new';
               break;
             case 'הערות/הסכמים/פרטים':
+            case 'הצעות/הסכמים':
             case 'פרטים':
             case 'הערות':
               lead.notes = value;
@@ -106,21 +107,29 @@ export function ImportLeadsCSV() {
               lead.estimated_deal_value = value ? parseFloat(value.replace(/[^\d.-]/g, '')) : null;
               break;
             case 'המעת חד"פ':
+            case 'הצעת חד"פ':
             case 'הצעת חודשית':
               lead.monthly_budget = value ? parseFloat(value.replace(/[^\d.-]/g, '')) : null;
               break;
             case 'המעת 3 חודשים':
+            case 'הצעת 3 חודשים':
             case 'הצעת 3 חודשית':
               lead.three_month_budget = value ? parseFloat(value.replace(/[^\d.-]/g, '')) : null;
               break;
             case 'תאריך הצעה':
               lead.proposal_date = value ? new Date(value).toISOString().split('T')[0] : null;
               break;
+            case 'תאריך מכירה':
             case 'תאריך חתימה':
             case 'תאריך סגירה':
+              lead.sale_date = value ? new Date(value).toISOString().split('T')[0] : null;
               lead.closing_date = value ? new Date(value).toISOString().split('T')[0] : null;
               break;
+            case 'מוצרים':
+              lead.products = value;
+              break;
             case 'המלצה':
+            case 'הפניה':
             case 'מקור':
             case 'מקורות':
               // Map source
@@ -133,6 +142,11 @@ export function ImportLeadsCSV() {
                 'אחר': 'other',
               };
               lead.source = sourceMap[value] || 'other';
+              break;
+            case 'שיחה עם איתי':
+            case 'איש מכירות':
+              // Store the sales person name, will need to map it later
+              lead.sales_person_name = value;
               break;
           }
         });
@@ -226,19 +240,21 @@ export function ImportLeadsCSV() {
           </div>
           <div className="text-xs text-muted-foreground space-y-1">
             <p className="font-medium">שדות נתמכים:</p>
-            <ul className="list-disc list-inside space-y-0.5">
+            <ul className="list-disc list-inside space-y-0.5 grid grid-cols-2 gap-x-4">
               <li>שם (איש קשר)</li>
               <li>שם העסק</li>
               <li>מייל</li>
               <li>פרוק / טלפון</li>
-              <li>סטטוס</li>
-              <li>שלב העסקה</li>
-              <li>הערות/הסכמים/פרטים</li>
-              <li>המעת חד"פ</li>
+              <li>סטטוס (תגובה)</li>
+              <li>שלב העסקה / שלב במשפך</li>
+              <li>הערות / הצעות/הסכמים</li>
+              <li>המעת חד"פ / הצעת חד"פ</li>
               <li>המעת 3 חודשים</li>
               <li>תאריך הצעה</li>
-              <li>תאריך חתימה</li>
-              <li>המלצה (מקור)</li>
+              <li>תאריך מכירה / תאריך חתימה</li>
+              <li>מוצרים</li>
+              <li>שיחה עם איתי (איש מכירות)</li>
+              <li>המלצה / הפניה (מקור)</li>
               <li>ארגון קליינט לפי (תחום)</li>
             </ul>
           </div>

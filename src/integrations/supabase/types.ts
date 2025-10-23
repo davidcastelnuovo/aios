@@ -431,11 +431,13 @@ export type Database = {
           monthly_budget: number | null
           notes: string | null
           phone: string | null
+          products: string | null
           proposal_date: string | null
           proposal_sent_date: string | null
           response_status:
             | Database["public"]["Enums"]["lead_response_status"]
             | null
+          sale_date: string | null
           sales_person_id: string | null
           source: Database["public"]["Enums"]["lead_source"]
           status: Database["public"]["Enums"]["lead_status"]
@@ -459,11 +461,13 @@ export type Database = {
           monthly_budget?: number | null
           notes?: string | null
           phone?: string | null
+          products?: string | null
           proposal_date?: string | null
           proposal_sent_date?: string | null
           response_status?:
             | Database["public"]["Enums"]["lead_response_status"]
             | null
+          sale_date?: string | null
           sales_person_id?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: Database["public"]["Enums"]["lead_status"]
@@ -487,11 +491,13 @@ export type Database = {
           monthly_budget?: number | null
           notes?: string | null
           phone?: string | null
+          products?: string | null
           proposal_date?: string | null
           proposal_sent_date?: string | null
           response_status?:
             | Database["public"]["Enums"]["lead_response_status"]
             | null
+          sale_date?: string | null
           sales_person_id?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
           status?: Database["public"]["Enums"]["lead_status"]

@@ -28,6 +28,7 @@ const formSchema = z.object({
   response_status: z.string().optional(),
   estimated_deal_value: z.string().optional(),
   industry: z.string().optional(),
+  products: z.string().optional(),
   notes: z.string().optional(),
   sales_person_id: z.string().optional(),
   agency_id: z.string().optional(),
@@ -55,6 +56,7 @@ export function AddLeadForm() {
       response_status: "",
       estimated_deal_value: "",
       industry: "",
+      products: "",
       notes: "",
       sales_person_id: "",
       agency_id: (selectedAgency && selectedAgency !== "all") ? selectedAgency : "",
@@ -107,6 +109,7 @@ export function AddLeadForm() {
           ? parseFloat(values.estimated_deal_value) 
           : null,
         industry: values.industry || null,
+        products: values.products || null,
         notes: values.notes || null,
         sales_person_id: values.sales_person_id || null,
         agency_id: values.agency_id || null,
@@ -409,6 +412,20 @@ export function AddLeadForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>תחום עיסוק</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="products"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>מוצרים/שירותים</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
