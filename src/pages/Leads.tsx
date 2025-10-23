@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,16 +9,19 @@ import { AddLeadForm } from "@/components/forms/AddLeadForm";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/contexts/AgencyContext";
+import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { useState } from "react";
 
-const STATUS_LABELS: Record<string, string> = {
-  new: "חדש",
-  contacted: "יצירת קשר",
-  meeting_scheduled: "פגישה מתוכננת",
-  proposal_sent: "הצעה נשלחה",
-  negotiation: "משא ומתן",
-  won: "נסגר",
-  lost: "אבד",
-};
+const PIPELINE_STAGES = [
+  { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900" },
+  { id: "contacted", label: "נוצר קשר", color: "bg-purple-100 dark:bg-purple-900" },
+  { id: "follow_up", label: "תהליך פולואפ", color: "bg-yellow-100 dark:bg-yellow-900" },
+  { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900" },
+  { id: "closed", label: "נסגר", color: "bg-green-100 dark:bg-green-900" },
+];
 
 const SOURCE_LABELS: Record<string, string> = {
   website: "אתר",
@@ -31,19 +34,112 @@ const SOURCE_LABELS: Record<string, string> = {
   other: "אחר",
 };
 
-const STATUS_COLORS: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  new: "default",
-  contacted: "secondary",
-  meeting_scheduled: "outline",
-  proposal_sent: "outline",
-  negotiation: "outline",
-  won: "default",
-  lost: "destructive",
-};
+function LeadCard({ lead }: { lead: any }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: lead.id,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const { toast } = useToast();
+
+  const handleDelete = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from("leads")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+
+      toast({
+        title: "ליד נמחק בהצלחה",
+      });
+      window.location.reload();
+    } catch (error: any) {
+      toast({
+        title: "שגיאה במחיקת ליד",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={style}
+      className="mb-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
+      {...attributes}
+      {...listeners}
+    >
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Building2 className="h-4 w-4" />
+          {lead.company_name}
+        </CardTitle>
+        {lead.contact_name && (
+          <p className="text-sm text-muted-foreground">{lead.contact_name}</p>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm">
+        {lead.estimated_deal_value && (
+          <div className="flex items-center gap-1 font-semibold text-primary">
+            <DollarSign className="h-3 w-3" />
+            ₪{lead.estimated_deal_value.toLocaleString()}
+          </div>
+        )}
+
+        {lead.email && (
+          <div className="flex items-center gap-2">
+            <Mail className="h-3 w-3 text-muted-foreground" />
+            <a href={`mailto:${lead.email}`} className="hover:underline truncate">
+              {lead.email}
+            </a>
+          </div>
+        )}
+
+        {lead.phone && (
+          <div className="flex items-center gap-2">
+            <Phone className="h-3 w-3 text-muted-foreground" />
+            <a href={`tel:${lead.phone}`} className="hover:underline">
+              {lead.phone}
+            </a>
+          </div>
+        )}
+
+        {lead.sales_people?.full_name && (
+          <p className="text-xs text-muted-foreground border-t pt-2">
+            איש מכירות: {lead.sales_people.full_name}
+          </p>
+        )}
+
+        <div className="flex gap-2 pt-2 border-t">
+          <EditLeadDialog lead={lead} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleDelete(lead.id)}
+            className="flex-1"
+          >
+            <Trash2 className="h-4 w-4 ml-2" />
+            מחק
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Leads() {
   const { toast } = useToast();
   const { selectedAgency } = useAgency();
+  const queryClient = useQueryClient();
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const { data: leads, isLoading, refetch } = useQuery({
     queryKey: ["leads", selectedAgency],
@@ -63,27 +159,54 @@ export default function Leads() {
     },
   });
 
-  const handleDelete = async (id: string) => {
-    try {
+  const updateLeadStatus = useMutation({
+    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "closed" }) => {
       const { error } = await supabase
         .from("leads")
-        .delete()
-        .eq("id", id);
+        .update({ status: newStatus })
+        .eq("id", leadId);
 
       if (error) throw error;
-
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
       toast({
-        title: "ליד נמחק בהצלחה",
+        title: "סטטוס ליד עודכן בהצלחה",
       });
-      refetch();
-    } catch (error: any) {
+    },
+    onError: (error: any) => {
       toast({
-        title: "שגיאה במחיקת ליד",
+        title: "שגיאה בעדכון סטטוס",
         description: error.message,
         variant: "destructive",
       });
+    },
+  });
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over) return;
+
+    const leadId = active.id as string;
+    const newStatus = over.id as "new" | "contacted" | "follow_up" | "proposal_sent" | "closed";
+
+    // Check if dropped on a valid stage
+    if (PIPELINE_STAGES.find((stage) => stage.id === newStatus)) {
+      updateLeadStatus.mutate({ leadId, newStatus });
     }
   };
+
+  const getLeadsByStage = (stageId: string) => {
+    return leads?.filter((lead: any) => lead.status === stageId) || [];
+  };
+
+  const activeLead = leads?.find((lead: any) => lead.id === activeId);
 
   if (isLoading) {
     return (
@@ -98,121 +221,15 @@ export default function Leads() {
       <div className="p-8 space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold">לידים</h1>
+            <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
             <p className="text-muted-foreground mt-2">
-              ניהול וקליטת לידים חדשים
+              גרור כרטיסים בין השלבים לעדכון סטטוס
             </p>
           </div>
           <AddLeadForm />
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {leads?.map((lead: any) => (
-            <Card key={lead.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <CardTitle className="text-xl flex items-center gap-2">
-                      <Building2 className="h-5 w-5" />
-                      {lead.company_name}
-                    </CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {lead.contact_name}
-                    </p>
-                  </div>
-                  <Badge variant={STATUS_COLORS[lead.status]}>
-                    {STATUS_LABELS[lead.status]}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center gap-2 text-sm">
-                  <Badge variant="outline">
-                    {SOURCE_LABELS[lead.source]}
-                  </Badge>
-                  {lead.industry && (
-                    <Badge variant="outline">
-                      {lead.industry}
-                    </Badge>
-                  )}
-                </div>
-
-                {lead.estimated_deal_value && (
-                  <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-                    <DollarSign className="h-4 w-4" />
-                    ₪{lead.estimated_deal_value.toLocaleString()}
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  {lead.email && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <a 
-                        href={`mailto:${lead.email}`}
-                        className="hover:underline"
-                      >
-                        {lead.email}
-                      </a>
-                    </div>
-                  )}
-                  
-                  {lead.phone && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <a 
-                        href={`tel:${lead.phone}`}
-                        className="hover:underline"
-                      >
-                        {lead.phone}
-                      </a>
-                    </div>
-                  )}
-                </div>
-
-                {(lead.sales_people?.full_name || lead.agencies?.name) && (
-                  <div className="text-sm text-muted-foreground border-t pt-3">
-                    {lead.sales_people?.full_name && <p>איש מכירות: {lead.sales_people.full_name}</p>}
-                    {lead.agencies?.name && <p className="text-xs mt-1">{lead.agencies.name}</p>}
-                  </div>
-                )}
-
-                {lead.folder_link && (
-                  <a
-                    href={lead.folder_link}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-primary hover:underline"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    תיקייה
-                  </a>
-                )}
-
-                {lead.notes && (
-                  <p className="text-sm text-muted-foreground border-t pt-3">
-                    {lead.notes}
-                  </p>
-                )}
-
-                <div className="flex gap-2 pt-2 border-t">
-                  <EditLeadDialog lead={lead} />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDelete(lead.id)}
-                    className="flex-1"
-                  >
-                    <Trash2 className="h-4 w-4 ml-2" />
-                    מחק
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {leads?.length === 0 && (
+        {leads?.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <p className="text-muted-foreground mb-4">
@@ -221,6 +238,42 @@ export default function Leads() {
               <AddLeadForm />
             </CardContent>
           </Card>
+        ) : (
+          <DndContext
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="grid grid-cols-5 gap-4">
+              {PIPELINE_STAGES.map((stage) => {
+                const stageLeads = getLeadsByStage(stage.id);
+                return (
+                  <SortableContext
+                    key={stage.id}
+                    id={stage.id}
+                    items={stageLeads.map((l: any) => l.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="flex flex-col min-h-[600px]">
+                      <div className={`${stage.color} rounded-t-lg p-3 font-semibold text-center`}>
+                        {stage.label}
+                        <span className="mr-2 text-sm">({stageLeads.length})</span>
+                      </div>
+                      <div className="bg-muted/30 rounded-b-lg p-3 flex-1 space-y-2">
+                        {stageLeads.map((lead: any) => (
+                          <LeadCard key={lead.id} lead={lead} />
+                        ))}
+                      </div>
+                    </div>
+                  </SortableContext>
+                );
+              })}
+            </div>
+
+            <DragOverlay>
+              {activeId && activeLead ? <LeadCard lead={activeLead} /> : null}
+            </DragOverlay>
+          </DndContext>
         )}
       </div>
     </AppLayout>

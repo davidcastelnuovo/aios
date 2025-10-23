@@ -139,7 +139,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
     updateMutation.mutate(values);
   };
 
-  const showLostReason = form.watch("status") === "lost";
+  const showLostReason = form.watch("status") === "closed";
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -307,13 +307,11 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="new">חדש</SelectItem>
-                        <SelectItem value="contacted">יצירת קשר</SelectItem>
-                        <SelectItem value="meeting_scheduled">פגישה מתוכננת</SelectItem>
-                        <SelectItem value="proposal_sent">הצעה נשלחה</SelectItem>
-                        <SelectItem value="negotiation">משא ומתן</SelectItem>
-                        <SelectItem value="won">נסגר</SelectItem>
-                        <SelectItem value="lost">אבד</SelectItem>
+                        <SelectItem value="new">ליד חדש</SelectItem>
+                        <SelectItem value="contacted">נוצר קשר</SelectItem>
+                        <SelectItem value="follow_up">תהליך פולואפ</SelectItem>
+                        <SelectItem value="proposal_sent">נשלחה הצעה</SelectItem>
+                        <SelectItem value="closed">נסגר</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -342,9 +340,9 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                 name="lost_reason"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>סיבת אובדן</FormLabel>
+                    <FormLabel>פרטי סגירה / סיבת אובדן</FormLabel>
                     <FormControl>
-                      <Textarea {...field} rows={2} />
+                      <Textarea {...field} rows={2} placeholder="האם נסגר בהצלחה או אבד? פרטים..." />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

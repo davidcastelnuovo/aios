@@ -300,13 +300,11 @@ export function AddLeadForm() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="new">חדש</SelectItem>
-                        <SelectItem value="contacted">יצירת קשר</SelectItem>
-                        <SelectItem value="meeting_scheduled">פגישה מתוכננת</SelectItem>
-                        <SelectItem value="proposal_sent">הצעה נשלחה</SelectItem>
-                        <SelectItem value="negotiation">משא ומתן</SelectItem>
-                        <SelectItem value="won">נסגר</SelectItem>
-                        <SelectItem value="lost">אבד</SelectItem>
+                        <SelectItem value="new">ליד חדש</SelectItem>
+                        <SelectItem value="contacted">נוצר קשר</SelectItem>
+                        <SelectItem value="follow_up">תהליך פולואפ</SelectItem>
+                        <SelectItem value="proposal_sent">נשלחה הצעה</SelectItem>
+                        <SelectItem value="closed">נסגר</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

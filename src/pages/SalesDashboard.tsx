@@ -26,14 +26,12 @@ export default function SalesDashboard() {
         total: data.length,
         new: data.filter(l => l.status === "new").length,
         contacted: data.filter(l => l.status === "contacted").length,
-        meeting: data.filter(l => l.status === "meeting_scheduled").length,
+        followUp: data.filter(l => l.status === "follow_up").length,
         proposal: data.filter(l => l.status === "proposal_sent").length,
-        negotiation: data.filter(l => l.status === "negotiation").length,
-        won: data.filter(l => l.status === "won").length,
-        lost: data.filter(l => l.status === "lost").length,
+        closed: data.filter(l => l.status === "closed").length,
         totalValue: data.reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
-        wonValue: data
-          .filter(l => l.status === "won")
+        closedValue: data
+          .filter(l => l.status === "closed")
           .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
       };
 
@@ -71,7 +69,7 @@ export default function SalesDashboard() {
   }
 
   const conversionRate = leadsStats?.total 
-    ? ((leadsStats.won / leadsStats.total) * 100).toFixed(1)
+    ? ((leadsStats.closed / leadsStats.total) * 100).toFixed(1)
     : "0";
 
   return (
@@ -132,7 +130,7 @@ export default function SalesDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                ₪{leadsStats?.wonValue?.toLocaleString() || 0}
+                ₪{leadsStats?.closedValue?.toLocaleString() || 0}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
                 עסקאות שנסגרו
@@ -151,7 +149,7 @@ export default function SalesDashboard() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Target className="h-4 w-4 text-blue-500" />
-                  <span className="text-sm font-medium">חדש</span>
+                  <span className="text-sm font-medium">ליד חדש</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-2xl font-bold">{leadsStats?.new || 0}</span>
@@ -161,8 +159,8 @@ export default function SalesDashboard() {
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-yellow-500" />
-                  <span className="text-sm font-medium">יצירת קשר</span>
+                  <Clock className="h-4 w-4 text-purple-500" />
+                  <span className="text-sm font-medium">נוצר קשר</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-2xl font-bold">{leadsStats?.contacted || 0}</span>
@@ -172,11 +170,11 @@ export default function SalesDashboard() {
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-purple-500" />
-                  <span className="text-sm font-medium">פגישה מתוכננת</span>
+                  <Users className="h-4 w-4 text-yellow-500" />
+                  <span className="text-sm font-medium">תהליך פולואפ</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold">{leadsStats?.meeting || 0}</span>
+                  <span className="text-2xl font-bold">{leadsStats?.followUp || 0}</span>
                   <span className="text-sm text-muted-foreground">לידים</span>
                 </div>
               </div>
@@ -184,21 +182,10 @@ export default function SalesDashboard() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-orange-500" />
-                  <span className="text-sm font-medium">הצעה נשלחה</span>
+                  <span className="text-sm font-medium">נשלחה הצעה</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-2xl font-bold">{leadsStats?.proposal || 0}</span>
-                  <span className="text-sm text-muted-foreground">לידים</span>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <DollarSign className="h-4 w-4 text-amber-500" />
-                  <span className="text-sm font-medium">משא ומתן</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold">{leadsStats?.negotiation || 0}</span>
                   <span className="text-sm text-muted-foreground">לידים</span>
                 </div>
               </div>
@@ -209,7 +196,7 @@ export default function SalesDashboard() {
                   <span className="text-sm font-medium">נסגר</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl font-bold text-green-600">{leadsStats?.won || 0}</span>
+                  <span className="text-2xl font-bold text-green-600">{leadsStats?.closed || 0}</span>
                   <span className="text-sm text-muted-foreground">לידים</span>
                 </div>
               </div>
@@ -239,10 +226,10 @@ export default function SalesDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold text-green-600">
-                ₪{leadsStats?.wonValue?.toLocaleString() || 0}
+                ₪{leadsStats?.closedValue?.toLocaleString() || 0}
               </div>
               <p className="text-sm text-muted-foreground mt-2">
-                סכום עסקאות שנסגרו בהצלחה
+                סכום עסקאות שנסגרו
               </p>
             </CardContent>
           </Card>
