@@ -14,6 +14,8 @@ import {
   ShieldCheck,
   UserCheck,
   Target,
+  TrendingUp,
+  ChevronDown,
 } from "lucide-react";
 import {
   Sidebar,
@@ -24,8 +26,12 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 
 const menuItems = [
@@ -39,10 +45,14 @@ const menuItems = [
   { title: "ספקים", url: "/suppliers", icon: Truck, module: "suppliers" as const },
   { title: "כספים", url: "/finance", icon: DollarSign, module: "finance" as const },
   { title: "דוחות", url: "/reports", icon: BarChart3, module: "reports" as const },
-  { title: "אנשי מכירות", url: "/sales-people", icon: UserCheck, module: null },
-  { title: "לידים", url: "/leads", icon: Target, module: null },
   { title: "ניהול משתמשים", url: "/users", icon: ShieldCheck, module: "users" as const },
   { title: "אזור אישי", url: "/my-profile", icon: User, module: null },
+];
+
+const salesMenuItems = [
+  { title: "דשבורד מכירות", url: "/sales-dashboard", icon: TrendingUp },
+  { title: "לידים", url: "/leads", icon: Target },
+  { title: "אנשי מכירות", url: "/sales-people", icon: UserCheck },
 ];
 
 export function AppSidebar() {
@@ -94,6 +104,43 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+
+              {/* ניהול מכירות - תפריט מתקפל */}
+              <Collapsible defaultOpen className="group/collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton tooltip="ניהול מכירות">
+                      <DollarSign className="h-4 w-4" />
+                      {!isCollapsed && <span>ניהול מכירות</span>}
+                      {!isCollapsed && (
+                        <ChevronDown className="mr-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                      )}
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {salesMenuItems.map((item) => (
+                        <SidebarMenuSubItem key={item.title}>
+                          <SidebarMenuSubButton asChild>
+                            <NavLink
+                              to={item.url}
+                              onClick={handleLinkClick}
+                              className={({ isActive }) =>
+                                isActive
+                                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                  : ""
+                              }
+                            >
+                              <item.icon className="h-4 w-4" />
+                              <span>{item.title}</span>
+                            </NavLink>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

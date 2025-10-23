@@ -22,6 +22,7 @@ import MyProfile from "./pages/MyProfile";
 import Users from "./pages/Users";
 import SalesPeople from "./pages/SalesPeople";
 import Leads from "./pages/Leads";
+import SalesDashboard from "./pages/SalesDashboard";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -48,6 +49,7 @@ const App = () => (
             <Route path="/reports" element={<ProtectedRoute requiredPermission="reports"><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
             <Route path="/my-profile" element={<ProtectedRoute><AppLayout><MyProfile /></AppLayout></ProtectedRoute>} />
             <Route path="/users" element={<ProtectedRoute requiredPermission="users"><AppLayout><Users /></AppLayout></ProtectedRoute>} />
+            <Route path="/sales-dashboard" element={<ProtectedRoute><AppLayout><SalesDashboard /></AppLayout></ProtectedRoute>} />
             <Route path="/sales-people" element={<ProtectedRoute><AppLayout><SalesPeople /></AppLayout></ProtectedRoute>} />
             <Route path="/leads" element={<ProtectedRoute><AppLayout><Leads /></AppLayout></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
