@@ -128,32 +128,33 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
     <Card
       ref={setNodeRef}
       style={style}
-      className="mb-3 hover:shadow-md transition-shadow"
+      className="mb-3 hover:shadow-lg transition-all"
     >
-      <CardHeader className="pb-3 pt-4">
+      <CardHeader className="pb-3 pt-4 bg-muted/30">
         <CardTitle className="text-base flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Building2 className="h-4 w-4" />
-            {lead.company_name}
+            <Building2 className="h-4 w-4 text-primary" />
+            <span className="font-bold">{lead.company_name}</span>
           </div>
           <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing" aria-label="גרור כרטיס">
             <GripVertical className="h-4 w-4 text-muted-foreground" />
           </div>
         </CardTitle>
         {lead.contact_name && (
-          <p className="text-sm text-muted-foreground">{lead.contact_name}</p>
+          <p className="text-sm text-muted-foreground font-medium">{lead.contact_name}</p>
         )}
       </CardHeader>
-      <CardContent className="space-y-3 text-sm px-4 pb-4">
-        {lead.estimated_deal_value && (
-          <div className="flex items-center gap-1 font-semibold text-primary">
-            <DollarSign className="h-3 w-3" />
-            ₪{lead.estimated_deal_value.toLocaleString()}
-          </div>
-        )}
+      <CardContent className="space-y-3 text-sm px-4 pb-4 pt-3">
+        {/* Value and Status Section */}
+        <div className="flex flex-wrap gap-2">
+          {lead.estimated_deal_value && (
+            <Badge variant="default" className="flex items-center gap-1 font-semibold">
+              <DollarSign className="h-3 w-3" />
+              ₪{lead.estimated_deal_value.toLocaleString()}
+            </Badge>
+          )}
 
-        {lead.response_status && (
-          <div className="flex items-center gap-1">
+          {lead.response_status && (
             <Badge variant="secondary" className="text-xs">
               {lead.response_status === 'no_answer_1' && 'אין מענה 1'}
               {lead.response_status === 'no_answer_2' && 'אין מענה 2'}
@@ -162,59 +163,76 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
               {lead.response_status === 'denies_contact' && 'מכחיש פניה'}
               {lead.response_status === 'not_relevant' && 'לא רלוונטי'}
             </Badge>
+          )}
+        </div>
+
+        {/* Products */}
+        {lead.products && (
+          <div className="bg-muted/50 p-2 rounded text-xs">
+            <span className="font-semibold text-primary">מוצרים:</span> {lead.products}
           </div>
         )}
 
-        {lead.products && (
-          <p className="text-xs">
-            <span className="font-medium">מוצרים:</span> {lead.products}
-          </p>
-        )}
-
+        {/* Budget Section */}
         {(lead.monthly_budget || lead.three_month_budget) && (
-          <div className="text-xs space-y-1">
+          <div className="bg-accent/10 p-2 rounded space-y-1 text-xs">
             {lead.monthly_budget && (
-              <p><span className="font-medium">הצעה חודשית:</span> ₪{lead.monthly_budget.toLocaleString()}</p>
+              <div className="flex justify-between">
+                <span className="font-semibold">הצעה חודשית:</span>
+                <span className="font-bold text-primary">₪{lead.monthly_budget.toLocaleString()}</span>
+              </div>
             )}
             {lead.three_month_budget && (
-              <p><span className="font-medium">הצעת 3 חודשים:</span> ₪{lead.three_month_budget.toLocaleString()}</p>
+              <div className="flex justify-between">
+                <span className="font-semibold">הצעת 3 חודשים:</span>
+                <span className="font-bold text-primary">₪{lead.three_month_budget.toLocaleString()}</span>
+              </div>
             )}
           </div>
         )}
 
-        {lead.proposal_date && (
-          <p className="text-xs">
-            <span className="font-medium">תאריך הצעה:</span> {new Date(lead.proposal_date).toLocaleDateString('he-IL')}
-          </p>
-        )}
-
-        {lead.sale_date && (
-          <p className="text-xs">
-            <span className="font-medium">תאריך מכירה:</span> {new Date(lead.sale_date).toLocaleDateString('he-IL')}
-          </p>
-        )}
-
-        {lead.email && (
-          <div className="flex items-center gap-2">
-            <Mail className="h-3 w-3 text-muted-foreground" />
-            <a href={`mailto:${lead.email}`} className="hover:underline truncate">
-              {lead.email}
-            </a>
+        {/* Dates Section */}
+        {(lead.proposal_date || lead.sale_date) && (
+          <div className="space-y-1 text-xs border-r-2 border-primary pr-2">
+            {lead.proposal_date && (
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-muted-foreground">תאריך הצעה:</span>
+                <span>{new Date(lead.proposal_date).toLocaleDateString('he-IL')}</span>
+              </div>
+            )}
+            {lead.sale_date && (
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-muted-foreground">תאריך מכירה:</span>
+                <span>{new Date(lead.sale_date).toLocaleDateString('he-IL')}</span>
+              </div>
+            )}
           </div>
         )}
 
-        {lead.phone && (
-          <div className="flex items-center gap-2">
-            <Phone className="h-3 w-3 text-muted-foreground" />
-            <a href={`tel:${lead.phone}`} className="hover:underline">
-              {lead.phone}
-            </a>
-          </div>
-        )}
+        {/* Contact Info */}
+        <div className="space-y-2 pt-2 border-t">
+          {lead.email && (
+            <div className="flex items-center gap-2">
+              <Mail className="h-3 w-3 text-primary" />
+              <a href={`mailto:${lead.email}`} className="hover:underline truncate text-xs">
+                {lead.email}
+              </a>
+            </div>
+          )}
+
+          {lead.phone && (
+            <div className="flex items-center gap-2">
+              <Phone className="h-3 w-3 text-primary" />
+              <a href={`tel:${lead.phone}`} className="hover:underline text-xs">
+                {lead.phone}
+              </a>
+            </div>
+          )}
+        </div>
 
         {lead.sales_people?.full_name && (
           <p className="text-xs text-muted-foreground border-t pt-2">
-            איש מכירות: {lead.sales_people.full_name}
+            <span className="font-semibold">איש מכירות:</span> {lead.sales_people.full_name}
           </p>
         )}
 
