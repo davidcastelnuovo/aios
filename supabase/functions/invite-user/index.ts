@@ -85,16 +85,17 @@ serve(async (req: Request) => {
 
     // For resend, send a password reset email using backend mailer (no Resend)
     if (resend) {
-      // Get the origin from the request
-      const origin = new URL(req.headers.get('referer') || req.url).origin;
-      const setupUrl = `${origin}/setup`;
+      // Prefer redirectUrl from body, otherwise build from Origin header
+      const originHeader = req.headers.get('origin') || req.headers.get('referer');
+      const computedOrigin = originHeader ? new URL(originHeader).origin : undefined;
+      const setupUrl = redirectUrl || (computedOrigin ? `${computedOrigin}/setup` : undefined);
       
       const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
         redirectTo: setupUrl,
       });
 
       if (resetError) {
-        console.error('Error sending password reset:', resetError);
+        console.error('Error sending password reset:', resetError, 'redirectTo:', setupUrl);
         throw resetError;
       }
 
