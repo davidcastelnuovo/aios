@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Upload, FileSpreadsheet } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import Papa from "papaparse";
 
 export function ImportLeadsCSV() {
   const [open, setOpen] = useState(false);
@@ -29,169 +30,141 @@ export function ImportLeadsCSV() {
 
     try {
       const text = await file.text();
-      const lines = text.split('\n').filter(line => line.trim());
-      const headers = lines[0].split(',').map(h => h.trim());
 
-      // Parse CSV rows
-      const leads = lines.slice(1).map(line => {
-        const values = line.split(',').map(v => v.trim());
+      // Parse robustly with Papa Parse
+      const parsed = Papa.parse<any>(text, { header: true, skipEmptyLines: true });
+      if (parsed.errors && parsed.errors.length) {
+        console.warn("CSV parse warnings:", parsed.errors);
+      }
+      const rows = (parsed.data || []) as any[];
+
+      if (rows.length === 0) {
+        throw new Error("לא נמצאו נתונים בקובץ");
+      }
+
+      // Resolve defaults: agency 'promo' and salesperson 'זיו'
+      const { data: promoAgency, error: agencyErr } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .ilike("name", "%promo%")
+        .maybeSingle();
+      if (agencyErr) throw agencyErr;
+      if (!promoAgency) throw new Error('סוכנות "promo" לא נמצאה');
+
+      const { data: zivPerson, error: spErr } = await supabase
+        .from("sales_people")
+        .select("id, full_name")
+        .eq("agency_id", promoAgency.id)
+        .ilike("full_name", "%זיו%")
+        .maybeSingle();
+      if (spErr) throw spErr;
+      if (!zivPerson) throw new Error('איש מכירות "זיו" לא נמצא בסוכנות promo');
+
+      const normalize = (s: string | null | undefined) =>
+        (s || "")
+          .toString()
+          .replace(/\*/g, "")
+          .replace(/[\s_\-\/=\\()\[\]"'.,]/g, "")
+          .toLowerCase();
+
+      const mapSource = (val: string) => {
+        const v = normalize(val);
+        if (v.includes("אתר") || v.includes("website")) return "website";
+        if (v.includes("הפניה") || v.includes("המלצה") || v.includes("referral")) return "referral";
+        if (v.includes("פייסבוק") || v.includes("social")) return "social_media";
+        if (v.includes("גוגל") || v.includes("ads")) return "paid_ads";
+        return "other";
+      };
+
+      const mapResponse = (val: string) => {
+        const v = normalize(val);
+        if (v.includes("איןמענה1") || v.includes("ללאמענה1")) return "no_answer_1";
+        if (v.includes("איןמענה2") || v.includes("ללאמענה2")) return "no_answer_2";
+        if (v.includes("איןמענה3") || v.includes("ללאמענה3")) return "no_answer_3";
+        if (v.includes("איןמענה4") || v.includes("ללאמענה4")) return "no_answer_4";
+        if (v.includes("מכחישפניה")) return "denies_contact";
+        if (v.includes("לארלוונטי")) return "not_relevant";
+        return null;
+      };
+
+      const mapStage = (val: string) => {
+        const v = normalize(val);
+        if (v.includes("לידחדש")) return "new";
+        if (v.includes("נוצרקשר")) return "contacted";
+        if (v.includes("פולואפ")) return "follow_up";
+        if (v.includes("נשלחההצעה") || v === "הצעה") return "proposal_sent";
+        if (v.includes("נסגר")) return "closed";
+        return "new";
+      };
+
+      const mapped = rows.map((row) => {
         const lead: any = {};
+        Object.entries(row).forEach(([key, raw]) => {
+          const value = (raw as string)?.toString().trim();
+          if (!value) return;
+          const k = normalize(key);
 
-        headers.forEach((header, index) => {
-          const value = values[index] || null;
-          
-          // Map CSV headers to database columns
-          switch (header) {
-            case 'שם':
-              lead.contact_name = value;
-              break;
-            case 'שם העסק':
-            case 'שם החברה':
-              lead.company_name = value;
-              break;
-            case 'מייל':
-            case 'אימייל':
-              lead.email = value;
-              break;
-            case 'פרוק':
-            case 'טלפון':
-              lead.phone = value;
-              break;
-            case 'סטטוס':
-              // Map to response status
-              const responseStatusMap: Record<string, string> = {
-                'ללא מענה 1': 'no_answer_1',
-                'אין מענה 1': 'no_answer_1',
-                'ללא מענה 2': 'no_answer_2',
-                'אין מענה 2': 'no_answer_2',
-                'ללא מענה 3': 'no_answer_3',
-                'אין מענה 3': 'no_answer_3',
-                'ללא מענה 4': 'no_answer_4',
-                'אין מענה 4': 'no_answer_4',
-                'מכחיש פניה': 'denies_contact',
-                'לא רלוונטי': 'not_relevant',
-              };
-              lead.response_status = responseStatusMap[value] || null;
-              // Keep general_status for backward compatibility
-              lead.general_status = value;
-              break;
-            case 'שלב העסקה':
-            case 'שלב במשפך':
-            case 'שלב':
-              // Map to pipeline stage
-              const stageMap: Record<string, string> = {
-                'ליד חדש': 'new',
-                'נוצר קשר': 'contacted',
-                'פולואפ': 'follow_up',
-                'follow_up': 'follow_up',
-                'תהליך פולואפ': 'follow_up',
-                'הצעה': 'proposal_sent',
-                'נשלחה הצעה': 'proposal_sent',
-                'נסגר': 'closed',
-              };
-              lead.status = stageMap[value] || 'new';
-              break;
-            case 'הערות/הסכמים/פרטים':
-            case 'הצעות/הסכמים':
-            case 'פרטים':
-            case 'הערות':
-              lead.notes = value;
-              break;
-            case 'תחום':
-            case 'תחום עיסוק':
-            case 'ארגון קליינט לפי':
-              lead.industry = value;
-              break;
-            case 'שווי משוער העסקה':
-            case 'שווי עסקה':
-              lead.estimated_deal_value = value ? parseFloat(value.replace(/[^\d.-]/g, '')) : null;
-              break;
-            case 'המעת חד"פ':
-            case 'הצעת חד"פ':
-            case 'הצעת חודשית':
-              lead.monthly_budget = value ? parseFloat(value.replace(/[^\d.-]/g, '')) : null;
-              break;
-            case 'המעת 3 חודשים':
-            case 'הצעת 3 חודשים':
-            case 'הצעת 3 חודשית':
-              lead.three_month_budget = value ? parseFloat(value.replace(/[^\d.-]/g, '')) : null;
-              break;
-            case 'תאריך הצעה':
-              lead.proposal_date = value ? new Date(value).toISOString().split('T')[0] : null;
-              break;
-            case 'תאריך מכירה':
-            case 'תאריך חתימה':
-            case 'תאריך סגירה':
-              lead.sale_date = value ? new Date(value).toISOString().split('T')[0] : null;
-              lead.closing_date = value ? new Date(value).toISOString().split('T')[0] : null;
-              break;
-            case 'מוצרים':
-              lead.products = value;
-              break;
-            case 'המלצה':
-            case 'הפניה':
-            case 'מקור':
-            case 'מקורות':
-              // Map source
-              const sourceMap: Record<string, string> = {
-                'אתר': 'website',
-                'הפניה': 'referral',
-                'המלצה': 'referral',
-                'פייסבוק': 'social_media',
-                'גוגל': 'paid_ads',
-                'אחר': 'other',
-              };
-              lead.source = sourceMap[value] || 'other';
-              break;
-            case 'שיחה עם איתי':
-            case 'איש מכירות':
-              // Store the sales person name, will need to map it later
-              lead.sales_person_name = value;
-              break;
+          if (k.includes("שמהעסק") || k.includes("שםהחברה") || k.includes("שחברה")) {
+            lead.company_name = value;
+          } else if (k.includes("שמקשר") || k.includes("אישקשר")) {
+            lead.contact_name = value;
+          } else if (k.includes("מייל") || k.includes("אימייל") || k.includes("email")) {
+            lead.email = value;
+          } else if (k.includes("טלפון") || k.includes("פלאפון") || k.includes("phone") || k.includes("פרוק")) {
+            lead.phone = value;
+          } else if (k.includes("סטטוס")) {
+            lead.response_status = mapResponse(value);
+            lead.general_status = value;
+          } else if (k.includes("שלב")) {
+            lead.status = mapStage(value);
+          } else if (k.includes("שווייעסקה") || k.includes("שוויםשוער") || k.includes("שוי")) {
+            const n = parseFloat(value.replace(/[^\d.-]/g, ""));
+            if (!Number.isNaN(n)) lead.estimated_deal_value = n;
+          } else if (k.includes("חדפ") || k.includes("חודשית")) {
+            const n = parseFloat(value.replace(/[^\d.-]/g, ""));
+            if (!Number.isNaN(n)) lead.monthly_budget = n;
+          } else if (k.includes("3חודש") || k.includes("שלושהחודש")) {
+            const n = parseFloat(value.replace(/[^\d.-]/g, ""));
+            if (!Number.isNaN(n)) lead.three_month_budget = n;
+          } else if (k.includes("תאריך") && k.includes("הצעה")) {
+            const d = new Date(value);
+            if (!isNaN(d as any)) lead.proposal_date = d.toISOString().split("T")[0];
+          } else if (k.includes("תאריך") && (k.includes("מכירה") || k.includes("חתימה") || k.includes("סגירה"))) {
+            const d = new Date(value);
+            if (!isNaN(d as any)) {
+              const ds = d.toISOString().split("T")[0];
+              lead.sale_date = ds;
+              lead.closing_date = ds;
+            }
+          } else if (k.includes("מוצרים") || k.includes("מוצר")) {
+            lead.products = value;
+          } else if (k.includes("מקור") || k.includes("הפניה") || k.includes("המלצה")) {
+            lead.source = mapSource(value);
           }
         });
 
-        // Set default status if not provided
-        if (!lead.status) {
-          lead.status = 'new';
-        }
+        if (!lead.status) lead.status = "new";
+        if (lead.proposal_date && lead.status === "new") lead.status = "proposal_sent";
+        if (!lead.company_name) lead.company_name = lead.contact_name || "לא צוין";
 
-        // If there's a proposal date, set status to proposal_sent
-        if (lead.proposal_date && lead.status === 'new') {
-          lead.status = 'proposal_sent';
-        }
-
-        // Ensure company_name exists
-        if (!lead.company_name) {
-          lead.company_name = lead.contact_name || 'לא צוין';
-        }
-
+        // Force assignment per user request
+        lead.agency_id = promoAgency.id;
+        lead.sales_person_id = zivPerson.id;
         return lead;
       });
 
-      // Filter out invalid leads
-      const validLeads = leads.filter(lead => lead.company_name);
-
+      const validLeads = mapped.filter((l) => l.company_name);
       if (validLeads.length === 0) {
-        toast({
-          title: "שגיאה",
-          description: "לא נמצאו לידים תקינים בקובץ",
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        return;
+        throw new Error("לא נמצאו לידים תקינים בקובץ");
       }
 
-      // Insert leads
       const { error } = await supabase.from("leads").insert(validLeads);
-
       if (error) throw error;
 
       queryClient.invalidateQueries({ queryKey: ["leads"] });
-
       toast({
         title: "הצלחה!",
-        description: `${validLeads.length} לידים יובאו בהצלחה`,
+        description: `${validLeads.length} לידים יובאו והוקצו לסוכנות promo ולאיש מכירות זיו`,
       });
 
       setOpen(false);
