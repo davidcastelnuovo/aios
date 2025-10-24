@@ -519,7 +519,8 @@ export default function Leads() {
                       {stageLeads.length === 0 ? (
                         <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
                       ) : (
-                    <ScrollArea className="w-full">
+                    <ScrollArea className="w-full" dir="rtl">
+                      <div className="min-w-max">
                       <Table>
                       <TableHeader>
                         <TableRow>
@@ -638,6 +639,7 @@ export default function Leads() {
                         ))}
                       </TableBody>
                     </Table>
+                    </div>
                     <ScrollBar orientation="horizontal" />
                     </ScrollArea>
                       )}
