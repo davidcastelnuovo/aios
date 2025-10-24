@@ -523,12 +523,11 @@ export default function Leads() {
                       <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>חברה</TableHead>
-                          <TableHead>איש קשר</TableHead>
-                          <TableHead>אימייל</TableHead>
+                          <TableHead>שם</TableHead>
                           <TableHead>טלפון</TableHead>
-                          <TableHead>שווי משוער</TableHead>
-                          <TableHead>איש מכירות</TableHead>
+                          <TableHead>אימייל</TableHead>
+                          <TableHead>שם חברה</TableHead>
+                          <TableHead>שלב במשפך</TableHead>
                           <TableHead>סטטוס</TableHead>
                           <TableHead className="text-left">פעולות</TableHead>
                         </TableRow>
@@ -538,18 +537,9 @@ export default function Leads() {
                           <TableRow key={lead.id}>
                             <TableCell className="font-medium">
                               <div className="flex items-center gap-2">
-                                <Building2 className="h-4 w-4" />
-                                {lead.company_name}
+                                <User className="h-4 w-4" />
+                                {lead.contact_name || "-"}
                               </div>
-                            </TableCell>
-                            <TableCell>{lead.contact_name || "-"}</TableCell>
-                            <TableCell>
-                              {lead.email ? (
-                                <a href={`mailto:${lead.email}`} className="hover:underline flex items-center gap-1">
-                                  <Mail className="h-3 w-3" />
-                                  {lead.email}
-                                </a>
-                              ) : "-"}
                             </TableCell>
                             <TableCell>
                               {lead.phone ? (
@@ -560,13 +550,19 @@ export default function Leads() {
                               ) : "-"}
                             </TableCell>
                             <TableCell>
-                              {lead.estimated_deal_value ? (
-                                <span className="font-semibold text-primary">
-                                  ₪{lead.estimated_deal_value.toLocaleString()}
-                                </span>
+                              {lead.email ? (
+                                <a href={`mailto:${lead.email}`} className="hover:underline flex items-center gap-1">
+                                  <Mail className="h-3 w-3" />
+                                  {lead.email}
+                                </a>
                               ) : "-"}
                             </TableCell>
-                            <TableCell>{lead.sales_people?.full_name || "-"}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Building2 className="h-4 w-4" />
+                                {lead.company_name}
+                              </div>
+                            </TableCell>
                             <TableCell>
                               <Select
                                 value={lead.status}
@@ -592,6 +588,18 @@ export default function Leads() {
                                   ))}
                                 </SelectContent>
                               </Select>
+                            </TableCell>
+                            <TableCell>
+                              {lead.response_status ? (
+                                <Badge variant="outline" className="text-xs">
+                                  {lead.response_status === 'no_answer_1' && 'אין מענה 1'}
+                                  {lead.response_status === 'no_answer_2' && 'אין מענה 2'}
+                                  {lead.response_status === 'no_answer_3' && 'אין מענה 3'}
+                                  {lead.response_status === 'no_answer_4' && 'אין מענה 4'}
+                                  {lead.response_status === 'denies_contact' && 'מכחיש פניה'}
+                                  {lead.response_status === 'not_relevant' && 'לא רלוונטי'}
+                                </Badge>
+                              ) : "-"}
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-2">
