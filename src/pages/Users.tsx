@@ -47,12 +47,14 @@ const roleLabels: Record<UserRole, string> = {
   owner: "בעלים",
   team_manager: "מנהל צוות",
   campaigner: "קמפיינר",
+  sales_person: "איש מכירות",
 };
 
 const roleBadgeColors: Record<UserRole, string> = {
   owner: "bg-purple-500",
   team_manager: "bg-green-500",
   campaigner: "bg-orange-500",
+  sales_person: "bg-blue-500",
 };
 
 export default function Users() {
@@ -63,6 +65,8 @@ export default function Users() {
   const [inviteRole, setInviteRole] = useState<UserRole>("campaigner");
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
+  const [selectedCampaignerId, setSelectedCampaignerId] = useState<string>("");
+  const [selectedSalesPersonId, setSelectedSalesPersonId] = useState<string>("");
   const [editAgenciesUserId, setEditAgenciesUserId] = useState<string | null>(null);
   const [editAgenciesUserEmail, setEditAgenciesUserEmail] = useState<string>("");
   const [editPermissionsUserId, setEditPermissionsUserId] = useState<string | null>(null);
@@ -94,6 +98,32 @@ export default function Users() {
         return data;
       }
       return [];
+    },
+  });
+
+  const { data: campaigners } = useQuery({
+    queryKey: ["campaigners-for-invite"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaigners")
+        .select("id, full_name")
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: salesPeople } = useQuery({
+    queryKey: ["sales-people-for-invite"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sales_people")
+        .select("id, full_name")
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
     },
   });
 
@@ -152,7 +182,21 @@ export default function Users() {
 
 
   const inviteUserMutation = useMutation({
-    mutationFn: async ({ email, role, agencyIds, modulePermissions }: { email: string; role: UserRole; agencyIds: string[]; modulePermissions: string[] }) => {
+    mutationFn: async ({ 
+      email, 
+      role, 
+      agencyIds, 
+      modulePermissions,
+      campaignerId,
+      salesPersonId 
+    }: { 
+      email: string; 
+      role: UserRole; 
+      agencyIds: string[]; 
+      modulePermissions: string[];
+      campaignerId?: string;
+      salesPersonId?: string;
+    }) => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
@@ -165,6 +209,8 @@ export default function Users() {
           role,
           agencyIds,
           modulePermissions,
+          campaignerId,
+          salesPersonId,
           redirectUrl: `${window.location.origin}/setup`
         },
         headers: {
@@ -184,6 +230,8 @@ export default function Users() {
       setInviteRole("campaigner");
       setSelectedAgencies([]);
       setSelectedModules([]);
+      setSelectedCampaignerId("");
+      setSelectedSalesPersonId("");
     },
     onError: (error: Error) => {
       toast.error("שגיאה בשליחת הזמנה: " + error.message);
@@ -275,8 +323,6 @@ export default function Users() {
               <DialogTitle>הזמן משתמש חדש</DialogTitle>
               <DialogDescription>
                 המשתמש יקבל מייל עם קישור ליצירת חשבון והגדרת סיסמה.
-                <br />
-                <strong>חשוב:</strong> אחרי יצירת המשתמש, יש לשייך אותו לקמפיינר פעיל דרך כפתור "ערוך" בעמודת "קמפיינר משויך".
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -312,6 +358,49 @@ export default function Users() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Campaigner Selection */}
+              <div>
+                <Label htmlFor="campaigner">קמפיינר משויך (אופציונלי)</Label>
+                <Select
+                  value={selectedCampaignerId}
+                  onValueChange={setSelectedCampaignerId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחר קמפיינר" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">ללא שיוך</SelectItem>
+                    {campaigners?.map((campaigner) => (
+                      <SelectItem key={campaigner.id} value={campaigner.id}>
+                        {campaigner.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Sales Person Selection */}
+              <div>
+                <Label htmlFor="sales-person">איש מכירות משויך (אופציונלי)</Label>
+                <Select
+                  value={selectedSalesPersonId}
+                  onValueChange={setSelectedSalesPersonId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחר איש מכירות" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">ללא שיוך</SelectItem>
+                    {salesPeople?.map((salesPerson) => (
+                      <SelectItem key={salesPerson.id} value={salesPerson.id}>
+                        {salesPerson.full_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div>
                 <Label>סוכנויות</Label>
                 <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
@@ -404,6 +493,8 @@ export default function Users() {
                     role: inviteRole,
                     agencyIds: selectedAgencies,
                     modulePermissions: selectedModules,
+                    campaignerId: selectedCampaignerId || undefined,
+                    salesPersonId: selectedSalesPersonId || undefined,
                   })
                 }
                 disabled={!inviteEmail || inviteUserMutation.isPending}

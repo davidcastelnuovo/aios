@@ -14,6 +14,8 @@ interface InviteUserRequest {
   modulePermissions?: string[];
   redirectUrl?: string;
   resend?: boolean;
+  campaignerId?: string;
+  salesPersonId?: string;
 }
 
 serve(async (req: Request) => {
@@ -62,7 +64,7 @@ serve(async (req: Request) => {
       throw new Error("Only owners and agency owners can invite users");
     }
 
-    const { email, role, agencyIds, modulePermissions, redirectUrl, resend }: InviteUserRequest = await req.json();
+    const { email, role, agencyIds, modulePermissions, redirectUrl, resend, campaignerId, salesPersonId }: InviteUserRequest = await req.json();
 
     if (!email) {
       throw new Error("Email is required");
@@ -75,7 +77,7 @@ serve(async (req: Request) => {
       }
 
       // Validate role
-      const validRoles = ["owner", "agency_owner", "team_manager", "campaigner"];
+      const validRoles = ["owner", "agency_owner", "team_manager", "campaigner", "sales_person"];
       if (!validRoles.includes(role)) {
         throw new Error("Invalid role");
       }
@@ -152,21 +154,47 @@ serve(async (req: Request) => {
         // Don't throw - the user was created, just log the error
       }
 
-      // Link campaigner to agencies ONLY if campaigner_id already exists and not resending
-      if (agencyIds && agencyIds.length > 0 && !resend) {
-        // First get user profile to check if campaigner exists
-        const { data: profile } = await supabaseAdmin
+      // Update profile with campaigner_id and sales_person_id if provided
+      if (campaignerId || salesPersonId) {
+        console.log('Updating profile with campaignerId:', campaignerId, 'salesPersonId:', salesPersonId);
+        
+        const updateData: any = {};
+        if (campaignerId) updateData.campaigner_id = campaignerId;
+        if (salesPersonId) updateData.sales_person_id = salesPersonId;
+        
+        const { error: profileError } = await supabaseAdmin
           .from("profiles")
-          .select("campaigner_id")
-          .eq("id", inviteData.user.id)
-          .maybeSingle();
+          .update(updateData)
+          .eq("id", inviteData.user.id);
 
-        const campaignerId = profile?.campaigner_id;
+        if (profileError) {
+          console.error("Error updating profile:", profileError);
+          // Don't throw - the user was created, just log the error
+        } else {
+          console.log('Profile updated successfully');
+        }
+      }
 
-        // Only link to agencies if user is already linked to a campaigner
-        if (campaignerId) {
+      // Link campaigner to agencies if agencyIds provided
+      // Use the campaignerId from the request if provided, otherwise check profile
+      if (agencyIds && agencyIds.length > 0 && !resend) {
+        let finalCampaignerId = campaignerId;
+        
+        // If no campaignerId was provided in request, check if profile has one
+        if (!finalCampaignerId) {
+          const { data: profile } = await supabaseAdmin
+            .from("profiles")
+            .select("campaigner_id")
+            .eq("id", inviteData.user.id)
+            .maybeSingle();
+          
+          finalCampaignerId = profile?.campaigner_id;
+        }
+
+        // Only link to agencies if we have a campaigner_id
+        if (finalCampaignerId) {
           const agencyLinks = agencyIds.map((agencyId) => ({
-            campaigner_id: campaignerId,
+            campaigner_id: finalCampaignerId,
             agency_id: agencyId,
           }));
 
@@ -177,9 +205,11 @@ serve(async (req: Request) => {
           if (agencyError) {
             console.error("Error linking campaigner to agencies:", agencyError);
             // Don't throw - the user was created, just log the error
+          } else {
+            console.log('Campaigner linked to agencies successfully');
           }
         } else {
-          console.log("User has no campaigner_id, skipping agency links");
+          console.log("No campaigner_id available, skipping agency links");
         }
       }
 
