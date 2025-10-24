@@ -568,7 +568,7 @@ export default function Leads() {
               >
                 <Card className={`border-r-4 ${stage.borderColor} bg-card`}>
                   <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors sticky top-0 z-30 bg-card">
                       <CardTitle className="text-xl flex items-center justify-between">
                         <span>{stage.label} ({stageLeads.length})</span>
                         <ChevronDown className={`h-5 w-5 transition-transform ${openTables[stage.id] ? '' : '-rotate-90'}`} />
@@ -704,25 +704,25 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
       {/* Sticky top scrollbar */}
       <div 
         ref={topScrollRef}
-        className="overflow-x-auto sticky top-16 z-10 bg-background border-b mb-2 shadow-sm"
+        className="overflow-x-auto sticky top-0 z-20 bg-background border-b shadow-sm"
         style={{ overflowY: 'hidden', height: '20px' }}
       >
         <div style={{ width: `${tableWidth}px`, height: '1px' }} />
       </div>
 
-      {/* Table container */}
-      <div ref={tableContainerRef} className="overflow-x-auto">
+      {/* Table container with vertical scroll */}
+      <div ref={tableContainerRef} className="overflow-x-auto max-h-[500px] overflow-y-auto">
         <div ref={tableRef}>
           <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
-              <TableHead className="text-right sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10">שם</TableHead>
-              <TableHead className="text-right">טלפון</TableHead>
-              <TableHead className="text-right">אימייל</TableHead>
-              <TableHead className="text-right">שם חברה</TableHead>
-              <TableHead className="text-right">שלב במשפך</TableHead>
-              <TableHead className="text-right">סטטוס</TableHead>
-              <TableHead className="text-right">פעולות</TableHead>
+              <TableHead className="text-right sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20">שם</TableHead>
+              <TableHead className="text-right bg-background">טלפון</TableHead>
+              <TableHead className="text-right bg-background">אימייל</TableHead>
+              <TableHead className="text-right bg-background">שם חברה</TableHead>
+              <TableHead className="text-right bg-background">שלב במשפך</TableHead>
+              <TableHead className="text-right bg-background">סטטוס</TableHead>
+              <TableHead className="text-right bg-background">פעולות</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
