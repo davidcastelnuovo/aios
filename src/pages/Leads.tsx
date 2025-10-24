@@ -376,7 +376,6 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
             {isOpen && stageLeads.length > 0 && (
               <div 
                 ref={scrollbarRef}
-                dir="rtl"
                 className="overflow-x-auto bg-muted/30 rounded mt-2"
                 style={{ overflowY: 'hidden', height: '12px' }}
                 onClick={(e) => e.stopPropagation()}
@@ -736,7 +735,7 @@ function TableWithStickyScroll({ stageLeads, scrollbarRef, tableWidth }: { stage
   return (
     <div className="max-h-[500px] overflow-y-auto">
       {/* Horizontal scroll container */}
-      <div ref={xContainerRef} dir="rtl" className="overflow-x-auto">
+      <div ref={xContainerRef} className="overflow-x-auto">
         <div ref={tableRef}>
           <Table>
           <TableHeader className="sticky top-0 z-10 bg-background">
