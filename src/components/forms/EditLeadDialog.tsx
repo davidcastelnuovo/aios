@@ -26,6 +26,10 @@ const formSchema = z.object({
   status: z.string().optional(),
   response_status: z.string().optional(),
   estimated_deal_value: z.string().optional(),
+  monthly_budget: z.string().optional(),
+  three_month_budget: z.string().optional(),
+  proposal_date: z.date().optional(),
+  sale_date: z.date().optional(),
   industry: z.string().optional(),
   products: z.string().optional(),
   notes: z.string().optional(),
@@ -58,6 +62,10 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
       status: lead.status || "new",
       response_status: lead.response_status || "",
       estimated_deal_value: lead.estimated_deal_value?.toString() || "",
+      monthly_budget: lead.monthly_budget?.toString() || "",
+      three_month_budget: lead.three_month_budget?.toString() || "",
+      proposal_date: lead.proposal_date ? new Date(lead.proposal_date) : undefined,
+      sale_date: lead.sale_date ? new Date(lead.sale_date) : undefined,
       industry: lead.industry || "",
       products: lead.products || "",
       notes: lead.notes || "",
@@ -112,6 +120,10 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
         estimated_deal_value: values.estimated_deal_value 
           ? parseFloat(values.estimated_deal_value) 
           : null,
+        monthly_budget: values.monthly_budget ? parseFloat(values.monthly_budget) : null,
+        three_month_budget: values.three_month_budget ? parseFloat(values.three_month_budget) : null,
+        proposal_date: values.proposal_date || null,
+        sale_date: values.sale_date || null,
         industry: values.industry || null,
         products: values.products || null,
         notes: values.notes || null,
@@ -373,6 +385,36 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
               />
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="monthly_budget"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>הצעה חודשית (₪)</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="three_month_budget"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>הצעת 3 חודשים (₪)</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
             <FormField
               control={form.control}
               name="created_at"
@@ -412,6 +454,88 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                 </FormItem>
               )}
             />
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="proposal_date"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>תאריך הצעה</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-right font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "dd/MM/yyyy")
+                            ) : (
+                              <span>בחר תאריך</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 bg-background z-50" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="sale_date"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>תאריך מכירה</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-right font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "dd/MM/yyyy")
+                            ) : (
+                              <span>בחר תאריך</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 bg-background z-50" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             {showLostReason && (
               <FormField
