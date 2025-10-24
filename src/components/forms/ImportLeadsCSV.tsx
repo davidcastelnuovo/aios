@@ -95,20 +95,60 @@ export function ImportLeadsCSV() {
           if (!value) return;
           const k = normalize(key);
 
-          if (k.includes("שמהעסק") || k.includes("שםהחברה") || k.includes("שחברה")) {
+          // Company / contact names
+          if (
+            k.includes("שמהעסק") ||
+            k.includes("שםהחברה") ||
+            k.includes("שחברה") ||
+            k.includes("שםעסק") ||
+            k.includes("שםלקוח")
+          ) {
             lead.company_name = value;
-          } else if (k.includes("שמקשר") || k.includes("אישקשר")) {
+          } else if (
+            k === "שם" ||
+            k.includes("שםמלא") ||
+            k.includes("שםפרטי") ||
+            k.includes("שמקשר") ||
+            k.includes("אישקשר")
+          ) {
+            // Only set contact_name when it's not clearly business name
             lead.contact_name = value;
-          } else if (k.includes("מייל") || k.includes("אימייל") || k.includes("email")) {
+          }
+          // Email
+          else if (
+            k.includes("מייל") ||
+            k.includes("אימייל") ||
+            k.includes("email") ||
+            k.includes("דואל") ||
+            k.includes("דוא")
+          ) {
             lead.email = value;
-          } else if (k.includes("טלפון") || k.includes("פלאפון") || k.includes("phone") || k.includes("פרוק")) {
+          }
+          // Phone
+          else if (
+            k.includes("טלפון") ||
+            k.includes("טל") ||
+            k.includes("פלאפון") ||
+            k.includes("phone") ||
+            k.includes("נייד") ||
+            k.includes("סלולרי") ||
+            k.includes("פרוק")
+          ) {
             lead.phone = value;
-          } else if (k.includes("סטטוס")) {
+          }
+          // Status fields
+          else if (k.includes("סטטוס")) {
             lead.response_status = mapResponse(value);
             lead.general_status = value;
           } else if (k.includes("שלב")) {
             lead.status = mapStage(value);
-          } else if (k.includes("שווייעסקה") || k.includes("שוויםשוער") || k.includes("שוי")) {
+          }
+          // Numeric budgets / values
+          else if (
+            k.includes("שווייעסקה") ||
+            k.includes("שוויםשוער") ||
+            k.includes("שוי")
+          ) {
             const n = parseFloat(value.replace(/[^\d.-]/g, ""));
             if (!Number.isNaN(n)) lead.estimated_deal_value = n;
           } else if (k.includes("חדפ") || k.includes("חודשית")) {
@@ -117,19 +157,27 @@ export function ImportLeadsCSV() {
           } else if (k.includes("3חודש") || k.includes("שלושהחודש")) {
             const n = parseFloat(value.replace(/[^\d.-]/g, ""));
             if (!Number.isNaN(n)) lead.three_month_budget = n;
-          } else if (k.includes("תאריך") && k.includes("הצעה")) {
+          }
+          // Dates
+          else if (k.includes("תאריך") && k.includes("הצעה")) {
             const d = new Date(value);
             if (!isNaN(d as any)) lead.proposal_date = d.toISOString().split("T")[0];
-          } else if (k.includes("תאריך") && (k.includes("מכירה") || k.includes("חתימה") || k.includes("סגירה"))) {
+          } else if (
+            k.includes("תאריך") &&
+            (k.includes("מכירה") || k.includes("חתימה") || k.includes("סגירה"))
+          ) {
             const d = new Date(value);
             if (!isNaN(d as any)) {
               const ds = d.toISOString().split("T")[0];
               lead.sale_date = ds;
               lead.closing_date = ds;
             }
-          } else if (k.includes("מוצרים") || k.includes("מוצר")) {
+          }
+          // Products / source
+          else if (k.includes("מוצרים") || k.includes("מוצר")) {
             lead.products = value;
           } else if (k.includes("מקור") || k.includes("הפניה") || k.includes("המלצה")) {
+            // Free text source per user request
             lead.source = value;
           }
         });
