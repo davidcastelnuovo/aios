@@ -51,9 +51,11 @@ export function UpdateLeadsCompanyName() {
           const value = (raw as string)?.toString().trim();
           if (!value) return;
           const k = normalize(key);
+          const rawKey = (key as string)?.toString().trim();
 
           // שם עסק
           if (
+            rawKey === "שם העסק" ||
             k.includes("שמהעסק") ||
             k.includes("שםהחברה") ||
             k.includes("שחברה") ||
