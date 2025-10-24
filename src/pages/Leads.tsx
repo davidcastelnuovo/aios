@@ -336,6 +336,7 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
 }) {
   const scrollbarRef = useRef<HTMLDivElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const xContainerRef = useRef<HTMLDivElement>(null);
   const [tableWidth, setTableWidth] = useState(0);
 
   // Update table width when table size changes
@@ -359,6 +360,21 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
 
     return () => {
       resizeObserver.disconnect();
+    };
+  }, [stageLeads]);
+
+  // Sync top scrollbar with table
+  useEffect(() => {
+    const bar = scrollbarRef.current;
+    const x = xContainerRef.current;
+    if (!bar || !x) return;
+    const onBar = () => { x.scrollLeft = bar.scrollLeft; };
+    const onX = () => { bar.scrollLeft = x.scrollLeft; };
+    bar.addEventListener('scroll', onBar);
+    x.addEventListener('scroll', onX);
+    return () => {
+      bar.removeEventListener('scroll', onBar);
+      x.removeEventListener('scroll', onX);
     };
   }, [stageLeads]);
 
@@ -393,9 +409,8 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
             ) : (
               <div ref={tableContainerRef}>
                 <TableWithStickyScroll 
-                  stageLeads={stageLeads} 
-                  scrollbarRef={scrollbarRef}
-                  tableWidth={tableWidth}
+                  stageLeads={stageLeads}
+                  xContainerRef={xContainerRef}
                 />
               </div>
             )}
@@ -654,9 +669,7 @@ export default function Leads() {
   );
 }
 
-function TableWithStickyScroll({ stageLeads, scrollbarRef, tableWidth }: { stageLeads: any[]; scrollbarRef: React.RefObject<HTMLDivElement>; tableWidth: number }) {
-  const xContainerRef = useRef<HTMLDivElement>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
+function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[]; xContainerRef: React.RefObject<HTMLDivElement> }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -708,35 +721,14 @@ function TableWithStickyScroll({ stageLeads, scrollbarRef, tableWidth }: { stage
     },
   });
 
-  // Sync scrolling between header scrollbar and table
-  useEffect(() => {
-    const scrollbar = scrollbarRef.current;
-    const xContainer = xContainerRef.current;
+  // Scrolling sync handled in parent (StageTable)
 
-    if (!scrollbar || !xContainer) return;
-
-    const handleScrollbarScroll = () => {
-      xContainer.scrollLeft = scrollbar.scrollLeft;
-    };
-
-    const handleTableScroll = () => {
-      scrollbar.scrollLeft = xContainer.scrollLeft;
-    };
-
-    scrollbar.addEventListener('scroll', handleScrollbarScroll);
-    xContainer.addEventListener('scroll', handleTableScroll);
-
-    return () => {
-      scrollbar.removeEventListener('scroll', handleScrollbarScroll);
-      xContainer.removeEventListener('scroll', handleTableScroll);
-    };
-  }, [scrollbarRef]);
 
   return (
     <div className="max-h-[500px] overflow-y-auto">
       {/* Horizontal scroll container */}
       <div ref={xContainerRef} className="overflow-x-auto">
-        <div ref={tableRef}>
+        <div>
           <Table>
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
