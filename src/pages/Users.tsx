@@ -62,6 +62,7 @@ export default function Users() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<UserRole>("campaigner");
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
+  const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [editAgenciesUserId, setEditAgenciesUserId] = useState<string | null>(null);
   const [editAgenciesUserEmail, setEditAgenciesUserEmail] = useState<string>("");
   const [editPermissionsUserId, setEditPermissionsUserId] = useState<string | null>(null);
@@ -151,7 +152,7 @@ export default function Users() {
 
 
   const inviteUserMutation = useMutation({
-    mutationFn: async ({ email, role, agencyIds }: { email: string; role: UserRole; agencyIds: string[] }) => {
+    mutationFn: async ({ email, role, agencyIds, modulePermissions }: { email: string; role: UserRole; agencyIds: string[]; modulePermissions: string[] }) => {
       const { data: { session } } = await supabase.auth.getSession();
       
       if (!session) {
@@ -163,6 +164,7 @@ export default function Users() {
           email, 
           role,
           agencyIds,
+          modulePermissions,
           redirectUrl: `${window.location.origin}/setup`
         },
         headers: {
@@ -181,6 +183,7 @@ export default function Users() {
       setInviteEmail("");
       setInviteRole("campaigner");
       setSelectedAgencies([]);
+      setSelectedModules([]);
     },
     onError: (error: Error) => {
       toast.error("שגיאה בשליחת הזמנה: " + error.message);
@@ -315,12 +318,61 @@ export default function Users() {
                   </p>
                 )}
               </div>
+              <div>
+                <Label>הרשאות מודולים</Label>
+                <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
+                  {[
+                    { id: "leads", name: "ניהול לידים" },
+                    { id: "clients", name: "ניהול לקוחות" },
+                    { id: "client_onboarding", name: "קליטת לקוחות" },
+                    { id: "campaigners", name: "ניהול קמפיינרים" },
+                    { id: "agencies", name: "ניהול סוכנויות" },
+                    { id: "sales_people", name: "ניהול אנשי מכירות" },
+                    { id: "suppliers", name: "ניהול ספקים" },
+                    { id: "tasks", name: "משימות" },
+                    { id: "finance", name: "פיננסים" },
+                    { id: "reports", name: "דוחות" },
+                    { id: "time_tracking", name: "מעקב זמן" },
+                  ].map((module) => (
+                    <div key={module.id} className="flex items-center space-x-2 space-x-reverse">
+                      <input
+                        type="checkbox"
+                        id={`module-${module.id}`}
+                        checked={selectedModules.includes(module.id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedModules([...selectedModules, module.id]);
+                          } else {
+                            setSelectedModules(selectedModules.filter((id) => id !== module.id));
+                          }
+                        }}
+                        className="rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                      <label
+                        htmlFor={`module-${module.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        {module.name}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+                {selectedModules.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    נבחרו {selectedModules.length} מודולים
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  מודולים שלא נבחרו יהיו נעולים למשתמש
+                </p>
+              </div>
               <Button
                 onClick={() =>
                   inviteUserMutation.mutate({
                     email: inviteEmail,
                     role: inviteRole,
                     agencyIds: selectedAgencies,
+                    modulePermissions: selectedModules,
                   })
                 }
                 disabled={!inviteEmail || inviteUserMutation.isPending}

@@ -11,6 +11,7 @@ interface InviteUserRequest {
   email: string;
   role: string;
   agencyIds?: string[];
+  modulePermissions?: string[];
   redirectUrl?: string;
 }
 
@@ -60,7 +61,7 @@ serve(async (req: Request) => {
       throw new Error("Only owners and agency owners can invite users");
     }
 
-    const { email, role, agencyIds, redirectUrl }: InviteUserRequest = await req.json();
+    const { email, role, agencyIds, modulePermissions, redirectUrl }: InviteUserRequest = await req.json();
 
     if (!email || !role) {
       throw new Error("Email and role are required");
@@ -143,6 +144,24 @@ serve(async (req: Request) => {
           }
         } else {
           console.log("User has no campaigner_id, skipping agency links");
+        }
+      }
+
+      // Set module permissions
+      if (modulePermissions && modulePermissions.length > 0) {
+        const permissions = modulePermissions.map((module) => ({
+          user_id: inviteData.user.id,
+          module: module,
+          can_access: true,
+        }));
+
+        const { error: permissionsError } = await supabaseAdmin
+          .from("user_permissions")
+          .insert(permissions);
+
+        if (permissionsError) {
+          console.error("Error setting module permissions:", permissionsError);
+          // Don't throw - the user was created, just log the error
         }
       }
     }
