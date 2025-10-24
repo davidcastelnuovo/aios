@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar, Search } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -29,13 +29,14 @@ import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, 
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState, ReactNode, useRef, useEffect } from "react";
+import { useState, ReactNode, useRef, useEffect, useMemo } from "react";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
 
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100/50", borderColor: "border-blue-500" },
@@ -333,6 +334,7 @@ export default function Leads() {
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
+  const [searchQuery, setSearchQuery] = useState("");
   const [openTables, setOpenTables] = useState<Record<string, boolean>>({
     new: false,
     contacted: false,
@@ -426,11 +428,27 @@ export default function Leads() {
     }
   };
 
+  const filteredLeads = useMemo(() => {
+    if (!leads) return [];
+    if (!searchQuery.trim()) return leads;
+
+    const query = searchQuery.toLowerCase().trim();
+    return leads.filter((lead: any) => {
+      const contactName = lead.contact_name?.toLowerCase() || "";
+      const companyName = lead.company_name?.toLowerCase() || "";
+      const phone = lead.phone?.toLowerCase() || "";
+      
+      return contactName.includes(query) || 
+             companyName.includes(query) || 
+             phone.includes(query);
+    });
+  }, [leads, searchQuery]);
+
   const getLeadsByStage = (stageId: string) => {
-    return leads?.filter((lead: any) => lead.status === stageId) || [];
+    return filteredLeads?.filter((lead: any) => lead.status === stageId) || [];
   };
 
-  const activeLead = leads?.find((lead: any) => lead.id === activeId);
+  const activeLead = filteredLeads?.find((lead: any) => lead.id === activeId);
 
   if (isLoading) {
     return <div className="flex justify-center p-8">טוען...</div>;
@@ -438,10 +456,20 @@ export default function Leads() {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex justify-between items-center">
-      <div>
-        <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
-      </div>
+      <div className="flex justify-between items-start gap-4">
+        <div className="flex-1 max-w-md">
+          <h1 className="text-3xl font-bold mb-4">לידים - Pipeline</h1>
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="חיפוש לפי שם, טלפון או חברה..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pr-10"
+            />
+          </div>
+        </div>
         <div className="flex gap-3 items-center">
           {/* View mode toggle */}
           <div className="flex gap-1 border rounded-md p-1">
