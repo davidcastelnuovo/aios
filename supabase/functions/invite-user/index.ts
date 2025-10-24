@@ -83,7 +83,35 @@ serve(async (req: Request) => {
 
     console.log(`${resend ? 'Resending' : 'Inviting'} user: ${email}${role ? ` with role: ${role}` : ''}`);
 
-    // Invite user via admin API
+    // For resend, use resetPasswordForEmail to send reset link to existing user
+    if (resend) {
+      const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(
+        email,
+        {
+          redirectTo: redirectUrl || `${Deno.env.get("SUPABASE_URL")}/auth/v1/verify`
+        }
+      );
+
+      if (resetError) {
+        console.error("Error sending password reset:", resetError);
+        throw resetError;
+      }
+
+      console.log("Password reset email sent successfully for resend");
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Invitation resent successfully",
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // For new invites, use inviteUserByEmail
     const inviteOptions: { redirectTo?: string; data?: Record<string, any> } = {};
     
     if (role) {
