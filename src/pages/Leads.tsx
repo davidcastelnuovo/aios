@@ -701,29 +701,31 @@ export default function Leads() {
                 <SheetHeader>
                   <SheetTitle>בחר שלב במשפך</SheetTitle>
                 </SheetHeader>
-                <div className="grid gap-3 mt-6">
-                  {PIPELINE_STAGES.map((stage) => {
-                    const stageLeads = getLeadsByStage(stage.id);
-                    const isSelected = selectedMobileStage === stage.id;
-                    return (
-                      <Button
-                        key={stage.id}
-                        variant={isSelected ? "default" : "outline"}
-                        size="lg"
-                        onClick={() => {
-                          setSelectedMobileStage(stage.id);
-                          setMobileSheetOpen(false);
-                        }}
-                        className={`justify-between h-auto py-4 ${stage.bgClass}`}
-                      >
-                        <span className="text-lg font-semibold">{stage.label}</span>
-                        <Badge variant={isSelected ? "secondary" : "default"}>
-                          {stageLeads.length}
-                        </Badge>
-                      </Button>
-                    );
-                  })}
-                </div>
+                <ScrollArea className="h-[320px] mt-6">
+                  <div className="grid gap-3 px-1">
+                    {PIPELINE_STAGES.map((stage) => {
+                      const stageLeads = getLeadsByStage(stage.id);
+                      const isSelected = selectedMobileStage === stage.id;
+                      return (
+                        <Button
+                          key={stage.id}
+                          variant={isSelected ? "default" : "outline"}
+                          size="lg"
+                          onClick={() => {
+                            setSelectedMobileStage(stage.id);
+                            setMobileSheetOpen(false);
+                          }}
+                          className={`justify-between h-auto py-4 ${stage.bgClass}`}
+                        >
+                          <span className="text-lg font-semibold">{stage.label}</span>
+                          <Badge variant={isSelected ? "secondary" : "default"}>
+                            {stageLeads.length}
+                          </Badge>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                </ScrollArea>
               </SheetContent>
             </Sheet>
           </div>
