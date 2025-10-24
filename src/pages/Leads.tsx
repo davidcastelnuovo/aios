@@ -73,16 +73,12 @@ function DroppableStage({ stage, children }: { stage: any; children: ReactNode }
         }`}
       >
         <div 
-          className={`${stage.color} relative p-4 py-3 font-semibold text-center rounded-md shadow-md overflow-visible`}
+          className={`${stage.color} relative p-4 py-3 font-semibold text-center shadow-md overflow-visible`}
+          style={{
+            clipPath: "polygon(0 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 0 100%, 20px 50%)"
+          }}
         >
-          <div
-            className={`${stage.color} absolute -left-5 top-0 h-full w-5 rounded-l-sm`}
-            style={{
-              clipPath: "polygon(0 50%, 100% 0, 100% 100%)",
-              filter: "drop-shadow(0 2px 4px hsl(var(--foreground)/0.06))",
-            }}
-          />
-          <div className="relative z-10">
+          <div className="relative z-10 px-4">
             {stage.label}
             <span className="mr-2 text-sm">({leadsCount})</span>
           </div>
