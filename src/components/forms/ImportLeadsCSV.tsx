@@ -145,7 +145,7 @@ export function ImportLeadsCSV() {
 
         if (!lead.status) lead.status = "new";
         if (lead.proposal_date && lead.status === "new") lead.status = "proposal_sent";
-        if (!lead.company_name) lead.company_name = lead.contact_name || "לא צוין";
+        if (!lead.company_name && lead.contact_name) lead.company_name = lead.contact_name;
 
         // Force assignment per user request
         lead.agency_id = promoAgency.id;
@@ -153,7 +153,18 @@ export function ImportLeadsCSV() {
         return lead;
       });
 
-      const validLeads = mapped.filter((l) => l.company_name);
+      const validLeads = mapped.filter((l) => {
+        const name = (l.company_name || '').trim();
+        const contact = (l.contact_name || '').trim();
+        const email = (l.email || '').trim();
+        const phone = (l.phone || '').trim();
+        // Require at least one identifying/contact field
+        if (!name && !contact && !email && !phone) return false;
+        // Skip placeholder-only rows
+        if ((name === 'לא צוין' || name === 'לא צויין') && !contact && !email && !phone) return false;
+        return true;
+      });
+      const skipped = mapped.length - validLeads.length;
       if (validLeads.length === 0) {
         throw new Error("לא נמצאו לידים תקינים בקובץ");
       }
@@ -164,7 +175,7 @@ export function ImportLeadsCSV() {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       toast({
         title: "הצלחה!",
-        description: `${validLeads.length} לידים יובאו והוקצו לסוכנות promo ולאיש מכירות זיו`,
+        description: `${validLeads.length} לידים יובאו והוקצו לסוכנות promo ולאיש מכירות זיו${skipped > 0 ? ` (דילגנו על ${skipped} שורות ריקות)` : ""}`,
       });
 
       setOpen(false);
