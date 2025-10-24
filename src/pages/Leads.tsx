@@ -716,7 +716,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
           <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="text-right">שם</TableHead>
+              <TableHead className="text-right sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10">שם</TableHead>
               <TableHead className="text-right">טלפון</TableHead>
               <TableHead className="text-right">אימייל</TableHead>
               <TableHead className="text-right">שם חברה</TableHead>
@@ -728,7 +728,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
           <TableBody>
             {stageLeads.map((lead: any) => (
               <TableRow key={lead.id}>
-                <TableCell className="font-medium">
+                <TableCell className="font-medium sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10">
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4" />
                     {lead.contact_name || "-"}
