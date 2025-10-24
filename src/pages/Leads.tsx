@@ -701,17 +701,17 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
       {/* Sticky top scrollbar inside vertical container */}
       <div 
         ref={topScrollRef}
-        className="overflow-x-auto sticky top-0 z-20 bg-muted/50 border-b"
-        style={{ overflowY: 'hidden', height: '12px' }}
+        className="overflow-x-auto sticky top-12 z-40 bg-muted/60 border-b shadow-inner pointer-events-auto"
+        style={{ overflowY: 'hidden', height: '16px' }}
       >
-        <div style={{ width: `${tableWidth}px`, height: '10px' }} />
+        <div style={{ width: `${tableWidth}px`, height: '8px' }} />
       </div>
 
       {/* Horizontal scroll container */}
-      <div ref={xContainerRef} className="overflow-x-auto">
+      <div ref={xContainerRef} className="overflow-x-auto pt-4">
         <div ref={tableRef}>
           <Table>
-          <TableHeader className="sticky top-0 z-10 bg-background">
+          <TableHeader className="sticky top-12 z-10 bg-background">
             <TableRow>
               <TableHead className="text-right sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20">שם</TableHead>
               <TableHead className="text-right bg-background">טלפון</TableHead>
