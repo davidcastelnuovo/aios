@@ -73,11 +73,20 @@ function DroppableStage({ stage, children }: { stage: any; children: ReactNode }
         }`}
       >
         <div 
-          className={`${stage.color} relative p-4 py-3 font-semibold text-center shadow-md overflow-visible`}
+          className={`${stage.color} relative p-4 py-3 font-semibold text-center shadow-md overflow-hidden`}
           style={{
-            clipPath: "polygon(25px 0, 100% 0, 100% 100%, 25px 100%, 0 50%)"
+            clipPath: "polygon(0 0, calc(100% - 20px) 0, 100% 50%, calc(100% - 20px) 100%, 0 100%)"
           }}
         >
+          {/* negative tail notch */}
+          <div
+            className="absolute inset-y-0 left-0 w-5"
+            style={{
+              background: "hsl(var(--background))",
+              clipPath: "polygon(0 0, 100% 50%, 0 100%)"
+            }}
+            aria-hidden="true"
+          />
           <div className="relative z-10 px-6">
             {stage.label}
             <span className="mr-2 text-sm">({leadsCount})</span>
