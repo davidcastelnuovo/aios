@@ -36,16 +36,16 @@ export default function SalesDashboard() {
           .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
         newValue: data
           .filter(l => l.status === "new")
-          .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
+          .reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
         contactedValue: data
           .filter(l => l.status === "contacted")
-          .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
+          .reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
         followUpValue: data
           .filter(l => l.status === "follow_up")
-          .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
+          .reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
         proposalValue: data
           .filter(l => l.status === "proposal_sent")
-          .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
+          .reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
         totalMonthlyBudget: data.reduce((sum, l) => sum + (l.monthly_budget || 0), 0),
         totalThreeMonthBudget: data.reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
         closedMonthlyBudget: data
