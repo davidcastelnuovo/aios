@@ -41,7 +41,7 @@ import { Input } from "@/components/ui/input";
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100/50", borderColor: "border-blue-500" },
   { id: "contacted", label: "נוצר קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100/50", borderColor: "border-purple-500" },
-  { id: "follow_up", label: "תהליך פולואפ", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100/50", borderColor: "border-yellow-500" },
+  { id: "follow_up", label: "בתהליך", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100/50", borderColor: "border-yellow-500" },
   { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100/50", borderColor: "border-orange-500" },
   { id: "closed", label: "נסגר", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100/50", borderColor: "border-green-500" },
 ];
@@ -100,7 +100,6 @@ function DroppableStage({ stage, children }: { stage: any; children: ReactNode }
           />
           <div className="relative z-10 px-6">
             {stage.label}
-            <span className="mr-2 text-sm">({leadsCount})</span>
           </div>
         </div>
         <div className="bg-muted/30 rounded-b-lg p-4 flex-1 space-y-3 min-h-[550px]">
@@ -393,7 +392,7 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
         <CollapsibleTrigger asChild>
           <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors sticky top-0 z-30 bg-card pb-2">
             <CardTitle className="text-xl flex items-center justify-between">
-              <span>{stage.label} ({stageLeads.length})</span>
+              <span>{stage.label}</span>
               <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
             </CardTitle>
           </CardHeader>
