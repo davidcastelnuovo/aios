@@ -28,9 +28,11 @@ type ModuleConfig = {
 
 const MODULES: ModuleConfig[] = [
   { id: "dashboard", label: "דשבורד", description: "מבט על כללי על המערכת" },
+  { id: "leads", label: "לידים", description: "ניהול לידים ומעקב אחר הזדמנויות" },
   { id: "clients", label: "לקוחות", description: "ניהול לקוחות" },
   { id: "agencies", label: "סוכנויות", description: "ניהול סוכנויות" },
   { id: "campaigners", label: "קמפיינרים", description: "ניהול קמפיינרים" },
+  { id: "sales_people", label: "אנשי מכירות", description: "ניהול אנשי מכירות" },
   { id: "suppliers", label: "ספקים", description: "ניהול ספקים" },
   { id: "tasks", label: "משימות", description: "ניהול משימות" },
   { id: "client_onboarding", label: "קליטת לקוחות", description: "תהליך קליטה" },
