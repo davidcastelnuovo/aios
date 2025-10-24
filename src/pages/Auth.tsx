@@ -22,26 +22,35 @@ export default function Auth() {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    // Handle password recovery/invite redirect by exchanging the code for a session
     const init = async () => {
       const type = searchParams.get("type");
       const code = searchParams.get("code");
 
+      // If we have a code param, try to exchange it for a session
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
+          console.error("exchangeCodeForSession error:", error);
           toast({ title: "שגיאה", description: error.message, variant: "destructive" });
-          return;
         }
       }
 
+      // Check if user is already authenticated after code exchange
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        // Already logged in, redirect to profile
+        navigate("/my-profile");
+        return;
+      }
+
+      // If recovery type, show password update mode
       if (type === "recovery") {
         setUpdatePasswordMode(true);
       }
     };
 
     init();
-  }, [searchParams]);
+  }, [searchParams, navigate]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
