@@ -363,14 +363,14 @@ export default function Users() {
               <div>
                 <Label htmlFor="campaigner">קמפיינר משויך (אופציונלי)</Label>
                 <Select
-                  value={selectedCampaignerId}
-                  onValueChange={setSelectedCampaignerId}
+                  value={selectedCampaignerId || "none"}
+                  onValueChange={(value) => setSelectedCampaignerId(value === "none" ? "" : value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="בחר קמפיינר" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">ללא שיוך</SelectItem>
+                    <SelectItem value="none">ללא שיוך</SelectItem>
                     {campaigners?.map((campaigner) => (
                       <SelectItem key={campaigner.id} value={campaigner.id}>
                         {campaigner.full_name}
@@ -384,14 +384,14 @@ export default function Users() {
               <div>
                 <Label htmlFor="sales-person">איש מכירות משויך (אופציונלי)</Label>
                 <Select
-                  value={selectedSalesPersonId}
-                  onValueChange={setSelectedSalesPersonId}
+                  value={selectedSalesPersonId || "none"}
+                  onValueChange={(value) => setSelectedSalesPersonId(value === "none" ? "" : value)}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="בחר איש מכירות" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">ללא שיוך</SelectItem>
+                    <SelectItem value="none">ללא שיוך</SelectItem>
                     {salesPeople?.map((salesPerson) => (
                       <SelectItem key={salesPerson.id} value={salesPerson.id}>
                         {salesPerson.full_name}
