@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Shield, UserPlus, Trash2, Settings, Lock } from "lucide-react";
+import { Shield, UserPlus, Trash2, Settings, Lock, Mail } from "lucide-react";
 import { useState } from "react";
 import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialog";
 import { EditUserPermissionsDialog } from "@/components/forms/EditUserPermissionsDialog";
@@ -207,6 +207,37 @@ export default function Users() {
     },
     onError: (error: Error) => {
       toast.error("שגיאה במחיקת משתמש: " + error.message);
+    },
+  });
+
+  const resendInviteMutation = useMutation({
+    mutationFn: async ({ email }: { email: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        throw new Error("No active session");
+      }
+
+      const { data, error } = await supabase.functions.invoke("invite-user", {
+        body: { 
+          email,
+          resend: true,
+          redirectUrl: `${window.location.origin}/setup`
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      toast.success("הזמנה נשלחה מחדש בהצלחה");
+    },
+    onError: (error: Error) => {
+      toast.error("שגיאה בשליחת הזמנה מחדש: " + error.message);
     },
   });
 
@@ -495,6 +526,19 @@ export default function Users() {
                         title="ערוך הרשאות"
                       >
                         <Lock className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                          if (confirm(`האם לשלוח הזמנה מחדש ל-${user.email}?`)) {
+                            resendInviteMutation.mutate({ email: user.email });
+                          }
+                        }}
+                        disabled={resendInviteMutation.isPending}
+                        title="שלח הזמנה מחדש"
+                      >
+                        <Mail className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="destructive"

@@ -9,10 +9,11 @@ const corsHeaders = {
 
 interface InviteUserRequest {
   email: string;
-  role: string;
+  role?: string;
   agencyIds?: string[];
   modulePermissions?: string[];
   redirectUrl?: string;
+  resend?: boolean;
 }
 
 serve(async (req: Request) => {
@@ -61,24 +62,34 @@ serve(async (req: Request) => {
       throw new Error("Only owners and agency owners can invite users");
     }
 
-    const { email, role, agencyIds, modulePermissions, redirectUrl }: InviteUserRequest = await req.json();
+    const { email, role, agencyIds, modulePermissions, redirectUrl, resend }: InviteUserRequest = await req.json();
 
-    if (!email || !role) {
-      throw new Error("Email and role are required");
+    if (!email) {
+      throw new Error("Email is required");
     }
 
-    // Validate role
-    const validRoles = ["owner", "agency_owner", "team_manager", "campaigner"];
-    if (!validRoles.includes(role)) {
-      throw new Error("Invalid role");
+    // If resend is true, we don't need role validation
+    if (!resend) {
+      if (!role) {
+        throw new Error("Role is required for new invites");
+      }
+
+      // Validate role
+      const validRoles = ["owner", "agency_owner", "team_manager", "campaigner"];
+      if (!validRoles.includes(role)) {
+        throw new Error("Invalid role");
+      }
     }
 
-    console.log(`Inviting user: ${email} with role: ${role}`);
+    console.log(`${resend ? 'Resending' : 'Inviting'} user: ${email}${role ? ` with role: ${role}` : ''}`);
 
     // Invite user via admin API
-    const inviteOptions: { redirectTo?: string; data: Record<string, any> } = {
-      data: { role }
-    };
+    const inviteOptions: { redirectTo?: string; data?: Record<string, any> } = {};
+    
+    if (role) {
+      inviteOptions.data = { role };
+    }
+    
     if (redirectUrl) {
       inviteOptions.redirectTo = redirectUrl;
     }
@@ -95,8 +106,8 @@ serve(async (req: Request) => {
 
     console.log("User invited successfully:", inviteData);
 
-    // Assign the role to the user
-    if (inviteData.user) {
+    // Assign the role to the user (only if not resending and role is provided)
+    if (inviteData.user && role && !resend) {
       // First delete any existing roles (especially the default "campaigner" from handle_new_user trigger)
       await supabaseAdmin
         .from("user_roles")
@@ -116,8 +127,8 @@ serve(async (req: Request) => {
         // Don't throw - the user was created, just log the error
       }
 
-      // Link campaigner to agencies ONLY if campaigner_id already exists
-      if (agencyIds && agencyIds.length > 0) {
+      // Link campaigner to agencies ONLY if campaigner_id already exists and not resending
+      if (agencyIds && agencyIds.length > 0 && !resend) {
         // First get user profile to check if campaigner exists
         const { data: profile } = await supabaseAdmin
           .from("profiles")
@@ -147,8 +158,8 @@ serve(async (req: Request) => {
         }
       }
 
-      // Set module permissions
-      if (modulePermissions && modulePermissions.length > 0) {
+      // Set module permissions (only if not resending)
+      if (modulePermissions && modulePermissions.length > 0 && !resend) {
         const permissions = modulePermissions.map((module) => ({
           user_id: inviteData.user.id,
           module: module,
