@@ -411,12 +411,24 @@ export default function SalesDashboard() {
               <CardTitle>עסקאות שנסגרו</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-green-600">
-                ₪{leadsStats?.closedValue?.toLocaleString() || 0}
+              <div className="space-y-3">
+                <div>
+                  <div className="text-2xl font-bold text-green-600">
+                    ₪{leadsStats?.closedMonthlyBudget?.toLocaleString() || 0}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    הצעות חודשיות שנסגרו
+                  </p>
+                </div>
+                <div className="border-t pt-2">
+                  <div className="text-2xl font-bold text-green-600">
+                    ₪{leadsStats?.closedThreeMonthBudget?.toLocaleString() || 0}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    הצעות 3 חודשים שנסגרו
+                  </p>
+                </div>
               </div>
-              <p className="text-sm text-muted-foreground mt-2">
-                סכום עסקאות שנסגרו
-              </p>
             </CardContent>
           </Card>
         </div>
