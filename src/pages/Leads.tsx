@@ -328,6 +328,84 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
   );
 }
 
+function StageTable({ stage, stageLeads, isOpen, onToggle }: { 
+  stage: any; 
+  stageLeads: any[]; 
+  isOpen: boolean; 
+  onToggle: (open: boolean) => void;
+}) {
+  const scrollbarRef = useRef<HTMLDivElement>(null);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [tableWidth, setTableWidth] = useState(0);
+
+  // Update table width when table size changes
+  useEffect(() => {
+    const container = tableContainerRef.current;
+    if (!container) return;
+
+    const updateWidth = () => {
+      const table = container.querySelector('table');
+      if (table) {
+        setTableWidth(table.scrollWidth);
+      }
+    };
+
+    // Initial width
+    updateWidth();
+
+    // Watch for size changes
+    const resizeObserver = new ResizeObserver(updateWidth);
+    resizeObserver.observe(container);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [stageLeads]);
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={onToggle}>
+      <Card className={`border-r-4 ${stage.borderColor} bg-card`}>
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors sticky top-0 z-30 bg-card pb-2">
+            <CardTitle className="text-xl flex items-center justify-between">
+              <span>{stage.label} ({stageLeads.length})</span>
+              <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
+            </CardTitle>
+            
+            {/* Horizontal scrollbar directly under the title */}
+            {isOpen && stageLeads.length > 0 && (
+              <div 
+                ref={scrollbarRef}
+                className="overflow-x-auto bg-muted/30 rounded mt-2"
+                style={{ overflowY: 'hidden', height: '12px' }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ width: `${tableWidth}px`, height: '8px' }} />
+              </div>
+            )}
+          </CardHeader>
+        </CollapsibleTrigger>
+        
+        <CollapsibleContent>
+          <CardContent>
+            {stageLeads.length === 0 ? (
+              <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
+            ) : (
+              <div ref={tableContainerRef}>
+                <TableWithStickyScroll 
+                  stageLeads={stageLeads} 
+                  scrollbarRef={scrollbarRef}
+                  tableWidth={tableWidth}
+                />
+              </div>
+            )}
+          </CardContent>
+        </CollapsibleContent>
+      </Card>
+    </Collapsible>
+  );
+}
+
 export default function Leads() {
   const { toast } = useToast();
   const { selectedAgency } = useAgency();
@@ -561,31 +639,13 @@ export default function Leads() {
           {PIPELINE_STAGES.map((stage) => {
             const stageLeads = getLeadsByStage(stage.id);
             return (
-              <Collapsible 
+              <StageTable 
                 key={stage.id}
-                open={openTables[stage.id]}
-                onOpenChange={(open) => setOpenTables(prev => ({ ...prev, [stage.id]: open }))}
-              >
-                <Card className={`border-r-4 ${stage.borderColor} bg-card`}>
-                  <CollapsibleTrigger asChild>
-                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors sticky top-0 z-30 bg-card">
-                      <CardTitle className="text-xl flex items-center justify-between">
-                        <span>{stage.label} ({stageLeads.length})</span>
-                        <ChevronDown className={`h-5 w-5 transition-transform ${openTables[stage.id] ? '' : '-rotate-90'}`} />
-                      </CardTitle>
-                    </CardHeader>
-                  </CollapsibleTrigger>
-                   <CollapsibleContent>
-                    <CardContent>
-                      {stageLeads.length === 0 ? (
-                        <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
-                      ) : (
-                       <TableWithStickyScroll stageLeads={stageLeads} />
-                      )}
-                    </CardContent>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
+                stage={stage}
+                stageLeads={stageLeads}
+                isOpen={openTables[stage.id]}
+                onToggle={(open) => setOpenTables(prev => ({ ...prev, [stage.id]: open }))}
+              />
             );
           })}
         </div>
@@ -594,12 +654,9 @@ export default function Leads() {
   );
 }
 
-function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
-  const verticalContainerRef = useRef<HTMLDivElement>(null);
-  const topScrollRef = useRef<HTMLDivElement>(null);
+function TableWithStickyScroll({ stageLeads, scrollbarRef, tableWidth }: { stageLeads: any[]; scrollbarRef: React.RefObject<HTMLDivElement>; tableWidth: number }) {
   const xContainerRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLDivElement>(null);
-  const [tableWidth, setTableWidth] = useState(0);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -651,67 +708,37 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
     },
   });
 
-  // Update table width when table size changes
+  // Sync scrolling between header scrollbar and table
   useEffect(() => {
-    const table = tableRef.current;
-    if (!table) return;
-
-    const updateWidth = () => {
-      setTableWidth(table.scrollWidth);
-    };
-
-    // Initial width
-    updateWidth();
-
-    // Watch for size changes
-    const resizeObserver = new ResizeObserver(updateWidth);
-    resizeObserver.observe(table);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [stageLeads]);
-
-  // Sync scrolling between top scrollbar and table
-  useEffect(() => {
-    const topScroll = topScrollRef.current;
+    const scrollbar = scrollbarRef.current;
     const xContainer = xContainerRef.current;
 
-    if (!topScroll || !xContainer) return;
+    if (!scrollbar || !xContainer) return;
 
-    const handleTopScroll = () => {
-      xContainer.scrollLeft = topScroll.scrollLeft;
+    const handleScrollbarScroll = () => {
+      xContainer.scrollLeft = scrollbar.scrollLeft;
     };
 
     const handleTableScroll = () => {
-      topScroll.scrollLeft = xContainer.scrollLeft;
+      scrollbar.scrollLeft = xContainer.scrollLeft;
     };
 
-    topScroll.addEventListener('scroll', handleTopScroll);
+    scrollbar.addEventListener('scroll', handleScrollbarScroll);
     xContainer.addEventListener('scroll', handleTableScroll);
 
     return () => {
-      topScroll.removeEventListener('scroll', handleTopScroll);
+      scrollbar.removeEventListener('scroll', handleScrollbarScroll);
       xContainer.removeEventListener('scroll', handleTableScroll);
     };
-  }, []);
+  }, [scrollbarRef]);
 
   return (
-    <div ref={verticalContainerRef} className="max-h-[500px] overflow-y-auto">
-      {/* Sticky top scrollbar inside vertical container */}
-      <div 
-        ref={topScrollRef}
-        className="overflow-x-auto sticky top-12 z-40 bg-muted/60 border-b shadow-inner pointer-events-auto"
-        style={{ overflowY: 'hidden', height: '16px' }}
-      >
-        <div style={{ width: `${tableWidth}px`, height: '8px' }} />
-      </div>
-
+    <div className="max-h-[500px] overflow-y-auto">
       {/* Horizontal scroll container */}
-      <div ref={xContainerRef} className="overflow-x-auto pt-4">
+      <div ref={xContainerRef} className="overflow-x-auto">
         <div ref={tableRef}>
           <Table>
-          <TableHeader className="sticky top-12 z-10 bg-background">
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead className="text-right sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20">שם</TableHead>
               <TableHead className="text-right bg-background">טלפון</TableHead>
