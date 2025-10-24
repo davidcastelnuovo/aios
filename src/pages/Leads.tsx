@@ -108,9 +108,9 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
 
   const { toast } = useToast();
   const [openSections, setOpenSections] = useState({
-    business: true,
-    dates: true,
-    management: true,
+    business: false,
+    dates: false,
+    management: false,
   });
 
   const toggleSection = (section: 'business' | 'dates' | 'management') => {
@@ -340,11 +340,11 @@ export default function Leads() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
   const [openTables, setOpenTables] = useState<Record<string, boolean>>({
-    new: true,
-    contacted: true,
-    follow_up: true,
-    proposal_sent: true,
-    closed: true,
+    new: false,
+    contacted: false,
+    follow_up: false,
+    proposal_sent: false,
+    closed: false,
   });
 
   const { data: leads, isLoading, refetch } = useQuery({
