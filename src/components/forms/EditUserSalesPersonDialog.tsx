@@ -30,7 +30,7 @@ export function EditUserSalesPersonDialog({
   onClose,
 }: EditUserSalesPersonDialogProps) {
   const queryClient = useQueryClient();
-  const [selectedSalesPerson, setSelectedSalesPerson] = useState<string>("");
+  const [selectedSalesPerson, setSelectedSalesPerson] = useState<string>("none");
 
   // Fetch all sales people
   const { data: salesPeople } = useQuery({
@@ -66,7 +66,7 @@ export function EditUserSalesPersonDialog({
     if (currentAssignment?.sales_person_id) {
       setSelectedSalesPerson(currentAssignment.sales_person_id);
     } else {
-      setSelectedSalesPerson("");
+      setSelectedSalesPerson("none");
     }
   }, [currentAssignment]);
 
@@ -93,7 +93,7 @@ export function EditUserSalesPersonDialog({
   });
 
   const handleSave = () => {
-    const salesPersonId = selectedSalesPerson === "" ? null : selectedSalesPerson;
+    const salesPersonId = selectedSalesPerson === "none" ? null : selectedSalesPerson;
     updateSalesPersonMutation.mutate(salesPersonId);
   };
 
@@ -114,7 +114,7 @@ export function EditUserSalesPersonDialog({
                 <SelectValue placeholder="בחר איש מכירות" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">ללא שיוך</SelectItem>
+                <SelectItem value="none">ללא שיוך</SelectItem>
                 {salesPeople?.map((sp) => (
                   <SelectItem key={sp.id} value={sp.id}>
                     {sp.full_name}
