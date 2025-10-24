@@ -14,7 +14,7 @@ export default function SalesDashboard() {
     queryFn: async () => {
       let query = supabase
         .from("leads")
-        .select("status, estimated_deal_value");
+        .select("status, estimated_deal_value, monthly_budget, three_month_budget");
 
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
@@ -46,6 +46,14 @@ export default function SalesDashboard() {
         proposalValue: data
           .filter(l => l.status === "proposal_sent")
           .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
+        totalMonthlyBudget: data.reduce((sum, l) => sum + (l.monthly_budget || 0), 0),
+        totalThreeMonthBudget: data.reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
+        closedMonthlyBudget: data
+          .filter(l => l.status === "closed")
+          .reduce((sum, l) => sum + (l.monthly_budget || 0), 0),
+        closedThreeMonthBudget: data
+          .filter(l => l.status === "closed")
+          .reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
       };
 
       return stats;
@@ -422,6 +430,65 @@ export default function SalesDashboard() {
               </div>
               <p className="text-sm text-muted-foreground mt-2">
                 סכום עסקאות שנסגרו
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* הצעות חודשיות */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>סה"כ הצעות חודשיות</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">
+                ₪{leadsStats?.totalMonthlyBudget?.toLocaleString() || 0}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                כל ההצעות החודשיות במשפך
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>הצעות חודשיות שנסגרו</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">
+                ₪{leadsStats?.closedMonthlyBudget?.toLocaleString() || 0}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                הצעות חודשיות שהפכו ללקוחות
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>סה"כ הצעות 3 חודשים</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-600">
+                ₪{leadsStats?.totalThreeMonthBudget?.toLocaleString() || 0}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                כל ההצעות ל-3 חודשים במשפך
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>הצעות 3 חודשים שנסגרו</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-green-600">
+                ₪{leadsStats?.closedThreeMonthBudget?.toLocaleString() || 0}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                הצעות 3 חודשים שהפכו ללקוחות
               </p>
             </CardContent>
           </Card>
