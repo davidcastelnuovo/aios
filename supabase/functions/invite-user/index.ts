@@ -83,21 +83,63 @@ serve(async (req: Request) => {
 
     console.log(`${resend ? 'Resending' : 'Inviting'} user: ${email}${role ? ` with role: ${role}` : ''}`);
 
-    // For resend, use resetPasswordForEmail to send reset link to existing user
+    // For resend, generate a recovery link that allows password reset
     if (resend) {
-      const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(
-        email,
-        {
-          redirectTo: redirectUrl || `${Deno.env.get("SUPABASE_URL")}/auth/v1/verify`
+      // Generate recovery link
+      const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'recovery',
+        email: email,
+        options: {
+          redirectTo: redirectUrl || `${Deno.env.get("SUPABASE_URL")}/setup`
         }
-      );
+      });
 
-      if (resetError) {
-        console.error("Error sending password reset:", resetError);
-        throw resetError;
+      if (linkError) {
+        console.error("Error generating signup link:", linkError);
+        throw linkError;
       }
 
-      console.log("Password reset email sent successfully for resend");
+      // Send email with Resend
+      const resendApiKey = Deno.env.get("RESEND_API_KEY");
+      if (!resendApiKey) {
+        throw new Error("RESEND_API_KEY not configured");
+      }
+
+      const emailResponse = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${resendApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: "After-Lead <onboarding@resend.dev>",
+          to: [email],
+          subject: "הזמנה מחדש למערכת After-Lead",
+          html: `
+            <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h1 style="color: #333;">שלום,</h1>
+              <p>קיבלת הזמנה מחדש להצטרף למערכת After-Lead.</p>
+              <p>לחץ על הכפתור למטה כדי להגדיר את הסיסמה שלך ולהתחבר למערכת:</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${linkData.properties.action_link}" 
+                   style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                  הגדר סיסמה והתחבר
+                </a>
+              </div>
+              <p style="color: #666; font-size: 14px;">הלינק תקף ל-24 שעות.</p>
+              <p style="color: #666; font-size: 14px;">אם לא ביקשת הזמנה זו, אנא התעלם ממייל זה.</p>
+            </div>
+          `,
+        }),
+      });
+
+      if (!emailResponse.ok) {
+        const errorText = await emailResponse.text();
+        console.error("Error sending email via Resend:", errorText);
+        throw new Error("Failed to send invitation email");
+      }
+
+      console.log("Invitation resent successfully via Resend");
 
       return new Response(
         JSON.stringify({
