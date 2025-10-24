@@ -101,7 +101,13 @@ export function ImportLeadsCSV() {
             k.includes("שםהחברה") ||
             k.includes("שחברה") ||
             k.includes("שםעסק") ||
-            k.includes("שםלקוח")
+            k.includes("שםלקוח") ||
+            k.includes("עסק") ||
+            k.includes("חברה") ||
+            k.includes("לקוח") ||
+            k.includes("ארגון") ||
+            k.includes("ארגונקליינט") ||
+            k === "ארגון"
           ) {
             lead.company_name = value;
           } else if (
