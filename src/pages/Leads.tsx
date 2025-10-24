@@ -519,18 +519,17 @@ export default function Leads() {
                       {stageLeads.length === 0 ? (
                         <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
                       ) : (
-                    <ScrollArea className="w-full" dir="rtl">
-                      <div className="min-w-max">
+                    <ScrollArea className="w-full">
                       <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>שם</TableHead>
-                          <TableHead>טלפון</TableHead>
-                          <TableHead>אימייל</TableHead>
-                          <TableHead>שם חברה</TableHead>
-                          <TableHead>שלב במשפך</TableHead>
-                          <TableHead>סטטוס</TableHead>
-                          <TableHead className="text-left">פעולות</TableHead>
+                          <TableHead className="text-right">שם</TableHead>
+                          <TableHead className="text-right">טלפון</TableHead>
+                          <TableHead className="text-right">אימייל</TableHead>
+                          <TableHead className="text-right">שם חברה</TableHead>
+                          <TableHead className="text-right">שלב במשפך</TableHead>
+                          <TableHead className="text-right">סטטוס</TableHead>
+                          <TableHead className="text-right">פעולות</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -639,7 +638,6 @@ export default function Leads() {
                         ))}
                       </TableBody>
                     </Table>
-                    </div>
                     <ScrollBar orientation="horizontal" />
                     </ScrollArea>
                       )}
