@@ -38,6 +38,7 @@ import {
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100/50", borderColor: "border-blue-500" },
@@ -444,6 +445,8 @@ export default function Leads() {
     proposal_sent: false,
     closed: false,
   });
+  const [selectedMobileStage, setSelectedMobileStage] = useState<string>("new");
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
 
   const { data: leads, isLoading, refetch } = useQuery({
     queryKey: ["leads", selectedAgency],
@@ -630,68 +633,99 @@ export default function Leads() {
         </Card>
       ) : viewMode === "kanban" ? (
         <>
-          {/* Mobile Kanban - Tabs */}
-          <div className="block md:hidden">
-            <Tabs defaultValue="new" className="w-full">
-              <TabsList className="w-full grid grid-cols-3 md:grid-cols-5 h-auto">
-                {PIPELINE_STAGES.map((stage) => {
-                  const stageLeads = getLeadsByStage(stage.id);
-                  return (
-                    <TabsTrigger 
-                      key={stage.id} 
-                      value={stage.id}
-                      className="flex flex-col gap-1 py-2 text-xs"
-                    >
-                      <span className="truncate">{stage.label}</span>
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                        {stageLeads.length}
-                      </Badge>
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
-              <DndContext
-                collisionDetection={closestCorners}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-              >
-                {PIPELINE_STAGES.map((stage) => {
-                  const stageLeads = getLeadsByStage(stage.id);
-                  return (
-                    <TabsContent key={stage.id} value={stage.id} className="mt-4">
-                      <DroppableStage stage={stage}>
-                        <SortableContext
-                          id={stage.id}
-                          items={stageLeads.map((l: any) => l.id)}
-                          strategy={verticalListSortingStrategy}
-                        >
-                          {stageLeads.map((lead: any) => (
-                            <LeadCard 
-                              key={lead.id} 
-                              lead={lead}
-                              onStatusChange={(leadId, newStatus) => 
-                                updateLeadStatus.mutate({ 
-                                  leadId, 
-                                  newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
-                                })
-                              }
-                            />
-                          ))}
-                        </SortableContext>
-                      </DroppableStage>
-                    </TabsContent>
-                  );
-                })}
-                <DragOverlay>
-                  {activeId && activeLead ? (
-                    <LeadCard 
-                      lead={activeLead}
-                      onStatusChange={() => {}}
-                    />
-                  ) : null}
-                </DragOverlay>
-              </DndContext>
-            </Tabs>
+          {/* Mobile Kanban - Single Stage with Floating Button */}
+          <div className="block md:hidden relative pb-20">
+            <DndContext
+              collisionDetection={closestCorners}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              {PIPELINE_STAGES.map((stage) => {
+                if (stage.id !== selectedMobileStage) return null;
+                const stageLeads = getLeadsByStage(stage.id);
+                return (
+                  <div key={stage.id}>
+                    <div className="mb-4">
+                      <h2 className="text-xl font-bold flex items-center justify-between">
+                        <span>{stage.label}</span>
+                        <Badge variant="secondary" className="text-sm">
+                          {stageLeads.length} לידים
+                        </Badge>
+                      </h2>
+                    </div>
+                    <DroppableStage stage={stage}>
+                      <SortableContext
+                        id={stage.id}
+                        items={stageLeads.map((l: any) => l.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {stageLeads.map((lead: any) => (
+                          <LeadCard 
+                            key={lead.id} 
+                            lead={lead}
+                            onStatusChange={(leadId, newStatus) => 
+                              updateLeadStatus.mutate({ 
+                                leadId, 
+                                newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
+                              })
+                            }
+                          />
+                        ))}
+                      </SortableContext>
+                    </DroppableStage>
+                  </div>
+                );
+              })}
+              <DragOverlay>
+                {activeId && activeLead ? (
+                  <LeadCard 
+                    lead={activeLead}
+                    onStatusChange={() => {}}
+                  />
+                ) : null}
+              </DragOverlay>
+            </DndContext>
+
+            {/* Floating Stage Selector Button */}
+            <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
+              <SheetTrigger asChild>
+                <Button
+                  size="lg"
+                  className="fixed bottom-6 left-1/2 -translate-x-1/2 shadow-lg z-50 gap-2"
+                >
+                  <LayoutGrid className="h-5 w-5" />
+                  בחר שלב
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="bottom" className="h-[400px]">
+                <SheetHeader>
+                  <SheetTitle>בחר שלב במשפך</SheetTitle>
+                </SheetHeader>
+                <div className="grid gap-3 mt-6">
+                  {PIPELINE_STAGES.map((stage) => {
+                    const stageLeads = getLeadsByStage(stage.id);
+                    const isSelected = selectedMobileStage === stage.id;
+                    return (
+                      <Button
+                        key={stage.id}
+                        variant={isSelected ? "default" : "outline"}
+                        size="lg"
+                        onClick={() => {
+                          setSelectedMobileStage(stage.id);
+                          setMobileSheetOpen(false);
+                        }}
+                        className={`justify-between h-auto py-4 ${stage.bgClass}`}
+                      >
+                        <span className="text-lg font-semibold">{stage.label}</span>
+                        <Badge variant={isSelected ? "secondary" : "default"}>
+                          {stageLeads.length}
+                        </Badge>
+                      </Button>
+                    );
+                  })}
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
 
           {/* Desktop Kanban - Grid */}
