@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.invite-user]
 verify_jwt = true
+
+[functions.cleanup-empty-leads]
+verify_jwt = false
