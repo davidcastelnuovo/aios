@@ -519,7 +519,7 @@ export default function Leads() {
                       {stageLeads.length === 0 ? (
                         <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
                       ) : (
-                    <ScrollArea className="w-full">
+                      <div className="overflow-x-auto">
                       <Table>
                       <TableHeader>
                         <TableRow>
@@ -638,8 +638,7 @@ export default function Leads() {
                         ))}
                       </TableBody>
                     </Table>
-                    <ScrollBar orientation="horizontal" />
-                    </ScrollArea>
+                    </div>
                       )}
                     </CardContent>
                   </CollapsibleContent>
