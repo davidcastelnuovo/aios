@@ -82,6 +82,7 @@ serve(async (req: Request) => {
     }
 
     console.log(`${resend ? 'Resending' : 'Inviting'} user: ${email}${role ? ` with role: ${role}` : ''}`);
+    console.log('Module permissions received:', modulePermissions);
 
     // For resend, send a password reset email using backend mailer (no Resend)
     if (resend) {
@@ -184,6 +185,8 @@ serve(async (req: Request) => {
 
       // Set module permissions (only if not resending)
       if (modulePermissions && modulePermissions.length > 0 && !resend) {
+        console.log('Setting module permissions for user:', inviteData.user.id, 'permissions:', modulePermissions);
+        
         const permissions = modulePermissions.map((module) => ({
           user_id: inviteData.user.id,
           module: module,
@@ -197,7 +200,11 @@ serve(async (req: Request) => {
         if (permissionsError) {
           console.error("Error setting module permissions:", permissionsError);
           // Don't throw - the user was created, just log the error
+        } else {
+          console.log('Module permissions set successfully');
         }
+      } else {
+        console.log('Skipping module permissions - modulePermissions:', modulePermissions, 'length:', modulePermissions?.length, 'resend:', resend);
       }
     }
 
