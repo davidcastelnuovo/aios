@@ -85,8 +85,12 @@ serve(async (req: Request) => {
 
     // For resend, send a password reset email using backend mailer (no Resend)
     if (resend) {
+      // Get the origin from the request
+      const origin = new URL(req.headers.get('referer') || req.url).origin;
+      const setupUrl = `${origin}/setup`;
+      
       const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-        redirectTo: redirectUrl || req.headers.get('referer') || undefined,
+        redirectTo: setupUrl,
       });
 
       if (resetError) {
@@ -94,7 +98,7 @@ serve(async (req: Request) => {
         throw resetError;
       }
 
-      console.log('Password reset email sent successfully for resend');
+      console.log('Password reset email sent successfully for resend to:', setupUrl);
 
       return new Response(
         JSON.stringify({ success: true, message: 'Invitation resent successfully' }),
