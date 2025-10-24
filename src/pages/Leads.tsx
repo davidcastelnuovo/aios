@@ -701,10 +701,10 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
       {/* Sticky top scrollbar inside vertical container */}
       <div 
         ref={topScrollRef}
-        className="overflow-x-auto sticky top-0 z-20 bg-background border-b shadow-sm"
-        style={{ overflowY: 'hidden', height: '16px' }}
+        className="overflow-x-auto sticky top-0 z-20 bg-muted/50 border-b"
+        style={{ overflowY: 'hidden', height: '12px' }}
       >
-        <div style={{ width: `${tableWidth}px`, height: '1px' }} />
+        <div style={{ width: `${tableWidth}px`, height: '10px' }} />
       </div>
 
       {/* Horizontal scroll container */}
