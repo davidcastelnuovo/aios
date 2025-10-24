@@ -363,41 +363,29 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
     };
   }, [stageLeads]);
 
-  // Sync top scrollbar with table
+  // Sync top scrollbar with table - simplified version
   useEffect(() => {
     const bar = scrollbarRef.current;
     const x = xContainerRef.current;
 
-    if (!bar || !x) {
-      // try once on next frame if refs not ready yet
-      const id = requestAnimationFrame(() => {
-        if (scrollbarRef.current && xContainerRef.current) {
-          scrollbarRef.current!.scrollLeft = xContainerRef.current!.scrollLeft;
-        }
-      });
-      return () => cancelAnimationFrame(id);
-    }
+    if (!bar || !x) return;
 
-    const onBar = () => {
+    const onBarScroll = () => {
       x.scrollLeft = bar.scrollLeft;
-      // debug
-      console.debug('TopScrollbar->', { left: bar.scrollLeft });
     };
-    const onX = () => {
+    
+    const onXScroll = () => {
       bar.scrollLeft = x.scrollLeft;
     };
 
-    bar.addEventListener('scroll', onBar);
-    x.addEventListener('scroll', onX);
-
-    // initialize positions
-    bar.scrollLeft = x.scrollLeft;
+    bar.addEventListener('scroll', onBarScroll);
+    x.addEventListener('scroll', onXScroll);
 
     return () => {
-      bar.removeEventListener('scroll', onBar);
-      x.removeEventListener('scroll', onX);
+      bar.removeEventListener('scroll', onBarScroll);
+      x.removeEventListener('scroll', onXScroll);
     };
-  }, [scrollbarRef, xContainerRef, stageLeads]);
+  }, [isOpen, stageLeads]);
 
   return (
     <Collapsible open={isOpen} onOpenChange={onToggle}>
@@ -408,20 +396,20 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
               <span>{stage.label} ({stageLeads.length})</span>
               <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
             </CardTitle>
-            
-            {/* Horizontal scrollbar directly under the title */}
-            {isOpen && stageLeads.length > 0 && (
-              <div 
-                ref={scrollbarRef}
-                className="overflow-x-auto bg-muted/30 rounded mt-2"
-                style={{ overflowY: 'hidden', height: '12px' }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div style={{ width: `${tableWidth}px`, height: '8px' }} />
-              </div>
-            )}
           </CardHeader>
         </CollapsibleTrigger>
+        
+        {/* Horizontal scrollbar directly under the title - stays sticky with header */}
+        {isOpen && stageLeads.length > 0 && (
+          <div 
+            ref={scrollbarRef}
+            className="overflow-x-auto bg-muted/30 rounded mx-6 mt-1 mb-2 sticky top-[72px] z-30"
+            style={{ overflowY: 'hidden', height: '14px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ width: `${tableWidth}px`, height: '10px' }} />
+          </div>
+        )}
         
         <CollapsibleContent>
           <CardContent>
