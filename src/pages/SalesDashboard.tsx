@@ -390,48 +390,32 @@ export default function SalesDashboard() {
           </CardContent>
         </Card>
 
-        {/* שווי פוטנציאלי */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>שווי כולל משוער</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold">
-                ₪{leadsStats?.totalValue?.toLocaleString() || 0}
-              </div>
-              <p className="text-sm text-muted-foreground mt-2">
-                סכום כל הלידים במשפך
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>עסקאות שנסגרו</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div>
-                  <div className="text-2xl font-bold text-green-600">
-                    ₪{leadsStats?.closedMonthlyBudget?.toLocaleString() || 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    הצעות חודשיות שנסגרו
-                  </p>
+        {/* עסקאות שנסגרו */}
+        <Card>
+          <CardHeader>
+            <CardTitle>עסקאות שנסגרו</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div>
+                <div className="text-2xl font-bold text-green-600">
+                  ₪{leadsStats?.closedMonthlyBudget?.toLocaleString() || 0}
                 </div>
-                <div className="border-t pt-2">
-                  <div className="text-2xl font-bold text-green-600">
-                    ₪{leadsStats?.closedThreeMonthBudget?.toLocaleString() || 0}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    הצעות 3 חודשים שנסגרו
-                  </p>
-                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  הצעות חודשיות שנסגרו
+                </p>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+              <div className="border-t pt-2">
+                <div className="text-2xl font-bold text-green-600">
+                  ₪{leadsStats?.closedThreeMonthBudget?.toLocaleString() || 0}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  הצעות 3 חודשים שנסגרו
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* הצעות חודשיות */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
