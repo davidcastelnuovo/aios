@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/collapsible";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100/50", borderColor: "border-blue-500" },
@@ -556,8 +557,29 @@ export default function Leads() {
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex justify-between items-start gap-4">
+    <div className="space-y-6 p-3 md:p-6">
+      {/* Mobile Header */}
+      <div className="block md:hidden space-y-4">
+        <h1 className="text-2xl font-bold">לידים - Pipeline</h1>
+        <div className="relative">
+          <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="חיפוש..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pr-10"
+          />
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <AddLeadForm />
+          <ImportLeadsCSV />
+          <UpdateLeadsCompanyName />
+        </div>
+      </div>
+
+      {/* Desktop Header */}
+      <div className="hidden md:flex justify-between items-start gap-4">
         <div className="flex-1 max-w-md">
           <h1 className="text-3xl font-bold mb-4">לידים - Pipeline</h1>
           <div className="relative">
@@ -607,56 +629,123 @@ export default function Leads() {
           </CardContent>
         </Card>
       ) : viewMode === "kanban" ? (
-        <DndContext
-          collisionDetection={closestCorners}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="grid grid-cols-5 gap-0">
-            {PIPELINE_STAGES.map((stage, index) => {
-              const stageLeads = getLeadsByStage(stage.id);
-              return (
-                <div 
-                  key={stage.id}
-                  className="relative"
-                  style={{
-                    zIndex: PIPELINE_STAGES.length - index,
-                  }}
-                >
-                  <DroppableStage stage={stage}>
-                    <SortableContext
-                      id={stage.id}
-                      items={stageLeads.map((l: any) => l.id)}
-                      strategy={verticalListSortingStrategy}
+        <>
+          {/* Mobile Kanban - Tabs */}
+          <div className="block md:hidden">
+            <Tabs defaultValue="new" className="w-full">
+              <TabsList className="w-full grid grid-cols-3 md:grid-cols-5 h-auto">
+                {PIPELINE_STAGES.map((stage) => {
+                  const stageLeads = getLeadsByStage(stage.id);
+                  return (
+                    <TabsTrigger 
+                      key={stage.id} 
+                      value={stage.id}
+                      className="flex flex-col gap-1 py-2 text-xs"
                     >
-                      {stageLeads.map((lead: any) => (
-                        <LeadCard 
-                          key={lead.id} 
-                          lead={lead}
-                          onStatusChange={(leadId, newStatus) => 
-                            updateLeadStatus.mutate({ 
-                              leadId, 
-                              newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
-                            })
-                          }
-                        />
-                      ))}
-                    </SortableContext>
-                  </DroppableStage>
-                </div>
-              );
-            })}
+                      <span className="truncate">{stage.label}</span>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                        {stageLeads.length}
+                      </Badge>
+                    </TabsTrigger>
+                  );
+                })}
+              </TabsList>
+              <DndContext
+                collisionDetection={closestCorners}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+              >
+                {PIPELINE_STAGES.map((stage) => {
+                  const stageLeads = getLeadsByStage(stage.id);
+                  return (
+                    <TabsContent key={stage.id} value={stage.id} className="mt-4">
+                      <DroppableStage stage={stage}>
+                        <SortableContext
+                          id={stage.id}
+                          items={stageLeads.map((l: any) => l.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          {stageLeads.map((lead: any) => (
+                            <LeadCard 
+                              key={lead.id} 
+                              lead={lead}
+                              onStatusChange={(leadId, newStatus) => 
+                                updateLeadStatus.mutate({ 
+                                  leadId, 
+                                  newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
+                                })
+                              }
+                            />
+                          ))}
+                        </SortableContext>
+                      </DroppableStage>
+                    </TabsContent>
+                  );
+                })}
+                <DragOverlay>
+                  {activeId && activeLead ? (
+                    <LeadCard 
+                      lead={activeLead}
+                      onStatusChange={() => {}}
+                    />
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
+            </Tabs>
           </div>
 
-          <DragOverlay>
-            {activeId && activeLead ? (
-              <LeadCard 
-                lead={activeLead}
-                onStatusChange={() => {}}
-              />
-            ) : null}
-          </DragOverlay>
-        </DndContext>
+          {/* Desktop Kanban - Grid */}
+          <DndContext
+            collisionDetection={closestCorners}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="hidden md:grid grid-cols-5 gap-0">
+              {PIPELINE_STAGES.map((stage, index) => {
+                const stageLeads = getLeadsByStage(stage.id);
+                return (
+                  <div 
+                    key={stage.id}
+                    className="relative"
+                    style={{
+                      zIndex: PIPELINE_STAGES.length - index,
+                    }}
+                  >
+                    <DroppableStage stage={stage}>
+                      <SortableContext
+                        id={stage.id}
+                        items={stageLeads.map((l: any) => l.id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {stageLeads.map((lead: any) => (
+                          <LeadCard 
+                            key={lead.id} 
+                            lead={lead}
+                            onStatusChange={(leadId, newStatus) => 
+                              updateLeadStatus.mutate({ 
+                                leadId, 
+                                newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
+                              })
+                            }
+                          />
+                        ))}
+                      </SortableContext>
+                    </DroppableStage>
+                  </div>
+                );
+              })}
+            </div>
+
+            <DragOverlay>
+              {activeId && activeLead ? (
+                <LeadCard 
+                  lead={activeLead}
+                  onStatusChange={() => {}}
+                />
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        </>
       ) : (
         <div className="space-y-6">
           {PIPELINE_STAGES.map((stage) => {
