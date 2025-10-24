@@ -44,7 +44,7 @@ export default function Auth() {
         title: "ברוך הבא!",
         description: "החשבון נוצר בהצלחה",
       });
-      navigate("/");
+      navigate("/my-profile");
     }
     setLoading(false);
   };
@@ -60,8 +60,8 @@ export default function Auth() {
         variant: "destructive",
       });
     } else {
-      // Redirect to dashboard after successful login
-      navigate("/");
+      // Redirect to personal profile after successful login
+      navigate("/my-profile");
     }
     setLoading(false);
   };
@@ -125,7 +125,7 @@ export default function Auth() {
         title: "הסיסמה עודכנה",
         description: "הסיסמה שלך עודכנה בהצלחה",
       });
-      navigate("/");
+      navigate("/my-profile");
     }
     setLoading(false);
   };

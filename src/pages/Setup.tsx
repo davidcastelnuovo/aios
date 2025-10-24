@@ -32,8 +32,8 @@ export default function Setup() {
             setEmail(session.user.email || "");
             setVerifying(false);
           } else {
-            // Already logged in and not from invite, redirect to dashboard
-            navigate("/");
+            // Already logged in and not from invite, redirect to personal profile
+            navigate("/my-profile");
           }
         } else {
           // Not authenticated, check for error in URL
@@ -82,9 +82,9 @@ export default function Setup() {
 
       toast.success("הסיסמה הוגדרה בהצלחה! מעביר אותך למערכת...");
       
-      // Wait a bit then redirect
+      // Wait a bit then redirect to personal profile
       setTimeout(() => {
-        navigate("/");
+        navigate("/my-profile");
       }, 1500);
     } catch (error: any) {
       console.error("Error setting password:", error);
