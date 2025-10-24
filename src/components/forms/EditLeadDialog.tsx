@@ -179,150 +179,56 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="company_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>שם העסק *</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {/* חלק ראשון - מידע בסיסי */}
+            <div className="space-y-4 pb-4 border-b-2">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="contact_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>שם איש קשר *</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="company_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>שם העסק *</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <FormField
                 control={form.control}
-                name="contact_name"
+                name="agency_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>שם איש קשר *</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="agency_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>סוכנות *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="בחר סוכנות" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {agencies?.map((agency) => (
-                        <SelectItem key={agency.id} value={agency.id}>
-                          {agency.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="sales_person_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>איש מכירות *</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="בחר איש מכירות" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {salesPeople?.map((person) => (
-                        <SelectItem key={person.id} value={person.id}>
-                          {person.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>אימייל</FormLabel>
-                    <FormControl>
-                      <Input type="email" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>טלפון</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-3 gap-4">
-              <FormField
-                control={form.control}
-                name="source"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>מקור הגעה</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="למשל: אתר, הפניה, מדיה חברתית" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>שלב במשפך *</FormLabel>
+                    <FormLabel>סוכנות *</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue />
+                          <SelectValue placeholder="בחר סוכנות" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="new">ליד חדש</SelectItem>
-                        <SelectItem value="contacted">נוצר קשר</SelectItem>
-                        <SelectItem value="follow_up">תהליך פולואפ</SelectItem>
-                        <SelectItem value="proposal_sent">נשלחה הצעה</SelectItem>
-                        <SelectItem value="transferred_to_onboarding">הועבר לקליטה</SelectItem>
-                        <SelectItem value="closed">נסגר</SelectItem>
+                        {agencies?.map((agency) => (
+                          <SelectItem key={agency.id} value={agency.id}>
+                            {agency.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -332,25 +238,181 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
 
               <FormField
                 control={form.control}
-                name="response_status"
+                name="sales_person_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>סטטוס</FormLabel>
+                    <FormLabel>איש מכירות *</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="בחר סטטוס" />
+                          <SelectValue placeholder="בחר איש מכירות" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="no_answer_1">אין מענה 1</SelectItem>
-                        <SelectItem value="no_answer_2">אין מענה 2</SelectItem>
-                        <SelectItem value="no_answer_3">אין מענה 3</SelectItem>
-                        <SelectItem value="no_answer_4">אין מענה 4</SelectItem>
-                        <SelectItem value="denies_contact">מכחיש פניה</SelectItem>
-                        <SelectItem value="not_relevant">לא רלוונטי</SelectItem>
+                        {salesPeople?.map((person) => (
+                          <SelectItem key={person.id} value={person.id}>
+                            {person.full_name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>אימייל</FormLabel>
+                      <FormControl>
+                        <Input type="email" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>טלפון</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+
+            {/* חלק שני - פרטים נוספים */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-primary">פרטים נוספים</h3>
+              
+              <div className="grid grid-cols-3 gap-4">
+                <FormField
+                  control={form.control}
+                  name="source"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>מקור הגעה</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר מקור" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="website">אתר</SelectItem>
+                          <SelectItem value="referral">הפניה</SelectItem>
+                          <SelectItem value="social_media">מדיה חברתית</SelectItem>
+                          <SelectItem value="paid_ads">מודעות ממומנות</SelectItem>
+                          <SelectItem value="cold_call">שיחה קרה</SelectItem>
+                          <SelectItem value="email_campaign">קמפיין אימייל</SelectItem>
+                          <SelectItem value="event">אירוע</SelectItem>
+                          <SelectItem value="other">אחר</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>שלב במשפך *</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="new">ליד חדש</SelectItem>
+                          <SelectItem value="contacted">נוצר קשר</SelectItem>
+                          <SelectItem value="follow_up">תהליך פולואפ</SelectItem>
+                          <SelectItem value="proposal_sent">נשלחה הצעה</SelectItem>
+                          <SelectItem value="transferred_to_onboarding">הועבר לקליטה</SelectItem>
+                          <SelectItem value="closed">נסגר</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="response_status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>סטטוס</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר סטטוס" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="no_answer_1">אין מענה 1</SelectItem>
+                          <SelectItem value="no_answer_2">אין מענה 2</SelectItem>
+                          <SelectItem value="no_answer_3">אין מענה 3</SelectItem>
+                          <SelectItem value="no_answer_4">אין מענה 4</SelectItem>
+                          <SelectItem value="denies_contact">מכחיש פניה</SelectItem>
+                          <SelectItem value="not_relevant">לא רלוונטי</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="created_at"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>תאריך יצירת ליד</FormLabel>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-right font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "dd/MM/yyyy")
+                            ) : (
+                              <span>בחר תאריך</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0 bg-background z-50" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={field.onChange}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -369,77 +431,37 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                   </FormItem>
                 )}
               />
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="monthly_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>הצעה חודשית (₪)</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="three_month_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>הצעת 3 חודשים (₪)</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="created_at"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>תאריך יצירת ליד</FormLabel>
-                  <Popover>
-                    <PopoverTrigger asChild>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="monthly_budget"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>הצעה חודשית (₪)</FormLabel>
                       <FormControl>
-                        <Button
-                          variant={"outline"}
-                          className={cn(
-                            "w-full pl-3 text-right font-normal",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        >
-                          {field.value ? (
-                            format(field.value, "dd/MM/yyyy")
-                          ) : (
-                            <span>בחר תאריך</span>
-                          )}
-                          <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                        </Button>
+                        <Input type="number" {...field} />
                       </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 bg-background z-50" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={field.onChange}
-                        initialFocus
-                        className={cn("p-3 pointer-events-auto")}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="three_month_budget"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>הצעת 3 חודשים (₪)</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
 
             <div className="grid grid-cols-2 gap-4">
               <FormField
