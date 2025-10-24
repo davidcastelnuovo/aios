@@ -367,16 +367,37 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
   useEffect(() => {
     const bar = scrollbarRef.current;
     const x = xContainerRef.current;
-    if (!bar || !x) return;
-    const onBar = () => { x.scrollLeft = bar.scrollLeft; };
-    const onX = () => { bar.scrollLeft = x.scrollLeft; };
+
+    if (!bar || !x) {
+      // try once on next frame if refs not ready yet
+      const id = requestAnimationFrame(() => {
+        if (scrollbarRef.current && xContainerRef.current) {
+          scrollbarRef.current!.scrollLeft = xContainerRef.current!.scrollLeft;
+        }
+      });
+      return () => cancelAnimationFrame(id);
+    }
+
+    const onBar = () => {
+      x.scrollLeft = bar.scrollLeft;
+      // debug
+      console.debug('TopScrollbar->', { left: bar.scrollLeft });
+    };
+    const onX = () => {
+      bar.scrollLeft = x.scrollLeft;
+    };
+
     bar.addEventListener('scroll', onBar);
     x.addEventListener('scroll', onX);
+
+    // initialize positions
+    bar.scrollLeft = x.scrollLeft;
+
     return () => {
       bar.removeEventListener('scroll', onBar);
       x.removeEventListener('scroll', onX);
     };
-  }, [stageLeads]);
+  }, [scrollbarRef, xContainerRef, stageLeads]);
 
   return (
     <Collapsible open={isOpen} onOpenChange={onToggle}>
