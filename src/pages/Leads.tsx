@@ -35,6 +35,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100/50", borderColor: "border-blue-500" },
@@ -518,7 +519,8 @@ export default function Leads() {
                       {stageLeads.length === 0 ? (
                         <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
                       ) : (
-                    <Table>
+                    <ScrollArea className="w-full">
+                      <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>חברה</TableHead>
@@ -628,6 +630,8 @@ export default function Leads() {
                         ))}
                       </TableBody>
                     </Table>
+                    <ScrollBar orientation="horizontal" />
+                    </ScrollArea>
                       )}
                     </CardContent>
                   </CollapsibleContent>
