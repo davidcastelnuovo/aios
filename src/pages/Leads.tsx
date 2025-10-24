@@ -338,6 +338,13 @@ export default function Leads() {
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
+  const [openTables, setOpenTables] = useState<Record<string, boolean>>({
+    new: true,
+    contacted: true,
+    follow_up: true,
+    proposal_sent: true,
+    closed: true,
+  });
 
   const { data: leads, isLoading, refetch } = useQuery({
     queryKey: ["leads", selectedAgency],
@@ -506,16 +513,25 @@ export default function Leads() {
           {PIPELINE_STAGES.map((stage) => {
             const stageLeads = getLeadsByStage(stage.id);
             return (
-              <Card key={stage.id} className={`border-r-4 ${stage.borderColor} bg-card`}>
-                <CardHeader>
-                  <CardTitle className="text-xl">
-                    {stage.label} ({stageLeads.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {stageLeads.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
-                  ) : (
+              <Collapsible 
+                key={stage.id}
+                open={openTables[stage.id]}
+                onOpenChange={(open) => setOpenTables(prev => ({ ...prev, [stage.id]: open }))}
+              >
+                <Card className={`border-r-4 ${stage.borderColor} bg-card`}>
+                  <CollapsibleTrigger asChild>
+                    <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                      <CardTitle className="text-xl flex items-center justify-between">
+                        <span>{stage.label} ({stageLeads.length})</span>
+                        <ChevronDown className={`h-5 w-5 transition-transform ${openTables[stage.id] ? '' : '-rotate-90'}`} />
+                      </CardTitle>
+                    </CardHeader>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <CardContent>
+                      {stageLeads.length === 0 ? (
+                        <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
+                      ) : (
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -626,9 +642,11 @@ export default function Leads() {
                         ))}
                       </TableBody>
                     </Table>
-                  )}
-                </CardContent>
-              </Card>
+                      )}
+                    </CardContent>
+                  </CollapsibleContent>
+                </Card>
+              </Collapsible>
             );
           })}
         </div>
