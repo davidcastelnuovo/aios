@@ -18,44 +18,57 @@ export default function Setup() {
   const [email, setEmail] = useState("");
 
   useEffect(() => {
-    const verifyToken = async () => {
+    const handleRedirect = async () => {
       try {
-        // Check if user is already authenticated
+        const code = searchParams.get("code");
+        const type = searchParams.get("type");
+        const error = searchParams.get("error");
+        const errorDescription = searchParams.get("error_description");
+
+        // If we have a code from email link, exchange it for a session
+        if (code) {
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeError) {
+            console.error("exchangeCodeForSession error:", exchangeError);
+            toast.error(errorDescription || exchangeError.message || "שגיאה באימות הקישור");
+            return setTimeout(() => navigate("/auth"), 1500);
+          }
+
+          // Session established → move to password setup for invite/recovery
+          setEmail(data.user?.email || "");
+          setVerifying(false);
+          return;
+        }
+
+        // No code param – check if already authenticated
         const { data: { session } } = await supabase.auth.getSession();
-        
         if (session?.user) {
-          // User is already logged in, check if they came from an invite
-          const type = searchParams.get("type");
-          
           if (type === "invite" || type === "recovery") {
-            // They just verified their email from an invite
             setEmail(session.user.email || "");
             setVerifying(false);
           } else {
-            // Already logged in and not from invite, redirect to personal profile
             navigate("/my-profile");
           }
-        } else {
-          // Not authenticated, check for error in URL
-          const error = searchParams.get("error");
-          const errorDescription = searchParams.get("error_description");
-          
-          if (error) {
-            toast.error(errorDescription || "הקישור אינו תקף או שפג תוקפו");
-            setTimeout(() => navigate("/auth"), 2000);
-          } else {
-            toast.error("לא נמצא טוקן תקף. אנא השתמש בקישור שנשלח אליך במייל");
-            setTimeout(() => navigate("/auth"), 2000);
-          }
+          return;
         }
-      } catch (error: any) {
-        console.error("Error verifying token:", error);
+
+        // Handle explicit errors from redirect
+        if (error) {
+          toast.error(errorDescription || "הקישור אינו תקף או שפג תוקפו");
+          return setTimeout(() => navigate("/auth"), 1500);
+        }
+
+        // Fallback when nothing found
+        toast.error("לא נמצא טוקן תקף. אנא השתמשו בקישור שנשלח במייל");
+        setTimeout(() => navigate("/auth"), 1500);
+      } catch (err: any) {
+        console.error("Error verifying token:", err);
         toast.error("שגיאה באימות הקישור");
-        setTimeout(() => navigate("/auth"), 2000);
+        setTimeout(() => navigate("/auth"), 1500);
       }
     };
 
-    verifyToken();
+    handleRedirect();
   }, [searchParams, navigate]);
 
   const handleSetupPassword = async (e: React.FormEvent) => {

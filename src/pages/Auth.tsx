@@ -22,11 +22,25 @@ export default function Auth() {
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
-    // Check if this is a password recovery/invite link
-    const type = searchParams.get("type");
-    if (type === "recovery") {
-      setUpdatePasswordMode(true);
-    }
+    // Handle password recovery/invite redirect by exchanging the code for a session
+    const init = async () => {
+      const type = searchParams.get("type");
+      const code = searchParams.get("code");
+
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          toast({ title: "שגיאה", description: error.message, variant: "destructive" });
+          return;
+        }
+      }
+
+      if (type === "recovery") {
+        setUpdatePasswordMode(true);
+      }
+    };
+
+    init();
   }, [searchParams]);
 
   const handleSignUp = async (e: React.FormEvent) => {
