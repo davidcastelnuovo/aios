@@ -29,7 +29,7 @@ import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, 
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useState, ReactNode } from "react";
+import { useState, ReactNode, useRef, useEffect } from "react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -547,145 +547,12 @@ export default function Leads() {
                       </CardTitle>
                     </CardHeader>
                   </CollapsibleTrigger>
-                  <CollapsibleContent>
+                   <CollapsibleContent>
                     <CardContent>
                       {stageLeads.length === 0 ? (
                         <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
                       ) : (
-                      <div className="overflow-x-auto">
-                      <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-right">שם</TableHead>
-                          <TableHead className="text-right">טלפון</TableHead>
-                          <TableHead className="text-right">אימייל</TableHead>
-                          <TableHead className="text-right">שם חברה</TableHead>
-                          <TableHead className="text-right">שלב במשפך</TableHead>
-                          <TableHead className="text-right">סטטוס</TableHead>
-                          <TableHead className="text-right">פעולות</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {stageLeads.map((lead: any) => (
-                          <TableRow key={lead.id}>
-                            <TableCell className="font-medium">
-                              <div className="flex items-center gap-2">
-                                <User className="h-4 w-4" />
-                                {lead.contact_name || "-"}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {lead.phone ? (
-                                <a href={`tel:${lead.phone}`} className="hover:underline flex items-center gap-1">
-                                  <Phone className="h-3 w-3" />
-                                  {lead.phone}
-                                </a>
-                              ) : "-"}
-                            </TableCell>
-                            <TableCell>
-                              {lead.email ? (
-                                <a href={`mailto:${lead.email}`} className="hover:underline flex items-center gap-1">
-                                  <Mail className="h-3 w-3" />
-                                  {lead.email}
-                                </a>
-                              ) : "-"}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Building2 className="h-4 w-4" />
-                                {lead.company_name}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <Select
-                                value={lead.status}
-                                onValueChange={(value) => 
-                                  updateLeadStatus.mutate({ 
-                                    leadId: lead.id, 
-                                    newStatus: value as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
-                                  })
-                                }
-                              >
-                                <SelectTrigger className="h-8 w-[140px]">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent className="bg-background z-50">
-                                  {PIPELINE_STAGES.map((s) => (
-                                    <SelectItem 
-                                      key={s.id} 
-                                      value={s.id}
-                                      className={s.bgClass}
-                                    >
-                                      {s.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                            <TableCell>
-                              <Select
-                                value={lead.response_status || "none"}
-                                onValueChange={(value) => 
-                                  updateLeadResponseStatus.mutate({ 
-                                    leadId: lead.id, 
-                                    responseStatus: value === "none" ? null : value as "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant"
-                                  })
-                                }
-                              >
-                                <SelectTrigger className="h-8 w-[140px]">
-                                  <SelectValue placeholder="בחר סטטוס" />
-                                </SelectTrigger>
-                                <SelectContent className="bg-background z-50">
-                                  <SelectItem value="none">ללא סטטוס</SelectItem>
-                                  {RESPONSE_STATUS_OPTIONS.map((status) => (
-                                    <SelectItem 
-                                      key={status.id} 
-                                      value={status.id}
-                                    >
-                                      {status.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex gap-2">
-                                <EditLeadDialog lead={lead} />
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-8 w-8"
-                                  onClick={async () => {
-                                    try {
-                                      const { error } = await supabase
-                                        .from("leads")
-                                        .delete()
-                                        .eq("id", lead.id);
-
-                                      if (error) throw error;
-
-                                      toast({
-                                        title: "ליד נמחק בהצלחה",
-                                      });
-                                      queryClient.invalidateQueries({ queryKey: ["leads"] });
-                                    } catch (error: any) {
-                                      toast({
-                                        title: "שגיאה במחיקת ליד",
-                                        description: error.message,
-                                        variant: "destructive",
-                                      });
-                                    }
-                                  }}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    </div>
+                       <TableWithStickyScroll stageLeads={stageLeads} />
                       )}
                     </CardContent>
                   </CollapsibleContent>
@@ -696,5 +563,236 @@ export default function Leads() {
         </div>
       )}
     </div>
+  );
+}
+
+function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
+  const topScrollRef = useRef<HTMLDivElement>(null);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const updateLeadStatus = useMutation({
+    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" }) => {
+      const { error } = await supabase
+        .from("leads")
+        .update({ status: newStatus })
+        .eq("id", leadId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      toast({
+        title: "סטטוס ליד עודכן בהצלחה",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "שגיאה בעדכון סטטוס",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateLeadResponseStatus = useMutation({
+    mutationFn: async ({ leadId, responseStatus }: { leadId: string; responseStatus: "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant" | null }) => {
+      const { error } = await supabase
+        .from("leads")
+        .update({ response_status: responseStatus })
+        .eq("id", leadId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      toast({
+        title: "סטטוס תגובה עודכן בהצלחה",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "שגיאה בעדכון סטטוס תגובה",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  useEffect(() => {
+    const topScroll = topScrollRef.current;
+    const tableContainer = tableContainerRef.current;
+
+    if (!topScroll || !tableContainer) return;
+
+    const handleTopScroll = () => {
+      if (tableContainer) {
+        tableContainer.scrollLeft = topScroll.scrollLeft;
+      }
+    };
+
+    const handleTableScroll = () => {
+      if (topScroll) {
+        topScroll.scrollLeft = tableContainer.scrollLeft;
+      }
+    };
+
+    topScroll.addEventListener('scroll', handleTopScroll);
+    tableContainer.addEventListener('scroll', handleTableScroll);
+
+    return () => {
+      topScroll.removeEventListener('scroll', handleTopScroll);
+      tableContainer.removeEventListener('scroll', handleTableScroll);
+    };
+  }, []);
+
+  return (
+    <>
+      {/* Sticky top scrollbar */}
+      <div 
+        ref={topScrollRef}
+        className="overflow-x-auto sticky top-0 z-10 bg-background border-b mb-2"
+        style={{ overflowY: 'hidden' }}
+      >
+        <div style={{ width: '1200px', height: '1px' }} />
+      </div>
+
+      {/* Table container */}
+      <div ref={tableContainerRef} className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-right">שם</TableHead>
+              <TableHead className="text-right">טלפון</TableHead>
+              <TableHead className="text-right">אימייל</TableHead>
+              <TableHead className="text-right">שם חברה</TableHead>
+              <TableHead className="text-right">שלב במשפך</TableHead>
+              <TableHead className="text-right">סטטוס</TableHead>
+              <TableHead className="text-right">פעולות</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {stageLeads.map((lead: any) => (
+              <TableRow key={lead.id}>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4" />
+                    {lead.contact_name || "-"}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {lead.phone ? (
+                    <a href={`tel:${lead.phone}`} className="hover:underline flex items-center gap-1">
+                      <Phone className="h-3 w-3" />
+                      {lead.phone}
+                    </a>
+                  ) : "-"}
+                </TableCell>
+                <TableCell>
+                  {lead.email ? (
+                    <a href={`mailto:${lead.email}`} className="hover:underline flex items-center gap-1">
+                      <Mail className="h-3 w-3" />
+                      {lead.email}
+                    </a>
+                  ) : "-"}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-4 w-4" />
+                    {lead.company_name}
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Select
+                    value={lead.status}
+                    onValueChange={(value) => 
+                      updateLeadStatus.mutate({ 
+                        leadId: lead.id, 
+                        newStatus: value as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-8 w-[140px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      {PIPELINE_STAGES.map((s) => (
+                        <SelectItem 
+                          key={s.id} 
+                          value={s.id}
+                          className={s.bgClass}
+                        >
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+                <TableCell>
+                  <Select
+                    value={lead.response_status || "none"}
+                    onValueChange={(value) => 
+                      updateLeadResponseStatus.mutate({ 
+                        leadId: lead.id, 
+                        responseStatus: value === "none" ? null : value as "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant"
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-8 w-[140px]">
+                      <SelectValue placeholder="בחר סטטוס" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      <SelectItem value="none">ללא סטטוס</SelectItem>
+                      {RESPONSE_STATUS_OPTIONS.map((status) => (
+                        <SelectItem 
+                          key={status.id} 
+                          value={status.id}
+                        >
+                          {status.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-2">
+                    <EditLeadDialog lead={lead} />
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={async () => {
+                        try {
+                          const { error } = await supabase
+                            .from("leads")
+                            .delete()
+                            .eq("id", lead.id);
+
+                          if (error) throw error;
+
+                          toast({
+                            title: "ליד נמחק בהצלחה",
+                          });
+                          queryClient.invalidateQueries({ queryKey: ["leads"] });
+                        } catch (error: any) {
+                          toast({
+                            title: "שגיאה במחיקת ליד",
+                            description: error.message,
+                            variant: "destructive",
+                          });
+                        }
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
   );
 }
