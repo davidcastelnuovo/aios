@@ -597,6 +597,8 @@ export default function Leads() {
 function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   const topScrollRef = useRef<HTMLDivElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const [tableWidth, setTableWidth] = useState(0);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -648,6 +650,28 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
     },
   });
 
+  // Update table width when table size changes
+  useEffect(() => {
+    const table = tableRef.current;
+    if (!table) return;
+
+    const updateWidth = () => {
+      setTableWidth(table.scrollWidth);
+    };
+
+    // Initial width
+    updateWidth();
+
+    // Watch for size changes
+    const resizeObserver = new ResizeObserver(updateWidth);
+    resizeObserver.observe(table);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [stageLeads]);
+
+  // Sync scrolling between top scrollbar and table
   useEffect(() => {
     const topScroll = topScrollRef.current;
     const tableContainer = tableContainerRef.current;
@@ -680,15 +704,16 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
       {/* Sticky top scrollbar */}
       <div 
         ref={topScrollRef}
-        className="overflow-x-auto sticky top-0 z-10 bg-background border-b mb-2"
-        style={{ overflowY: 'hidden' }}
+        className="overflow-x-auto sticky top-16 z-10 bg-background border-b mb-2 shadow-sm"
+        style={{ overflowY: 'hidden', height: '20px' }}
       >
-        <div style={{ width: '1200px', height: '1px' }} />
+        <div style={{ width: `${tableWidth}px`, height: '1px' }} />
       </div>
 
       {/* Table container */}
       <div ref={tableContainerRef} className="overflow-x-auto">
-        <Table>
+        <div ref={tableRef}>
+          <Table>
           <TableHeader>
             <TableRow>
               <TableHead className="text-right">שם</TableHead>
@@ -820,6 +845,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
     </>
   );
