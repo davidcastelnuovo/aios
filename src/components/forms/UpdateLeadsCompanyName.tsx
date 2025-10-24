@@ -44,6 +44,18 @@ export function UpdateLeadsCompanyName() {
           .replace(/[\s_\-\/=\\()\[\]"'.,]/g, "")
           .toLowerCase();
 
+      // פונקציה לזיהוי תאריכים
+      const isDateValue = (val: string) => {
+        if (!val || val.length < 3) return false;
+        // בדיקה לפורמטים של תאריך כמו: DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD
+        const datePattern = /^\d{1,4}[-\/\.]\d{1,2}[-\/\.]\d{1,4}$/;
+        if (datePattern.test(val.trim())) return true;
+        // בדיקה אם זה תאריך שנכתב בעברית או אנגלית
+        const d = new Date(val);
+        if (!isNaN(d.getTime()) && val.match(/\d{4}/)) return true;
+        return false;
+      };
+
       // מיפוי נתוני CSV
       const mapped = rows.map((row) => {
         const data: any = {};
@@ -64,7 +76,10 @@ export function UpdateLeadsCompanyName() {
             k.includes("עסק") ||
             k.includes("חברה")
           ) {
-            data.company_name = value;
+            // אל תעדכן אם הערך הוא תאריך
+            if (!isDateValue(value)) {
+              data.company_name = value;
+            }
           }
           // מזהים לחיפוש
           else if (
