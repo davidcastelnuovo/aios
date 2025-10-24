@@ -30,10 +30,10 @@ export default function SalesDashboard() {
         followUp: data.filter(l => l.status === "follow_up").length,
         proposal: data.filter(l => l.status === "proposal_sent").length,
         closed: data.filter(l => l.status === "closed").length,
-        totalValue: data.reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
+        totalValue: data.reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
         closedValue: data
           .filter(l => l.status === "closed")
-          .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
+          .reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
         newValue: data
           .filter(l => l.status === "new")
           .reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
