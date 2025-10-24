@@ -25,6 +25,7 @@ import { useState } from "react";
 import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialog";
 import { EditUserPermissionsDialog } from "@/components/forms/EditUserPermissionsDialog";
 import { EditUserCampaignerDialog } from "@/components/forms/EditUserCampaignerDialog";
+import { EditUserSalesPersonDialog } from "@/components/forms/EditUserSalesPersonDialog";
 import {
   Dialog,
   DialogContent,
@@ -67,6 +68,8 @@ export default function Users() {
   const [editPermissionsUserEmail, setEditPermissionsUserEmail] = useState<string>("");
   const [editCampaignerUserId, setEditCampaignerUserId] = useState<string | null>(null);
   const [editCampaignerUserEmail, setEditCampaignerUserEmail] = useState<string>("");
+  const [editSalesPersonUserId, setEditSalesPersonUserId] = useState<string | null>(null);
+  const [editSalesPersonUserEmail, setEditSalesPersonUserEmail] = useState<string>("");
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies-for-invite", currentUserId],
@@ -98,7 +101,7 @@ export default function Users() {
     queryFn: async () => {
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, email, full_name, campaigner_id, campaigners(full_name)");
+        .select("id, email, full_name, campaigner_id, sales_person_id, campaigners(full_name), sales_people(full_name)");
 
       if (profilesError) throw profilesError;
 
@@ -114,6 +117,7 @@ export default function Users() {
           ...profile,
           role: userRole?.role as UserRole | undefined,
           campaigner_name: profile.campaigners?.full_name,
+          sales_person_name: profile.sales_people?.full_name,
         };
       });
     },
@@ -340,6 +344,7 @@ export default function Users() {
                 <TableHead className="text-right">אימייל</TableHead>
                 <TableHead className="text-right">תפקידים</TableHead>
                 <TableHead className="text-right">קמפיינר משויך</TableHead>
+                <TableHead className="text-right">איש מכירות</TableHead>
                 <TableHead className="text-right">פעולות</TableHead>
               </TableRow>
             </TableHeader>
@@ -370,6 +375,24 @@ export default function Users() {
                         onClick={() => {
                           setEditCampaignerUserId(user.id);
                           setEditCampaignerUserEmail(user.email);
+                        }}
+                        className="h-6 px-2 text-xs"
+                      >
+                        ערוך
+                      </Button>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">
+                        {user.sales_person_name || "-"}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditSalesPersonUserId(user.id);
+                          setEditSalesPersonUserEmail(user.email);
                         }}
                         className="h-6 px-2 text-xs"
                       >
@@ -519,6 +542,17 @@ export default function Users() {
           }}
           userId={editCampaignerUserId}
           userEmail={editCampaignerUserEmail}
+        />
+      )}
+
+      {editSalesPersonUserId && (
+        <EditUserSalesPersonDialog
+          userId={editSalesPersonUserId}
+          userEmail={editSalesPersonUserEmail}
+          onClose={() => {
+            setEditSalesPersonUserId(null);
+            setEditSalesPersonUserEmail("");
+          }}
         />
       )}
     </div>

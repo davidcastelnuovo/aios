@@ -529,6 +529,7 @@ export type Database = {
           email: string
           full_name: string | null
           id: string
+          sales_person_id: string | null
           updated_at: string
         }
         Insert: {
@@ -537,6 +538,7 @@ export type Database = {
           email: string
           full_name?: string | null
           id: string
+          sales_person_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -545,6 +547,7 @@ export type Database = {
           email?: string
           full_name?: string | null
           id?: string
+          sales_person_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -553,6 +556,13 @@ export type Database = {
             columns: ["campaigner_id"]
             isOneToOne: false
             referencedRelation: "campaigners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_sales_person_id_fkey"
+            columns: ["sales_person_id"]
+            isOneToOne: false
+            referencedRelation: "sales_people"
             referencedColumns: ["id"]
           },
         ]
