@@ -56,6 +56,15 @@ const SOURCE_LABELS: Record<string, string> = {
   other: "אחר",
 };
 
+const RESPONSE_STATUS_OPTIONS = [
+  { id: "no_answer_1", label: "אין מענה 1" },
+  { id: "no_answer_2", label: "אין מענה 2" },
+  { id: "no_answer_3", label: "אין מענה 3" },
+  { id: "no_answer_4", label: "אין מענה 4" },
+  { id: "denies_contact", label: "מכחיש פניה" },
+  { id: "not_relevant", label: "לא רלוונטי" },
+];
+
 function DroppableStage({ stage, children }: { stage: any; children: ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -374,6 +383,30 @@ export default function Leads() {
     },
   });
 
+  const updateLeadResponseStatus = useMutation({
+    mutationFn: async ({ leadId, responseStatus }: { leadId: string; responseStatus: "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant" | null }) => {
+      const { error } = await supabase
+        .from("leads")
+        .update({ response_status: responseStatus })
+        .eq("id", leadId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      toast({
+        title: "סטטוס תגובה עודכן בהצלחה",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "שגיאה בעדכון סטטוס תגובה",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
   };
@@ -590,16 +623,30 @@ export default function Leads() {
                               </Select>
                             </TableCell>
                             <TableCell>
-                              {lead.response_status ? (
-                                <Badge variant="outline" className="text-xs">
-                                  {lead.response_status === 'no_answer_1' && 'אין מענה 1'}
-                                  {lead.response_status === 'no_answer_2' && 'אין מענה 2'}
-                                  {lead.response_status === 'no_answer_3' && 'אין מענה 3'}
-                                  {lead.response_status === 'no_answer_4' && 'אין מענה 4'}
-                                  {lead.response_status === 'denies_contact' && 'מכחיש פניה'}
-                                  {lead.response_status === 'not_relevant' && 'לא רלוונטי'}
-                                </Badge>
-                              ) : "-"}
+                              <Select
+                                value={lead.response_status || "none"}
+                                onValueChange={(value) => 
+                                  updateLeadResponseStatus.mutate({ 
+                                    leadId: lead.id, 
+                                    responseStatus: value === "none" ? null : value as "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant"
+                                  })
+                                }
+                              >
+                                <SelectTrigger className="h-8 w-[140px]">
+                                  <SelectValue placeholder="בחר סטטוס" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-background z-50">
+                                  <SelectItem value="none">ללא סטטוס</SelectItem>
+                                  {RESPONSE_STATUS_OPTIONS.map((status) => (
+                                    <SelectItem 
+                                      key={status.id} 
+                                      value={status.id}
+                                    >
+                                      {status.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             </TableCell>
                             <TableCell>
                               <div className="flex gap-2">
