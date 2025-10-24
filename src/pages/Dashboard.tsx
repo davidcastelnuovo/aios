@@ -61,6 +61,7 @@ export default function Dashboard() {
       let campaignerQuery = supabase.from("campaigners").select("*", { count: "exact", head: true });
       let taskQuery = supabase.from("tasks").select("*").eq("status", "open");
       let activeClientsQuery = supabase.from("clients").select("id, retainer, agency_id").eq("status", "active");
+      let leadsQuery = supabase.from("leads").select("estimated_deal_value, monthly_budget, three_month_budget, status");
       
       // אם בחרנו ספק, נמצא את הקמפיינר הקשור אליו
       let relatedCampaignerId = null;
@@ -85,6 +86,7 @@ export default function Dashboard() {
         clientQuery = clientQuery.eq("agency_id", selectedAgency);
         taskQuery = taskQuery.eq("agency_id", selectedAgency);
         activeClientsQuery = activeClientsQuery.eq("agency_id", selectedAgency);
+        leadsQuery = leadsQuery.eq("agency_id", selectedAgency);
       }
 
       if (selectedClient !== "all") {
@@ -102,13 +104,20 @@ export default function Dashboard() {
         }
       }
 
-      const [agenciesData, clientsData, campaignersData, tasks, activeClients] = await Promise.all([
+      const [agenciesData, clientsData, campaignersData, tasks, activeClients, leads] = await Promise.all([
         agencyQuery,
         clientQuery,
         campaignerQuery,
         taskQuery,
         activeClientsQuery,
+        leadsQuery,
       ]);
+
+      // חישוב שווי לידים פעילים (לא closed)
+      const activeLeads = leads.data?.filter(l => l.status !== "closed") || [];
+      const leadsValue = activeLeads.reduce((sum, lead) => {
+        return sum + (Number(lead.estimated_deal_value || 0) || Number(lead.monthly_budget || 0) || Number(lead.three_month_budget || 0));
+      }, 0);
 
       // עכשיו שואלים את finance עם הסינון הנכון
       let financeQuery = supabase.from("finance").select("type, amount, client_id");
@@ -168,6 +177,8 @@ export default function Dashboard() {
         clientsCount: clientsData.count || 0,
         campaignersCount: campaignersData.count || 0,
         openTasksCount: tasks.data?.length || 0,
+        leadsValue,
+        activeLeadsCount: activeLeads.length,
         income: totalIncome,
         expense: totalExpense,
         profit: totalIncome - totalExpense,
@@ -203,6 +214,13 @@ export default function Dashboard() {
       icon: CheckSquare,
       color: "text-destructive",
       bg: "bg-destructive/10",
+    },
+    {
+      title: `לידים פעילים (${stats?.activeLeadsCount || 0})`,
+      value: `₪${stats?.leadsValue.toLocaleString() || 0}`,
+      icon: TrendingUp,
+      color: "text-success",
+      bg: "bg-success/10",
     },
   ];
 
@@ -252,7 +270,7 @@ export default function Dashboard() {
         </Select>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         {statCards.map((stat) => (
           <Card key={stat.title} className="shadow-card hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
