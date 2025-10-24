@@ -114,7 +114,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
         contact_name: values.contact_name || null,
         email: values.email || null,
         phone: values.phone || null,
-        source: (values.source as any) || 'other',
+        source: (values.source as any) || null,
         status: (values.status as any) || 'new',
         response_status: (values.response_status as any) || null,
         estimated_deal_value: values.estimated_deal_value 
@@ -295,24 +295,10 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                 name="source"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>מקור *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="website">אתר</SelectItem>
-                        <SelectItem value="referral">הפניה</SelectItem>
-                        <SelectItem value="social_media">מדיה חברתית</SelectItem>
-                        <SelectItem value="paid_ads">מודעות ממומנות</SelectItem>
-                        <SelectItem value="cold_call">שיחה קרה</SelectItem>
-                        <SelectItem value="email_campaign">קמפיין אימייל</SelectItem>
-                        <SelectItem value="event">אירוע</SelectItem>
-                        <SelectItem value="other">אחר</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>מקור הגעה</FormLabel>
+                    <FormControl>
+                      <Input {...field} placeholder="למשל: אתר, הפניה, מדיה חברתית" />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

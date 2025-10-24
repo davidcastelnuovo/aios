@@ -67,15 +67,6 @@ export function ImportLeadsCSV() {
           .replace(/[\s_\-\/=\\()\[\]"'.,]/g, "")
           .toLowerCase();
 
-      const mapSource = (val: string) => {
-        const v = normalize(val);
-        if (v.includes("אתר") || v.includes("website")) return "website";
-        if (v.includes("הפניה") || v.includes("המלצה") || v.includes("referral")) return "referral";
-        if (v.includes("פייסבוק") || v.includes("social")) return "social_media";
-        if (v.includes("גוגל") || v.includes("ads")) return "paid_ads";
-        return "other";
-      };
-
       const mapResponse = (val: string) => {
         const v = normalize(val);
         if (v.includes("איןמענה1") || v.includes("ללאמענה1")) return "no_answer_1";
@@ -139,7 +130,7 @@ export function ImportLeadsCSV() {
           } else if (k.includes("מוצרים") || k.includes("מוצר")) {
             lead.products = value;
           } else if (k.includes("מקור") || k.includes("הפניה") || k.includes("המלצה")) {
-            lead.source = mapSource(value);
+            lead.source = value;
           }
         });
 
