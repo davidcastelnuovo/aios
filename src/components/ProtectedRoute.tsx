@@ -38,7 +38,21 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "/cl
     }
   }, [authenticated, rolesLoading, roles]);
 
-  if (loading || permissionsLoading || rolesLoading) {
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // If not authenticated, redirect immediately without waiting for other queries
+  if (!authenticated) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  // Only wait on permissions/roles once we know the user is authenticated
+  if (permissionsLoading || rolesLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -47,10 +61,6 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "/cl
   }
 
   if (authenticated && !rolesLoading && (!roles || roles.length === 0)) {
-    return <Navigate to="/auth" replace />;
-  }
-
-  if (!authenticated) {
     return <Navigate to="/auth" replace />;
   }
 
