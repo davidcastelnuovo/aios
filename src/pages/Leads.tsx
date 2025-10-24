@@ -595,9 +595,10 @@ export default function Leads() {
 }
 
 function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
+  const verticalContainerRef = useRef<HTMLDivElement>(null);
   const topScrollRef = useRef<HTMLDivElement>(null);
-  const tableContainerRef = useRef<HTMLDivElement>(null);
-  const tableRef = useRef<HTMLTableElement>(null);
+  const xContainerRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
   const [tableWidth, setTableWidth] = useState(0);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -674,44 +675,40 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   // Sync scrolling between top scrollbar and table
   useEffect(() => {
     const topScroll = topScrollRef.current;
-    const tableContainer = tableContainerRef.current;
+    const xContainer = xContainerRef.current;
 
-    if (!topScroll || !tableContainer) return;
+    if (!topScroll || !xContainer) return;
 
     const handleTopScroll = () => {
-      if (tableContainer) {
-        tableContainer.scrollLeft = topScroll.scrollLeft;
-      }
+      xContainer.scrollLeft = topScroll.scrollLeft;
     };
 
     const handleTableScroll = () => {
-      if (topScroll) {
-        topScroll.scrollLeft = tableContainer.scrollLeft;
-      }
+      topScroll.scrollLeft = xContainer.scrollLeft;
     };
 
     topScroll.addEventListener('scroll', handleTopScroll);
-    tableContainer.addEventListener('scroll', handleTableScroll);
+    xContainer.addEventListener('scroll', handleTableScroll);
 
     return () => {
       topScroll.removeEventListener('scroll', handleTopScroll);
-      tableContainer.removeEventListener('scroll', handleTableScroll);
+      xContainer.removeEventListener('scroll', handleTableScroll);
     };
   }, []);
 
   return (
-    <>
-      {/* Sticky top scrollbar */}
+    <div ref={verticalContainerRef} className="max-h-[500px] overflow-y-auto">
+      {/* Sticky top scrollbar inside vertical container */}
       <div 
         ref={topScrollRef}
         className="overflow-x-auto sticky top-0 z-20 bg-background border-b shadow-sm"
-        style={{ overflowY: 'hidden', height: '20px' }}
+        style={{ overflowY: 'hidden', height: '16px' }}
       >
         <div style={{ width: `${tableWidth}px`, height: '1px' }} />
       </div>
 
-      {/* Table container with vertical scroll */}
-      <div ref={tableContainerRef} className="overflow-x-auto max-h-[500px] overflow-y-auto">
+      {/* Horizontal scroll container */}
+      <div ref={xContainerRef} className="overflow-x-auto">
         <div ref={tableRef}>
           <Table>
           <TableHeader className="sticky top-0 z-10 bg-background">
@@ -847,6 +844,6 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
         </Table>
         </div>
       </div>
-    </>
+    </div>
   );
 }
