@@ -220,7 +220,6 @@ export default function Users() {
           modulePermissions,
           campaignerId,
           salesPersonId,
-          redirectUrl: `${window.location.origin}/setup`
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -280,7 +279,6 @@ export default function Users() {
         body: { 
           email,
           resend: true,
-          redirectUrl: `${window.location.origin}/setup`
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,

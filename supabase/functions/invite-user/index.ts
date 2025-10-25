@@ -13,7 +13,6 @@ interface InviteUserRequest {
   role?: string;
   agencyIds?: string[];
   modulePermissions?: string[];
-  redirectUrl?: string;
   resend?: boolean;
   campaignerId?: string;
   salesPersonId?: string;
@@ -65,7 +64,7 @@ serve(async (req: Request) => {
       throw new Error("Only owners and agency owners can invite users");
     }
 
-    const { email, fullName, role, agencyIds, modulePermissions, redirectUrl, resend, campaignerId, salesPersonId }: InviteUserRequest = await req.json();
+    const { email, fullName, role, agencyIds, modulePermissions, resend, campaignerId, salesPersonId }: InviteUserRequest = await req.json();
 
     if (!email) {
       throw new Error("Email is required");
@@ -87,23 +86,16 @@ serve(async (req: Request) => {
     console.log(`${resend ? 'Resending' : 'Inviting'} user: ${email}${role ? ` with role: ${role}` : ''}`);
     console.log('Module permissions received:', modulePermissions);
 
-    // For resend, send a password reset email using backend mailer (no Resend)
+    // For resend, send a password reset email relying on Site URL configured in Auth
     if (resend) {
-      // Prefer redirectUrl from body, otherwise build from Origin header
-      const originHeader = req.headers.get('origin') || req.headers.get('referer');
-      const computedOrigin = originHeader ? new URL(originHeader).origin : undefined;
-      const setupUrl = redirectUrl || (computedOrigin ? `${computedOrigin}/setup` : undefined);
-      
-      const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-        redirectTo: setupUrl,
-      });
+      const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email);
 
       if (resetError) {
-        console.error('Error sending password reset:', resetError, 'redirectTo:', setupUrl);
+        console.error('Error sending password reset:', resetError);
         throw resetError;
       }
 
-      console.log('Password reset email sent successfully for resend to:', setupUrl);
+      console.log('Password reset email sent successfully (using Site URL)');
 
       return new Response(
         JSON.stringify({ success: true, message: 'Invitation resent successfully' }),
@@ -117,10 +109,7 @@ serve(async (req: Request) => {
     if (role) {
       inviteOptions.data = { role };
     }
-    
-    if (redirectUrl) {
-      inviteOptions.redirectTo = redirectUrl;
-    }
+    // Do not override redirectTo; use the configured Site URL in Auth
 
     const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
       email,
