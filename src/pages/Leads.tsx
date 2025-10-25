@@ -3,7 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar, Search } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar, Search, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -870,6 +871,7 @@ export default function Leads() {
 function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[]; xContainerRef: React.RefObject<HTMLDivElement> }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
 
   const updateLeadStatus = useMutation({
     mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" }) => {
@@ -919,19 +921,138 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
     },
   });
 
+  const bulkUpdateStatus = useMutation({
+    mutationFn: async ({ leadIds, status }: { leadIds: string[]; status: "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" }) => {
+      const { error } = await supabase
+        .from("leads")
+        .update({ status })
+        .in("id", leadIds);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      setSelectedLeads([]);
+      toast({
+        title: "לידים עודכנו בהצלחה",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "שגיאה בעדכון לידים",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const bulkDelete = useMutation({
+    mutationFn: async (leadIds: string[]) => {
+      const { error } = await supabase
+        .from("leads")
+        .delete()
+        .in("id", leadIds);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      setSelectedLeads([]);
+      toast({
+        title: "לידים נמחקו בהצלחה",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "שגיאה במחיקת לידים",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedLeads(stageLeads.map(lead => lead.id));
+    } else {
+      setSelectedLeads([]);
+    }
+  };
+
+  const handleSelectLead = (leadId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedLeads(prev => [...prev, leadId]);
+    } else {
+      setSelectedLeads(prev => prev.filter(id => id !== leadId));
+    }
+  };
+
+  const isAllSelected = stageLeads.length > 0 && selectedLeads.length === stageLeads.length;
+
   // Scrolling sync handled in parent (StageTable)
 
 
   return (
     <div className="relative">
+      {/* Bulk Actions Toolbar */}
+      {selectedLeads.length > 0 && (
+        <div className="bg-primary text-primary-foreground p-3 rounded-lg mb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">{selectedLeads.length} לידים נבחרו</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedLeads([])}
+              className="h-7 px-2 hover:bg-primary-foreground/20"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Select onValueChange={(value) => bulkUpdateStatus.mutate({ leadIds: selectedLeads, status: value as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" })}>
+              <SelectTrigger className="h-8 w-[180px] bg-background text-foreground">
+                <SelectValue placeholder="שנה שלב" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                {PIPELINE_STAGES.map((stage) => (
+                  <SelectItem key={stage.id} value={stage.id} className={stage.bgClass}>
+                    {stage.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                if (confirm(`האם אתה בטוח שברצונך למחוק ${selectedLeads.length} לידים?`)) {
+                  bulkDelete.mutate(selectedLeads);
+                }
+              }}
+              className="h-8"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              מחק
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Horizontal scroll container wraps everything */}
       <div ref={xContainerRef} className="overflow-x-auto w-full">
         {/* Vertical scroll only for table body */}
         <div className="max-h-[500px] overflow-y-auto">
-          <Table className="min-w-[1000px] table-fixed">
+          <Table className="min-w-[1100px] table-fixed">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow className="whitespace-nowrap">
-                <TableHead className="text-right sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 w-[200px]">שם</TableHead>
+                <TableHead className="text-center sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 w-[50px]">
+                  <Checkbox
+                    checked={isAllSelected}
+                    onCheckedChange={handleSelectAll}
+                    aria-label="בחר הכל"
+                  />
+                </TableHead>
+                <TableHead className="text-right bg-background w-[200px]">שם</TableHead>
                 <TableHead className="text-right bg-background w-[160px]">טלפון</TableHead>
                 <TableHead className="text-right bg-background w-[200px]">שם חברה</TableHead>
                 <TableHead className="text-right bg-background w-[180px]">שלב במשפך</TableHead>
@@ -942,7 +1063,14 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
             <TableBody>
             {stageLeads.map((lead: any) => (
               <TableRow key={lead.id} className="whitespace-nowrap">
-                <TableCell className="font-medium sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10 w-[200px]">
+                <TableCell className="text-center sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10 w-[50px]">
+                  <Checkbox
+                    checked={selectedLeads.includes(lead.id)}
+                    onCheckedChange={(checked) => handleSelectLead(lead.id, checked as boolean)}
+                    aria-label={`בחר ${lead.contact_name || lead.company_name}`}
+                  />
+                </TableCell>
+                <TableCell className="font-medium bg-background w-[200px]">
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 shrink-0" />
                     <span className="truncate">{lead.contact_name || "-"}</span>
