@@ -923,23 +923,24 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
 
 
   return (
-    <div className="max-h-[500px] overflow-y-auto">
-      {/* Horizontal scroll container */}
+    <div className="relative">
+      {/* Horizontal scroll container wraps everything */}
       <div ref={xContainerRef} className="overflow-x-auto">
-        <div>
-          <Table>
-          <TableHeader className="sticky top-0 z-10 bg-background">
-            <TableRow>
-              <TableHead className="text-right sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20">שם</TableHead>
-              <TableHead className="text-right bg-background">טלפון</TableHead>
-              <TableHead className="text-right bg-background">אימייל</TableHead>
-              <TableHead className="text-right bg-background">שם חברה</TableHead>
-              <TableHead className="text-right bg-background">שלב במשפך</TableHead>
-              <TableHead className="text-right bg-background">סטטוס</TableHead>
-              <TableHead className="text-right bg-background">פעולות</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        {/* Vertical scroll only for table body */}
+        <div className="max-h-[500px] overflow-y-auto">
+          <Table className="min-w-[900px]">
+            <TableHeader className="sticky top-0 z-10 bg-background">
+              <TableRow>
+                <TableHead className="text-right sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20">שם</TableHead>
+                <TableHead className="text-right bg-background">טלפון</TableHead>
+                <TableHead className="text-right bg-background">אימייל</TableHead>
+                <TableHead className="text-right bg-background">שם חברה</TableHead>
+                <TableHead className="text-right bg-background">שלב במשפך</TableHead>
+                <TableHead className="text-right bg-background">סטטוס</TableHead>
+                <TableHead className="text-right bg-background">פעולות</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
             {stageLeads.map((lead: any) => (
               <TableRow key={lead.id}>
                 <TableCell className="font-medium sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10">
