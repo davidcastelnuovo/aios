@@ -423,6 +423,32 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
     };
   }, [isOpen, stageLeads]);
 
+  // Pointer drag + wheel to control bottom scroll from the top bar
+  const dragState = useRef({ dragging: false, startX: 0, startScrollLeft: 0, pointerId: 0 });
+  const onPointerDownBar = (e: React.PointerEvent<HTMLDivElement>) => {
+    dragState.current.dragging = true;
+    dragState.current.startX = e.clientX;
+    dragState.current.startScrollLeft = xContainerRef.current?.scrollLeft || 0;
+    dragState.current.pointerId = e.pointerId;
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+  const onPointerMoveBar = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragState.current.dragging) return;
+    const x = xContainerRef.current;
+    if (!x) return;
+    const dx = e.clientX - dragState.current.startX;
+    x.scrollLeft = dragState.current.startScrollLeft - dx;
+  };
+  const onPointerUpBar = (e: React.PointerEvent<HTMLDivElement>) => {
+    dragState.current.dragging = false;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(dragState.current.pointerId);
+  };
+  const onWheelBar = (e: React.WheelEvent<HTMLDivElement>) => {
+    const x = xContainerRef.current;
+    if (!x) return;
+    x.scrollLeft += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  };
+
   return (
     <Collapsible open={isOpen} onOpenChange={onToggle}>
       <Card className={`border-r-4 ${stage.borderColor} bg-card`}>
@@ -439,9 +465,13 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
         {isOpen && stageLeads.length > 0 && (
           <div 
             ref={scrollbarRef}
-            className="overflow-x-auto overflow-y-hidden bg-muted/30 rounded mx-6 mt-1 mb-2 sticky top-[72px] z-30"
+            className="overflow-x-auto overflow-y-hidden bg-muted/30 rounded mx-6 mt-1 mb-2 sticky top-[72px] z-30 cursor-grab active:cursor-grabbing select-none"
             style={{ height: '14px' }}
             onClick={(e) => e.stopPropagation()}
+            onPointerDown={onPointerDownBar}
+            onPointerMove={onPointerMoveBar}
+            onPointerUp={onPointerUpBar}
+            onWheel={onWheelBar}
             aria-label="גלול אופקית"
           >
             <div style={{ width: `${tableWidth}px`, height: '1px' }} />
