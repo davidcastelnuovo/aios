@@ -61,12 +61,12 @@ const SOURCE_LABELS: Record<string, string> = {
 };
 
 const RESPONSE_STATUS_OPTIONS = [
-  { id: "no_answer_1", label: "אין מענה 1" },
-  { id: "no_answer_2", label: "אין מענה 2" },
-  { id: "no_answer_3", label: "אין מענה 3" },
-  { id: "no_answer_4", label: "אין מענה 4" },
-  { id: "denies_contact", label: "מכחיש פניה" },
-  { id: "not_relevant", label: "לא רלוונטי" },
+  { id: "no_answer_1", label: "אין מענה 1", color: "bg-amber-100 dark:bg-amber-900 border-amber-300" },
+  { id: "no_answer_2", label: "אין מענה 2", color: "bg-amber-200 dark:bg-amber-800 border-amber-400" },
+  { id: "no_answer_3", label: "אין מענה 3", color: "bg-orange-200 dark:bg-orange-800 border-orange-400" },
+  { id: "no_answer_4", label: "אין מענה 4", color: "bg-red-200 dark:bg-red-800 border-red-400" },
+  { id: "denies_contact", label: "מכחיש פניה", color: "bg-gray-200 dark:bg-gray-700 border-gray-400" },
+  { id: "not_relevant", label: "לא רלוונטי", color: "bg-slate-200 dark:bg-slate-700 border-slate-400" },
 ];
 
 function DroppableStage({ stage, children }: { stage: any; children: ReactNode }) {
@@ -225,13 +225,17 @@ function LeadCard({
             value={lead.response_status || "none"}
             onValueChange={(value) => onResponseStatusChange(lead.id, value === "none" ? null : value)}
           >
-            <SelectTrigger className="h-8 text-sm">
+            <SelectTrigger className={`h-8 text-sm border-2 ${
+              lead.response_status 
+                ? RESPONSE_STATUS_OPTIONS.find(s => s.id === lead.response_status)?.color || ""
+                : "bg-background"
+            }`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-background z-[100]">
               <SelectItem value="none">ללא סטטוס</SelectItem>
               {RESPONSE_STATUS_OPTIONS.map((option) => (
-                <SelectItem key={option.id} value={option.id}>
+                <SelectItem key={option.id} value={option.id} className={option.color}>
                   {option.label}
                 </SelectItem>
               ))}
@@ -307,7 +311,9 @@ function LeadCard({
                 value={lead.status}
                 onValueChange={(value) => onStatusChange(lead.id, value)}
               >
-                <SelectTrigger className="h-8 text-sm">
+                <SelectTrigger className={`h-8 text-sm border-2 ${
+                  PIPELINE_STAGES.find(s => s.id === lead.status)?.bgClass || ""
+                }`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
@@ -713,27 +719,37 @@ export default function Leads() {
         </div>
         <div className="flex gap-2">
           <Select value={filterStage} onValueChange={setFilterStage}>
-            <SelectTrigger className="flex-1 bg-background">
+            <SelectTrigger className={`flex-1 border-2 ${
+              filterStage !== "all" 
+                ? PIPELINE_STAGES.find(s => s.id === filterStage)?.bgClass || "bg-background"
+                : "bg-background"
+            }`}>
               <SelectValue placeholder="שלב" />
             </SelectTrigger>
             <SelectContent className="bg-background z-[100]">
               <SelectItem value="all">כל השלבים</SelectItem>
               {PIPELINE_STAGES.map((stage) => (
-                <SelectItem key={stage.id} value={stage.id}>
+                <SelectItem key={stage.id} value={stage.id} className={stage.bgClass}>
                   {stage.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
           <Select value={filterResponseStatus} onValueChange={setFilterResponseStatus}>
-            <SelectTrigger className="flex-1 bg-background">
+            <SelectTrigger className={`flex-1 border-2 ${
+              filterResponseStatus !== "all" 
+                ? filterResponseStatus === "none"
+                  ? "bg-background"
+                  : RESPONSE_STATUS_OPTIONS.find(s => s.id === filterResponseStatus)?.color || "bg-background"
+                : "bg-background"
+            }`}>
               <SelectValue placeholder="סטטוס" />
             </SelectTrigger>
             <SelectContent className="bg-background z-[100]">
               <SelectItem value="all">כל הסטטוסים</SelectItem>
               <SelectItem value="none">ללא סטטוס</SelectItem>
               {RESPONSE_STATUS_OPTIONS.map((status) => (
-                <SelectItem key={status.id} value={status.id}>
+                <SelectItem key={status.id} value={status.id} className={status.color}>
                   {status.label}
                 </SelectItem>
               ))}
@@ -763,27 +779,37 @@ export default function Leads() {
               />
             </div>
             <Select value={filterStage} onValueChange={setFilterStage}>
-              <SelectTrigger className="w-[180px] bg-background">
+              <SelectTrigger className={`w-[180px] border-2 ${
+                filterStage !== "all" 
+                  ? PIPELINE_STAGES.find(s => s.id === filterStage)?.bgClass || "bg-background"
+                  : "bg-background"
+              }`}>
                 <SelectValue placeholder="שלב במשפך" />
               </SelectTrigger>
               <SelectContent className="bg-background z-[100]">
                 <SelectItem value="all">כל השלבים</SelectItem>
                 {PIPELINE_STAGES.map((stage) => (
-                  <SelectItem key={stage.id} value={stage.id}>
+                  <SelectItem key={stage.id} value={stage.id} className={stage.bgClass}>
                     {stage.label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={filterResponseStatus} onValueChange={setFilterResponseStatus}>
-              <SelectTrigger className="w-[180px] bg-background">
+              <SelectTrigger className={`w-[180px] border-2 ${
+                filterResponseStatus !== "all" 
+                  ? filterResponseStatus === "none"
+                    ? "bg-background"
+                    : RESPONSE_STATUS_OPTIONS.find(s => s.id === filterResponseStatus)?.color || "bg-background"
+                  : "bg-background"
+              }`}>
                 <SelectValue placeholder="סטטוס תגובה" />
               </SelectTrigger>
               <SelectContent className="bg-background z-[100]">
                 <SelectItem value="all">כל הסטטוסים</SelectItem>
                 <SelectItem value="none">ללא סטטוס</SelectItem>
                 {RESPONSE_STATUS_OPTIONS.map((status) => (
-                  <SelectItem key={status.id} value={status.id}>
+                  <SelectItem key={status.id} value={status.id} className={status.color}>
                     {status.label}
                   </SelectItem>
                 ))}
@@ -1243,7 +1269,9 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                       })
                     }
                   >
-                    <SelectTrigger className="h-8 w-full">
+                    <SelectTrigger className={`h-8 w-full border-2 ${
+                      PIPELINE_STAGES.find(s => s.id === lead.status)?.bgClass || ""
+                    }`}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-background z-50">
@@ -1269,7 +1297,11 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                       })
                     }
                   >
-                    <SelectTrigger className="h-8 w-full">
+                    <SelectTrigger className={`h-8 w-full border-2 ${
+                      lead.response_status 
+                        ? RESPONSE_STATUS_OPTIONS.find(s => s.id === lead.response_status)?.color || ""
+                        : "bg-background"
+                    }`}>
                       <SelectValue placeholder="בחר סטטוס" />
                     </SelectTrigger>
                     <SelectContent className="bg-background z-50">
@@ -1278,24 +1310,25 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                         <SelectItem 
                           key={status.id} 
                           value={status.id}
+                          className={status.color}
                         >
                           {status.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                </TableCell>
-                <TableCell className="w-[80px]">
-                  <div className="flex justify-center">
-                    <EditLeadDialog lead={lead} />
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        </div>
-      </div>
-    </div>
-  );
-}
+                 </TableCell>
+                 <TableCell className="w-[80px]">
+                   <div className="flex justify-center">
+                     <EditLeadDialog lead={lead} />
+                   </div>
+                 </TableCell>
+               </TableRow>
+             ))}
+           </TableBody>
+         </Table>
+         </div>
+       </div>
+     </div>
+   );
+ }
