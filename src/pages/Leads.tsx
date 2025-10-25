@@ -928,50 +928,41 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
       <div ref={xContainerRef} className="overflow-x-auto w-full">
         {/* Vertical scroll only for table body */}
         <div className="max-h-[500px] overflow-y-auto">
-          <Table className="min-w-[1200px] table-fixed">
+          <Table className="min-w-[1000px] table-fixed">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow className="whitespace-nowrap">
-                <TableHead className="text-right sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 min-w-[200px]">שם</TableHead>
-                <TableHead className="text-right bg-background min-w-[160px]">טלפון</TableHead>
-                <TableHead className="text-right bg-background min-w-[220px]">אימייל</TableHead>
-                <TableHead className="text-right bg-background min-w-[220px]">שם חברה</TableHead>
-                <TableHead className="text-right bg-background min-w-[180px]">שלב במשפך</TableHead>
-                <TableHead className="text-right bg-background min-w-[180px]">סטטוס</TableHead>
-                <TableHead className="text-right bg-background min-w-[160px]">פעולות</TableHead>
+                <TableHead className="text-right sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 w-[200px]">שם</TableHead>
+                <TableHead className="text-right bg-background w-[160px]">טלפון</TableHead>
+                <TableHead className="text-right bg-background w-[200px]">שם חברה</TableHead>
+                <TableHead className="text-right bg-background w-[180px]">שלב במשפך</TableHead>
+                <TableHead className="text-right bg-background w-[180px]">סטטוס</TableHead>
+                <TableHead className="text-right bg-background w-[80px]">פעולות</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
             {stageLeads.map((lead: any) => (
               <TableRow key={lead.id} className="whitespace-nowrap">
-                <TableCell className="font-medium sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10 min-w-[200px]">
+                <TableCell className="font-medium sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10 w-[200px]">
                   <div className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    {lead.contact_name || "-"}
+                    <User className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{lead.contact_name || "-"}</span>
                   </div>
                 </TableCell>
-                <TableCell className="min-w-[160px]">
+                <TableCell className="w-[160px]">
                   {lead.phone ? (
                     <a href={`tel:${lead.phone}`} className="hover:underline flex items-center gap-1">
-                      <Phone className="h-3 w-3" />
-                      {lead.phone}
+                      <Phone className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{lead.phone}</span>
                     </a>
                   ) : "-"}
                 </TableCell>
-                <TableCell className="min-w-[220px]">
-                  {lead.email ? (
-                    <a href={`mailto:${lead.email}`} className="hover:underline flex items-center gap-1">
-                      <Mail className="h-3 w-3" />
-                      {lead.email}
-                    </a>
-                  ) : "-"}
-                </TableCell>
-                <TableCell className="min-w-[220px]">
+                <TableCell className="w-[200px]">
                   <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4" />
-                    {lead.company_name}
+                    <Building2 className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{lead.company_name}</span>
                   </div>
                 </TableCell>
-                <TableCell className="min-w-[180px]">
+                <TableCell className="w-[180px]">
                   <Select
                     value={lead.status}
                     onValueChange={(value) => 
@@ -981,7 +972,7 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                       })
                     }
                   >
-                    <SelectTrigger className="h-8 w-[160px]">
+                    <SelectTrigger className="h-8 w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-background z-50">
@@ -997,7 +988,7 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                     </SelectContent>
                   </Select>
                 </TableCell>
-                <TableCell className="min-w-[180px]">
+                <TableCell className="w-[180px]">
                   <Select
                     value={lead.response_status || "none"}
                     onValueChange={(value) => 
@@ -1007,7 +998,7 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                       })
                     }
                   >
-                    <SelectTrigger className="h-8 w-[160px]">
+                    <SelectTrigger className="h-8 w-full">
                       <SelectValue placeholder="בחר סטטוס" />
                     </SelectTrigger>
                     <SelectContent className="bg-background z-50">
@@ -1023,37 +1014,9 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                     </SelectContent>
                   </Select>
                 </TableCell>
-                <TableCell className="min-w-[160px]">
-                  <div className="flex gap-2">
+                <TableCell className="w-[80px]">
+                  <div className="flex justify-center">
                     <EditLeadDialog lead={lead} />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={async () => {
-                        try {
-                          const { error } = await supabase
-                            .from("leads")
-                            .delete()
-                            .eq("id", lead.id);
-
-                          if (error) throw error;
-
-                          toast({
-                            title: "ליד נמחק בהצלחה",
-                          });
-                          queryClient.invalidateQueries({ queryKey: ["leads"] });
-                        } catch (error: any) {
-                          toast({
-                            title: "שגיאה במחיקת ליד",
-                            description: error.message,
-                            variant: "destructive",
-                          });
-                        }
-                      }}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
                   </div>
                 </TableCell>
               </TableRow>
