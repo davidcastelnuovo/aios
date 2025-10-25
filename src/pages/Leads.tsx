@@ -925,10 +925,10 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
   return (
     <div className="relative">
       {/* Horizontal scroll container wraps everything */}
-      <div ref={xContainerRef} className="overflow-x-auto">
+      <div ref={xContainerRef} className="overflow-x-auto w-full">
         {/* Vertical scroll only for table body */}
         <div className="max-h-[500px] overflow-y-auto">
-          <Table className="min-w-[900px]">
+          <Table className="min-w-[1200px] table-fixed">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow className="whitespace-nowrap">
                 <TableHead className="text-right sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 min-w-[200px]">שם</TableHead>
