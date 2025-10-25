@@ -3,12 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "./useUserRole";
 
 export function useUserAgencies() {
-  const { isOwner, isTeamManager, isCampaigner, userId } = useUserRole();
+  const { isOwner, isTeamManager, isCampaigner, isSalesPerson, userId, salesPersonAgencyIds } = useUserRole();
 
   const { data: userAgencyIds, isLoading } = useQuery({
-    queryKey: ["user-agency-ids", userId, isOwner, isTeamManager, isCampaigner],
+    queryKey: ["user-agency-ids", userId, isOwner, isTeamManager, isCampaigner, isSalesPerson],
     queryFn: async () => {
-      console.log("🔍 useUserAgencies - Starting:", { userId, isOwner, isTeamManager, isCampaigner });
+      console.log("🔍 useUserAgencies - Starting:", { userId, isOwner, isTeamManager, isCampaigner, isSalesPerson });
       
       if (isOwner) {
         console.log("✅ User is Owner - returning null (all agencies)");
@@ -21,6 +21,12 @@ export function useUserAgencies() {
       }
 
       const aggregated = new Set<string>();
+
+      // Sales Person: use their assigned agencies from salesPersonAgencyIds
+      if (isSalesPerson && salesPersonAgencyIds && salesPersonAgencyIds.length > 0) {
+        console.log("🔍 Sales Person - using salesPersonAgencyIds:", salesPersonAgencyIds);
+        salesPersonAgencyIds.forEach((id) => aggregated.add(id));
+      }
 
       // Campaigner or Team Manager with campaigner_id: agencies via campaigner_agencies
       if (isCampaigner || isTeamManager) {
@@ -70,7 +76,7 @@ export function useUserAgencies() {
       const finalAgencies = Array.from(aggregated);
       console.log("✅ useUserAgencies final result:", {
         userId,
-        roles: { isOwner, isTeamManager, isCampaigner },
+        roles: { isOwner, isTeamManager, isCampaigner, isSalesPerson },
         agencyIds: finalAgencies,
         count: finalAgencies.length,
       });

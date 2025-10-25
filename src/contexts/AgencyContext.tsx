@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserAgencies } from "@/hooks/useUserAgencies";
 
 
 interface AgencyContextType {
@@ -23,6 +24,7 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
   };
   const [selectedAgency, setSelectedAgency] = useState<string>(getInitialSelectedAgency());
   const didSetDefault = useRef(false);
+  const { userAgencyIds } = useUserAgencies();
 
   
 
@@ -33,9 +35,9 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, [selectedAgency]);
 
-  // Get all agencies for the filter
+  // Get all agencies for the filter - filtered by RLS so users only see their agencies
   const { data: allAgencies, isLoading: isLoadingAgencies } = useQuery({
-    queryKey: ["agencies-filter"],
+    queryKey: ["agencies-filter", userAgencyIds],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("agencies")
@@ -47,13 +49,13 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
         return [];
       }
       
-      console.log("🏢 Fetched agencies:", data);
+      console.log("🏢 Fetched agencies (filtered by RLS):", data);
       return data || [];
     },
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
   });
 
-  // Agencies available globally (independent of user role)
+  // Agencies available (RLS-filtered)
   const agencies = allAgencies;
 
   const isLoading = isLoadingAgencies;
