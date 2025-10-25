@@ -20,51 +20,89 @@ export default function Setup() {
   useEffect(() => {
     const handleRedirect = async () => {
       try {
-        const code = searchParams.get("code");
-        const type = searchParams.get("type");
-        const error = searchParams.get("error");
-        const errorDescription = searchParams.get("error_description");
+        // 1) Handle hash-based tokens (#access_token=...&refresh_token=...)
+        const hash = window.location.hash;
+        if (hash) {
+          const hashParams = new URLSearchParams(hash.replace('#', ''));
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token');
+          if (accessToken && refreshToken) {
+            const { data, error: setSessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            if (setSessionError) {
+              console.error('setSession error:', setSessionError);
+              toast.error('שגיאה באימות הקישור');
+              return setTimeout(() => navigate('/auth'), 1500);
+            }
+            setEmail(data.user?.email || '');
+            setVerifying(false);
+            return;
+          }
+        }
 
-        // If we have a code from email link, exchange it for a session
+        // 2) Handle PKCE code in query (?code=...)
+        const code = searchParams.get('code');
         if (code) {
           const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
           if (exchangeError) {
-            console.error("exchangeCodeForSession error:", exchangeError);
-            toast.error(errorDescription || exchangeError.message || "שגיאה באימות הקישור");
-            return setTimeout(() => navigate("/auth"), 1500);
+            console.error('exchangeCodeForSession error:', exchangeError);
+            toast.error(exchangeError.message || 'שגיאה באימות הקישור');
+            return setTimeout(() => navigate('/auth'), 1500);
           }
-
-          // Session established → move to password setup for invite/recovery
-          setEmail(data.user?.email || "");
+          setEmail(data.user?.email || '');
           setVerifying(false);
           return;
         }
 
-        // No code param – check if already authenticated
+        // 3) Handle token_hash + type (e.g. type=invite|recovery&token_hash=...)
+        const tokenHash = searchParams.get('token_hash');
+        const type = searchParams.get('type');
+        const explicitError = searchParams.get('error');
+        const errorDescription = searchParams.get('error_description');
+
+        if (tokenHash && type) {
+          const verifyType = type === 'invite' ? 'signup' : (type as any);
+          const { data, error: verifyError } = await supabase.auth.verifyOtp({
+            type: verifyType,
+            token_hash: tokenHash,
+          } as any);
+          if (verifyError) {
+            console.error('verifyOtp error:', verifyError);
+            toast.error(errorDescription || verifyError.message || 'שגיאה באימות הקישור');
+            return setTimeout(() => navigate('/auth'), 1500);
+          }
+          setEmail(data.user?.email || '');
+          setVerifying(false);
+          return;
+        }
+
+        // 4) Already authenticated? If came from invite/recovery keep on setup
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          if (type === "invite" || type === "recovery") {
-            setEmail(session.user.email || "");
+          if (type === 'invite' || type === 'recovery') {
+            setEmail(session.user.email || '');
             setVerifying(false);
           } else {
-            navigate("/my-profile");
+            navigate('/my-profile');
           }
           return;
         }
 
-        // Handle explicit errors from redirect
-        if (error) {
-          toast.error(errorDescription || "הקישור אינו תקף או שפג תוקפו");
-          return setTimeout(() => navigate("/auth"), 1500);
+        // 5) Explicit errors from redirect
+        if (explicitError) {
+          toast.error(errorDescription || 'הקישור אינו תקף או שפג תוקפו');
+          return setTimeout(() => navigate('/auth'), 1500);
         }
 
-        // Fallback when nothing found
-        toast.error("לא נמצא טוקן תקף. אנא השתמשו בקישור שנשלח במייל");
-        setTimeout(() => navigate("/auth"), 1500);
+        // 6) Fallback
+        toast.error('לא נמצא טוקן תקף. אנא השתמשו בקישור שנשלח במייל');
+        setTimeout(() => navigate('/auth'), 1500);
       } catch (err: any) {
-        console.error("Error verifying token:", err);
-        toast.error("שגיאה באימות הקישור");
-        setTimeout(() => navigate("/auth"), 1500);
+        console.error('Error verifying token:', err);
+        toast.error('שגיאה באימות הקישור');
+        setTimeout(() => navigate('/auth'), 1500);
       }
     };
 
