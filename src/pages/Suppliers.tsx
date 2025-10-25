@@ -1,15 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Truck, Phone, Mail, Coins, Pencil } from "lucide-react";
+import { Truck, Phone, Mail, Coins, Pencil, Trash2 } from "lucide-react";
 import { AddSupplierForm } from "@/components/forms/AddSupplierForm";
 import { EditSupplierDialog } from "@/components/forms/EditSupplierDialog";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { toast } from "sonner";
 
 export default function Suppliers() {
   const [editingSupplier, setEditingSupplier] = useState<any>(null);
+  const queryClient = useQueryClient();
+  
   const { data: suppliers, isLoading } = useQuery({
     queryKey: ["suppliers"],
     queryFn: async () => {
@@ -24,6 +27,23 @@ export default function Suppliers() {
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
+    },
+  });
+
+  const deleteSupplierMutation = useMutation({
+    mutationFn: async (supplierId: string) => {
+      const { error } = await supabase
+        .from("suppliers")
+        .delete()
+        .eq("id", supplierId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      toast.success("הספק נמחק בהצלחה");
+    },
+    onError: (error: Error) => {
+      toast.error("שגיאה במחיקת ספק: " + error.message);
     },
   });
 
@@ -91,6 +111,18 @@ export default function Suppliers() {
                     onClick={() => setEditingSupplier(supplier)}
                   >
                     <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      if (confirm(`האם אתה בטוח שברצונך למחוק את הספק "${supplier.name}"?`)) {
+                        deleteSupplierMutation.mutate(supplier.id);
+                      }
+                    }}
+                    disabled={deleteSupplierMutation.isPending}
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </div>
               </div>
