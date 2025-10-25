@@ -21,7 +21,8 @@ export default function MyProfile() {
         .from("profiles")
         .select(`
           *,
-          campaigners (*)
+          campaigners (*),
+          sales_people (*)
         `)
         .eq("id", userId)
         .maybeSingle();
@@ -55,6 +56,27 @@ export default function MyProfile() {
       return data;
     },
     enabled: !!profile?.campaigner_id,
+  });
+
+  // Fetch leads for sales people
+  const { data: salesLeads } = useQuery({
+    queryKey: ["my-sales-leads", profile?.sales_person_id],
+    queryFn: async () => {
+      if (!profile?.sales_person_id) return [];
+
+      const { data, error } = await supabase
+        .from("leads")
+        .select(`
+          *,
+          agencies (name)
+        `)
+        .eq("sales_person_id", profile.sales_person_id)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!profile?.sales_person_id,
   });
 
   const { data: agencies } = useQuery({
@@ -180,7 +202,11 @@ export default function MyProfile() {
     return <div className="flex justify-center p-8">טוען...</div>;
   }
 
-  if (!profile?.campaigners) {
+  // Check if user is a sales person or campaigner
+  const isSalesPerson = profile?.sales_person_id && profile?.sales_people;
+  const isCampaigner = profile?.campaigner_id && profile?.campaigners;
+
+  if (!isSalesPerson && !isCampaigner) {
     return (
       <div className="space-y-6 p-6">
         <div>
@@ -188,15 +214,15 @@ export default function MyProfile() {
         </div>
         <Card>
           <CardContent className="p-6">
-            <p className="text-muted-foreground">לא נמצא פרופיל קמפיינר עבור המשתמש שלך.</p>
+            <p className="text-muted-foreground">לא נמצא פרופיל עבור המשתמש שלך.</p>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  const campaigner = profile.campaigners;
-  const totalPayment = calculateTotal();
+  const person = isSalesPerson ? profile.sales_people : profile.campaigners;
+  const totalPayment = isCampaigner ? calculateTotal() : 0;
 
   return (
     <div className="space-y-6 p-6">
@@ -207,9 +233,9 @@ export default function MyProfile() {
       <Card className="shadow-card">
         <CardHeader className="border-b bg-muted/30">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl">{campaigner.full_name}</CardTitle>
-            <Badge variant={campaigner.active ? "default" : "secondary"}>
-              {campaigner.active ? "פעיל" : "לא פעיל"}
+            <CardTitle className="text-2xl">{person.full_name}</CardTitle>
+            <Badge variant={person.active ? "default" : "secondary"}>
+              {person.active ? "פעיל" : "לא פעיל"}
             </Badge>
           </div>
         </CardHeader>
@@ -221,23 +247,23 @@ export default function MyProfile() {
               פרטי קשר
             </h3>
             <div className="grid gap-3">
-              {campaigner.phone && (
+              {person.phone && (
                 <div className="flex items-center gap-3 text-sm">
                   <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span dir="ltr">{campaigner.phone}</span>
+                  <span dir="ltr">{person.phone}</span>
                 </div>
               )}
-              {campaigner.email && (
+              {person.email && (
                 <div className="flex items-center gap-3 text-sm">
                   <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span>{campaigner.email}</span>
+                  <span>{person.email}</span>
                 </div>
               )}
-              {campaigner.folder_link && (
+              {person.folder_link && (
                 <div className="flex items-center gap-3 text-sm">
                   <Folder className="h-4 w-4 text-muted-foreground" />
                   <a
-                    href={campaigner.folder_link}
+                    href={person.folder_link}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-primary hover:underline"
@@ -249,8 +275,8 @@ export default function MyProfile() {
             </div>
           </div>
 
-          {/* Agencies */}
-          {mergedAgencies && mergedAgencies.length > 0 && (
+          {/* Agencies - only for campaigners */}
+          {isCampaigner && mergedAgencies && mergedAgencies.length > 0 && (
             <div className="space-y-3">
               <h3 className="font-semibold text-lg">סוכנויות</h3>
               <div className="flex flex-wrap gap-2">
@@ -263,128 +289,201 @@ export default function MyProfile() {
             </div>
           )}
 
-          {/* Role */}
-          {campaigner.role && (
+          {/* Agency - for sales people */}
+          {isSalesPerson && profile.sales_people?.agency_id && (
             <div className="space-y-3">
-              <h3 className="font-semibold text-lg">תפקיד</h3>
-              <Badge variant="secondary">{campaigner.role}</Badge>
+              <h3 className="font-semibold text-lg">סוכנות</h3>
+              <p className="text-sm text-muted-foreground">מוצג בלידים</p>
             </div>
           )}
 
           {/* Notes */}
-          {campaigner.notes && (
+          {person.notes && (
             <div className="space-y-3">
               <h3 className="font-semibold text-lg">הערות</h3>
               <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                {campaigner.notes}
+                {person.notes}
               </p>
             </div>
           )}
 
-          {/* Client Assignments */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <button
-                className="w-full flex items-center justify-between p-2 hover:bg-muted/50 rounded text-foreground"
-                onClick={() => setShowAssignments(!showAssignments)}
-              >
-                <h3 className="font-semibold text-lg">
-                  לקוחות משויכים ({assignments?.filter(a => a.clients?.status === "active" || a.clients?.status === "onboarding").length || 0})
-                </h3>
-                {showAssignments ? (
-                  <ChevronUp className="h-5 w-5" />
-                ) : (
-                  <ChevronDown className="h-5 w-5" />
-                )}
-              </button>
-            </div>
-            {totalPayment > 0 && (
-              <div className="flex items-center gap-2 text-primary font-semibold">
-                <span>סה"כ תשלום: ₪{totalPayment.toLocaleString()}</span>
+          {/* Client Assignments - for campaigners */}
+          {isCampaigner && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <button
+                  className="w-full flex items-center justify-between p-2 hover:bg-muted/50 rounded text-foreground"
+                  onClick={() => setShowAssignments(!showAssignments)}
+                >
+                  <h3 className="font-semibold text-lg">
+                    לקוחות משויכים ({assignments?.filter(a => a.clients?.status === "active" || a.clients?.status === "onboarding").length || 0})
+                  </h3>
+                  {showAssignments ? (
+                    <ChevronUp className="h-5 w-5" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5" />
+                  )}
+                </button>
               </div>
-            )}
-            
-            {showAssignments && assignments && assignments.length > 0 && (
-              <div className="space-y-3">
-                {assignments
-                  .filter(assignment => 
-                    assignment.clients?.status === "active" || 
-                    assignment.clients?.status === "onboarding"
-                  )
-                  .map((assignment) => (
-                  <Card key={assignment.id} className="bg-muted/30">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-medium">{assignment.clients?.name}</h4>
-                            <Badge className={getStatusColor(assignment.clients?.status || "")}>
-                              {getStatusText(assignment.clients?.status || "")}
-                            </Badge>
+              {totalPayment > 0 && (
+                <div className="flex items-center gap-2 text-primary font-semibold">
+                  <span>סה"כ תשלום: ₪{totalPayment.toLocaleString()}</span>
+                </div>
+              )}
+              
+              {showAssignments && assignments && assignments.length > 0 && (
+                <div className="space-y-3">
+                  {assignments
+                    .filter(assignment => 
+                      assignment.clients?.status === "active" || 
+                      assignment.clients?.status === "onboarding"
+                    )
+                    .map((assignment) => (
+                    <Card key={assignment.id} className="bg-muted/30">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-medium">{assignment.clients?.name}</h4>
+                              <Badge className={getStatusColor(assignment.clients?.status || "")}>
+                                {getStatusText(assignment.clients?.status || "")}
+                              </Badge>
+                            </div>
+                            
+                            {assignment.clients?.agencies && (
+                              <p className="text-sm text-muted-foreground">
+                                {assignment.clients.agencies.name}
+                              </p>
+                            )}
+
+                            {assignment.role_on_account && (
+                              <p className="text-sm">
+                                <span className="text-muted-foreground">תפקיד: </span>
+                                {assignment.role_on_account}
+                              </p>
+                            )}
+
+                            {assignment.allocation_percent && (
+                              <p className="text-sm">
+                                <span className="text-muted-foreground">אחוז הקצאה: </span>
+                                {assignment.allocation_percent}%
+                              </p>
+                            )}
+
+                            {(assignment.start_date || assignment.end_date) && (
+                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                {assignment.start_date && (
+                                  <div className="flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    <span>התחלה: {format(new Date(assignment.start_date), "dd/MM/yyyy", { locale: he })}</span>
+                                  </div>
+                                )}
+                                {assignment.end_date && (
+                                  <div className="flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    <span>סיום: {format(new Date(assignment.end_date), "dd/MM/yyyy", { locale: he })}</span>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {assignment.notes && (
+                              <p className="text-sm text-muted-foreground italic">
+                                {assignment.notes}
+                              </p>
+                            )}
                           </div>
-                          
-                          {assignment.clients?.agencies && (
-                            <p className="text-sm text-muted-foreground">
-                              {assignment.clients.agencies.name}
-                            </p>
-                          )}
 
-                          {assignment.role_on_account && (
-                            <p className="text-sm">
-                              <span className="text-muted-foreground">תפקיד: </span>
-                              {assignment.role_on_account}
-                            </p>
-                          )}
-
-                          {assignment.allocation_percent && (
-                            <p className="text-sm">
-                              <span className="text-muted-foreground">אחוז הקצאה: </span>
-                              {assignment.allocation_percent}%
-                            </p>
-                          )}
-
-                          {(assignment.start_date || assignment.end_date) && (
-                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                              {assignment.start_date && (
-                                <div className="flex items-center gap-1">
-                                  <Calendar className="h-3 w-3" />
-                                  <span>התחלה: {format(new Date(assignment.start_date), "dd/MM/yyyy", { locale: he })}</span>
-                                </div>
-                              )}
-                              {assignment.end_date && (
-                                <div className="flex items-center gap-1">
-                                  <Calendar className="h-3 w-3" />
-                                  <span>סיום: {format(new Date(assignment.end_date), "dd/MM/yyyy", { locale: he })}</span>
-                                </div>
-                              )}
+                          {assignment.campaigner_payment && Number(assignment.campaigner_payment) > 0 && (
+                            <div className="text-left">
+                              <Badge variant="outline" className="text-base font-semibold">
+                                ₪{Number(assignment.campaigner_payment).toLocaleString()}
+                              </Badge>
                             </div>
                           )}
-
-                          {assignment.notes && (
-                            <p className="text-sm text-muted-foreground italic">
-                              {assignment.notes}
-                            </p>
-                          )}
                         </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
 
-                        {assignment.campaigner_payment && Number(assignment.campaigner_payment) > 0 && (
-                          <div className="text-left">
-                            <Badge variant="outline" className="text-base font-semibold">
-                              ₪{Number(assignment.campaigner_payment).toLocaleString()}
-                            </Badge>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+              {showAssignments && (!assignments || assignments.length === 0) && (
+                <p className="text-sm text-muted-foreground">אין לקוחות משויכים</p>
+              )}
+            </div>
+          )}
+
+          {/* Leads - for sales people */}
+          {isSalesPerson && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <button
+                  className="w-full flex items-center justify-between p-2 hover:bg-muted/50 rounded text-foreground"
+                  onClick={() => setShowAssignments(!showAssignments)}
+                >
+                  <h3 className="font-semibold text-lg">
+                    לידים שלי ({salesLeads?.length || 0})
+                  </h3>
+                  {showAssignments ? (
+                    <ChevronUp className="h-5 w-5" />
+                  ) : (
+                    <ChevronDown className="h-5 w-5" />
+                  )}
+                </button>
               </div>
-            )}
+              
+              {showAssignments && salesLeads && salesLeads.length > 0 && (
+                <div className="space-y-3">
+                  {salesLeads.map((lead) => (
+                    <Card key={lead.id} className="bg-muted/30">
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-medium">{lead.company_name}</h4>
+                              <Badge>{lead.status}</Badge>
+                            </div>
+                            
+                            {lead.agencies && (
+                              <p className="text-sm text-muted-foreground">
+                                {lead.agencies.name}
+                              </p>
+                            )}
 
-            {showAssignments && (!assignments || assignments.length === 0) && (
-              <p className="text-sm text-muted-foreground">אין לקוחות משויכים</p>
-            )}
-          </div>
+                            {lead.contact_name && (
+                              <p className="text-sm">
+                                <span className="text-muted-foreground">איש קשר: </span>
+                                {lead.contact_name}
+                              </p>
+                            )}
+
+                            {lead.email && (
+                              <p className="text-sm">
+                                <Mail className="h-3 w-3 inline ml-1" />
+                                {lead.email}
+                              </p>
+                            )}
+
+                            {lead.phone && (
+                              <p className="text-sm" dir="ltr">
+                                <Phone className="h-3 w-3 inline ml-1" />
+                                {lead.phone}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {showAssignments && (!salesLeads || salesLeads.length === 0) && (
+                <p className="text-sm text-muted-foreground">אין לידים משויכים</p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
