@@ -930,26 +930,26 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
         <div className="max-h-[500px] overflow-y-auto">
           <Table className="min-w-[900px]">
             <TableHeader className="sticky top-0 z-10 bg-background">
-              <TableRow>
-                <TableHead className="text-right sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20">שם</TableHead>
-                <TableHead className="text-right bg-background">טלפון</TableHead>
-                <TableHead className="text-right bg-background">אימייל</TableHead>
-                <TableHead className="text-right bg-background">שם חברה</TableHead>
-                <TableHead className="text-right bg-background">שלב במשפך</TableHead>
-                <TableHead className="text-right bg-background">סטטוס</TableHead>
-                <TableHead className="text-right bg-background">פעולות</TableHead>
+              <TableRow className="whitespace-nowrap">
+                <TableHead className="text-right sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 min-w-[200px]">שם</TableHead>
+                <TableHead className="text-right bg-background min-w-[160px]">טלפון</TableHead>
+                <TableHead className="text-right bg-background min-w-[220px]">אימייל</TableHead>
+                <TableHead className="text-right bg-background min-w-[220px]">שם חברה</TableHead>
+                <TableHead className="text-right bg-background min-w-[180px]">שלב במשפך</TableHead>
+                <TableHead className="text-right bg-background min-w-[180px]">סטטוס</TableHead>
+                <TableHead className="text-right bg-background min-w-[160px]">פעולות</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
             {stageLeads.map((lead: any) => (
-              <TableRow key={lead.id}>
-                <TableCell className="font-medium sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10">
+              <TableRow key={lead.id} className="whitespace-nowrap">
+                <TableCell className="font-medium sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10 min-w-[200px]">
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4" />
                     {lead.contact_name || "-"}
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className="min-w-[160px]">
                   {lead.phone ? (
                     <a href={`tel:${lead.phone}`} className="hover:underline flex items-center gap-1">
                       <Phone className="h-3 w-3" />
@@ -957,7 +957,7 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                     </a>
                   ) : "-"}
                 </TableCell>
-                <TableCell>
+                <TableCell className="min-w-[220px]">
                   {lead.email ? (
                     <a href={`mailto:${lead.email}`} className="hover:underline flex items-center gap-1">
                       <Mail className="h-3 w-3" />
@@ -965,13 +965,13 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                     </a>
                   ) : "-"}
                 </TableCell>
-                <TableCell>
+                <TableCell className="min-w-[220px]">
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4" />
                     {lead.company_name}
                   </div>
                 </TableCell>
-                <TableCell>
+                <TableCell className="min-w-[180px]">
                   <Select
                     value={lead.status}
                     onValueChange={(value) => 
@@ -981,7 +981,7 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                       })
                     }
                   >
-                    <SelectTrigger className="h-8 w-[140px]">
+                    <SelectTrigger className="h-8 w-[160px]">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-background z-50">
@@ -997,7 +997,7 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                     </SelectContent>
                   </Select>
                 </TableCell>
-                <TableCell>
+                <TableCell className="min-w-[180px]">
                   <Select
                     value={lead.response_status || "none"}
                     onValueChange={(value) => 
@@ -1007,7 +1007,7 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                       })
                     }
                   >
-                    <SelectTrigger className="h-8 w-[140px]">
+                    <SelectTrigger className="h-8 w-[160px]">
                       <SelectValue placeholder="בחר סטטוס" />
                     </SelectTrigger>
                     <SelectContent className="bg-background z-50">
@@ -1023,7 +1023,7 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                     </SelectContent>
                   </Select>
                 </TableCell>
-                <TableCell>
+                <TableCell className="min-w-[160px]">
                   <div className="flex gap-2">
                     <EditLeadDialog lead={lead} />
                     <Button
