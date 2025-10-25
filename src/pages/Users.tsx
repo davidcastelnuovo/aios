@@ -533,7 +533,7 @@ export default function Users() {
           {isLoading ? (
             <div className="p-6 text-center">טוען...</div>
           ) : (
-            <Table>
+            <Table className="min-w-[1200px] whitespace-nowrap">
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-right">שם מלא</TableHead>
