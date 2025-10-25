@@ -112,7 +112,15 @@ function DroppableStage({ stage, children }: { stage: any; children: ReactNode }
   );
 }
 
-function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId: string, newStatus: string) => void }) {
+function LeadCard({ 
+  lead, 
+  onStatusChange, 
+  onResponseStatusChange 
+}: { 
+  lead: any; 
+  onStatusChange: (leadId: string, newStatus: string) => void;
+  onResponseStatusChange: (leadId: string, responseStatus: string | null) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: lead.id,
   });
@@ -209,6 +217,27 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
           )}
         </div>
 
+        {/* Response Status Selector - Always visible */}
+        <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+          <label className="text-xs font-semibold text-muted-foreground">סטטוס תגובה</label>
+          <Select
+            value={lead.response_status || "none"}
+            onValueChange={(value) => onResponseStatusChange(lead.id, value === "none" ? null : value)}
+          >
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-[100]">
+              <SelectItem value="none">ללא סטטוס</SelectItem>
+              {RESPONSE_STATUS_OPTIONS.map((option) => (
+                <SelectItem key={option.id} value={option.id}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Collapsible Details Section */}
         <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
           <CollapsibleTrigger className="flex items-center justify-between w-full hover:opacity-70 transition-opacity pb-2">
@@ -232,20 +261,6 @@ function LeadCard({ lead, onStatusChange }: { lead: any; onStatusChange: (leadId
                   {PIPELINE_STAGES.find(s => s.id === lead.status)?.label || lead.status}
                 </span>
               </div>
-              
-              {lead.response_status && (
-                <div className="bg-muted/30 p-2 rounded col-span-2">
-                  <span className="font-semibold block text-muted-foreground mb-1">סטטוס</span>
-                  <span className="font-medium">
-                    {lead.response_status === 'no_answer_1' && 'אין מענה 1'}
-                    {lead.response_status === 'no_answer_2' && 'אין מענה 2'}
-                    {lead.response_status === 'no_answer_3' && 'אין מענה 3'}
-                    {lead.response_status === 'no_answer_4' && 'אין מענה 4'}
-                    {lead.response_status === 'denies_contact' && 'מכחיש פניה'}
-                    {lead.response_status === 'not_relevant' && 'לא רלוונטי'}
-                  </span>
-                </div>
-              )}
               
               <div className="bg-muted/30 p-2 rounded col-span-2">
                 <span className="font-semibold block text-muted-foreground mb-1">תאריך יצירה</span>
@@ -694,6 +709,12 @@ export default function Leads() {
                                 newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
                               })
                             }
+                            onResponseStatusChange={(leadId, responseStatus) =>
+                              updateLeadResponseStatus.mutate({
+                                leadId,
+                                responseStatus: responseStatus as "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant" | null
+                              })
+                            }
                           />
                         ))}
                       </SortableContext>
@@ -706,6 +727,7 @@ export default function Leads() {
                   <LeadCard 
                     lead={activeLead}
                     onStatusChange={() => {}}
+                    onResponseStatusChange={() => {}}
                   />
                 ) : null}
               </DragOverlay>
@@ -788,6 +810,12 @@ export default function Leads() {
                                 newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
                               })
                             }
+                            onResponseStatusChange={(leadId, responseStatus) =>
+                              updateLeadResponseStatus.mutate({
+                                leadId,
+                                responseStatus: responseStatus as "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant" | null
+                              })
+                            }
                           />
                         ))}
                       </SortableContext>
@@ -802,6 +830,7 @@ export default function Leads() {
                 <LeadCard 
                   lead={activeLead}
                   onStatusChange={() => {}}
+                  onResponseStatusChange={() => {}}
                 />
               ) : null}
             </DragOverlay>
