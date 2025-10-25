@@ -336,7 +336,17 @@ export default function Users() {
               </DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[calc(90vh-180px)] pl-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pr-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pr-4" dir="rtl">
+                <div>
+                  <Label htmlFor="invite-email">אימייל משתמש</Label>
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="user@example.com"
+                  />
+                </div>
                 <div>
                   <Label htmlFor="invite-full-name">שם מלא (אופציונלי)</Label>
                   <Input
@@ -348,14 +358,23 @@ export default function Users() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="invite-email">אימייל משתמש</Label>
-                  <Input
-                    id="invite-email"
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="user@example.com"
-                  />
+                  <Label htmlFor="campaigner">קמפיינר משויך (אופציונלי)</Label>
+                  <Select
+                    value={selectedCampaignerId || "none"}
+                    onValueChange={(value) => setSelectedCampaignerId(value === "none" ? "" : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר קמפיינר" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">ללא שיוך</SelectItem>
+                      {campaigners?.map((campaigner) => (
+                        <SelectItem key={campaigner.id} value={campaigner.id}>
+                          {campaigner.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div>
                   <Label htmlFor="invite-role">תפקיד</Label>
@@ -374,27 +393,6 @@ export default function Users() {
                       {Object.entries(roleLabels).map(([value, label]) => (
                         <SelectItem key={value} value={value}>
                           {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Campaigner Selection */}
-                <div>
-                  <Label htmlFor="campaigner">קמפיינר משויך (אופציונלי)</Label>
-                  <Select
-                    value={selectedCampaignerId || "none"}
-                    onValueChange={(value) => setSelectedCampaignerId(value === "none" ? "" : value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="בחר קמפיינר" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">ללא שיוך</SelectItem>
-                      {campaigners?.map((campaigner) => (
-                        <SelectItem key={campaigner.id} value={campaigner.id}>
-                          {campaigner.full_name}
                         </SelectItem>
                       ))}
                     </SelectContent>
