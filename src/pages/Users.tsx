@@ -26,6 +26,7 @@ import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialo
 import { EditUserPermissionsDialog } from "@/components/forms/EditUserPermissionsDialog";
 import { EditUserCampaignerDialog } from "@/components/forms/EditUserCampaignerDialog";
 import { EditUserSalesPersonDialog } from "@/components/forms/EditUserSalesPersonDialog";
+import { EditUserNameDialog } from "@/components/forms/EditUserNameDialog";
 import {
   Dialog,
   DialogContent,
@@ -62,6 +63,7 @@ export default function Users() {
   const queryClient = useQueryClient();
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteFullName, setInviteFullName] = useState("");
   const [inviteRole, setInviteRole] = useState<UserRole>("campaigner");
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
@@ -75,6 +77,9 @@ export default function Users() {
   const [editCampaignerUserEmail, setEditCampaignerUserEmail] = useState<string>("");
   const [editSalesPersonUserId, setEditSalesPersonUserId] = useState<string | null>(null);
   const [editSalesPersonUserEmail, setEditSalesPersonUserEmail] = useState<string>("");
+  const [editNameUserId, setEditNameUserId] = useState<string | null>(null);
+  const [editNameUserEmail, setEditNameUserEmail] = useState<string>("");
+  const [editNameUserFullName, setEditNameUserFullName] = useState<string>("");
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies-for-invite", currentUserId],
@@ -184,13 +189,15 @@ export default function Users() {
   const inviteUserMutation = useMutation({
     mutationFn: async ({ 
       email, 
+      fullName,
       role, 
       agencyIds, 
       modulePermissions,
       campaignerId,
       salesPersonId 
     }: { 
-      email: string; 
+      email: string;
+      fullName?: string; 
       role: UserRole; 
       agencyIds: string[]; 
       modulePermissions: string[];
@@ -205,7 +212,8 @@ export default function Users() {
 
       const { data, error } = await supabase.functions.invoke("invite-user", {
         body: { 
-          email, 
+          email,
+          fullName,
           role,
           agencyIds,
           modulePermissions,
@@ -227,6 +235,7 @@ export default function Users() {
       toast.success("הזמנה נשלחה בהצלחה למייל המשתמש");
       setIsInviteDialogOpen(false);
       setInviteEmail("");
+      setInviteFullName("");
       setInviteRole("campaigner");
       setSelectedAgencies([]);
       setSelectedModules([]);
@@ -326,6 +335,16 @@ export default function Users() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
+              <div>
+                <Label htmlFor="invite-full-name">שם מלא (אופציונלי)</Label>
+                <Input
+                  id="invite-full-name"
+                  type="text"
+                  value={inviteFullName}
+                  onChange={(e) => setInviteFullName(e.target.value)}
+                  placeholder="שם מלא של המשתמש"
+                />
+              </div>
               <div>
                 <Label htmlFor="invite-email">אימייל משתמש</Label>
                 <Input
@@ -490,6 +509,7 @@ export default function Users() {
                 onClick={() =>
                   inviteUserMutation.mutate({
                     email: inviteEmail,
+                    fullName: inviteFullName || undefined,
                     role: inviteRole,
                     agencyIds: selectedAgencies,
                     modulePermissions: selectedModules,
@@ -525,7 +545,23 @@ export default function Users() {
             <TableBody>
               {users?.map((user: any) => (
                 <TableRow key={user.id}>
-                  <TableCell>{user.full_name || "-"}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm">{user.full_name || "-"}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditNameUserId(user.id);
+                          setEditNameUserEmail(user.email);
+                          setEditNameUserFullName(user.full_name || "");
+                        }}
+                        className="h-6 px-2 text-xs"
+                      >
+                        ערוך
+                      </Button>
+                    </div>
+                  </TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
                     {user.role ? (
@@ -739,6 +775,19 @@ export default function Users() {
           onClose={() => {
             setEditSalesPersonUserId(null);
             setEditSalesPersonUserEmail("");
+          }}
+        />
+      )}
+
+      {editNameUserId && (
+        <EditUserNameDialog
+          userId={editNameUserId}
+          userEmail={editNameUserEmail}
+          currentFullName={editNameUserFullName}
+          onClose={() => {
+            setEditNameUserId(null);
+            setEditNameUserEmail("");
+            setEditNameUserFullName("");
           }}
         />
       )}

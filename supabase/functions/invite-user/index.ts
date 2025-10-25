@@ -9,6 +9,7 @@ const corsHeaders = {
 
 interface InviteUserRequest {
   email: string;
+  fullName?: string;
   role?: string;
   agencyIds?: string[];
   modulePermissions?: string[];
@@ -64,7 +65,7 @@ serve(async (req: Request) => {
       throw new Error("Only owners and agency owners can invite users");
     }
 
-    const { email, role, agencyIds, modulePermissions, redirectUrl, resend, campaignerId, salesPersonId }: InviteUserRequest = await req.json();
+    const { email, fullName, role, agencyIds, modulePermissions, redirectUrl, resend, campaignerId, salesPersonId }: InviteUserRequest = await req.json();
 
     if (!email) {
       throw new Error("Email is required");
@@ -155,12 +156,13 @@ serve(async (req: Request) => {
       }
 
       // Update profile with campaigner_id and sales_person_id if provided
-      if (campaignerId || salesPersonId) {
-        console.log('Updating profile with campaignerId:', campaignerId, 'salesPersonId:', salesPersonId);
-        
-        const updateData: any = {};
-        if (campaignerId) updateData.campaigner_id = campaignerId;
-        if (salesPersonId) updateData.sales_person_id = salesPersonId;
+      const updateData: any = {};
+      if (campaignerId) updateData.campaigner_id = campaignerId;
+      if (salesPersonId) updateData.sales_person_id = salesPersonId;
+      if (fullName) updateData.full_name = fullName;
+      
+      if (Object.keys(updateData).length > 0) {
+        console.log('Updating profile with data:', updateData);
         
         const { error: profileError } = await supabaseAdmin
           .from("profiles")
