@@ -528,165 +528,167 @@ export default function Users() {
         </Dialog>
       </div>
 
-      <Card className="overflow-x-auto">
-        {isLoading ? (
-          <div className="p-6 text-center">טוען...</div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-right">שם מלא</TableHead>
-                <TableHead className="text-right">אימייל</TableHead>
-                <TableHead className="text-right">תפקידים</TableHead>
-                <TableHead className="text-right">קמפיינר משויך</TableHead>
-                <TableHead className="text-right">איש מכירות</TableHead>
-                <TableHead className="text-right">פעולות</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users?.map((user: any) => (
-                <TableRow key={user.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">{user.full_name || "-"}</span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditNameUserId(user.id);
-                          setEditNameUserEmail(user.email);
-                          setEditNameUserFullName(user.full_name || "");
-                        }}
-                        className="h-6 px-2 text-xs"
-                      >
-                        ערוך
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell>{user.email}</TableCell>
-                  <TableCell>
-                    {user.role ? (
-                      <Badge className={roleBadgeColors[user.role]}>
-                        {roleLabels[user.role]}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground text-sm">
-                        אין תפקיד
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">
-                        {user.campaigner_name || "-"}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditCampaignerUserId(user.id);
-                          setEditCampaignerUserEmail(user.email);
-                        }}
-                        className="h-6 px-2 text-xs"
-                      >
-                        ערוך
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">
-                        {user.sales_person_name || "-"}
-                      </span>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditSalesPersonUserId(user.id);
-                          setEditSalesPersonUserEmail(user.email);
-                        }}
-                        className="h-6 px-2 text-xs"
-                      >
-                        ערוך
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-2">
-                      <Select
-                        value={user.role || ""}
-                        onValueChange={(role) =>
-                          updateRoleMutation.mutate({
-                            userId: user.id,
-                            role: role as UserRole,
-                          })
-                        }
-                      >
-                        <SelectTrigger className="w-[140px]">
-                          <SelectValue placeholder="בחר תפקיד" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(roleLabels).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => {
-                          setEditAgenciesUserId(user.id);
-                          setEditAgenciesUserEmail(user.email);
-                        }}
-                        title="ערוך סוכנויות"
-                      >
-                        <Settings className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => {
-                          setEditPermissionsUserId(user.id);
-                          setEditPermissionsUserEmail(user.email);
-                        }}
-                        title="ערוך הרשאות"
-                      >
-                        <Lock className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => {
-                          if (confirm(`האם לשלוח הזמנה מחדש ל-${user.email}?`)) {
-                            resendInviteMutation.mutate({ email: user.email });
-                          }
-                        }}
-                        disabled={resendInviteMutation.isPending}
-                        title="שלח הזמנה מחדש"
-                      >
-                        <Mail className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        onClick={() => {
-                          if (confirm(`האם אתה בטוח שברצונך למחוק את ${user.email}?`)) {
-                            deleteUserMutation.mutate(user.id);
-                          }
-                        }}
-                        disabled={deleteUserMutation.isPending}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+      <Card>
+        <div className="overflow-x-auto">
+          {isLoading ? (
+            <div className="p-6 text-center">טוען...</div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-right">שם מלא</TableHead>
+                  <TableHead className="text-right">אימייל</TableHead>
+                  <TableHead className="text-right">תפקידים</TableHead>
+                  <TableHead className="text-right">קמפיינר משויך</TableHead>
+                  <TableHead className="text-right">איש מכירות</TableHead>
+                  <TableHead className="text-right">פעולות</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
+              </TableHeader>
+              <TableBody>
+                {users?.map((user: any) => (
+                  <TableRow key={user.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">{user.full_name || "-"}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditNameUserId(user.id);
+                            setEditNameUserEmail(user.email);
+                            setEditNameUserFullName(user.full_name || "");
+                          }}
+                          className="h-6 px-2 text-xs"
+                        >
+                          ערוך
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>
+                      {user.role ? (
+                        <Badge className={roleBadgeColors[user.role]}>
+                          {roleLabels[user.role]}
+                        </Badge>
+                      ) : (
+                        <span className="text-muted-foreground text-sm">
+                          אין תפקיד
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">
+                          {user.campaigner_name || "-"}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditCampaignerUserId(user.id);
+                            setEditCampaignerUserEmail(user.email);
+                          }}
+                          className="h-6 px-2 text-xs"
+                        >
+                          ערוך
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm">
+                          {user.sales_person_name || "-"}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditSalesPersonUserId(user.id);
+                            setEditSalesPersonUserEmail(user.email);
+                          }}
+                          className="h-6 px-2 text-xs"
+                        >
+                          ערוך
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-2">
+                        <Select
+                          value={user.role || ""}
+                          onValueChange={(role) =>
+                            updateRoleMutation.mutate({
+                              userId: user.id,
+                              role: role as UserRole,
+                            })
+                          }
+                        >
+                          <SelectTrigger className="w-[140px]">
+                            <SelectValue placeholder="בחר תפקיד" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(roleLabels).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            setEditAgenciesUserId(user.id);
+                            setEditAgenciesUserEmail(user.email);
+                          }}
+                          title="ערוך סוכנויות"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            setEditPermissionsUserId(user.id);
+                            setEditPermissionsUserEmail(user.email);
+                          }}
+                          title="ערוך הרשאות"
+                        >
+                          <Lock className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            if (confirm(`האם לשלוח הזמנה מחדש ל-${user.email}?`)) {
+                              resendInviteMutation.mutate({ email: user.email });
+                            }
+                          }}
+                          disabled={resendInviteMutation.isPending}
+                          title="שלח הזמנה מחדש"
+                        >
+                          <Mail className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          onClick={() => {
+                            if (confirm(`האם אתה בטוח שברצונך למחוק את ${user.email}?`)) {
+                              deleteUserMutation.mutate(user.id);
+                            }
+                          }}
+                          disabled={deleteUserMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </div>
       </Card>
 
       <Card className="p-6">
