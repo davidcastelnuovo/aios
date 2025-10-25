@@ -22,6 +22,7 @@ import {
 import { toast } from "sonner";
 import { Shield, UserPlus, Trash2, Settings, Lock, Mail } from "lucide-react";
 import { useState } from "react";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialog";
 import { EditUserPermissionsDialog } from "@/components/forms/EditUserPermissionsDialog";
 import { EditUserCampaignerDialog } from "@/components/forms/EditUserCampaignerDialog";
@@ -327,102 +328,103 @@ export default function Users() {
               הזמן משתמש חדש
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-4xl max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>הזמן משתמש חדש</DialogTitle>
               <DialogDescription>
                 המשתמש יקבל מייל עם קישור ליצירת חשבון והגדרת סיסמה.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="invite-full-name">שם מלא (אופציונלי)</Label>
-                <Input
-                  id="invite-full-name"
-                  type="text"
-                  value={inviteFullName}
-                  onChange={(e) => setInviteFullName(e.target.value)}
-                  placeholder="שם מלא של המשתמש"
-                />
-              </div>
-              <div>
-                <Label htmlFor="invite-email">אימייל משתמש</Label>
-                <Input
-                  id="invite-email"
-                  type="email"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="user@example.com"
-                />
-              </div>
-              <div>
-                <Label htmlFor="invite-role">תפקיד</Label>
-                <Select
-                  value={inviteRole}
-                  onValueChange={(value) => {
-                    setInviteRole(value as UserRole);
-                    // Reset agencies when role changes
-                    setSelectedAgencies([]);
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(roleLabels).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <ScrollArea className="max-h-[calc(90vh-180px)] pl-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pr-4">
+                <div>
+                  <Label htmlFor="invite-full-name">שם מלא (אופציונלי)</Label>
+                  <Input
+                    id="invite-full-name"
+                    type="text"
+                    value={inviteFullName}
+                    onChange={(e) => setInviteFullName(e.target.value)}
+                    placeholder="שם מלא של המשתמש"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="invite-email">אימייל משתמש</Label>
+                  <Input
+                    id="invite-email"
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="user@example.com"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="invite-role">תפקיד</Label>
+                  <Select
+                    value={inviteRole}
+                    onValueChange={(value) => {
+                      setInviteRole(value as UserRole);
+                      // Reset agencies when role changes
+                      setSelectedAgencies([]);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(roleLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              {/* Campaigner Selection */}
-              <div>
-                <Label htmlFor="campaigner">קמפיינר משויך (אופציונלי)</Label>
-                <Select
-                  value={selectedCampaignerId || "none"}
-                  onValueChange={(value) => setSelectedCampaignerId(value === "none" ? "" : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="בחר קמפיינר" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">ללא שיוך</SelectItem>
-                    {campaigners?.map((campaigner) => (
-                      <SelectItem key={campaigner.id} value={campaigner.id}>
-                        {campaigner.full_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                {/* Campaigner Selection */}
+                <div>
+                  <Label htmlFor="campaigner">קמפיינר משויך (אופציונלי)</Label>
+                  <Select
+                    value={selectedCampaignerId || "none"}
+                    onValueChange={(value) => setSelectedCampaignerId(value === "none" ? "" : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר קמפיינר" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">ללא שיוך</SelectItem>
+                      {campaigners?.map((campaigner) => (
+                        <SelectItem key={campaigner.id} value={campaigner.id}>
+                          {campaigner.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              {/* Sales Person Selection */}
-              <div>
-                <Label htmlFor="sales-person">איש מכירות משויך (אופציונלי)</Label>
-                <Select
-                  value={selectedSalesPersonId || "none"}
-                  onValueChange={(value) => setSelectedSalesPersonId(value === "none" ? "" : value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="בחר איש מכירות" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">ללא שיוך</SelectItem>
-                    {salesPeople?.map((salesPerson) => (
-                      <SelectItem key={salesPerson.id} value={salesPerson.id}>
-                        {salesPerson.full_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                {/* Sales Person Selection */}
+                <div>
+                  <Label htmlFor="sales-person">איש מכירות משויך (אופציונלי)</Label>
+                  <Select
+                    value={selectedSalesPersonId || "none"}
+                    onValueChange={(value) => setSelectedSalesPersonId(value === "none" ? "" : value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר איש מכירות" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">ללא שיוך</SelectItem>
+                      {salesPeople?.map((salesPerson) => (
+                        <SelectItem key={salesPerson.id} value={salesPerson.id}>
+                          {salesPerson.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-              <div>
-                <Label>סוכנויות</Label>
-                <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
+                <div className="md:col-span-2">
+                  <Label>סוכנויות</Label>
+                  <div className="border rounded-md p-3 space-y-2 max-h-32 overflow-y-auto">
                   {agencies?.length === 0 ? (
                     <p className="text-sm text-muted-foreground">אין סוכנויות זמינות</p>
                   ) : (
@@ -450,16 +452,16 @@ export default function Users() {
                       </div>
                     ))
                   )}
+                  </div>
+                  {selectedAgencies.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      נבחרו {selectedAgencies.length} סוכנויות
+                    </p>
+                  )}
                 </div>
-                {selectedAgencies.length > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    נבחרו {selectedAgencies.length} סוכנויות
-                  </p>
-                )}
-              </div>
-              <div>
-                <Label>הרשאות מודולים</Label>
-                <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
+                <div className="md:col-span-2">
+                  <Label>הרשאות מודולים</Label>
+                  <div className="border rounded-md p-3 space-y-2 max-h-32 overflow-y-auto">
                   {[
                     { id: "leads", name: "ניהול לידים" },
                     { id: "clients", name: "ניהול לקוחות" },
@@ -495,16 +497,19 @@ export default function Users() {
                       </label>
                     </div>
                   ))}
-                </div>
-                {selectedModules.length > 0 && (
+                  </div>
+                  {selectedModules.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      נבחרו {selectedModules.length} מודולים
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground mt-1">
-                    נבחרו {selectedModules.length} מודולים
+                    מודולים שלא נבחרו יהיו נעולים למשתמש
                   </p>
-                )}
-                <p className="text-xs text-muted-foreground mt-1">
-                  מודולים שלא נבחרו יהיו נעולים למשתמש
-                </p>
+                </div>
               </div>
+            </ScrollArea>
+            <div className="pt-4 border-t">
               <Button
                 onClick={() =>
                   inviteUserMutation.mutate({
