@@ -42,6 +42,28 @@ export function useUserRole() {
     enabled: !!session?.user?.id,
   });
 
+  const { data: salesPersonAgencyIds } = useQuery({
+    queryKey: ["user-sales-person-agency-ids", session?.user?.id],
+    queryFn: async () => {
+      if (!session?.user?.id) return null;
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("sales_person_id")
+        .eq("id", session.user.id)
+        .maybeSingle();
+      
+      if (!profile?.sales_person_id) return null;
+      
+      const { data: agencies } = await supabase
+        .from("sales_person_agencies")
+        .select("agency_id")
+        .eq("sales_person_id", profile.sales_person_id);
+      
+      return agencies?.map(a => a.agency_id) || null;
+    },
+    enabled: !!session?.user?.id,
+  });
+
   const hasRole = (role: UserRole) => roles?.includes(role) || false;
 
   return {
@@ -49,9 +71,11 @@ export function useUserRole() {
     isOwner: hasRole("owner"),
     isTeamManager: hasRole("team_manager"),
     isCampaigner: hasRole("campaigner"),
+    isSalesPerson: hasRole("sales_person"),
     isLoading,
     userId: session?.user?.id,
     userEmail: session?.user?.email,
     campaignerId,
+    salesPersonAgencyIds,
   };
 }

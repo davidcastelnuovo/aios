@@ -28,6 +28,7 @@ import { EditUserPermissionsDialog } from "@/components/forms/EditUserPermission
 import { EditUserCampaignerDialog } from "@/components/forms/EditUserCampaignerDialog";
 import { EditUserSalesPersonDialog } from "@/components/forms/EditUserSalesPersonDialog";
 import { EditUserNameDialog } from "@/components/forms/EditUserNameDialog";
+import EditSalesPersonAgenciesDialog from "@/components/forms/EditSalesPersonAgenciesDialog";
 import {
   Dialog,
   DialogContent,
@@ -81,6 +82,11 @@ export default function Users() {
   const [editNameUserId, setEditNameUserId] = useState<string | null>(null);
   const [editNameUserEmail, setEditNameUserEmail] = useState<string>("");
   const [editNameUserFullName, setEditNameUserFullName] = useState<string>("");
+  const [editSalesPersonAgencies, setEditSalesPersonAgencies] = useState<{
+    id: string;
+    full_name: string;
+    agencies: Array<{ id: string; name: string }>;
+  } | null>(null);
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies-for-invite", currentUserId],
@@ -130,6 +136,30 @@ export default function Users() {
         .order("full_name");
       if (error) throw error;
       return data;
+    },
+  });
+
+  const { data: salesPeopleWithAgencies } = useQuery({
+    queryKey: ["sales-people-with-agencies"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sales_people")
+        .select(`
+          id,
+          full_name,
+          sales_person_agencies(
+            agency_id,
+            agencies(id, name)
+          )
+        `);
+      
+      if (error) throw error;
+      
+      return data.map((sp: any) => ({
+        id: sp.id,
+        full_name: sp.full_name,
+        agencies: sp.sales_person_agencies.map((spa: any) => spa.agencies).filter(Boolean),
+      }));
     },
   });
 
@@ -541,6 +571,7 @@ export default function Users() {
                   <TableHead className="text-right">תפקידים</TableHead>
                   <TableHead className="text-right">קמפיינר משויך</TableHead>
                   <TableHead className="text-right">איש מכירות</TableHead>
+                  <TableHead className="text-right">סוכנויות איש מכירות</TableHead>
                   <TableHead className="text-right">פעולות</TableHead>
                 </TableRow>
               </TableHeader>
@@ -611,6 +642,30 @@ export default function Users() {
                           ערוך
                         </Button>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {user.sales_person_id ? (
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm">
+                            {salesPeopleWithAgencies?.find(sp => sp.id === user.sales_person_id)?.agencies.map(a => a.name).join(", ") || "אין סוכנויות"}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const salesPerson = salesPeopleWithAgencies?.find(sp => sp.id === user.sales_person_id);
+                              if (salesPerson) {
+                                setEditSalesPersonAgencies(salesPerson);
+                              }
+                            }}
+                            className="h-6 px-2 text-xs"
+                          >
+                            ערוך סוכנויות
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
@@ -792,6 +847,18 @@ export default function Users() {
             setEditNameUserEmail("");
             setEditNameUserFullName("");
           }}
+        />
+      )}
+
+      {editSalesPersonAgencies && (
+        <EditSalesPersonAgenciesDialog
+          open={!!editSalesPersonAgencies}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditSalesPersonAgencies(null);
+            }
+          }}
+          salesPerson={editSalesPersonAgencies}
         />
       )}
     </div>

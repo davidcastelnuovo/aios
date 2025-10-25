@@ -614,6 +614,42 @@ export type Database = {
           },
         ]
       }
+      sales_person_agencies: {
+        Row: {
+          agency_id: string
+          created_at: string
+          id: string
+          sales_person_id: string
+        }
+        Insert: {
+          agency_id: string
+          created_at?: string
+          id?: string
+          sales_person_id: string
+        }
+        Update: {
+          agency_id?: string
+          created_at?: string
+          id?: string
+          sales_person_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_person_agencies_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_person_agencies_sales_person_id_fkey"
+            columns: ["sales_person_id"]
+            isOneToOne: false
+            referencedRelation: "sales_people"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           agency_id_1: string | null
@@ -893,6 +929,10 @@ export type Database = {
       }
       get_user_agency_ids: { Args: { _user_id: string }; Returns: string[] }
       get_user_campaigner_id: { Args: { _user_id: string }; Returns: string }
+      get_user_sales_person_agency_ids: {
+        Args: { _user_id: string }
+        Returns: string[]
+      }
       get_user_sales_person_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
