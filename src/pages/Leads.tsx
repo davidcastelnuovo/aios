@@ -565,11 +565,22 @@ export default function Leads() {
     if (!over) return;
 
     const leadId = active.id as string;
-    const newStatus = over.id as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed";
 
-    // Check if dropped on a valid stage
-    if (PIPELINE_STAGES.find((stage) => stage.id === newStatus)) {
-      updateLeadStatus.mutate({ leadId, newStatus });
+    // over.id can be either a stage id or another lead id inside a stage.
+    let targetStatus = over.id as string;
+
+    // If over.id is not one of the stage IDs, try to resolve it via the lead it hovers over
+    if (!PIPELINE_STAGES.some((s) => s.id === targetStatus)) {
+      const overLead = filteredLeads?.find((l: any) => l.id === over.id);
+      if (overLead) targetStatus = overLead.status;
+    }
+
+    // Validate final status
+    if (PIPELINE_STAGES.find((stage) => stage.id === targetStatus)) {
+      updateLeadStatus.mutate({
+        leadId,
+        newStatus: targetStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed",
+      });
     }
   };
 
