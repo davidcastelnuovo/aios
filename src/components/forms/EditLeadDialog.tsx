@@ -90,21 +90,16 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
   });
 
   const { data: salesPeople } = useQuery({
-    queryKey: ["sales-people-for-form", form.watch("agency_id")],
+    queryKey: ["sales-people-all"],
     queryFn: async () => {
-      const agencyId = form.watch("agency_id");
-      if (!agencyId || agencyId === "all") return [];
-      
       const { data, error } = await supabase
         .from("sales_people")
         .select("*")
-        .eq("agency_id", agencyId)
         .eq("active", true)
         .order("full_name");
       if (error) throw error;
       return data;
     },
-    enabled: !!form.watch("agency_id") && form.watch("agency_id") !== "all",
   });
 
   const updateMutation = useMutation({
