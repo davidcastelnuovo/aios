@@ -454,6 +454,8 @@ export default function Leads() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterStage, setFilterStage] = useState<string>("all");
+  const [filterResponseStatus, setFilterResponseStatus] = useState<string>("all");
   const [openTables, setOpenTables] = useState<Record<string, boolean>>({
     new: false,
     contacted: false,
@@ -587,19 +589,39 @@ export default function Leads() {
 
   const filteredLeads = useMemo(() => {
     if (!leads) return [];
-    if (!searchQuery.trim()) return leads;
-
-    const query = searchQuery.toLowerCase().trim();
+    
     return leads.filter((lead: any) => {
-      const contactName = lead.contact_name?.toLowerCase() || "";
-      const companyName = lead.company_name?.toLowerCase() || "";
-      const phone = lead.phone?.toLowerCase() || "";
+      // Search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase().trim();
+        const contactName = lead.contact_name?.toLowerCase() || "";
+        const companyName = lead.company_name?.toLowerCase() || "";
+        const phone = lead.phone?.toLowerCase() || "";
+        
+        const matchesSearch = contactName.includes(query) || 
+               companyName.includes(query) || 
+               phone.includes(query);
+        
+        if (!matchesSearch) return false;
+      }
       
-      return contactName.includes(query) || 
-             companyName.includes(query) || 
-             phone.includes(query);
+      // Stage filter
+      if (filterStage !== "all" && lead.status !== filterStage) {
+        return false;
+      }
+      
+      // Response status filter
+      if (filterResponseStatus !== "all") {
+        if (filterResponseStatus === "none" && lead.response_status !== null) {
+          return false;
+        } else if (filterResponseStatus !== "none" && lead.response_status !== filterResponseStatus) {
+          return false;
+        }
+      }
+      
+      return true;
     });
-  }, [leads, searchQuery]);
+  }, [leads, searchQuery, filterStage, filterResponseStatus]);
 
   const getLeadsByStage = (stageId: string) => {
     return filteredLeads?.filter((lead: any) => lead.status === stageId) || [];
@@ -626,6 +648,35 @@ export default function Leads() {
             className="pr-10"
           />
         </div>
+        <div className="flex gap-2">
+          <Select value={filterStage} onValueChange={setFilterStage}>
+            <SelectTrigger className="flex-1 bg-background">
+              <SelectValue placeholder="שלב" />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-[100]">
+              <SelectItem value="all">כל השלבים</SelectItem>
+              {PIPELINE_STAGES.map((stage) => (
+                <SelectItem key={stage.id} value={stage.id}>
+                  {stage.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterResponseStatus} onValueChange={setFilterResponseStatus}>
+            <SelectTrigger className="flex-1 bg-background">
+              <SelectValue placeholder="סטטוס" />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-[100]">
+              <SelectItem value="all">כל הסטטוסים</SelectItem>
+              <SelectItem value="none">ללא סטטוס</SelectItem>
+              {RESPONSE_STATUS_OPTIONS.map((status) => (
+                <SelectItem key={status.id} value={status.id}>
+                  {status.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="flex gap-2 flex-wrap">
           <AddLeadForm />
           <ImportLeadsCSV />
@@ -635,17 +686,46 @@ export default function Leads() {
 
       {/* Desktop Header */}
       <div className="hidden md:flex justify-between items-start gap-4">
-        <div className="flex-1 max-w-md">
-          <h1 className="text-3xl font-bold mb-4">לידים - Pipeline</h1>
-          <div className="relative">
-            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="חיפוש לפי שם, טלפון או חברה..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-10"
-            />
+        <div className="flex-1 space-y-4">
+          <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
+          <div className="flex gap-3 items-center max-w-4xl">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="חיפוש לפי שם, טלפון או חברה..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pr-10"
+              />
+            </div>
+            <Select value={filterStage} onValueChange={setFilterStage}>
+              <SelectTrigger className="w-[180px] bg-background">
+                <SelectValue placeholder="שלב במשפך" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-[100]">
+                <SelectItem value="all">כל השלבים</SelectItem>
+                {PIPELINE_STAGES.map((stage) => (
+                  <SelectItem key={stage.id} value={stage.id}>
+                    {stage.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filterResponseStatus} onValueChange={setFilterResponseStatus}>
+              <SelectTrigger className="w-[180px] bg-background">
+                <SelectValue placeholder="סטטוס תגובה" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-[100]">
+                <SelectItem value="all">כל הסטטוסים</SelectItem>
+                <SelectItem value="none">ללא סטטוס</SelectItem>
+                {RESPONSE_STATUS_OPTIONS.map((status) => (
+                  <SelectItem key={status.id} value={status.id}>
+                    {status.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div className="flex gap-3 items-center">
