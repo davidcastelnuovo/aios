@@ -92,9 +92,7 @@ export default function Auth() {
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth?type=recovery`,
-    });
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
     if (error) {
       toast({
         title: "שגיאה",
@@ -115,9 +113,6 @@ export default function Auth() {
     setLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/my-profile`,
-      },
     });
     if (error) {
       toast({
