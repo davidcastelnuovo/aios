@@ -386,89 +386,42 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
     };
   }, [stageLeads]);
 
-  // Sync top scrollbar with table - simplified version
+  // Sync scrollbars bidirectionally
   useEffect(() => {
     const bar = scrollbarRef.current;
-    const x = xContainerRef.current;
+    const table = xContainerRef.current;
 
-    if (!bar || !x) return;
+    if (!bar || !table) return;
 
-    const onBarScroll = () => {
-      x.scrollLeft = bar.scrollLeft;
+    let isScrollingFromBar = false;
+    let isScrollingFromTable = false;
+
+    const syncFromBar = () => {
+      if (isScrollingFromTable) return;
+      isScrollingFromBar = true;
+      table.scrollLeft = bar.scrollLeft;
+      requestAnimationFrame(() => {
+        isScrollingFromBar = false;
+      });
     };
     
-    const onXScroll = () => {
-      bar.scrollLeft = x.scrollLeft;
+    const syncFromTable = () => {
+      if (isScrollingFromBar) return;
+      isScrollingFromTable = true;
+      bar.scrollLeft = table.scrollLeft;
+      requestAnimationFrame(() => {
+        isScrollingFromTable = false;
+      });
     };
 
-    bar.addEventListener('scroll', onBarScroll);
-    x.addEventListener('scroll', onXScroll);
+    bar.addEventListener('scroll', syncFromBar, { passive: true });
+    table.addEventListener('scroll', syncFromTable, { passive: true });
 
     return () => {
-      bar.removeEventListener('scroll', onBarScroll);
-      x.removeEventListener('scroll', onXScroll);
+      bar.removeEventListener('scroll', syncFromBar);
+      table.removeEventListener('scroll', syncFromTable);
     };
   }, [isOpen, stageLeads]);
-
-  // Drag-to-scroll support on the top scrollbar
-  const isDragging = useRef(false);
-  const dragStartX = useRef(0);
-  const dragStartScrollLeft = useRef(0);
-
-  const startDrag = (clientX: number) => {
-    isDragging.current = true;
-    dragStartX.current = clientX;
-    dragStartScrollLeft.current = xContainerRef.current?.scrollLeft || 0;
-  };
-
-  const onMouseDownBar = (e: React.MouseEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    onToggle(true); // ensure section stays open
-    startDrag(e.clientX);
-  };
-
-  const onTouchStartBar = (e: React.TouchEvent<HTMLDivElement>) => {
-    const touch = e.touches[0];
-    if (touch) startDrag(touch.clientX);
-  };
-
-  useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isDragging.current) return;
-      e.preventDefault();
-      const x = xContainerRef.current;
-      if (!x) return;
-      const delta = e.clientX - dragStartX.current;
-      x.scrollLeft = dragStartScrollLeft.current - delta;
-    };
-    const onTouchMove = (e: TouchEvent) => {
-      if (!isDragging.current) return;
-      const touch = e.touches[0];
-      const x = xContainerRef.current;
-      if (!x || !touch) return;
-      const delta = touch.clientX - dragStartX.current;
-      x.scrollLeft = dragStartScrollLeft.current - delta;
-    };
-    const end = () => {
-      isDragging.current = false;
-    };
-
-    window.addEventListener('mousemove', onMouseMove, { passive: false });
-    window.addEventListener('mouseup', end);
-    window.addEventListener('mouseleave', end);
-    window.addEventListener('touchmove', onTouchMove, { passive: false });
-    window.addEventListener('touchend', end);
-    window.addEventListener('touchcancel', end);
-
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove as any);
-      window.removeEventListener('mouseup', end);
-      window.removeEventListener('mouseleave', end);
-      window.removeEventListener('touchmove', onTouchMove as any);
-      window.removeEventListener('touchend', end);
-      window.removeEventListener('touchcancel', end);
-    };
-  }, []);
 
   return (
     <Collapsible open={isOpen} onOpenChange={onToggle}>
@@ -483,19 +436,17 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
         </CollapsibleTrigger>
         
         {/* Horizontal scrollbar directly under the title - stays sticky with header */}
-          {isOpen && stageLeads.length > 0 && (
-            <div 
-              ref={scrollbarRef}
-              className="overflow-x-auto bg-muted/30 rounded mx-6 mt-1 mb-2 sticky top-[72px] z-30 cursor-grab active:cursor-grabbing select-none"
-              style={{ overflowY: 'hidden', height: '14px' }}
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={onMouseDownBar}
-              onTouchStart={onTouchStartBar}
-              aria-label="גרור לגלילה אופקית"
-            >
-              <div style={{ width: `${tableWidth}px`, height: '10px' }} />
-            </div>
-          )}
+        {isOpen && stageLeads.length > 0 && (
+          <div 
+            ref={scrollbarRef}
+            className="overflow-x-auto overflow-y-hidden bg-muted/30 rounded mx-6 mt-1 mb-2 sticky top-[72px] z-30"
+            style={{ height: '14px' }}
+            onClick={(e) => e.stopPropagation()}
+            aria-label="גלול אופקית"
+          >
+            <div style={{ width: `${tableWidth}px`, height: '1px' }} />
+          </div>
+        )}
         
         <CollapsibleContent>
           <CardContent>
