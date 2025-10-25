@@ -1172,7 +1172,7 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                     aria-label="בחר הכל"
                   />
                 </TableHead>
-                <TableHead className="text-right bg-background w-[200px]">שם</TableHead>
+                <TableHead className="text-right sticky right-[50px] bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 w-[160px]">שם</TableHead>
                 <TableHead className="text-right bg-background w-[160px]">טלפון</TableHead>
                 <TableHead className="text-right bg-background w-[200px]">שם חברה</TableHead>
                 <TableHead className="text-right bg-background w-[180px]">שלב במשפך</TableHead>
@@ -1190,7 +1190,7 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                     aria-label={`בחר ${lead.contact_name || lead.company_name}`}
                   />
                 </TableCell>
-                <TableCell className="font-medium bg-background w-[200px]">
+                <TableCell className="font-medium sticky right-[50px] bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10 w-[160px]">
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 shrink-0" />
                     <span className="truncate">{lead.contact_name || "-"}</span>
