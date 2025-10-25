@@ -475,18 +475,43 @@ export default function Leads() {
 
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
-      toast({
-        title: "סטטוס ליד עודכן בהצלחה",
+    onMutate: async ({ leadId, newStatus }) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["leads", selectedAgency] });
+
+      // Snapshot the previous value
+      const previousLeads = queryClient.getQueryData(["leads", selectedAgency]);
+
+      // Optimistically update to the new value
+      queryClient.setQueryData(["leads", selectedAgency], (old: any) => {
+        if (!old) return old;
+        return old.map((lead: any) => 
+          lead.id === leadId ? { ...lead, status: newStatus } : lead
+        );
       });
+
+      // Return context with the snapshot
+      return { previousLeads };
     },
-    onError: (error: any) => {
+    onError: (error: any, variables, context) => {
+      // Rollback to the previous value if error
+      if (context?.previousLeads) {
+        queryClient.setQueryData(["leads", selectedAgency], context.previousLeads);
+      }
       toast({
         title: "שגיאה בעדכון סטטוס",
         description: error.message,
         variant: "destructive",
       });
+    },
+    onSuccess: () => {
+      toast({
+        title: "סטטוס ליד עודכן בהצלחה",
+      });
+    },
+    onSettled: () => {
+      // Always refetch after error or success
+      queryClient.invalidateQueries({ queryKey: ["leads", selectedAgency] });
     },
   });
 
