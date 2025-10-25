@@ -396,6 +396,9 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
     let isScrollingFromBar = false;
     let isScrollingFromTable = false;
 
+    // Ensure initial alignment on mount/update
+    bar.scrollLeft = table.scrollLeft;
+
     const syncFromBar = () => {
       if (isScrollingFromTable) return;
       isScrollingFromBar = true;
@@ -421,11 +424,12 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
       bar.removeEventListener('scroll', syncFromBar);
       table.removeEventListener('scroll', syncFromTable);
     };
-  }, [isOpen, stageLeads]);
+  }, [isOpen, stageLeads, tableWidth]);
 
   // Pointer drag + wheel to control bottom scroll from the top bar
   const dragState = useRef({ dragging: false, startX: 0, startScrollLeft: 0, pointerId: 0 });
   const onPointerDownBar = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
     dragState.current.dragging = true;
     dragState.current.startX = e.clientX;
     dragState.current.startScrollLeft = xContainerRef.current?.scrollLeft || 0;
@@ -433,6 +437,7 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
   };
   const onPointerMoveBar = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
     if (!dragState.current.dragging) return;
     const x = xContainerRef.current;
     if (!x) return;
@@ -465,12 +470,14 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
         {isOpen && stageLeads.length > 0 && (
           <div 
             ref={scrollbarRef}
-            className="overflow-x-auto overflow-y-hidden bg-muted/30 rounded mx-6 mt-1 mb-2 sticky top-[72px] z-30 cursor-grab active:cursor-grabbing select-none"
+            className="overflow-x-auto overflow-y-hidden bg-muted/30 rounded mx-6 mt-1 mb-2 sticky top-[72px] z-40 cursor-grab active:cursor-grabbing select-none"
             style={{ height: '14px' }}
             onClick={(e) => e.stopPropagation()}
             onPointerDown={onPointerDownBar}
             onPointerMove={onPointerMoveBar}
             onPointerUp={onPointerUpBar}
+            onPointerCancel={onPointerUpBar}
+            onPointerLeave={onPointerUpBar}
             onWheel={onWheelBar}
             aria-label="גלול אופקית"
           >
