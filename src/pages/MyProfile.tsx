@@ -79,6 +79,42 @@ export default function MyProfile() {
     enabled: !!profile?.sales_person_id,
   });
 
+  // Fetch sales person details explicitly (avoid relying on FK-based embedding)
+  const { data: salesPerson } = useQuery({
+    queryKey: ["my-sales-person", profile?.sales_person_id],
+    queryFn: async () => {
+      if (!profile?.sales_person_id) return null;
+      const { data, error } = await supabase
+        .from("sales_people")
+        .select("id, full_name, email, phone, folder_link, active, notes")
+        .eq("id", profile.sales_person_id)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!profile?.sales_person_id,
+  });
+
+  // Fetch agencies linked to the sales person (supports multiple)
+  const { data: salesPersonAgencies } = useQuery({
+    queryKey: ["my-sales-person-agencies", profile?.sales_person_id],
+    queryFn: async () => {
+      if (!profile?.sales_person_id) return [];
+      const { data, error } = await supabase
+        .from("sales_person_agencies")
+        .select(`
+          agencies (
+            id,
+            name
+          )
+        `)
+        .eq("sales_person_id", profile.sales_person_id);
+      if (error) throw error;
+      return (data || []).map((row: any) => row.agencies).filter(Boolean);
+    },
+    enabled: !!profile?.sales_person_id,
+  });
+
   const { data: agencies } = useQuery({
     queryKey: ["my-agencies", profile?.campaigner_id],
     queryFn: async () => {
@@ -203,8 +239,8 @@ export default function MyProfile() {
   }
 
   // Check if user is a sales person or campaigner
-  const isSalesPerson = profile?.sales_person_id && profile?.sales_people;
-  const isCampaigner = profile?.campaigner_id && profile?.campaigners;
+  const isSalesPerson = !!profile?.sales_person_id;
+  const isCampaigner = !!profile?.campaigner_id;
 
   if (!isSalesPerson && !isCampaigner) {
     return (
@@ -221,7 +257,7 @@ export default function MyProfile() {
     );
   }
 
-  const person = isSalesPerson ? profile.sales_people : profile.campaigners;
+  const person = isSalesPerson ? salesPerson : profile.campaigners;
   const totalPayment = isCampaigner ? calculateTotal() : 0;
 
   return (
@@ -233,9 +269,9 @@ export default function MyProfile() {
       <Card className="shadow-card">
         <CardHeader className="border-b bg-muted/30">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl">{person.full_name}</CardTitle>
-            <Badge variant={person.active ? "default" : "secondary"}>
-              {person.active ? "פעיל" : "לא פעיל"}
+            <CardTitle className="text-2xl">{person?.full_name || profile?.full_name || ""}</CardTitle>
+            <Badge variant={person?.active ? "default" : "secondary"}>
+              {person?.active ? "פעיל" : "לא פעיל"}
             </Badge>
           </div>
         </CardHeader>
@@ -289,20 +325,26 @@ export default function MyProfile() {
             </div>
           )}
 
-          {/* Agency - for sales people */}
-          {isSalesPerson && profile.sales_people?.agency_id && (
+          {/* Agencies - for sales people */}
+          {isSalesPerson && salesPersonAgencies && salesPersonAgencies.length > 0 && (
             <div className="space-y-3">
-              <h3 className="font-semibold text-lg">סוכנות</h3>
-              <p className="text-sm text-muted-foreground">מוצג בלידים</p>
+              <h3 className="font-semibold text-lg">סוכנויות</h3>
+              <div className="flex flex-wrap gap-2">
+                {salesPersonAgencies.map((agency: any) => (
+                  <Badge key={agency.id} variant="outline">
+                    {agency.name}
+                  </Badge>
+                ))}
+              </div>
             </div>
           )}
 
           {/* Notes */}
-          {person.notes && (
+          {person?.notes && (
             <div className="space-y-3">
               <h3 className="font-semibold text-lg">הערות</h3>
               <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                {person.notes}
+                {person?.notes}
               </p>
             </div>
           )}
