@@ -40,6 +40,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100/50", borderColor: "border-blue-500" },
@@ -134,6 +135,7 @@ function LeadCard({
 
   const { toast } = useToast();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const handleDelete = async (id: string) => {
     try {
@@ -177,9 +179,45 @@ function LeadCard({
           <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
           <span className="text-xs text-muted-foreground">{lead.company_name}</span>
         </div>
+        {/* Phone in mobile - visible upfront */}
+        {isMobile && lead.phone && (
+          <div className="flex items-center gap-2 mt-2">
+            <Phone className="h-3 w-3 text-primary shrink-0" />
+            <a href={`tel:${lead.phone}`} className="text-xs hover:underline font-medium text-primary">
+              {lead.phone}
+            </a>
+          </div>
+        )}
       </CardHeader>
       
       <CardContent className="px-4 pb-4 pt-2 space-y-3">
+        {/* Response Status - Mobile: outside/prominent */}
+        {isMobile && (
+          <div className="space-y-1.5 -mt-1 mb-3" onClick={(e) => e.stopPropagation()}>
+            <label className="text-xs font-semibold text-muted-foreground">סטטוס תגובה</label>
+            <Select
+              value={lead.response_status || "none"}
+              onValueChange={(value) => onResponseStatusChange(lead.id, value === "none" ? null : value)}
+            >
+              <SelectTrigger className={`h-9 text-sm border-2 font-medium ${
+                lead.response_status 
+                  ? RESPONSE_STATUS_OPTIONS.find(s => s.id === lead.response_status)?.color || ""
+                  : "bg-background"
+              }`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-[100]">
+                <SelectItem value="none">ללא סטטוס</SelectItem>
+                {RESPONSE_STATUS_OPTIONS.map((option) => (
+                  <SelectItem key={option.id} value={option.id} className={option.color}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        
         {/* Contact Information - Always Visible */}
         <div className="space-y-2 pb-3 border-b">
           {lead.email && (
@@ -190,7 +228,8 @@ function LeadCard({
               </a>
             </div>
           )}
-          {lead.phone && (
+          {/* Phone - hide in mobile since shown above */}
+          {!isMobile && lead.phone && (
             <div className="flex items-center gap-2 text-xs">
               <Phone className="h-3 w-3 text-primary shrink-0" />
               <a href={`tel:${lead.phone}`} className="hover:underline">
@@ -218,30 +257,32 @@ function LeadCard({
           )}
         </div>
 
-        {/* Response Status Selector - Always visible */}
-        <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
-          <label className="text-xs font-semibold text-muted-foreground">סטטוס תגובה</label>
-          <Select
-            value={lead.response_status || "none"}
-            onValueChange={(value) => onResponseStatusChange(lead.id, value === "none" ? null : value)}
-          >
-            <SelectTrigger className={`h-8 text-sm border-2 ${
-              lead.response_status 
-                ? RESPONSE_STATUS_OPTIONS.find(s => s.id === lead.response_status)?.color || ""
-                : "bg-background"
-            }`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-[100]">
-              <SelectItem value="none">ללא סטטוס</SelectItem>
-              {RESPONSE_STATUS_OPTIONS.map((option) => (
-                <SelectItem key={option.id} value={option.id} className={option.color}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {/* Response Status Selector - Desktop only (mobile shown above) */}
+        {!isMobile && (
+          <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+            <label className="text-xs font-semibold text-muted-foreground">סטטוס תגובה</label>
+            <Select
+              value={lead.response_status || "none"}
+              onValueChange={(value) => onResponseStatusChange(lead.id, value === "none" ? null : value)}
+            >
+              <SelectTrigger className={`h-8 text-sm border-2 ${
+                lead.response_status 
+                  ? RESPONSE_STATUS_OPTIONS.find(s => s.id === lead.response_status)?.color || ""
+                  : "bg-background"
+              }`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-[100]">
+                <SelectItem value="none">ללא סטטוס</SelectItem>
+                {RESPONSE_STATUS_OPTIONS.map((option) => (
+                  <SelectItem key={option.id} value={option.id} className={option.color}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Collapsible Details Section */}
         <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
