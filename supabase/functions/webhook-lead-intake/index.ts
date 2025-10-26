@@ -36,19 +36,7 @@ Deno.serve(async (req) => {
     const payload: LeadPayload = await req.json()
     console.log('Received payload:', payload)
 
-    // Validate required fields
-    if (!payload.company_name) {
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'company_name is required' 
-        }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      )
-    }
+    // No required fields - accept all leads even with empty fields
 
     // Get default agency if not provided
     let agencyId = payload.agency_id
@@ -93,11 +81,11 @@ Deno.serve(async (req) => {
       ? (sourceMap[payload.source.toLowerCase()] || 'other')
       : 'other'
 
-    // Insert lead
+    // Insert lead - all fields optional
     const { data: lead, error } = await supabase
       .from('leads')
       .insert({
-        company_name: payload.company_name,
+        company_name: payload.company_name || '',
         contact_name: payload.contact_name || null,
         email: payload.email || null,
         phone: payload.phone || null,
