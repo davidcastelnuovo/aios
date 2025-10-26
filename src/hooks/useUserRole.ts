@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-export type UserRole = "owner" | "team_manager" | "campaigner" | "sales_person";
+export type UserRole = "owner" | "team_manager" | "campaigner" | "sales_person" | "super_admin";
 
 export function useUserRole() {
   const { data: session } = useQuery({
@@ -72,6 +72,7 @@ export function useUserRole() {
     isTeamManager: hasRole("team_manager"),
     isCampaigner: hasRole("campaigner"),
     isSalesPerson: hasRole("sales_person"),
+    isSuperAdmin: hasRole("super_admin"),
     isLoading,
     userId: session?.user?.id,
     userEmail: session?.user?.email,

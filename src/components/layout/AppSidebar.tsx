@@ -88,6 +88,8 @@ export function AppSidebar() {
     return hasPermission(item.module);
   });
 
+  const showSuperAdminMenu = false; // TODO: Add super admin check when ready
+
   return (
     <Sidebar side="right" collapsible="icon">
       <SidebarContent>

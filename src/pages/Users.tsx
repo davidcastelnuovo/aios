@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUserRole, UserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { AddTenantForm } from "@/components/forms/AddTenantForm";
 import {
   Table,
   TableBody,
@@ -20,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Shield, UserPlus, Trash2, Settings, Lock, Mail } from "lucide-react";
+import { Shield, UserPlus, Trash2, Settings, Lock, Mail, Building2 } from "lucide-react";
 import { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialog";
@@ -51,6 +52,7 @@ const roleLabels: Record<UserRole, string> = {
   team_manager: "מנהל צוות",
   campaigner: "קמפיינר",
   sales_person: "איש מכירות",
+  super_admin: "סופר אדמין",
 };
 
 const roleBadgeColors: Record<UserRole, string> = {
@@ -58,11 +60,13 @@ const roleBadgeColors: Record<UserRole, string> = {
   team_manager: "bg-green-500",
   campaigner: "bg-orange-500",
   sales_person: "bg-blue-500",
+  super_admin: "bg-red-500",
 };
 
 export default function Users() {
-  const { isOwner, userId: currentUserId } = useUserRole();
+  const { isOwner, isSuperAdmin, userId: currentUserId } = useUserRole();
   const queryClient = useQueryClient();
+  const [isTenantDialogOpen, setIsTenantDialogOpen] = useState(false);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteFullName, setInviteFullName] = useState("");
@@ -161,6 +165,20 @@ export default function Users() {
         agencies: sp.sales_person_agencies.map((spa: any) => spa.agencies).filter(Boolean),
       }));
     },
+  });
+
+  const { data: tenants } = useQuery({
+    queryKey: ["tenants"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("*")
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: isSuperAdmin,
   });
 
   const { data: users, isLoading } = useQuery({
@@ -347,9 +365,29 @@ export default function Users() {
     <div className="container mx-auto py-6 px-6 space-y-6" dir="rtl">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">ניהול משתמשים</h1>
+          <h1 className="text-3xl font-bold">ניהול {isSuperAdmin ? "מערכת" : "משתמשים"}</h1>
         </div>
-        <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
+        <div className="flex gap-2">
+          {isSuperAdmin && (
+            <Dialog open={isTenantDialogOpen} onOpenChange={setIsTenantDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Building2 className="h-4 w-4 ml-2" />
+                  הוסף ארגון
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>הוסף ארגון חדש</DialogTitle>
+                  <DialogDescription>
+                    צור ארגון חדש במערכת. יהיה צורך ליצור משתמשים עבורו בנפרד.
+                  </DialogDescription>
+                </DialogHeader>
+                <AddTenantForm onSuccess={() => setIsTenantDialogOpen(false)} />
+              </DialogContent>
+            </Dialog>
+          )}
+          <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
           <DialogTrigger asChild>
             <Button>
               <UserPlus className="h-4 w-4 ml-2" />
@@ -556,6 +594,7 @@ export default function Users() {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card>
