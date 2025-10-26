@@ -23,6 +23,7 @@ import Users from "./pages/Users";
 import SalesPeople from "./pages/SalesPeople";
 import Leads from "./pages/Leads";
 import SalesDashboard from "./pages/SalesDashboard";
+import LeadIntegrations from "./pages/LeadIntegrations";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -52,6 +53,7 @@ const App = () => (
             <Route path="/sales-dashboard" element={<ProtectedRoute><AppLayout><SalesDashboard /></AppLayout></ProtectedRoute>} />
             <Route path="/sales-people" element={<ProtectedRoute><AppLayout><SalesPeople /></AppLayout></ProtectedRoute>} />
             <Route path="/leads" element={<ProtectedRoute><AppLayout><Leads /></AppLayout></ProtectedRoute>} />
+            <Route path="/lead-integrations" element={<ProtectedRoute><AppLayout><LeadIntegrations /></AppLayout></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AgencyProvider>

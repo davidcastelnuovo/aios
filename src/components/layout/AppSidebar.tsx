@@ -57,6 +57,7 @@ const salesMenuItems = [
   { title: "דשבורד מכירות", url: "/sales-dashboard", icon: TrendingUp },
   { title: "לידים", url: "/leads", icon: Target },
   { title: "אנשי מכירות", url: "/sales-people", icon: UserCheck },
+  { title: "אינטגרציות לידים", url: "/lead-integrations", icon: Settings },
 ];
 
 export function AppSidebar() {
