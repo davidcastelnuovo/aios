@@ -37,7 +37,7 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
 
   // Get all agencies for the filter - filtered by RLS so users only see their agencies
   const { data: allAgencies, isLoading: isLoadingAgencies } = useQuery({
-    queryKey: ["agencies-filter", userAgencyIds],
+    queryKey: ["agencies-filter"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("agencies")
