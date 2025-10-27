@@ -4,6 +4,7 @@ import { useUserRole, UserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Table,
   TableBody,
@@ -66,6 +67,7 @@ const roleBadgeColors: Record<UserRole, string> = {
 export default function Users() {
   const { isOwner, isSuperAdmin, userId: currentUserId } = useUserRole();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
   const [isTenantDialogOpen, setIsTenantDialogOpen] = useState(false);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -395,21 +397,23 @@ export default function Users() {
   }
 
   return (
-    <div className="container mx-auto py-6 px-6 space-y-6" dir="rtl">
-      <div className="flex justify-between items-center">
+    <div className="container mx-auto py-4 md:py-6 px-4 md:px-6 space-y-4 md:space-y-6" dir="rtl">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">ניהול משתמשים בארגון</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-2xl md:text-3xl font-bold">ניהול משתמשים בארגון</h1>
+          <p className="text-xs md:text-sm text-muted-foreground mt-1">
             {isSuperAdmin 
               ? "ניהול ארגונים ומשתמשים במערכת SaaS" 
-              : `כל המשתמשים שמוזמנים כאן ישתייכו לארגון "${currentUserTenant?.tenants?.name || "שלך"}" ולא יקבלו חשבון נפרד`}
+              : isMobile 
+                ? `ארגון: ${currentUserTenant?.tenants?.name || "שלך"}`
+                : `כל המשתמשים שמוזמנים כאן ישתייכו לארגון "${currentUserTenant?.tenants?.name || "שלך"}" ולא יקבלו חשבון נפרד`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
           {isSuperAdmin && (
             <Dialog open={isTenantDialogOpen} onOpenChange={setIsTenantDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline">
+                <Button variant="outline" className="w-full sm:w-auto">
                   <Building2 className="h-4 w-4 ml-2" />
                   הוסף ארגון
                 </Button>
@@ -427,7 +431,7 @@ export default function Users() {
           )}
           <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="w-full sm:w-auto">
               <UserPlus className="h-4 w-4 ml-2" />
               הזמן משתמש חדש
             </Button>
@@ -660,17 +664,135 @@ export default function Users() {
 
       {isSuperAdmin ? (
         <Tabs defaultValue="users" dir="rtl">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="users">ניהול משתמשים</TabsTrigger>
-            <TabsTrigger value="tenants">ניהול ארגונים (SaaS)</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 h-auto">
+            <TabsTrigger value="users" className="text-xs md:text-sm py-2">ניהול משתמשים</TabsTrigger>
+            <TabsTrigger value="tenants" className="text-xs md:text-sm py-2">ניהול ארגונים (SaaS)</TabsTrigger>
           </TabsList>
           
-          <TabsContent value="users" className="mt-6">
-            <Card>
-              <div className="overflow-x-auto">
-                {isLoading ? (
-                  <div className="p-6 text-center">טוען...</div>
-                ) : (
+          <TabsContent value="users" className="mt-4 md:mt-6">
+            {isLoading ? (
+              <Card className="p-6 text-center">טוען...</Card>
+            ) : isMobile ? (
+              <div className="space-y-4">
+                {users?.map((user: any) => (
+                  <Card key={user.id} className="p-4">
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-medium">{user.full_name || "-"}</div>
+                          <div className="text-sm text-muted-foreground">{user.email}</div>
+                        </div>
+                        {user.role && (
+                          <Badge className={roleBadgeColors[user.role]}>
+                            {roleLabels[user.role]}
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      {user.campaigner_name && (
+                        <div className="text-sm">
+                          <span className="text-muted-foreground">קמפיינר: </span>
+                          <span>{user.campaigner_name}</span>
+                        </div>
+                      )}
+                      
+                      {user.sales_person_name && (
+                        <div className="text-sm">
+                          <span className="text-muted-foreground">איש מכירות: </span>
+                          <span>{user.sales_person_name}</span>
+                        </div>
+                      )}
+                      
+                      <div className="flex flex-wrap gap-2 pt-2 border-t">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditNameUserId(user.id);
+                            setEditNameUserEmail(user.email);
+                            setEditNameUserFullName(user.full_name || "");
+                          }}
+                          className="flex-1"
+                        >
+                          ערוך שם
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditAgenciesUserId(user.id);
+                            setEditAgenciesUserEmail(user.email);
+                          }}
+                          className="flex-1"
+                        >
+                          <Settings className="h-3 w-3 ml-1" />
+                          סוכנויות
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditPermissionsUserId(user.id);
+                            setEditPermissionsUserEmail(user.email);
+                          }}
+                          className="flex-1"
+                        >
+                          <Lock className="h-3 w-3 ml-1" />
+                          הרשאות
+                        </Button>
+                        <Select
+                          value={user.role || ""}
+                          onValueChange={(role) =>
+                            updateRoleMutation.mutate({
+                              userId: user.id,
+                              role: role as UserRole,
+                            })
+                          }
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="שנה תפקיד" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(roleLabels).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex gap-2 w-full">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => resendInviteMutation.mutate({ email: user.email })}
+                            disabled={resendInviteMutation.isPending}
+                            className="flex-1"
+                          >
+                            <Mail className="h-3 w-3 ml-1" />
+                            שלח מחדש
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm(`האם למחוק את ${user.email}?`)) {
+                                deleteUserMutation.mutate(user.id);
+                              }
+                            }}
+                            disabled={deleteUserMutation.isPending}
+                            className="flex-1"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <Card>
+                <div className="overflow-x-auto">
                   <Table className="min-w-[1200px] whitespace-nowrap">
                     <TableHeader>
                       <TableRow>
@@ -850,10 +972,10 @@ export default function Users() {
                 ))}
               </TableBody>
             </Table>
-          )}
-        </div>
-      </Card>
-            </TabsContent>
+                </div>
+              </Card>
+            )}
+          </TabsContent>
 
             <TabsContent value="tenants" className="mt-6">
               <Card>
@@ -897,13 +1019,153 @@ export default function Users() {
               </Card>
             </TabsContent>
           </Tabs>
+        ) : isLoading ? (
+          <Card className="p-6 text-center">טוען...</Card>
+        ) : isMobile ? (
+          <div className="space-y-4">
+            {users?.map((user: any) => (
+              <Card key={user.id} className="p-4">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="font-medium">{user.full_name || "-"}</div>
+                      <div className="text-sm text-muted-foreground">{user.email}</div>
+                    </div>
+                    {user.role && (
+                      <Badge className={roleBadgeColors[user.role]}>
+                        {roleLabels[user.role]}
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  {user.campaigner_name && (
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">קמפיינר: </span>
+                      <span>{user.campaigner_name}</span>
+                    </div>
+                  )}
+                  
+                  {user.sales_person_name && (
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">איש מכירות: </span>
+                      <span>{user.sales_person_name}</span>
+                    </div>
+                  )}
+                  
+                  <div className="flex flex-wrap gap-2 pt-2 border-t">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditNameUserId(user.id);
+                        setEditNameUserEmail(user.email);
+                        setEditNameUserFullName(user.full_name || "");
+                      }}
+                      className="flex-1"
+                    >
+                      ערוך שם
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditCampaignerUserId(user.id);
+                        setEditCampaignerUserEmail(user.email);
+                      }}
+                      className="flex-1"
+                    >
+                      קמפיינר
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditSalesPersonUserId(user.id);
+                        setEditSalesPersonUserEmail(user.email);
+                      }}
+                      className="flex-1"
+                    >
+                      מכירות
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditAgenciesUserId(user.id);
+                        setEditAgenciesUserEmail(user.email);
+                      }}
+                      className="flex-1"
+                    >
+                      <Settings className="h-3 w-3 ml-1" />
+                      סוכנויות
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditPermissionsUserId(user.id);
+                        setEditPermissionsUserEmail(user.email);
+                      }}
+                      className="flex-1"
+                    >
+                      <Lock className="h-3 w-3 ml-1" />
+                      הרשאות
+                    </Button>
+                    <Select
+                      value={user.role || ""}
+                      onValueChange={(value) =>
+                        updateRoleMutation.mutate({
+                          userId: user.id,
+                          role: value as UserRole,
+                        })
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="שנה תפקיד" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(roleLabels).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="flex gap-2 w-full">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => resendInviteMutation.mutate({ email: user.email })}
+                        disabled={resendInviteMutation.isPending}
+                        className="flex-1"
+                      >
+                        <Mail className="h-3 w-3 ml-1" />
+                        שלח מחדש
+                      </Button>
+                      {user.id !== currentUserId && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            if (confirm(`האם למחוק את ${user.email}?`)) {
+                              deleteUserMutation.mutate(user.id);
+                            }
+                          }}
+                          className="flex-1"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
         ) : (
           <Card>
             <div className="overflow-x-auto">
-              {isLoading ? (
-                <div className="p-6 text-center">טוען...</div>
-              ) : (
-                <Table className="min-w-[1200px] whitespace-nowrap">
+              <Table className="min-w-[1200px] whitespace-nowrap">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="text-right">שם מלא</TableHead>
@@ -1083,20 +1345,19 @@ export default function Users() {
                     ))}
                   </TableBody>
                 </Table>
-              )}
-            </div>
-          </Card>
-        )}
+              </div>
+            </Card>
+          )
+        }
 
-
-      <Card className="p-6 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-        <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
-          <Shield className="h-5 w-5" />
+      <Card className="p-4 md:p-6 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+        <h2 className="text-lg md:text-xl font-semibold mb-2 flex items-center gap-2">
+          <Shield className="h-4 md:h-5 w-4 md:w-5" />
           הבנת מערכת הניהול
         </h2>
-        <div className="mb-6 p-4 bg-white dark:bg-gray-900 rounded-lg border">
-          <h3 className="font-semibold mb-2">ההבדל בין ניהול משתמשים לניהול ארגונים:</h3>
-          <ul className="text-sm space-y-2 mr-4">
+        <div className="mb-4 md:mb-6 p-3 md:p-4 bg-white dark:bg-gray-900 rounded-lg border">
+          <h3 className="font-semibold mb-2 text-sm md:text-base">ההבדל בין ניהול משתמשים לניהול ארגונים:</h3>
+          <ul className="text-xs md:text-sm space-y-2 mr-4">
             <li><strong>• ניהול משתמשים (דף זה):</strong> הוספת עובדים/קמפיינרים לארגון שלך. הם לא מקבלים חשבון נפרד, אלא נכנסים למערכת שלך.</li>
             <li><strong>• ניהול ארגונים (רק Super Admin):</strong> יצירת לקוחות SaaS חדשים שמקבלים חשבון נפרד לחלוטין.</li>
           </ul>
