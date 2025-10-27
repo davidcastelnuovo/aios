@@ -16,6 +16,7 @@ interface InviteUserRequest {
   resend?: boolean;
   campaignerId?: string;
   salesPersonId?: string;
+  tenantId?: string; // For inviting users to a specific tenant
 }
 
 serve(async (req: Request) => {
@@ -64,7 +65,7 @@ serve(async (req: Request) => {
       throw new Error("Only owners and agency owners can invite users");
     }
 
-    const { email, fullName, role, agencyIds, modulePermissions, resend, campaignerId, salesPersonId }: InviteUserRequest = await req.json();
+    const { email, fullName, role, agencyIds, modulePermissions, resend, campaignerId, salesPersonId, tenantId }: InviteUserRequest = await req.json();
 
     if (!email) {
       throw new Error("Email is required");
@@ -226,6 +227,26 @@ serve(async (req: Request) => {
         }
       } else {
         console.log('Skipping module permissions - modulePermissions:', modulePermissions, 'length:', modulePermissions?.length, 'resend:', resend);
+      }
+
+      // Add user to tenant if tenantId provided
+      if (tenantId && !resend) {
+        console.log('Adding user to tenant:', tenantId);
+        
+        const { error: tenantUserError } = await supabaseAdmin
+          .from("tenant_users")
+          .insert({
+            user_id: inviteData.user.id,
+            tenant_id: tenantId,
+            role: role === 'owner' ? 'owner' : 'member',
+          });
+
+        if (tenantUserError) {
+          console.error("Error adding user to tenant:", tenantUserError);
+          // Don't throw - the user was created, just log the error
+        } else {
+          console.log('User added to tenant successfully');
+        }
       }
     }
 

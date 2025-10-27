@@ -235,6 +235,23 @@ export default function Users() {
   });
 
 
+  const { data: currentUserTenant } = useQuery({
+    queryKey: ["current-user-tenant", currentUserId],
+    queryFn: async () => {
+      if (!currentUserId) return null;
+      
+      const { data, error } = await supabase
+        .from("tenant_users")
+        .select("tenant_id, tenants(name)")
+        .eq("user_id", currentUserId)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!currentUserId && !isSuperAdmin,
+  });
+
   const inviteUserMutation = useMutation({
     mutationFn: async ({ 
       email, 
@@ -259,6 +276,12 @@ export default function Users() {
         throw new Error("No active session");
       }
 
+      // Get tenant_id for non-super-admin users
+      let tenantId = undefined;
+      if (!isSuperAdmin && currentUserTenant?.tenant_id) {
+        tenantId = currentUserTenant.tenant_id;
+      }
+
       const { data, error } = await supabase.functions.invoke("invite-user", {
         body: { 
           email,
@@ -268,6 +291,7 @@ export default function Users() {
           modulePermissions,
           campaignerId,
           salesPersonId,
+          tenantId,
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -365,7 +389,10 @@ export default function Users() {
     <div className="container mx-auto py-6 px-6 space-y-6" dir="rtl">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">ניהול {isSuperAdmin ? "מערכת" : "משתמשים"}</h1>
+          <h1 className="text-3xl font-bold">ניהול משתמשים</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {isSuperAdmin ? "ניהול ארגונים ומשתמשים במערכת SaaS" : `ניהול משתמשים - ${currentUserTenant?.tenants?.name || "ארגון"}`}
+          </p>
         </div>
         <div className="flex gap-2">
           {isSuperAdmin && (
