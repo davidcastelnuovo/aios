@@ -56,7 +56,6 @@ export function AddClientForm() {
       const { data, error } = await supabase
         .from("agencies")
         .select("id, name")
-        .in("name", ["dmm", "marketingCaptian"])
         .order("name");
       if (error) throw error;
       return data;
