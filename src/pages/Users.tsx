@@ -91,6 +91,7 @@ export default function Users() {
     full_name: string;
     agencies: Array<{ id: string; name: string }>;
   } | null>(null);
+  const [selectedTenantId, setSelectedTenantId] = useState<string>("");
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies-for-invite", currentUserId],
@@ -278,7 +279,14 @@ export default function Users() {
 
       // Get tenant_id for non-super-admin users
       let tenantId = undefined;
-      if (!isSuperAdmin && currentUserTenant?.tenant_id) {
+      if (isSuperAdmin) {
+        // Super admin must select a tenant
+        if (!selectedTenantId) {
+          throw new Error("יש לבחור ארגון למשתמש");
+        }
+        tenantId = selectedTenantId;
+      } else if (currentUserTenant?.tenant_id) {
+        // Regular owner uses their own tenant
         tenantId = currentUserTenant.tenant_id;
       }
 
@@ -313,6 +321,7 @@ export default function Users() {
       setSelectedModules([]);
       setSelectedCampaignerId("");
       setSelectedSalesPersonId("");
+      setSelectedTenantId("");
     },
     onError: (error: Error) => {
       toast.error("שגיאה בשליחת הזמנה: " + error.message);
@@ -430,6 +439,29 @@ export default function Users() {
             </DialogHeader>
             <ScrollArea className="max-h-[calc(90vh-180px)] pl-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pr-4" dir="rtl">
+                {isSuperAdmin && (
+                  <div className="md:col-span-2 p-3 border border-amber-500 bg-amber-50 dark:bg-amber-950 rounded-md">
+                    <Label htmlFor="tenant-select" className="text-amber-900 dark:text-amber-100 font-semibold">בחר ארגון (Tenant)</Label>
+                    <Select
+                      value={selectedTenantId}
+                      onValueChange={setSelectedTenantId}
+                    >
+                      <SelectTrigger className="mt-2">
+                        <SelectValue placeholder="בחר ארגון למשתמש החדש" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tenants?.map((tenant) => (
+                          <SelectItem key={tenant.id} value={tenant.id}>
+                            {tenant.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
+                      המשתמש ישוייך לארגון הנבחר
+                    </p>
+                  </div>
+                )}
                 <div>
                   <Label htmlFor="invite-email">אימייל משתמש</Label>
                   <Input
@@ -624,23 +656,31 @@ export default function Users() {
         </div>
       </div>
 
-      <Card>
-        <div className="overflow-x-auto">
-          {isLoading ? (
-            <div className="p-6 text-center">טוען...</div>
-          ) : (
-            <Table className="min-w-[1200px] whitespace-nowrap">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-right">שם מלא</TableHead>
-                  <TableHead className="text-right">אימייל</TableHead>
-                  <TableHead className="text-right">תפקידים</TableHead>
-                  <TableHead className="text-right">קמפיינר משויך</TableHead>
-                  <TableHead className="text-right">איש מכירות</TableHead>
-                  <TableHead className="text-right">סוכנויות איש מכירות</TableHead>
-                  <TableHead className="text-right">פעולות</TableHead>
-                </TableRow>
-              </TableHeader>
+      {isSuperAdmin ? (
+        <Tabs defaultValue="users" dir="rtl">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="users">ניהול משתמשים</TabsTrigger>
+            <TabsTrigger value="tenants">ניהול ארגונים (SaaS)</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="users" className="mt-6">
+            <Card>
+              <div className="overflow-x-auto">
+                {isLoading ? (
+                  <div className="p-6 text-center">טוען...</div>
+                ) : (
+                  <Table className="min-w-[1200px] whitespace-nowrap">
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">שם מלא</TableHead>
+                        <TableHead className="text-right">אימייל</TableHead>
+                        <TableHead className="text-right">תפקידים</TableHead>
+                        <TableHead className="text-right">קמפיינר משויך</TableHead>
+                        <TableHead className="text-right">איש מכירות</TableHead>
+                        <TableHead className="text-right">סוכנויות איש מכירות</TableHead>
+                        <TableHead className="text-right">פעולות</TableHead>
+                      </TableRow>
+                    </TableHeader>
               <TableBody>
                 {users?.map((user: any) => (
                   <TableRow key={user.id}>
@@ -811,6 +851,241 @@ export default function Users() {
           )}
         </div>
       </Card>
+            </TabsContent>
+
+            <TabsContent value="tenants" className="mt-6">
+              <Card>
+                <div className="p-6">
+                  <h2 className="text-xl font-semibold mb-4">ניהול ארגונים (Tenants)</h2>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    כל ארגון מייצג לקוח SaaS נפרד עם משתמשים ונתונים משלו
+                  </p>
+                  
+                  {!tenants || tenants.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      אין ארגונים במערכת. לחץ על "הוסף ארגון" כדי להתחיל.
+                    </div>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="text-right">שם הארגון</TableHead>
+                          <TableHead className="text-right">סטטוס</TableHead>
+                          <TableHead className="text-right">איש קשר</TableHead>
+                          <TableHead className="text-right">תאריך יצירה</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {tenants.map((tenant: any) => (
+                          <TableRow key={tenant.id}>
+                            <TableCell className="font-medium">{tenant.name}</TableCell>
+                            <TableCell>
+                              <Badge variant={tenant.status === 'active' ? 'default' : 'secondary'}>
+                                {tenant.status === 'active' ? 'פעיל' : tenant.status}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{tenant.contact_name || '-'}</TableCell>
+                            <TableCell>{new Date(tenant.created_at).toLocaleDateString('he-IL')}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              </Card>
+            </TabsContent>
+          </Tabs>
+        ) : (
+          <Card>
+            <div className="overflow-x-auto">
+              {isLoading ? (
+                <div className="p-6 text-center">טוען...</div>
+              ) : (
+                <Table className="min-w-[1200px] whitespace-nowrap">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-right">שם מלא</TableHead>
+                      <TableHead className="text-right">אימייל</TableHead>
+                      <TableHead className="text-right">תפקידים</TableHead>
+                      <TableHead className="text-right">קמפיינר משויך</TableHead>
+                      <TableHead className="text-right">איש מכירות</TableHead>
+                      <TableHead className="text-right">סוכנויות איש מכירות</TableHead>
+                      <TableHead className="text-right">פעולות</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {users?.map((user: any) => (
+                      <TableRow key={user.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm">{user.full_name || "-"}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditNameUserId(user.id);
+                                setEditNameUserEmail(user.email);
+                                setEditNameUserFullName(user.full_name || "");
+                              }}
+                              className="h-6 px-2 text-xs"
+                            >
+                              ערוך
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>
+                          {user.role ? (
+                            <Badge className={roleBadgeColors[user.role]}>
+                              {roleLabels[user.role]}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">
+                              אין תפקיד
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm">
+                              {user.campaigner_name || "-"}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditCampaignerUserId(user.id);
+                                setEditCampaignerUserEmail(user.email);
+                              }}
+                              className="h-6 px-2 text-xs"
+                            >
+                              ערוך
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm">
+                              {user.sales_person_name || "-"}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setEditSalesPersonUserId(user.id);
+                                setEditSalesPersonUserEmail(user.email);
+                              }}
+                              className="h-6 px-2 text-xs"
+                            >
+                              ערוך
+                            </Button>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {user.sales_person_id ? (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm">
+                                {salesPeopleWithAgencies?.find(sp => sp.id === user.sales_person_id)?.agencies.map(a => a.name).join(", ") || "אין סוכנויות"}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const salesPerson = salesPeopleWithAgencies?.find(sp => sp.id === user.sales_person_id);
+                                  if (salesPerson) {
+                                    setEditSalesPersonAgencies(salesPerson);
+                                  }
+                                }}
+                                className="h-6 px-2 text-xs"
+                              >
+                                ערוך
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditAgenciesUserId(user.id);
+                                setEditAgenciesUserEmail(user.email);
+                              }}
+                              className="h-8"
+                            >
+                              <Settings className="h-3 w-3 ml-1" />
+                              סוכנויות
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditPermissionsUserId(user.id);
+                                setEditPermissionsUserEmail(user.email);
+                              }}
+                              className="h-8"
+                            >
+                              <Lock className="h-3 w-3 ml-1" />
+                              הרשאות
+                            </Button>
+                            <Select
+                              value={user.role || ""}
+                              onValueChange={(value) =>
+                                updateRoleMutation.mutate({
+                                  userId: user.id,
+                                  role: value as UserRole,
+                                })
+                              }
+                            >
+                              <SelectTrigger className="h-8 w-[140px]">
+                                <SelectValue placeholder="שנה תפקיד" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(roleLabels).map(([value, label]) => (
+                                  <SelectItem key={value} value={value}>
+                                    {label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => resendInviteMutation.mutate({ email: user.email })}
+                              disabled={resendInviteMutation.isPending}
+                              className="h-8"
+                            >
+                              <Mail className="h-3 w-3 ml-1" />
+                              שלח מחדש
+                            </Button>
+                            {user.id !== currentUserId && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => {
+                                  if (confirm(`האם אתה בטוח שברצונך למחוק את ${user.email}?`)) {
+                                    deleteUserMutation.mutate(user.id);
+                                  }
+                                }}
+                                className="h-8"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          </Card>
+        )}
+
 
       <Card className="p-6">
         <h2 className="text-xl font-semibold mb-4">הסבר על התפקידים</h2>
