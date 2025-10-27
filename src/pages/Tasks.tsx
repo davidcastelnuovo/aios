@@ -118,6 +118,16 @@ export default function Tasks() {
   const getTaskAgencyId = (t: any) => t?.clients?.agency_id ?? t?.agency_id;
   let accessibleTasks = tasks;
 
+  console.log('🔍 Tasks Filter Debug:', {
+    isOwner,
+    isTeamManager,
+    isCampaigner,
+    campaignerId,
+    userAgencyIds,
+    campaignerClientIds,
+    totalTasks: tasks?.length
+  });
+
   if (!isOwner) {
     if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
       // Team managers see all tasks in their agencies (including all team members)
