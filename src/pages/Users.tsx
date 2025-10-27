@@ -398,9 +398,11 @@ export default function Users() {
     <div className="container mx-auto py-6 px-6 space-y-6" dir="rtl">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">ניהול משתמשים</h1>
+          <h1 className="text-3xl font-bold">ניהול משתמשים בארגון</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {isSuperAdmin ? "ניהול ארגונים ומשתמשים במערכת SaaS" : `ניהול משתמשים - ${currentUserTenant?.tenants?.name || "ארגון"}`}
+            {isSuperAdmin 
+              ? "ניהול ארגונים ומשתמשים במערכת SaaS" 
+              : `כל המשתמשים שמוזמנים כאן ישתייכו לארגון "${currentUserTenant?.tenants?.name || "שלך"}" ולא יקבלו חשבון נפרד`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -432,9 +434,9 @@ export default function Users() {
           </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[90vh]">
             <DialogHeader>
-              <DialogTitle>הזמן משתמש חדש</DialogTitle>
+              <DialogTitle>הזמן משתמש חדש לארגון שלך</DialogTitle>
               <DialogDescription>
-                המשתמש יקבל מייל עם קישור ליצירת חשבון והגדרת סיסמה.
+                המשתמש יקבל מייל עם קישור ליצירת חשבון והצטרפות לארגון שלך (MarketingCaptain).
               </DialogDescription>
             </DialogHeader>
             <ScrollArea className="max-h-[calc(90vh-180px)] pl-4">
@@ -1087,8 +1089,20 @@ export default function Users() {
         )}
 
 
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">הסבר על התפקידים</h2>
+      <Card className="p-6 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+        <h2 className="text-xl font-semibold mb-2 flex items-center gap-2">
+          <Shield className="h-5 w-5" />
+          הבנת מערכת הניהול
+        </h2>
+        <div className="mb-6 p-4 bg-white dark:bg-gray-900 rounded-lg border">
+          <h3 className="font-semibold mb-2">ההבדל בין ניהול משתמשים לניהול ארגונים:</h3>
+          <ul className="text-sm space-y-2 mr-4">
+            <li><strong>• ניהול משתמשים (דף זה):</strong> הוספת עובדים/קמפיינרים לארגון שלך. הם לא מקבלים חשבון נפרד, אלא נכנסים למערכת שלך.</li>
+            <li><strong>• ניהול ארגונים (רק Super Admin):</strong> יצירת לקוחות SaaS חדשים שמקבלים חשבון נפרד לחלוטין.</li>
+          </ul>
+        </div>
+        
+        <h3 className="text-lg font-semibold mb-3">תפקידים זמינים:</h3>
         <div className="space-y-3">
           <div className="flex items-start gap-3">
             <Badge className={roleBadgeColors.owner}>
