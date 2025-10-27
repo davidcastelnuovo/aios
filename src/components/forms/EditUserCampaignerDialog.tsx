@@ -90,11 +90,11 @@ export function EditUserCampaignerDialog({
       await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
       await queryClient.invalidateQueries({ queryKey: ["user-campaigner"] });
       await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
-      toast.success("הקמפיינר המשויך עודכן בהצלחה");
+      toast.success("איש הצוות המשויך עודכן בהצלחה");
       onOpenChange(false);
     },
     onError: (error: Error) => {
-      toast.error("שגיאה בעדכון קמפיינר: " + error.message);
+      toast.error("שגיאה בעדכון איש צוות: " + error.message);
     },
   });
 
@@ -106,7 +106,7 @@ export function EditUserCampaignerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>עריכת קמפיינר משויך</DialogTitle>
+          <DialogTitle>עריכת איש צוות משויך</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div>
@@ -114,16 +114,16 @@ export function EditUserCampaignerDialog({
             <p className="text-sm text-muted-foreground">{userEmail}</p>
           </div>
           <div>
-            <Label htmlFor="campaigner-select">קמפיינר משויך</Label>
+            <Label htmlFor="campaigner-select">איש צוות משויך</Label>
             <Select
               value={selectedCampaignerId}
               onValueChange={setSelectedCampaignerId}
             >
               <SelectTrigger id="campaigner-select">
-                <SelectValue placeholder="בחר קמפיינר" />
+                <SelectValue placeholder="בחר איש צוות" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">ללא קמפיינר משויך</SelectItem>
+                <SelectItem value="none">ללא איש צוות משויך</SelectItem>
                 {campaigners?.map((campaigner) => (
                   <SelectItem key={campaigner.id} value={campaigner.id}>
                     {campaigner.full_name}

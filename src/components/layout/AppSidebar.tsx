@@ -41,7 +41,7 @@ const menuItems = [
   { title: "משימות", url: "/tasks", icon: CheckSquare, module: "tasks" as const },
   { title: "לקוחות בקליטה", url: "/client-onboarding", icon: UserPlus, module: "client_onboarding" as const },
   { title: "שעון נוכחות", url: "/time-tracking", icon: Clock, module: "time_tracking" as const },
-  { title: "קמפיינרים", url: "/campaigners", icon: Megaphone, module: "campaigners" as const },
+  { title: "צוות", url: "/campaigners", icon: Megaphone, module: "campaigners" as const },
   { title: "ניהול משתמשים", url: "/users", icon: ShieldCheck, module: "users" as const },
   { title: "אזור אישי", url: "/my-profile", icon: User, module: null },
 ];

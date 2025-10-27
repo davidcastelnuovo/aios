@@ -105,7 +105,7 @@ export default function Campaigners() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold">קמפיינרים</h2>
+          <h2 className="text-3xl font-bold">צוות</h2>
         </div>
         <AddCampaignerForm />
       </div>
@@ -223,8 +223,8 @@ export default function Campaigners() {
         <Card className="shadow-card">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Megaphone className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-1">אין קמפיינרים</h3>
-            <p className="text-sm text-muted-foreground">התחל בהוספת קמפיינר ראשון</p>
+            <h3 className="text-lg font-semibold mb-1">אין אנשי צוות</h3>
+            <p className="text-sm text-muted-foreground">התחל בהוספת איש צוות ראשון</p>
           </CardContent>
         </Card>
       )}

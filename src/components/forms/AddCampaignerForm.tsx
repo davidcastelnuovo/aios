@@ -98,13 +98,13 @@ export function AddCampaignerForm() {
       if (linksError) throw linksError;
     },
     onSuccess: () => {
-      toast.success("הקמפיינר נוסף בהצלחה");
+      toast.success("איש הצוות נוסף בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["campaigners"] });
       form.reset();
       setOpen(false);
     },
     onError: (error) => {
-      toast.error("שגיאה בהוספת קמפיינר: " + error.message);
+      toast.error("שגיאה בהוספת איש צוות: " + error.message);
     },
   });
 
@@ -117,12 +117,12 @@ export function AddCampaignerForm() {
       <DialogTrigger asChild>
         <Button>
           <Plus className="ml-2 h-4 w-4" />
-          הוסף קמפיינר
+          הוסף איש צוות
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>הוסף קמפיינר חדש</DialogTitle>
+          <DialogTitle>הוסף איש צוות חדש</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -243,7 +243,7 @@ export function AddCampaignerForm() {
             />
 
             <Button type="submit" className="w-full" disabled={mutation.isPending}>
-              {mutation.isPending ? "מוסיף..." : "הוסף קמפיינר"}
+              {mutation.isPending ? "מוסיף..." : "הוסף איש צוות"}
             </Button>
           </form>
         </Form>
