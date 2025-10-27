@@ -468,14 +468,13 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
   }, [isOpen, stageLeads, tableWidth]);
 
   // Pointer drag + wheel to control bottom scroll from the top bar
-  const dragState = useRef({ dragging: false, startX: 0, startScrollLeft: 0, pointerId: 0 });
+  const dragState = useRef({ dragging: false, startX: 0, startScrollLeft: 0 });
   const onPointerDownBar = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
     dragState.current.dragging = true;
     dragState.current.startX = e.clientX;
     dragState.current.startScrollLeft = xContainerRef.current?.scrollLeft || 0;
-    dragState.current.pointerId = e.pointerId;
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
   const onPointerMoveBar = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -486,8 +485,13 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
     x.scrollLeft = dragState.current.startScrollLeft - dx;
   };
   const onPointerUpBar = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragState.current.dragging) return;
     dragState.current.dragging = false;
-    (e.currentTarget as HTMLElement).releasePointerCapture?.(dragState.current.pointerId);
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch (err) {
+      // Ignore errors if pointer was already released
+    }
   };
   const onWheelBar = (e: React.WheelEvent<HTMLDivElement>) => {
     const x = xContainerRef.current;
