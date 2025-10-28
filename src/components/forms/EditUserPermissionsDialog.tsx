@@ -28,17 +28,23 @@ type ModuleConfig = {
 
 const MODULES: ModuleConfig[] = [
   { id: "dashboard", label: "דשבורד", description: "מבט על כללי על המערכת" },
-  { id: "leads", label: "לידים", description: "ניהול לידים ומעקב אחר הזדמנויות" },
   { id: "clients", label: "לקוחות", description: "ניהול לקוחות" },
   { id: "agencies", label: "סוכנויות", description: "ניהול סוכנויות" },
   { id: "campaigners", label: "קמפיינרים", description: "ניהול קמפיינרים" },
-  { id: "sales_people", label: "אנשי מכירות", description: "ניהול אנשי מכירות" },
   { id: "suppliers", label: "ספקים", description: "ניהול ספקים" },
   { id: "tasks", label: "משימות", description: "ניהול משימות" },
   { id: "client_onboarding", label: "קליטת לקוחות", description: "תהליך קליטה" },
   { id: "time_tracking", label: "מעקב זמנים", description: "רישום שעות עבודה" },
   { id: "finance", label: "כספים", description: "ניהול הכנסות והוצאות" },
   { id: "reports", label: "דוחות", description: "דוחות וניתוחים" },
+  { id: "users", label: "ניהול משתמשים", description: "הוספה ועריכת משתמשים" },
+];
+
+const SALES_MODULES: ModuleConfig[] = [
+  { id: "sales_dashboard", label: "דשבורד מכירות", description: "סקירת מכירות ומעקב" },
+  { id: "leads", label: "לידים", description: "ניהול לידים ומעקב אחר הזדמנויות מכירה" },
+  { id: "sales_people", label: "אנשי מכירות", description: "ניהול צוות המכירות" },
+  { id: "lead_integrations", label: "אינטגרציות לידים", description: "הגדרות ואינטגרציות לקבלת לידים" },
 ];
 
 const SPECIAL_PERMISSIONS: ModuleConfig[] = [
@@ -70,6 +76,11 @@ export function EditUserPermissionsDialog({
       // Set all modules to true by default
       [...MODULES, ...SPECIAL_PERMISSIONS].forEach(module => {
         permissionsMap[module.id] = true;
+      });
+      
+      // Set sales modules to false by default
+      SALES_MODULES.forEach(module => {
+        permissionsMap[module.id] = false;
       });
 
       // Override with actual values from database
@@ -142,7 +153,7 @@ export function EditUserPermissionsDialog({
 
         <div className="space-y-6">
           <div>
-            <h3 className="text-lg font-semibold mb-3">מודולים</h3>
+            <h3 className="text-lg font-semibold mb-3">מודולים כלליים</h3>
             <div className="space-y-3">
               {MODULES.map((module) => (
                 <div key={module.id} className="flex items-start space-x-3 space-x-reverse">
@@ -154,6 +165,35 @@ export function EditUserPermissionsDialog({
                   <div className="flex-1">
                     <label
                       htmlFor={`module-${module.id}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      {module.label}
+                    </label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {module.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <h3 className="text-lg font-semibold mb-3">מודולי מכירות</h3>
+            <p className="text-sm text-muted-foreground mb-3">
+              ברירת מחדל: ללא גישה למודולי מכירות
+            </p>
+            <div className="space-y-3">
+              {SALES_MODULES.map((module) => (
+                <div key={module.id} className="flex items-start space-x-3 space-x-reverse">
+                  <Checkbox
+                    id={`sales-${module.id}`}
+                    checked={permissions[module.id] ?? false}
+                    onCheckedChange={() => togglePermission(module.id)}
+                  />
+                  <div className="flex-1">
+                    <label
+                      htmlFor={`sales-${module.id}`}
                       className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                     >
                       {module.label}

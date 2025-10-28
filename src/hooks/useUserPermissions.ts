@@ -15,8 +15,12 @@ export type ModulePermission =
   | "time_tracking"
   | "finance"
   | "reports"
-  | "finance_view" // Special permission for viewing financial data
-  | "users"; // Access to user management
+  | "users" // Access to user management
+  | "sales_dashboard" // Sales dashboard
+  | "leads" // Leads management
+  | "sales_people" // Sales people management
+  | "lead_integrations" // Lead integrations
+  | "finance_view"; // Special permission for viewing financial data
 
 export function useUserPermissions() {
   const { user } = useCurrentUser();

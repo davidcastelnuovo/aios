@@ -54,10 +54,10 @@ const managementMenuItems = [
 ];
 
 const salesMenuItems = [
-  { title: "דשבורד מכירות", url: "/sales-dashboard", icon: TrendingUp },
-  { title: "לידים", url: "/leads", icon: Target },
-  { title: "אנשי מכירות", url: "/sales-people", icon: UserCheck },
-  { title: "אינטגרציות לידים", url: "/lead-integrations", icon: Settings },
+  { title: "דשבורד מכירות", url: "/sales-dashboard", icon: TrendingUp, module: "sales_dashboard" as const },
+  { title: "לידים", url: "/leads", icon: Target, module: "leads" as const },
+  { title: "אנשי מכירות", url: "/sales-people", icon: UserCheck, module: "sales_people" as const },
+  { title: "אינטגרציות לידים", url: "/lead-integrations", icon: Settings, module: "lead_integrations" as const },
 ];
 
 export function AppSidebar() {
@@ -84,6 +84,11 @@ export function AppSidebar() {
   });
 
   const visibleManagementItems = managementMenuItems.filter((item) => {
+    if (isLoading) return false;
+    return hasPermission(item.module);
+  });
+
+  const visibleSalesItems = salesMenuItems.filter((item) => {
     if (isLoading) return false;
     return hasPermission(item.module);
   });
@@ -158,41 +163,43 @@ export function AppSidebar() {
               )}
 
               {/* ניהול מכירות - תפריט מתקפל */}
-              <Collapsible className="group/collapsible">
-                <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton tooltip="ניהול מכירות">
-                      <DollarSign className="h-4 w-4" />
-                      {!isCollapsed && <span>ניהול מכירות</span>}
-                      {!isCollapsed && (
-                        <ChevronDown className="mr-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
-                      )}
-                    </SidebarMenuButton>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
-                      {salesMenuItems.map((item) => (
-                        <SidebarMenuSubItem key={item.title}>
-                          <SidebarMenuSubButton asChild>
-                            <NavLink
-                              to={item.url}
-                              onClick={handleLinkClick}
-                              className={({ isActive }) =>
-                                isActive
-                                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                                  : ""
-                              }
-                            >
-                              <item.icon className="h-4 w-4" />
-                              <span>{item.title}</span>
-                            </NavLink>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
+              {visibleSalesItems.length > 0 && (
+                <Collapsible className="group/collapsible">
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton tooltip="ניהול מכירות">
+                        <DollarSign className="h-4 w-4" />
+                        {!isCollapsed && <span>ניהול מכירות</span>}
+                        {!isCollapsed && (
+                          <ChevronDown className="mr-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                        )}
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {visibleSalesItems.map((item) => (
+                          <SidebarMenuSubItem key={item.title}>
+                            <SidebarMenuSubButton asChild>
+                              <NavLink
+                                to={item.url}
+                                onClick={handleLinkClick}
+                                className={({ isActive }) =>
+                                  isActive
+                                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                    : ""
+                                }
+                              >
+                                <item.icon className="h-4 w-4" />
+                                <span>{item.title}</span>
+                              </NavLink>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
