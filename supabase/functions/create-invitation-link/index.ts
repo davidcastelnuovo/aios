@@ -79,7 +79,8 @@ serve(async (req) => {
     }
 
     // Create invitation link
-    const invitationLink = `${baseUrl}/signup?token=${token_value}`;
+    const safeBaseUrl = (baseUrl || "https://after-lead.lovable.app").replace(/\/+$/, "");
+    const invitationLink = `${safeBaseUrl}/signup?token=${token_value}`;
 
     return new Response(
       JSON.stringify({
