@@ -13,6 +13,7 @@ export function CreateInvitationDialog() {
   const [loading, setLoading] = useState(false);
   const [invitationLink, setInvitationLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [baseUrl, setBaseUrl] = useState<string>(window.location.origin);
   const { toast } = useToast();
 
   const handleCreateInvitation = async () => {
@@ -22,7 +23,7 @@ export function CreateInvitationDialog() {
       const { data, error } = await supabase.functions.invoke("create-invitation-link", {
         body: { 
           email: email || undefined,
-          baseUrl: window.location.origin 
+          baseUrl: baseUrl
         },
       });
 
@@ -101,6 +102,21 @@ export function CreateInvitationDialog() {
               />
               <p className="text-xs text-muted-foreground">
                 אם תזין אימייל, המשתמש יצטרך להשתמש באותו אימייל להרשמה
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="baseUrl">דומיין/כתובת בסיס לקישור</Label>
+              <Input
+                id="baseUrl"
+                type="text"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder="https://your-domain.com"
+                disabled={loading}
+              />
+              <p className="text-xs text-muted-foreground">
+                ברירת מחדל: הדומיין הנוכחי. ניתן לשנות לדומיין הייצור. ללא סלש בסוף.
               </p>
             </div>
 
