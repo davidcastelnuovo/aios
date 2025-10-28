@@ -1,5 +1,11 @@
 project_id = "jnzguisakdtcollxmgzd"
 
+[functions.create-invitation-link]
+verify_jwt = true
+
+[functions.signup-with-invitation]
+verify_jwt = false
+
 [functions.delete-user]
 verify_jwt = true
 
