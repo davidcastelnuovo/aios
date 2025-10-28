@@ -20,7 +20,10 @@ export function CreateInvitationDialog() {
 
     try {
       const { data, error } = await supabase.functions.invoke("create-invitation-link", {
-        body: { email: email || undefined },
+        body: { 
+          email: email || undefined,
+          baseUrl: window.location.origin 
+        },
       });
 
       if (error) throw error;

@@ -8,6 +8,7 @@ const corsHeaders = {
 
 interface CreateInvitationRequest {
   email?: string;
+  baseUrl?: string;
 }
 
 serve(async (req) => {
@@ -55,7 +56,7 @@ serve(async (req) => {
       throw new Error("User not associated with any tenant");
     }
 
-    const { email }: CreateInvitationRequest = await req.json();
+    const { email, baseUrl }: CreateInvitationRequest = await req.json();
 
     // Generate unique token
     const token_value = crypto.randomUUID();
@@ -78,7 +79,6 @@ serve(async (req) => {
     }
 
     // Create invitation link
-    const baseUrl = req.headers.get("origin") || supabaseUrl;
     const invitationLink = `${baseUrl}/signup?token=${token_value}`;
 
     return new Response(
