@@ -90,7 +90,7 @@ serve(async (req) => {
       safeBaseUrl = parts.join("/");
     }
     safeBaseUrl = safeBaseUrl.replace(/\/+$/, "");
-    const invitationLink = `${safeBaseUrl}/signup?token=${token_value}`;
+    const invitationLink = `${safeBaseUrl}/auth?token=${token_value}`;
 
     return new Response(
       JSON.stringify({

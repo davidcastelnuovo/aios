@@ -148,7 +148,7 @@ serve(async (req: Request) => {
           const parts = baseUrlInput1.split("/").slice(0, 3);
           safeBaseUrl1 = parts.join("/");
         }
-        const invitationLink = `${safeBaseUrl1.replace(/\/+$/, "")}/signup?token=${token_value}`;
+        const invitationLink = `${safeBaseUrl1.replace(/\/+$/, "")}/auth?token=${token_value}`;
 
         // Send invitation email via Supabase Auth
         try {
@@ -228,7 +228,7 @@ serve(async (req: Request) => {
       const parts = baseUrlInput2.split("/").slice(0, 3);
       safeBaseUrl2 = parts.join("/");
     }
-    const invitationLink = `${safeBaseUrl2.replace(/\/+$/, "")}/signup?token=${token_value}`;
+    const invitationLink = `${safeBaseUrl2.replace(/\/+$/, "")}/auth?token=${token_value}`;
 
     // Send invitation email via Supabase Auth
     try {
@@ -269,7 +269,7 @@ serve(async (req: Request) => {
       const parts = baseUrlInput3.split("/").slice(0, 3);
       safeBaseUrl3 = parts.join("/");
     }
-    const directInvitationLink = `${safeBaseUrl3.replace(/\/+$/, "")}/signup?token=${token_value}`;
+    const directInvitationLink = `${safeBaseUrl3.replace(/\/+$/, "")}/auth?token=${token_value}`;
 
     return new Response(
       JSON.stringify({

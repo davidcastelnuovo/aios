@@ -17,40 +17,74 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [resetMode, setResetMode] = useState(false);
   const [updatePasswordMode, setUpdatePasswordMode] = useState(false);
+  // Invitation signup state (for /auth?token=... flow)
+  const [inviteMode, setInviteMode] = useState(false);
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [inviteFullName, setInviteFullName] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [invitePassword, setInvitePassword] = useState("");
+  const [inviteConfirm, setInviteConfirm] = useState("");
+  const [inviteLoading, setInviteLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
 
-  useEffect(() => {
-    const init = async () => {
-      const type = searchParams.get("type");
-      const code = searchParams.get("code");
+useEffect(() => {
+  const init = async () => {
+    const type = searchParams.get("type");
+    const code = searchParams.get("code");
+    const token = searchParams.get("token");
 
-      // If we have a code param, try to exchange it for a session
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
-          console.error("exchangeCodeForSession error:", error);
-          toast({ title: "שגיאה", description: error.message, variant: "destructive" });
+    // If we have a code param, try to exchange it for a session
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) {
+        console.error("exchangeCodeForSession error:", error);
+        toast({ title: "שגיאה", description: error.message, variant: "destructive" });
+      }
+    }
+
+    // Check if user is already authenticated after code exchange
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      // Already logged in, redirect to profile
+      navigate("/my-profile");
+      return;
+    }
+
+    // Invitation link flow
+    if (token) {
+      setInviteMode(true);
+      setInviteToken(token);
+      // Verify invitation token
+      const { data, error } = await supabase
+        .from("invitation_tokens")
+        .select("*")
+        .eq("token", token)
+        .eq("used", false)
+        .maybeSingle();
+
+      if (error || !data) {
+        setInviteMode(false);
+        toast({ title: "קישור לא תקין", description: "קישור ההזמנה אינו תקף או שכבר נוצל", variant: "destructive" });
+      } else {
+        if (data.email) setInviteEmail(data.email);
+        // Expiration check
+        if (data.expires_at && new Date(data.expires_at) < new Date()) {
+          setInviteMode(false);
+          toast({ title: "קישור פג תוקף", description: "קישור ההזמנה פג תוקף", variant: "destructive" });
         }
       }
+    }
 
-      // Check if user is already authenticated after code exchange
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        // Already logged in, redirect to profile
-        navigate("/my-profile");
-        return;
-      }
+    // If recovery type, show password update mode
+    if (type === "recovery") {
+      setUpdatePasswordMode(true);
+    }
+  };
 
-      // If recovery type, show password update mode
-      if (type === "recovery") {
-        setUpdatePasswordMode(true);
-      }
-    };
-
-    init();
-  }, [searchParams, navigate]);
+  init();
+}, [searchParams, navigate]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -165,6 +199,99 @@ export default function Auth() {
     }
     setLoading(false);
   };
+
+  // Handle invitation-based signup
+  const handleInviteSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inviteToken) {
+      toast({ title: "שגיאה", description: "קישור הזמנה חסר", variant: "destructive" });
+      return;
+    }
+    if (!inviteFullName || !inviteEmail || !invitePassword) {
+      toast({ title: "שגיאה", description: "נא למלא את כל השדות", variant: "destructive" });
+      return;
+    }
+    if (invitePassword !== inviteConfirm) {
+      toast({ title: "שגיאה", description: "הסיסמאות אינן תואמות", variant: "destructive" });
+      return;
+    }
+    if (invitePassword.length < 6) {
+      toast({ title: "שגיאה", description: "הסיסמה חייבת להכיל לפחות 6 תווים", variant: "destructive" });
+      return;
+    }
+
+    setInviteLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("signup-with-invitation", {
+        body: {
+          token: inviteToken,
+          full_name: inviteFullName,
+          email: inviteEmail,
+          password: invitePassword,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      toast({ title: "הצלחה!", description: "ההרשמה הושלמה בהצלחה" });
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: inviteEmail,
+        password: invitePassword,
+      });
+      if (signInError) {
+        toast({ title: "שגיאה בהתחברות", description: "נא להתחבר מדף הכניסה", variant: "destructive" });
+        navigate("/auth");
+      } else {
+        navigate("/my-profile");
+      }
+    } catch (err: any) {
+      console.error("Invite signup error:", err);
+      toast({ title: "שגיאה", description: err.message || "שגיאה בהרשמה", variant: "destructive" });
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  // If opened with /auth?token=... show invitation signup form
+  if (inviteMode) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary p-4">
+        <Card className="w-full max-w-md shadow-lg">
+          <CardHeader className="space-y-4 text-center">
+            <div className="mx-auto w-12 h-12 rounded-xl bg-gradient-primary flex items-center justify-center">
+              <Building2 className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-2xl">הרשמה עם הזמנה</CardTitle>
+              <CardDescription>השלם את פרטי החשבון כדי להצטרף</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleInviteSignup} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="fullName">שם מלא</Label>
+                <Input id="fullName" type="text" value={inviteFullName} onChange={(e) => setInviteFullName(e.target.value)} required disabled={inviteLoading} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">אימייל</Label>
+                <Input id="email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required disabled={inviteLoading} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">סיסמה</Label>
+                <Input id="password" type="password" value={invitePassword} onChange={(e) => setInvitePassword(e.target.value)} required minLength={6} disabled={inviteLoading} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm">אימות סיסמה</Label>
+                <Input id="confirm" type="password" value={inviteConfirm} onChange={(e) => setInviteConfirm(e.target.value)} required minLength={6} disabled={inviteLoading} />
+              </div>
+              <Button type="submit" className="w-full" disabled={inviteLoading}>{inviteLoading ? "נרשם..." : "סיום הרשמה"}</Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary p-4">
