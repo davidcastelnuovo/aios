@@ -11,6 +11,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
   Form,
   FormControl,
   FormField,
@@ -29,16 +34,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Check, ChevronsUpDown, Send } from "lucide-react";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { format } from "date-fns";
-import { he } from "date-fns/locale";
-import { Card } from "@/components/ui/card";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { Check, ChevronsUpDown, ChevronDown, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Command,
@@ -53,6 +49,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Card } from "@/components/ui/card";
+import { format } from "date-fns";
+import { he } from "date-fns/locale";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 const formSchema = z.object({
   title: z.string().min(1, "שם המשימה הוא שדה חובה"),
@@ -72,6 +72,7 @@ interface EditTaskDialogProps {
 
 export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDialogProps) {
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const [newUpdate, setNewUpdate] = useState("");
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
@@ -101,21 +102,21 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     },
   });
 
-  const { data: taskUpdates } = useQuery({
-    queryKey: ["task_updates", task.id],
+  const { data: taskUpdates, refetch: refetchUpdates } = useQuery({
+    queryKey: ["task-updates", task.id],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("task_updates")
         .select(`
           *,
-          profiles (full_name, email)
+          profiles:user_id (full_name, email)
         `)
         .eq("task_id", task.id)
         .order("created_at", { ascending: true });
       if (error) throw error;
       return data;
     },
-    enabled: open,
+    enabled: !!task.id && open,
   });
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -177,7 +178,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["task_updates", task.id] });
+      refetchUpdates();
       setNewUpdate("");
       toast.success("העדכון נוסף בהצלחה");
     },
@@ -217,17 +218,23 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
               )}
             />
 
-            <Collapsible defaultOpen={false} className="space-y-2">
+            <Collapsible open={notesOpen} onOpenChange={setNotesOpen}>
               <CollapsibleTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="flex items-center justify-between w-full p-0 hover:bg-transparent"
+                  type="button"
+                  className="w-full flex items-center justify-between p-4 hover:bg-muted/50"
                 >
-                  <FormLabel className="cursor-pointer">תיאור משימה</FormLabel>
-                  <ChevronsUpDown className="h-4 w-4" />
+                  <span className="font-medium">תיאור משימה</span>
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 transition-transform",
+                      notesOpen && "rotate-180"
+                    )}
+                  />
                 </Button>
               </CollapsibleTrigger>
-              <CollapsibleContent>
+              <CollapsibleContent className="px-4 pb-4">
                 <FormField
                   control={form.control}
                   name="notes"
@@ -244,8 +251,8 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
             </Collapsible>
 
             {/* Task Updates Section */}
-            <div className="space-y-3 pt-2">
-              <div className="flex items-center justify-between">
+            <div className="space-y-3 pt-2 border-t">
+              <div className="flex items-center justify-between pt-3">
                 <h4 className="text-sm font-medium">עדכונים</h4>
                 <span className="text-xs text-muted-foreground">
                   {taskUpdates?.length || 0} עדכונים
