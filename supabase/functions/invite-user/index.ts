@@ -142,23 +142,19 @@ serve(async (req: Request) => {
         const safeBaseUrl = (baseUrl || "https://after-lead.lovable.app").replace(/\/+$/, "");
         const invitationLink = `${safeBaseUrl}/signup?token=${token_value}`;
 
-        // Send email via Supabase Auth magic link
+        // Send invitation email via Supabase Auth
         try {
-          const { data: magicLinkData, error: magicLinkError } = await supabaseAdmin.auth.admin.generateLink({
-            type: 'magiclink',
-            email: email,
-            options: {
-              redirectTo: invitationLink,
-            }
+          const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+            redirectTo: invitationLink,
           });
 
-          if (magicLinkError) {
-            console.error("Error generating magic link:", magicLinkError);
+          if (inviteError) {
+            console.error("Error sending invitation email:", inviteError);
           } else {
-            console.log("Invitation email resent successfully via Supabase Auth");
+            console.log("Invitation email resent successfully via Supabase Auth to:", email);
           }
         } catch (e) {
-          console.error("Magic link exception:", e);
+          console.error("Invitation email exception:", e);
         }
 
         // Always return success with the link so you can copy manually if needed
@@ -218,23 +214,19 @@ serve(async (req: Request) => {
     const safeBaseUrl = (baseUrl || "https://after-lead.lovable.app").replace(/\/+$/, "");
     const invitationLink = `${safeBaseUrl}/signup?token=${token_value}`;
 
-    // Send email via Supabase Auth magic link with custom redirect
+    // Send invitation email via Supabase Auth
     try {
-      const { data: magicLinkData, error: magicLinkError } = await supabaseAdmin.auth.admin.generateLink({
-        type: 'magiclink',
-        email: email,
-        options: {
-          redirectTo: invitationLink,
-        }
+      const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+        redirectTo: invitationLink,
       });
 
-      if (magicLinkError) {
-        console.error("Error generating magic link:", magicLinkError);
+      if (inviteError) {
+        console.error("Error sending invitation email:", inviteError);
       } else {
-        console.log("Invitation email sent successfully via Supabase Auth");
+        console.log("Invitation email sent successfully via Supabase Auth to:", email);
       }
     } catch (e) {
-      console.error("Magic link exception:", e);
+      console.error("Invitation email exception:", e);
     }
 
     // Store invitation details for later user creation

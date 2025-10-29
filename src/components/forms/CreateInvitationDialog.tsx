@@ -13,7 +13,7 @@ export function CreateInvitationDialog() {
   const [loading, setLoading] = useState(false);
   const [invitationLink, setInvitationLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [baseUrl, setBaseUrl] = useState<string>(typeof window !== "undefined" ? window.location.origin : "");
+  const [baseUrl, setBaseUrl] = useState<string>("https://after-lead.lovable.app");
   const { toast } = useToast();
 
   const handleCreateInvitation = async () => {
