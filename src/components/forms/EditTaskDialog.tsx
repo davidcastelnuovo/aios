@@ -333,9 +333,9 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                               <SelectValue placeholder="בחר קמפיינר" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent className="bg-background z-50">
+                          <SelectContent className="bg-background z-50" align="end">
                             {campaigners?.map((campaigner) => (
-                              <SelectItem key={campaigner.id} value={campaigner.id}>
+                              <SelectItem key={campaigner.id} value={campaigner.id} className="text-right">
                                 {campaigner.full_name}
                               </SelectItem>
                             ))}
