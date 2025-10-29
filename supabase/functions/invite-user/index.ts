@@ -17,6 +17,7 @@ interface InviteUserRequest {
   campaignerId?: string;
   salesPersonId?: string;
   tenantId?: string; // For inviting users to a specific tenant
+  baseUrl?: string; // Base URL for invitation link
 }
 
 serve(async (req: Request) => {
@@ -65,10 +66,14 @@ serve(async (req: Request) => {
       throw new Error("Only owners and agency owners can invite users");
     }
 
-    const { email, fullName, role, agencyIds, modulePermissions, resend, campaignerId, salesPersonId, tenantId }: InviteUserRequest = await req.json();
+    const { email, fullName, role, agencyIds, modulePermissions, resend, campaignerId, salesPersonId, tenantId, baseUrl }: InviteUserRequest = await req.json();
 
     if (!email) {
       throw new Error("Email is required");
+    }
+
+    if (!tenantId) {
+      throw new Error("Tenant ID is required");
     }
 
     // If resend is true, we don't need role validation
@@ -86,189 +91,200 @@ serve(async (req: Request) => {
 
     console.log(`${resend ? 'Resending' : 'Inviting'} user: ${email}${role ? ` with role: ${role}` : ''}`);
     console.log('Module permissions received:', modulePermissions);
+    console.log('Tenant ID:', tenantId);
 
-    // For resend, send a password reset email relying on Site URL configured in Auth
-    if (resend) {
-      const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email);
+    // Check if user already exists
+    const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
+    const userExists = existingUser?.users?.some(u => u.email === email);
 
-      if (resetError) {
-        console.error('Error sending password reset:', resetError);
-        throw resetError;
+    if (userExists) {
+      console.log("User already exists");
+      // For resend, send invitation link again
+      if (resend) {
+        // Generate new invitation token
+        const token_value = crypto.randomUUID();
+        
+        const { error: tokenError } = await supabaseAdmin
+          .from("invitation_tokens")
+          .insert({
+            token: token_value,
+            tenant_id: tenantId,
+            created_by: requesterId,
+            email: email,
+          });
+
+        if (tokenError) {
+          console.error("Error creating invitation token:", tokenError);
+          throw tokenError;
+        }
+
+        // Send email with Resend
+        const resendApiKey = Deno.env.get("RESEND_API_KEY");
+        if (!resendApiKey) {
+          throw new Error("RESEND_API_KEY not configured");
+        }
+
+        const safeBaseUrl = (baseUrl || "https://after-lead.lovable.app").replace(/\/+$/, "");
+        const invitationLink = `${safeBaseUrl}/signup?token=${token_value}`;
+
+        const resendResponse = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${resendApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: "After-Lead <noreply@after-lead.com>",
+            to: email,
+            subject: "הזמנה להצטרף למערכת After-Lead",
+            html: `
+              <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2>הוזמנת להצטרף למערכת After-Lead</h2>
+                <p>שלום,</p>
+                <p>הוזמנת להצטרף למערכת ניהול After-Lead.</p>
+                <p style="margin: 30px 0;">
+                  <a href="${invitationLink}" 
+                     style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                    הצטרף למערכת
+                  </a>
+                </p>
+                <p style="color: #666; font-size: 14px;">קישור זה תקף ל-7 ימים</p>
+              </div>
+            `,
+          }),
+        });
+
+        if (!resendResponse.ok) {
+          const error = await resendResponse.text();
+          console.error("Resend error:", error);
+          throw new Error("Failed to send invitation email");
+        }
+
+        console.log("Invitation email resent successfully");
+
+        return new Response(
+          JSON.stringify({ success: true, message: 'Invitation resent successfully' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
-
-      console.log('Password reset email sent successfully (using Site URL)');
-
+      
       return new Response(
-        JSON.stringify({ success: true, message: 'Invitation resent successfully' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          success: false,
+          error: "EMAIL_EXISTS",
+          message: "המשתמש כבר רשום במערכת",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
       );
     }
 
-    // For new invites, use inviteUserByEmail
-    const inviteOptions: { redirectTo?: string; data?: Record<string, any> } = {};
+    // Create invitation token for new user
+    const token_value = crypto.randomUUID();
     
-    if (role) {
-      inviteOptions.data = { role };
-    }
-    // Do not override redirectTo; use the configured Site URL in Auth
+    const { data: invitation, error: tokenError } = await supabaseAdmin
+      .from("invitation_tokens")
+      .insert({
+        token: token_value,
+        tenant_id: tenantId,
+        created_by: requesterId,
+        email: email,
+      })
+      .select()
+      .single();
 
-    const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+    if (tokenError) {
+      console.error("Error creating invitation token:", tokenError);
+      throw tokenError;
+    }
+
+    console.log("Invitation token created:", invitation);
+
+    // Send invitation email with Resend
+    const resendApiKey = Deno.env.get("RESEND_API_KEY");
+    if (!resendApiKey) {
+      throw new Error("RESEND_API_KEY not configured");
+    }
+
+    const safeBaseUrl = (baseUrl || "https://after-lead.lovable.app").replace(/\/+$/, "");
+    const invitationLink = `${safeBaseUrl}/signup?token=${token_value}`;
+
+    const resendResponse = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "After-Lead <noreply@after-lead.com>",
+        to: email,
+        subject: "הזמנה להצטרף למערכת After-Lead",
+        html: `
+          <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>הוזמנת להצטרף למערכת After-Lead</h2>
+            <p>שלום${fullName ? ` ${fullName}` : ''},</p>
+            <p>הוזמנת להצטרף למערכת ניהול After-Lead בתפקיד ${getRoleNameInHebrew(role || '')}.</p>
+            <p style="margin: 30px 0;">
+              <a href="${invitationLink}" 
+                 style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                הצטרף למערכת
+              </a>
+            </p>
+            <p style="color: #666; font-size: 14px;">קישור זה תקף ל-7 ימים</p>
+          </div>
+        `,
+      }),
+    });
+
+    if (!resendResponse.ok) {
+      const error = await resendResponse.text();
+      console.error("Resend error:", error);
+      throw new Error("Failed to send invitation email");
+    }
+
+    console.log("Invitation email sent successfully");
+
+    // Store invitation details for later user creation
+    const inviteData = {
       email,
-      inviteOptions
-    );
+      fullName,
+      role,
+      agencyIds,
+      modulePermissions,
+      campaignerId,
+      salesPersonId,
+      tenantId,
+      token: token_value,
+    };
 
-    if (inviteError) {
-      console.error("Error inviting user:", inviteError);
-      // Check if it's an email exists error
-      if (inviteError.message?.includes("already been registered") || inviteError.code === "email_exists") {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: "EMAIL_EXISTS",
-            message: "המשתמש כבר רשום במערכת",
-          }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-      throw inviteError;
-    }
+    // Store invitation metadata for signup process
+    const invitationMetadata = {
+      email,
+      fullName,
+      role,
+      agencyIds: agencyIds || [],
+      modulePermissions: modulePermissions || [],
+      campaignerId,
+      salesPersonId,
+      tenantId,
+    };
 
-    console.log("User invited successfully:", inviteData);
-
-    // Assign the role to the user (only if not resending and role is provided)
-    if (inviteData.user && role && !resend) {
-      // First delete any existing roles (especially the default "campaigner" from handle_new_user trigger)
-      await supabaseAdmin
-        .from("user_roles")
-        .delete()
-        .eq("user_id", inviteData.user.id);
-
-      // Then insert the correct role
-      const { error: roleError } = await supabaseAdmin
-        .from("user_roles")
-        .insert({
-          user_id: inviteData.user.id,
-          role: role,
-        });
-
-      if (roleError) {
-        console.error("Error assigning role:", roleError);
-        // Don't throw - the user was created, just log the error
-      }
-
-      // Update profile with campaigner_id and sales_person_id if provided
-      const updateData: any = {};
-      if (campaignerId) updateData.campaigner_id = campaignerId;
-      if (salesPersonId) updateData.sales_person_id = salesPersonId;
-      if (fullName) updateData.full_name = fullName;
-      
-      if (Object.keys(updateData).length > 0) {
-        console.log('Updating profile with data:', updateData);
-        
-        const { error: profileError } = await supabaseAdmin
-          .from("profiles")
-          .update(updateData)
-          .eq("id", inviteData.user.id);
-
-        if (profileError) {
-          console.error("Error updating profile:", profileError);
-          // Don't throw - the user was created, just log the error
-        } else {
-          console.log('Profile updated successfully');
-        }
-      }
-
-      // Link campaigner to agencies if agencyIds provided
-      // Use the campaignerId from the request if provided, otherwise check profile
-      if (agencyIds && agencyIds.length > 0 && !resend) {
-        let finalCampaignerId = campaignerId;
-        
-        // If no campaignerId was provided in request, check if profile has one
-        if (!finalCampaignerId) {
-          const { data: profile } = await supabaseAdmin
-            .from("profiles")
-            .select("campaigner_id")
-            .eq("id", inviteData.user.id)
-            .maybeSingle();
-          
-          finalCampaignerId = profile?.campaigner_id;
-        }
-
-        // Only link to agencies if we have a campaigner_id
-        if (finalCampaignerId) {
-          const agencyLinks = agencyIds.map((agencyId) => ({
-            campaigner_id: finalCampaignerId,
-            agency_id: agencyId,
-          }));
-
-          const { error: agencyError } = await supabaseAdmin
-            .from("campaigner_agencies")
-            .insert(agencyLinks);
-
-          if (agencyError) {
-            console.error("Error linking campaigner to agencies:", agencyError);
-            // Don't throw - the user was created, just log the error
-          } else {
-            console.log('Campaigner linked to agencies successfully');
-          }
-        } else {
-          console.log("No campaigner_id available, skipping agency links");
-        }
-      }
-
-      // Set module permissions (only if not resending)
-      if (modulePermissions && modulePermissions.length > 0 && !resend) {
-        console.log('Setting module permissions for user:', inviteData.user.id, 'permissions:', modulePermissions);
-        
-        const permissions = modulePermissions.map((module) => ({
-          user_id: inviteData.user.id,
-          module: module,
-          can_access: true,
-        }));
-
-        const { error: permissionsError } = await supabaseAdmin
-          .from("user_permissions")
-          .insert(permissions);
-
-        if (permissionsError) {
-          console.error("Error setting module permissions:", permissionsError);
-          // Don't throw - the user was created, just log the error
-        } else {
-          console.log('Module permissions set successfully');
-        }
-      } else {
-        console.log('Skipping module permissions - modulePermissions:', modulePermissions, 'length:', modulePermissions?.length, 'resend:', resend);
-      }
-
-      // Add user to tenant if tenantId provided
-      if (tenantId && !resend) {
-        console.log('Adding user to tenant:', tenantId);
-        
-        const { error: tenantUserError } = await supabaseAdmin
-          .from("tenant_users")
-          .insert({
-            user_id: inviteData.user.id,
-            tenant_id: tenantId,
-            role: role === 'owner' ? 'owner' : 'member',
-          });
-
-        if (tenantUserError) {
-          console.error("Error adding user to tenant:", tenantUserError);
-          // Don't throw - the user was created, just log the error
-        } else {
-          console.log('User added to tenant successfully');
-        }
-      }
-    }
+    // Update invitation token with metadata
+    await supabaseAdmin
+      .from("invitation_tokens")
+      .update({
+        email: email,
+      })
+      .eq("token", token_value);
 
     return new Response(
       JSON.stringify({
         success: true,
         message: "User invited successfully",
-        user: inviteData.user,
+        invitation_link: invitationLink,
+        metadata: invitationMetadata,
       }),
       {
         status: 200,
@@ -289,3 +305,15 @@ serve(async (req: Request) => {
     );
   }
 });
+
+// Helper function to get role name in Hebrew
+function getRoleNameInHebrew(role: string): string {
+  const roleNames: Record<string, string> = {
+    owner: "בעלים",
+    agency_owner: "בעלים סוכנות",
+    team_manager: "מנהל צוות",
+    campaigner: "קמפיינר",
+    sales_person: "איש מכירות",
+  };
+  return roleNames[role] || role;
+}
