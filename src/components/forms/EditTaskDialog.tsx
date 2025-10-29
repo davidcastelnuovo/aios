@@ -363,10 +363,10 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                                   !field.value && "text-muted-foreground"
                                 )}
                               >
-                                {field.value
-                                  ? clients?.find((client) => client.id === field.value)?.name
-                                  : "בחר לקוח"}
-                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                 {field.value
+                                   ? clients?.find((client) => client.id === field.value)?.name
+                                   : "בחר לקוח"}
+                                 <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
@@ -428,24 +428,24 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                               rows={3}
                               className="w-full"
                             />
-                            <div className="flex gap-2 justify-end">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleCancelEdit}
-                              >
-                                ביטול
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={handleSaveEdit}
-                                disabled={!editingUpdateContent.trim() || updateUpdateMutation.isPending}
-                              >
-                                שמור
-                              </Button>
-                            </div>
+                             <div className="flex gap-2 justify-start">
+                               <Button
+                                 type="button"
+                                 size="sm"
+                                 onClick={handleSaveEdit}
+                                 disabled={!editingUpdateContent.trim() || updateUpdateMutation.isPending}
+                               >
+                                 שמור
+                               </Button>
+                               <Button
+                                 type="button"
+                                 variant="ghost"
+                                 size="sm"
+                                 onClick={handleCancelEdit}
+                               >
+                                 ביטול
+                               </Button>
+                             </div>
                           </div>
                         ) : (
                           <div className="flex items-start justify-between gap-2">
@@ -495,33 +495,33 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                     )}
                   </div>
 
-                  {/* Add New Update */}
-                  <div className="flex gap-2 pt-4 border-t">
-                    <Textarea
-                      value={newUpdate}
-                      onChange={(e) => setNewUpdate(e.target.value)}
-                      placeholder="הוסף עדכון חדש..."
-                      rows={3}
-                      className="flex-1"
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && e.ctrlKey) {
-                          handleAddUpdate();
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      size="icon"
-                      onClick={handleAddUpdate}
-                      disabled={!newUpdate.trim() || addUpdateMutation.isPending}
-                      className="self-end"
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    לחץ Ctrl+Enter לשליחה מהירה
-                  </p>
+                   {/* Add New Update */}
+                   <div className="flex gap-2 pt-4 border-t" dir="rtl">
+                     <Button
+                       type="button"
+                       size="icon"
+                       onClick={handleAddUpdate}
+                       disabled={!newUpdate.trim() || addUpdateMutation.isPending}
+                       className="self-end"
+                     >
+                       <Send className="h-4 w-4" />
+                     </Button>
+                     <Textarea
+                       value={newUpdate}
+                       onChange={(e) => setNewUpdate(e.target.value)}
+                       placeholder="הוסף עדכון חדש..."
+                       rows={3}
+                       className="flex-1"
+                       onKeyDown={(e) => {
+                         if (e.key === "Enter" && e.ctrlKey) {
+                           handleAddUpdate();
+                         }
+                       }}
+                     />
+                   </div>
+                   <p className="text-xs text-muted-foreground text-right">
+                     לחץ Ctrl+Enter לשליחה מהירה
+                   </p>
                 </div>
               </TabsContent>
 
@@ -598,18 +598,18 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
               />
               </TabsContent>
 
-              <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => onOpenChange(false)}
-                >
-                  ביטול
-                </Button>
-                <Button type="submit" disabled={mutation.isPending}>
-                  {mutation.isPending ? "מעדכן..." : "עדכן משימה"}
-                </Button>
-              </div>
+               <div className="flex justify-start gap-2 mt-6 pt-4 border-t">
+                 <Button type="submit" disabled={mutation.isPending}>
+                   {mutation.isPending ? "מעדכן..." : "עדכן משימה"}
+                 </Button>
+                 <Button
+                   type="button"
+                   variant="outline"
+                   onClick={() => onOpenChange(false)}
+                 >
+                   ביטול
+                 </Button>
+               </div>
             </form>
           </Form>
         </Tabs>
