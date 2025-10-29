@@ -29,7 +29,16 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Send } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { format } from "date-fns";
+import { he } from "date-fns/locale";
+import { Card } from "@/components/ui/card";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { cn } from "@/lib/utils";
 import {
   Command,
@@ -63,7 +72,9 @@ interface EditTaskDialogProps {
 
 export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDialogProps) {
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
+  const [newUpdate, setNewUpdate] = useState("");
   const queryClient = useQueryClient();
+  const { userId } = useCurrentUser();
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners"],
@@ -88,6 +99,23 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       if (error) throw error;
       return data;
     },
+  });
+
+  const { data: taskUpdates } = useQuery({
+    queryKey: ["task_updates", task.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("task_updates")
+        .select(`
+          *,
+          profiles:user_id (full_name, email)
+        `)
+        .eq("task_id", task.id)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: open,
   });
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -137,8 +165,34 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     },
   });
 
+  const addUpdateMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const { error } = await supabase
+        .from("task_updates")
+        .insert({
+          task_id: task.id,
+          user_id: userId,
+          content,
+        });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["task_updates", task.id] });
+      setNewUpdate("");
+      toast.success("העדכון נוסף בהצלחה");
+    },
+    onError: (error: Error) => {
+      toast.error(`שגיאה בהוספת עדכון: ${error.message}`);
+    },
+  });
+
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     mutation.mutate(values);
+  };
+
+  const handleAddUpdate = () => {
+    if (!newUpdate.trim()) return;
+    addUpdateMutation.mutate(newUpdate);
   };
 
   return (
@@ -163,19 +217,97 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>תיאור משימה</FormLabel>
-                  <FormControl>
-                    <Textarea {...field} rows={4} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <Collapsible defaultOpen={false} className="space-y-2">
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="flex items-center justify-between w-full p-0 hover:bg-transparent"
+                >
+                  <FormLabel className="cursor-pointer">תיאור משימה</FormLabel>
+                  <ChevronsUpDown className="h-4 w-4" />
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <Textarea {...field} rows={4} placeholder="הוסף תיאור למשימה..." />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Task Updates Section */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium">עדכונים</h4>
+                <span className="text-xs text-muted-foreground">
+                  {taskUpdates?.length || 0} עדכונים
+                </span>
+              </div>
+
+              {/* Updates List */}
+              <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                {taskUpdates?.map((update: any) => (
+                  <Card key={update.id} className="p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">
+                            {update.profiles?.full_name || update.profiles?.email || "משתמש"}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(update.created_at), "d בMMMM, HH:mm", { locale: he })}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                          {update.content}
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+                {(!taskUpdates || taskUpdates.length === 0) && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    אין עדכונים עדיין
+                  </p>
+                )}
+              </div>
+
+              {/* Add New Update */}
+              <div className="flex gap-2">
+                <Textarea
+                  value={newUpdate}
+                  onChange={(e) => setNewUpdate(e.target.value)}
+                  placeholder="הוסף עדכון חדש..."
+                  rows={2}
+                  className="flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && e.ctrlKey) {
+                      handleAddUpdate();
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  onClick={handleAddUpdate}
+                  disabled={!newUpdate.trim() || addUpdateMutation.isPending}
+                  className="self-end"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                לחץ Ctrl+Enter לשליחה מהירה
+              </p>
+            </div>
 
             <div className="p-4 rounded-lg bg-muted/30 space-y-4">
               <div className="grid gap-4 md:grid-cols-2">
