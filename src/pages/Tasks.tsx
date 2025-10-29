@@ -317,7 +317,7 @@ export default function Tasks() {
             setEditingTask(task);
           }}
         >
-          <CardContent className="p-4">
+          <CardContent className="p-4" dir="rtl">
             {/* Agency name at top */}
             {task.agencies && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">

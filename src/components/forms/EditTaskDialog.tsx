@@ -261,7 +261,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
         <DialogHeader>
           <DialogTitle>עריכת משימה</DialogTitle>
         </DialogHeader>
