@@ -104,6 +104,16 @@ serve(async (req: Request) => {
         // Generate new invitation token
         const token_value = crypto.randomUUID();
         
+        const invitationMetadata = {
+          email,
+          fullName,
+          role,
+          agencyIds: agencyIds || [],
+          modulePermissions: modulePermissions || [],
+          campaignerId,
+          salesPersonId,
+        };
+
         const { error: tokenError } = await supabaseAdmin
           .from("invitation_tokens")
           .insert({
@@ -111,6 +121,7 @@ serve(async (req: Request) => {
             tenant_id: tenantId,
             created_by: requesterId,
             email: email,
+            metadata: invitationMetadata,
           });
 
         if (tokenError) {
@@ -184,6 +195,17 @@ serve(async (req: Request) => {
     // Create invitation token for new user
     const token_value = crypto.randomUUID();
     
+    // Store invitation metadata
+    const invitationMetadata = {
+      email,
+      fullName,
+      role,
+      agencyIds: agencyIds || [],
+      modulePermissions: modulePermissions || [],
+      campaignerId,
+      salesPersonId,
+    };
+    
     const { data: invitation, error: tokenError } = await supabaseAdmin
       .from("invitation_tokens")
       .insert({
@@ -191,6 +213,7 @@ serve(async (req: Request) => {
         tenant_id: tenantId,
         created_by: requesterId,
         email: email,
+        metadata: invitationMetadata,
       })
       .select()
       .single();
@@ -259,32 +282,11 @@ serve(async (req: Request) => {
       token: token_value,
     };
 
-    // Store invitation metadata for signup process
-    const invitationMetadata = {
-      email,
-      fullName,
-      role,
-      agencyIds: agencyIds || [],
-      modulePermissions: modulePermissions || [],
-      campaignerId,
-      salesPersonId,
-      tenantId,
-    };
-
-    // Update invitation token with metadata
-    await supabaseAdmin
-      .from("invitation_tokens")
-      .update({
-        email: email,
-      })
-      .eq("token", token_value);
 
     return new Response(
       JSON.stringify({
         success: true,
         message: "User invited successfully",
-        invitation_link: invitationLink,
-        metadata: invitationMetadata,
       }),
       {
         status: 200,

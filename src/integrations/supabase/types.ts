@@ -500,6 +500,7 @@ export type Database = {
           email: string | null
           expires_at: string
           id: string
+          metadata: Json | null
           tenant_id: string
           token: string
           updated_at: string
@@ -513,6 +514,7 @@ export type Database = {
           email?: string | null
           expires_at?: string
           id?: string
+          metadata?: Json | null
           tenant_id: string
           token: string
           updated_at?: string
@@ -526,6 +528,7 @@ export type Database = {
           email?: string | null
           expires_at?: string
           id?: string
+          metadata?: Json | null
           tenant_id?: string
           token?: string
           updated_at?: string

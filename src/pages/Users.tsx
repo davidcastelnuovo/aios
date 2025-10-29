@@ -303,6 +303,7 @@ export default function Users() {
           campaignerId,
           salesPersonId,
           tenantId,
+          baseUrl: window.location.origin,
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,

@@ -70,42 +70,92 @@ serve(async (req) => {
     const userId = authData.user.id;
     console.log("User created:", userId);
 
-    // Update profile with full name
+    // Get invitation metadata
+    const metadata = invitation.metadata || {};
+    const inviteFullName = metadata.fullName || full_name;
+    const inviteRole = metadata.role || "campaigner";
+    const inviteAgencyIds = metadata.agencyIds || [];
+    const inviteModulePermissions = metadata.modulePermissions || [];
+    const inviteCampaignerId = metadata.campaignerId;
+    const inviteSalesPersonId = metadata.salesPersonId;
+
+    console.log("Processing invitation metadata:", metadata);
+
+    // Update profile with full name and IDs
+    const profileUpdate: any = { full_name: inviteFullName };
+    if (inviteCampaignerId) profileUpdate.campaigner_id = inviteCampaignerId;
+    if (inviteSalesPersonId) profileUpdate.sales_person_id = inviteSalesPersonId;
+
     const { error: profileError } = await supabase
       .from("profiles")
-      .update({ full_name })
+      .update(profileUpdate)
       .eq("id", userId);
 
     if (profileError) {
       console.error("Error updating profile:", profileError);
+    } else {
+      console.log("Profile updated successfully");
     }
 
-    // Assign campaigner role (already done by trigger, but ensuring it)
-    const { error: roleCheckError } = await supabase
+    // Delete default campaigner role from trigger
+    await supabase
       .from("user_roles")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("role", "campaigner")
-      .single();
+      .delete()
+      .eq("user_id", userId);
 
-    if (roleCheckError) {
-      // Role doesn't exist, insert it
-      await supabase
-        .from("user_roles")
-        .insert({ user_id: userId, role: "campaigner" });
-    }
-
-    // Add basic permission - only my_profile
-    const { error: permError } = await supabase
-      .from("user_permissions")
+    // Assign correct role from invitation
+    const { error: roleError } = await supabase
+      .from("user_roles")
       .insert({
         user_id: userId,
-        module: "my_profile",
-        can_access: true,
+        role: inviteRole,
       });
+
+    if (roleError) {
+      console.error("Error assigning role:", roleError);
+    } else {
+      console.log("Role assigned:", inviteRole);
+    }
+
+    // Set module permissions from invitation
+    const permissionsToInsert = inviteModulePermissions.length > 0
+      ? inviteModulePermissions.map((module: string) => ({
+          user_id: userId,
+          module: module,
+          can_access: true,
+        }))
+      : [{
+          user_id: userId,
+          module: "my_profile",
+          can_access: true,
+        }];
+
+    const { error: permError } = await supabase
+      .from("user_permissions")
+      .insert(permissionsToInsert);
 
     if (permError) {
       console.error("Error setting permissions:", permError);
+    } else {
+      console.log("Permissions set:", permissionsToInsert);
+    }
+
+    // Link campaigner to agencies if provided
+    if (inviteCampaignerId && inviteAgencyIds.length > 0) {
+      const agencyLinks = inviteAgencyIds.map((agencyId: string) => ({
+        campaigner_id: inviteCampaignerId,
+        agency_id: agencyId,
+      }));
+
+      const { error: agencyError } = await supabase
+        .from("campaigner_agencies")
+        .insert(agencyLinks);
+
+      if (agencyError) {
+        console.error("Error linking campaigner to agencies:", agencyError);
+      } else {
+        console.log("Campaigner linked to agencies successfully");
+      }
     }
 
     // Add user to tenant
