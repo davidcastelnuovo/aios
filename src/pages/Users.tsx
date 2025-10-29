@@ -320,9 +320,16 @@ export default function Users() {
       }
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-      toast.success("הזמנה נשלחה בהצלחה למייל המשתמש");
+      
+      // Show success message with invitation link if available
+      if (data.invitationLink) {
+        toast.success(`הזמנה נשלחה בהצלחה! לינק ההזמנה: ${data.invitationLink}`);
+      } else {
+        toast.success("הזמנה נשלחה בהצלחה למייל המשתמש");
+      }
+      
       setIsInviteDialogOpen(false);
       setInviteEmail("");
       setInviteFullName("");
@@ -390,10 +397,16 @@ export default function Users() {
       
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
+      
       return data;
     },
-    onSuccess: () => {
-      toast.success("הזמנה נשלחה מחדש בהצלחה");
+    onSuccess: (data) => {
+      // Show success message with invitation link if available
+      if (data.invitationLink) {
+        toast.success(`הזמנה נשלחה מחדש! לינק ההזמנה: ${data.invitationLink}`);
+      } else {
+        toast.success("הזמנה נשלחה מחדש בהצלחה");
+      }
     },
     onError: (error: Error) => {
       toast.error("שגיאה בשליחת הזמנה מחדש: " + error.message);
