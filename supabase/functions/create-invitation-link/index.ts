@@ -78,8 +78,18 @@ serve(async (req) => {
       throw insertError;
     }
 
-    // Create invitation link
-    const safeBaseUrl = (baseUrl || "https://after-lead.lovable.app").replace(/\/+$/, "");
+    // Create invitation link (force origin only)
+    const base = baseUrl || "https://after-lead.lovable.app";
+    let safeBaseUrl: string;
+    try {
+      const u = new URL(base);
+      safeBaseUrl = u.origin;
+    } catch {
+      // Fallback: take protocol + host if a path was provided
+      const parts = base.split("/").slice(0, 3);
+      safeBaseUrl = parts.join("/");
+    }
+    safeBaseUrl = safeBaseUrl.replace(/\/+$/, "");
     const invitationLink = `${safeBaseUrl}/signup?token=${token_value}`;
 
     return new Response(

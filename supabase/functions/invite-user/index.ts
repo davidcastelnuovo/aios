@@ -138,9 +138,17 @@ serve(async (req: Request) => {
           throw tokenError;
         }
 
-        // Build invitation link
-        const safeBaseUrl = (baseUrl || "https://after-lead.lovable.app").replace(/\/+$/, "");
-        const invitationLink = `${safeBaseUrl}/signup?token=${token_value}`;
+        // Build invitation link (force origin only)
+        const baseUrlInput1 = baseUrl || "https://after-lead.lovable.app";
+        let safeBaseUrl1: string;
+        try {
+          const u = new URL(baseUrlInput1);
+          safeBaseUrl1 = u.origin;
+        } catch {
+          const parts = baseUrlInput1.split("/").slice(0, 3);
+          safeBaseUrl1 = parts.join("/");
+        }
+        const invitationLink = `${safeBaseUrl1.replace(/\/+$/, "")}/signup?token=${token_value}`;
 
         // Send invitation email via Supabase Auth
         try {
@@ -210,9 +218,17 @@ serve(async (req: Request) => {
 
     console.log("Invitation token created:", invitation);
 
-    // Build invitation link
-    const safeBaseUrl = (baseUrl || "https://after-lead.lovable.app").replace(/\/+$/, "");
-    const invitationLink = `${safeBaseUrl}/signup?token=${token_value}`;
+    // Build invitation link (force origin only)
+    const baseUrlInput2 = baseUrl || "https://after-lead.lovable.app";
+    let safeBaseUrl2: string;
+    try {
+      const u = new URL(baseUrlInput2);
+      safeBaseUrl2 = u.origin;
+    } catch {
+      const parts = baseUrlInput2.split("/").slice(0, 3);
+      safeBaseUrl2 = parts.join("/");
+    }
+    const invitationLink = `${safeBaseUrl2.replace(/\/+$/, "")}/signup?token=${token_value}`;
 
     // Send invitation email via Supabase Auth
     try {
@@ -243,11 +259,23 @@ serve(async (req: Request) => {
     };
 
 
+    // Return success with direct invitation link
+    const baseUrlInput3 = baseUrl || "https://after-lead.lovable.app";
+    let safeBaseUrl3: string;
+    try {
+      const u = new URL(baseUrlInput3);
+      safeBaseUrl3 = u.origin;
+    } catch {
+      const parts = baseUrlInput3.split("/").slice(0, 3);
+      safeBaseUrl3 = parts.join("/");
+    }
+    const directInvitationLink = `${safeBaseUrl3.replace(/\/+$/, "")}/signup?token=${token_value}`;
+
     return new Response(
       JSON.stringify({
         success: true,
         message: "User invited successfully",
-        invitationLink: `${(baseUrl || "https://after-lead.lovable.app").replace(/\/\+$/, "")}/signup?token=${token_value}`,
+        invitationLink: directInvitationLink,
       }),
       {
         status: 200,
