@@ -312,10 +312,10 @@ export default function Users() {
       if (error) throw error;
       if (!data.success) {
         // Check if error is about existing email
-        if (data.error && data.error.includes("already been registered")) {
+        if (data.error === "EMAIL_EXISTS") {
           throw new Error("EMAIL_EXISTS");
         }
-        throw new Error(data.error);
+        throw new Error(data.error || data.message || "שגיאה לא ידועה");
       }
       return data;
     },

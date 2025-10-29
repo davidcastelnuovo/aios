@@ -119,6 +119,20 @@ serve(async (req: Request) => {
 
     if (inviteError) {
       console.error("Error inviting user:", inviteError);
+      // Check if it's an email exists error
+      if (inviteError.message?.includes("already been registered") || inviteError.code === "email_exists") {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "EMAIL_EXISTS",
+            message: "המשתמש כבר רשום במערכת",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
       throw inviteError;
     }
 
