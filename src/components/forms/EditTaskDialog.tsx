@@ -11,10 +11,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import {
   Form,
   FormControl,
@@ -34,7 +35,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Check, ChevronsUpDown, ChevronDown, Send } from "lucide-react";
+import { Check, ChevronsUpDown, Send, FileText, MessageSquare, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Command,
@@ -72,8 +73,8 @@ interface EditTaskDialogProps {
 
 export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDialogProps) {
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
-  const [notesOpen, setNotesOpen] = useState(false);
   const [newUpdate, setNewUpdate] = useState("");
+  const [activeTab, setActiveTab] = useState("details");
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
 
@@ -198,264 +199,227 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>עריכת משימה</DialogTitle>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>כותרת משימה</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+        
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="details" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              פרטי משימה
+            </TabsTrigger>
+            <TabsTrigger value="updates" className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" />
+              עדכונים
+              {taskUpdates && taskUpdates.length > 0 && (
+                <span className="ml-1 rounded-full bg-primary text-primary-foreground px-2 py-0.5 text-xs">
+                  {taskUpdates.length}
+                </span>
               )}
-            />
+            </TabsTrigger>
+            <TabsTrigger value="status" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              סטטוס
+            </TabsTrigger>
+          </TabsList>
 
-            <Collapsible open={notesOpen} onOpenChange={setNotesOpen}>
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  type="button"
-                  className="w-full flex items-center justify-between p-4 hover:bg-muted/50"
-                >
-                  <span className="font-medium">תיאור משימה</span>
-                  <ChevronDown
-                    className={cn(
-                      "h-4 w-4 transition-transform",
-                      notesOpen && "rotate-180"
-                    )}
-                  />
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="px-4 pb-4">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="mt-6">
+              
+              {/* Tab 1: Details */}
+              <TabsContent value="details" className="space-y-4 mt-0">
                 <FormField
                   control={form.control}
-                  name="notes"
+                  name="title"
                   render={({ field }) => (
                     <FormItem>
+                      <FormLabel>כותרת משימה</FormLabel>
                       <FormControl>
-                        <Textarea {...field} rows={4} placeholder="הוסף תיאור למשימה..." />
+                        <Input {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              </CollapsibleContent>
-            </Collapsible>
 
-            {/* Task Updates Section */}
-            <div className="space-y-3 pt-2 border-t">
-              <div className="flex items-center justify-between pt-3">
-                <h4 className="text-sm font-medium">עדכונים</h4>
-                <span className="text-xs text-muted-foreground">
-                  {taskUpdates?.length || 0} עדכונים
-                </span>
-              </div>
+                <FormField
+                  control={form.control}
+                  name="notes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>תיאור משימה</FormLabel>
+                      <FormControl>
+                        <Textarea {...field} rows={6} placeholder="הוסף תיאור למשימה..." />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-              {/* Updates List */}
-              <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                {taskUpdates?.map((update: any) => (
-                  <Card key={update.id} className="p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium">
-                            {update.profiles?.full_name || update.profiles?.email || "משתמש"}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {format(new Date(update.created_at), "d בMMMM, HH:mm", { locale: he })}
-                          </span>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="campaigner_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>קמפיינר אחראי</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="בחר קמפיינר" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-background z-50">
+                            {campaigners?.map((campaigner) => (
+                              <SelectItem key={campaigner.id} value={campaigner.id}>
+                                {campaigner.full_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="client_id"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-col">
+                        <FormLabel>לקוח</FormLabel>
+                        <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className={cn(
+                                  "justify-between",
+                                  !field.value && "text-muted-foreground"
+                                )}
+                              >
+                                {field.value
+                                  ? clients?.find((client) => client.id === field.value)?.name
+                                  : "בחר לקוח"}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[300px] p-0 bg-background" align="start">
+                            <Command>
+                              <CommandInput placeholder="חפש לקוח..." />
+                              <CommandList>
+                                <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
+                                <CommandGroup>
+                                  {clients?.map((client) => (
+                                    <CommandItem
+                                      key={client.id}
+                                      value={client.name}
+                                      onSelect={() => {
+                                        form.setValue("client_id", client.id);
+                                        setClientPopoverOpen(false);
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          field.value === client.id ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      {client.name}
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </TabsContent>
+
+              {/* Tab 2: Updates */}
+              <TabsContent value="updates" className="space-y-4 mt-0">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium">היסטוריית עדכונים</h4>
+                    <span className="text-xs text-muted-foreground">
+                      {taskUpdates?.length || 0} עדכונים
+                    </span>
+                  </div>
+
+                  {/* Updates List */}
+                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                    {taskUpdates?.map((update: any) => (
+                      <Card key={update.id} className="p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">
+                                {update.profiles?.full_name || update.profiles?.email || "משתמש"}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {format(new Date(update.created_at), "d בMMMM, HH:mm", { locale: he })}
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                              {update.content}
+                            </p>
+                          </div>
                         </div>
-                        <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                          {update.content}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-                {(!taskUpdates || taskUpdates.length === 0) && (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    אין עדכונים עדיין
+                      </Card>
+                    ))}
+                    {(!taskUpdates || taskUpdates.length === 0) && (
+                      <p className="text-sm text-muted-foreground text-center py-8">
+                        אין עדכונים עדיין
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Add New Update */}
+                  <div className="flex gap-2 pt-4 border-t">
+                    <Textarea
+                      value={newUpdate}
+                      onChange={(e) => setNewUpdate(e.target.value)}
+                      placeholder="הוסף עדכון חדש..."
+                      rows={3}
+                      className="flex-1"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && e.ctrlKey) {
+                          handleAddUpdate();
+                        }
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      onClick={handleAddUpdate}
+                      disabled={!newUpdate.trim() || addUpdateMutation.isPending}
+                      className="self-end"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    לחץ Ctrl+Enter לשליחה מהירה
                   </p>
-                )}
-              </div>
+                </div>
+              </TabsContent>
 
-              {/* Add New Update */}
-              <div className="flex gap-2">
-                <Textarea
-                  value={newUpdate}
-                  onChange={(e) => setNewUpdate(e.target.value)}
-                  placeholder="הוסף עדכון חדש..."
-                  rows={2}
-                  className="flex-1"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && e.ctrlKey) {
-                      handleAddUpdate();
-                    }
-                  }}
-                />
-                <Button
-                  type="button"
-                  size="icon"
-                  onClick={handleAddUpdate}
-                  disabled={!newUpdate.trim() || addUpdateMutation.isPending}
-                  className="self-end"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                לחץ Ctrl+Enter לשליחה מהירה
-              </p>
-            </div>
-
-            <div className="p-4 rounded-lg bg-muted/30 space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              {/* Tab 3: Status */}
+              <TabsContent value="status" className="space-y-4 mt-0">
                 <FormField
                   control={form.control}
-                  name="campaigner_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>קמפיינר</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="בחר קמפיינר" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-background z-50">
-                          {campaigners?.map((campaigner) => (
-                            <SelectItem key={campaigner.id} value={campaigner.id}>
-                              {campaigner.full_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="priority"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>דחיפות</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className={cn(
-                            "border-0 text-white font-medium",
-                            field.value === "high" && "bg-red-400 hover:bg-red-500",
-                            field.value === "medium" && "bg-orange-400 hover:bg-orange-500",
-                            field.value === "low" && "bg-purple-400 hover:bg-purple-500"
-                          )}>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-background z-50">
-                          <SelectItem value="high" className="text-red-600 focus:text-red-600 focus:bg-red-50">גבוה</SelectItem>
-                          <SelectItem value="medium" className="text-orange-600 focus:text-orange-600 focus:bg-orange-50">בינוני</SelectItem>
-                          <SelectItem value="low" className="text-purple-600 focus:text-purple-600 focus:bg-purple-50">נמוך</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-
-            <div className="p-4 rounded-lg bg-muted/30">
-              <FormField
-                control={form.control}
-                name="client_id"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>לקוח</FormLabel>
-                    <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            className={cn(
-                              "justify-between",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value
-                              ? clients?.find((client) => client.id === field.value)?.name
-                              : "בחר לקוח"}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[300px] p-0 bg-background" align="start">
-                        <Command>
-                          <CommandInput placeholder="חפש לקוח..." />
-                          <CommandList>
-                            <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
-                            <CommandGroup>
-                              {clients?.map((client) => (
-                                <CommandItem
-                                  key={client.id}
-                                  value={client.name}
-                                  onSelect={() => {
-                                    form.setValue("client_id", client.id);
-                                    setClientPopoverOpen(false);
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      field.value === client.id ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                  {client.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="p-4 rounded-lg bg-muted/30">
-              <FormField
-                control={form.control}
-                name="due_date"
+                  name="status"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>תאריך יעד</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="p-4 rounded-lg bg-muted/30">
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>סטטוס</FormLabel>
+                    <FormLabel>סטטוס משימה</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger className={cn(
@@ -477,13 +441,65 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                   </FormItem>
                 )}
               />
-            </div>
 
-            <Button type="submit" disabled={mutation.isPending} className="w-full">
-              {mutation.isPending ? "מעדכן..." : "עדכן משימה"}
-            </Button>
-          </form>
-        </Form>
+              <FormField
+                control={form.control}
+                name="priority"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>דחיפות</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className={cn(
+                          "border-0 text-white font-medium",
+                          field.value === "high" && "bg-red-400 hover:bg-red-500",
+                          field.value === "medium" && "bg-orange-400 hover:bg-orange-500",
+                          field.value === "low" && "bg-purple-400 hover:bg-purple-500"
+                        )}>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background z-50">
+                        <SelectItem value="high" className="text-red-600 focus:text-red-600 focus:bg-red-50">גבוה</SelectItem>
+                        <SelectItem value="medium" className="text-orange-600 focus:text-orange-600 focus:bg-orange-50">בינוני</SelectItem>
+                        <SelectItem value="low" className="text-purple-600 focus:text-purple-600 focus:bg-purple-50">נמוך</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="due_date"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>תאריך יעד</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              </TabsContent>
+
+              <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  ביטול
+                </Button>
+                <Button type="submit" disabled={mutation.isPending}>
+                  {mutation.isPending ? "מעדכן..." : "עדכן משימה"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
