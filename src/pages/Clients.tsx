@@ -53,6 +53,7 @@ export default function Clients() {
   const [editingClient, setEditingClient] = useState<any>(null);
   const [hideInactive, setHideInactive] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [deletingClient, setDeletingClient] = useState<any>(null);
   const [editingFolderLink, setEditingFolderLink] = useState<{ clientId: string; link: string } | null>(null);
   const queryClient = useQueryClient();
@@ -238,11 +239,18 @@ export default function Clients() {
 
   const filteredClients = accessibleClients;
 
-  const searchedClients = searchTerm 
+  // Filter by selected campaigner (only for team managers and owners)
+  const campaignerFilteredClients = selectedCampaigner && selectedCampaigner !== "all"
     ? filteredClients?.filter(client => 
-        client.name.toLowerCase().includes(searchTerm.toLowerCase())
+        client.client_team?.some((ct: any) => ct.campaigner_id === selectedCampaigner)
       )
     : filteredClients;
+
+  const searchedClients = searchTerm 
+    ? campaignerFilteredClients?.filter(client => 
+        client.name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : campaignerFilteredClients;
 
   const visibleClients = hideInactive 
     ? searchedClients?.filter(client => client.status === "active" || client.status === "onboarding")
@@ -299,6 +307,26 @@ export default function Clients() {
               className="pr-9"
             />
           </div>
+          
+          {/* Campaigner Filter - Only for team managers and owners */}
+          {(isTeamManager || isOwner) && (
+            <>
+              <div className="h-8 w-px bg-border"></div>
+              <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="כל הקמפיינרים" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">כל הקמפיינרים</SelectItem>
+                  {campaigners?.map((campaigner) => (
+                    <SelectItem key={campaigner.id} value={campaigner.id}>
+                      {campaigner.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          )}
           
           <div className="h-8 w-px bg-border"></div>
           <div className="flex gap-1 border rounded-md p-1">
