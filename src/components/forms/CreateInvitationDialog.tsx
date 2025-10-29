@@ -13,7 +13,7 @@ export function CreateInvitationDialog() {
   const [loading, setLoading] = useState(false);
   const [invitationLink, setInvitationLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [baseUrl, setBaseUrl] = useState<string>("https://after-lead.lovable.app");
+  const [baseUrl, setBaseUrl] = useState<string>(typeof window !== "undefined" ? window.location.origin : "");
   const { toast } = useToast();
 
   const handleCreateInvitation = async () => {
@@ -136,6 +136,12 @@ export function CreateInvitationDialog() {
                   onClick={copyToClipboard}
                 >
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => invitationLink && window.open(invitationLink, "_blank", "noopener,noreferrer")}
+                >
+                  פתח
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">

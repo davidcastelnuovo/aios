@@ -118,6 +118,12 @@ serve(async (req) => {
     }
 
     // Set module permissions from invitation
+    // Clear any existing permissions to avoid unintended defaults
+    await supabase
+      .from("user_permissions")
+      .delete()
+      .eq("user_id", userId);
+
     const permissionsToInsert = inviteModulePermissions.length > 0
       ? inviteModulePermissions.map((module: string) => ({
           user_id: userId,
