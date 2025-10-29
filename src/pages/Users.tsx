@@ -381,6 +381,7 @@ export default function Users() {
         body: { 
           email,
           resend: true,
+          baseUrl: window.location.origin,
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,

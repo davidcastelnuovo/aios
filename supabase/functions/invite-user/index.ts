@@ -72,8 +72,17 @@ serve(async (req: Request) => {
       throw new Error("Email is required");
     }
 
-    if (!tenantId) {
-      throw new Error("Tenant ID is required");
+    let tenantIdFinal = tenantId;
+    if (!tenantIdFinal) {
+      const { data: requesterTenant } = await supabaseAdmin
+        .from("tenant_users")
+        .select("tenant_id")
+        .eq("user_id", requesterId)
+        .maybeSingle();
+      tenantIdFinal = requesterTenant?.tenant_id as string | undefined;
+      if (!tenantIdFinal) {
+        throw new Error("Tenant ID is required");
+      }
     }
 
     // If resend is true, we don't need role validation
@@ -91,7 +100,7 @@ serve(async (req: Request) => {
 
     console.log(`${resend ? 'Resending' : 'Inviting'} user: ${email}${role ? ` with role: ${role}` : ''}`);
     console.log('Module permissions received:', modulePermissions);
-    console.log('Tenant ID:', tenantId);
+    console.log('Tenant ID:', tenantIdFinal);
 
     // Check if user already exists
     const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
@@ -118,7 +127,7 @@ serve(async (req: Request) => {
           .from("invitation_tokens")
           .insert({
             token: token_value,
-            tenant_id: tenantId,
+            tenant_id: tenantIdFinal,
             created_by: requesterId,
             email: email,
             metadata: invitationMetadata,
@@ -210,7 +219,7 @@ serve(async (req: Request) => {
       .from("invitation_tokens")
       .insert({
         token: token_value,
-        tenant_id: tenantId,
+        tenant_id: tenantIdFinal,
         created_by: requesterId,
         email: email,
         metadata: invitationMetadata,
