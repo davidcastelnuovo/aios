@@ -303,7 +303,7 @@ export default function Users() {
           campaignerId,
           salesPersonId,
           tenantId,
-          baseUrl: window.location.origin,
+          baseUrl: "https://after-lead.lovable.app",
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -388,7 +388,7 @@ export default function Users() {
         body: { 
           email,
           resend: true,
-          baseUrl: window.location.origin,
+          baseUrl: "https://after-lead.lovable.app",
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
