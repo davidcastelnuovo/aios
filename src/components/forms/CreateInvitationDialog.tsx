@@ -33,11 +33,13 @@ export function CreateInvitationDialog() {
         throw new Error(data.error);
       }
 
-      setInvitationLink(data.invitation_link);
+      // Do not show the link UI; just show toast and close the dialog
+      setInvitationLink(null);
       toast({
         title: "הצלחה!",
-        description: "קישור הזמנה נוצר בהצלחה",
+        description: "ההזמנה נוצרה ונשלחה (אם אימות הדומיין תקין)",
       });
+      setOpen(false);
     } catch (error: any) {
       console.error("Error creating invitation:", error);
       toast({
