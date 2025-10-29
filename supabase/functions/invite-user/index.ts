@@ -138,51 +138,27 @@ serve(async (req: Request) => {
           throw tokenError;
         }
 
-        // Build invitation link (always)
+        // Build invitation link
         const safeBaseUrl = (baseUrl || "https://after-lead.lovable.app").replace(/\/+$/, "");
         const invitationLink = `${safeBaseUrl}/signup?token=${token_value}`;
 
-        // Try to send via Resend if configured, but don't fail the request
-        const resendApiKey = Deno.env.get("RESEND_API_KEY");
-        if (!resendApiKey) {
-          console.warn("RESEND_API_KEY not configured, skipping email send");
-        } else {
-          try {
-            const resendResponse = await fetch("https://api.resend.com/emails", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${resendApiKey}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                from: "After-Lead <onboarding@resend.dev>",
-                to: email,
-                subject: "הזמנה להצטרף למערכת After-Lead",
-                html: `
-                  <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2>הוזמנת להצטרף למערכת After-Lead</h2>
-                    <p>שלום,</p>
-                    <p>הוזמנת להצטרף למערכת ניהול After-Lead.</p>
-                    <p style="margin: 30px 0;">
-                      <a href="${invitationLink}" 
-                         style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-                        הצטרף למערכת
-                      </a>
-                    </p>
-                    <p style="color: #666; font-size: 14px;">קישור זה תקף ל-7 ימים</p>
-                  </div>
-                `,
-              }),
-            });
-            if (!resendResponse.ok) {
-              const errorText = await resendResponse.text();
-              console.error("Resend error:", errorText);
-            } else {
-              console.log("Invitation email resent successfully");
+        // Send email via Supabase Auth magic link
+        try {
+          const { data: magicLinkData, error: magicLinkError } = await supabaseAdmin.auth.admin.generateLink({
+            type: 'magiclink',
+            email: email,
+            options: {
+              redirectTo: invitationLink,
             }
-          } catch (e) {
-            console.error("Resend exception:", e);
+          });
+
+          if (magicLinkError) {
+            console.error("Error generating magic link:", magicLinkError);
+          } else {
+            console.log("Invitation email resent successfully via Supabase Auth");
           }
+        } catch (e) {
+          console.error("Magic link exception:", e);
         }
 
         // Always return success with the link so you can copy manually if needed
@@ -238,51 +214,27 @@ serve(async (req: Request) => {
 
     console.log("Invitation token created:", invitation);
 
-    // Build invitation link (always)
+    // Build invitation link
     const safeBaseUrl = (baseUrl || "https://after-lead.lovable.app").replace(/\/+$/, "");
     const invitationLink = `${safeBaseUrl}/signup?token=${token_value}`;
 
-    // Try to send via Resend if configured, but never fail if it doesn't work
-    const resendApiKey = Deno.env.get("RESEND_API_KEY");
-    if (!resendApiKey) {
-      console.warn("RESEND_API_KEY not configured, skipping email send");
-    } else {
-      try {
-        const resendResponse = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${resendApiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: "After-Lead <onboarding@resend.dev>",
-            to: email,
-            subject: "הזמנה להצטרף למערכת After-Lead",
-            html: `
-              <div dir="rtl" style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>הוזמנת להצטרף למערכת After-Lead</h2>
-                <p>שלום${fullName ? ` ${fullName}` : ''},</p>
-                <p>הוזמנת להצטרף למערכת ניהול After-Lead בתפקיד ${getRoleNameInHebrew(role || '')}.</p>
-                <p style="margin: 30px 0;">
-                  <a href="${invitationLink}" 
-                     style="background-color: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-                    הצטרף למערכת
-                  </a>
-                </p>
-                <p style="color: #666; font-size: 14px;">קישור זה תקף ל-7 ימים</p>
-              </div>
-            `,
-          }),
-        });
-        if (!resendResponse.ok) {
-          const errorText = await resendResponse.text();
-          console.error("Resend error:", errorText);
-        } else {
-          console.log("Invitation email sent successfully");
+    // Send email via Supabase Auth magic link with custom redirect
+    try {
+      const { data: magicLinkData, error: magicLinkError } = await supabaseAdmin.auth.admin.generateLink({
+        type: 'magiclink',
+        email: email,
+        options: {
+          redirectTo: invitationLink,
         }
-      } catch (e) {
-        console.error("Resend exception:", e);
+      });
+
+      if (magicLinkError) {
+        console.error("Error generating magic link:", magicLinkError);
+      } else {
+        console.log("Invitation email sent successfully via Supabase Auth");
       }
+    } catch (e) {
+      console.error("Magic link exception:", e);
     }
 
     // Store invitation details for later user creation
