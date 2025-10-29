@@ -310,7 +310,13 @@ export default function Users() {
       });
       
       if (error) throw error;
-      if (!data.success) throw new Error(data.error);
+      if (!data.success) {
+        // Check if error is about existing email
+        if (data.error && data.error.includes("already been registered")) {
+          throw new Error("EMAIL_EXISTS");
+        }
+        throw new Error(data.error);
+      }
       return data;
     },
     onSuccess: () => {
@@ -327,7 +333,18 @@ export default function Users() {
       setSelectedTenantId("");
     },
     onError: (error: Error) => {
-      toast.error("שגיאה בשליחת הזמנה: " + error.message);
+      if (error.message === "EMAIL_EXISTS") {
+        toast.error("המשתמש כבר רשום במערכת. האם ברצונך לשלוח מחדש את ההזמנה?", {
+          action: {
+            label: "שלח מחדש",
+            onClick: () => {
+              resendInviteMutation.mutate({ email: inviteEmail });
+            },
+          },
+        });
+      } else {
+        toast.error("שגיאה בשליחת הזמנה: " + error.message);
+      }
     },
   });
 
