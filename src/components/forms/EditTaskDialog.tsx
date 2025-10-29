@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Check, ChevronsUpDown, Send, FileText, MessageSquare, Settings } from "lucide-react";
+import { Check, ChevronsUpDown, Send, FileText, MessageSquare, Settings, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Command,
@@ -75,6 +75,8 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
   const [newUpdate, setNewUpdate] = useState("");
   const [activeTab, setActiveTab] = useState("details");
+  const [editingUpdateId, setEditingUpdateId] = useState<string | null>(null);
+  const [editingUpdateContent, setEditingUpdateContent] = useState("");
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
 
@@ -188,6 +190,42 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     },
   });
 
+  const updateUpdateMutation = useMutation({
+    mutationFn: async ({ id, content }: { id: string; content: string }) => {
+      const { error } = await supabase
+        .from("task_updates")
+        .update({ content })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      refetchUpdates();
+      setEditingUpdateId(null);
+      setEditingUpdateContent("");
+      toast.success("העדכון עודכן בהצלחה");
+    },
+    onError: (error: Error) => {
+      toast.error(`שגיאה בעדכון: ${error.message}`);
+    },
+  });
+
+  const deleteUpdateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("task_updates")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      refetchUpdates();
+      toast.success("העדכון נמחק בהצלחה");
+    },
+    onError: (error: Error) => {
+      toast.error(`שגיאה במחיקת עדכון: ${error.message}`);
+    },
+  });
+
   const onSubmit = (values: z.infer<typeof formSchema>) => {
     mutation.mutate(values);
   };
@@ -195,6 +233,30 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
   const handleAddUpdate = () => {
     if (!newUpdate.trim()) return;
     addUpdateMutation.mutate(newUpdate);
+  };
+
+  const handleEditUpdate = (updateId: string, currentContent: string) => {
+    setEditingUpdateId(updateId);
+    setEditingUpdateContent(currentContent);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingUpdateContent.trim() || !editingUpdateId) return;
+    updateUpdateMutation.mutate({
+      id: editingUpdateId,
+      content: editingUpdateContent.trim(),
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingUpdateId(null);
+    setEditingUpdateContent("");
+  };
+
+  const handleDeleteUpdate = (updateId: string) => {
+    if (confirm("האם אתה בטוח שברצונך למחוק עדכון זה?")) {
+      deleteUpdateMutation.mutate(updateId);
+    }
   };
 
   return (
@@ -358,21 +420,72 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                   <div className="space-y-2 max-h-[400px] overflow-y-auto">
                     {taskUpdates?.map((update: any) => (
                       <Card key={update.id} className="p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">
-                                {update.profiles?.full_name || update.profiles?.email || "משתמש"}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {format(new Date(update.created_at), "d בMMMM, HH:mm", { locale: he })}
-                              </span>
+                        {editingUpdateId === update.id ? (
+                          <div className="space-y-2">
+                            <Textarea
+                              value={editingUpdateContent}
+                              onChange={(e) => setEditingUpdateContent(e.target.value)}
+                              rows={3}
+                              className="w-full"
+                            />
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleCancelEdit}
+                              >
+                                ביטול
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={handleSaveEdit}
+                                disabled={!editingUpdateContent.trim() || updateUpdateMutation.isPending}
+                              >
+                                שמור
+                              </Button>
                             </div>
-                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                              {update.content}
-                            </p>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-medium text-muted-foreground">
+                                  {update.profiles?.full_name || update.profiles?.email || "משתמש"}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground">
+                                  {format(new Date(update.created_at), "d בMMMM, HH:mm", { locale: he })}
+                                </span>
+                              </div>
+                              <p className="text-sm whitespace-pre-wrap">
+                                {update.content}
+                              </p>
+                            </div>
+                            {update.user_id === userId && (
+                              <div className="flex gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={() => handleEditUpdate(update.id, update.content)}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive hover:text-destructive"
+                                  onClick={() => handleDeleteUpdate(update.id)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </Card>
                     ))}
                     {(!taskUpdates || taskUpdates.length === 0) && (
