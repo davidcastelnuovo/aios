@@ -297,9 +297,9 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                   name="title"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>כותרת משימה</FormLabel>
+                      <FormLabel className="text-right block">כותרת משימה</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input {...field} className="text-right" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -311,9 +311,9 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                   name="notes"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>תיאור משימה</FormLabel>
+                      <FormLabel className="text-right block">תיאור משימה</FormLabel>
                       <FormControl>
-                        <Textarea {...field} rows={6} placeholder="הוסף תיאור למשימה..." />
+                        <Textarea {...field} rows={6} placeholder="הוסף תיאור למשימה..." className="text-right" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -326,10 +326,10 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                     name="campaigner_id"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>קמפיינר אחראי</FormLabel>
+                        <FormLabel className="text-right block">קמפיינר אחראי</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className="text-right">
                               <SelectValue placeholder="בחר קמפיינר" />
                             </SelectTrigger>
                           </FormControl>
@@ -351,7 +351,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                     name="client_id"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>לקוח</FormLabel>
+                        <FormLabel className="text-right block">לקוח</FormLabel>
                         <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
                           <PopoverTrigger asChild>
                             <FormControl>
@@ -359,7 +359,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                                 variant="outline"
                                 role="combobox"
                                 className={cn(
-                                  "justify-between",
+                                  "justify-between text-right",
                                   !field.value && "text-muted-foreground"
                                 )}
                               >
@@ -532,7 +532,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                   name="status"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>סטטוס משימה</FormLabel>
+                    <FormLabel className="text-right block">סטטוס משימה</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger className={cn(
@@ -560,7 +560,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                 name="priority"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>דחיפות</FormLabel>
+                    <FormLabel className="text-right block">דחיפות</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger className={cn(
@@ -588,7 +588,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                 name="due_date"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>תאריך יעד</FormLabel>
+                    <FormLabel className="text-right block">תאריך יעד</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} />
                     </FormControl>
