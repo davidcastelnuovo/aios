@@ -89,7 +89,18 @@ export function useUserPermissions() {
 
     const { permissions, hasAnyPermissions } = permissionsData || { permissions: null, hasAnyPermissions: false };
 
-    // If user has no permissions defined, only owners get full access
+    // For sales-related modules, require an explicit allow flag in DB
+    const salesModules: ModulePermission[] = [
+      "sales_dashboard",
+      "leads",
+      "sales_people",
+      "lead_integrations",
+    ];
+    if (salesModules.includes(module)) {
+      return permissions?.[module] === true;
+    }
+
+    // If user has no permissions defined at all, only owners get full access
     if (!hasAnyPermissions) return isOwner;
 
     return permissions?.[module] === true;
