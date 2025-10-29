@@ -108,7 +108,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         .from("task_updates")
         .select(`
           *,
-          profiles:user_id (full_name, email)
+          profiles (full_name, email)
         `)
         .eq("task_id", task.id)
         .order("created_at", { ascending: true });
