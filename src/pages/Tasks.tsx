@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckSquare, Calendar, Building2, Users, Megaphone, AlertCircle, GripVertical, LayoutGrid, Table as TableIcon } from "lucide-react";
+import { CheckSquare, Calendar, Building2, Users, Megaphone, AlertCircle, GripVertical, LayoutGrid, Table as TableIcon, MessageSquare } from "lucide-react";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useAgency } from "@/contexts/AgencyContext";
@@ -60,7 +60,8 @@ export default function Tasks() {
           *,
           agencies (name),
           clients (agency_id, name),
-          campaigners (full_name)
+          campaigners (full_name),
+          task_updates (id)
         `)
         .order("due_date", { ascending: true });
 
@@ -311,12 +312,23 @@ export default function Tasks() {
     return (
       <div ref={setNodeRef} style={style}>
         <Card 
-          className="shadow-card hover:shadow-lg transition-all cursor-pointer"
+          className="shadow-card hover:shadow-lg transition-all cursor-pointer relative"
           onClick={(e) => {
             if ((e.target as HTMLElement).closest("[role='combobox']")) return;
             setEditingTask(task);
           }}
         >
+          {/* Updates badge - positioned absolutely in top left corner */}
+          {task.task_updates && task.task_updates.length > 0 && (
+            <Badge 
+              variant="secondary" 
+              className="absolute -top-2 -left-2 h-6 min-w-6 flex items-center justify-center gap-1 px-2 bg-primary text-primary-foreground shadow-md z-10"
+            >
+              <MessageSquare className="h-3 w-3" />
+              <span className="text-xs font-semibold">{task.task_updates.length}</span>
+            </Badge>
+          )}
+          
           <CardContent className="p-4" dir="rtl">
             {/* Agency name at top */}
             {task.agencies && (
