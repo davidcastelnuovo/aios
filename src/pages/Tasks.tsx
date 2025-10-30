@@ -139,7 +139,7 @@ export default function Tasks() {
     }
   }
 
-  // Then apply agency filter (works for all roles including campaigners)
+  // Apply agency filter - but NOT for pure campaigners viewing their own tasks
   if (selectedAgency && selectedAgency !== "all") {
     console.log('🔍 Filtering by agency:', selectedAgency);
     console.log('📋 Tasks before agency filter:', accessibleTasks?.map(t => ({
@@ -148,9 +148,22 @@ export default function Tasks() {
       client_agency_id: t.clients?.agency_id,
       agency_name: t.agencies?.name
     })));
-    accessibleTasks = accessibleTasks?.filter(
-      (task) => getTaskAgencyId(task) === selectedAgency
-    );
+    
+    // For pure campaigners, agency filter should not hide their directly assigned tasks
+    if (isCampaigner && !isTeamManager && !isOwner && campaignerId) {
+      accessibleTasks = accessibleTasks?.filter(task => 
+        // Show if task is directly assigned to this campaigner
+        task.campaigner_id === campaignerId ||
+        // OR if task is in selected agency (for client-based tasks)
+        getTaskAgencyId(task) === selectedAgency
+      );
+    } else {
+      // For other roles, apply standard agency filter
+      accessibleTasks = accessibleTasks?.filter(
+        (task) => getTaskAgencyId(task) === selectedAgency
+      );
+    }
+    
     console.log('📋 Tasks after agency filter:', accessibleTasks?.map(t => ({
       title: t.title,
       agency_id: t.agency_id,
