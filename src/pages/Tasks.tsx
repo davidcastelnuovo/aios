@@ -125,10 +125,11 @@ export default function Tasks() {
       accessibleTasks = tasks?.filter(task => 
         userAgencyIds.includes(getTaskAgencyId(task))
       );
-    } else if (isCampaigner && campaignerClientIds) {
-      // Pure campaigners see only tasks for their assigned clients
+    } else if (isCampaigner && campaignerId) {
+      // Pure campaigners see tasks assigned to them OR tasks for their assigned clients
       accessibleTasks = tasks?.filter(task => 
-        campaignerClientIds.includes(task.client_id)
+        task.campaigner_id === campaignerId || 
+        (campaignerClientIds && campaignerClientIds.includes(task.client_id))
       );
     } else if (userAgencyIds && userAgencyIds.length > 0) {
       // Fallback: users with agency access see tasks in their agencies
