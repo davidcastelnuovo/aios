@@ -108,6 +108,18 @@ export default function Clients() {
     },
   });
 
+  // Fetch client-team mapping for campaigner filter (for managers/owners)
+  const { data: clientTeam } = useQuery({
+    queryKey: ["client-team"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("client_team")
+        .select("client_id, campaigner_id");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   // Get client IDs for the campaigner
   const { data: campaignerClientIds } = useQuery({
     queryKey: ["campaigner-client-ids", campaignerId],
@@ -242,13 +254,8 @@ export default function Clients() {
   // Filter by selected campaigner (only for team managers and owners)
   const campaignerFilteredClients = selectedCampaigner && selectedCampaigner !== "all"
     ? filteredClients?.filter(client => {
-        console.log("Filtering client:", client.name, "client_team:", client.client_team);
-        const hasMatch = client.client_team?.some((ct: any) => {
-          console.log("Checking campaigner_id:", ct.campaigner_id, "against:", selectedCampaigner);
-          return ct.campaigner_id === selectedCampaigner;
-        });
-        console.log("Match result:", hasMatch);
-        return hasMatch;
+        const hasMatch = clientTeam?.some(ct => ct.client_id === client.id && ct.campaigner_id === selectedCampaigner);
+        return !!hasMatch;
       })
     : filteredClients;
 
