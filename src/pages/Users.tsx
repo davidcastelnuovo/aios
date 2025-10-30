@@ -95,6 +95,7 @@ export default function Users() {
     agencies: Array<{ id: string; name: string }>;
   } | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
+  const [agencyFilter, setAgencyFilter] = useState<string>("all");
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies-for-invite", currentUserId],
@@ -200,16 +201,49 @@ export default function Users() {
 
       if (rolesError) throw rolesError;
 
+      // Get campaigner agencies
+      const { data: campaignerAgencies } = await supabase
+        .from("campaigner_agencies")
+        .select("campaigner_id, agency_id");
+
+      // Get sales person agencies
+      const { data: salesPersonAgencies } = await supabase
+        .from("sales_person_agencies")
+        .select("sales_person_id, agency_id");
+
       return profiles.map((profile: any) => {
         const userRole = userRoles.find((r) => r.user_id === profile.id);
+        
+        // Get agencies for this user
+        const userAgencyIds: string[] = [];
+        if (profile.campaigner_id) {
+          const campaignerAgencyIds = campaignerAgencies
+            ?.filter(ca => ca.campaigner_id === profile.campaigner_id)
+            .map(ca => ca.agency_id) || [];
+          userAgencyIds.push(...campaignerAgencyIds);
+        }
+        if (profile.sales_person_id) {
+          const salesAgencyIds = salesPersonAgencies
+            ?.filter(spa => spa.sales_person_id === profile.sales_person_id)
+            .map(spa => spa.agency_id) || [];
+          userAgencyIds.push(...salesAgencyIds);
+        }
+
         return {
           ...profile,
           role: userRole?.role as UserRole | undefined,
           campaigner_name: profile.campaigners?.full_name,
           sales_person_name: profile.sales_people?.full_name,
+          agency_ids: [...new Set(userAgencyIds)], // Remove duplicates
         };
       });
     },
+  });
+
+  // Filter users by selected agency
+  const filteredUsers = users?.filter(user => {
+    if (agencyFilter === "all") return true;
+    return user.agency_ids?.includes(agencyFilter);
   });
 
   const updateRoleMutation = useMutation({
@@ -704,11 +738,27 @@ export default function Users() {
           </TabsList>
           
           <TabsContent value="users" className="mt-4 md:mt-6">
+            <div className="mb-4 flex gap-4 items-center">
+              <Label className="text-sm font-medium">סנן לפי סוכנות:</Label>
+              <Select value={agencyFilter} onValueChange={setAgencyFilter}>
+                <SelectTrigger className="w-[250px]">
+                  <SelectValue placeholder="כל הסוכנויות" />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectItem value="all">כל הסוכנויות</SelectItem>
+                  {agencies?.map((agency) => (
+                    <SelectItem key={agency.id} value={agency.id}>
+                      {agency.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             {isLoading ? (
               <Card className="p-6 text-center">טוען...</Card>
             ) : isMobile ? (
               <div className="space-y-4">
-                {users?.map((user: any) => (
+                {filteredUsers?.map((user: any) => (
                   <Card key={user.id} className="p-4">
                     <div className="space-y-3">
                       <div className="flex justify-between items-start">
@@ -840,7 +890,7 @@ export default function Users() {
                       </TableRow>
                     </TableHeader>
               <TableBody>
-                {users?.map((user: any) => (
+                {filteredUsers?.map((user: any) => (
                   <TableRow key={user.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -1055,9 +1105,27 @@ export default function Users() {
           </Tabs>
         ) : isLoading ? (
           <Card className="p-6 text-center">טוען...</Card>
-        ) : isMobile ? (
-          <div className="space-y-4">
-            {users?.map((user: any) => (
+        ) : (
+          <>
+            <div className="mb-4 flex gap-4 items-center">
+              <Label className="text-sm font-medium">סנן לפי סוכנות:</Label>
+              <Select value={agencyFilter} onValueChange={setAgencyFilter}>
+                <SelectTrigger className="w-[250px]">
+                  <SelectValue placeholder="כל הסוכנויות" />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectItem value="all">כל הסוכנויות</SelectItem>
+                  {agencies?.map((agency) => (
+                    <SelectItem key={agency.id} value={agency.id}>
+                      {agency.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {isMobile ? (
+              <div className="space-y-4">
+                {filteredUsers?.map((user: any) => (
               <Card key={user.id} className="p-4">
                 <div className="space-y-3">
                   <div className="flex justify-between items-start">
@@ -1212,7 +1280,7 @@ export default function Users() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {users?.map((user: any) => (
+                    {filteredUsers?.map((user: any) => (
                       <TableRow key={user.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -1381,8 +1449,9 @@ export default function Users() {
                 </Table>
               </div>
             </Card>
-          )
-        }
+          )}
+        </>
+      )}
 
       <Card className="p-4 md:p-6 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
         <h2 className="text-lg md:text-xl font-semibold mb-2 flex items-center gap-2">
