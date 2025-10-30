@@ -59,11 +59,21 @@ export default function Clients() {
   const queryClient = useQueryClient();
 
   const { data: clients, isLoading } = useQuery({
-    queryKey: ["clients"],
+    queryKey: ["clients", campaignerId, isCampaigner, isTeamManager, isOwner],
     queryFn: async () => {
-      let query = supabase
-        .from("clients")
-        .select(`
+      const selectStr = (isCampaigner && !isTeamManager && !isOwner)
+        ? `
+          *,
+          agencies (name),
+          client_team!inner (
+            campaigner_id,
+            campaigners!inner (
+              id,
+              full_name
+            )
+          )
+        `
+        : `
           *,
           agencies (name),
           client_team (
@@ -73,14 +83,22 @@ export default function Clients() {
               full_name
             )
           )
-        `)
+        `;
+
+      let query = supabase
+        .from("clients")
+        .select(selectStr)
         .order("created_at", { ascending: false });
+
+      if (isCampaigner && !isTeamManager && !isOwner && campaignerId) {
+        query = query.eq("client_team.campaigner_id", campaignerId);
+      }
 
       const { data, error } = await query;
       if (error) throw error;
-      console.log("Clients data with campaigners:", data);
       return data;
     },
+    enabled: !(isCampaigner && !isTeamManager && !isOwner) || !!campaignerId,
   });
 
   const { data: agencies } = useQuery({
@@ -228,7 +246,7 @@ export default function Clients() {
   let accessibleClients = clients;
 
   if (!isOwner) {
-    if (isCampaigner && !isTeamManager && campaignerClientIds) {
+    if (isCampaigner && !isTeamManager && Array.isArray(campaignerClientIds) && campaignerClientIds.length > 0) {
       // Pure campaigners see only their assigned clients
       accessibleClients = clients?.filter(client => 
         campaignerClientIds.includes(client.id)
