@@ -53,22 +53,25 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
             <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
               {agencies && agencies.length > 0 && (
-                <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-                  <SelectTrigger className="w-[140px] md:w-[200px] bg-background">
-                    <Building2 className="h-4 w-4 mr-2 flex-shrink-0" />
-                    <SelectValue placeholder="בחר סוכנות" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-[100]">
-                    {agencies.length > 1 && (
-                      <SelectItem value="all">כל הסוכנויות</SelectItem>
-                    )}
-                    {agencies.map((agency) => (
-                      <SelectItem key={agency.id} value={agency.id}>
-                        {agency.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground hidden sm:inline">סוכנות:</span>
+                  <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                    <SelectTrigger className="w-[160px] md:w-[220px] bg-background border-2">
+                      <Building2 className="h-4 w-4 mr-2 flex-shrink-0" />
+                      <SelectValue placeholder="בחר סוכנות" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[100]">
+                      {agencies.length > 1 && (
+                        <SelectItem value="all">כל הסוכנויות</SelectItem>
+                      )}
+                      {agencies.map((agency) => (
+                        <SelectItem key={agency.id} value={agency.id}>
+                          {agency.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
