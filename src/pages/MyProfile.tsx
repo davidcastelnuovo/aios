@@ -8,6 +8,7 @@ import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useState, useEffect } from "react";
 import { MFASettings } from "@/components/MFASettings";
+import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 
 export default function MyProfile() {
   const { userId } = useCurrentUser();
@@ -266,6 +267,8 @@ export default function MyProfile() {
       <div>
         <h2 className="text-3xl font-bold">אזור אישי</h2>
       </div>
+
+      <ChangePasswordForm />
 
       <MFASettings />
 
