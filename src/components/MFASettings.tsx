@@ -13,6 +13,7 @@ export function MFASettings() {
   const [isLoading, setIsLoading] = useState(true);
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [secret, setSecret] = useState<string | null>(null);
+  const [factorId, setFactorId] = useState<string | null>(null);
   const [verifyCode, setVerifyCode] = useState("");
   const [isEnrolling, setIsEnrolling] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
@@ -38,9 +39,24 @@ export function MFASettings() {
   const startMFAEnrollment = async () => {
     setIsEnrolling(true);
     try {
+      // First check if there's already an unverified factor and remove it
+      const existingFactors = await supabase.auth.mfa.listFactors();
+      if (existingFactors.error) throw existingFactors.error;
+
+      // Remove any existing unverified factors
+      const unverifiedFactors = existingFactors.data?.totp || [];
+      for (const factor of unverifiedFactors) {
+        try {
+          await supabase.auth.mfa.unenroll({ factorId: factor.id });
+        } catch (e) {
+          // Ignore errors when removing old factors
+          console.log("Could not remove old factor:", e);
+        }
+      }
+
       const { data, error } = await supabase.auth.mfa.enroll({
         factorType: "totp",
-        friendlyName: "אפליקציית Authenticator"
+        friendlyName: `Authenticator ${new Date().getTime()}`
       });
 
       if (error) throw error;
@@ -48,6 +64,7 @@ export function MFASettings() {
       if (data) {
         setQrCode(data.totp.qr_code);
         setSecret(data.totp.secret);
+        setFactorId(data.id);
       }
     } catch (error: any) {
       toast({
@@ -55,6 +72,8 @@ export function MFASettings() {
         description: error.message || "אירעה שגיאה בהפעלת אימות דו-שלבי",
         variant: "destructive",
       });
+    } finally {
+      setIsEnrolling(false);
     }
   };
 
@@ -68,17 +87,24 @@ export function MFASettings() {
       return;
     }
 
+    if (!factorId) {
+      toast({
+        title: "שגיאה",
+        description: "לא נמצא מזהה גורם, נסה להתחיל מחדש",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
-      const factors = await supabase.auth.mfa.listFactors();
-      if (factors.error) throw factors.error;
+      // First create a challenge
+      const challenge = await supabase.auth.mfa.challenge({ factorId });
+      if (challenge.error) throw challenge.error;
 
-      const totpFactor = factors.data?.totp?.[0];
-      if (!totpFactor) {
-        throw new Error("לא נמצא גורם TOTP");
-      }
-
-      const { data, error } = await supabase.auth.mfa.challengeAndVerify({
-        factorId: totpFactor.id,
+      // Then verify with the challenge ID
+      const { error } = await supabase.auth.mfa.verify({
+        factorId,
+        challengeId: challenge.data.id,
         code: verifyCode,
       });
 
@@ -92,8 +118,10 @@ export function MFASettings() {
       setIsEnrolled(true);
       setQrCode(null);
       setSecret(null);
+      setFactorId(null);
       setVerifyCode("");
       setIsEnrolling(false);
+      await checkMFAStatus();
     } catch (error: any) {
       toast({
         title: "שגיאה",
@@ -148,6 +176,7 @@ export function MFASettings() {
   const cancelEnrollment = () => {
     setQrCode(null);
     setSecret(null);
+    setFactorId(null);
     setVerifyCode("");
     setIsEnrolling(false);
   };
