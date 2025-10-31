@@ -223,7 +223,7 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
           <div className="space-y-2">
             <Label>תפקידים</Label>
             <div className="space-y-2">
-              {["קמפיינר", "SEO"].map((role) => (
+              {["קמפיינר", "SEO", "מנהל צוות"].map((role) => (
                 <div key={role} className="flex items-center space-x-2 space-x-reverse">
                   <input
                     type="checkbox"

@@ -503,6 +503,7 @@ export default function Tasks() {
                   <SelectItem value="all">כל התפקידים</SelectItem>
                   <SelectItem value="קמפיינר">קמפיינר</SelectItem>
                   <SelectItem value="SEO">SEO</SelectItem>
+                  <SelectItem value="מנהל צוות">מנהל צוות</SelectItem>
                 </SelectContent>
               </Select>
             </div>
