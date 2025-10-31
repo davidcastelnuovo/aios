@@ -23,7 +23,7 @@ interface EditCampaignerDialogProps {
     id: string;
     full_name: string;
     campaigner_agencies?: { agencies: { name: string } }[];
-    role: string | null;
+    role: string[] | null;
     phone: string | null;
     email: string | null;
     folder_link: string | null;
@@ -37,7 +37,7 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
   const [formData, setFormData] = useState({
     full_name: campaigner.full_name,
     agency_ids: [] as string[],
-    role: campaigner.role || "",
+    roles: (campaigner.role || []) as string[],
     phone: campaigner.phone || "",
     email: campaigner.email || "",
     folder_link: campaigner.folder_link || "",
@@ -77,10 +77,13 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
   const updateMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
       // עדכון פרטי הקמפיינר הבסיסיים
-      const { agency_ids, ...campaignerData } = data;
+      const { agency_ids, roles, ...rest } = data;
       const { error: campaignerError } = await supabase
         .from("campaigners")
-        .update(campaignerData)
+        .update({
+          ...rest,
+          role: roles.length > 0 ? roles : null,
+        })
         .eq("id", campaigner.id);
       if (campaignerError) throw campaignerError;
 
@@ -218,19 +221,28 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
           )}
 
           <div className="space-y-2">
-            <Label htmlFor="role">תפקיד</Label>
-            <Select
-              value={formData.role}
-              onValueChange={(value) => setFormData({ ...formData, role: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="בחר תפקיד" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="קמפיינר">קמפיינר</SelectItem>
-                <SelectItem value="SEO">SEO</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label>תפקידים</Label>
+            <div className="space-y-2">
+              {["קמפיינר", "SEO"].map((role) => (
+                <div key={role} className="flex items-center space-x-2 space-x-reverse">
+                  <input
+                    type="checkbox"
+                    id={`edit-role-${role}`}
+                    checked={formData.roles.includes(role)}
+                    onChange={(e) => {
+                      const newValue = e.target.checked
+                        ? [...formData.roles, role]
+                        : formData.roles.filter(r => r !== role);
+                      setFormData({ ...formData, roles: newValue });
+                    }}
+                    className="rounded border-gray-300"
+                  />
+                  <label htmlFor={`edit-role-${role}`} className="text-sm cursor-pointer">
+                    {role}
+                  </label>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-2">

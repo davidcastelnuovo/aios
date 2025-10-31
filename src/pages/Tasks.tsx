@@ -191,7 +191,7 @@ export default function Tasks() {
   // Then filter by campaigner and role
   let filteredTasks = accessibleTasks?.filter(t => {
     const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
-    const matchesRole = selectedRole === "all" || t.campaigners?.role === selectedRole;
+    const matchesRole = selectedRole === "all" || (t.campaigners?.role && t.campaigners.role.includes(selectedRole));
     return matchesCampaigner && matchesRole;
   }) || [];
 
@@ -518,9 +518,9 @@ export default function Tasks() {
                     <SelectItem value="all">כל הקמפיינרים</SelectItem>
                     {campaigners
                       ?.filter((campaigner) => {
-                        // If user is a campaigner with a role, show only same role
-                        if (isCampaigner && currentUserRole) {
-                          return campaigner.role === currentUserRole;
+                        // If user is a campaigner with roles, show only campaigners with overlapping roles
+                        if (isCampaigner && currentUserRole && currentUserRole.length > 0 && campaigner.role) {
+                          return currentUserRole.some(userRole => campaigner.role?.includes(userRole));
                         }
                         // Otherwise show all
                         return true;

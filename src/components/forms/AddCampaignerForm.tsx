@@ -35,7 +35,7 @@ import {
 const formSchema = z.object({
   full_name: z.string().min(1, "שם מלא הוא שדה חובה"),
   agency_ids: z.array(z.string()).min(1, "יש לבחור לפחות סוכנות אחת"),
-  role: z.string().optional(),
+  roles: z.array(z.string()).optional(),
   phone: z.string().optional(),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   folder_link: z.string().url("קישור לא תקין").optional().or(z.literal("")),
@@ -65,7 +65,7 @@ export function AddCampaignerForm() {
     defaultValues: {
       full_name: "",
       agency_ids: [],
-      role: "",
+      roles: [],
       phone: "",
       email: "",
       folder_link: "",
@@ -80,7 +80,7 @@ export function AddCampaignerForm() {
         .from("campaigners")
         .insert({
           full_name: values.full_name,
-          role: values.role || null,
+          role: values.roles && values.roles.length > 0 ? values.roles : null,
           phone: values.phone || null,
           email: values.email || null,
           folder_link: values.folder_link || null,
@@ -181,21 +181,31 @@ export function AddCampaignerForm() {
 
             <FormField
               control={form.control}
-              name="role"
+              name="roles"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>תפקיד</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="בחר תפקיד" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="קמפיינר">קמפיינר</SelectItem>
-                      <SelectItem value="SEO">SEO</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <FormLabel>תפקידים</FormLabel>
+                  <div className="space-y-2">
+                    {["קמפיינר", "SEO"].map((role) => (
+                      <div key={role} className="flex items-center space-x-2 space-x-reverse">
+                        <input
+                          type="checkbox"
+                          id={`role-${role}`}
+                          checked={field.value?.includes(role)}
+                          onChange={(e) => {
+                            const newValue = e.target.checked
+                              ? [...(field.value || []), role]
+                              : (field.value || []).filter(r => r !== role);
+                            field.onChange(newValue);
+                          }}
+                          className="rounded border-gray-300"
+                        />
+                        <label htmlFor={`role-${role}`} className="text-sm cursor-pointer">
+                          {role}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
                   <FormMessage />
                 </FormItem>
               )}

@@ -121,10 +121,10 @@ export default function Campaigners() {
                   </div>
                   <div>
                     <CardTitle className="text-lg">{campaigner.full_name}</CardTitle>
-                    {campaigner.role && (
+                    {campaigner.role && campaigner.role.length > 0 && (
                       <p className="text-sm text-muted-foreground flex items-center gap-1">
                         <Briefcase className="h-3 w-3" />
-                        {campaigner.role}
+                        {campaigner.role.join(", ")}
                       </p>
                     )}
                     {campaigner.campaigner_agencies && campaigner.campaigner_agencies.length > 0 && (
