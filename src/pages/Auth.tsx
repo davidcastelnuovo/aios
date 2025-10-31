@@ -25,6 +25,10 @@ export default function Auth() {
   const [invitePassword, setInvitePassword] = useState("");
   const [inviteConfirm, setInviteConfirm] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
+  // MFA state
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [factorId, setFactorId] = useState<string | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
   const [searchParams] = useSearchParams();
@@ -116,11 +120,79 @@ useEffect(() => {
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      // Redirect to personal profile after successful login
-      navigate("/my-profile");
+      setLoading(false);
+      return;
     }
+
+    // Check if MFA is required
+    const { data: { currentLevel, nextLevel } } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    
+    if (nextLevel === 'aal2' && currentLevel !== 'aal2') {
+      // MFA is required
+      const factors = await supabase.auth.mfa.listFactors();
+      if (factors.data?.totp && factors.data.totp.length > 0) {
+        setFactorId(factors.data.totp[0].id);
+        setMfaRequired(true);
+        setLoading(false);
+        return;
+      }
+    }
+
+    // No MFA required or already verified, redirect to profile
+    navigate("/my-profile");
     setLoading(false);
+  };
+
+  const handleMFAVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaCode || mfaCode.length !== 6) {
+      toast({
+        title: "שגיאה",
+        description: "נא להזין קוד בן 6 ספרות",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!factorId) {
+      toast({
+        title: "שגיאה",
+        description: "לא נמצא מזהה גורם",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Create a challenge
+      const challenge = await supabase.auth.mfa.challenge({ factorId });
+      if (challenge.error) throw challenge.error;
+
+      // Verify the code
+      const { error } = await supabase.auth.mfa.verify({
+        factorId,
+        challengeId: challenge.data.id,
+        code: mfaCode,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "הצלחה!",
+        description: "התחברת בהצלחה",
+      });
+
+      navigate("/my-profile");
+    } catch (error: any) {
+      toast({
+        title: "שגיאה",
+        description: error.message || "הקוד שגוי, נסה שוב",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
@@ -347,7 +419,46 @@ useEffect(() => {
               <TabsTrigger value="signup">הרשמה</TabsTrigger>
             </TabsList>
             <TabsContent value="signin">
-              {resetMode ? (
+              {mfaRequired ? (
+                <form onSubmit={handleMFAVerify} className="space-y-4">
+                  <div className="space-y-2 text-center">
+                    <h3 className="text-lg font-semibold">אימות דו-שלבי</h3>
+                    <p className="text-sm text-muted-foreground">
+                      הזן את הקוד בן 6 הספרות מאפליקציית ה-Authenticator שלך
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="mfa-code">קוד אימות</Label>
+                    <Input
+                      id="mfa-code"
+                      type="text"
+                      maxLength={6}
+                      value={mfaCode}
+                      onChange={(e) => setMfaCode(e.target.value.replace(/\D/g, ""))}
+                      placeholder="123456"
+                      className="font-mono text-lg tracking-wider text-center"
+                      autoComplete="off"
+                      autoFocus
+                      disabled={loading}
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={loading || mfaCode.length !== 6}>
+                    {loading ? "מאמת..." : "אמת"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => {
+                      setMfaRequired(false);
+                      setMfaCode("");
+                      setFactorId(null);
+                    }}
+                  >
+                    חזור להתחברות
+                  </Button>
+                </form>
+              ) : resetMode ? (
                 <form onSubmit={handleResetPassword} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="email-reset">אימייל</Label>
