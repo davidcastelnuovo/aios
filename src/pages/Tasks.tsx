@@ -85,6 +85,21 @@ export default function Tasks() {
     },
   });
 
+  // Get current user's campaigner role
+  const { data: currentUserRole } = useQuery({
+    queryKey: ["current-user-campaigner-role", campaignerId],
+    queryFn: async () => {
+      if (!campaignerId) return null;
+      const { data } = await supabase
+        .from("campaigners")
+        .select("role")
+        .eq("id", campaignerId)
+        .maybeSingle();
+      return data?.role || null;
+    },
+    enabled: !!campaignerId && isCampaigner,
+  });
+
   // Get client IDs for the campaigner
   const { data: campaignerClientIds } = useQuery({
     queryKey: ["campaigner-client-ids", campaignerId],
@@ -501,11 +516,20 @@ export default function Tasks() {
                   </SelectTrigger>
                   <SelectContent className="bg-background z-50">
                     <SelectItem value="all">כל הקמפיינרים</SelectItem>
-                    {campaigners?.map((campaigner) => (
-                      <SelectItem key={campaigner.id} value={campaigner.id}>
-                        {campaigner.full_name}
-                      </SelectItem>
-                    ))}
+                    {campaigners
+                      ?.filter((campaigner) => {
+                        // If user is a campaigner with a role, show only same role
+                        if (isCampaigner && currentUserRole) {
+                          return campaigner.role === currentUserRole;
+                        }
+                        // Otherwise show all
+                        return true;
+                      })
+                      .map((campaigner) => (
+                        <SelectItem key={campaigner.id} value={campaigner.id}>
+                          {campaigner.full_name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
