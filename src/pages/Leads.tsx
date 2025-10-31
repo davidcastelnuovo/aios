@@ -676,7 +676,32 @@ export default function Leads() {
     queryFn: async () => {
       let query = supabase
         .from("leads")
-        .select("*, agencies (name), sales_people (full_name)")
+        .select(`
+          id,
+          contact_name,
+          company_name,
+          phone,
+          email,
+          status,
+          response_status,
+          source,
+          industry,
+          products,
+          estimated_deal_value,
+          monthly_budget,
+          three_month_budget,
+          proposal_date,
+          sale_date,
+          lost_reason,
+          folder_link,
+          notes,
+          agency_id,
+          sales_person_id,
+          created_at,
+          updated_at,
+          agencies (name),
+          sales_people (full_name)
+        `)
         .order("created_at", { ascending: false });
 
       if (selectedAgency && selectedAgency !== "all") {
