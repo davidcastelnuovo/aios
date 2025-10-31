@@ -130,7 +130,7 @@ export function ImportLeadsCSV() {
           ) {
             lead.email = value;
           }
-          // Phone
+          // Phone - expanded patterns
           else if (
             k.includes("טלפון") ||
             k.includes("טל") ||
@@ -138,7 +138,16 @@ export function ImportLeadsCSV() {
             k.includes("phone") ||
             k.includes("נייד") ||
             k.includes("סלולרי") ||
-            k.includes("פרוק")
+            k.includes("פרוק") ||
+            k.includes("פלפון") ||
+            k.includes("טלמספר") ||
+            k.includes("מספרטלפון") ||
+            k.includes("מספרנייד") ||
+            k.includes("נייח") ||
+            k.includes("tel") ||
+            k.includes("cell") ||
+            k === "פון" ||
+            k === "טל"
           ) {
             lead.phone = value;
           }
