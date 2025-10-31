@@ -191,7 +191,35 @@ function LeadCard({
       </CardHeader>
       
       <CardContent className="px-4 pb-4 pt-2 space-y-3">
-        {/* Response Status - Mobile: outside/prominent */}
+        {/* Stage/Status Selector - Mobile: prominent at top */}
+        {isMobile && (
+          <div className="space-y-1.5 -mt-1 mb-3" onClick={(e) => e.stopPropagation()}>
+            <label className="text-xs font-semibold text-muted-foreground">שלב במשפך</label>
+            <Select
+              value={lead.status}
+              onValueChange={(value) => onStatusChange(lead.id, value)}
+            >
+              <SelectTrigger className={`h-9 text-sm border-2 ${
+                PIPELINE_STAGES.find(s => s.id === lead.status)?.bgClass || ""
+              }`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-[100]">
+                {PIPELINE_STAGES.map((stage) => (
+                  <SelectItem 
+                    key={stage.id} 
+                    value={stage.id}
+                    className={stage.bgClass}
+                  >
+                    {stage.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        
+        {/* Response Status - Mobile */}
         {isMobile && (
           <div className="space-y-1.5 -mt-1 mb-3" onClick={(e) => e.stopPropagation()}>
             <label className="text-xs font-semibold text-muted-foreground">סטטוס תגובה</label>
@@ -256,6 +284,34 @@ function LeadCard({
             </div>
           )}
         </div>
+
+        {/* Stage Selector - Desktop */}
+        {!isMobile && (
+          <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+            <label className="text-xs font-semibold text-muted-foreground">שלב במשפך</label>
+            <Select
+              value={lead.status}
+              onValueChange={(value) => onStatusChange(lead.id, value)}
+            >
+              <SelectTrigger className={`h-8 text-sm border-2 ${
+                PIPELINE_STAGES.find(s => s.id === lead.status)?.bgClass || ""
+              }`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-[100]">
+                {PIPELINE_STAGES.map((stage) => (
+                  <SelectItem 
+                    key={stage.id} 
+                    value={stage.id}
+                    className={stage.bgClass}
+                  >
+                    {stage.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Response Status Selector - Desktop only (mobile shown above) */}
         {!isMobile && (
@@ -348,28 +404,6 @@ function LeadCard({
             
             {/* Actions */}
             <div className="space-y-2 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
-              <Select
-                value={lead.status}
-                onValueChange={(value) => onStatusChange(lead.id, value)}
-              >
-                <SelectTrigger className={`h-8 text-sm border-2 ${
-                  PIPELINE_STAGES.find(s => s.id === lead.status)?.bgClass || ""
-                }`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  {PIPELINE_STAGES.map((stage) => (
-                    <SelectItem 
-                      key={stage.id} 
-                      value={stage.id}
-                      className={stage.bgClass}
-                    >
-                      {stage.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
               <div className="flex gap-2">
                 <EditLeadDialog lead={lead} />
                 <Button
