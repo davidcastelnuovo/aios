@@ -219,11 +219,18 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
 
           <div className="space-y-2">
             <Label htmlFor="role">תפקיד</Label>
-            <Input
-              id="role"
+            <Select
               value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-            />
+              onValueChange={(value) => setFormData({ ...formData, role: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="בחר תפקיד" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="קמפיינר">קמפיינר</SelectItem>
+                <SelectItem value="SEO">SEO</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
