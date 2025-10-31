@@ -257,8 +257,7 @@ function LeadCard({
               </a>
             </div>
           )}
-          {/* Phone - hide in mobile since shown above */}
-          {!isMobile && lead.phone && (
+          {lead.phone && (
             <div className="flex items-center gap-2 text-xs">
               <Phone className="h-3 w-3 text-primary shrink-0" />
               <a href={`tel:${lead.phone}`} className="hover:underline">
@@ -713,6 +712,16 @@ export default function Leads() {
       return data;
     },
   });
+
+  // Debug: log how many leads are missing phone/email to verify visibility
+  useEffect(() => {
+    if (leads) {
+      const arr = leads as any[];
+      const missingPhone = arr.filter((l: any) => !l.phone).length;
+      const missingEmail = arr.filter((l: any) => !l.email).length;
+      console.info("Leads fetched", { total: arr.length, missingPhone, missingEmail, sample: arr.slice(0, 3) });
+    }
+  }, [leads]);
 
   const updateLeadStatus = useMutation({
     mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" }) => {
