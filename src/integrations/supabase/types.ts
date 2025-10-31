@@ -325,6 +325,7 @@ export type Database = {
           folder_link: string | null
           id: string
           industry: string | null
+          is_seo_client: boolean | null
           monthly_budget: number | null
           name: string
           notes: string | null
@@ -343,6 +344,7 @@ export type Database = {
           folder_link?: string | null
           id?: string
           industry?: string | null
+          is_seo_client?: boolean | null
           monthly_budget?: number | null
           name: string
           notes?: string | null
@@ -361,6 +363,7 @@ export type Database = {
           folder_link?: string | null
           id?: string
           industry?: string | null
+          is_seo_client?: boolean | null
           monthly_budget?: number | null
           name?: string
           notes?: string | null

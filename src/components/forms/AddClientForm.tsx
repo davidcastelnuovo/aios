@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח הוא שדה חובה"),
@@ -42,6 +43,7 @@ const formSchema = z.object({
   monthly_budget: z.string().optional(),
   website: z.string().url("כתובת אתר לא תקינה").optional().or(z.literal("")),
   notes: z.string().optional(),
+  is_seo_client: z.boolean().default(false),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -74,6 +76,7 @@ export function AddClientForm() {
       monthly_budget: "",
       website: "",
       notes: "",
+      is_seo_client: false,
     },
   });
 
@@ -89,6 +92,7 @@ export function AddClientForm() {
         monthly_budget: values.monthly_budget ? parseFloat(values.monthly_budget) : null,
         website: values.website || null,
         notes: values.notes || null,
+        is_seo_client: values.is_seo_client,
       });
       if (error) throw error;
     },
@@ -254,6 +258,26 @@ export function AddClientForm() {
                     <Textarea {...field} />
                   </FormControl>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="is_seo_client"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="cursor-pointer">
+                      לקוח SEO
+                    </FormLabel>
+                  </div>
                 </FormItem>
               )}
             />

@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח נדרש"),
@@ -43,6 +44,7 @@ const formSchema = z.object({
   website: z.string().url("כתובת אתר לא תקינה").optional().or(z.literal("")),
   notes: z.string().optional(),
   status: z.enum(["active", "paused", "ended", "onboarding"]),
+  is_seo_client: z.boolean().default(false),
 });
 
 interface EditClientDialogProps {
@@ -159,6 +161,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       website: client.website || "",
       notes: client.notes || "",
       status: client.status || "active",
+      is_seo_client: client.is_seo_client || false,
     },
   });
 
@@ -179,6 +182,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
           website: values.website || null,
           notes: values.notes || null,
           status: values.status,
+          is_seo_client: values.is_seo_client,
         })
         .eq("id", client.id);
 
@@ -371,6 +375,26 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                     <Textarea {...field} rows={4} placeholder="הוסף הערות כאן..." />
                   </FormControl>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="is_seo_client"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel className="cursor-pointer">
+                      לקוח SEO
+                    </FormLabel>
+                  </div>
                 </FormItem>
               )}
             />
