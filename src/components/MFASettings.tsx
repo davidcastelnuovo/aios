@@ -253,27 +253,34 @@ export function MFASettings() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="verify-code">הזן את הקוד בן 6 הספרות מהאפליקציה:</Label>
-                <Input
-                  id="verify-code"
-                  type="text"
-                  maxLength={6}
-                  value={verifyCode}
-                  onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ""))}
-                  placeholder="123456"
-                  className="font-mono text-lg tracking-wider"
-                />
-              </div>
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                if (verifyCode.length === 6) {
+                  verifyAndEnableMFA();
+                }
+              }}>
+                <div className="space-y-2">
+                  <Label htmlFor="verify-code">הזן את הקוד בן 6 הספרות מהאפליקציה:</Label>
+                  <Input
+                    id="verify-code"
+                    type="text"
+                    maxLength={6}
+                    value={verifyCode}
+                    onChange={(e) => setVerifyCode(e.target.value.replace(/\D/g, ""))}
+                    placeholder="123456"
+                    className="font-mono text-lg tracking-wider"
+                  />
+                </div>
 
-              <div className="flex gap-2">
-                <Button onClick={verifyAndEnableMFA} disabled={verifyCode.length !== 6}>
-                  אמת והפעל
-                </Button>
-                <Button variant="outline" onClick={cancelEnrollment}>
-                  ביטול
-                </Button>
-              </div>
+                <div className="flex gap-2 mt-4">
+                  <Button type="submit" disabled={verifyCode.length !== 6}>
+                    אמת והפעל
+                  </Button>
+                  <Button type="button" variant="outline" onClick={cancelEnrollment}>
+                    ביטול
+                  </Button>
+                </div>
+              </form>
             </div>
           </div>
         )}
