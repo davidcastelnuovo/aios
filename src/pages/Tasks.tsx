@@ -35,6 +35,7 @@ import {
 export default function Tasks() {
   const [editingTask, setEditingTask] = useState<any>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
+  const [selectedRole, setSelectedRole] = useState<string>("all");
   const [activeTask, setActiveTask] = useState<any>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
   const [hideCompleted, setHideCompleted] = useState(false);
@@ -60,7 +61,7 @@ export default function Tasks() {
           *,
           agencies (name),
           clients (agency_id, name),
-          campaigners (full_name),
+          campaigners (full_name, role),
           task_updates (id)
         `)
         .order("due_date", { ascending: true });
@@ -172,10 +173,11 @@ export default function Tasks() {
     })));
   }
 
-  // Then filter by campaigner
+  // Then filter by campaigner and role
   let filteredTasks = accessibleTasks?.filter(t => {
     const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
-    return matchesCampaigner;
+    const matchesRole = selectedRole === "all" || t.campaigners?.role === selectedRole;
+    return matchesCampaigner && matchesRole;
   }) || [];
 
   // Apply hide completed filter
@@ -475,6 +477,20 @@ export default function Tasks() {
             </div>
             
             <div className="h-8 w-px bg-border"></div>
+            
+            {/* Role filter */}
+            <div className="w-full md:w-40">
+              <Select value={selectedRole} onValueChange={setSelectedRole}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="כל התפקידים" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="all">כל התפקידים</SelectItem>
+                  <SelectItem value="קמפיינר">קמפיינר</SelectItem>
+                  <SelectItem value="SEO">SEO</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             
             {/* Hide campaigner filter for pure campaigners */}
             {!(isCampaigner && !isTeamManager && !isOwner) && (
