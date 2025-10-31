@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar, Search, X } from "lucide-react";
+import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -583,6 +584,74 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
   );
 }
 
+// Bubble pop animation
+const playBubbleAnimation = () => {
+  // Create bubble sound using Web Audio API
+  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+  
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+  
+  // Bubble pop sound - high freq that drops quickly
+  oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+  oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.1);
+  
+  gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+  
+  oscillator.start(audioContext.currentTime);
+  oscillator.stop(audioContext.currentTime + 0.1);
+
+  // Bubble confetti animation
+  const count = 30;
+  const defaults = {
+    origin: { y: 0.7 },
+    shapes: ['circle'],
+    gravity: 0.5,
+    scalar: 1.2,
+    drift: 0,
+    ticks: 120,
+  };
+
+  function fire(particleRatio: number, opts: any) {
+    confetti({
+      ...defaults,
+      ...opts,
+      particleCount: Math.floor(count * particleRatio),
+      colors: ['#00d4ff', '#00b8e6', '#0099cc', '#7dd3fc', '#38bdf8'],
+    });
+  }
+
+  fire(0.25, {
+    spread: 26,
+    startVelocity: 55,
+  });
+
+  fire(0.2, {
+    spread: 60,
+  });
+
+  fire(0.35, {
+    spread: 100,
+    decay: 0.91,
+    scalar: 0.8,
+  });
+
+  fire(0.1, {
+    spread: 120,
+    startVelocity: 25,
+    decay: 0.92,
+    scalar: 1.2,
+  });
+
+  fire(0.1, {
+    spread: 120,
+    startVelocity: 45,
+  });
+};
+
 export default function Leads() {
   const { toast } = useToast();
   const { selectedAgency } = useAgency();
@@ -628,6 +697,11 @@ export default function Leads() {
         .eq("id", leadId);
 
       if (error) throw error;
+      
+      // Trigger bubble animation when status changes to "closed"
+      if (newStatus === "closed") {
+        playBubbleAnimation();
+      }
     },
     onMutate: async ({ leadId, newStatus }) => {
       // Cancel any outgoing refetches
