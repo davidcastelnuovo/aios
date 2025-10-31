@@ -595,23 +595,23 @@ const playBubbleAnimation = () => {
   
   // Bubble pop sound - high freq that drops quickly
   oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-  oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.1);
+  oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.08);
   
   gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.08);
   
   oscillator.start(audioContext.currentTime);
-  oscillator.stop(audioContext.currentTime + 0.1);
+  oscillator.stop(audioContext.currentTime + 0.08);
 
-  // Bubble confetti animation
-  const count = 30;
+  // Faster bubble confetti animation
+  const count = 25;
   const defaults = {
     origin: { y: 0.7 },
     shapes: ['circle'],
-    gravity: 0.5,
-    scalar: 1.2,
+    gravity: 0.7,
+    scalar: 1.1,
     drift: 0,
-    ticks: 120,
+    ticks: 80,
   };
 
   function fire(particleRatio: number, opts: any) {
@@ -625,29 +625,29 @@ const playBubbleAnimation = () => {
 
   fire(0.25, {
     spread: 26,
-    startVelocity: 55,
+    startVelocity: 50,
   });
 
   fire(0.2, {
-    spread: 60,
+    spread: 55,
   });
 
   fire(0.35, {
-    spread: 100,
-    decay: 0.91,
-    scalar: 0.8,
-  });
-
-  fire(0.1, {
-    spread: 120,
-    startVelocity: 25,
+    spread: 90,
     decay: 0.92,
-    scalar: 1.2,
+    scalar: 0.75,
   });
 
   fire(0.1, {
-    spread: 120,
-    startVelocity: 45,
+    spread: 110,
+    startVelocity: 22,
+    decay: 0.93,
+    scalar: 1.1,
+  });
+
+  fire(0.1, {
+    spread: 110,
+    startVelocity: 40,
   });
 };
 

@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import confetti from "canvas-confetti";
 import {
   Select,
   SelectContent,
@@ -31,6 +32,74 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+// Faster bubble pop animation for task completion
+const playBubbleAnimation = () => {
+  // Create bubble sound using Web Audio API
+  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const oscillator = audioContext.createOscillator();
+  const gainNode = audioContext.createGain();
+  
+  oscillator.connect(gainNode);
+  gainNode.connect(audioContext.destination);
+  
+  // Bubble pop sound - high freq that drops quickly
+  oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+  oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.08);
+  
+  gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.08);
+  
+  oscillator.start(audioContext.currentTime);
+  oscillator.stop(audioContext.currentTime + 0.08);
+
+  // Faster bubble confetti animation
+  const count = 25;
+  const defaults = {
+    origin: { y: 0.7 },
+    shapes: ['circle'],
+    gravity: 0.7,
+    scalar: 1.1,
+    drift: 0,
+    ticks: 80,
+  };
+
+  function fire(particleRatio: number, opts: any) {
+    confetti({
+      ...defaults,
+      ...opts,
+      particleCount: Math.floor(count * particleRatio),
+      colors: ['#4ade80', '#22c55e', '#16a34a', '#86efac', '#bbf7d0'],
+    });
+  }
+
+  fire(0.25, {
+    spread: 26,
+    startVelocity: 50,
+  });
+
+  fire(0.2, {
+    spread: 55,
+  });
+
+  fire(0.35, {
+    spread: 90,
+    decay: 0.92,
+    scalar: 0.75,
+  });
+
+  fire(0.1, {
+    spread: 110,
+    startVelocity: 22,
+    decay: 0.93,
+    scalar: 1.1,
+  });
+
+  fire(0.1, {
+    spread: 110,
+    startVelocity: 40,
+  });
+};
 
 export default function Tasks() {
   const [editingTask, setEditingTask] = useState<any>(null);
@@ -121,6 +190,11 @@ export default function Tasks() {
         .update({ status })
         .eq("id", taskId);
       if (error) throw error;
+      
+      // Trigger bubble animation when status changes to "done"
+      if (status === "done") {
+        playBubbleAnimation();
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
