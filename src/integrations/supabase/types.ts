@@ -1260,6 +1260,7 @@ export type Database = {
         Args: { _email: string; _role: Database["public"]["Enums"]["app_role"] }
         Returns: string
       }
+      get_client_tenant_id: { Args: { _client_id: string }; Returns: string }
       get_effective_setting: {
         Args: { _setting_key: string; _tenant_id: string }
         Returns: Json
