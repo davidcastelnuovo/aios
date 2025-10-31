@@ -1352,7 +1352,7 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
       <div ref={xContainerRef} className="overflow-x-auto w-full">
         {/* Vertical scroll only for table body */}
         <div className="max-h-[500px] overflow-y-auto">
-          <Table className="min-w-[1100px] table-fixed">
+          <Table className="min-w-[1300px] table-fixed">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow className="whitespace-nowrap">
                 <TableHead className="text-center sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 w-[50px]">
@@ -1363,10 +1363,11 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                   />
                 </TableHead>
                 <TableHead className="text-right sticky right-[50px] bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 w-[160px]">שם</TableHead>
-                <TableHead className="text-right bg-background w-[160px]">טלפון</TableHead>
-                <TableHead className="text-right bg-background w-[200px]">שם חברה</TableHead>
-                <TableHead className="text-right bg-background w-[180px]">שלב במשפך</TableHead>
-                <TableHead className="text-right bg-background w-[180px]">סטטוס</TableHead>
+                <TableHead className="text-right bg-background w-[200px]">אימייל</TableHead>
+                <TableHead className="text-right bg-background w-[140px]">טלפון</TableHead>
+                <TableHead className="text-right bg-background w-[180px]">שם חברה</TableHead>
+                <TableHead className="text-right bg-background w-[160px]">שלב במשפך</TableHead>
+                <TableHead className="text-right bg-background w-[160px]">סטטוס</TableHead>
                 <TableHead className="text-right bg-background w-[80px]">פעולות</TableHead>
               </TableRow>
             </TableHeader>
@@ -1386,7 +1387,15 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                     <span className="truncate">{lead.contact_name || "-"}</span>
                   </div>
                 </TableCell>
-                <TableCell className="w-[160px]">
+                <TableCell className="w-[200px]">
+                  {lead.email ? (
+                    <a href={`mailto:${lead.email}`} className="hover:underline flex items-center gap-1">
+                      <Mail className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{lead.email}</span>
+                    </a>
+                  ) : "-"}
+                </TableCell>
+                <TableCell className="w-[140px]">
                   {lead.phone ? (
                     <a href={`tel:${lead.phone}`} className="hover:underline flex items-center gap-1">
                       <Phone className="h-3 w-3 shrink-0" />
@@ -1394,7 +1403,7 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
                     </a>
                   ) : "-"}
                 </TableCell>
-                <TableCell className="w-[200px]">
+                <TableCell className="w-[180px]">
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4 shrink-0" />
                     <span className="truncate">{lead.company_name}</span>
