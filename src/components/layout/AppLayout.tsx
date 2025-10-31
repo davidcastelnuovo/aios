@@ -31,12 +31,29 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate("/auth");
-    toast({
-      title: "התנתקת בהצלחה",
-      description: "להתראות!",
-    });
+    try {
+      // Try to revoke tokens server-side (global)
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
+      if (error) throw error;
+    } catch (err) {
+      // If server rejects (e.g., session_not_found), clear locally as fallback
+      try {
+        await supabase.auth.signOut({ scope: 'local' });
+      } catch (_) {}
+      // Hard-clear any lingering auth tokens in localStorage
+      try {
+        Object.keys(localStorage).forEach((k) => {
+          if (/^sb-.*-auth-token$/.test(k)) localStorage.removeItem(k);
+        });
+      } catch (_) {}
+    } finally {
+      // Ensure redirect to auth regardless
+      navigate('/auth', { replace: true });
+      toast({
+        title: 'התנתקת בהצלחה',
+        description: 'להתראות!',
+      });
+    }
   };
 
   return (
