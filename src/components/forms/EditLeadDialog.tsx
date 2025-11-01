@@ -354,7 +354,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                             <SelectValue placeholder="בחר סוכנות" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
+                        <SelectContent className="bg-background z-50 text-right" align="end">
                           {agencies?.map((agency) => (
                             <SelectItem key={agency.id} value={agency.id}>
                               {agency.name}
@@ -379,7 +379,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                             <SelectValue placeholder="בחר איש מכירות" />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
+                        <SelectContent className="bg-background z-50 text-right" align="end">
                           {salesPeople?.map((person) => (
                             <SelectItem key={person.id} value={person.id}>
                               {person.full_name}
@@ -435,7 +435,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                               <SelectValue placeholder="בחר סטטוס" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          <SelectContent className="bg-background z-50 text-right" align="end">
                             <SelectItem value="no_answer_1">אין מענה 1</SelectItem>
                             <SelectItem value="no_answer_2">אין מענה 2</SelectItem>
                             <SelectItem value="no_answer_3">אין מענה 3</SelectItem>
@@ -461,7 +461,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                               <SelectValue />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          <SelectContent className="bg-background z-50 text-right" align="end">
                             <SelectItem value="new">ליד חדש</SelectItem>
                             <SelectItem value="contacted">נוצר קשר</SelectItem>
                             <SelectItem value="follow_up">תהליך פולואפ</SelectItem>
@@ -487,7 +487,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                               <SelectValue placeholder="בחר מקור" />
                             </SelectTrigger>
                           </FormControl>
-                          <SelectContent>
+                          <SelectContent className="bg-background z-50 text-right" align="end">
                             <SelectItem value="website">אתר</SelectItem>
                             <SelectItem value="referral">הפניה</SelectItem>
                             <SelectItem value="social_media">מדיה חברתית</SelectItem>
