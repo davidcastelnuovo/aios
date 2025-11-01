@@ -795,6 +795,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          calendar_iframe_code: string | null
           campaigner_id: string | null
           created_at: string
           email: string
@@ -804,6 +805,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          calendar_iframe_code?: string | null
           campaigner_id?: string | null
           created_at?: string
           email: string
@@ -813,6 +815,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          calendar_iframe_code?: string | null
           campaigner_id?: string | null
           created_at?: string
           email?: string

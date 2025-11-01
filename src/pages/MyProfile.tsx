@@ -9,6 +9,7 @@ import { he } from "date-fns/locale";
 import { useState, useEffect } from "react";
 import { MFASettings } from "@/components/MFASettings";
 import { ChangePasswordForm } from "@/components/ChangePasswordForm";
+import { CalendarIframeSettings } from "@/components/CalendarIframeSettings";
 
 export default function MyProfile() {
   const { userId } = useCurrentUser();
@@ -271,6 +272,8 @@ export default function MyProfile() {
       <ChangePasswordForm />
 
       <MFASettings />
+
+      <CalendarIframeSettings />
 
       <Card className="shadow-card">
         <CardHeader className="border-b bg-muted/30">
