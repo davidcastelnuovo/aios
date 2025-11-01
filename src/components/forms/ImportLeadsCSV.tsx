@@ -164,6 +164,9 @@ export function ImportLeadsCSV() {
         // מקור הגעה - source
         if (row['מקור הגעה']) lead.source = mapSource(row['מקור הגעה'].toString());
         
+        // שם קמפיין - campaign_name
+        if (row['שם קמפיין']) lead.campaign_name = row['שם קמפיין'].toString().trim();
+        
         // סטטוס + סיבת הפסד (אם רלוונטי)
         if (row['סטטוס']) {
           const statusText = row['סטטוס'].toString();
@@ -202,12 +205,16 @@ export function ImportLeadsCSV() {
           }
         }
         
-        // תאריך קליטת ליד - created_at
+        // תאריך קליטת ליד - created_at (חובה - אם לא קיים נשתמש בתאריך הנוכחי)
         if (row['תאריך קליטת ליד']) {
           const d = parseDate(row['תאריך קליטת ליד'].toString());
           if (d) {
             lead.created_at = d + 'T00:00:00Z';
+          } else {
+            lead.created_at = new Date().toISOString();
           }
+        } else {
+          lead.created_at = new Date().toISOString();
         }
         
         // הצעה חד"פ - monthly budget
@@ -378,6 +385,8 @@ export function ImportLeadsCSV() {
               <li>שם העסק</li>
               <li>מייל</li>
               <li>נייד</li>
+              <li>שם קמפיין</li>
+              <li>מקור הגעה</li>
               <li>פרסום</li>
               <li>סטטוס</li>
               <li>הערות</li>
@@ -387,7 +396,6 @@ export function ImportLeadsCSV() {
               <li>תאריך מכירה</li>
               <li>מוצרים</li>
               <li>שווי הצעות/הסכמים</li>
-              <li>מקור הגעה</li>
               <li>תאריך קליטת ליד</li>
             </ul>
           </div>
