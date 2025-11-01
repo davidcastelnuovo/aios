@@ -824,8 +824,8 @@ export default function Leads() {
         </div>
       </div>
 
-      {/* Desktop Header */}
-      <div className="hidden md:block space-y-4">
+      {/* Desktop Header - Sticky */}
+      <div className="hidden md:block sticky top-0 z-40 bg-background pb-4 space-y-4">
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
           <div className="flex gap-3 items-center">
