@@ -67,6 +67,97 @@ export type Database = {
           },
         ]
       }
+      automation_logs: {
+        Row: {
+          automation_id: string
+          error_message: string | null
+          execution_time_ms: number | null
+          id: string
+          payload: Json | null
+          response: Json | null
+          success: boolean
+          triggered_at: string | null
+        }
+        Insert: {
+          automation_id: string
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          payload?: Json | null
+          response?: Json | null
+          success: boolean
+          triggered_at?: string | null
+        }
+        Update: {
+          automation_id?: string
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          payload?: Json | null
+          response?: Json | null
+          success?: boolean
+          triggered_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_logs_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "automations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      automations: {
+        Row: {
+          action_type: Database["public"]["Enums"]["automation_action"]
+          active: boolean | null
+          conditions: Json | null
+          configuration: Json
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          tenant_id: string | null
+          trigger_type: Database["public"]["Enums"]["automation_trigger"]
+          updated_at: string | null
+        }
+        Insert: {
+          action_type: Database["public"]["Enums"]["automation_action"]
+          active?: boolean | null
+          conditions?: Json | null
+          configuration: Json
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          tenant_id?: string | null
+          trigger_type: Database["public"]["Enums"]["automation_trigger"]
+          updated_at?: string | null
+        }
+        Update: {
+          action_type?: Database["public"]["Enums"]["automation_action"]
+          active?: boolean | null
+          conditions?: Json | null
+          configuration?: Json
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          tenant_id?: string | null
+          trigger_type?: Database["public"]["Enums"]["automation_trigger"]
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automations_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaigner_agencies: {
         Row: {
           agency_id: string
@@ -1339,6 +1430,15 @@ export type Database = {
         | "campaigner"
         | "sales_person"
         | "super_admin"
+      automation_action: "webhook" | "email" | "notification"
+      automation_trigger:
+        | "task_assigned"
+        | "task_status_changed"
+        | "lead_status_changed"
+        | "lead_created"
+        | "client_created"
+        | "client_status_changed"
+        | "onboarding_status_changed"
       client_status: "active" | "paused" | "ended" | "onboarding"
       finance_type: "income" | "expense"
       lead_response_status:
@@ -1516,6 +1616,16 @@ export const Constants = {
         "campaigner",
         "sales_person",
         "super_admin",
+      ],
+      automation_action: ["webhook", "email", "notification"],
+      automation_trigger: [
+        "task_assigned",
+        "task_status_changed",
+        "lead_status_changed",
+        "lead_created",
+        "client_created",
+        "client_status_changed",
+        "onboarding_status_changed",
       ],
       client_status: ["active", "paused", "ended", "onboarding"],
       finance_type: ["income", "expense"],

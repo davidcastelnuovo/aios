@@ -26,6 +26,7 @@ import Leads from "./pages/Leads";
 import SalesDashboard from "./pages/SalesDashboard";
 import LeadIntegrations from "./pages/LeadIntegrations";
 import Tenants from "./pages/Tenants";
+import Automations from "./pages/Automations";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -58,6 +59,7 @@ const App = () => (
             <Route path="/leads" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Leads /></AppLayout></ProtectedRoute>} />
             <Route path="/lead-integrations" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><LeadIntegrations /></AppLayout></ProtectedRoute>} />
             <Route path="/tenants" element={<ProtectedRoute><AppLayout><Tenants /></AppLayout></ProtectedRoute>} />
+            <Route path="/automations" element={<ProtectedRoute><AppLayout><Automations /></AppLayout></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AgencyProvider>

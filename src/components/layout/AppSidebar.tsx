@@ -18,6 +18,7 @@ import {
   ChevronDown,
   Settings,
   Building,
+  Zap,
 } from "lucide-react";
 import {
   Sidebar,
@@ -63,6 +64,7 @@ const salesMenuItems = [
 
 const adminMenuItems = [
   { title: "ניהול ארגונים", url: "/tenants", icon: Building, module: null },
+  { title: "אוטומציות", url: "/automations", icon: Zap, module: null },
 ];
 
 export function AppSidebar() {
