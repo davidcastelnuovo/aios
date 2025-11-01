@@ -19,6 +19,8 @@ import {
   Settings,
   Building,
   Zap,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 import {
   Sidebar,
@@ -32,6 +34,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubItem,
   SidebarMenuSubButton,
+  SidebarHeader,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -68,7 +71,7 @@ const adminMenuItems = [
 ];
 
 export function AppSidebar() {
-  const { state, setOpenMobile, isMobile } = useSidebar();
+  const { state, setOpenMobile, isMobile, toggleSidebar } = useSidebar();
   const { hasPermission, isLoading } = useUserPermissions();
   const isCollapsed = state === "collapsed";
 
@@ -107,6 +110,24 @@ export function AppSidebar() {
 
   return (
     <Sidebar side="right" collapsible="icon" className="transition-all duration-300 ease-in-out">
+      <SidebarHeader className="border-b p-2">
+        <div className="flex items-center justify-between">
+          {!isCollapsed && (
+            <span className="text-sm font-semibold px-2">תפריט</span>
+          )}
+          <button
+            onClick={toggleSidebar}
+            className="p-2 hover:bg-accent rounded-md transition-colors"
+            aria-label={isCollapsed ? "פתח סרגל צד" : "סגור סרגל צד"}
+          >
+            {isCollapsed ? (
+              <PanelRightOpen className="h-4 w-4" />
+            ) : (
+              <PanelRightClose className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>תפריט ראשי</SidebarGroupLabel>
