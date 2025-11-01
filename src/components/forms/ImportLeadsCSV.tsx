@@ -90,10 +90,10 @@ export function ImportLeadsCSV() {
 
       const mapSource = (val: string) => {
         const v = normalize(val);
-        if (v.includes("פייסבוק") || v.includes("facebook")) return "facebook";
         if (v.includes("אתר") || v.includes("website")) return "website";
         if (v.includes("לינקדאין") || v.includes("linkedin")) return "linkedin";
-        if (v.includes("שיחה") || v.includes("טלפון") || v.includes("איתי")) return "referral";
+        if (v.includes("שיחה") || v.includes("טלפון") || v.includes("איתי") || v.includes("המלצה")) return "referral";
+        // Default to 'other' for all social media and unrecognized sources
         return "other";
       };
 
