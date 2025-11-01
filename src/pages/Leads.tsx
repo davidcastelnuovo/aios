@@ -653,7 +653,7 @@ const playBubbleAnimation = () => {
 
 export default function Leads() {
   const { toast } = useToast();
-  const { selectedAgency } = useAgency();
+  const { selectedAgency, setSelectedAgency, agencies } = useAgency();
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
@@ -893,6 +893,19 @@ export default function Leads() {
           />
         </div>
         <div className="flex gap-2">
+          <Select value={selectedAgency || "all"} onValueChange={setSelectedAgency}>
+            <SelectTrigger className="flex-1">
+              <SelectValue placeholder="סוכנות" />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-[100]">
+              <SelectItem value="all">כל הסוכנויות</SelectItem>
+              {agencies?.map((agency) => (
+                <SelectItem key={agency.id} value={agency.id}>
+                  {agency.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={filterStage} onValueChange={setFilterStage}>
             <SelectTrigger className={`flex-1 border-2 ${
               filterStage !== "all" 
@@ -942,8 +955,8 @@ export default function Leads() {
       <div className="hidden md:flex justify-between items-start gap-4">
         <div className="flex-1 space-y-4">
           <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
-          <div className="flex gap-3 items-center max-w-4xl">
-            <div className="relative flex-1 max-w-md">
+          <div className="flex gap-3 items-center flex-wrap max-w-6xl">
+            <div className="relative flex-1 min-w-[200px] max-w-md">
               <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 type="text"
@@ -953,6 +966,19 @@ export default function Leads() {
                 className="pr-10"
               />
             </div>
+            <Select value={selectedAgency || "all"} onValueChange={setSelectedAgency}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="סוכנות" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-[100]">
+                <SelectItem value="all">כל הסוכנויות</SelectItem>
+                {agencies?.map((agency) => (
+                  <SelectItem key={agency.id} value={agency.id}>
+                    {agency.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={filterStage} onValueChange={setFilterStage}>
               <SelectTrigger className={`w-[180px] border-2 ${
                 filterStage !== "all" 
