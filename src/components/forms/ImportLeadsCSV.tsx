@@ -171,8 +171,9 @@ export function ImportLeadsCSV() {
         }
         
         // הצעה חד"פ - monthly budget
-        if (row['הצעה חד"פ']) {
-          const val = row['הצעה חד"פ'].toString().replace(/[^\d.-]/g, '');
+        const monthlyKey = row['הצעה חד"פ'] ? 'הצעה חד"פ' : row['הצעה חד״פ'] ? 'הצעה חד״פ' : null;
+        if (monthlyKey && row[monthlyKey]) {
+          const val = row[monthlyKey].toString().replace(/[^\d.-]/g, '');
           const n = parseFloat(val);
           if (!isNaN(n) && n > 0) lead.monthly_budget = n;
         }
@@ -290,18 +291,18 @@ export function ImportLeadsCSV() {
               <li>שם (איש קשר)</li>
               <li>שם העסק</li>
               <li>מייל</li>
-              <li>נייד / טלפון</li>
+              <li>נייד</li>
+              <li>פרסום</li>
               <li>סטטוס</li>
-              <li>שלב העסקה / שלב במשפך</li>
-              <li>הערות / הצעות/הסכמים</li>
-              <li>המעת חד"פ / הצעת חד"פ</li>
-              <li>המעת 3 חודשים</li>
+              <li>הערות</li>
+              <li>הצעה חד"פ</li>
+              <li>הצעה 3 חודשים</li>
               <li>תאריך הצעה</li>
-              <li>תאריך מכירה / תאריך חתימה</li>
+              <li>תאריך מכירה</li>
               <li>מוצרים</li>
-              <li>שיחה עם איתי (איש מכירות)</li>
-              <li>המלצה / הפניה (מקור)</li>
-              <li>ארגון קליינט לפי (תחום)</li>
+              <li>שווי הצעות/הסכמים</li>
+              <li>מקור הגעה</li>
+              <li>תאריך קליטת ליד</li>
             </ul>
           </div>
         </div>
