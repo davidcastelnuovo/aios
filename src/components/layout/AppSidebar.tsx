@@ -66,8 +66,8 @@ const salesMenuItems = [
 ];
 
 const adminMenuItems = [
-  { title: "ניהול ארגונים", url: "/tenants", icon: Building, module: null },
-  { title: "אוטומציות", url: "/automations", icon: Zap, module: null },
+  { title: "ניהול ארגונים", url: "/tenants", icon: Building, module: "tenants" as const },
+  { title: "אוטומציות", url: "/automations", icon: Zap, module: "automations" as const },
 ];
 
 export function AppSidebar() {
@@ -103,8 +103,11 @@ export function AppSidebar() {
     return hasPermission(item.module);
   });
 
-  // Admin items are always visible if user is super_admin
-  const visibleAdminItems = adminMenuItems;
+  // Admin items require explicit permission
+  const visibleAdminItems = adminMenuItems.filter((item) => {
+    if (isLoading) return false;
+    return hasPermission(item.module);
+  });
 
   const showSuperAdminMenu = false; // TODO: Add super admin check when ready
 
@@ -232,7 +235,7 @@ export function AppSidebar() {
                 </Collapsible>
               )}
 
-              {/* ניהול ארגונים - למשתמשי super admin */}
+              {/* ניהול ארגונים ואוטומציות - דורש הרשאה מפורשת */}
               {visibleAdminItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild tooltip={item.title}>

@@ -20,7 +20,9 @@ export type ModulePermission =
   | "leads" // Leads management
   | "sales_people" // Sales people management
   | "lead_integrations" // Lead integrations
-  | "finance_view"; // Special permission for viewing financial data
+  | "finance_view" // Special permission for viewing financial data
+  | "automations" // Automations management (admin only)
+  | "tenants"; // Tenant management (admin only)
 
 export function useUserPermissions() {
   const { user } = useCurrentUser();
@@ -89,14 +91,16 @@ export function useUserPermissions() {
 
     const { permissions, hasAnyPermissions } = permissionsData || { permissions: null, hasAnyPermissions: false };
 
-    // For sales-related modules, require an explicit allow flag in DB
-    const salesModules: ModulePermission[] = [
+    // For admin-only and sales-related modules, require an explicit allow flag in DB
+    const restrictedModules: ModulePermission[] = [
       "sales_dashboard",
       "leads",
       "sales_people",
       "lead_integrations",
+      "automations",
+      "tenants",
     ];
-    if (salesModules.includes(module)) {
+    if (restrictedModules.includes(module)) {
       return permissions?.[module] === true;
     }
 
