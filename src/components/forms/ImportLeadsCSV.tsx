@@ -105,13 +105,24 @@ export function ImportLeadsCSV() {
       const mapStatus = (val: string) => {
         const v = normalize(val);
         if (v.includes("איןמענה") || v.includes("אינומענה")) return "contacted";
-        if (v.includes("לאמעוניין") || v.includes("לאמעניין")) return "lost";
-        if (v.includes("לארלוונטי")) return "lost";
+        if (v.includes("לאמעוניין") || v.includes("לאמעניין")) return "closed";
+        if (v.includes("לארלוונטי")) return "closed";
         if (v.includes("פולואפ") || v.includes("פולאפ")) return "follow_up";
         if (v.includes("הצעתמחיר") || v.includes("הצעה") || v.includes("נקבעהפגישה") || v.includes("נקבעהשיחה")) return "proposal_sent";
         if (v.includes("נסגר") || v.includes("מכירה")) return "closed";
         if (v.includes("פגישהעםאיתי") || v.includes("ממתיןלשיחה")) return "follow_up";
         return "new";
+      };
+
+      const mapResponseStatus = (val: string) => {
+        const v = normalize(val);
+        if (v.includes("איןמענה4")) return "no_answer_4";
+        if (v.includes("איןמענה3")) return "no_answer_3";
+        if (v.includes("איןמענה2")) return "no_answer_2";
+        if (v.includes("איןמענה") || v.includes("אינומענה")) return "no_answer_1";
+        if (v.includes("מכחישפניה")) return "denies_contact";
+        if (v.includes("לארלוונטי")) return "not_relevant";
+        return null;
       };
 
       const mapped = rows.map((row) => {
@@ -142,8 +153,17 @@ export function ImportLeadsCSV() {
         // מקור הגעה - source
         if (row['מקור הגעה']) lead.source = mapSource(row['מקור הגעה'].toString());
         
-        // סטטוס - status
-        if (row['סטטוס']) lead.status = mapStatus(row['סטטוס'].toString());
+        // סטטוס + סיבת הפסד (אם רלוונטי)
+        if (row['סטטוס']) {
+          const statusText = row['סטטוס'].toString();
+          lead.status = mapStatus(statusText);
+          const vstat = normalize(statusText);
+          if (vstat.includes('לאמעוניין') || vstat.includes('לאמעניין') || vstat.includes('לארלוונטי')) {
+            lead.lost_reason = statusText.trim();
+          }
+          const resp = mapResponseStatus(statusText);
+          if (resp) lead.response_status = resp;
+        }
         
         // הערות - notes
         if (row['הערות']) lead.notes = row['הערות'].toString().trim();
