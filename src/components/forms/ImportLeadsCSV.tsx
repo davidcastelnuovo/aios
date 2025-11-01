@@ -31,7 +31,7 @@ export function ImportLeadsCSV() {
     try {
       const text = await file.text();
 
-      // Parse robustly with Papa Parse
+      // Parse CSV
       const parsed = Papa.parse<any>(text, { header: true, skipEmptyLines: true });
       if (parsed.errors && parsed.errors.length) {
         console.warn("CSV parse warnings:", parsed.errors);
@@ -42,7 +42,7 @@ export function ImportLeadsCSV() {
         throw new Error("לא נמצאו נתונים בקובץ");
       }
 
-      // Resolve defaults: agency 'promo' and salesperson 'זיו'
+      // Get agency and salesperson
       const { data: promoAgency, error: agencyErr } = await supabase
         .from("agencies")
         .select("id, name")
@@ -58,152 +58,136 @@ export function ImportLeadsCSV() {
         .ilike("full_name", "%זיו%")
         .maybeSingle();
       if (spErr) throw spErr;
-      if (!zivPerson) throw new Error('איש מכירות "זיו" לא נמצא בסוכנות promo');
+      if (!zivPerson) throw new Error('איש מכירות "זיו" לא נמצא');
+
+      // Delete all existing leads
+      const { error: deleteError } = await supabase
+        .from("leads")
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+      if (deleteError) throw deleteError;
 
       const normalize = (s: string | null | undefined) =>
-        (s || "")
-          .toString()
-          .replace(/\*/g, "")
-          .replace(/[\s_\-\/=\\()\[\]"'.,]/g, "")
-          .toLowerCase();
+        (s || "").toString().trim().replace(/[\s_\-\/'"]/g, "").toLowerCase();
 
-      const mapResponse = (val: string) => {
-        const v = normalize(val);
-        if (v.includes("איןמענה1") || v.includes("ללאמענה1")) return "no_answer_1";
-        if (v.includes("איןמענה2") || v.includes("ללאמענה2")) return "no_answer_2";
-        if (v.includes("איןמענה3") || v.includes("ללאמענה3")) return "no_answer_3";
-        if (v.includes("איןמענה4") || v.includes("ללאמענה4")) return "no_answer_4";
-        if (v.includes("מכחישפניה")) return "denies_contact";
-        if (v.includes("לארלוונטי")) return "not_relevant";
+      const parseDate = (val: string) => {
+        if (!val) return null;
+        // Try DD/MM/YY format
+        const parts = val.split('/');
+        if (parts.length === 3) {
+          const day = parts[0].padStart(2, '0');
+          const month = parts[1].padStart(2, '0');
+          let year = parts[2];
+          if (year.length === 2) year = '20' + year;
+          const d = new Date(`${year}-${month}-${day}`);
+          if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+        }
+        // Try ISO format
+        const d = new Date(val);
+        if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
         return null;
       };
 
-      const mapStage = (val: string) => {
+      const mapSource = (val: string) => {
         const v = normalize(val);
-        if (v.includes("לידחדש")) return "new";
-        if (v.includes("נוצרקשר")) return "contacted";
-        if (v.includes("פולואפ")) return "follow_up";
-        if (v.includes("נשלחההצעה") || v === "הצעה") return "proposal_sent";
-        if (v.includes("נסגר")) return "closed";
+        if (v.includes("פייסבוק") || v.includes("facebook")) return "facebook";
+        if (v.includes("אתר") || v.includes("website")) return "website";
+        if (v.includes("לינקדאין") || v.includes("linkedin")) return "linkedin";
+        if (v.includes("שיחה") || v.includes("טלפון") || v.includes("איתי")) return "referral";
+        return "other";
+      };
+
+      const mapStatus = (val: string) => {
+        const v = normalize(val);
+        if (v.includes("איןמענה") || v.includes("אינומענה")) return "contacted";
+        if (v.includes("לאמעוניין") || v.includes("לאמעניין")) return "lost";
+        if (v.includes("לארלוונטי")) return "lost";
+        if (v.includes("פולואפ") || v.includes("פולאפ")) return "follow_up";
+        if (v.includes("הצעתמחיר") || v.includes("הצעה") || v.includes("נקבעהפגישה") || v.includes("נקבעהשיחה")) return "proposal_sent";
+        if (v.includes("נסגר") || v.includes("מכירה")) return "closed";
+        if (v.includes("פגישהעםאיתי") || v.includes("ממתיןלשיחה")) return "follow_up";
         return "new";
       };
 
       const mapped = rows.map((row) => {
-        const lead: any = {};
-        Object.entries(row).forEach(([key, raw]) => {
-          const value = (raw as string)?.toString().trim();
-          if (!value) return;
-          const k = normalize(key);
+        const lead: any = {
+          agency_id: promoAgency.id,
+          sales_person_id: zivPerson.id,
+        };
 
-          // Company / contact names
-          if (
-            k.includes("שמהעסק") ||
-            k.includes("שםהחברה") ||
-            k.includes("שחברה") ||
-            k.includes("שםעסק") ||
-            k.includes("שםלקוח") ||
-            k.includes("עסק") ||
-            k.includes("חברה") ||
-            k.includes("לקוח") ||
-            k.includes("ארגון") ||
-            k.includes("ארגונקליינט") ||
-            k === "ארגון"
-          ) {
-            lead.company_name = value;
-          } else if (
-            k === "שם" ||
-            k.includes("שםמלא") ||
-            k.includes("שםפרטי") ||
-            k.includes("שמקשר") ||
-            k.includes("אישקשר")
-          ) {
-            // Only set contact_name when it's not clearly business name
-            lead.contact_name = value;
+        // שם - contact name
+        if (row['שם']) lead.contact_name = row['שם'].toString().trim();
+        
+        // נייד - phone
+        if (row['נייד']) lead.phone = row['נייד'].toString().trim();
+        
+        // מייל - email
+        if (row['מייל']) lead.email = row['מייל'].toString().trim();
+        
+        // שם העסק - company name
+        if (row['שם העסק']) {
+          lead.company_name = row['שם העסק'].toString().trim();
+        } else if (lead.contact_name) {
+          lead.company_name = lead.contact_name;
+        }
+        
+        // פרסום - industry/notes
+        if (row['פרסום']) lead.industry = row['פרסום'].toString().trim();
+        
+        // הפנייה - source
+        if (row['הפנייה']) lead.source = mapSource(row['הפנייה'].toString());
+        
+        // סטטוס - status
+        if (row['סטטוס']) lead.status = mapStatus(row['סטטוס'].toString());
+        
+        // הערות - notes
+        if (row['הערות']) lead.notes = row['הערות'].toString().trim();
+        
+        // מוצרים - products
+        if (row['מוצרים']) lead.products = row['מוצרים'].toString().trim();
+        
+        // תאריך הצעה
+        if (row['תאריך הצעה']) {
+          const d = parseDate(row['תאריך הצעה'].toString());
+          if (d) {
+            lead.proposal_date = d;
+            if (lead.status === 'new') lead.status = 'proposal_sent';
           }
-          // Email
-          else if (
-            k.includes("מייל") ||
-            k.includes("אימייל") ||
-            k.includes("email") ||
-            k.includes("דואל") ||
-            k.includes("דוא")
-          ) {
-            lead.email = value;
+        }
+        
+        // תאריך מכירה
+        if (row['תאריך מכירה']) {
+          const d = parseDate(row['תאריך מכירה'].toString());
+          if (d) {
+            lead.sale_date = d;
+            lead.closing_date = d;
+            lead.status = 'closed';
           }
-          // Phone - expanded patterns
-          else if (
-            k.includes("טלפון") ||
-            k.includes("טל") ||
-            k.includes("פלאפון") ||
-            k.includes("phone") ||
-            k.includes("נייד") ||
-            k.includes("סלולרי") ||
-            k.includes("פרוק") ||
-            k.includes("פלפון") ||
-            k.includes("טלמספר") ||
-            k.includes("מספרטלפון") ||
-            k.includes("מספרנייד") ||
-            k.includes("נייח") ||
-            k.includes("tel") ||
-            k.includes("cell") ||
-            k === "פון" ||
-            k === "טל"
-          ) {
-            lead.phone = value;
-          }
-          // Status fields
-          else if (k.includes("סטטוס")) {
-            lead.response_status = mapResponse(value);
-            lead.general_status = value;
-          } else if (k.includes("שלב")) {
-            lead.status = mapStage(value);
-          }
-          // Numeric budgets / values
-          else if (
-            k.includes("שווייעסקה") ||
-            k.includes("שוויםשוער") ||
-            k.includes("שוי")
-          ) {
-            const n = parseFloat(value.replace(/[^\d.-]/g, ""));
-            if (!Number.isNaN(n)) lead.estimated_deal_value = n;
-          } else if (k.includes("חדפ") || k.includes("חודשית")) {
-            const n = parseFloat(value.replace(/[^\d.-]/g, ""));
-            if (!Number.isNaN(n)) lead.monthly_budget = n;
-          } else if (k.includes("3חודש") || k.includes("שלושהחודש")) {
-            const n = parseFloat(value.replace(/[^\d.-]/g, ""));
-            if (!Number.isNaN(n)) lead.three_month_budget = n;
-          }
-          // Dates
-          else if (k.includes("תאריך") && k.includes("הצעה")) {
-            const d = new Date(value);
-            if (!isNaN(d as any)) lead.proposal_date = d.toISOString().split("T")[0];
-          } else if (
-            k.includes("תאריך") &&
-            (k.includes("מכירה") || k.includes("חתימה") || k.includes("סגירה"))
-          ) {
-            const d = new Date(value);
-            if (!isNaN(d as any)) {
-              const ds = d.toISOString().split("T")[0];
-              lead.sale_date = ds;
-              lead.closing_date = ds;
-            }
-          }
-          // Products / source
-          else if (k.includes("מוצרים") || k.includes("מוצר")) {
-            lead.products = value;
-          } else if (k.includes("מקור") || k.includes("הפניה") || k.includes("המלצה")) {
-            // Free text source per user request
-            lead.source = value;
-          }
-        });
+        }
+        
+        // הצעה חד"פ - monthly budget
+        if (row['הצעה חד"פ']) {
+          const val = row['הצעה חד"פ'].toString().replace(/[^\d.-]/g, '');
+          const n = parseFloat(val);
+          if (!isNaN(n) && n > 0) lead.monthly_budget = n;
+        }
+        
+        // הצעה 3 חודשים
+        if (row['הצעה 3 חודשים']) {
+          const val = row['הצעה 3 חודשים'].toString().replace(/[^\d.-]/g, '');
+          const n = parseFloat(val);
+          if (!isNaN(n) && n > 0) lead.three_month_budget = n;
+        }
+        
+        // שווי הצעות/הסכמים
+        if (row['שווי הצעות/הסכמים']) {
+          const val = row['שווי הצעות/הסכמים'].toString().replace(/[^\d.-]/g, '');
+          const n = parseFloat(val);
+          if (!isNaN(n) && n > 0) lead.estimated_deal_value = n;
+        }
 
         if (!lead.status) lead.status = "new";
-        if (lead.proposal_date && lead.status === "new") lead.status = "proposal_sent";
-        if (!lead.company_name && lead.contact_name) lead.company_name = lead.contact_name;
-
-        // Force assignment per user request
-        lead.agency_id = promoAgency.id;
-        lead.sales_person_id = zivPerson.id;
+        
         return lead;
       });
 
@@ -212,13 +196,10 @@ export function ImportLeadsCSV() {
         const contact = (l.contact_name || '').trim();
         const email = (l.email || '').trim();
         const phone = (l.phone || '').trim();
-        // Require at least one identifying/contact field
         if (!name && !contact && !email && !phone) return false;
-        // Skip placeholder-only rows
-        if ((name === 'לא צוין' || name === 'לא צויין') && !contact && !email && !phone) return false;
         return true;
       });
-      const skipped = mapped.length - validLeads.length;
+
       if (validLeads.length === 0) {
         throw new Error("לא נמצאו לידים תקינים בקובץ");
       }
@@ -229,7 +210,7 @@ export function ImportLeadsCSV() {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       toast({
         title: "הצלחה!",
-        description: `${validLeads.length} לידים יובאו והוקצו לסוכנות promo ולאיש מכירות זיו${skipped > 0 ? ` (דילגנו על ${skipped} שורות ריקות)` : ""}`,
+        description: `${validLeads.length} לידים יובאו בהצלחה. כל הלידים הקודמים נמחקו.`,
       });
 
       setOpen(false);
