@@ -320,7 +320,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                       <FormItem>
                         <FormLabel>שם העסק *</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <Input {...field} className="text-right" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -334,7 +334,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                       <FormItem>
                         <FormLabel>שם איש קשר *</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <Input {...field} className="text-right" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -350,7 +350,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                       <FormLabel>סוכנות *</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="text-right">
                             <SelectValue placeholder="בחר סוכנות" />
                           </SelectTrigger>
                         </FormControl>
@@ -375,7 +375,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                       <FormLabel>איש מכירות *</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="text-right">
                             <SelectValue placeholder="בחר איש מכירות" />
                           </SelectTrigger>
                         </FormControl>
@@ -400,7 +400,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                       <FormItem>
                         <FormLabel>טלפון</FormLabel>
                         <FormControl>
-                          <Input {...field} />
+                          <Input {...field} className="text-right" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -414,7 +414,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                       <FormItem>
                         <FormLabel>אימייל</FormLabel>
                         <FormControl>
-                          <Input type="email" {...field} />
+                          <Input type="email" {...field} className="text-right" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -431,7 +431,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                         <FormLabel>סטטוס תגובה</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className="text-right">
                               <SelectValue placeholder="בחר סטטוס" />
                             </SelectTrigger>
                           </FormControl>
@@ -457,7 +457,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                         <FormLabel>שלב במשפך *</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className="text-right">
                               <SelectValue />
                             </SelectTrigger>
                           </FormControl>
@@ -483,7 +483,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                         <FormLabel>מקור הגעה</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className="text-right">
                               <SelectValue placeholder="בחר מקור" />
                             </SelectTrigger>
                           </FormControl>
@@ -551,7 +551,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                     <FormItem>
                       <FormLabel>תחום עיסוק</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input {...field} className="text-right" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -565,7 +565,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                     <FormItem>
                       <FormLabel>מוצרים/שירותים</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Input {...field} className="text-right" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -579,7 +579,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                     <FormItem>
                       <FormLabel>קישור לתיקייה</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="https://..." />
+                        <Input {...field} placeholder="https://..." className="text-right" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -593,7 +593,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                     <FormItem>
                       <FormLabel>הערות</FormLabel>
                       <FormControl>
-                        <Textarea {...field} rows={3} />
+                        <Textarea {...field} rows={3} className="text-right" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -614,7 +614,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                     <FormItem>
                       <FormLabel>שווי עסקה משוער (₪)</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} />
+                        <Input type="number" {...field} className="text-right" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -629,7 +629,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                       <FormItem>
                         <FormLabel>הצעה חודשית (₪)</FormLabel>
                         <FormControl>
-                          <Input type="number" {...field} />
+                          <Input type="number" {...field} className="text-right" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -643,7 +643,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                       <FormItem>
                         <FormLabel>הצעת 3 חודשים (₪)</FormLabel>
                         <FormControl>
-                          <Input type="number" {...field} />
+                          <Input type="number" {...field} className="text-right" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -741,7 +741,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                       <FormItem>
                         <FormLabel>פרטי סגירה / סיבת אובדן</FormLabel>
                         <FormControl>
-                          <Textarea {...field} rows={2} placeholder="האם נסגר בהצלחה או אבד? פרטים..." />
+                          <Textarea {...field} rows={2} placeholder="האם נסגר בהצלחה או אבד? פרטים..." className="text-right" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -774,7 +774,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                               value={editingUpdateContent}
                               onChange={(e) => setEditingUpdateContent(e.target.value)}
                               rows={3}
-                              className="w-full"
+                              className="w-full text-right"
                             />
                             <div className="flex gap-2 justify-start">
                               <Button
@@ -850,7 +850,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                       onChange={(e) => setNewUpdate(e.target.value)}
                       placeholder="הוסף עדכון חדש..."
                       rows={3}
-                      className="flex-1"
+                      className="flex-1 text-right"
                     />
                     <Button
                       type="button"
