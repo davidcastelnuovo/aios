@@ -137,6 +137,7 @@ export function ImportLeadsCSV() {
       
       const mapped = rows.map((row) => {
         const lead: any = {
+          tenant_id: tenantData.tenant_id,
           agency_id: promoAgency.id,
           sales_person_id: zivPerson.id,
         };
