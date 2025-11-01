@@ -17,6 +17,7 @@ import {
   TrendingUp,
   ChevronDown,
   Settings,
+  Building,
 } from "lucide-react";
 import {
   Sidebar,
@@ -60,6 +61,10 @@ const salesMenuItems = [
   { title: "אינטגרציות לידים", url: "/lead-integrations", icon: Settings, module: "lead_integrations" as const },
 ];
 
+const adminMenuItems = [
+  { title: "ניהול ארגונים", url: "/tenants", icon: Building, module: null },
+];
+
 export function AppSidebar() {
   const { state, setOpenMobile, isMobile } = useSidebar();
   const { hasPermission, isLoading } = useUserPermissions();
@@ -92,6 +97,9 @@ export function AppSidebar() {
     if (isLoading) return false;
     return hasPermission(item.module);
   });
+
+  // Admin items are always visible if user is super_admin
+  const visibleAdminItems = adminMenuItems;
 
   const showSuperAdminMenu = false; // TODO: Add super admin check when ready
 
@@ -200,6 +208,26 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 </Collapsible>
               )}
+
+              {/* ניהול ארגונים - למשתמשי super admin */}
+              {visibleAdminItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton asChild tooltip={item.title}>
+                    <NavLink
+                      to={item.url}
+                      onClick={handleLinkClick}
+                      className={({ isActive }) =>
+                        isActive
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                          : ""
+                      }
+                    >
+                      <item.icon className="h-4 w-4" />
+                      {!isCollapsed && <span>{item.title}</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
