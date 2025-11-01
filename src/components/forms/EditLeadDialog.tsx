@@ -34,6 +34,7 @@ const formSchema = z.object({
   monthly_budget: z.string().optional(),
   three_month_budget: z.string().optional(),
   proposal_date: z.date().optional(),
+  itai_meeting_date: z.date().optional(),
   sale_date: z.date().optional(),
   industry: z.string().optional(),
   products: z.string().optional(),
@@ -75,6 +76,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
       monthly_budget: lead.monthly_budget?.toString() || "",
       three_month_budget: lead.three_month_budget?.toString() || "",
       proposal_date: lead.proposal_date ? new Date(lead.proposal_date) : undefined,
+      itai_meeting_date: lead.itai_meeting_date ? new Date(lead.itai_meeting_date) : undefined,
       sale_date: lead.sale_date ? new Date(lead.sale_date) : undefined,
       industry: lead.industry || "",
       products: lead.products || "",
@@ -694,10 +696,10 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
 
                   <FormField
                     control={form.control}
-                    name="sale_date"
+                    name="itai_meeting_date"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>תאריך מכירה</FormLabel>
+                        <FormLabel>שיחה עם איתי</FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
@@ -732,6 +734,46 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="sale_date"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>תאריך מכירה</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant={"outline"}
+                              className={cn(
+                                "w-full pl-3 text-right font-normal",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value ? (
+                                format(field.value, "dd/MM/yyyy")
+                              ) : (
+                                <span>בחר תאריך</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0 bg-background z-50" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            initialFocus
+                            className={cn("p-3 pointer-events-auto")}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 {showLostReason && (
                   <FormField

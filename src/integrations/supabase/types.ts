@@ -763,6 +763,7 @@ export type Database = {
           general_status: string | null
           id: string
           industry: string | null
+          itai_meeting_date: string | null
           lost_reason: string | null
           monthly_budget: number | null
           notes: string | null
@@ -795,6 +796,7 @@ export type Database = {
           general_status?: string | null
           id?: string
           industry?: string | null
+          itai_meeting_date?: string | null
           lost_reason?: string | null
           monthly_budget?: number | null
           notes?: string | null
@@ -827,6 +829,7 @@ export type Database = {
           general_status?: string | null
           id?: string
           industry?: string | null
+          itai_meeting_date?: string | null
           lost_reason?: string | null
           monthly_budget?: number | null
           notes?: string | null

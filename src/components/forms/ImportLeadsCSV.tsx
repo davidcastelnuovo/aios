@@ -216,8 +216,8 @@ export function ImportLeadsCSV() {
         // שיחה עם איתי - תאריך פגישה/שיחה
         if (row['שיחה עם איתי']) {
           const d = parseDate(row['שיחה עם איתי'].toString());
-          if (d && !lead.notes) {
-            lead.notes = `שיחה עם איתי: ${row['שיחה עם איתי']}`;
+          if (d) {
+            lead.itai_meeting_date = d;
           }
         }
         
