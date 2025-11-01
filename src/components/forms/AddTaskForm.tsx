@@ -124,6 +124,9 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
         throw new Error("הלקוח שנבחר לא משויך לסוכנות");
       }
 
+      // Get campaigner name
+      const selectedCampaigner = campaigners?.find(c => c.id === values.campaigner_id);
+      
       const { error } = await supabase.from("tasks").insert([{
         title: values.title,
         notes: values.notes || null,
@@ -136,6 +139,35 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
         task_type: "other",
       }]);
       if (error) throw error;
+
+      // Get tenant_id for automation
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: tenantUser } = await supabase
+          .from("tenant_users")
+          .select("tenant_id")
+          .eq("user_id", user.id)
+          .single();
+
+        if (tenantUser) {
+          // Trigger automation
+          await supabase.functions.invoke('trigger-automation', {
+            body: {
+              trigger_type: 'task_assigned',
+              tenant_id: tenantUser.tenant_id,
+              data: {
+                task_title: values.title,
+                task_notes: values.notes || '',
+                campaigner_name: selectedCampaigner?.full_name || '',
+                client_name: selectedClient.name,
+                priority: values.priority,
+                status: values.status,
+                due_date: values.due_date || '',
+              }
+            }
+          });
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
