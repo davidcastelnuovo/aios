@@ -952,95 +952,107 @@ export default function Leads() {
       </div>
 
       {/* Desktop Header */}
-      <div className="hidden md:flex justify-between items-start gap-4">
-        <div className="flex-1 space-y-4">
+      <div className="hidden md:block space-y-4">
+        <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
-          <div className="flex gap-3 items-center flex-wrap max-w-6xl">
-            <div className="relative flex-1 min-w-[200px] max-w-md">
-              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="text"
-                placeholder="חיפוש לפי שם, טלפון או חברה..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pr-10"
-              />
+          <div className="flex gap-3 items-center">
+            {/* View mode toggle */}
+            <div className="flex gap-1 border rounded-md p-1">
+              <Button
+                variant={viewMode === "kanban" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("kanban")}
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "table" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("table")}
+              >
+                <TableIcon className="h-4 w-4" />
+              </Button>
             </div>
-            <Select value={selectedAgency || "all"} onValueChange={setSelectedAgency}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="סוכנות" />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-[100]">
-                <SelectItem value="all">כל הסוכנויות</SelectItem>
-                {agencies?.map((agency) => (
-                  <SelectItem key={agency.id} value={agency.id}>
-                    {agency.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterStage} onValueChange={setFilterStage}>
-              <SelectTrigger className={`w-[180px] border-2 ${
-                filterStage !== "all" 
-                  ? PIPELINE_STAGES.find(s => s.id === filterStage)?.bgClass || "bg-background"
-                  : "bg-background"
-              }`}>
-                <SelectValue placeholder="שלב במשפך" />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-[100]">
-                <SelectItem value="all">כל השלבים</SelectItem>
-                {PIPELINE_STAGES.map((stage) => (
-                  <SelectItem key={stage.id} value={stage.id} className={stage.bgClass}>
-                    {stage.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterResponseStatus} onValueChange={setFilterResponseStatus}>
-              <SelectTrigger className={`w-[180px] border-2 ${
-                filterResponseStatus !== "all" 
-                  ? filterResponseStatus === "none"
-                    ? "bg-background"
-                    : RESPONSE_STATUS_OPTIONS.find(s => s.id === filterResponseStatus)?.color || "bg-background"
-                  : "bg-background"
-              }`}>
-                <SelectValue placeholder="סטטוס תגובה" />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-[100]">
-                <SelectItem value="all">כל הסטטוסים</SelectItem>
-                <SelectItem value="none">ללא סטטוס</SelectItem>
-                {RESPONSE_STATUS_OPTIONS.map((status) => (
-                  <SelectItem key={status.id} value={status.id} className={status.color}>
-                    {status.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <UpdateLeadsCompanyName />
+              <ImportLeadsCSV />
+              <AddLeadForm />
+            </div>
           </div>
         </div>
+        
+        {/* Search and Filters in one row */}
         <div className="flex gap-3 items-center">
-          {/* View mode toggle */}
-          <div className="flex gap-1 border rounded-md p-1">
-            <Button
-              variant={viewMode === "kanban" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("kanban")}
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === "table" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setViewMode("table")}
-            >
-              <TableIcon className="h-4 w-4" />
-            </Button>
+          <div className="relative flex-1 max-w-xl">
+            <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="חיפוש לפי שם, טלפון או חברה..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pr-12 h-11 text-base font-medium shadow-sm border-2 focus:border-primary"
+            />
+            {searchQuery && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSearchQuery("")}
+                className="absolute left-2 top-1/2 transform -translate-y-1/2 h-7 w-7 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
-          <div className="flex gap-2">
-            <UpdateLeadsCompanyName />
-            <ImportLeadsCSV />
-            <AddLeadForm />
-          </div>
+          <Select value={selectedAgency || "all"} onValueChange={setSelectedAgency}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="כל הסוכנויות" />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-[100]">
+              <SelectItem value="all">כל הסוכנויות</SelectItem>
+              {agencies?.map((agency) => (
+                <SelectItem key={agency.id} value={agency.id}>
+                  {agency.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterStage} onValueChange={setFilterStage}>
+            <SelectTrigger className={`w-[180px] border-2 ${
+              filterStage !== "all" 
+                ? PIPELINE_STAGES.find(s => s.id === filterStage)?.bgClass || "bg-background"
+                : "bg-background"
+            }`}>
+              <SelectValue placeholder="כל השלבים" />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-[100]">
+              <SelectItem value="all">כל השלבים</SelectItem>
+              {PIPELINE_STAGES.map((stage) => (
+                <SelectItem key={stage.id} value={stage.id} className={stage.bgClass}>
+                  {stage.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterResponseStatus} onValueChange={setFilterResponseStatus}>
+            <SelectTrigger className={`w-[180px] border-2 ${
+              filterResponseStatus !== "all" 
+                ? filterResponseStatus === "none"
+                  ? "bg-background"
+                  : RESPONSE_STATUS_OPTIONS.find(s => s.id === filterResponseStatus)?.color || "bg-background"
+                : "bg-background"
+            }`}>
+              <SelectValue placeholder="כל הסטטוסים" />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-[100]">
+              <SelectItem value="all">כל הסטטוסים</SelectItem>
+              <SelectItem value="none">ללא סטטוס</SelectItem>
+              {RESPONSE_STATUS_OPTIONS.map((status) => (
+                <SelectItem key={status.id} value={status.id} className={status.color}>
+                  {status.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
