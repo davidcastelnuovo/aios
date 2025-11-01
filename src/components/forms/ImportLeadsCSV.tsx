@@ -75,6 +75,9 @@ export function ImportLeadsCSV() {
       const normalize = (s: string | null | undefined) =>
         (s || "").toString().trim().replace(/[\s_\-\/'"]/g, "").toLowerCase();
 
+      const isUUID = (s: string) =>
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
+
       const parseDate = (val: string) => {
         if (!val) return null;
         // Try DD/MM/YY format
@@ -105,11 +108,10 @@ export function ImportLeadsCSV() {
       const mapStatus = (val: string) => {
         const v = normalize(val);
         if (v.includes("איןמענה") || v.includes("אינומענה")) return "contacted";
-        if (v.includes("לאמעוניין") || v.includes("לאמעניין")) return "closed";
-        if (v.includes("לארלוונטי")) return "closed";
+        if (v.includes("לאמעוניין") || v.includes("לאמעניין") || v.includes("לארלוונטי")) return "closed";
         if (v.includes("פולואפ") || v.includes("פולאפ")) return "follow_up";
         if (v.includes("הצעתמחיר") || v.includes("הצעה") || v.includes("נקבעהפגישה") || v.includes("נקבעהשיחה")) return "proposal_sent";
-        if (v.includes("נסגר") || v.includes("מכירה")) return "closed";
+        if (v.includes("נסגר")) return "closed";
         if (v.includes("פגישהעםאיתי") || v.includes("ממתיןלשיחה")) return "follow_up";
         return "new";
       };
@@ -141,6 +143,12 @@ export function ImportLeadsCSV() {
           agency_id: promoAgency.id,
           sales_person_id: zivPerson.id,
         };
+
+        // ליד ID - אם קיים ונראה כמו UUID נשתמש בו
+        if (row['ליד id']) {
+          const idStr = row['ליד id'].toString().trim();
+          if (isUUID(idStr)) lead.id = idStr;
+        }
 
         // שם - contact name
         if (row['שם']) lead.contact_name = row['שם'].toString().trim();
@@ -201,7 +209,7 @@ export function ImportLeadsCSV() {
             lead.sale_date = d;
             lead.won_date = d;
             lead.closing_date = d;
-            lead.status = 'closed';
+            // לא משנים סטטוס אוטומטית ל"נסגר" כדי למנוע סיווג שגוי
           }
         }
         
@@ -288,6 +296,18 @@ export function ImportLeadsCSV() {
       const inserts: any[] = [];
 
       for (const lead of validLeads) {
+        // אם קיבלנו ID תקין - נעדכן/נוסיף לפי ID
+        if (lead.id) {
+          const byId = existingLeads?.find((e) => e.id === lead.id);
+          if (byId) {
+            updates.push({ ...lead, id: byId.id });
+            continue;
+          } else {
+            inserts.push(lead);
+            continue;
+          }
+        }
+
         const name = normalizeStr(lead.company_name);
         const email = normalizeStr(lead.email);
         const phone = (lead.phone || "").toString().replace(/[\s-]/g, "");
@@ -325,7 +345,7 @@ export function ImportLeadsCSV() {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       toast({
         title: "הצלחה!",
-        description: `${updates.length} לידים עודכנו, ${inserts.length} לידים חדשים נוספו.`,
+        description: `${updates.length} לידים עודכנו, ${inserts.length} לידים חדשים נוספו. (${validLeads.length} סה"כ)`,
       });
 
       setOpen(false);
@@ -397,6 +417,7 @@ export function ImportLeadsCSV() {
               <li>מוצרים</li>
               <li>שווי הצעות/הסכמים</li>
               <li>תאריך קליטת ליד</li>
+              <li>ליד ID (אופציונלי לעדכון קיים)</li>
             </ul>
           </div>
         </div>
