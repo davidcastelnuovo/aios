@@ -86,8 +86,23 @@ export default function Tenants() {
   }
 
   return (
-    <div className="space-y-6 p-3 md:p-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-4 md:space-y-6 p-3 md:p-6">
+      {/* Mobile Header */}
+      <div className="block md:hidden space-y-3">
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Building2 className="h-6 w-6" />
+          ניהול ארגונים
+        </h1>
+        {currentTenant && (
+          <p className="text-sm text-muted-foreground">
+            ארגון נוכחי: <strong>{(currentTenant as any).tenants.name}</strong>
+          </p>
+        )}
+        <AddTenantForm />
+      </div>
+
+      {/* Desktop Header */}
+      <div className="hidden md:flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-2">
             <Building2 className="h-8 w-8" />
@@ -102,43 +117,44 @@ export default function Tenants() {
         <AddTenantForm />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {tenants?.map((tenant) => (
           <Card
             key={tenant.id}
-            className="hover:shadow-lg transition-shadow cursor-pointer"
+            className="hover:shadow-lg transition-shadow cursor-pointer active:scale-95"
             onClick={() => handleTenantClick(tenant.id)}
           >
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <CardTitle className="flex items-center gap-2">
-                    <Building2 className="h-5 w-5" />
-                    {tenant.name}
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-1 flex-1 min-w-0">
+                  <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                    <Building2 className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0" />
+                    <span className="truncate">{tenant.name}</span>
                   </CardTitle>
                   {tenant.subdomain && (
-                    <CardDescription className="text-xs">
+                    <CardDescription className="text-xs truncate">
                       {tenant.subdomain}.lovableproject.com
                     </CardDescription>
                   )}
                 </div>
                 <Badge
                   variant={tenant.status === "active" ? "default" : "secondary"}
+                  className="text-xs flex-shrink-0"
                 >
                   {tenant.status === "active" ? "פעיל" : "לא פעיל"}
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-0">
               <div className="space-y-2 text-sm">
                 {tenant.contact_name && (
                   <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                    <span>{tenant.contact_name}</span>
+                    <Users className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <span className="truncate">{tenant.contact_name}</span>
                   </div>
                 )}
                 {tenant.contact_email && (
-                  <div className="text-muted-foreground">
+                  <div className="text-muted-foreground text-xs md:text-sm truncate">
                     {tenant.contact_email}
                   </div>
                 )}

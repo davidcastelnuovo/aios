@@ -493,7 +493,7 @@ export default function Users() {
                     צור ארגון חדש במערכת. יהיה צורך ליצור משתמשים עבורו בנפרד.
                   </DialogDescription>
                 </DialogHeader>
-                <AddTenantForm onSuccess={() => setIsTenantDialogOpen(false)} />
+                <AddTenantForm asDialog={false} onSuccess={() => setIsTenantDialogOpen(false)} />
               </DialogContent>
             </Dialog>
           )}
