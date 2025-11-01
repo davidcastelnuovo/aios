@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Plus, Zap, Activity, Trash2, Edit, TestTube } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddAutomationForm } from "@/components/forms/AddAutomationForm";
+import { EditAutomationDialog } from "@/components/forms/EditAutomationDialog";
 import {
   Dialog,
   DialogContent,
@@ -46,6 +47,8 @@ export default function Automations() {
   const queryClient = useQueryClient();
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
   const [selectedAutomationId, setSelectedAutomationId] = useState<string | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedAutomation, setSelectedAutomation] = useState<any>(null);
 
   // Fetch automations
   const { data: automations, isLoading } = useQuery({
@@ -178,6 +181,11 @@ export default function Automations() {
     setLogsDialogOpen(true);
   };
 
+  const handleEdit = (automation: any) => {
+    setSelectedAutomation(automation);
+    setEditDialogOpen(true);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -264,6 +272,7 @@ export default function Automations() {
                 <Button
                   size="sm"
                   variant="outline"
+                  onClick={() => handleEdit(automation)}
                 >
                   <Edit className="h-3 w-3 ml-1" />
                   עריכה
@@ -294,6 +303,15 @@ export default function Automations() {
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Edit Dialog */}
+      {selectedAutomation && (
+        <EditAutomationDialog
+          automation={selectedAutomation}
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+        />
       )}
 
       {/* Logs Dialog */}
