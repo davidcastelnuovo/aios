@@ -1291,7 +1291,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
       )}
 
       {/* ScrollArea for horizontal and vertical scrolling */}
-      <ScrollArea className="w-full">
+      <ScrollArea className="w-full" dir="rtl">
         <div className="max-h-[500px]">
           <Table className="min-w-[1300px]">
             <TableHeader className="sticky top-0 z-10 bg-background">
