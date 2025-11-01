@@ -289,10 +289,9 @@ export default function Automations() {
         <Card>
           <CardContent className="py-12 text-center">
             <Zap className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground mb-4">
+            <p className="text-muted-foreground">
               אין עדיין אוטומציות במערכת
             </p>
-            <AddAutomationForm />
           </CardContent>
         </Card>
       )}
