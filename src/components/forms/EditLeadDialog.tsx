@@ -315,10 +315,10 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="contact_name"
+                    name="company_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>שם איש קשר *</FormLabel>
+                        <FormLabel>שם העסק *</FormLabel>
                         <FormControl>
                           <Input {...field} />
                         </FormControl>
@@ -329,10 +329,10 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
 
                   <FormField
                     control={form.control}
-                    name="company_name"
+                    name="contact_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>שם העסק *</FormLabel>
+                        <FormLabel>שם איש קשר *</FormLabel>
                         <FormControl>
                           <Input {...field} />
                         </FormControl>
@@ -395,20 +395,6 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>אימייל</FormLabel>
-                        <FormControl>
-                          <Input type="email" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
                     name="phone"
                     render={({ field }) => (
                       <FormItem>
@@ -420,30 +406,42 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                       </FormItem>
                     )}
                   />
+
+                  <FormField
+                    control={form.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>אימייל</FormLabel>
+                        <FormControl>
+                          <Input type="email" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
                 
                 <div className="grid grid-cols-3 gap-4">
                   <FormField
                     control={form.control}
-                    name="source"
+                    name="response_status"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>מקור הגעה</FormLabel>
+                        <FormLabel>סטטוס תגובה</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="בחר מקור" />
+                              <SelectValue placeholder="בחר סטטוס" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="website">אתר</SelectItem>
-                            <SelectItem value="referral">הפניה</SelectItem>
-                            <SelectItem value="social_media">מדיה חברתית</SelectItem>
-                            <SelectItem value="paid_ads">מודעות ממומנות</SelectItem>
-                            <SelectItem value="cold_call">שיחה קרה</SelectItem>
-                            <SelectItem value="email_campaign">קמפיין אימייל</SelectItem>
-                            <SelectItem value="event">אירוע</SelectItem>
-                            <SelectItem value="other">אחר</SelectItem>
+                            <SelectItem value="no_answer_1">אין מענה 1</SelectItem>
+                            <SelectItem value="no_answer_2">אין מענה 2</SelectItem>
+                            <SelectItem value="no_answer_3">אין מענה 3</SelectItem>
+                            <SelectItem value="no_answer_4">אין מענה 4</SelectItem>
+                            <SelectItem value="denies_contact">מכחיש פניה</SelectItem>
+                            <SelectItem value="not_relevant">לא רלוונטי</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -479,23 +477,25 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
 
                   <FormField
                     control={form.control}
-                    name="response_status"
+                    name="source"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>סטטוס תגובה</FormLabel>
+                        <FormLabel>מקור הגעה</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="בחר סטטוס" />
+                              <SelectValue placeholder="בחר מקור" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="no_answer_1">אין מענה 1</SelectItem>
-                            <SelectItem value="no_answer_2">אין מענה 2</SelectItem>
-                            <SelectItem value="no_answer_3">אין מענה 3</SelectItem>
-                            <SelectItem value="no_answer_4">אין מענה 4</SelectItem>
-                            <SelectItem value="denies_contact">מכחיש פניה</SelectItem>
-                            <SelectItem value="not_relevant">לא רלוונטי</SelectItem>
+                            <SelectItem value="website">אתר</SelectItem>
+                            <SelectItem value="referral">הפניה</SelectItem>
+                            <SelectItem value="social_media">מדיה חברתית</SelectItem>
+                            <SelectItem value="paid_ads">מודעות ממומנות</SelectItem>
+                            <SelectItem value="cold_call">שיחה קרה</SelectItem>
+                            <SelectItem value="email_campaign">קמפיין אימייל</SelectItem>
+                            <SelectItem value="event">אירוע</SelectItem>
+                            <SelectItem value="other">אחר</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
