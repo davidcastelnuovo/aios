@@ -139,8 +139,8 @@ export function ImportLeadsCSV() {
         // פרסום - industry/notes
         if (row['פרסום']) lead.industry = row['פרסום'].toString().trim();
         
-        // הפנייה - source
-        if (row['הפנייה']) lead.source = mapSource(row['הפנייה'].toString());
+        // מקור הגעה - source
+        if (row['מקור הגעה']) lead.source = mapSource(row['מקור הגעה'].toString());
         
         // סטטוס - status
         if (row['סטטוס']) lead.status = mapStatus(row['סטטוס'].toString());
@@ -290,8 +290,8 @@ export function ImportLeadsCSV() {
               <li>שם (איש קשר)</li>
               <li>שם העסק</li>
               <li>מייל</li>
-              <li>פרוק / טלפון</li>
-              <li>סטטוס (תגובה)</li>
+              <li>נייד / טלפון</li>
+              <li>סטטוס</li>
               <li>שלב העסקה / שלב במשפך</li>
               <li>הערות / הצעות/הסכמים</li>
               <li>המעת חד"פ / הצעת חד"פ</li>
