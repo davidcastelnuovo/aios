@@ -24,7 +24,6 @@ import {
 import { AddLeadForm } from "@/components/forms/AddLeadForm";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { ImportLeadsCSV } from "@/components/forms/ImportLeadsCSV";
-import { UpdateLeadsCompanyName } from "@/components/forms/UpdateLeadsCompanyName";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/contexts/AgencyContext";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable } from "@dnd-kit/core";
@@ -947,7 +946,6 @@ export default function Leads() {
         <div className="flex gap-2 flex-wrap">
           <AddLeadForm />
           <ImportLeadsCSV />
-          <UpdateLeadsCompanyName />
         </div>
       </div>
 
@@ -974,7 +972,6 @@ export default function Leads() {
               </Button>
             </div>
             <div className="flex gap-2">
-              <UpdateLeadsCompanyName />
               <ImportLeadsCSV />
               <AddLeadForm />
             </div>
