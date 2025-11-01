@@ -256,13 +256,73 @@ export function ImportLeadsCSV() {
         // Continue with import even if backup fails
       }
 
-      const { error } = await supabase.from("leads").insert(validLeads);
-      if (error) throw error;
+      // Use upsert to update existing leads or insert new ones
+      // Match by company_name and email (or phone if email is missing)
+      const { error, data: upsertedData } = await supabase
+        .from("leads")
+        .upsert(validLeads, { 
+          onConflict: 'company_name,email',
+          ignoreDuplicates: false 
+        })
+        .select();
+      
+      if (error) {
+        // If onConflict doesn't work (no unique constraint), do manual check
+        console.warn("Upsert with conflict failed, doing manual merge:", error);
+        
+        // Get existing leads for comparison
+        const { data: existingLeads } = await supabase
+          .from("leads")
+          .select("id, company_name, email, phone");
+        
+        const updates = [];
+        const inserts = [];
+        
+        for (const lead of validLeads) {
+          // Find matching lead by company_name + email/phone
+          const existing = existingLeads?.find(e => 
+            e.company_name === lead.company_name && 
+            (e.email === lead.email || (lead.email && e.email === lead.email) || 
+             (!lead.email && e.phone === lead.phone))
+          );
+          
+          if (existing) {
+            updates.push({ ...lead, id: existing.id });
+          } else {
+            inserts.push(lead);
+          }
+        }
+        
+        // Perform updates
+        if (updates.length > 0) {
+          const { error: updateError } = await supabase
+            .from("leads")
+            .upsert(updates);
+          if (updateError) throw updateError;
+        }
+        
+        // Perform inserts
+        if (inserts.length > 0) {
+          const { error: insertError } = await supabase
+            .from("leads")
+            .insert(inserts);
+          if (insertError) throw insertError;
+        }
+        
+        queryClient.invalidateQueries({ queryKey: ["leads"] });
+        toast({
+          title: "הצלחה!",
+          description: `${updates.length} לידים עודכנו, ${inserts.length} לידים חדשים נוספו.`,
+        });
+        
+        setOpen(false);
+        return;
+      }
 
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       toast({
         title: "הצלחה!",
-        description: `${validLeads.length} לידים יובאו בהצלחה. כל הלידים הקודמים נמחקו.`,
+        description: `${validLeads.length} לידים יובאו/עודכנו בהצלחה.`,
       });
 
       setOpen(false);
