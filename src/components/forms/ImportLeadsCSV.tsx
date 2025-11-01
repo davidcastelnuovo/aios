@@ -125,6 +125,16 @@ export function ImportLeadsCSV() {
         return null;
       };
 
+      const sanitize = (obj: any) => {
+        const cleaned: any = {};
+        for (const [k, v] of Object.entries(obj)) {
+          if (v === undefined || v === null) continue;
+          if (typeof v === 'string' && v.trim() === '') continue;
+          cleaned[k] = v;
+        }
+        return cleaned;
+      };
+      
       const mapped = rows.map((row) => {
         const lead: any = {
           agency_id: promoAgency.id,
@@ -223,7 +233,7 @@ export function ImportLeadsCSV() {
 
         if (!lead.status) lead.status = "new";
         
-        return lead;
+        return sanitize(lead);
       });
 
       const validLeads = mapped.filter((l) => {
