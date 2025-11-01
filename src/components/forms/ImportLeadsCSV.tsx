@@ -60,13 +60,6 @@ export function ImportLeadsCSV() {
       if (spErr) throw spErr;
       if (!zivPerson) throw new Error('איש מכירות "זיו" לא נמצא');
 
-      // Delete all existing leads
-      const { error: deleteError } = await supabase
-        .from("leads")
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
-      if (deleteError) throw deleteError;
-
       const normalize = (s: string | null | undefined) =>
         (s || "").toString().trim().replace(/[\s_\-\/'"]/g, "").toLowerCase();
 
