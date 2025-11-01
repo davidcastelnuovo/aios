@@ -187,7 +187,7 @@ export function ImportLeadsCSV() {
             lead.sale_date = d;
             lead.won_date = d;
             lead.closing_date = d;
-            lead.status = 'won';
+            lead.status = 'closed';
           }
         }
         
@@ -256,76 +256,62 @@ export function ImportLeadsCSV() {
         // Continue with import even if backup fails
       }
 
-      // Use upsert to update existing leads or insert new ones
-      // Match by company_name and email (or phone if email is missing)
-      const { error, data: upsertedData } = await supabase
+      // השוואה ידנית כדי לעדכן קיימים ולהוסיף חדשים ללא כפילויות
+      // נטען לידים קיימים לסוכנות הרלוונטית להשוואה
+      const { data: existingLeads, error: existingErr } = await supabase
         .from("leads")
-        .upsert(validLeads, { 
-          onConflict: 'company_name,email',
-          ignoreDuplicates: false 
-        })
-        .select();
-      
-      if (error) {
-        // If onConflict doesn't work (no unique constraint), do manual check
-        console.warn("Upsert with conflict failed, doing manual merge:", error);
-        
-        // Get existing leads for comparison
-        const { data: existingLeads } = await supabase
+        .select("id, company_name, email, phone")
+        .eq("agency_id", promoAgency.id);
+      if (existingErr) throw existingErr;
+      // בניית רשימות עדכון/הוספה לפי התאמה בתוך אותה סוכנות (השוואה לא רגישה לרישיות)
+      const normalizeStr = (s: string | null | undefined) => (s || "").toString().trim().toLowerCase();
+
+      const updates: any[] = [];
+      const inserts: any[] = [];
+
+      for (const lead of validLeads) {
+        const name = normalizeStr(lead.company_name);
+        const email = normalizeStr(lead.email);
+        const phone = (lead.phone || "").toString().replace(/[\s-]/g, "");
+        const existing = existingLeads?.find((e) =>
+          normalizeStr(e.company_name) === name &&
+          (
+            (email && normalizeStr(e.email) === email) ||
+            (!email && e.phone && e.phone.toString().replace(/[\s-]/g, "") === phone)
+          )
+        );
+
+        if (existing) {
+          updates.push({ ...lead, id: existing.id });
+        } else {
+          inserts.push(lead);
+        }
+      }
+
+      // עדכונים
+      if (updates.length > 0) {
+        const { error: updateError } = await supabase
           .from("leads")
-          .select("id, company_name, email, phone");
-        
-        const updates = [];
-        const inserts = [];
-        
-        for (const lead of validLeads) {
-          // Find matching lead by company_name + email/phone
-          const existing = existingLeads?.find(e => 
-            e.company_name === lead.company_name && 
-            (e.email === lead.email || (lead.email && e.email === lead.email) || 
-             (!lead.email && e.phone === lead.phone))
-          );
-          
-          if (existing) {
-            updates.push({ ...lead, id: existing.id });
-          } else {
-            inserts.push(lead);
-          }
-        }
-        
-        // Perform updates
-        if (updates.length > 0) {
-          const { error: updateError } = await supabase
-            .from("leads")
-            .upsert(updates);
-          if (updateError) throw updateError;
-        }
-        
-        // Perform inserts
-        if (inserts.length > 0) {
-          const { error: insertError } = await supabase
-            .from("leads")
-            .insert(inserts);
-          if (insertError) throw insertError;
-        }
-        
-        queryClient.invalidateQueries({ queryKey: ["leads"] });
-        toast({
-          title: "הצלחה!",
-          description: `${updates.length} לידים עודכנו, ${inserts.length} לידים חדשים נוספו.`,
-        });
-        
-        setOpen(false);
-        return;
+          .upsert(updates);
+        if (updateError) throw updateError;
+      }
+
+      // הוספות
+      if (inserts.length > 0) {
+        const { error: insertError } = await supabase
+          .from("leads")
+          .insert(inserts);
+        if (insertError) throw insertError;
       }
 
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       toast({
         title: "הצלחה!",
-        description: `${validLeads.length} לידים יובאו/עודכנו בהצלחה.`,
+        description: `${updates.length} לידים עודכנו, ${inserts.length} לידים חדשים נוספו.`,
       });
 
       setOpen(false);
+      return;
     } catch (error: any) {
       console.error("Error importing CSV:", error);
       toast({
