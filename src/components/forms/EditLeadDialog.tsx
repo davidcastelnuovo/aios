@@ -317,7 +317,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                     control={form.control}
                     name="company_name"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="flex flex-row-reverse items-center gap-3">
                         <FormLabel>שם העסק *</FormLabel>
                         <FormControl>
                           <Input {...field} className="text-right" dir="rtl" />
@@ -331,7 +331,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                     control={form.control}
                     name="contact_name"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="flex flex-row-reverse items-center gap-3">
                         <FormLabel>שם איש קשר *</FormLabel>
                         <FormControl>
                           <Input {...field} className="text-right" dir="rtl" />
@@ -371,24 +371,24 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                   control={form.control}
                   name="sales_person_id"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>איש מכירות *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="text-right">
-                            <SelectValue placeholder="בחר איש מכירות" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-background z-50 text-right" align="end">
-                          {salesPeople?.map((person) => (
-                            <SelectItem key={person.id} value={person.id}>
-                              {person.full_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
+                      <FormItem className="flex flex-row-reverse items-center gap-3">
+                        <FormLabel>איש מכירות *</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger className="text-right">
+                              <SelectValue placeholder="בחר איש מכירות" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-background z-50 text-right" align="end">
+                            {salesPeople?.map((person) => (
+                              <SelectItem key={person.id} value={person.id}>
+                                {person.full_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
                   )}
                 />
 
@@ -397,7 +397,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                     control={form.control}
                     name="phone"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="flex flex-row-reverse items-center gap-3">
                         <FormLabel>טלפון</FormLabel>
                         <FormControl>
                           <Input {...field} className="text-right" dir="rtl" />
@@ -411,7 +411,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                     control={form.control}
                     name="email"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="flex flex-row-reverse items-center gap-3">
                         <FormLabel>אימייל</FormLabel>
                         <FormControl>
                           <Input type="email" {...field} className="text-right" dir="rtl" />
@@ -548,7 +548,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                   control={form.control}
                   name="industry"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-row-reverse items-center gap-3">
                       <FormLabel>תחום עיסוק</FormLabel>
                       <FormControl>
                         <Input {...field} className="text-right" dir="rtl" />
@@ -562,7 +562,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                   control={form.control}
                   name="products"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-row-reverse items-center gap-3">
                       <FormLabel>מוצרים/שירותים</FormLabel>
                       <FormControl>
                         <Input {...field} className="text-right" dir="rtl" />
@@ -576,7 +576,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                   control={form.control}
                   name="folder_link"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="flex flex-row-reverse items-center gap-3">
                       <FormLabel>קישור לתיקייה</FormLabel>
                       <FormControl>
                         <Input {...field} placeholder="https://..." className="text-right" dir="rtl" />
