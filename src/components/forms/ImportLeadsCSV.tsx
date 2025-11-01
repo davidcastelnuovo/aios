@@ -96,6 +96,23 @@ export function ImportLeadsCSV() {
         return null;
       };
 
+      // Helpers to avoid mis-mapping date values into text fields
+      const isDateLike = (val: any) => {
+        if (val === undefined || val === null) return false;
+        return !!parseDate(String(val));
+      };
+
+      const getFirst = (row: any, keys: string[]) => {
+        for (const key of keys) {
+          const v = row[key] ?? row[String(key).trim()];
+          if (v !== undefined && v !== null) {
+            const s = String(v).trim();
+            if (s !== '') return s;
+          }
+        }
+        return undefined;
+      };
+
       const mapSource = (val: string) => {
         const v = normalize(val);
         if (v.includes("אתר") || v.includes("website")) return "website";
@@ -151,7 +168,10 @@ export function ImportLeadsCSV() {
         }
 
         // שם - contact name
-        if (row['שם']) lead.contact_name = row['שם'].toString().trim();
+        const contact = getFirst(row, ['שם', 'איש קשר', 'שם איש קשר']);
+        if (contact && !isDateLike(contact)) {
+          lead.contact_name = contact;
+        }
         
         // נייד - phone
         if (row['נייד']) lead.phone = row['נייד'].toString().trim();
@@ -159,10 +179,11 @@ export function ImportLeadsCSV() {
         // מייל - email
         if (row['מייל']) lead.email = row['מייל'].toString().trim();
         
-        // שם העסק - company name
-        if (row['שם העסק']) {
-          lead.company_name = row['שם העסק'].toString().trim();
-        } else if (lead.contact_name) {
+        // שם העסק - company name (מניעת זיהוי תאריך בתור שם)
+        const company = getFirst(row, ['שם העסק', 'שם חברה', 'שם החברה', 'חברה', 'עסק', 'שם העסק/חברה', 'שם עסק']);
+        if (company && !isDateLike(company)) {
+          lead.company_name = company;
+        } else if (!lead.company_name && lead.contact_name) {
           lead.company_name = lead.contact_name;
         }
         
