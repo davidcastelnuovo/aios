@@ -125,11 +125,10 @@ export function ImportLeadsCSV() {
       const mapStatus = (val: string) => {
         const v = normalize(val);
         if (v.includes("איןמענה") || v.includes("אינומענה")) return "contacted";
-        if (v.includes("לאמעוניין") || v.includes("לאמעניין") || v.includes("לארלוונטי")) return "closed";
         if (v.includes("פולואפ") || v.includes("פולאפ")) return "follow_up";
         if (v.includes("הצעתמחיר") || v.includes("הצעה") || v.includes("נקבעהפגישה") || v.includes("נקבעהשיחה")) return "proposal_sent";
-        if (v.includes("נסגר")) return "closed";
         if (v.includes("פגישהעםאיתי") || v.includes("ממתיןלשיחה")) return "follow_up";
+        // לא מעוניין / לא רלוונטי נשארים כ-new, רק תאריך ב"נסגר" יקבע closed
         return "new";
       };
 
