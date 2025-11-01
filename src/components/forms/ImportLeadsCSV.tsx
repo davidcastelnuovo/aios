@@ -30,6 +30,18 @@ export function ImportLeadsCSV() {
 
     try {
       const text = await file.text();
+      
+      // Get current user and tenant for backup
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("משתמש לא מחובר");
+      
+      const { data: tenantData } = await supabase
+        .from("tenant_users")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .single();
+      
+      if (!tenantData) throw new Error("לא נמצא tenant למשתמש");
 
       // Parse CSV
       const parsed = Papa.parse<any>(text, { header: true, skipEmptyLines: true });
@@ -195,6 +207,23 @@ export function ImportLeadsCSV() {
 
       if (validLeads.length === 0) {
         throw new Error("לא נמצאו לידים תקינים בקובץ");
+      }
+
+      // Save backup to import_history before inserting
+      const { error: backupError } = await supabase
+        .from("import_history")
+        .insert({
+          tenant_id: tenantData.tenant_id,
+          import_type: "leads",
+          file_name: file.name,
+          file_content: text,
+          imported_by: user.id,
+          records_count: validLeads.length,
+        });
+      
+      if (backupError) {
+        console.error("Failed to save backup:", backupError);
+        // Continue with import even if backup fails
       }
 
       const { error } = await supabase.from("leads").insert(validLeads);

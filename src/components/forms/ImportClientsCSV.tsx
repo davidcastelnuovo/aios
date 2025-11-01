@@ -94,6 +94,19 @@ export function ImportClientsCSV() {
   const mutation = useMutation({
     mutationFn: async (file: File) => {
       const text = await file.text();
+      
+      // Get current user and tenant for backup
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("משתמש לא מחובר");
+      
+      const { data: tenantData } = await supabase
+        .from("tenant_users")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .single();
+      
+      if (!tenantData) throw new Error("לא נמצא tenant למשתמש");
+      
       const rows = parseCSV(text);
 
       if (rows.length === 0) {
@@ -195,6 +208,23 @@ export function ImportClientsCSV() {
           )
         );
         updatedCount = results.reduce((acc, r) => acc + (r.error ? 0 : (r.data?.length || 0)), 0);
+      }
+
+      // Save backup to import_history before inserting
+      const { error: backupError } = await supabase
+        .from("import_history")
+        .insert({
+          tenant_id: tenantData.tenant_id,
+          import_type: "clients",
+          file_name: file.name,
+          file_content: text,
+          imported_by: user.id,
+          records_count: validRows.length,
+        });
+      
+      if (backupError) {
+        console.error("Failed to save backup:", backupError);
+        // Continue with import even if backup fails
       }
 
       // Insert new rows

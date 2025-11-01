@@ -617,6 +617,50 @@ export type Database = {
         }
         Relationships: []
       }
+      import_history: {
+        Row: {
+          created_at: string
+          file_content: string
+          file_name: string
+          id: string
+          import_type: string
+          imported_at: string
+          imported_by: string | null
+          records_count: number | null
+          tenant_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_content: string
+          file_name: string
+          id?: string
+          import_type: string
+          imported_at?: string
+          imported_by?: string | null
+          records_count?: number | null
+          tenant_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_content?: string
+          file_name?: string
+          id?: string
+          import_type?: string
+          imported_at?: string
+          imported_by?: string | null
+          records_count?: number | null
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_history_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invitation_tokens: {
         Row: {
           created_at: string
