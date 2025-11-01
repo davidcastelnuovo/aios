@@ -752,6 +752,7 @@ export type Database = {
       leads: {
         Row: {
           agency_id: string | null
+          campaign_name: string | null
           closing_date: string | null
           company_name: string
           contact_name: string | null
@@ -783,6 +784,7 @@ export type Database = {
         }
         Insert: {
           agency_id?: string | null
+          campaign_name?: string | null
           closing_date?: string | null
           company_name: string
           contact_name?: string | null
@@ -814,6 +816,7 @@ export type Database = {
         }
         Update: {
           agency_id?: string | null
+          campaign_name?: string | null
           closing_date?: string | null
           company_name?: string
           contact_name?: string | null
