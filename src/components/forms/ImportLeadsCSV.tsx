@@ -202,14 +202,14 @@ export function ImportLeadsCSV() {
           }
         }
         
-        // תאריך מכירה
+        // תאריך מכירה - אם יש תאריך מכירה, הסטטוס תמיד יהיה "closed"
         if (row['תאריך מכירה']) {
           const d = parseDate(row['תאריך מכירה'].toString());
           if (d) {
             lead.sale_date = d;
             lead.won_date = d;
             lead.closing_date = d;
-            // לא משנים סטטוס אוטומטית ל"נסגר" כדי למנוע סיווג שגוי
+            lead.status = 'closed';
           }
         }
         
