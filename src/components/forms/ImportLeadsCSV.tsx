@@ -185,8 +185,17 @@ export function ImportLeadsCSV() {
           const d = parseDate(row['תאריך מכירה'].toString());
           if (d) {
             lead.sale_date = d;
+            lead.won_date = d;
             lead.closing_date = d;
-            lead.status = 'closed';
+            lead.status = 'won';
+          }
+        }
+        
+        // תאריך קליטת ליד - created_at
+        if (row['תאריך קליטת ליד']) {
+          const d = parseDate(row['תאריך קליטת ליד'].toString());
+          if (d) {
+            lead.created_at = d + 'T00:00:00Z';
           }
         }
         
