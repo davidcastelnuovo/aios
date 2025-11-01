@@ -431,112 +431,11 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
   isOpen: boolean; 
   onToggle: (open: boolean) => void;
 }) {
-  const scrollbarRef = useRef<HTMLDivElement>(null);
-  const tableContainerRef = useRef<HTMLDivElement>(null);
-  const xContainerRef = useRef<HTMLDivElement>(null);
-  const [tableWidth, setTableWidth] = useState(0);
-
-  // Update table width when table size changes
-  useEffect(() => {
-    const container = tableContainerRef.current;
-    if (!container) return;
-
-    const updateWidth = () => {
-      const table = container.querySelector('table');
-      if (table) {
-        setTableWidth(table.scrollWidth);
-      }
-    };
-
-    // Initial width
-    updateWidth();
-
-    // Watch for size changes
-    const resizeObserver = new ResizeObserver(updateWidth);
-    resizeObserver.observe(container);
-
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [stageLeads]);
-
-  // Sync scrollbars bidirectionally
-  useEffect(() => {
-    const bar = scrollbarRef.current;
-    const table = xContainerRef.current;
-
-    if (!bar || !table) return;
-
-    let isScrollingFromBar = false;
-    let isScrollingFromTable = false;
-
-    // Ensure initial alignment on mount/update
-    bar.scrollLeft = table.scrollLeft;
-
-    const syncFromBar = () => {
-      if (isScrollingFromTable) return;
-      isScrollingFromBar = true;
-      table.scrollLeft = bar.scrollLeft;
-      requestAnimationFrame(() => {
-        isScrollingFromBar = false;
-      });
-    };
-    
-    const syncFromTable = () => {
-      if (isScrollingFromBar) return;
-      isScrollingFromTable = true;
-      bar.scrollLeft = table.scrollLeft;
-      requestAnimationFrame(() => {
-        isScrollingFromTable = false;
-      });
-    };
-
-    bar.addEventListener('scroll', syncFromBar, { passive: true });
-    table.addEventListener('scroll', syncFromTable, { passive: true });
-
-    return () => {
-      bar.removeEventListener('scroll', syncFromBar);
-      table.removeEventListener('scroll', syncFromTable);
-    };
-  }, [isOpen, stageLeads, tableWidth]);
-
-  // Pointer drag + wheel to control bottom scroll from the top bar
-  const dragState = useRef({ dragging: false, startX: 0, startScrollLeft: 0 });
-  const onPointerDownBar = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    dragState.current.dragging = true;
-    dragState.current.startX = e.clientX;
-    dragState.current.startScrollLeft = xContainerRef.current?.scrollLeft || 0;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-  };
-  const onPointerMoveBar = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    if (!dragState.current.dragging) return;
-    const x = xContainerRef.current;
-    if (!x) return;
-    const dx = e.clientX - dragState.current.startX;
-    x.scrollLeft = dragState.current.startScrollLeft - dx;
-  };
-  const onPointerUpBar = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragState.current.dragging) return;
-    dragState.current.dragging = false;
-    try {
-      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-    } catch (err) {
-      // Ignore errors if pointer was already released
-    }
-  };
-  const onWheelBar = (e: React.WheelEvent<HTMLDivElement>) => {
-    const x = xContainerRef.current;
-    if (!x) return;
-    x.scrollLeft += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-  };
-
   return (
     <Collapsible open={isOpen} onOpenChange={onToggle}>
       <Card className={`border-r-4 ${stage.borderColor} bg-card`}>
         <CollapsibleTrigger asChild>
-          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors sticky top-0 z-30 bg-card pb-2">
+          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
             <CardTitle className="text-xl flex items-center justify-between">
               <span>{stage.label}</span>
               <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? '' : '-rotate-90'}`} />
@@ -544,36 +443,12 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
           </CardHeader>
         </CollapsibleTrigger>
         
-        {/* Horizontal scrollbar directly under the title - stays sticky with header */}
-        {isOpen && stageLeads.length > 0 && (
-          <div 
-            ref={scrollbarRef}
-            className="overflow-x-auto overflow-y-hidden bg-muted/30 rounded mx-6 mt-1 mb-2 sticky top-[72px] z-40 cursor-grab active:cursor-grabbing select-none"
-            style={{ height: '14px' }}
-            onClick={(e) => e.stopPropagation()}
-            onPointerDown={onPointerDownBar}
-            onPointerMove={onPointerMoveBar}
-            onPointerUp={onPointerUpBar}
-            onPointerCancel={onPointerUpBar}
-            onPointerLeave={onPointerUpBar}
-            onWheel={onWheelBar}
-            aria-label="גלול אופקית"
-          >
-            <div style={{ width: `${tableWidth}px`, height: '1px' }} />
-          </div>
-        )}
-        
         <CollapsibleContent>
           <CardContent>
             {stageLeads.length === 0 ? (
               <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
             ) : (
-              <div ref={tableContainerRef}>
-                <TableWithStickyScroll 
-                  stageLeads={stageLeads}
-                  xContainerRef={xContainerRef}
-                />
-              </div>
+              <TableWithStickyScroll stageLeads={stageLeads} />
             )}
           </CardContent>
         </CollapsibleContent>
@@ -1247,10 +1122,11 @@ export default function Leads() {
   );
 }
 
-function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[]; xContainerRef: React.RefObject<HTMLDivElement> }) {
+function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
+  const { selectedAgency } = useAgency();
 
   const updateLeadStatus = useMutation({
     mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" }) => {
@@ -1368,9 +1244,6 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
 
   const isAllSelected = stageLeads.length > 0 && selectedLeads.length === stageLeads.length;
 
-  // Scrolling sync handled in parent (StageTable)
-
-
   return (
     <div className="relative">
       {/* Bulk Actions Toolbar */}
@@ -1417,11 +1290,10 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
         </div>
       )}
 
-      {/* Horizontal scroll container wraps everything */}
-      <div ref={xContainerRef} className="overflow-x-auto w-full">
-        {/* Vertical scroll only for table body */}
-        <div className="max-h-[500px] overflow-y-auto">
-          <Table className="min-w-[1300px] table-fixed">
+      {/* ScrollArea for horizontal and vertical scrolling */}
+      <ScrollArea className="w-full">
+        <div className="max-h-[500px]">
+          <Table className="min-w-[1300px]">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow className="whitespace-nowrap">
                 <TableHead className="text-center sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 w-[50px]">
@@ -1547,7 +1419,8 @@ function TableWithStickyScroll({ stageLeads, xContainerRef }: { stageLeads: any[
            </TableBody>
          </Table>
          </div>
-       </div>
+         <ScrollBar orientation="horizontal" />
+       </ScrollArea>
      </div>
    );
  }
