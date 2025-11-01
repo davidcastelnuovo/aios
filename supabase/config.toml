@@ -17,3 +17,9 @@ verify_jwt = false
 
 [functions.webhook-lead-intake]
 verify_jwt = false
+
+[functions.google-calendar-auth]
+verify_jwt = false
+
+[functions.add-calendar-event]
+verify_jwt = true

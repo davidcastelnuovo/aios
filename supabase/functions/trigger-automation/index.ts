@@ -80,17 +80,18 @@ Deno.serve(async (req) => {
         } catch (error) {
           const executionTime = Date.now() - startTime
           console.error(`Error executing automation ${automation.id}:`, error)
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
           // Log failure
           await supabase.from('automation_logs').insert({
             automation_id: automation.id,
             success: false,
-            error_message: error.message,
+            error_message: errorMessage,
             payload: payload.data,
             execution_time_ms: executionTime,
           })
 
-          return { success: false, automation_id: automation.id, error: error.message }
+          return { success: false, automation_id: automation.id, error: errorMessage }
         }
       })
     )
@@ -105,8 +106,9 @@ Deno.serve(async (req) => {
     )
   } catch (error) {
     console.error('Error in trigger-automation:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: errorMessage }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
     )
   }
