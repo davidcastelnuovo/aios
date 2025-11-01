@@ -214,18 +214,27 @@ export function ImportLeadsCSV() {
         // מוצרים - products
         if (row['מוצרים']) lead.products = row['מוצרים'].toString().trim();
         
+        // שיחה עם איתי - תאריך פגישה/שיחה
+        if (row['שיחה עם איתי']) {
+          const d = parseDate(row['שיחה עם איתי'].toString());
+          if (d && !lead.notes) {
+            lead.notes = `שיחה עם איתי: ${row['שיחה עם איתי']}`;
+          }
+        }
+        
         // תאריך הצעה
         if (row['תאריך הצעה']) {
           const d = parseDate(row['תאריך הצעה'].toString());
           if (d) {
             lead.proposal_date = d;
+            lead.proposal_sent_date = d;
             if (lead.status === 'new') lead.status = 'proposal_sent';
           }
         }
         
-        // תאריך מכירה - אם יש תאריך מכירה, הסטטוס תמיד יהיה "closed"
-        if (row['תאריך מכירה']) {
-          const d = parseDate(row['תאריך מכירה'].toString());
+        // נסגר - תאריך מכירה (אם יש תאריך, הסטטוס תמיד יהיה "closed")
+        if (row['נסגר']) {
+          const d = parseDate(row['נסגר'].toString());
           if (d) {
             lead.sale_date = d;
             lead.won_date = d;
@@ -234,9 +243,9 @@ export function ImportLeadsCSV() {
           }
         }
         
-        // תאריך קליטת ליד - created_at (חובה - אם לא קיים נשתמש בתאריך הנוכחי)
-        if (row['תאריך קליטת ליד']) {
-          const d = parseDate(row['תאריך קליטת ליד'].toString());
+        // תאריך יצירה - created_at (חובה - אם לא קיים נשתמש בתאריך הנוכחי)
+        if (row['תאריך יצירה']) {
+          const d = parseDate(row['תאריך יצירה'].toString());
           if (d) {
             lead.created_at = d + 'T00:00:00Z';
           } else {
@@ -426,19 +435,18 @@ export function ImportLeadsCSV() {
               <li>שם העסק</li>
               <li>מייל</li>
               <li>נייד</li>
-              <li>שם קמפיין</li>
               <li>מקור הגעה</li>
-              <li>פרסום</li>
               <li>סטטוס</li>
               <li>הערות</li>
+              <li>שיחה עם איתי</li>
+              <li>תאריך הצעה</li>
+              <li>מוצרים</li>
               <li>הצעה חד"פ</li>
               <li>הצעה 3 חודשים</li>
-              <li>תאריך הצעה</li>
-              <li>תאריך מכירה</li>
-              <li>מוצרים</li>
+              <li>נסגר (תאריך מכירה)</li>
+              <li>תאריך יצירה</li>
               <li>שווי הצעות/הסכמים</li>
-              <li>תאריך קליטת ליד</li>
-              <li>ליד ID (אופציונלי לעדכון קיים)</li>
+              <li>ליד ID (אופציונלי)</li>
             </ul>
           </div>
         </div>
