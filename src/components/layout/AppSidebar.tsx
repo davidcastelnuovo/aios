@@ -106,7 +106,7 @@ export function AppSidebar() {
   const showSuperAdminMenu = false; // TODO: Add super admin check when ready
 
   return (
-    <Sidebar side="right" collapsible="icon">
+    <Sidebar side="right" collapsible="icon" className="transition-all duration-300 ease-in-out">
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel>תפריט ראשי</SidebarGroupLabel>
