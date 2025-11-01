@@ -2,12 +2,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckSquare, Calendar, Building2, Users, Megaphone, AlertCircle, GripVertical, LayoutGrid, Table as TableIcon, MessageSquare } from "lucide-react";
+import { CheckSquare, Calendar as CalendarIcon, Building2, Users, Megaphone, AlertCircle, GripVertical, LayoutGrid, Table as TableIcon, MessageSquare } from "lucide-react";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserRole } from "@/hooks/useUserRole";
+import { CalendarView } from "@/components/CalendarView";
 import { useState } from "react";
 import { DndContext, DragOverlay, closestCorners, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
@@ -106,7 +107,7 @@ export default function Tasks() {
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [selectedRole, setSelectedRole] = useState<string>("all");
   const [activeTask, setActiveTask] = useState<any>(null);
-  const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
+  const [viewMode, setViewMode] = useState<"kanban" | "table" | "calendar">("kanban");
   const [hideCompleted, setHideCompleted] = useState(false);
   const { selectedAgency } = useAgency();
   const { userAgencyIds } = useUserAgencies();
@@ -471,7 +472,7 @@ export default function Tasks() {
             {task.due_date && (
               <div className={`flex items-center gap-1.5 text-xs mb-2 ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
                 {isOverdue(task.due_date) && task.status !== 'done' && <AlertCircle className="h-3 w-3" />}
-                <Calendar className="h-3 w-3" />
+                <CalendarIcon className="h-3 w-3" />
                 <span>{new Date(task.due_date).toLocaleDateString("he-IL")}</span>
               </div>
             )}
@@ -539,6 +540,7 @@ export default function Tasks() {
                 variant={viewMode === "kanban" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setViewMode("kanban")}
+                title="תצוגת לוח"
               >
                 <LayoutGrid className="h-4 w-4" />
               </Button>
@@ -546,8 +548,17 @@ export default function Tasks() {
                 variant={viewMode === "table" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setViewMode("table")}
+                title="תצוגת טבלה"
               >
                 <TableIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "calendar" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("calendar")}
+                title="יומן"
+              >
+                <CalendarIcon className="h-4 w-4" />
               </Button>
             </div>
             
@@ -728,7 +739,7 @@ export default function Tasks() {
                       {task.due_date ? (
                         <div className={`flex items-center gap-2 ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive font-medium' : ''}`}>
                           {isOverdue(task.due_date) && task.status !== 'done' && <AlertCircle className="h-4 w-4" />}
-                          <Calendar className="h-4 w-4" />
+                          <CalendarIcon className="h-4 w-4" />
                           <span>{new Date(task.due_date).toLocaleDateString("he-IL")}</span>
                         </div>
                       ) : (
