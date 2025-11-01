@@ -189,8 +189,12 @@ export function ImportLeadsCSV() {
         // פרסום - industry/notes
         if (row['פרסום']) lead.industry = row['פרסום'].toString().trim();
         
-        // מקור הגעה - source
-        if (row['מקור הגעה']) lead.source = mapSource(row['מקור הגעה'].toString());
+        // מקור הגעה - source (חובה - ברירת מחדל "other")
+        if (row['מקור הגעה']) {
+          lead.source = mapSource(row['מקור הגעה'].toString());
+        } else {
+          lead.source = 'other';
+        }
         
         // שם קמפיין - campaign_name
         if (row['שם קמפיין']) lead.campaign_name = row['שם קמפיין'].toString().trim();
