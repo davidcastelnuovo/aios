@@ -317,7 +317,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                     control={form.control}
                     name="company_name"
                     render={({ field }) => (
-                      <FormItem className="flex flex-row-reverse items-center gap-3">
+                      <FormItem>
                         <FormLabel>שם העסק *</FormLabel>
                         <FormControl>
                           <Input {...field} className="text-right" dir="rtl" />
@@ -331,7 +331,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                     control={form.control}
                     name="contact_name"
                     render={({ field }) => (
-                      <FormItem className="flex flex-row-reverse items-center gap-3">
+                      <FormItem>
                         <FormLabel>שם איש קשר *</FormLabel>
                         <FormControl>
                           <Input {...field} className="text-right" dir="rtl" />
@@ -371,7 +371,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                   control={form.control}
                   name="sales_person_id"
                   render={({ field }) => (
-                      <FormItem className="flex flex-row-reverse items-center gap-3">
+                      <FormItem>
                         <FormLabel>איש מכירות *</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
@@ -397,7 +397,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                     control={form.control}
                     name="phone"
                     render={({ field }) => (
-                      <FormItem className="flex flex-row-reverse items-center gap-3">
+                      <FormItem>
                         <FormLabel>טלפון</FormLabel>
                         <FormControl>
                           <Input {...field} className="text-right" dir="rtl" />
@@ -411,7 +411,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                     control={form.control}
                     name="email"
                     render={({ field }) => (
-                      <FormItem className="flex flex-row-reverse items-center gap-3">
+                      <FormItem>
                         <FormLabel>אימייל</FormLabel>
                         <FormControl>
                           <Input type="email" {...field} className="text-right" dir="rtl" />
@@ -548,7 +548,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                   control={form.control}
                   name="industry"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row-reverse items-center gap-3">
+                    <FormItem>
                       <FormLabel>תחום עיסוק</FormLabel>
                       <FormControl>
                         <Input {...field} className="text-right" dir="rtl" />
@@ -562,7 +562,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                   control={form.control}
                   name="products"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row-reverse items-center gap-3">
+                    <FormItem>
                       <FormLabel>מוצרים/שירותים</FormLabel>
                       <FormControl>
                         <Input {...field} className="text-right" dir="rtl" />
@@ -576,7 +576,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                   control={form.control}
                   name="folder_link"
                   render={({ field }) => (
-                    <FormItem className="flex flex-row-reverse items-center gap-3">
+                    <FormItem>
                       <FormLabel>קישור לתיקייה</FormLabel>
                       <FormControl>
                         <Input {...field} placeholder="https://..." className="text-right" dir="rtl" />
