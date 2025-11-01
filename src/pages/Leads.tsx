@@ -1290,8 +1290,8 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
         </div>
       )}
 
-      {/* ScrollArea for horizontal and vertical scrolling */}
-      <ScrollArea className="w-full" dir="rtl">
+      {/* Scroll container for horizontal and vertical scrolling (native) */}
+      <div className="w-full overflow-auto" dir="rtl">
         <div className="max-h-[500px]">
           <Table className="min-w-[1300px]">
             <TableHeader className="sticky top-0 z-10 bg-background">
@@ -1419,8 +1419,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
            </TableBody>
          </Table>
          </div>
-         <ScrollBar orientation="horizontal" />
-       </ScrollArea>
+       </div>
      </div>
    );
  }
