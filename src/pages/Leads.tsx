@@ -62,6 +62,18 @@ const SOURCE_LABELS: Record<string, string> = {
   other: "אחר",
 };
 
+const PRODUCT_LABELS: Record<string, string> = {
+  google_ads: "Google Ads",
+  facebook_ads: "פרסום פייסבוק",
+  seo: "SEO",
+  website_design: "עיצוב אתרים",
+  social_media: "ניהול רשתות חברתיות",
+  content_marketing: "שיווק תוכן",
+  branding: "מיתוג",
+  consulting: "ייעוץ שיווקי",
+  other: "אחר",
+};
+
 const RESPONSE_STATUS_OPTIONS = [
   { id: "no_answer_1", label: "אין מענה 1", color: "bg-amber-100 dark:bg-amber-900 border-amber-300" },
   { id: "no_answer_2", label: "אין מענה 2", color: "bg-amber-200 dark:bg-amber-800 border-amber-400" },
@@ -266,19 +278,19 @@ function LeadCard({
             </div>
           )}
           
-          {/* Budget Info */}
-          {(lead.monthly_budget || lead.three_month_budget) && (
+          {/* Service Info */}
+          {(lead.products || lead.estimated_deal_value) && (
             <div className="bg-accent/10 p-2 rounded space-y-1 mt-2">
-              {lead.monthly_budget && (
+              {lead.products && (
                 <div className="flex justify-between text-xs">
-                  <span className="font-semibold">הצעה חודשית:</span>
-                  <span className="font-bold text-primary">₪{lead.monthly_budget.toLocaleString()}</span>
+                  <span className="font-semibold">שירות:</span>
+                  <span className="font-medium">{PRODUCT_LABELS[lead.products] || lead.products}</span>
                 </div>
               )}
-              {lead.three_month_budget && (
+              {lead.estimated_deal_value && (
                 <div className="flex justify-between text-xs">
-                  <span className="font-semibold">הצעת 3 חודשים:</span>
-                  <span className="font-bold text-primary">₪{lead.three_month_budget.toLocaleString()}</span>
+                  <span className="font-semibold">שווי שירות:</span>
+                  <span className="font-bold text-primary">₪{lead.estimated_deal_value.toLocaleString()}</span>
                 </div>
               )}
             </div>
@@ -562,8 +574,6 @@ export default function Leads() {
           industry,
           products,
           estimated_deal_value,
-          monthly_budget,
-          three_month_budget,
           proposal_date,
           sale_date,
           lost_reason,

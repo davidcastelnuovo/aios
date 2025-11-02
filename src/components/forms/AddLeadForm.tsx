@@ -293,7 +293,7 @@ export function AddLeadForm() {
                           <SelectValue placeholder="בחר שלב" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent>
+                      <SelectContent className="bg-background z-[100]">
                         <SelectItem value="new">ליד חדש</SelectItem>
                         <SelectItem value="contacted">נוצר קשר</SelectItem>
                         <SelectItem value="follow_up">תהליך פולואפ</SelectItem>
@@ -318,7 +318,7 @@ export function AddLeadForm() {
                           <SelectValue placeholder="בחר סטטוס" />
                         </SelectTrigger>
                       </FormControl>
-                      <SelectContent>
+                      <SelectContent className="bg-background z-[100]">
                         <SelectItem value="no_answer_1">אין מענה 1</SelectItem>
                         <SelectItem value="no_answer_2">אין מענה 2</SelectItem>
                         <SelectItem value="no_answer_3">אין מענה 3</SelectItem>
@@ -331,15 +331,46 @@ export function AddLeadForm() {
                   </FormItem>
                 )}
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="products"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>מוצרים/שירותים</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="בחר מוצר/שירות" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background z-[100]">
+                        <SelectItem value="google_ads">Google Ads</SelectItem>
+                        <SelectItem value="facebook_ads">פרסום פייסבוק</SelectItem>
+                        <SelectItem value="seo">SEO</SelectItem>
+                        <SelectItem value="website_design">עיצוב אתרים</SelectItem>
+                        <SelectItem value="social_media">ניהול רשתות חברתיות</SelectItem>
+                        <SelectItem value="content_marketing">שיווק תוכן</SelectItem>
+                        <SelectItem value="branding">מיתוג</SelectItem>
+                        <SelectItem value="consulting">ייעוץ שיווקי</SelectItem>
+                        <SelectItem value="other">אחר</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}
                 name="estimated_deal_value"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>שווי עסקה משוער (₪)</FormLabel>
+                    <FormLabel>שווי שירות (₪)</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" {...field} placeholder="0" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -393,20 +424,6 @@ export function AddLeadForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>תחום עיסוק</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="products"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>מוצרים/שירותים</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>

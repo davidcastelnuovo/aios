@@ -31,8 +31,6 @@ const formSchema = z.object({
   status: z.string().optional(),
   response_status: z.string().optional(),
   estimated_deal_value: z.string().optional(),
-  monthly_budget: z.string().optional(),
-  three_month_budget: z.string().optional(),
   proposal_date: z.date().optional(),
   itai_meeting_date: z.date().optional(),
   sale_date: z.date().optional(),
@@ -62,7 +60,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
 
-  const form = useForm<FormValues>({
+const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       company_name: lead.company_name || "",
@@ -73,8 +71,6 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
       status: lead.status || "new",
       response_status: lead.response_status || "",
       estimated_deal_value: lead.estimated_deal_value?.toString() || "",
-      monthly_budget: lead.monthly_budget?.toString() || "",
-      three_month_budget: lead.three_month_budget?.toString() || "",
       proposal_date: lead.proposal_date ? new Date(lead.proposal_date) : undefined,
       itai_meeting_date: lead.itai_meeting_date ? new Date(lead.itai_meeting_date) : undefined,
       sale_date: lead.sale_date ? new Date(lead.sale_date) : undefined,
@@ -131,7 +127,7 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
     enabled: !!lead.id && open,
   });
 
-  const updateMutation = useMutation({
+const updateMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       const submitData: any = {
         company_name: values.company_name,
@@ -144,8 +140,6 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
         estimated_deal_value: values.estimated_deal_value 
           ? parseFloat(values.estimated_deal_value) 
           : null,
-        monthly_budget: values.monthly_budget ? parseFloat(values.monthly_budget) : null,
-        three_month_budget: values.three_month_budget ? parseFloat(values.three_month_budget) : null,
         proposal_date: values.proposal_date || null,
         sale_date: values.sale_date || null,
         industry: values.industry || null,
@@ -566,9 +560,24 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>מוצרים/שירותים</FormLabel>
-                      <FormControl>
-                        <Input {...field} className="text-right" dir="rtl" />
-                      </FormControl>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="text-right">
+                            <SelectValue placeholder="בחר מוצר/שירות" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100] text-right" align="end">
+                          <SelectItem value="google_ads">Google Ads</SelectItem>
+                          <SelectItem value="facebook_ads">פרסום פייסבוק</SelectItem>
+                          <SelectItem value="seo">SEO</SelectItem>
+                          <SelectItem value="website_design">עיצוב אתרים</SelectItem>
+                          <SelectItem value="social_media">ניהול רשתות חברתיות</SelectItem>
+                          <SelectItem value="content_marketing">שיווק תוכן</SelectItem>
+                          <SelectItem value="branding">מיתוג</SelectItem>
+                          <SelectItem value="consulting">ייעוץ שיווקי</SelectItem>
+                          <SelectItem value="other">אחר</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -614,44 +623,14 @@ export function EditLeadDialog({ lead }: EditLeadDialogProps) {
                   name="estimated_deal_value"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>שווי עסקה משוער (₪)</FormLabel>
+                      <FormLabel>שווי שירות (₪)</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} className="text-right" dir="rtl" />
+                        <Input type="number" {...field} className="text-right" dir="rtl" placeholder="0" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="monthly_budget"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>הצעה חודשית (₪)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} className="text-right" dir="rtl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="three_month_budget"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>הצעת 3 חודשים (₪)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} className="text-right" dir="rtl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
