@@ -17,14 +17,6 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [resetMode, setResetMode] = useState(false);
   const [updatePasswordMode, setUpdatePasswordMode] = useState(false);
-  // Invitation signup state (for /auth?token=... flow)
-  const [inviteMode, setInviteMode] = useState(false);
-  const [inviteToken, setInviteToken] = useState<string | null>(null);
-  const [inviteFullName, setInviteFullName] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [invitePassword, setInvitePassword] = useState("");
-  const [inviteConfirm, setInviteConfirm] = useState("");
-  const [inviteLoading, setInviteLoading] = useState(false);
   // MFA state
   const [mfaRequired, setMfaRequired] = useState(false);
   const [factorId, setFactorId] = useState<string | null>(null);
@@ -37,8 +29,6 @@ useEffect(() => {
   const init = async () => {
     const type = searchParams.get("type");
     const code = searchParams.get("code");
-    const token = searchParams.get("token");
-    const inviteSignup = searchParams.get("invite_signup");
 
     // If we have a code param, try to exchange it for a session
     if (code) {
@@ -47,45 +37,6 @@ useEffect(() => {
         console.error("exchangeCodeForSession error:", error);
         toast({ title: "שגיאה", description: error.message, variant: "destructive" });
       } else if (data?.session) {
-        // Successfully got session from code exchange
-        const savedToken = localStorage.getItem("invite_token");
-        
-        // Only try to link if we actually have an invitation token
-        if (savedToken) {
-          try {
-            console.log("Linking Google user to invitation with token:", savedToken);
-            const { data: linkData, error: linkError } = await supabase.functions.invoke(
-              "link-google-user-to-invitation",
-              {
-                body: {
-                  token: savedToken,
-                  user_id: data.session.user.id,
-                  email: data.session.user.email,
-                },
-              }
-            );
-            
-            localStorage.removeItem("invite_token");
-            
-            if (linkError || linkData?.error) {
-              console.error("Link function error:", linkError || linkData?.error);
-              toast({
-                title: "שגיאה",
-                description: (linkError?.message || linkData?.error) || "שגיאה בקישור המשתמש להזמנה",
-                variant: "destructive",
-              });
-            } else {
-              console.log("Successfully linked user to invitation");
-            }
-          } catch (e: any) {
-            console.error("Link exception:", e);
-            localStorage.removeItem("invite_token");
-          }
-        } else {
-          console.log("No invitation token found, proceeding with regular Google login");
-        }
-        
-        // Navigate to profile regardless of invitation link status
         navigate("/my-profile");
         return;
       }
@@ -94,111 +45,9 @@ useEffect(() => {
     // Check if user is already authenticated
     const { data: { session } } = await supabase.auth.getSession();
     
-    // Handle existing session - only process invitation if we have a token
     if (session?.user) {
-      const savedToken = localStorage.getItem("invite_token");
-      
-      if (savedToken) {
-        console.log("Processing Google signup with invite token:", savedToken);
-        try {
-          console.log("Calling link-google-user-to-invitation with:", {
-            token: savedToken,
-            user_id: session.user.id,
-            email: session.user.email,
-          });
-
-          // Call edge function to link user to invitation
-          const { data: linkData, error: linkError } = await supabase.functions.invoke(
-            "link-google-user-to-invitation",
-            {
-              body: {
-                token: savedToken,
-                user_id: session.user.id,
-                email: session.user.email,
-              },
-            }
-          );
-
-          console.log("Link result:", { linkData, linkError });
-
-          // Clear the token from localStorage
-          localStorage.removeItem("invite_token");
-
-          if (linkError) {
-            console.error("Link invocation error:", linkError);
-            toast({
-              title: "שגיאה",
-              description: linkError.message || "שגיאה בקישור המשתמש להזמנה",
-              variant: "destructive",
-            });
-            // Don't navigate on error
-            return;
-          }
-
-          if (linkData?.error) {
-            console.error("Link function error:", linkData.error);
-            toast({
-              title: "שגיאה",
-              description: linkData.error || "שגיאה בקישור המשתמש להזמנה",
-              variant: "destructive",
-            });
-            // Don't navigate on error
-            return;
-          }
-
-          toast({
-            title: "הצלחה!",
-            description: "ההרשמה הושלמה בהצלחה",
-          });
-
-          navigate("/my-profile");
-          return;
-        } catch (error: any) {
-          console.error("Link exception:", error);
-          localStorage.removeItem("invite_token");
-          toast({
-            title: "שגיאה",
-            description: error.message || "שגיאה בקישור המשתמש",
-            variant: "destructive",
-          });
-          return;
-        }
-      } else {
-        console.log("No invite token found in localStorage");
-      }
-    }
-    
-    if (session?.user) {
-      // Already logged in, redirect to profile
       navigate("/my-profile");
       return;
-    }
-
-    // Invitation link flow
-    if (token) {
-      setInviteMode(true);
-      setInviteToken(token);
-      // Persist the token across OAuth redirects
-      localStorage.setItem("invite_token", token);
-      // Verify invitation token
-      const { data, error } = await supabase
-        .from("invitation_tokens")
-        .select("*")
-        .eq("token", token)
-        .eq("used", false)
-        .maybeSingle();
-
-      if (error || !data) {
-        setInviteMode(false);
-        toast({ title: "קישור לא תקין", description: "קישור ההזמנה אינו תקף או שכבר נוצל", variant: "destructive" });
-      } else {
-        if (data.email) setInviteEmail(data.email);
-        // Expiration check
-        if (data.expires_at && new Date(data.expires_at) < new Date()) {
-          setInviteMode(false);
-          toast({ title: "קישור פג תוקף", description: "קישור ההזמנה פג תוקף", variant: "destructive" });
-        }
-      }
     }
 
     // If recovery type, show password update mode
@@ -208,7 +57,7 @@ useEffect(() => {
   };
 
   init();
-}, [searchParams, navigate]);
+}, [searchParams, navigate, toast]);
 
 // Ensure we auto-redirect when a session becomes available (e.g., after Google OAuth)
 useEffect(() => {
@@ -351,10 +200,6 @@ useEffect(() => {
       // Clear any old session data to prevent refresh token errors
       await supabase.auth.signOut();
       
-      const tokenParam = searchParams.get("token");
-      if (tokenParam) {
-        localStorage.setItem("invite_token", tokenParam);
-      }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -413,99 +258,6 @@ useEffect(() => {
     }
     setLoading(false);
   };
-
-  // Handle invitation-based signup
-  const handleInviteSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inviteToken) {
-      toast({ title: "שגיאה", description: "קישור הזמנה חסר", variant: "destructive" });
-      return;
-    }
-    if (!inviteFullName || !inviteEmail || !invitePassword) {
-      toast({ title: "שגיאה", description: "נא למלא את כל השדות", variant: "destructive" });
-      return;
-    }
-    if (invitePassword !== inviteConfirm) {
-      toast({ title: "שגיאה", description: "הסיסמאות אינן תואמות", variant: "destructive" });
-      return;
-    }
-    if (invitePassword.length < 6) {
-      toast({ title: "שגיאה", description: "הסיסמה חייבת להכיל לפחות 6 תווים", variant: "destructive" });
-      return;
-    }
-
-    setInviteLoading(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("signup-with-invitation", {
-        body: {
-          token: inviteToken,
-          full_name: inviteFullName,
-          email: inviteEmail,
-          password: invitePassword,
-        },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-
-      toast({ title: "הצלחה!", description: "ההרשמה הושלמה בהצלחה" });
-
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: inviteEmail,
-        password: invitePassword,
-      });
-      if (signInError) {
-        toast({ title: "שגיאה בהתחברות", description: "נא להתחבר מדף הכניסה", variant: "destructive" });
-        navigate("/auth");
-      } else {
-        navigate("/my-profile");
-      }
-    } catch (err: any) {
-      console.error("Invite signup error:", err);
-      toast({ title: "שגיאה", description: err.message || "שגיאה בהרשמה", variant: "destructive" });
-    } finally {
-      setInviteLoading(false);
-    }
-  };
-
-  // If opened with /auth?token=... show invitation signup form
-  if (inviteMode) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary p-4">
-        <Card className="w-full max-w-md shadow-lg">
-          <CardHeader className="space-y-4 text-center">
-            <div className="mx-auto w-12 h-12 rounded-xl bg-gradient-primary flex items-center justify-center">
-              <Building2 className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <CardTitle className="text-2xl">הרשמה עם הזמנה</CardTitle>
-              <CardDescription>השלם את פרטי החשבון כדי להצטרף</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleInviteSignup} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="fullName">שם מלא</Label>
-                <Input id="fullName" type="text" value={inviteFullName} onChange={(e) => setInviteFullName(e.target.value)} required disabled={inviteLoading} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">אימייל</Label>
-                <Input id="email" type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} required disabled={inviteLoading} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">סיסמה</Label>
-                <Input id="password" type="password" value={invitePassword} onChange={(e) => setInvitePassword(e.target.value)} required minLength={6} disabled={inviteLoading} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="confirm">אימות סיסמה</Label>
-                <Input id="confirm" type="password" value={inviteConfirm} onChange={(e) => setInviteConfirm(e.target.value)} required minLength={6} disabled={inviteLoading} />
-              </div>
-              <Button type="submit" className="w-full" disabled={inviteLoading}>{inviteLoading ? "נרשם..." : "סיום הרשמה"}</Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary p-4">

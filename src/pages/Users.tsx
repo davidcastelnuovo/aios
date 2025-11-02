@@ -30,7 +30,6 @@ import { EditUserPermissionsDialog } from "@/components/forms/EditUserPermission
 import { EditUserCampaignerDialog } from "@/components/forms/EditUserCampaignerDialog";
 import { EditUserSalesPersonDialog } from "@/components/forms/EditUserSalesPersonDialog";
 import { EditUserNameDialog } from "@/components/forms/EditUserNameDialog";
-import { CreateInvitationDialog } from "@/components/forms/CreateInvitationDialog";
 import EditSalesPersonAgenciesDialog from "@/components/forms/EditSalesPersonAgenciesDialog";
 import {
   Dialog,
@@ -477,7 +476,6 @@ export default function Users() {
           </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
-          <CreateInvitationDialog />
           {isSuperAdmin && (
             <Dialog open={isTenantDialogOpen} onOpenChange={setIsTenantDialogOpen}>
               <DialogTrigger asChild>
