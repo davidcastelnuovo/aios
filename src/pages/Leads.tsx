@@ -756,7 +756,12 @@ export default function Leads() {
     <div className="space-y-6 p-3 md:p-6">
       {/* Mobile Header */}
       <div className="block md:hidden space-y-4">
-        <h1 className="text-2xl font-bold">לידים - Pipeline</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">לידים - Pipeline</h1>
+          <Badge variant="secondary" className="text-sm px-2 py-0.5">
+            {filteredLeads?.length || 0}
+          </Badge>
+        </div>
         <div className="relative">
           <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -828,7 +833,12 @@ export default function Leads() {
       {/* Desktop Header - Sticky */}
       <div className="hidden md:block sticky top-0 z-40 bg-background pb-4 space-y-4">
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
+            <Badge variant="secondary" className="text-base px-3 py-1">
+              סה"כ: {filteredLeads?.length || 0}
+            </Badge>
+          </div>
           <div className="flex gap-3 items-center">
             {/* View mode toggle */}
             <div className="flex gap-1 border rounded-md p-1">
