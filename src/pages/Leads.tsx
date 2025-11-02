@@ -130,11 +130,13 @@ function DroppableStage({ stage, children }: { stage: any; children: ReactNode }
 function LeadCard({ 
   lead, 
   onStatusChange, 
-  onResponseStatusChange 
+  onResponseStatusChange,
+  productsLookup = {}
 }: { 
   lead: any; 
   onStatusChange: (leadId: string, newStatus: string) => void;
   onResponseStatusChange: (leadId: string, responseStatus: string | null) => void;
+  productsLookup?: Record<string, { name: string; price: number }>;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: lead.id,
@@ -284,7 +286,9 @@ function LeadCard({
               {lead.products && (
                 <div className="flex justify-between text-xs">
                   <span className="font-semibold">שירות:</span>
-                  <span className="font-medium">{PRODUCT_LABELS[lead.products] || lead.products}</span>
+                  <span className="font-medium">
+                    {productsLookup[lead.products]?.name || PRODUCT_LABELS[lead.products] || lead.products}
+                  </span>
                 </div>
               )}
               {lead.estimated_deal_value && (
@@ -597,6 +601,27 @@ export default function Leads() {
       return data;
     },
   });
+
+  // Fetch products for lookup
+  const { data: allProducts } = useQuery({
+    queryKey: ["products-lookup"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("id, name, price");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  // Create products lookup map
+  const productsLookup = useMemo(() => {
+    if (!allProducts) return {};
+    return allProducts.reduce((acc, product) => {
+      acc[product.id] = { name: product.name, price: product.price };
+      return acc;
+    }, {} as Record<string, { name: string; price: number }>);
+  }, [allProducts]);
 
   // Debug: log how many leads are missing phone/email to verify visibility
   useEffect(() => {
@@ -990,6 +1015,7 @@ export default function Leads() {
                           <LeadCard 
                             key={lead.id} 
                             lead={lead}
+                            productsLookup={productsLookup}
                             onStatusChange={(leadId, newStatus) => 
                               updateLeadStatus.mutate({ 
                                 leadId, 
@@ -997,9 +1023,9 @@ export default function Leads() {
                               })
                             }
                             onResponseStatusChange={(leadId, responseStatus) =>
-                              updateLeadResponseStatus.mutate({
-                                leadId,
-                                responseStatus: responseStatus as "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant" | null
+                              updateLeadResponseStatus.mutate({ 
+                                leadId, 
+                                responseStatus: responseStatus as "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant" | null 
                               })
                             }
                           />
@@ -1013,6 +1039,7 @@ export default function Leads() {
                 {activeId && activeLead ? (
                   <LeadCard 
                     lead={activeLead}
+                    productsLookup={productsLookup}
                     onStatusChange={() => {}}
                     onResponseStatusChange={() => {}}
                   />
@@ -1091,6 +1118,7 @@ export default function Leads() {
                           <LeadCard 
                             key={lead.id} 
                             lead={lead}
+                            productsLookup={productsLookup}
                             onStatusChange={(leadId, newStatus) => 
                               updateLeadStatus.mutate({ 
                                 leadId, 
@@ -1098,9 +1126,9 @@ export default function Leads() {
                               })
                             }
                             onResponseStatusChange={(leadId, responseStatus) =>
-                              updateLeadResponseStatus.mutate({
-                                leadId,
-                                responseStatus: responseStatus as "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant" | null
+                              updateLeadResponseStatus.mutate({ 
+                                leadId, 
+                                responseStatus: responseStatus as "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant" | null 
                               })
                             }
                           />
@@ -1116,6 +1144,7 @@ export default function Leads() {
               {activeId && activeLead ? (
                 <LeadCard 
                   lead={activeLead}
+                  productsLookup={productsLookup}
                   onStatusChange={() => {}}
                   onResponseStatusChange={() => {}}
                 />

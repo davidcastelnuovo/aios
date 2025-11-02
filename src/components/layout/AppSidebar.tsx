@@ -21,6 +21,7 @@ import {
   Zap,
   PanelRightClose,
   PanelRightOpen,
+  Package,
 } from "lucide-react";
 import {
   Sidebar,
@@ -63,6 +64,7 @@ const managementMenuItems = [
 const salesMenuItems = [
   { title: "דשבורד מכירות", url: "/sales-dashboard", icon: TrendingUp, module: "sales_dashboard" as const },
   { title: "לידים", url: "/leads", icon: Target, module: "leads" as const },
+  { title: "מוצרים ושירותים", url: "/products", icon: Package, module: "leads" as const },
   { title: "אנשי מכירות", url: "/sales-people", icon: UserCheck, module: "sales_people" as const },
   { title: "אינטגרציות לידים", url: "/lead-integrations", icon: Settings, module: "lead_integrations" as const },
 ];

@@ -90,6 +90,19 @@ export function AddLeadForm() {
     },
   });
 
+  const { data: products } = useQuery({
+    queryKey: ["products"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("products")
+        .select("*")
+        .eq("active", true)
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       const submitData: any = {
@@ -340,22 +353,27 @@ export function AddLeadForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>מוצרים/שירותים</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select 
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        const selectedProduct = products?.find(p => p.id === value);
+                        if (selectedProduct) {
+                          form.setValue("estimated_deal_value", selectedProduct.price.toString());
+                        }
+                      }} 
+                      defaultValue={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="בחר מוצר/שירות" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-background z-[100]">
-                        <SelectItem value="google_ads">Google Ads</SelectItem>
-                        <SelectItem value="facebook_ads">פרסום פייסבוק</SelectItem>
-                        <SelectItem value="seo">SEO</SelectItem>
-                        <SelectItem value="website_design">עיצוב אתרים</SelectItem>
-                        <SelectItem value="social_media">ניהול רשתות חברתיות</SelectItem>
-                        <SelectItem value="content_marketing">שיווק תוכן</SelectItem>
-                        <SelectItem value="branding">מיתוג</SelectItem>
-                        <SelectItem value="consulting">ייעוץ שיווקי</SelectItem>
-                        <SelectItem value="other">אחר</SelectItem>
+                        {products?.map((product) => (
+                          <SelectItem key={product.id} value={product.id}>
+                            {product.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
