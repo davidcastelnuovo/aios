@@ -38,6 +38,7 @@ useEffect(() => {
     const type = searchParams.get("type");
     const code = searchParams.get("code");
     const token = searchParams.get("token");
+    const inviteSignup = searchParams.get("invite_signup");
 
     // If we have a code param, try to exchange it for a session
     if (code) {
@@ -50,6 +51,55 @@ useEffect(() => {
 
     // Check if user is already authenticated after code exchange
     const { data: { session } } = await supabase.auth.getSession();
+    
+    // Handle Google OAuth invitation signup flow
+    if (session?.user && inviteSignup === "true") {
+      const savedToken = localStorage.getItem("invite_token");
+      if (savedToken) {
+        try {
+          // Call edge function to link user to invitation
+          const { data: linkData, error: linkError } = await supabase.functions.invoke(
+            "link-google-user-to-invitation",
+            {
+              body: {
+                token: savedToken,
+                user_id: session.user.id,
+                email: session.user.email,
+              },
+            }
+          );
+
+          // Clear the token from localStorage
+          localStorage.removeItem("invite_token");
+
+          if (linkError || linkData?.error) {
+            console.error("Link error:", linkError || linkData?.error);
+            toast({
+              title: "שגיאה",
+              description: "שגיאה בקישור המשתמש להזמנה",
+              variant: "destructive",
+            });
+          } else {
+            toast({
+              title: "הצלחה!",
+              description: "ההרשמה הושלמה בהצלחה",
+            });
+          }
+
+          navigate("/my-profile");
+          return;
+        } catch (error: any) {
+          console.error("Link error:", error);
+          localStorage.removeItem("invite_token");
+          toast({
+            title: "שגיאה",
+            description: error.message || "שגיאה בקישור המשתמש",
+            variant: "destructive",
+          });
+        }
+      }
+    }
+    
     if (session?.user) {
       // Already logged in, redirect to profile
       navigate("/my-profile");

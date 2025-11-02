@@ -6,6 +6,9 @@ verify_jwt = true
 [functions.signup-with-invitation]
 verify_jwt = false
 
+[functions.link-google-user-to-invitation]
+verify_jwt = false
+
 [functions.delete-user]
 verify_jwt = true
 
