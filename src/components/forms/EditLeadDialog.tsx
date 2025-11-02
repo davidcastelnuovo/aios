@@ -511,13 +511,11 @@ const updateMutation = useMutation({
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent className="bg-background z-50 text-right" align="end">
+                            <SelectItem value="phone">טלפון</SelectItem>
                             <SelectItem value="website">אתר</SelectItem>
+                            <SelectItem value="facebook">פייסבוק</SelectItem>
+                            <SelectItem value="google">גוגל</SelectItem>
                             <SelectItem value="referral">הפניה</SelectItem>
-                            <SelectItem value="social_media">מדיה חברתית</SelectItem>
-                            <SelectItem value="paid_ads">מודעות ממומנות</SelectItem>
-                            <SelectItem value="cold_call">שיחה קרה</SelectItem>
-                            <SelectItem value="email_campaign">קמפיין אימייל</SelectItem>
-                            <SelectItem value="event">אירוע</SelectItem>
                             <SelectItem value="other">אחר</SelectItem>
                           </SelectContent>
                         </Select>

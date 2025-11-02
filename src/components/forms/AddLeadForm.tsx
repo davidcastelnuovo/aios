@@ -286,9 +286,21 @@ export function AddLeadForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-sm font-medium">מקור הגעה</FormLabel>
-                    <FormControl>
-                      <Input {...field} placeholder="למשל: אתר, הפניה, מדיה חברתית" className="rounded-lg border-2 h-11 px-4" />
-                    </FormControl>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="rounded-lg border-2 h-11">
+                          <SelectValue placeholder="בחר מקור" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background z-[100]">
+                        <SelectItem value="phone">טלפון</SelectItem>
+                        <SelectItem value="website">אתר</SelectItem>
+                        <SelectItem value="facebook">פייסבוק</SelectItem>
+                        <SelectItem value="google">גוגל</SelectItem>
+                        <SelectItem value="referral">הפניה</SelectItem>
+                        <SelectItem value="other">אחר</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
