@@ -1296,14 +1296,14 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
            <Table className="min-w-[750px]">
             <TableHeader className="sticky top-0 z-10 bg-muted/50">
               <TableRow className="whitespace-nowrap border-b hover:bg-transparent">
-                <TableHead className="text-center sticky right-0 bg-muted/50 z-20 w-[50px] h-12 border-l">
+                <TableHead className="text-center sticky right-0 z-20 w-[50px] h-12 border-l">
                   <Checkbox
                     checked={isAllSelected}
                     onCheckedChange={handleSelectAll}
                     aria-label="בחר הכל"
                   />
                 </TableHead>
-                <TableHead className="text-right sticky right-[50px] bg-muted/50 border-l z-20 w-[110px] h-12">שם</TableHead>
+                <TableHead className="text-right sticky right-[50px] border-l z-20 w-[100px] h-12">שם</TableHead>
                 <TableHead className="text-right border-l w-[130px] h-12">טלפון</TableHead>
                 <TableHead className="text-right border-l w-[170px] h-12">שם חברה</TableHead>
                 <TableHead className="text-right border-l w-[130px] h-12">שלב במשפך</TableHead>
@@ -1321,7 +1321,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                     aria-label={`בחר ${lead.contact_name || lead.company_name}`}
                   />
                 </TableCell>
-                <TableCell className={`font-medium sticky right-[50px] border-l z-10 w-[110px] h-12 ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
+                <TableCell className={`font-medium sticky right-[50px] border-l z-10 w-[100px] h-12 ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 shrink-0" />
                     <span className="truncate">{lead.contact_name || "-"}</span>
