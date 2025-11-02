@@ -1296,32 +1296,32 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
           <Table className="min-w-[750px]">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow className="whitespace-nowrap">
-                <TableHead className="text-center sticky right-0 bg-background z-20 w-[50px]">
+                <TableHead className="text-center sticky right-0 z-20 w-[50px]">
                   <Checkbox
                     checked={isAllSelected}
                     onCheckedChange={handleSelectAll}
                     aria-label="בחר הכל"
                   />
                 </TableHead>
-                <TableHead className="text-right sticky right-[50px] bg-background z-20 w-[110px]">שם</TableHead>
-                <TableHead className="text-right bg-background w-[130px]">טלפון</TableHead>
-                <TableHead className="text-right bg-background w-[170px]">שם חברה</TableHead>
-                <TableHead className="text-right bg-background w-[130px]">שלב במשפך</TableHead>
-                <TableHead className="text-right bg-background w-[130px]">סטטוס</TableHead>
-                <TableHead className="text-right bg-background w-[80px]">פעולות</TableHead>
+                <TableHead className="text-right sticky right-[50px] z-20 w-[110px]">שם</TableHead>
+                <TableHead className="text-right w-[130px]">טלפון</TableHead>
+                <TableHead className="text-right w-[170px]">שם חברה</TableHead>
+                <TableHead className="text-right w-[130px]">שלב במשפך</TableHead>
+                <TableHead className="text-right w-[130px]">סטטוס</TableHead>
+                <TableHead className="text-right w-[80px]">פעולות</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
             {stageLeads.map((lead: any) => (
               <TableRow key={lead.id} className="whitespace-nowrap">
-                <TableCell className="text-center sticky right-0 bg-background z-10 w-[50px]">
+                <TableCell className="text-center sticky right-0 z-10 w-[50px]">
                   <Checkbox
                     checked={selectedLeads.includes(lead.id)}
                     onCheckedChange={(checked) => handleSelectLead(lead.id, checked as boolean)}
                     aria-label={`בחר ${lead.contact_name || lead.company_name}`}
                   />
                 </TableCell>
-                <TableCell className="font-medium sticky right-[50px] bg-background z-10 w-[110px]">
+                <TableCell className="font-medium sticky right-[50px] z-10 w-[110px]">
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 shrink-0" />
                     <span className="truncate">{lead.contact_name || "-"}</span>
