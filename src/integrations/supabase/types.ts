@@ -1171,7 +1171,7 @@ export type Database = {
           priority: Database["public"]["Enums"]["priority_level"]
           status: Database["public"]["Enums"]["task_status"]
           task_type: Database["public"]["Enums"]["task_type"] | null
-          tenant_id: string | null
+          tenant_id: string
           title: string
           updated_at: string
         }
@@ -1186,7 +1186,7 @@ export type Database = {
           priority?: Database["public"]["Enums"]["priority_level"]
           status?: Database["public"]["Enums"]["task_status"]
           task_type?: Database["public"]["Enums"]["task_type"] | null
-          tenant_id?: string | null
+          tenant_id: string
           title: string
           updated_at?: string
         }
@@ -1201,7 +1201,7 @@ export type Database = {
           priority?: Database["public"]["Enums"]["priority_level"]
           status?: Database["public"]["Enums"]["task_status"]
           task_type?: Database["public"]["Enums"]["task_type"] | null
-          tenant_id?: string | null
+          tenant_id?: string
           title?: string
           updated_at?: string
         }
