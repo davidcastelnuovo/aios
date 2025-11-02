@@ -56,6 +56,8 @@ const managementMenuItems = [
   { title: "כספים", url: "/finance", icon: DollarSign, module: "finance" as const },
   { title: "דוחות", url: "/reports", icon: BarChart3, module: "reports" as const },
   { title: "ספקים", url: "/suppliers", icon: Truck, module: "suppliers" as const },
+  { title: "אוטומציות", url: "/automations", icon: Zap, module: "automations" as const },
+  { title: "ניהול ארגונים", url: "/tenants", icon: Building, module: "tenants" as const },
 ];
 
 const salesMenuItems = [
@@ -63,11 +65,6 @@ const salesMenuItems = [
   { title: "לידים", url: "/leads", icon: Target, module: "leads" as const },
   { title: "אנשי מכירות", url: "/sales-people", icon: UserCheck, module: "sales_people" as const },
   { title: "אינטגרציות לידים", url: "/lead-integrations", icon: Settings, module: "lead_integrations" as const },
-];
-
-const adminMenuItems = [
-  { title: "ניהול ארגונים", url: "/tenants", icon: Building, module: "tenants" as const },
-  { title: "אוטומציות", url: "/automations", icon: Zap, module: "automations" as const },
 ];
 
 export function AppSidebar() {
@@ -102,14 +99,6 @@ export function AppSidebar() {
     if (isLoading) return false;
     return hasPermission(item.module);
   });
-
-  // Admin items require explicit permission
-  const visibleAdminItems = adminMenuItems.filter((item) => {
-    if (isLoading) return false;
-    return hasPermission(item.module);
-  });
-
-  const showSuperAdminMenu = false; // TODO: Add super admin check when ready
 
   return (
     <Sidebar side="right" collapsible="icon" className="transition-all duration-300 ease-in-out">
@@ -234,26 +223,6 @@ export function AppSidebar() {
                   </SidebarMenuItem>
                 </Collapsible>
               )}
-
-              {/* ניהול ארגונים ואוטומציות - דורש הרשאה מפורשת */}
-              {visibleAdminItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild tooltip={item.title}>
-                    <NavLink
-                      to={item.url}
-                      onClick={handleLinkClick}
-                      className={({ isActive }) =>
-                        isActive
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                          : ""
-                      }
-                    >
-                      <item.icon className="h-4 w-4" />
-                      {!isCollapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
