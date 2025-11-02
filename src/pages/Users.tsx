@@ -392,24 +392,29 @@ export default function Users() {
   });
 
   const deleteUserMutation = useMutation({
-    mutationFn: async ({ userId, email }: { userId?: string; email?: string }) => {
-      const { data, error } = await supabase.functions.invoke("delete-user", {
-        body: { userId, email },
-      });
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error);
-      return data;
-    },
-    onSuccess: async () => {
-      // Force refetch both queries
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
-      toast.success("המשתמש נמחק בהצלחה");
-    },
-    onError: (error: Error) => {
-      toast.error("שגיאה במחיקת משתמש: " + error.message);
-    },
-  });
+      mutationFn: async ({ userId, email }: { userId?: string; email?: string }) => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error("No active session");
+        const { data, error } = await supabase.functions.invoke("delete-user", {
+          body: { userId, email },
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+        if (error) throw error;
+        if (!data.success) throw new Error(data.error);
+        return data;
+      },
+      onSuccess: async () => {
+        // Force refetch both queries
+        await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+        await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
+        toast.success("המשתמש נמחק בהצלחה");
+      },
+      onError: (error: Error) => {
+        toast.error("שגיאה במחיקת משתמש: " + error.message);
+      },
+    });
 
   const resendInviteMutation = useMutation({
     mutationFn: async ({ email }: { email: string }) => {
