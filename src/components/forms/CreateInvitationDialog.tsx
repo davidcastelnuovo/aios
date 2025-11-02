@@ -3,9 +3,32 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { UserPlus, Copy, Check } from "lucide-react";
+
+const AVAILABLE_PERMISSIONS = [
+  { module: "dashboard", label: "דשבורד" },
+  { module: "clients", label: "לקוחות" },
+  { module: "agencies", label: "סוכנויות" },
+  { module: "campaigners", label: "קמפיינרים" },
+  { module: "suppliers", label: "ספקים" },
+  { module: "tasks", label: "משימות" },
+  { module: "client_onboarding", label: "קליטת לקוחות" },
+  { module: "time_tracking", label: "מעקב זמן" },
+  { module: "finance", label: "כספים" },
+  { module: "finance_view", label: "צפייה בכספים" },
+  { module: "reports", label: "דוחות" },
+  { module: "users", label: "משתמשים" },
+  { module: "sales_dashboard", label: "דשבורד מכירות" },
+  { module: "leads", label: "לידים" },
+  { module: "sales_people", label: "אנשי מכירות" },
+  { module: "lead_integrations", label: "אינטגרציות לידים" },
+  { module: "automations", label: "אוטומציות" },
+  { module: "tenants", label: "ארגונים" },
+];
 
 export function CreateInvitationDialog() {
   const [open, setOpen] = useState(false);
@@ -14,7 +37,24 @@ export function CreateInvitationDialog() {
   const [invitationLink, setInvitationLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [baseUrl, setBaseUrl] = useState<string>("https://after-lead.lovable.app");
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>([]);
   const { toast } = useToast();
+
+  const togglePermission = (module: string) => {
+    setSelectedPermissions(prev => 
+      prev.includes(module) 
+        ? prev.filter(m => m !== module)
+        : [...prev, module]
+    );
+  };
+
+  const toggleAllPermissions = () => {
+    if (selectedPermissions.length === AVAILABLE_PERMISSIONS.length) {
+      setSelectedPermissions([]);
+    } else {
+      setSelectedPermissions(AVAILABLE_PERMISSIONS.map(p => p.module));
+    }
+  };
 
   const handleCreateInvitation = async () => {
     setLoading(true);
@@ -23,7 +63,10 @@ export function CreateInvitationDialog() {
       const { data, error } = await supabase.functions.invoke("create-invitation-link", {
         body: { 
           email: email || undefined,
-          baseUrl: baseUrl
+          baseUrl: baseUrl,
+          metadata: {
+            modulePermissions: selectedPermissions
+          }
         },
       });
 
@@ -67,6 +110,7 @@ export function CreateInvitationDialog() {
     setEmail("");
     setInvitationLink(null);
     setCopied(false);
+    setSelectedPermissions([]);
   };
 
   return (
@@ -117,6 +161,44 @@ export function CreateInvitationDialog() {
               />
               <p className="text-xs text-muted-foreground">
                 ברירת מחדל: הדומיין הנוכחי. ניתן לשנות לדומיין הייצור. ללא סלש בסוף.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>הרשאות מודולים</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={toggleAllPermissions}
+                  disabled={loading}
+                >
+                  {selectedPermissions.length === AVAILABLE_PERMISSIONS.length ? "בטל הכל" : "בחר הכל"}
+                </Button>
+              </div>
+              <ScrollArea className="h-64 w-full rounded-md border p-4">
+                <div className="space-y-3">
+                  {AVAILABLE_PERMISSIONS.map((perm) => (
+                    <div key={perm.module} className="flex items-center space-x-2 space-x-reverse">
+                      <Checkbox
+                        id={perm.module}
+                        checked={selectedPermissions.includes(perm.module)}
+                        onCheckedChange={() => togglePermission(perm.module)}
+                        disabled={loading}
+                      />
+                      <Label
+                        htmlFor={perm.module}
+                        className="text-sm font-normal cursor-pointer"
+                      >
+                        {perm.label}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+              <p className="text-xs text-muted-foreground">
+                בחר את המודולים שהמשתמש יוכל לגשת אליהם
               </p>
             </div>
 
