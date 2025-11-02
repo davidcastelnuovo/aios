@@ -210,6 +210,16 @@ useEffect(() => {
   init();
 }, [searchParams, navigate]);
 
+// Ensure we auto-redirect when a session becomes available (e.g., after Google OAuth)
+useEffect(() => {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    if (session?.user) {
+      navigate("/my-profile");
+    }
+  });
+  return () => subscription.unsubscribe();
+}, [navigate]);
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
