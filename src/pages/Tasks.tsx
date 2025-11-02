@@ -8,7 +8,7 @@ import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserRole } from "@/hooks/useUserRole";
-import { CalendarView } from "@/components/CalendarView";
+import { CalendarIframeSettings } from "@/components/CalendarIframeSettings";
 import { useState } from "react";
 import { DndContext, DragOverlay, closestCorners, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
@@ -616,7 +616,7 @@ export default function Tasks() {
         </div>
 
         {viewMode === "calendar" ? (
-          <CalendarView />
+          <CalendarIframeSettings />
         ) : viewMode === "kanban" ? (
           <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-3">
           <DroppableColumn status="open">
