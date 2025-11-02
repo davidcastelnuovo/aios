@@ -175,9 +175,9 @@ export function AddLeadForm() {
                 name="company_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>שם העסק *</FormLabel>
+                    <FormLabel className="text-sm font-medium">שם העסק *</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input {...field} className="rounded-lg border-2 h-11 px-4" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -189,9 +189,9 @@ export function AddLeadForm() {
                 name="contact_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>שם איש קשר</FormLabel>
+                    <FormLabel className="text-sm font-medium">שם איש קשר</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input {...field} className="rounded-lg border-2 h-11 px-4" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -204,10 +204,10 @@ export function AddLeadForm() {
               name="agency_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>סוכנות</FormLabel>
+                  <FormLabel className="text-sm font-medium">סוכנות</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
-                      <SelectTrigger>
+                      <SelectTrigger className="rounded-lg border-2 h-11">
                         <SelectValue placeholder="בחר סוכנות" />
                       </SelectTrigger>
                     </FormControl>
@@ -229,10 +229,10 @@ export function AddLeadForm() {
               name="sales_person_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>איש מכירות</FormLabel>
+                  <FormLabel className="text-sm font-medium">איש מכירות</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
-                      <SelectTrigger>
+                      <SelectTrigger className="rounded-lg border-2 h-11">
                         <SelectValue placeholder="בחר איש מכירות" />
                       </SelectTrigger>
                     </FormControl>
@@ -255,9 +255,9 @@ export function AddLeadForm() {
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>אימייל</FormLabel>
+                    <FormLabel className="text-sm font-medium">אימייל</FormLabel>
                     <FormControl>
-                      <Input type="email" {...field} />
+                      <Input type="email" {...field} className="rounded-lg border-2 h-11 px-4" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -269,9 +269,9 @@ export function AddLeadForm() {
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>טלפון</FormLabel>
+                    <FormLabel className="text-sm font-medium">טלפון</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input {...field} className="rounded-lg border-2 h-11 px-4" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -285,9 +285,9 @@ export function AddLeadForm() {
                 name="source"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>מקור הגעה</FormLabel>
+                    <FormLabel className="text-sm font-medium">מקור הגעה</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="למשל: אתר, הפניה, מדיה חברתית" />
+                      <Input {...field} placeholder="למשל: אתר, הפניה, מדיה חברתית" className="rounded-lg border-2 h-11 px-4" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -299,10 +299,10 @@ export function AddLeadForm() {
                 name="status"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>שלב במשפך</FormLabel>
+                    <FormLabel className="text-sm font-medium">שלב במשפך</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="rounded-lg border-2 h-11">
                           <SelectValue placeholder="בחר שלב" />
                         </SelectTrigger>
                       </FormControl>
@@ -324,10 +324,10 @@ export function AddLeadForm() {
                 name="response_status"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>סטטוס</FormLabel>
+                    <FormLabel className="text-sm font-medium">סטטוס</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
+                       <FormControl>
+                        <SelectTrigger className="rounded-lg border-2 h-11">
                           <SelectValue placeholder="בחר סטטוס" />
                         </SelectTrigger>
                       </FormControl>
@@ -352,7 +352,7 @@ export function AddLeadForm() {
                 name="products"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>מוצרים/שירותים</FormLabel>
+                    <FormLabel className="text-sm font-medium">מוצרים/שירותים</FormLabel>
                     <Select 
                       onValueChange={(value) => {
                         field.onChange(value);
@@ -364,7 +364,7 @@ export function AddLeadForm() {
                       defaultValue={field.value}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger className="rounded-lg border-2 h-11">
                           <SelectValue placeholder="בחר מוצר/שירות" />
                         </SelectTrigger>
                       </FormControl>
@@ -386,9 +386,9 @@ export function AddLeadForm() {
                 name="estimated_deal_value"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>שווי שירות (₪)</FormLabel>
+                    <FormLabel className="text-sm font-medium">שווי שירות (₪)</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} placeholder="0" />
+                      <Input type="number" {...field} placeholder="0" className="rounded-lg border-2 h-11 px-4" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -401,14 +401,14 @@ export function AddLeadForm() {
               name="created_at"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
-                  <FormLabel>תאריך יצירת ליד</FormLabel>
+                  <FormLabel className="text-sm font-medium">תאריך יצירת ליד</FormLabel>
                   <Popover>
                     <PopoverTrigger asChild>
                       <FormControl>
                         <Button
                           variant={"outline"}
                           className={cn(
-                            "w-full pl-3 text-right font-normal",
+                            "w-full pl-3 text-right font-normal rounded-lg border-2 h-11",
                             !field.value && "text-muted-foreground"
                           )}
                         >
@@ -441,9 +441,9 @@ export function AddLeadForm() {
               name="industry"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>תחום עיסוק</FormLabel>
+                  <FormLabel className="text-sm font-medium">תחום עיסוק</FormLabel>
                   <FormControl>
-                    <Input {...field} />
+                    <Input {...field} className="rounded-lg border-2 h-11 px-4" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -455,9 +455,9 @@ export function AddLeadForm() {
               name="folder_link"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>קישור לתיקייה</FormLabel>
+                  <FormLabel className="text-sm font-medium">קישור לתיקייה</FormLabel>
                   <FormControl>
-                    <Input {...field} placeholder="https://..." />
+                    <Input {...field} placeholder="https://..." className="rounded-lg border-2 h-11 px-4" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -469,9 +469,9 @@ export function AddLeadForm() {
               name="notes"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>הערות</FormLabel>
+                  <FormLabel className="text-sm font-medium">הערות</FormLabel>
                   <FormControl>
-                    <Textarea {...field} rows={3} />
+                    <Textarea {...field} rows={3} className="rounded-lg border-2 px-4 py-3" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

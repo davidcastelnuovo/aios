@@ -296,16 +296,25 @@ const updateMutation = useMutation({
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="details" className="flex items-center gap-2">
+          <TabsList className="grid w-full grid-cols-3 bg-muted/50 p-1 rounded-lg shadow-sm">
+            <TabsTrigger 
+              value="details" 
+              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all"
+            >
               <FileText className="h-4 w-4" />
               פרטי ליד
             </TabsTrigger>
-            <TabsTrigger value="proposals" className="flex items-center gap-2">
+            <TabsTrigger 
+              value="proposals" 
+              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all"
+            >
               <DollarSign className="h-4 w-4" />
               הצעות מחיר
             </TabsTrigger>
-            <TabsTrigger value="updates" className="flex items-center gap-2">
+            <TabsTrigger 
+              value="updates" 
+              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all"
+            >
               <MessageSquare className="h-4 w-4" />
               עדכונים
               {leadUpdates && leadUpdates.length > 0 && (
@@ -327,9 +336,9 @@ const updateMutation = useMutation({
                     name="company_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>שם העסק *</FormLabel>
+                        <FormLabel className="text-sm font-medium">שם העסק *</FormLabel>
                         <FormControl>
-                          <Input {...field} className="text-right" dir="rtl" />
+                          <Input {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -341,9 +350,9 @@ const updateMutation = useMutation({
                     name="contact_name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>שם איש קשר *</FormLabel>
+                        <FormLabel className="text-sm font-medium">שם איש קשר *</FormLabel>
                         <FormControl>
-                          <Input {...field} className="text-right" dir="rtl" />
+                          <Input {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -356,10 +365,10 @@ const updateMutation = useMutation({
                   name="agency_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>סוכנות *</FormLabel>
+                      <FormLabel className="text-sm font-medium">סוכנות *</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger className="text-right">
+                          <SelectTrigger className="text-right rounded-lg border-2 h-11">
                             <SelectValue placeholder="בחר סוכנות" />
                           </SelectTrigger>
                         </FormControl>
@@ -381,10 +390,10 @@ const updateMutation = useMutation({
                   name="sales_person_id"
                   render={({ field }) => (
                       <FormItem>
-                        <FormLabel>איש מכירות *</FormLabel>
+                        <FormLabel className="text-sm font-medium">איש מכירות *</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger className="text-right">
+                            <SelectTrigger className="text-right rounded-lg border-2 h-11">
                               <SelectValue placeholder="בחר איש מכירות" />
                             </SelectTrigger>
                           </FormControl>
@@ -407,9 +416,9 @@ const updateMutation = useMutation({
                     name="phone"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>טלפון</FormLabel>
+                        <FormLabel className="text-sm font-medium">טלפון</FormLabel>
                         <FormControl>
-                          <Input {...field} className="text-right" dir="rtl" />
+                          <Input {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -421,9 +430,9 @@ const updateMutation = useMutation({
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>אימייל</FormLabel>
+                        <FormLabel className="text-sm font-medium">אימייל</FormLabel>
                         <FormControl>
-                          <Input type="email" {...field} className="text-right" dir="rtl" />
+                          <Input type="email" {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -437,10 +446,10 @@ const updateMutation = useMutation({
                     name="response_status"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>סטטוס תגובה</FormLabel>
+                        <FormLabel className="text-sm font-medium">סטטוס תגובה</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger className="text-right">
+                            <SelectTrigger className="text-right rounded-lg border-2 h-11">
                               <SelectValue placeholder="בחר סטטוס" />
                             </SelectTrigger>
                           </FormControl>
@@ -463,10 +472,10 @@ const updateMutation = useMutation({
                     name="status"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>שלב במשפך *</FormLabel>
+                        <FormLabel className="text-sm font-medium">שלב במשפך *</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger className="text-right">
+                            <SelectTrigger className="text-right rounded-lg border-2 h-11">
                               <SelectValue />
                             </SelectTrigger>
                           </FormControl>
@@ -489,10 +498,10 @@ const updateMutation = useMutation({
                     name="source"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>מקור הגעה</FormLabel>
+                        <FormLabel className="text-sm font-medium">מקור הגעה</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger className="text-right">
+                            <SelectTrigger className="text-right rounded-lg border-2 h-11">
                               <SelectValue placeholder="בחר מקור" />
                             </SelectTrigger>
                           </FormControl>
@@ -518,14 +527,14 @@ const updateMutation = useMutation({
                   name="created_at"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>תאריך יצירת ליד</FormLabel>
+                      <FormLabel className="text-sm font-medium">תאריך יצירת ליד</FormLabel>
                       <Popover>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
                               variant={"outline"}
                               className={cn(
-                                "w-full pl-3 text-right font-normal",
+                                "w-full pl-3 text-right font-normal rounded-lg border-2 h-11",
                                 !field.value && "text-muted-foreground"
                               )}
                             >
@@ -558,9 +567,9 @@ const updateMutation = useMutation({
                   name="industry"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>תחום עיסוק</FormLabel>
+                      <FormLabel className="text-sm font-medium">תחום עיסוק</FormLabel>
                       <FormControl>
-                        <Input {...field} className="text-right" dir="rtl" />
+                        <Input {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -572,9 +581,9 @@ const updateMutation = useMutation({
                   name="folder_link"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>קישור לתיקייה</FormLabel>
+                      <FormLabel className="text-sm font-medium">קישור לתיקייה</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="https://..." className="text-right" dir="rtl" />
+                        <Input {...field} placeholder="https://..." className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -586,9 +595,9 @@ const updateMutation = useMutation({
                   name="notes"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>הערות</FormLabel>
+                      <FormLabel className="text-sm font-medium">הערות</FormLabel>
                       <FormControl>
-                        <Textarea {...field} rows={3} className="text-right" dir="rtl" />
+                        <Textarea {...field} rows={3} className="text-right rounded-lg border-2 px-4 py-3" dir="rtl" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -607,7 +616,7 @@ const updateMutation = useMutation({
                   name="products"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>מוצרים/שירותים</FormLabel>
+                      <FormLabel className="text-sm font-medium">מוצרים/שירותים</FormLabel>
                       <Select 
                         onValueChange={(value) => {
                           field.onChange(value);
@@ -619,7 +628,7 @@ const updateMutation = useMutation({
                         defaultValue={field.value}
                       >
                         <FormControl>
-                          <SelectTrigger className="text-right">
+                          <SelectTrigger className="text-right rounded-lg border-2 h-11">
                             <SelectValue placeholder="בחר מוצר/שירות" />
                           </SelectTrigger>
                         </FormControl>
@@ -641,9 +650,9 @@ const updateMutation = useMutation({
                   name="estimated_deal_value"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>שווי שירות (₪)</FormLabel>
+                      <FormLabel className="text-sm font-medium">שווי שירות (₪)</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} className="text-right" dir="rtl" placeholder="0" />
+                        <Input type="number" {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" placeholder="0" />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -656,14 +665,14 @@ const updateMutation = useMutation({
                     name="proposal_date"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>תאריך הצעה</FormLabel>
+                        <FormLabel className="text-sm font-medium">תאריך הצעה</FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button
                                 variant={"outline"}
                                 className={cn(
-                                  "w-full pl-3 text-right font-normal",
+                                  "w-full pl-3 text-right font-normal rounded-lg border-2 h-11",
                                   !field.value && "text-muted-foreground"
                                 )}
                               >
@@ -696,14 +705,14 @@ const updateMutation = useMutation({
                     name="itai_meeting_date"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>שיחה עם איתי</FormLabel>
+                        <FormLabel className="text-sm font-medium">שיחה עם איתי</FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
                               <Button
                                 variant={"outline"}
                                 className={cn(
-                                  "w-full pl-3 text-right font-normal",
+                                  "w-full pl-3 text-right font-normal rounded-lg border-2 h-11",
                                   !field.value && "text-muted-foreground"
                                 )}
                               >
@@ -737,14 +746,14 @@ const updateMutation = useMutation({
                   name="sale_date"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>תאריך מכירה</FormLabel>
+                      <FormLabel className="text-sm font-medium">תאריך מכירה</FormLabel>
                       <Popover>
                         <PopoverTrigger asChild>
                           <FormControl>
                             <Button
                               variant={"outline"}
                               className={cn(
-                                "w-full pl-3 text-right font-normal",
+                                "w-full pl-3 text-right font-normal rounded-lg border-2 h-11",
                                 !field.value && "text-muted-foreground"
                               )}
                             >
@@ -778,9 +787,9 @@ const updateMutation = useMutation({
                     name="lost_reason"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>פרטי סגירה / סיבת אובדן</FormLabel>
+                        <FormLabel className="text-sm font-medium">פרטי סגירה / סיבת אובדן</FormLabel>
                         <FormControl>
-                          <Textarea {...field} rows={2} placeholder="האם נסגר בהצלחה או אבד? פרטים..." className="text-right" dir="rtl" />
+                          <Textarea {...field} rows={2} placeholder="האם נסגר בהצלחה או אבד? פרטים..." className="text-right rounded-lg border-2 px-4 py-3" dir="rtl" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -813,7 +822,7 @@ const updateMutation = useMutation({
                               value={editingUpdateContent}
                               onChange={(e) => setEditingUpdateContent(e.target.value)}
                               rows={3}
-                              className="w-full text-right"
+                              className="w-full text-right rounded-lg border-2 px-4 py-3"
                               dir="rtl"
                             />
                             <div className="flex gap-2 justify-start">
@@ -890,7 +899,7 @@ const updateMutation = useMutation({
                       onChange={(e) => setNewUpdate(e.target.value)}
                       placeholder="הוסף עדכון חדש..."
                       rows={3}
-                      className="flex-1 text-right"
+                      className="flex-1 text-right rounded-lg border-2 px-4 py-3"
                       dir="rtl"
                     />
                     <Button
