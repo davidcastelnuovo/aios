@@ -1288,11 +1288,11 @@ export default function Users() {
                     <TableRow>
                       <TableHead className="text-right">שם מלא</TableHead>
                       <TableHead className="text-right">אימייל</TableHead>
-                      <TableHead className="text-right">סטטוס</TableHead>
                       <TableHead className="text-right">תפקידים</TableHead>
                       <TableHead className="text-right">קמפיינר משויך</TableHead>
                       <TableHead className="text-right">איש מכירות</TableHead>
                       <TableHead className="text-right">סוכנויות איש מכירות</TableHead>
+                      <TableHead className="text-right">סטטוס</TableHead>
                       <TableHead className="text-right">פעולות</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1317,14 +1317,6 @@ export default function Users() {
                           </div>
                         </TableCell>
                         <TableCell>{user.email}</TableCell>
-                        <TableCell>
-                          <Badge 
-                            variant={user.status === 'active' ? 'default' : user.status === 'pending' ? 'secondary' : 'outline'}
-                            className={user.status === 'active' ? 'bg-green-500' : user.status === 'pending' ? 'bg-yellow-500' : ''}
-                          >
-                            {user.status === 'active' ? 'פעיל' : user.status === 'pending' ? 'ממתין' : user.status === 'inactive' ? 'לא פעיל' : user.status}
-                          </Badge>
-                        </TableCell>
                         <TableCell>
                           {user.role ? (
                             <Badge className={roleBadgeColors[user.role]}>
@@ -1395,6 +1387,14 @@ export default function Users() {
                           ) : (
                             <span className="text-sm text-muted-foreground">-</span>
                           )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant={user.status === 'active' ? 'default' : user.status === 'pending' ? 'secondary' : 'outline'}
+                            className={user.status === 'active' ? 'bg-green-500' : user.status === 'pending' ? 'bg-yellow-500' : ''}
+                          >
+                            {user.status === 'active' ? 'פעיל' : user.status === 'pending' ? 'ממתין' : user.status === 'inactive' ? 'לא פעיל' : user.status}
+                          </Badge>
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
