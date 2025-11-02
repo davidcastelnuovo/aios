@@ -1293,7 +1293,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
       {/* Scroll container for horizontal and vertical scrolling (native) */}
       <div className="w-full overflow-auto" dir="rtl">
         <div className="max-h-[500px]">
-          <Table className="min-w-[1070px]">
+          <Table className="min-w-[870px]">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow className="whitespace-nowrap">
                 <TableHead className="text-center sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 w-[50px]">
@@ -1304,7 +1304,6 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                   />
                 </TableHead>
                 <TableHead className="text-right sticky right-[50px] bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 w-[140px]">שם</TableHead>
-                <TableHead className="text-right bg-background w-[200px]">אימייל</TableHead>
                 <TableHead className="text-right bg-background w-[140px]">טלפון</TableHead>
                 <TableHead className="text-right bg-background w-[180px]">שם חברה</TableHead>
                 <TableHead className="text-right bg-background w-[140px]">שלב במשפך</TableHead>
@@ -1327,14 +1326,6 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                     <User className="h-4 w-4 shrink-0" />
                     <span className="truncate">{lead.contact_name || "-"}</span>
                   </div>
-                </TableCell>
-                <TableCell className="w-[200px]">
-                  {lead.email ? (
-                    <a href={`mailto:${lead.email}`} className="hover:underline flex items-center gap-1">
-                      <Mail className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{lead.email}</span>
-                    </a>
-                  ) : "-"}
                 </TableCell>
                 <TableCell className="w-[140px]">
                   {lead.phone ? (
