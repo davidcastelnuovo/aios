@@ -194,249 +194,83 @@ function LeadCard({
           <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
           <span className="text-xs text-muted-foreground">{lead.company_name}</span>
         </div>
-        {/* Phone in mobile - visible upfront */}
-        {isMobile && lead.phone && (
-          <div className="flex items-center gap-2 mt-2">
+      </CardHeader>
+      
+      <CardContent className="px-4 pb-4 pt-2 space-y-3">
+        {/* Phone */}
+        {lead.phone && (
+          <div className="flex items-center gap-2 text-xs pb-3 border-b">
             <Phone className="h-3 w-3 text-primary shrink-0" />
-            <a href={`tel:${lead.phone}`} className="text-xs hover:underline font-medium text-primary">
+            <a href={`tel:${lead.phone}`} className="hover:underline font-medium text-primary">
               {lead.phone}
             </a>
           </div>
         )}
-      </CardHeader>
-      
-      <CardContent className="px-4 pb-4 pt-2 space-y-3">
-        {/* Stage/Status Selector - Mobile: prominent at top */}
-        {isMobile && (
-          <div className="space-y-1.5 -mt-1 mb-3" onClick={(e) => e.stopPropagation()}>
-            <label className="text-xs font-semibold text-muted-foreground">שלב במשפך</label>
-            <Select
-              value={lead.status}
-              onValueChange={(value) => onStatusChange(lead.id, value)}
-            >
-              <SelectTrigger className={`h-9 text-sm border-2 ${
-                PIPELINE_STAGES.find(s => s.id === lead.status)?.bgClass || ""
-              }`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-[100]">
-                {PIPELINE_STAGES.map((stage) => (
-                  <SelectItem 
-                    key={stage.id} 
-                    value={stage.id}
-                    className={stage.bgClass}
-                  >
-                    {stage.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
+
+        {/* Stage/Status Selector */}
+        <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+          <Select
+            value={lead.status}
+            onValueChange={(value) => onStatusChange(lead.id, value)}
+          >
+            <SelectTrigger className={`h-9 text-sm border-2 ${
+              PIPELINE_STAGES.find(s => s.id === lead.status)?.bgClass || ""
+            }`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-[100]">
+              {PIPELINE_STAGES.map((stage) => (
+                <SelectItem 
+                  key={stage.id} 
+                  value={stage.id}
+                  className={stage.bgClass}
+                >
+                  {stage.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         
-        {/* Response Status - Mobile */}
-        {isMobile && (
-          <div className="space-y-1.5 -mt-1 mb-3" onClick={(e) => e.stopPropagation()}>
-            <label className="text-xs font-semibold text-muted-foreground">סטטוס תגובה</label>
-            <Select
-              value={lead.response_status || "none"}
-              onValueChange={(value) => onResponseStatusChange(lead.id, value === "none" ? null : value)}
-            >
-              <SelectTrigger className={`h-9 text-sm border-2 font-medium ${
-                lead.response_status 
-                  ? RESPONSE_STATUS_OPTIONS.find(s => s.id === lead.response_status)?.color || ""
-                  : "bg-background"
-              }`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-[100]">
-                <SelectItem value="none">ללא סטטוס</SelectItem>
-                {RESPONSE_STATUS_OPTIONS.map((option) => (
-                  <SelectItem key={option.id} value={option.id} className={option.color}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        
-        {/* Contact Information - Always Visible */}
-        <div className="space-y-2 pb-3 border-b">
-          {lead.email && (
-            <div className="flex items-center gap-2 text-xs">
-              <Mail className="h-3 w-3 text-primary shrink-0" />
-              <a href={`mailto:${lead.email}`} className="hover:underline truncate">
-                {lead.email}
-              </a>
-            </div>
-          )}
-          {lead.phone && (
-            <div className="flex items-center gap-2 text-xs">
-              <Phone className="h-3 w-3 text-primary shrink-0" />
-              <a href={`tel:${lead.phone}`} className="hover:underline">
-                {lead.phone}
-              </a>
-            </div>
-          )}
-          
-          {/* Service Info */}
-          {(lead.products || lead.estimated_deal_value) && (
-            <div className="bg-accent/10 p-2 rounded space-y-1 mt-2">
-              {lead.products && (
-                <div className="flex justify-between text-xs">
-                  <span className="font-semibold">שירות:</span>
-                  <span className="font-medium">
-                    {productsLookup[lead.products]?.name || PRODUCT_LABELS[lead.products] || lead.products}
-                  </span>
-                </div>
-              )}
-              {lead.estimated_deal_value && (
-                <div className="flex justify-between text-xs">
-                  <span className="font-semibold">שווי שירות:</span>
-                  <span className="font-bold text-primary">₪{lead.estimated_deal_value.toLocaleString()}</span>
-                </div>
-              )}
-            </div>
-          )}
+        {/* Response Status */}
+        <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+          <Select
+            value={lead.response_status || "none"}
+            onValueChange={(value) => onResponseStatusChange(lead.id, value === "none" ? null : value)}
+          >
+            <SelectTrigger className={`h-9 text-sm border-2 font-medium ${
+              lead.response_status 
+                ? RESPONSE_STATUS_OPTIONS.find(s => s.id === lead.response_status)?.color || ""
+                : "bg-background"
+            }`}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-[100]">
+              <SelectItem value="none">ללא סטטוס</SelectItem>
+              {RESPONSE_STATUS_OPTIONS.map((option) => (
+                <SelectItem key={option.id} value={option.id} className={option.color}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Stage Selector - Desktop */}
-        {!isMobile && (
-          <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
-            <label className="text-xs font-semibold text-muted-foreground">שלב במשפך</label>
-            <Select
-              value={lead.status}
-              onValueChange={(value) => onStatusChange(lead.id, value)}
-            >
-              <SelectTrigger className={`h-8 text-sm border-2 ${
-                PIPELINE_STAGES.find(s => s.id === lead.status)?.bgClass || ""
-              }`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-[100]">
-                {PIPELINE_STAGES.map((stage) => (
-                  <SelectItem 
-                    key={stage.id} 
-                    value={stage.id}
-                    className={stage.bgClass}
-                  >
-                    {stage.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {/* Response Status Selector - Desktop only (mobile shown above) */}
-        {!isMobile && (
-          <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
-            <label className="text-xs font-semibold text-muted-foreground">סטטוס תגובה</label>
-            <Select
-              value={lead.response_status || "none"}
-              onValueChange={(value) => onResponseStatusChange(lead.id, value === "none" ? null : value)}
-            >
-              <SelectTrigger className={`h-8 text-sm border-2 ${
-                lead.response_status 
-                  ? RESPONSE_STATUS_OPTIONS.find(s => s.id === lead.response_status)?.color || ""
-                  : "bg-background"
-              }`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-[100]">
-                <SelectItem value="none">ללא סטטוס</SelectItem>
-                {RESPONSE_STATUS_OPTIONS.map((option) => (
-                  <SelectItem key={option.id} value={option.id} className={option.color}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        {/* Collapsible Details Section */}
-        <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-          <CollapsibleTrigger className="flex items-center justify-between w-full hover:opacity-70 transition-opacity pb-2">
-            <h4 className="text-xs font-bold text-primary uppercase tracking-wide">פרטים נוספים</h4>
-            <ChevronDown className={`h-4 w-4 text-primary transition-transform ${detailsOpen ? '' : '-rotate-90'}`} />
-          </CollapsibleTrigger>
-          
-          <CollapsibleContent className="space-y-3 pt-2">
-            {/* Lead Details */}
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              {lead.source && (
-                <div className="bg-muted/30 p-2 rounded">
-                  <span className="font-semibold block text-muted-foreground mb-1">מקור הגעה</span>
-                  <span className="font-medium">{SOURCE_LABELS[lead.source] || lead.source}</span>
-                </div>
-              )}
-              
-              <div className="bg-muted/30 p-2 rounded">
-                <span className="font-semibold block text-muted-foreground mb-1">שלב במשפך</span>
-                <span className="font-medium">
-                  {PIPELINE_STAGES.find(s => s.id === lead.status)?.label || lead.status}
-                </span>
-              </div>
-              
-              <div className="bg-muted/30 p-2 rounded col-span-2">
-                <span className="font-semibold block text-muted-foreground mb-1">תאריך יצירה</span>
-                <span className="font-medium">{new Date(lead.created_at).toLocaleDateString('he-IL')}</span>
-              </div>
-            </div>
-
-            {/* Additional dates if exist */}
-            {(lead.proposal_date || lead.sale_date) && (
-              <div className="space-y-1.5 text-xs pt-2 border-t">
-                {lead.proposal_date && (
-                  <div className="flex justify-between items-center bg-muted/30 p-1.5 rounded">
-                    <span className="font-semibold">תאריך הצעה:</span>
-                    <span className="font-medium">{new Date(lead.proposal_date).toLocaleDateString('he-IL')}</span>
-                  </div>
-                )}
-                {lead.sale_date && (
-                  <div className="flex justify-between items-center bg-muted/30 p-1.5 rounded">
-                    <span className="font-semibold">תאריך מכירה:</span>
-                    <span className="font-medium">{new Date(lead.sale_date).toLocaleDateString('he-IL')}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Sales Person */}
-            {lead.sales_people?.full_name && (
-              <div className="bg-muted/30 p-2 rounded text-xs">
-                <span className="font-semibold">איש מכירות:</span> {lead.sales_people.full_name}
-              </div>
-            )}
-
-            {/* Products */}
-            {lead.products && (
-              <div className="bg-muted/50 p-2 rounded text-xs">
-                <span className="font-semibold text-foreground">מוצרים:</span> {lead.products}
-              </div>
-            )}
-            
-            {/* Actions */}
-            <div className="space-y-2 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
-              <div className="flex gap-2">
-                <EditLeadDialog lead={lead} />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(lead.id);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
+        {/* Actions */}
+        <div className="flex gap-2 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
+          <EditLeadDialog lead={lead} />
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-8 w-8"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDelete(lead.id);
+            }}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
