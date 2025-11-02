@@ -859,14 +859,16 @@ export default function Users() {
                             variant="destructive"
                             size="sm"
                             onClick={() => {
-                              if (confirm(`האם למחוק את ${user.email}?`)) {
+                              if (confirm(`האם למחוק את ${user.email}? פעולה זו תמחק את המשתמש לחלוטין מהמערכת.`)) {
                                 deleteUserMutation.mutate({ userId: user.id });
                               }
                             }}
                             disabled={deleteUserMutation.isPending}
                             className="flex-1"
+                            title="מחק משתמש"
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Trash2 className="h-3 w-3 ml-1" />
+                            מחק
                           </Button>
                         </div>
                       </div>
@@ -1042,11 +1044,13 @@ export default function Users() {
                           variant="destructive"
                           size="icon"
                           onClick={() => {
-                            if (confirm(`האם אתה בטוח שברצונך למחוק את ${user.email}?`)) {
+                            if (confirm(`האם אתה בטוח שברצונך למחוק את ${user.email}? פעולה זו תמחק את המשתמש לחלוטין מהמערכת.`)) {
                               deleteUserMutation.mutate({ userId: user.id });
                             }
                           }}
                           disabled={deleteUserMutation.isPending}
+                          title="מחק משתמש לחלוטין"
+                          className="flex-shrink-0"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
