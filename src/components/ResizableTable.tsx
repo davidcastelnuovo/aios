@@ -99,7 +99,7 @@ export function ResizableTable({
 
   return (
     <div className="relative w-full h-full overflow-auto border rounded-md" ref={tableRef}>
-      <table className="w-full border-collapse">
+      <table className="w-full table-fixed border-collapse">
         <thead className="sticky top-0 z-20 bg-muted/50">
           <tr className="border-b">
             {checkboxColumn && (
@@ -115,9 +115,11 @@ export function ResizableTable({
               return (
                 <th
                   key={column.id}
-                  className="sticky z-20 bg-muted/50 border-l p-3 text-right relative group"
+                  className="sticky z-20 bg-muted/50 border-l p-3 text-right relative group overflow-hidden"
                   style={{ 
                     width: column.width,
+                    minWidth: column.minWidth || 80,
+                    maxWidth: column.width,
                     right: offset,
                   }}
                 >
@@ -142,7 +144,7 @@ export function ResizableTable({
                     </Popover>
                   </div>
                   <div
-                    className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
+                    className="absolute left-0 top-0 bottom-0 w-2 -translate-x-1 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
                     onMouseDown={(e) => handleMouseDown(e, column.id, column.width)}
                   />
                 </th>
@@ -175,7 +177,7 @@ export function ResizableTable({
                   </Popover>
                 </div>
                 <div
-                  className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
+                  className="absolute left-0 top-0 bottom-0 w-2 -translate-x-1 cursor-col-resize hover:bg-primary/40 active:bg-primary/60"
                   onMouseDown={(e) => handleMouseDown(e, column.id, column.width)}
                 />
               </th>
@@ -189,7 +191,7 @@ export function ResizableTable({
               className={`border-b hover:bg-muted/30 ${rowIndex % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}
             >
               {checkboxColumn && (
-                <td className={`sticky right-0 z-10 border-l p-3 text-center ${rowIndex % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
+                <td className={`sticky right-0 z-10 border-l p-3 text-center bg-inherit`}>
                   <Checkbox
                     checked={checkboxColumn.checked[rowIndex]}
                     onCheckedChange={(checked) => checkboxColumn.onCheckedChange(rowIndex, checked as boolean)}
@@ -201,9 +203,11 @@ export function ResizableTable({
                 return (
                   <td
                     key={column.id}
-                    className={`sticky z-10 border-l p-3 ${rowIndex % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}
+                    className="sticky z-10 border-l p-3 bg-inherit overflow-hidden"
                     style={{ 
                       width: column.width,
+                      minWidth: column.minWidth || 80,
+                      maxWidth: column.width,
                       right: offset,
                     }}
                   >
