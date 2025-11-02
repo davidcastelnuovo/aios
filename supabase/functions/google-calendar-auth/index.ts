@@ -84,13 +84,27 @@ serve(async (req) => {
 
       console.log('Tokens stored successfully');
 
-      // Redirect back to the app
-      const appUrl = Deno.env.get('SUPABASE_URL')?.replace('.supabase.co', '.lovable.app') || '';
-      return new Response(null, {
-        status: 302,
+      // Redirect back to the app - return HTML that closes the popup
+      return new Response(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Calendar Connected</title>
+            <script>
+              window.opener?.postMessage({ type: 'calendar_connected' }, '*');
+              setTimeout(() => window.close(), 1000);
+            </script>
+          </head>
+          <body style="font-family: system-ui; text-align: center; padding: 50px;">
+            <h1>✅ היומן התחבר בהצלחה!</h1>
+            <p>החלון ייסגר אוטומטית...</p>
+          </body>
+        </html>
+      `, {
+        status: 200,
         headers: {
           ...corsHeaders,
-          'Location': `${appUrl}/my-profile?calendar_connected=true`,
+          'Content-Type': 'text/html; charset=utf-8',
         },
       });
     }

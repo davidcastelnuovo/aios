@@ -36,10 +36,31 @@ export function CalendarView() {
       if (error) throw error;
 
       if (data.authUrl) {
-        window.open(data.authUrl, '_blank', 'noopener');
+        // Open popup and listen for success message
+        const popup = window.open(
+          data.authUrl,
+          'google-calendar-auth',
+          'width=600,height=700,left=100,top=100'
+        );
+
+        // Listen for messages from the popup
+        const messageHandler = (event: MessageEvent) => {
+          if (event.data?.type === 'calendar_connected') {
+            // Refresh the calendar status
+            window.location.reload();
+            window.removeEventListener('message', messageHandler);
+          }
+        };
+        window.addEventListener('message', messageHandler);
+
+        // Check if popup was blocked
+        if (!popup || popup.closed) {
+          alert('חלון הקופץ נחסם. אנא אפשר חלונות קופצים עבור אתר זה.');
+        }
       }
     } catch (error) {
       console.error("Error connecting calendar:", error);
+      alert('שגיאה בהתחברות ליומן. אנא נסה שוב.');
     }
   };
 
