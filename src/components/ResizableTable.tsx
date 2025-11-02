@@ -27,6 +27,7 @@ interface ResizableTableProps {
     onSelectAll: (checked: boolean) => void;
   };
   getRowClassName?: (row: any, rowIndex: number) => string;
+  getStickyCellClassName?: (row: any, rowIndex: number) => string;
 }
 
 export function ResizableTable({ 
@@ -34,7 +35,8 @@ export function ResizableTable({
   data, 
   onColumnsChange,
   checkboxColumn,
-  getRowClassName
+  getRowClassName,
+  getStickyCellClassName
 }: ResizableTableProps) {
   const [columns, setColumns] = useState<ColumnConfig[]>(initialColumns);
   const [resizing, setResizing] = useState<{ columnId: string; startX: number; startWidth: number } | null>(null);
@@ -189,13 +191,14 @@ export function ResizableTable({
         <tbody>
           {data.map((row, rowIndex) => {
             const rowClassName = getRowClassName ? getRowClassName(row, rowIndex) : (rowIndex % 2 === 0 ? 'bg-background' : 'bg-muted/10');
+            const stickyCellClassName = getStickyCellClassName ? getStickyCellClassName(row, rowIndex) : 'bg-card';
             return (
             <tr
               key={rowIndex}
               className={`border-b hover:bg-muted/30 ${rowClassName}`}
             >
               {checkboxColumn && (
-                <td className={`sticky right-0 z-10 border-l p-3 text-center ${rowClassName}`}>
+                <td className={`sticky right-0 z-10 border-l p-3 text-center ${stickyCellClassName}`}>
                   <Checkbox
                     checked={checkboxColumn.checked[rowIndex]}
                     onCheckedChange={(checked) => checkboxColumn.onCheckedChange(rowIndex, checked as boolean)}
@@ -207,7 +210,7 @@ export function ResizableTable({
                 return (
                   <td
                     key={column.id}
-                    className={`sticky z-10 border-l p-3 overflow-hidden ${rowClassName}`}
+                    className={`sticky z-10 border-l p-3 overflow-hidden ${stickyCellClassName}`}
                     style={{ 
                       width: column.width,
                       minWidth: column.minWidth || 80,

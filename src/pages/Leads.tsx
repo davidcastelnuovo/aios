@@ -1414,6 +1414,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
             const stage = PIPELINE_STAGES.find(s => s.id === lead.status);
             return stage?.bgClass || (rowIndex % 2 === 0 ? 'bg-background' : 'bg-muted/10');
           }}
+          getStickyCellClassName={(lead: any, rowIndex: number) => 'bg-card'}
           checkboxColumn={{
             checked: stageLeads.map(lead => selectedLeads.includes(lead.id)),
             onCheckedChange: (index, checked) => handleSelectLead(stageLeads[index].id, checked),
