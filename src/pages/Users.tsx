@@ -375,11 +375,13 @@ export default function Users() {
     },
     onError: (error: Error) => {
       if (error.message === "EMAIL_EXISTS") {
-        toast.error("המשתמש כבר רשום במערכת. האם ברצונך לשלוח מחדש את ההזמנה?", {
+        toast.error("המשתמש כבר רשום במערכת", {
           action: {
-            label: "שלח מחדש",
+            label: "מחק משתמש קיים",
             onClick: () => {
-              resendInviteMutation.mutate({ email: inviteEmail });
+              if (window.confirm(`האם אתה בטוח שברצונך למחוק את המשתמש ${inviteEmail}? זה ימחק אותו לגמרי מהמערכת.`)) {
+                deleteUserMutation.mutate({ email: inviteEmail });
+              }
             },
           },
         });
@@ -390,9 +392,9 @@ export default function Users() {
   });
 
   const deleteUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
+    mutationFn: async ({ userId, email }: { userId?: string; email?: string }) => {
       const { data, error } = await supabase.functions.invoke("delete-user", {
-        body: { userId },
+        body: { userId, email },
       });
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
@@ -858,7 +860,7 @@ export default function Users() {
                             size="sm"
                             onClick={() => {
                               if (confirm(`האם למחוק את ${user.email}?`)) {
-                                deleteUserMutation.mutate(user.id);
+                                deleteUserMutation.mutate({ userId: user.id });
                               }
                             }}
                             disabled={deleteUserMutation.isPending}
@@ -1041,7 +1043,7 @@ export default function Users() {
                           size="icon"
                           onClick={() => {
                             if (confirm(`האם אתה בטוח שברצונך למחוק את ${user.email}?`)) {
-                              deleteUserMutation.mutate(user.id);
+                              deleteUserMutation.mutate({ userId: user.id });
                             }
                           }}
                           disabled={deleteUserMutation.isPending}
@@ -1242,20 +1244,20 @@ export default function Users() {
                         <Mail className="h-3 w-3 ml-1" />
                         שלח מחדש
                       </Button>
-                      {user.id !== currentUserId && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm(`האם למחוק את ${user.email}?`)) {
-                              deleteUserMutation.mutate(user.id);
-                            }
-                          }}
-                          className="flex-1"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      )}
+                        {user.id !== currentUserId && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm(`האם למחוק את ${user.email}?`)) {
+                                deleteUserMutation.mutate({ userId: user.id });
+                              }
+                            }}
+                            className="flex-1"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        )}
                     </div>
                   </div>
                 </div>
@@ -1431,7 +1433,7 @@ export default function Users() {
                                 size="sm"
                                 onClick={() => {
                                   if (confirm(`האם אתה בטוח שברצונך למחוק את ${user.email}?`)) {
-                                    deleteUserMutation.mutate(user.id);
+                                    deleteUserMutation.mutate({ userId: user.id });
                                   }
                                 }}
                                 className="h-8"

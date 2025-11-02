@@ -8,7 +8,8 @@ const corsHeaders = {
 };
 
 interface DeleteUserRequest {
-  userId: string;
+  userId?: string;
+  email?: string;
 }
 
 serve(async (req: Request) => {
@@ -51,31 +52,50 @@ serve(async (req: Request) => {
       throw new Error("Only owners and agency owners can delete users");
     }
 
-    const { userId }: DeleteUserRequest = await req.json();
+    const { userId, email }: DeleteUserRequest = await req.json();
 
-    if (!userId) {
-      throw new Error("User ID is required");
+    if (!userId && !email) {
+      throw new Error("User ID or email is required");
+    }
+
+    let targetUserId = userId;
+
+    // If email provided, find the user ID from auth
+    if (email && !targetUserId) {
+      const { data: users } = await supabaseAdmin.auth.admin.listUsers();
+      const targetUser = users?.users?.find(u => u.email === email);
+      
+      if (targetUser) {
+        targetUserId = targetUser.id;
+        console.log(`Found user by email ${email}: ${targetUserId}`);
+      } else {
+        throw new Error(`User with email ${email} not found`);
+      }
+    }
+
+    if (!targetUserId) {
+      throw new Error("Could not determine user ID");
     }
 
     // Prevent deleting yourself
-    if (userId === user.id) {
+    if (targetUserId === user.id) {
       throw new Error("Cannot delete yourself");
     }
 
-    console.log(`Deleting user: ${userId}`);
+    console.log(`Deleting user: ${targetUserId}`);
 
     // First, get the user's profile to check for campaigner_id
     const { data: profile } = await supabaseAdmin
       .from("profiles")
       .select("campaigner_id")
-      .eq("id", userId)
-      .single();
+      .eq("id", targetUserId)
+      .maybeSingle();
 
     // Delete from user_managed_agencies
     const { error: managedError } = await supabaseAdmin
       .from("user_managed_agencies")
       .delete()
-      .eq("user_id", userId);
+      .eq("user_id", targetUserId);
     
     if (managedError) {
       console.error("Error deleting managed agencies:", managedError);
@@ -85,24 +105,44 @@ serve(async (req: Request) => {
     const { error: userRolesError } = await supabaseAdmin
       .from("user_roles")
       .delete()
-      .eq("user_id", userId);
+      .eq("user_id", targetUserId);
     
     if (userRolesError) {
       console.error("Error deleting user roles:", userRolesError);
+    }
+
+    // Delete from user_permissions
+    const { error: permissionsError } = await supabaseAdmin
+      .from("user_permissions")
+      .delete()
+      .eq("user_id", targetUserId);
+    
+    if (permissionsError) {
+      console.error("Error deleting user permissions:", permissionsError);
+    }
+
+    // Delete from tenant_users
+    const { error: tenantError } = await supabaseAdmin
+      .from("tenant_users")
+      .delete()
+      .eq("user_id", targetUserId);
+    
+    if (tenantError) {
+      console.error("Error deleting tenant users:", tenantError);
     }
 
     // Delete from profiles (this will trigger cascade if set up)
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .delete()
-      .eq("id", userId);
+      .eq("id", targetUserId);
     
     if (profileError) {
       console.error("Error deleting profile:", profileError);
     }
 
     // Try to delete user from auth
-    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(targetUserId);
 
     if (deleteError) {
       // If user not found in auth, it's okay - we already cleaned up the database
