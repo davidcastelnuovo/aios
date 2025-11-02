@@ -615,7 +615,9 @@ export default function Tasks() {
           </div>
         </div>
 
-        {viewMode === "kanban" ? (
+        {viewMode === "calendar" ? (
+          <CalendarView />
+        ) : viewMode === "kanban" ? (
           <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-3">
           <DroppableColumn status="open">
             <SortableContext items={tasksByStatus.open.map(t => t.id)} strategy={verticalListSortingStrategy}>
