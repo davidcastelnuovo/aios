@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar, Search, X } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar as CalendarIcon, Search, X } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -42,6 +42,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ResizableTable, ColumnConfig } from "@/components/ResizableTable";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100/50", borderColor: "border-blue-500" },
@@ -396,6 +400,8 @@ export default function Leads() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStage, setFilterStage] = useState<string>("all");
   const [filterResponseStatus, setFilterResponseStatus] = useState<string>("all");
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [openTables, setOpenTables] = useState<Record<string, boolean>>({
     new: false,
     contacted: false,
@@ -618,9 +624,26 @@ export default function Leads() {
         }
       }
       
+      // Date range filter
+      if (startDate || endDate) {
+        const leadDate = new Date(lead.created_at);
+        
+        if (startDate) {
+          const start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+          if (leadDate < start) return false;
+        }
+        
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(23, 59, 59, 999);
+          if (leadDate > end) return false;
+        }
+      }
+      
       return true;
     });
-  }, [leads, searchQuery, filterStage, filterResponseStatus]);
+  }, [leads, searchQuery, filterStage, filterResponseStatus, startDate, endDate]);
 
   const getLeadsByStage = (stageId: string) => {
     return filteredLeads?.filter((lead: any) => lead.status === stageId) || [];
@@ -703,6 +726,71 @@ export default function Leads() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+        
+        {/* Date Range Filters */}
+        <div className="flex gap-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "flex-1 justify-start text-right font-normal border-2",
+                  !startDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="ml-2 h-4 w-4" />
+                {startDate ? format(startDate, "dd/MM/yyyy") : "מתאריך"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={startDate}
+                onSelect={setStartDate}
+                initialFocus
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </PopoverContent>
+          </Popover>
+          
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "flex-1 justify-start text-right font-normal border-2",
+                  !endDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="ml-2 h-4 w-4" />
+                {endDate ? format(endDate, "dd/MM/yyyy") : "עד תאריך"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={endDate}
+                onSelect={setEndDate}
+                initialFocus
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </PopoverContent>
+          </Popover>
+          
+          {(startDate || endDate) && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setStartDate(undefined);
+                setEndDate(undefined);
+              }}
+              className="shrink-0"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
         <div className="flex gap-2 flex-wrap">
           <AddLeadForm />
@@ -797,7 +885,7 @@ export default function Leads() {
             </SelectContent>
           </Select>
           <Select value={filterResponseStatus} onValueChange={setFilterResponseStatus}>
-            <SelectTrigger className={`w-[180px] border-2 ${
+            <SelectTrigger className={`w-[160px] border-2 ${
               filterResponseStatus !== "all" 
                 ? filterResponseStatus === "none"
                   ? "bg-background"
@@ -816,6 +904,69 @@ export default function Leads() {
               ))}
             </SelectContent>
           </Select>
+          
+          {/* Date Range Filters */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-[140px] justify-start text-right font-normal border-2",
+                  !startDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="ml-2 h-4 w-4" />
+                {startDate ? format(startDate, "dd/MM/yy") : "מתאריך"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={startDate}
+                onSelect={setStartDate}
+                initialFocus
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </PopoverContent>
+          </Popover>
+          
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-[140px] justify-start text-right font-normal border-2",
+                  !endDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="ml-2 h-4 w-4" />
+                {endDate ? format(endDate, "dd/MM/yy") : "עד תאריך"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={endDate}
+                onSelect={setEndDate}
+                initialFocus
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </PopoverContent>
+          </Popover>
+          
+          {(startDate || endDate) && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setStartDate(undefined);
+                setEndDate(undefined);
+              }}
+              title="נקה סינון תאריכים"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
