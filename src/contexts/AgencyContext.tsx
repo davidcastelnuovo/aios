@@ -49,23 +49,16 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
         return [];
       }
       
-      console.log("🏢 Fetched agencies (filtered by RLS):", data);
       return data || [];
     },
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
   });
 
   // Agencies available (RLS-filtered)
   const agencies = allAgencies;
 
   const isLoading = isLoadingAgencies;
-
-  console.log("🏢 AgencyContext - state:", { 
-    isLoadingAgencies,
-    allAgenciesCount: allAgencies?.length,
-    agenciesCount: agencies?.length,
-    agencies: agencies?.map(a => ({ id: a.id, name: a.name })),
-  });
 
   // Ensure a valid selection and sensible defaults
   useEffect(() => {
