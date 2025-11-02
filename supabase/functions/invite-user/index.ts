@@ -331,6 +331,7 @@ serve(async (req: Request) => {
 
       if (inviteError) {
         console.error("Error sending invitation email:", inviteError);
+        throw new Error(inviteError.message || "Failed to send invitation email");
       } else {
         console.log("Invitation email sent successfully via Supabase Auth to:", email);
       }
