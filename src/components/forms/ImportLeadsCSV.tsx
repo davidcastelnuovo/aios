@@ -175,8 +175,11 @@ export function ImportLeadsCSV() {
         // נייד - phone
         if (row['נייד']) lead.phone = row['נייד'].toString().trim();
         
-        // מייל - email
-        if (row['מייל']) lead.email = row['מייל'].toString().trim();
+        // מייל - email (מתעלם מתאריכים)
+        const emailVal = row['מייל'] ? row['מייל'].toString().trim() : '';
+        if (emailVal && !isDateLike(emailVal)) {
+          lead.email = emailVal;
+        }
         
         // שם העסק - company name (מניעת זיהוי תאריך בתור שם)
         const company = getFirst(row, ['שם העסק', 'שם חברה', 'שם החברה', 'חברה', 'עסק', 'שם העסק/חברה', 'שם עסק']);
