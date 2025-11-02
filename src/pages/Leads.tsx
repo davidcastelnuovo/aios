@@ -1293,41 +1293,41 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
       {/* Scroll container with visible scrollbars */}
       <ScrollArea className="w-full h-[540px] rounded-md border" dir="rtl">
         <div className="min-w-full">
-          <Table className="min-w-[750px]">
-            <TableHeader className="sticky top-0 z-10 bg-background">
-              <TableRow className="whitespace-nowrap">
-                <TableHead className="text-center sticky right-0 z-20 w-[50px]">
+           <Table className="min-w-[750px]">
+            <TableHeader className="sticky top-0 z-10 bg-muted/50">
+              <TableRow className="whitespace-nowrap border-b hover:bg-transparent">
+                <TableHead className="text-center sticky right-0 bg-muted/50 z-20 w-[50px] h-12 border-l">
                   <Checkbox
                     checked={isAllSelected}
                     onCheckedChange={handleSelectAll}
                     aria-label="בחר הכל"
                   />
                 </TableHead>
-                <TableHead className="text-right sticky right-[50px] border-l z-20 w-[110px]">שם</TableHead>
-                <TableHead className="text-right w-[130px]">טלפון</TableHead>
-                <TableHead className="text-right w-[170px]">שם חברה</TableHead>
-                <TableHead className="text-right w-[130px]">שלב במשפך</TableHead>
-                <TableHead className="text-right w-[130px]">סטטוס</TableHead>
-                <TableHead className="text-right w-[80px]">פעולות</TableHead>
+                <TableHead className="text-right sticky right-[50px] bg-muted/50 border-l z-20 w-[110px] h-12">שם</TableHead>
+                <TableHead className="text-right border-l w-[130px] h-12">טלפון</TableHead>
+                <TableHead className="text-right border-l w-[170px] h-12">שם חברה</TableHead>
+                <TableHead className="text-right border-l w-[130px] h-12">שלב במשפך</TableHead>
+                <TableHead className="text-right border-l w-[130px] h-12">סטטוס</TableHead>
+                <TableHead className="text-right w-[80px] h-12">פעולות</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-            {stageLeads.map((lead: any) => (
-              <TableRow key={lead.id} className="whitespace-nowrap">
-                <TableCell className="text-center sticky right-0 z-10 w-[50px]">
+            {stageLeads.map((lead: any, index: number) => (
+              <TableRow key={lead.id} className={`whitespace-nowrap border-b hover:bg-muted/30 ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
+                <TableCell className={`text-center sticky right-0 z-10 w-[50px] h-12 border-l ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
                   <Checkbox
                     checked={selectedLeads.includes(lead.id)}
                     onCheckedChange={(checked) => handleSelectLead(lead.id, checked as boolean)}
                     aria-label={`בחר ${lead.contact_name || lead.company_name}`}
                   />
                 </TableCell>
-                <TableCell className="font-medium sticky right-[50px] border-l z-10 w-[110px]">
+                <TableCell className={`font-medium sticky right-[50px] border-l z-10 w-[110px] h-12 ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
                   <div className="flex items-center gap-2">
                     <User className="h-4 w-4 shrink-0" />
                     <span className="truncate">{lead.contact_name || "-"}</span>
                   </div>
                 </TableCell>
-                <TableCell className="w-[130px]">
+                <TableCell className="w-[130px] h-12 border-l">
                   {lead.phone ? (
                     <a href={`tel:${lead.phone}`} className="hover:underline flex items-center gap-1">
                       <Phone className="h-3 w-3 shrink-0" />
@@ -1335,13 +1335,13 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                     </a>
                   ) : "-"}
                 </TableCell>
-                <TableCell className="w-[180px]">
+                <TableCell className="w-[180px] h-12 border-l">
                   <div className="flex items-center gap-2">
                     <Building2 className="h-4 w-4 shrink-0" />
                     <span className="truncate">{lead.company_name}</span>
                   </div>
                 </TableCell>
-                <TableCell className="w-[140px]">
+                <TableCell className="w-[140px] h-12 border-l">
                   <Select
                     value={lead.status}
                     onValueChange={(value) => 
@@ -1369,7 +1369,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                     </SelectContent>
                   </Select>
                 </TableCell>
-                <TableCell className="w-[140px]">
+                <TableCell className="w-[140px] h-12 border-l">
                   <Select
                     value={lead.response_status || "none"}
                     onValueChange={(value) => 
@@ -1400,7 +1400,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                     </SelectContent>
                   </Select>
                  </TableCell>
-                 <TableCell className="w-[80px]">
+                 <TableCell className="w-[80px] h-12">
                    <div className="flex justify-center">
                      <EditLeadDialog lead={lead} />
                    </div>
