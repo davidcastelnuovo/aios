@@ -237,36 +237,12 @@ serve(async (req: Request) => {
           });
       }
 
-      // Build invitation link for existing users
-      const baseUrlInput3 = baseUrl || "https://after-lead.lovable.app";
-      let safeBaseUrl3: string;
-      try {
-        const u = new URL(baseUrlInput3);
-        safeBaseUrl3 = u.origin;
-      } catch {
-        const parts = baseUrlInput3.split("/").slice(0, 3);
-        safeBaseUrl3 = parts.join("/");
-      }
-      const existingInvitationLink = `${safeBaseUrl3.replace(/\/+$/, "")}/auth`;
-
-      // Send password recovery email (acts as invite for existing users)
-      try {
-        const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
-          redirectTo: existingInvitationLink,
-        });
-        if (resetError) {
-          console.error("Error sending recovery email:", resetError);
-        } else {
-          console.log("Recovery email sent to existing user:", email);
-        }
-      } catch (e) {
-        console.error("Exception sending recovery email:", e);
-      }
-
+      // Return EMAIL_EXISTS so UI can offer "delete existing user" action
       return new Response(
         JSON.stringify({
-          success: true,
-          message: "המשתמש עודכן והאימייל נשלח",
+          success: false,
+          error: "EMAIL_EXISTS",
+          message: "User already exists in authentication",
         }),
         {
           status: 200,
