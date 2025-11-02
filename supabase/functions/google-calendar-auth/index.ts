@@ -14,14 +14,10 @@ serve(async (req) => {
   try {
     const url = new URL(req.url);
     const queryAction = url.searchParams.get('action');
+    const code = url.searchParams.get('code');
     
-    // For OAuth callback, action comes from URL
-    if (queryAction === 'callback') {
-      const code = url.searchParams.get('code');
-      if (!code) {
-        throw new Error('No authorization code provided');
-      }
-
+    // For OAuth callback, check if we have a code parameter
+    if (code && !queryAction) {
       const supabaseClient = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -32,7 +28,7 @@ serve(async (req) => {
 
       const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
       const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
-      const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/google-calendar-auth?action=callback`;
+      const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/google-calendar-auth`;
       if (!clientId) throw new Error('Missing GOOGLE_CLIENT_ID secret');
 
       // Exchange code for tokens
@@ -126,7 +122,7 @@ serve(async (req) => {
 
     const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
     const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
-    const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/google-calendar-auth?action=callback`;
+    const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/google-calendar-auth`;
 
     console.log('Calendar auth request:', { action, userId: user.id });
 
