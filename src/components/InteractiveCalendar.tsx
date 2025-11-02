@@ -98,13 +98,28 @@ export function InteractiveCalendar() {
   // Transform Google Calendar events to react-big-calendar format
   const events: CalendarEvent[] = useMemo(() => {
     if (!eventsData?.events) return [];
-    return eventsData.events.map((event: any) => ({
-      id: event.id,
-      title: event.summary || 'ללא כותרת',
-      start: new Date(event.start.dateTime || event.start.date),
-      end: new Date(event.end.dateTime || event.end.date),
-      description: event.description || '',
-    }));
+    return (
+      eventsData.events
+        .map((event: any) => {
+          const startStr = event?.start?.dateTime || event?.start?.date;
+          const endStr = event?.end?.dateTime || event?.end?.date;
+          if (!startStr) return null;
+          const start = new Date(startStr);
+          let end = endStr ? new Date(endStr) : new Date(start.getTime() + 60 * 60 * 1000);
+          if (isNaN(start.getTime())) return null;
+          if (isNaN(end.getTime()) || end <= start) {
+            end = new Date(start.getTime() + 60 * 60 * 1000);
+          }
+          return {
+            id: event.id,
+            title: event.summary || 'ללא כותרת',
+            start,
+            end,
+            description: event.description || '',
+          } as CalendarEvent;
+        })
+        .filter(Boolean) as CalendarEvent[]
+    );
   }, [eventsData]);
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
