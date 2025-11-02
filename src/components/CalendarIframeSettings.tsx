@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { Calendar, Plus, Unplug } from "lucide-react";
 
 export function CalendarIframeSettings() {
-  const { userId } = useCurrentUser();
+  const { userId, user } = useCurrentUser();
   const queryClient = useQueryClient();
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [eventSummary, setEventSummary] = useState("");
@@ -200,6 +200,19 @@ export function CalendarIframeSettings() {
                 <Unplug className="h-4 w-4 ml-2" />
                 נתק
               </Button>
+            </div>
+
+            {/* Google Calendar Embed */}
+            <div className="w-full overflow-hidden rounded-lg border">
+              <iframe
+                src={`https://calendar.google.com/calendar/embed?src=${encodeURIComponent(user?.email || '')}&ctz=Asia%2FJerusalem`}
+                style={{ border: 0 }}
+                width="100%"
+                height="600"
+                frameBorder="0"
+                scrolling="no"
+                title="Google Calendar"
+              />
             </div>
 
             {!showAddEvent ? (
