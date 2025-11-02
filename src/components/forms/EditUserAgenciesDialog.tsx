@@ -12,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 interface EditUserAgenciesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -80,6 +80,23 @@ export function EditUserAgenciesDialog({
     enabled: open && !!userId,
   });
 
+  // Fetch whether user has a campaigner assigned
+  const { data: userProfile } = useQuery({
+    queryKey: ["user-profile-campaigner", userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("campaigner_id")
+        .eq("id", userId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: open && !!userId,
+  });
+
+  const hasCampaigner = !!userProfile?.campaigner_id;
+
   // Update selected agencies when current agencies load
   useEffect(() => {
     if (currentAgencies) {
@@ -118,6 +135,10 @@ export function EditUserAgenciesDialog({
   });
 
   const handleSave = () => {
+    if (!hasCampaigner) {
+      toast.error("לא ניתן לעדכן סוכנויות: המשתמש לא משויך לקמפיינר");
+      return;
+    }
     updateAgenciesMutation.mutate(selectedAgencies);
   };
 
@@ -131,6 +152,14 @@ export function EditUserAgenciesDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
+          {!hasCampaigner && (
+            <Alert>
+              <AlertTitle>המשתמש לא משויך לקמפיינר</AlertTitle>
+              <AlertDescription>
+                יש לשייך קמפיינר למשתמש לפני עדכון סוכנויות.
+              </AlertDescription>
+            </Alert>
+          )}
           <div>
             <Label>סוכנויות</Label>
             <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
@@ -171,7 +200,7 @@ export function EditUserAgenciesDialog({
           <div className="flex gap-2">
             <Button
               onClick={handleSave}
-              disabled={updateAgenciesMutation.isPending}
+              disabled={updateAgenciesMutation.isPending || !hasCampaigner}
               className="flex-1"
             >
               {updateAgenciesMutation.isPending ? "שומר..." : "שמור שינויים"}
