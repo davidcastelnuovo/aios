@@ -1290,10 +1290,10 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
         </div>
       )}
 
-      {/* Scroll container for horizontal and vertical scrolling (native) */}
-      <div className="w-full overflow-auto" dir="rtl">
-        <div className="max-h-[500px]">
-          <Table className="min-w-[870px]">
+      {/* Scroll container with visible scrollbars */}
+      <ScrollArea className="w-full h-[540px] rounded-md border" dir="rtl">
+        <div className="min-w-full">
+          <Table className="min-w-[750px]">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow className="whitespace-nowrap">
                 <TableHead className="text-center sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 w-[50px]">
@@ -1303,11 +1303,11 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                     aria-label="בחר הכל"
                   />
                 </TableHead>
-                <TableHead className="text-right sticky right-[50px] bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 w-[140px]">שם</TableHead>
-                <TableHead className="text-right bg-background w-[140px]">טלפון</TableHead>
-                <TableHead className="text-right bg-background w-[180px]">שם חברה</TableHead>
-                <TableHead className="text-right bg-background w-[140px]">שלב במשפך</TableHead>
-                <TableHead className="text-right bg-background w-[140px]">סטטוס</TableHead>
+                <TableHead className="text-right sticky right-[50px] bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 w-[100px]">שם</TableHead>
+                <TableHead className="text-right bg-background w-[130px]">טלפון</TableHead>
+                <TableHead className="text-right bg-background w-[170px]">שם חברה</TableHead>
+                <TableHead className="text-right bg-background w-[130px]">שלב במשפך</TableHead>
+                <TableHead className="text-right bg-background w-[130px]">סטטוס</TableHead>
                 <TableHead className="text-right bg-background w-[80px]">פעולות</TableHead>
               </TableRow>
             </TableHeader>
@@ -1321,13 +1321,13 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                     aria-label={`בחר ${lead.contact_name || lead.company_name}`}
                   />
                 </TableCell>
-                <TableCell className="font-medium sticky right-[50px] bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10 w-[140px]">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{lead.contact_name || "-"}</span>
+                <TableCell className="font-medium sticky right-[50px] bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10 w-[100px]">
+                  <div className="flex items-center gap-1">
+                    <User className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate text-xs">{lead.contact_name || "-"}</span>
                   </div>
                 </TableCell>
-                <TableCell className="w-[140px]">
+                <TableCell className="w-[130px]">
                   {lead.phone ? (
                     <a href={`tel:${lead.phone}`} className="hover:underline flex items-center gap-1">
                       <Phone className="h-3 w-3 shrink-0" />
@@ -1407,10 +1407,12 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                  </TableCell>
                </TableRow>
              ))}
-           </TableBody>
-         </Table>
-         </div>
-       </div>
+            </TableBody>
+          </Table>
+        </div>
+        <ScrollBar orientation="horizontal" className="h-3" />
+        <ScrollBar orientation="vertical" />
+      </ScrollArea>
      </div>
    );
  }
