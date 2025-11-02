@@ -217,15 +217,25 @@ useEffect(() => {
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-    });
-    if (error) {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth`,
+          skipBrowserRedirect: true,
+        },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.open(data.url, '_blank', 'noopener');
+      }
+    } catch (error: any) {
       toast({
         title: "שגיאה",
-        description: error.message,
+        description: error.message || "שגיאה בהתחברות עם Google",
         variant: "destructive",
       });
+    } finally {
       setLoading(false);
     }
   };

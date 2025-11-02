@@ -36,7 +36,7 @@ export function CalendarView() {
       if (error) throw error;
 
       if (data.authUrl) {
-        window.location.href = data.authUrl;
+        window.open(data.authUrl, '_blank', 'noopener');
       }
     } catch (error) {
       console.error("Error connecting calendar:", error);
@@ -84,6 +84,7 @@ export function CalendarView() {
             src={`https://calendar.google.com/calendar/embed?src=primary&mode=WEEK&showTitle=0&showNav=1&showDate=1&showPrint=0&showTabs=1&showCalendars=0&showTz=0&hl=he`}
             className="w-full h-[600px] border-0 rounded-lg"
             title="Google Calendar"
+            referrerPolicy="no-referrer"
           />
         </CardContent>
       </Card>

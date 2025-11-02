@@ -46,7 +46,7 @@ export function CalendarIframeSettings() {
     },
     onSuccess: (data) => {
       if (data.authUrl) {
-        window.location.href = data.authUrl;
+        window.open(data.authUrl, '_blank', 'noopener');
       }
     },
     onError: (error) => {
