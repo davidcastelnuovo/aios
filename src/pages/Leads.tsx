@@ -48,11 +48,11 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
 const PIPELINE_STAGES = [
-  { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-200 text-blue-900 dark:bg-blue-900 dark:text-blue-100", borderColor: "border-blue-500" },
-  { id: "contacted", label: "נוצר קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-200 text-purple-900 dark:bg-purple-900 dark:text-purple-100", borderColor: "border-purple-500" },
-  { id: "follow_up", label: "בתהליך", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-200 text-yellow-900 dark:bg-yellow-900 dark:text-yellow-100", borderColor: "border-yellow-500" },
-  { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-200 text-orange-900 dark:bg-orange-900 dark:text-orange-100", borderColor: "border-orange-500" },
-  { id: "closed", label: "נסגר", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-200 text-green-900 dark:bg-green-900 dark:text-green-100", borderColor: "border-green-500" },
+  { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500" },
+  { id: "contacted", label: "נוצר קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300", borderColor: "border-purple-500" },
+  { id: "follow_up", label: "בתהליך", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300", borderColor: "border-yellow-500" },
+  { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300", borderColor: "border-orange-500" },
+  { id: "closed", label: "נסגר", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300", borderColor: "border-green-500" },
 ];
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -77,12 +77,12 @@ const PRODUCT_LABELS: Record<string, string> = {
 };
 
 const RESPONSE_STATUS_OPTIONS = [
-  { id: "no_answer_1", label: "אין מענה 1", color: "bg-amber-200 text-amber-900 dark:bg-amber-900 dark:text-amber-100 border-amber-300" },
-  { id: "no_answer_2", label: "אין מענה 2", color: "bg-amber-300 text-amber-900 dark:bg-amber-800 dark:text-amber-100 border-amber-400" },
-  { id: "no_answer_3", label: "אין מענה 3", color: "bg-orange-300 text-orange-900 dark:bg-orange-800 dark:text-orange-100 border-orange-400" },
-  { id: "no_answer_4", label: "אין מענה 4", color: "bg-red-300 text-red-900 dark:bg-red-800 dark:text-red-100 border-red-400" },
-  { id: "denies_contact", label: "מכחיש פניה", color: "bg-gray-300 text-gray-900 dark:bg-gray-700 dark:text-gray-100 border-gray-400" },
-  { id: "not_relevant", label: "לא רלוונטי", color: "bg-slate-300 text-slate-900 dark:bg-slate-700 dark:text-slate-100 border-slate-400" },
+  { id: "no_answer_1", label: "אין מענה 1", color: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 border-amber-300" },
+  { id: "no_answer_2", label: "אין מענה 2", color: "bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100 border-amber-400" },
+  { id: "no_answer_3", label: "אין מענה 3", color: "bg-orange-200 text-orange-900 dark:bg-orange-800 dark:text-orange-100 border-orange-400" },
+  { id: "no_answer_4", label: "אין מענה 4", color: "bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-100 border-red-400" },
+  { id: "denies_contact", label: "מכחיש פניה", color: "bg-gray-200 text-gray-900 dark:bg-gray-700 dark:text-gray-100 border-gray-400" },
+  { id: "not_relevant", label: "לא רלוונטי", color: "bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100 border-slate-400" },
 ];
 
 function DroppableStage({ stage, children }: { stage: any; children: ReactNode }) {

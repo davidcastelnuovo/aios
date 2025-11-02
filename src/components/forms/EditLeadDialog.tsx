@@ -22,6 +22,24 @@ import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
+const PIPELINE_STAGES = [
+  { id: "new", label: "ליד חדש", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300" },
+  { id: "contacted", label: "נוצר קשר", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300" },
+  { id: "follow_up", label: "תהליך פולואפ", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300" },
+  { id: "proposal_sent", label: "נשלחה הצעה", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300" },
+  { id: "transferred_to_onboarding", label: "הועבר לקליטה", bgClass: "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-100 border-teal-300" },
+  { id: "closed", label: "נסגר", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300" },
+];
+
+const RESPONSE_STATUS_OPTIONS = [
+  { id: "no_answer_1", label: "אין מענה 1", color: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 border-amber-300" },
+  { id: "no_answer_2", label: "אין מענה 2", color: "bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100 border-amber-400" },
+  { id: "no_answer_3", label: "אין מענה 3", color: "bg-orange-200 text-orange-900 dark:bg-orange-800 dark:text-orange-100 border-orange-400" },
+  { id: "no_answer_4", label: "אין מענה 4", color: "bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-100 border-red-400" },
+  { id: "denies_contact", label: "מכחיש פניה", color: "bg-gray-200 text-gray-900 dark:bg-gray-700 dark:text-gray-100 border-gray-400" },
+  { id: "not_relevant", label: "לא רלוונטי", color: "bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100 border-slate-400" },
+];
+
 const formSchema = z.object({
   company_name: z.string().min(1, "שם העסק הוא שדה חובה"),
   contact_name: z.string().optional(),
@@ -454,17 +472,20 @@ const updateMutation = useMutation({
                         <FormLabel className="text-sm font-medium">סטטוס תגובה</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger className="text-right rounded-lg border-2 h-11">
+                            <SelectTrigger className={`text-right rounded-lg border-2 h-11 ${
+                              field.value 
+                                ? RESPONSE_STATUS_OPTIONS.find(s => s.id === field.value)?.color || ""
+                                : ""
+                            }`}>
                               <SelectValue placeholder="בחר סטטוס" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent className="bg-background z-50 text-right" align="end">
-                            <SelectItem value="no_answer_1">אין מענה 1</SelectItem>
-                            <SelectItem value="no_answer_2">אין מענה 2</SelectItem>
-                            <SelectItem value="no_answer_3">אין מענה 3</SelectItem>
-                            <SelectItem value="no_answer_4">אין מענה 4</SelectItem>
-                            <SelectItem value="denies_contact">מכחיש פניה</SelectItem>
-                            <SelectItem value="not_relevant">לא רלוונטי</SelectItem>
+                            {RESPONSE_STATUS_OPTIONS.map((option) => (
+                              <SelectItem key={option.id} value={option.id} className={option.color}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -480,17 +501,18 @@ const updateMutation = useMutation({
                         <FormLabel className="text-sm font-medium">שלב במשפך *</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger className="text-right rounded-lg border-2 h-11">
+                            <SelectTrigger className={`text-right rounded-lg border-2 h-11 ${
+                              PIPELINE_STAGES.find(s => s.id === field.value)?.bgClass || ""
+                            }`}>
                               <SelectValue />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent className="bg-background z-50 text-right" align="end">
-                            <SelectItem value="new">ליד חדש</SelectItem>
-                            <SelectItem value="contacted">נוצר קשר</SelectItem>
-                            <SelectItem value="follow_up">תהליך פולואפ</SelectItem>
-                            <SelectItem value="proposal_sent">נשלחה הצעה</SelectItem>
-                            <SelectItem value="transferred_to_onboarding">הועבר לקליטה</SelectItem>
-                            <SelectItem value="closed">נסגר</SelectItem>
+                            {PIPELINE_STAGES.map((stage) => (
+                              <SelectItem key={stage.id} value={stage.id} className={stage.bgClass}>
+                                {stage.label}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <FormMessage />
