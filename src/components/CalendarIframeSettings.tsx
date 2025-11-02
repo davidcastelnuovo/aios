@@ -24,14 +24,18 @@ export function CalendarIframeSettings() {
     queryFn: async () => {
       if (!userId) return null;
       
+      console.log('Checking calendar status for user:', userId);
       const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
         body: { action: 'status' }
       });
 
+      console.log('Calendar status response:', data, 'error:', error);
       if (error) throw error;
       return data;
     },
     enabled: !!userId,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   });
 
   // Connect to Google Calendar
@@ -152,7 +156,8 @@ export function CalendarIframeSettings() {
     );
   }
 
-  const isConnected = connectionStatus?.connected;
+  const isConnected = connectionStatus?.connected === true;
+  console.log('Rendering with isConnected:', isConnected, 'connectionStatus:', connectionStatus);
 
   return (
     <Card>
