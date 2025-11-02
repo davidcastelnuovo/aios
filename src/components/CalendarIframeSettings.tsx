@@ -50,19 +50,23 @@ export function CalendarIframeSettings() {
     onSuccess: (data) => {
       console.log('Success! Auth URL:', data?.authUrl);
       if (data.authUrl) {
-        const popup = window.open(data.authUrl, '_blank', 'width=600,height=700,noopener');
-        if (!popup) {
-          toast.error("אנא אפשר חלונות קופצים (popup) בדפדפן");
-        } else {
-          // Listen for the popup to close or send a message
-          window.addEventListener('message', (event) => {
-            if (event.data.type === 'calendar_connected') {
-              console.log('Calendar connected successfully!');
-              queryClient.invalidateQueries({ queryKey: ["calendar-status", userId] });
-              toast.success("היומן מחובר בהצלחה!");
-            }
-          });
+        const popup = window.open(data.authUrl, '_blank', 'width=600,height=700,noopener,noreferrer');
+        // Fallback: if popup blocked, redirect current tab
+        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+          console.warn('Popup blocked. Redirecting current tab to Google OAuth...');
+          window.location.href = data.authUrl;
+          return;
         }
+        // Listen for the popup to notify on success
+        const onMessage = (event: MessageEvent) => {
+          if (event.data?.type === 'calendar_connected') {
+            console.log('Calendar connected successfully!');
+            window.removeEventListener('message', onMessage);
+            queryClient.invalidateQueries({ queryKey: ["calendar-status", userId] });
+            toast.success("היומן מחובר בהצלחה!");
+          }
+        };
+        window.addEventListener('message', onMessage);
       }
     },
     onError: (error) => {
