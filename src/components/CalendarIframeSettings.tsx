@@ -144,6 +144,15 @@ const [eventEnd, setEventEnd] = useState("");
     });
   };
 
+  const isConnected = connectionStatus?.connected === true;
+  console.log('Rendering with isConnected:', isConnected, 'connectionStatus:', connectionStatus);
+
+  useEffect(() => {
+    if (isConnected && calendarRef.current) {
+      calendarRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [isConnected]);
+
   if (statusLoading) {
     return (
       <Card>
@@ -159,15 +168,6 @@ const [eventEnd, setEventEnd] = useState("");
       </Card>
     );
   }
-
-const isConnected = connectionStatus?.connected === true;
-  console.log('Rendering with isConnected:', isConnected, 'connectionStatus:', connectionStatus);
-
-  useEffect(() => {
-    if (isConnected && calendarRef.current) {
-      calendarRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
-  }, [isConnected]);
 
   return (
     <Card>
