@@ -103,13 +103,42 @@ useEffect(() => {
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "ברוך הבא!",
-        description: "החשבון נוצר בהצלחה",
-      });
-      navigate("/my-profile");
+      setLoading(false);
+      return;
     }
+    
+    // Process invitation if exists
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (session?.session) {
+        const { data: invData, error: invError } = await supabase.functions.invoke("process-user-invitation", {
+          headers: {
+            Authorization: `Bearer ${session.session.access_token}`,
+          },
+        });
+        
+        if (invError) {
+          console.error("Error processing invitation:", invError);
+        } else if (invData?.error === "NO_INVITATION") {
+          toast({
+            title: "אין הזמנה",
+            description: invData.message,
+            variant: "destructive",
+          });
+          await supabase.auth.signOut();
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error("Exception processing invitation:", e);
+    }
+
+    toast({
+      title: "ברוך הבא!",
+      description: "החשבון נוצר בהצלחה",
+    });
+    navigate("/my-profile");
     setLoading(false);
   };
 
@@ -139,6 +168,33 @@ useEffect(() => {
         setLoading(false);
         return;
       }
+    }
+
+    // Process invitation if exists
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (session?.session) {
+        const { data: invData, error: invError } = await supabase.functions.invoke("process-user-invitation", {
+          headers: {
+            Authorization: `Bearer ${session.session.access_token}`,
+          },
+        });
+        
+        if (invError) {
+          console.error("Error processing invitation:", invError);
+        } else if (invData?.error === "NO_INVITATION") {
+          toast({
+            title: "אין הזמנה",
+            description: invData.message,
+            variant: "destructive",
+          });
+          await supabase.auth.signOut();
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error("Exception processing invitation:", e);
     }
 
     // No MFA required or already verified, redirect to profile
@@ -273,13 +329,42 @@ useEffect(() => {
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "הסיסמה עודכנה",
-        description: "הסיסמה שלך עודכנה בהצלחה",
-      });
-      navigate("/my-profile");
+      setLoading(false);
+      return;
     }
+
+    // Process invitation if exists
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (session?.session) {
+        const { data: invData, error: invError } = await supabase.functions.invoke("process-user-invitation", {
+          headers: {
+            Authorization: `Bearer ${session.session.access_token}`,
+          },
+        });
+        
+        if (invError) {
+          console.error("Error processing invitation:", invError);
+        } else if (invData?.error === "NO_INVITATION") {
+          toast({
+            title: "אין הזמנה",
+            description: invData.message,
+            variant: "destructive",
+          });
+          await supabase.auth.signOut();
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error("Exception processing invitation:", e);
+    }
+
+    toast({
+      title: "הסיסמה עודכנה",
+      description: "הסיסמה שלך עודכנה בהצלחה",
+    });
+    navigate("/my-profile");
     setLoading(false);
   };
 
