@@ -104,6 +104,12 @@ serve(async (req: Request) => {
         .eq("id", user.id);
     }
 
+    // Update profile status to active
+    await supabase
+      .from("profiles")
+      .update({ status: 'active' })
+      .eq("id", user.id);
+
     // Set user role
     if (role) {
       // Delete existing roles

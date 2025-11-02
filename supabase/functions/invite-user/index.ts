@@ -117,10 +117,10 @@ serve(async (req: Request) => {
         throw new Error("Could not find user ID");
       }
 
-      // Ensure profile exists
+      // Ensure profile exists with pending status
       await supabaseAdmin
         .from("profiles")
-        .upsert({ id: userId, email, full_name: fullName || null }, { onConflict: "id" });
+        .upsert({ id: userId, email, full_name: fullName || null, status: 'pending' }, { onConflict: "id" });
 
       // Update user profile if fullName provided
       if (fullName) {

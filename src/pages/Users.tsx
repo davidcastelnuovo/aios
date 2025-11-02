@@ -190,7 +190,7 @@ export default function Users() {
     queryFn: async () => {
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, email, full_name, campaigner_id, sales_person_id, campaigners(full_name), sales_people(full_name)");
+        .select("id, email, full_name, status, campaigner_id, sales_person_id, campaigners(full_name), sales_people(full_name)");
 
       if (profilesError) throw profilesError;
 
@@ -1141,6 +1141,12 @@ export default function Users() {
                     <div>
                       <div className="font-medium">{user.full_name || "-"}</div>
                       <div className="text-sm text-muted-foreground">{user.email}</div>
+                      <Badge 
+                        variant={user.status === 'active' ? 'default' : user.status === 'pending' ? 'secondary' : 'outline'}
+                        className={`mt-1 ${user.status === 'active' ? 'bg-green-500' : user.status === 'pending' ? 'bg-yellow-500' : ''}`}
+                      >
+                        {user.status === 'active' ? 'פעיל' : user.status === 'pending' ? 'ממתין' : user.status === 'inactive' ? 'לא פעיל' : user.status}
+                      </Badge>
                     </div>
                     {user.role && (
                       <Badge className={roleBadgeColors[user.role]}>
@@ -1281,6 +1287,7 @@ export default function Users() {
                     <TableRow>
                       <TableHead className="text-right">שם מלא</TableHead>
                       <TableHead className="text-right">אימייל</TableHead>
+                      <TableHead className="text-right">סטטוס</TableHead>
                       <TableHead className="text-right">תפקידים</TableHead>
                       <TableHead className="text-right">קמפיינר משויך</TableHead>
                       <TableHead className="text-right">איש מכירות</TableHead>
@@ -1309,6 +1316,14 @@ export default function Users() {
                           </div>
                         </TableCell>
                         <TableCell>{user.email}</TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant={user.status === 'active' ? 'default' : user.status === 'pending' ? 'secondary' : 'outline'}
+                            className={user.status === 'active' ? 'bg-green-500' : user.status === 'pending' ? 'bg-yellow-500' : ''}
+                          >
+                            {user.status === 'active' ? 'פעיל' : user.status === 'pending' ? 'ממתין' : user.status === 'inactive' ? 'לא פעיל' : user.status}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
                           {user.role ? (
                             <Badge className={roleBadgeColors[user.role]}>
