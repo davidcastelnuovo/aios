@@ -10,6 +10,8 @@ export function useUserRole() {
       const { data } = await supabase.auth.getSession();
       return data.session;
     },
+    staleTime: Infinity, // Session shouldn't change often
+    refetchOnWindowFocus: false,
   });
 
   const { data: roles, isLoading } = useQuery({
@@ -26,6 +28,8 @@ export function useUserRole() {
       return data.map((r) => r.role as UserRole);
     },
     enabled: !!session?.user?.id,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    refetchOnWindowFocus: false,
   });
 
   const { data: campaignerId } = useQuery({
@@ -40,6 +44,8 @@ export function useUserRole() {
       return data?.campaigner_id || null;
     },
     enabled: !!session?.user?.id,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    refetchOnWindowFocus: false,
   });
 
   const { data: salesPersonAgencyIds } = useQuery({
@@ -62,6 +68,8 @@ export function useUserRole() {
       return agencies?.map(a => a.agency_id) || null;
     },
     enabled: !!session?.user?.id,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    refetchOnWindowFocus: false,
   });
 
   const hasRole = (role: UserRole) => roles?.includes(role) || false;
