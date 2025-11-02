@@ -107,79 +107,138 @@ serve(async (req: Request) => {
     const userExists = existingUser?.users?.some(u => u.email === email);
 
     if (userExists) {
-      console.log("User already exists");
-      // For resend, send invitation link again
-      if (resend) {
-        // Generate new invitation token
-        const token_value = crypto.randomUUID();
-        
-        const invitationMetadata = {
-          email,
-          fullName,
-          role,
-          agencyIds: agencyIds || [],
-          modulePermissions: modulePermissions || [],
-          campaignerId,
-          salesPersonId,
-        };
-
-        const { error: tokenError } = await supabaseAdmin
-          .from("invitation_tokens")
-          .insert({
-            token: token_value,
-            tenant_id: tenantIdFinal,
-            created_by: requesterId,
-            email: email,
-            metadata: invitationMetadata,
-          });
-
-        if (tokenError) {
-          console.error("Error creating invitation token:", tokenError);
-          throw tokenError;
-        }
-
-        // Build invitation link (force origin only)
-        const baseUrlInput1 = baseUrl || "https://after-lead.lovable.app";
-        let safeBaseUrl1: string;
-        try {
-          const u = new URL(baseUrlInput1);
-          safeBaseUrl1 = u.origin;
-        } catch {
-          const parts = baseUrlInput1.split("/").slice(0, 3);
-          safeBaseUrl1 = parts.join("/");
-        }
-        const invitationLink = `${safeBaseUrl1.replace(/\/+$/, "")}/auth?token=${token_value}`;
-
-        // Send invitation email via Supabase Auth
-        try {
-          const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-            redirectTo: invitationLink,
-          });
-
-          if (inviteError) {
-            console.error("Error sending invitation email:", inviteError);
-          } else {
-            console.log("Invitation email resent successfully via Supabase Auth to:", email);
-          }
-        } catch (e) {
-          console.error("Invitation email exception:", e);
-        }
-
-        // Always return success with the link so you can copy manually if needed
-        return new Response(
-          JSON.stringify({ success: true, message: 'Invitation resent successfully', invitationLink }),
-          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      console.log("User already exists - updating their details");
       
+      // Get existing user ID
+      const existingUserData = existingUser?.users?.find(u => u.email === email);
+      const userId = existingUserData?.id;
+      
+      if (!userId) {
+        throw new Error("Could not find user ID");
+      }
+
+      // Update user profile if fullName provided
+      if (fullName) {
+        await supabaseAdmin
+          .from("profiles")
+          .update({ full_name: fullName })
+          .eq("id", userId);
+      }
+
+      // Update campaigner_id if provided
+      if (campaignerId) {
+        await supabaseAdmin
+          .from("profiles")
+          .update({ campaigner_id: campaignerId })
+          .eq("id", userId);
+      }
+
+      // Update sales_person_id if provided
+      if (salesPersonId) {
+        await supabaseAdmin
+          .from("profiles")
+          .update({ sales_person_id: salesPersonId })
+          .eq("id", userId);
+      }
+
+      // Update role if provided
+      if (role) {
+        // Delete existing roles
+        await supabaseAdmin
+          .from("user_roles")
+          .delete()
+          .eq("user_id", userId);
+
+        // Insert new role
+        await supabaseAdmin
+          .from("user_roles")
+          .insert({ user_id: userId, role });
+      }
+
+      // Update module permissions if provided
+      if (modulePermissions && modulePermissions.length > 0) {
+        // Delete existing permissions
+        await supabaseAdmin
+          .from("user_permissions")
+          .delete()
+          .eq("user_id", userId);
+
+        // Insert new permissions
+        const permissionsToInsert = modulePermissions.map((module) => ({
+          user_id: userId,
+          module: module,
+          can_access: true,
+        }));
+
+        await supabaseAdmin
+          .from("user_permissions")
+          .insert(permissionsToInsert);
+      }
+
+      // Update campaigner agencies if provided
+      if (campaignerId && agencyIds && agencyIds.length > 0) {
+        // Delete existing campaigner agencies
+        await supabaseAdmin
+          .from("campaigner_agencies")
+          .delete()
+          .eq("campaigner_id", campaignerId);
+
+        // Insert new campaigner agencies
+        const campaignerAgenciesToInsert = agencyIds.map((agencyId) => ({
+          campaigner_id: campaignerId,
+          agency_id: agencyId,
+        }));
+
+        await supabaseAdmin
+          .from("campaigner_agencies")
+          .insert(campaignerAgenciesToInsert);
+      }
+
+      // Update sales person agencies if provided
+      if (salesPersonId && agencyIds && agencyIds.length > 0) {
+        // Delete existing sales person agencies
+        await supabaseAdmin
+          .from("sales_person_agencies")
+          .delete()
+          .eq("sales_person_id", salesPersonId);
+
+        // Insert new sales person agencies
+        const salesPersonAgenciesToInsert = agencyIds.map((agencyId) => ({
+          sales_person_id: salesPersonId,
+          agency_id: agencyId,
+        }));
+
+        await supabaseAdmin
+          .from("sales_person_agencies")
+          .insert(salesPersonAgenciesToInsert);
+      }
+
+      // Check if user is in the tenant
+      const { data: tenantUser } = await supabaseAdmin
+        .from("tenant_users")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("tenant_id", tenantIdFinal)
+        .maybeSingle();
+
+      // Add user to tenant if not already there
+      if (!tenantUser) {
+        await supabaseAdmin
+          .from("tenant_users")
+          .insert({
+            user_id: userId,
+            tenant_id: tenantIdFinal,
+            role: role || "member",
+          });
+      }
+
       return new Response(
         JSON.stringify({
-          success: false,
-          error: "EMAIL_EXISTS",
-          message: "המשתמש כבר רשום במערכת",
+          success: true,
+          message: "המשתמש עודכן בהצלחה",
         }),
         {
-          status: 400,
+          status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
