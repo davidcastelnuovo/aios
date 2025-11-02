@@ -7,7 +7,9 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { toast } from "sonner";
-import { Calendar, Plus, Unplug } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Calendar, Plus, Unplug, Loader2 } from "lucide-react";
+import { InteractiveCalendar } from "./InteractiveCalendar";
 
 export function CalendarIframeSettings() {
   const { userId, user } = useCurrentUser();
@@ -186,34 +188,28 @@ export function CalendarIframeSettings() {
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-green-600" />
-                <span className="font-medium">מחובר ל-Google Calendar</span>
-              </div>
+            {/* Connected State */}
+            <Alert>
+              <Calendar className="h-4 w-4" />
+              <AlertDescription>
+                היומן שלך מחובר בהצלחה. תוכל להוסיף, לערוך ולמחוק אירועים מכאן.
+              </AlertDescription>
+            </Alert>
+
+            <div className="flex gap-2">
               <Button
-                variant="outline"
-                size="sm"
+                variant="destructive"
                 onClick={() => disconnectMutation.mutate()}
                 disabled={disconnectMutation.isPending}
               >
+                {disconnectMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
                 <Unplug className="h-4 w-4 ml-2" />
-                נתק
+                נתק יומן
               </Button>
             </div>
 
-            {/* Google Calendar Embed */}
-            <div className="w-full overflow-hidden rounded-lg border">
-              <iframe
-                src={`https://calendar.google.com/calendar/embed?src=${encodeURIComponent(user?.email || '')}&ctz=Asia%2FJerusalem`}
-                style={{ border: 0 }}
-                width="100%"
-                height="600"
-                frameBorder="0"
-                scrolling="no"
-                title="Google Calendar"
-              />
-            </div>
+            {/* Interactive Calendar */}
+            <InteractiveCalendar />
 
             {!showAddEvent ? (
               <Button onClick={() => setShowAddEvent(true)} className="w-full">
