@@ -37,21 +37,37 @@ export function CalendarIframeSettings() {
   // Connect to Google Calendar
   const connectMutation = useMutation({
     mutationFn: async () => {
+      console.log('Starting Google Calendar connection...');
       const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
         body: { action: 'init' }
       });
+
+      console.log('Response from google-calendar-auth:', { data, error });
 
       if (error) throw error;
       return data;
     },
     onSuccess: (data) => {
+      console.log('Success! Auth URL:', data?.authUrl);
       if (data.authUrl) {
-        window.open(data.authUrl, '_blank', 'noopener');
+        const popup = window.open(data.authUrl, '_blank', 'width=600,height=700,noopener');
+        if (!popup) {
+          toast.error("אנא אפשר חלונות קופצים (popup) בדפדפן");
+        } else {
+          // Listen for the popup to close or send a message
+          window.addEventListener('message', (event) => {
+            if (event.data.type === 'calendar_connected') {
+              console.log('Calendar connected successfully!');
+              queryClient.invalidateQueries({ queryKey: ["calendar-status", userId] });
+              toast.success("היומן מחובר בהצלחה!");
+            }
+          });
+        }
       }
     },
     onError: (error) => {
       console.error("Error connecting calendar:", error);
-      toast.error("שגיאה בהתחברות ללוח השנה");
+      toast.error("שגיאה בהתחברות ללוח השנה: " + error.message);
     },
   });
 
