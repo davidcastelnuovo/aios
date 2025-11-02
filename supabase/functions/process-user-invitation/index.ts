@@ -46,12 +46,11 @@ serve(async (req: Request) => {
       );
     }
 
-    // Find unused invitation for this email
+    // Find latest invitation for this email (including used ones if not expired)
     const { data: invitation } = await supabase
       .from("invitation_tokens")
       .select("*")
       .eq("email", user.email)
-      .eq("used", false)
       .gt("expires_at", new Date().toISOString())
       .order("created_at", { ascending: false })
       .limit(1)
@@ -66,6 +65,15 @@ serve(async (req: Request) => {
           message: "לא נמצאה הזמנה תקפה למשתמש זה. אנא צור קשר עם המנהל." 
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
+
+    // If invitation was already used, skip processing
+    if (invitation.used) {
+      console.log("Invitation already processed for", user.email);
+      return new Response(
+        JSON.stringify({ success: true, message: "ההזמנה כבר עובדה בעבר" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
       );
     }
 
