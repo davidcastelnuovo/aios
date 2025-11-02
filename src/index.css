@@ -126,6 +126,7 @@ All colors MUST be HSL.
 
 html {
   direction: rtl;
+  scrollbar-gutter: stable both-edges;
 }
 
   body {

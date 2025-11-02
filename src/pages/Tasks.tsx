@@ -140,6 +140,9 @@ export default function Tasks() {
       if (error) throw error;
       return data;
     },
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   const { data: campaigners } = useQuery({
@@ -153,6 +156,9 @@ export default function Tasks() {
       if (error) throw error;
       return data;
     },
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Get current user's campaigner role
@@ -168,6 +174,9 @@ export default function Tasks() {
       return data?.role || null;
     },
     enabled: !!campaignerId && isCampaigner,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Get client IDs for the campaigner
@@ -182,6 +191,9 @@ export default function Tasks() {
       return data?.map(ct => ct.client_id) || [];
     },
     enabled: !!campaignerId && isCampaigner,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   const updateTaskStatusMutation = useMutation({
