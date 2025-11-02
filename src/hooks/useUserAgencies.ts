@@ -28,9 +28,9 @@ export function useUserAgencies() {
         salesPersonAgencyIds.forEach((id) => aggregated.add(id));
       }
 
-      // Campaigner or Team Manager with campaigner_id: agencies via campaigner_agencies
-      if (isCampaigner || isTeamManager) {
-        console.log("🔍 Fetching profile for campaigner/team_manager");
+      // Campaigner: agencies via campaigner_agencies (Team Managers use managed agencies only)
+      if (isCampaigner && !isTeamManager) {
+        console.log("🔍 Fetching profile for campaigner");
         const { data: profile } = await supabase
           .from("profiles")
           .select("campaigner_id")
