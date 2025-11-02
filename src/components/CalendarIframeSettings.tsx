@@ -21,6 +21,7 @@ export function CalendarIframeSettings() {
 const [eventEnd, setEventEnd] = useState("");
 
   const calendarRef = useRef<HTMLDivElement | null>(null);
+  const popupRef = useRef<Window | null>(null);
 
   // Check connection status
   const { data: connectionStatus, isLoading: statusLoading } = useQuery({
@@ -58,13 +59,21 @@ const [eventEnd, setEventEnd] = useState("");
     },
     onSuccess: (data) => {
       console.log('Success! Auth URL:', data?.authUrl);
-      if (data.authUrl) {
-        const popup = window.open(data.authUrl, '_blank', 'width=600,height=700,noopener,noreferrer');
-        // Fallback: if popup blocked, redirect current tab
-        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-          console.warn('Popup blocked. Redirecting current tab to Google OAuth...');
-          window.location.href = data.authUrl;
-          return;
+      if (data?.authUrl) {
+        // If we pre-opened a popup, navigate it; otherwise try to open now
+        if (popupRef.current && !popupRef.current.closed) {
+          popupRef.current.location.href = data.authUrl;
+        } else {
+          const popup = window.open(
+            data.authUrl,
+            'google-calendar-auth',
+            'width=600,height=700,left=100,top=100,noopener,noreferrer'
+          );
+          if (!popup) {
+            toast.error('חלון הקופץ נחסם. נא לאפשר חלונות קופצים ולנסות שוב.');
+            return;
+          }
+          popupRef.current = popup;
         }
         // Listen for the popup to notify on success
         const onMessage = (event: MessageEvent) => {
@@ -73,14 +82,22 @@ const [eventEnd, setEventEnd] = useState("");
             window.removeEventListener('message', onMessage);
             queryClient.invalidateQueries({ queryKey: ["calendar-status", userId] });
             toast.success("היומן מחובר בהצלחה!");
+            // Close popup if still open
+            try { popupRef.current?.close(); } catch {}
+            popupRef.current = null;
           }
         };
         window.addEventListener('message', onMessage);
+      } else {
+        toast.error('לא התקבל קישור התחברות מהשרת. נסה שוב מאוחר יותר.');
       }
     },
     onError: (error) => {
+      // Close any pre-opened popup on error
+      try { popupRef.current?.close(); } catch {}
+      popupRef.current = null;
       console.error("Error connecting calendar:", error);
-      toast.error("שגיאה בהתחברות ללוח השנה: " + error.message);
+      toast.error("שגיאה בהתחברות ללוח השנה: " + (error as Error).message);
     },
   });
 
@@ -189,7 +206,13 @@ const [eventEnd, setEventEnd] = useState("");
               חבר את חשבון Google שלך כדי להוסיף אירועים ישירות ללוח השנה
             </p>
             <Button 
-              onClick={() => connectMutation.mutate()}
+              onClick={() => {
+                // Pre-open a blank popup to avoid popup blockers
+                try {
+                  popupRef.current = window.open('', 'google-calendar-auth', 'width=600,height=700,left=100,top=100,noopener,noreferrer');
+                } catch {}
+                connectMutation.mutate();
+              }}
               disabled={connectMutation.isPending}
             >
               <Calendar className="h-4 w-4 ml-2" />

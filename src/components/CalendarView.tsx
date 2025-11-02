@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,40 +28,59 @@ export function CalendarView() {
     },
   });
 
+  const popupRef = useRef<Window | null>(null);
+
   const handleConnect = async () => {
     try {
+      // Pre-open a blank popup to avoid popup blockers
+      try {
+        popupRef.current = window.open('', 'google-calendar-auth', 'width=600,height=700,left=100,top=100,noopener,noreferrer');
+      } catch {}
+
       const { data, error } = await supabase.functions.invoke("google-calendar-auth", {
         body: { action: "init" },
       });
 
       if (error) throw error;
 
-      if (data.authUrl) {
-        // Open popup and listen for success message
-        const popup = window.open(
-          data.authUrl,
-          'google-calendar-auth',
-          'width=600,height=700,left=100,top=100'
-        );
+      if (data?.authUrl) {
+        // Navigate the pre-opened popup if available; otherwise try to open now
+        if (popupRef.current && !popupRef.current.closed) {
+          popupRef.current.location.href = data.authUrl;
+        } else {
+          const popup = window.open(
+            data.authUrl,
+            'google-calendar-auth',
+            'width=600,height=700,left=100,top=100,noopener,noreferrer'
+          );
+          if (!popup) {
+            alert('חלון הקופץ נחסם. אנא אפשר חלונות קופצים עבור אתר זה.');
+            return;
+          }
+          popupRef.current = popup;
+        }
 
         // Listen for messages from the popup
         const messageHandler = (event: MessageEvent) => {
           if (event.data?.type === 'calendar_connected') {
+            window.removeEventListener('message', messageHandler);
             // Refresh the calendar status
             window.location.reload();
-            window.removeEventListener('message', messageHandler);
+            try { popupRef.current?.close(); } catch {}
+            popupRef.current = null;
           }
         };
         window.addEventListener('message', messageHandler);
-
-        // Check if popup was blocked
-        if (!popup || popup.closed) {
-          alert('חלון הקופץ נחסם. אנא אפשר חלונות קופצים עבור אתר זה.');
-        }
+      } else {
+        alert('לא התקבל קישור התחברות מהשרת. נסה שוב.');
+        try { popupRef.current?.close(); } catch {}
+        popupRef.current = null;
       }
     } catch (error) {
       console.error("Error connecting calendar:", error);
       alert('שגיאה בהתחברות ליומן. אנא נסה שוב.');
+      try { popupRef.current?.close(); } catch {}
+      popupRef.current = null;
     }
   };
 
