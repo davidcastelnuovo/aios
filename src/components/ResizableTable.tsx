@@ -102,10 +102,10 @@ export function ResizableTable({
   return (
     <div className="relative w-full h-full overflow-auto border rounded-md" ref={tableRef}>
       <table className="w-full table-fixed border-collapse">
-        <thead className="sticky top-0 z-20 bg-muted/50">
+        <thead className="sticky top-0 z-20 bg-card">
           <tr className="border-b">
             {checkboxColumn && (
-              <th className="sticky right-0 z-30 bg-background border-l p-3 text-center w-[50px]">
+              <th className="sticky right-0 z-30 bg-card border-l p-3 text-center w-[50px]">
                 <Checkbox
                   checked={checkboxColumn.checked.every(Boolean)}
                   onCheckedChange={checkboxColumn.onSelectAll}
@@ -117,7 +117,7 @@ export function ResizableTable({
               return (
                 <th
                   key={column.id}
-                  className="sticky z-20 bg-background border-l p-3 text-right relative group overflow-hidden"
+                  className="sticky z-20 bg-card border-l p-3 text-right relative group overflow-hidden"
                   style={{ 
                     width: column.width,
                     minWidth: column.minWidth || 80,
@@ -155,7 +155,7 @@ export function ResizableTable({
             {regularColumns.map((column) => (
               <th
                 key={column.id}
-                className="bg-muted/50 border-l p-3 text-right relative group"
+                className="bg-card border-l p-3 text-right relative group"
                 style={{ width: column.width }}
               >
                 <div className="flex items-center justify-between gap-2">
