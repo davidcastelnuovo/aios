@@ -353,8 +353,9 @@ export default function Users() {
       }
       return data;
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
       
       // Show success message with invitation link if available
       if (data.invitationLink) {
