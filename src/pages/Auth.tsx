@@ -42,14 +42,19 @@ useEffect(() => {
 
     // If we have a code param, try to exchange it for a session
     if (code) {
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) {
         console.error("exchangeCodeForSession error:", error);
         toast({ title: "שגיאה", description: error.message, variant: "destructive" });
+      } else if (data?.session) {
+        // Successfully got session from code exchange, redirect to profile
+        console.log("Google OAuth successful, redirecting to profile");
+        navigate("/my-profile");
+        return;
       }
     }
 
-    // Check if user is already authenticated after code exchange
+    // Check if user is already authenticated
     const { data: { session } } = await supabase.auth.getSession();
     
     // Handle Google OAuth invitation signup flow
