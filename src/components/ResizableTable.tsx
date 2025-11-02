@@ -98,7 +98,7 @@ export function ResizableTable({
   };
 
   return (
-    <div className="relative overflow-auto border rounded-md" ref={tableRef}>
+    <div className="relative w-full h-full overflow-auto border rounded-md" ref={tableRef}>
       <table className="w-full border-collapse">
         <thead className="sticky top-0 z-20 bg-muted/50">
           <tr className="border-b">
@@ -122,7 +122,7 @@ export function ResizableTable({
                   }}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span>{column.label}</span>
+                    <span className="text-sm font-medium">{column.label}</span>
                     <Popover>
                       <PopoverTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-5 w-5">
@@ -155,7 +155,7 @@ export function ResizableTable({
                 style={{ width: column.width }}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span>{column.label}</span>
+                  <span className="text-sm font-medium">{column.label}</span>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover:opacity-100">
