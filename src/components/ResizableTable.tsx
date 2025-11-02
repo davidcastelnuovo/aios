@@ -26,13 +26,15 @@ interface ResizableTableProps {
     onCheckedChange: (index: number, checked: boolean) => void;
     onSelectAll: (checked: boolean) => void;
   };
+  getRowClassName?: (row: any, rowIndex: number) => string;
 }
 
 export function ResizableTable({ 
   columns: initialColumns, 
   data, 
   onColumnsChange,
-  checkboxColumn 
+  checkboxColumn,
+  getRowClassName
 }: ResizableTableProps) {
   const [columns, setColumns] = useState<ColumnConfig[]>(initialColumns);
   const [resizing, setResizing] = useState<{ columnId: string; startX: number; startWidth: number } | null>(null);
@@ -103,7 +105,7 @@ export function ResizableTable({
         <thead className="sticky top-0 z-20 bg-muted/50">
           <tr className="border-b">
             {checkboxColumn && (
-              <th className="sticky right-0 z-30 bg-muted/50 border-l p-3 text-center w-[50px]">
+              <th className="sticky right-0 z-30 bg-background border-l p-3 text-center w-[50px]">
                 <Checkbox
                   checked={checkboxColumn.checked.every(Boolean)}
                   onCheckedChange={checkboxColumn.onSelectAll}
@@ -115,7 +117,7 @@ export function ResizableTable({
               return (
                 <th
                   key={column.id}
-                  className="sticky z-20 bg-muted/50 border-l p-3 text-right relative group overflow-hidden"
+                  className="sticky z-20 bg-background border-l p-3 text-right relative group overflow-hidden"
                   style={{ 
                     width: column.width,
                     minWidth: column.minWidth || 80,
@@ -185,13 +187,15 @@ export function ResizableTable({
           </tr>
         </thead>
         <tbody>
-          {data.map((row, rowIndex) => (
+          {data.map((row, rowIndex) => {
+            const rowClassName = getRowClassName ? getRowClassName(row, rowIndex) : (rowIndex % 2 === 0 ? 'bg-background' : 'bg-muted/10');
+            return (
             <tr
               key={rowIndex}
-              className={`border-b hover:bg-muted/30 ${rowIndex % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}
+              className={`border-b hover:bg-muted/30 ${rowClassName}`}
             >
               {checkboxColumn && (
-                <td className={`sticky right-0 z-10 border-l p-3 text-center bg-inherit`}>
+                <td className={`sticky right-0 z-10 border-l p-3 text-center ${rowClassName}`}>
                   <Checkbox
                     checked={checkboxColumn.checked[rowIndex]}
                     onCheckedChange={(checked) => checkboxColumn.onCheckedChange(rowIndex, checked as boolean)}
@@ -203,7 +207,7 @@ export function ResizableTable({
                 return (
                   <td
                     key={column.id}
-                    className="sticky z-10 border-l p-3 bg-inherit overflow-hidden"
+                    className={`sticky z-10 border-l p-3 overflow-hidden ${rowClassName}`}
                     style={{ 
                       width: column.width,
                       minWidth: column.minWidth || 80,
@@ -225,7 +229,8 @@ export function ResizableTable({
                 </td>
               ))}
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
