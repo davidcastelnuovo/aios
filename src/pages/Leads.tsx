@@ -150,6 +150,7 @@ function LeadCard({
 
   const { toast } = useToast();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const isMobile = useIsMobile();
 
   const handleDelete = async (id: string) => {
@@ -182,7 +183,13 @@ function LeadCard({
     >
       <CardHeader className="pb-2 pt-3">
         <CardTitle className="text-sm flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div 
+            className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer hover:opacity-70 transition-opacity"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditDialogOpen(true);
+            }}
+          >
             <User className="h-4 w-4 text-primary shrink-0" />
             <span className="font-bold truncate">{lead.contact_name || 'ללא שם איש קשר'}</span>
           </div>
@@ -258,7 +265,11 @@ function LeadCard({
 
         {/* Actions */}
         <div className="flex gap-2 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
-          <EditLeadDialog lead={lead} />
+          <EditLeadDialog 
+            lead={lead} 
+            open={editDialogOpen} 
+            onOpenChange={setEditDialogOpen}
+          />
           <Button
             variant="outline"
             size="icon"

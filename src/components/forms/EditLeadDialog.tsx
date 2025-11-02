@@ -48,10 +48,15 @@ type FormValues = z.infer<typeof formSchema>;
 
 interface EditLeadDialogProps {
   lead: any;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function EditLeadDialog({ lead }: EditLeadDialogProps) {
-  const [open, setOpen] = useState(false);
+export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: EditLeadDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = onOpenChange !== undefined ? onOpenChange : setInternalOpen;
   const [activeTab, setActiveTab] = useState("details");
   const [newUpdate, setNewUpdate] = useState("");
   const [editingUpdateId, setEditingUpdateId] = useState<string | null>(null);
