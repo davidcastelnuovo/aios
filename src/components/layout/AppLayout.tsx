@@ -49,6 +49,9 @@ export function AppLayout({ children }: AppLayoutProps) {
       return data;
     },
     enabled: !!userId,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    refetchInterval: false, // Don't auto-refetch
   });
 
   useEffect(() => {
