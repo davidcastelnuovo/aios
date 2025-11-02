@@ -117,6 +117,11 @@ serve(async (req: Request) => {
         throw new Error("Could not find user ID");
       }
 
+      // Ensure profile exists
+      await supabaseAdmin
+        .from("profiles")
+        .upsert({ id: userId, email, full_name: fullName || null }, { onConflict: "id" });
+
       // Update user profile if fullName provided
       if (fullName) {
         await supabaseAdmin
@@ -232,10 +237,36 @@ serve(async (req: Request) => {
           });
       }
 
+      // Build invitation link for existing users
+      const baseUrlInput3 = baseUrl || "https://after-lead.lovable.app";
+      let safeBaseUrl3: string;
+      try {
+        const u = new URL(baseUrlInput3);
+        safeBaseUrl3 = u.origin;
+      } catch {
+        const parts = baseUrlInput3.split("/").slice(0, 3);
+        safeBaseUrl3 = parts.join("/");
+      }
+      const existingInvitationLink = `${safeBaseUrl3.replace(/\/+$/, "")}/auth`;
+
+      // Send password recovery email (acts as invite for existing users)
+      try {
+        const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(email, {
+          redirectTo: existingInvitationLink,
+        });
+        if (resetError) {
+          console.error("Error sending recovery email:", resetError);
+        } else {
+          console.log("Recovery email sent to existing user:", email);
+        }
+      } catch (e) {
+        console.error("Exception sending recovery email:", e);
+      }
+
       return new Response(
         JSON.stringify({
           success: true,
-          message: "המשתמש עודכן בהצלחה",
+          message: "המשתמש עודכן והאימייל נשלח",
         }),
         {
           status: 200,
