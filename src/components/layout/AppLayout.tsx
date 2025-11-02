@@ -7,6 +7,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/contexts/AgencyContext";
+import { useEffect } from "react";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useQuery } from "@tanstack/react-query";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +32,52 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
+  const { userId } = useCurrentUser();
+
+  // Check user status and process invitation if pending
+  const { data: userProfile } = useQuery({
+    queryKey: ["user-profile", userId],
+    queryFn: async () => {
+      if (!userId) return null;
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("status")
+        .eq("id", userId)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userId,
+  });
+
+  useEffect(() => {
+    const processInvitation = async () => {
+      if (!userId || !userProfile || userProfile.status !== 'pending') return;
+
+      try {
+        const { data: session } = await supabase.auth.getSession();
+        if (!session?.session) return;
+
+        const { data, error } = await supabase.functions.invoke("process-user-invitation", {
+          headers: {
+            Authorization: `Bearer ${session.session.access_token}`,
+          },
+        });
+
+        if (error) {
+          console.error("Error processing invitation:", error);
+        } else if (data?.success) {
+          // Reload the page to refresh all data
+          window.location.reload();
+        }
+      } catch (error) {
+        console.error("Error calling process-user-invitation:", error);
+      }
+    };
+
+    processInvitation();
+  }, [userId, userProfile]);
 
   const handleLogout = async () => {
     try {
