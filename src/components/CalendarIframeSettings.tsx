@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { toast } from "sonner";
@@ -18,7 +18,9 @@ export function CalendarIframeSettings() {
   const [eventSummary, setEventSummary] = useState("");
   const [eventDescription, setEventDescription] = useState("");
   const [eventStart, setEventStart] = useState("");
-  const [eventEnd, setEventEnd] = useState("");
+const [eventEnd, setEventEnd] = useState("");
+
+  const calendarRef = useRef<HTMLDivElement | null>(null);
 
   // Check connection status
   const { data: connectionStatus, isLoading: statusLoading } = useQuery({
@@ -158,8 +160,14 @@ export function CalendarIframeSettings() {
     );
   }
 
-  const isConnected = connectionStatus?.connected === true;
+const isConnected = connectionStatus?.connected === true;
   console.log('Rendering with isConnected:', isConnected, 'connectionStatus:', connectionStatus);
+
+  useEffect(() => {
+    if (isConnected && calendarRef.current) {
+      calendarRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [isConnected]);
 
   return (
     <Card>
@@ -209,7 +217,10 @@ export function CalendarIframeSettings() {
             </div>
 
             {/* Interactive Calendar */}
-            <InteractiveCalendar />
+            <div ref={calendarRef} className="space-y-2">
+              <h3 className="text-base font-semibold">היומן שלי</h3>
+              <InteractiveCalendar />
+            </div>
 
             {!showAddEvent ? (
               <Button onClick={() => setShowAddEvent(true)} className="w-full">
