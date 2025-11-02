@@ -569,40 +569,6 @@ const updateMutation = useMutation({
 
                 <FormField
                   control={form.control}
-                  name="products"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>מוצרים/שירותים</FormLabel>
-                      <Select 
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          const selectedProduct = products?.find(p => p.id === value);
-                          if (selectedProduct) {
-                            form.setValue("estimated_deal_value", selectedProduct.price.toString());
-                          }
-                        }} 
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="text-right">
-                            <SelectValue placeholder="בחר מוצר/שירות" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-background z-[100] text-right" align="end">
-                          {products?.map((product) => (
-                            <SelectItem key={product.id} value={product.id}>
-                              {product.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="folder_link"
                   render={({ field }) => (
                     <FormItem>
@@ -636,6 +602,40 @@ const updateMutation = useMutation({
 
               {/* Tab 2: Proposals & Pricing */}
               <TabsContent value="proposals" className="space-y-4 mt-0">
+                <FormField
+                  control={form.control}
+                  name="products"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>מוצרים/שירותים</FormLabel>
+                      <Select 
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          const selectedProduct = products?.find(p => p.id === value);
+                          if (selectedProduct) {
+                            form.setValue("estimated_deal_value", selectedProduct.price.toString());
+                          }
+                        }} 
+                        defaultValue={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="text-right">
+                            <SelectValue placeholder="בחר מוצר/שירות" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100] text-right" align="end">
+                          {products?.map((product) => (
+                            <SelectItem key={product.id} value={product.id}>
+                              {product.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <FormField
                   control={form.control}
                   name="estimated_deal_value"
