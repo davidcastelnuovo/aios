@@ -24,6 +24,7 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
     if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('Missing environment variables');
       throw new Error('Missing environment variables');
     }
 
@@ -31,8 +32,11 @@ serve(async (req) => {
 
     const { token, user_id, email }: LinkRequest = await req.json();
 
+    console.log('Received request:', { token, user_id, email });
+
     // Validate inputs
     if (!token || !user_id || !email) {
+      console.error('Missing required fields:', { token: !!token, user_id: !!user_id, email: !!email });
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -80,24 +84,31 @@ serve(async (req) => {
     const campaignerId = metadata.campaignerId || null;
     const salesPersonId = metadata.salesPersonId || null;
 
-    // Update user profile
+    // Update user profile - use update instead of upsert since profile should already exist from trigger
+    console.log('Updating profile for user:', user_id, {
+      full_name: fullName,
+      campaigner_id: campaignerId,
+      sales_person_id: salesPersonId,
+    });
+
     const { error: profileError } = await supabase
       .from('profiles')
-      .upsert({
-        id: user_id,
-        email: email,
+      .update({
         full_name: fullName,
         campaigner_id: campaignerId,
         sales_person_id: salesPersonId,
-      }, { onConflict: 'id' });
+      })
+      .eq('id', user_id);
 
     if (profileError) {
       console.error('Profile update error:', profileError);
       return new Response(
-        JSON.stringify({ error: 'Failed to update profile' }),
+        JSON.stringify({ error: 'Failed to update profile: ' + profileError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    console.log('Profile updated successfully');
 
     // Delete existing user roles
     await supabase

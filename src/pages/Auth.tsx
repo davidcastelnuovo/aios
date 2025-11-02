@@ -55,8 +55,16 @@ useEffect(() => {
     // Handle Google OAuth invitation signup flow
     if (session?.user && inviteSignup === "true") {
       const savedToken = localStorage.getItem("invite_token");
+      console.log("Processing Google signup with invite token:", savedToken);
+      
       if (savedToken) {
         try {
+          console.log("Calling link-google-user-to-invitation with:", {
+            token: savedToken,
+            user_id: session.user.id,
+            email: session.user.email,
+          });
+
           // Call edge function to link user to invitation
           const { data: linkData, error: linkError } = await supabase.functions.invoke(
             "link-google-user-to-invitation",
@@ -69,34 +77,52 @@ useEffect(() => {
             }
           );
 
+          console.log("Link result:", { linkData, linkError });
+
           // Clear the token from localStorage
           localStorage.removeItem("invite_token");
 
-          if (linkError || linkData?.error) {
-            console.error("Link error:", linkError || linkData?.error);
+          if (linkError) {
+            console.error("Link invocation error:", linkError);
             toast({
               title: "שגיאה",
-              description: "שגיאה בקישור המשתמש להזמנה",
+              description: linkError.message || "שגיאה בקישור המשתמש להזמנה",
               variant: "destructive",
             });
-          } else {
-            toast({
-              title: "הצלחה!",
-              description: "ההרשמה הושלמה בהצלחה",
-            });
+            // Don't navigate on error
+            return;
           }
+
+          if (linkData?.error) {
+            console.error("Link function error:", linkData.error);
+            toast({
+              title: "שגיאה",
+              description: linkData.error || "שגיאה בקישור המשתמש להזמנה",
+              variant: "destructive",
+            });
+            // Don't navigate on error
+            return;
+          }
+
+          toast({
+            title: "הצלחה!",
+            description: "ההרשמה הושלמה בהצלחה",
+          });
 
           navigate("/my-profile");
           return;
         } catch (error: any) {
-          console.error("Link error:", error);
+          console.error("Link exception:", error);
           localStorage.removeItem("invite_token");
           toast({
             title: "שגיאה",
             description: error.message || "שגיאה בקישור המשתמש",
             variant: "destructive",
           });
+          return;
         }
+      } else {
+        console.log("No invite token found in localStorage");
       }
     }
     
