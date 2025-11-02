@@ -47,8 +47,37 @@ useEffect(() => {
         console.error("exchangeCodeForSession error:", error);
         toast({ title: "שגיאה", description: error.message, variant: "destructive" });
       } else if (data?.session) {
-        // Successfully got session from code exchange, redirect to profile
-        console.log("Google OAuth successful, redirecting to profile");
+        // Successfully got session from code exchange
+        // If we have an invitation token, link the user before navigating
+        const savedToken = localStorage.getItem("invite_token");
+        if (savedToken) {
+          try {
+            const { data: linkData, error: linkError } = await supabase.functions.invoke(
+              "link-google-user-to-invitation",
+              {
+                body: {
+                  token: savedToken,
+                  user_id: data.session.user.id,
+                  email: data.session.user.email,
+                },
+              }
+            );
+            // Clear the token regardless of result to avoid re-link attempts
+            localStorage.removeItem("invite_token");
+            if (linkError || linkData?.error) {
+              console.error("Link function error after OAuth exchange:", linkError || linkData?.error);
+              toast({
+                title: "שגיאה",
+                description: (linkError?.message || linkData?.error) || "שגיאה בקישור המשתמש להזמנה",
+                variant: "destructive",
+              });
+            }
+          } catch (e: any) {
+            console.error("Link exception after OAuth exchange:", e);
+            localStorage.removeItem("invite_token");
+          }
+        }
+        // Now navigate to profile
         navigate("/my-profile");
         return;
       }
@@ -58,7 +87,7 @@ useEffect(() => {
     const { data: { session } } = await supabase.auth.getSession();
     
     // Handle Google OAuth invitation signup flow
-    if (session?.user && inviteSignup === "true") {
+    if (session?.user) {
       const savedToken = localStorage.getItem("invite_token");
       console.log("Processing Google signup with invite token:", savedToken);
       
@@ -141,6 +170,8 @@ useEffect(() => {
     if (token) {
       setInviteMode(true);
       setInviteToken(token);
+      // Persist the token across OAuth redirects
+      localStorage.setItem("invite_token", token);
       // Verify invitation token
       const { data, error } = await supabase
         .from("invitation_tokens")
@@ -299,6 +330,10 @@ useEffect(() => {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
+      const tokenParam = searchParams.get("token");
+      if (tokenParam) {
+        localStorage.setItem("invite_token", tokenParam);
+      }
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {

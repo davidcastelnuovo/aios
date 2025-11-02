@@ -31,12 +31,6 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "/cl
     return () => subscription.unsubscribe();
   }, []);
 
-  // If user authenticated but has no roles in the system, force sign-out and block access
-  useEffect(() => {
-    if (authenticated && !rolesLoading && (!roles || roles.length === 0)) {
-      supabase.auth.signOut();
-    }
-  }, [authenticated, rolesLoading, roles]);
 
   if (loading) {
     return (
@@ -60,9 +54,6 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "/cl
     );
   }
 
-  if (authenticated && !rolesLoading && (!roles || roles.length === 0)) {
-    return <Navigate to="/auth" replace />;
-  }
 
   if (requiredPermission && !hasPermission(requiredPermission)) {
     return <Navigate to={redirectTo} replace />;
