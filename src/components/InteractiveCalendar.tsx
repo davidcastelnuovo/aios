@@ -52,6 +52,8 @@ export function InteractiveCalendar() {
       return data;
     },
     enabled: !!userId,
+    staleTime: 1000 * 60 * 2, // Cache for 2 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
   });
 
   // Update event mutation

@@ -38,8 +38,9 @@ const [eventEnd, setEventEnd] = useState("");
       return data;
     },
     enabled: !!userId,
-    refetchOnMount: true,
-    refetchOnWindowFocus: true,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnMount: false, // Don't refetch on mount
   });
 
   // Connect to Google Calendar
