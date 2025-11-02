@@ -216,8 +216,8 @@ export default function Dashboard() {
       bg: "bg-destructive/10",
     },
     {
-      title: `שווי לידים פעילים (${stats?.activeLeadsCount || 0} לידים)`,
-      value: `₪${stats?.leadsValue.toLocaleString() || 0}`,
+      title: "לידים פעילים",
+      value: stats?.activeLeadsCount || 0,
       icon: TrendingUp,
       color: "text-success",
       bg: "bg-success/10",
