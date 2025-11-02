@@ -75,6 +75,18 @@ export function AddCampaignerForm() {
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
+      // Get current user's tenant_id
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("משתמש לא מחובר");
+      
+      const { data: tenantUser } = await supabase
+        .from("tenant_users")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .single();
+      
+      if (!tenantUser?.tenant_id) throw new Error("לא נמצא tenant_id למשתמש");
+      
       // יצירת הקמפיינר
       const { data: campaigner, error: campaignerError } = await supabase
         .from("campaigners")
@@ -86,6 +98,7 @@ export function AddCampaignerForm() {
           folder_link: values.folder_link || null,
           notes: values.notes || null,
           active: true,
+          tenant_id: tenantUser.tenant_id,
         })
         .select()
         .single();

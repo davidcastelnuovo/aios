@@ -167,6 +167,18 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
       // Get campaigner name
       const selectedCampaigner = campaigners?.find(c => c.id === values.campaigner_id);
       
+      // Get tenant_id
+      let tenantId: string;
+      if (values.task_category === "client" && selectedClient) {
+        tenantId = selectedClient.tenant_id;
+      } else if (values.task_category === "general" && values.agency_id) {
+        const selectedAgency = agencies?.find(a => a.id === values.agency_id);
+        if (!selectedAgency?.tenant_id) throw new Error("הסוכנות לא משויכת לטנט");
+        tenantId = selectedAgency.tenant_id;
+      } else {
+        throw new Error("לא ניתן לקבוע tenant_id למשימה");
+      }
+      
       const { error } = await supabase.from("tasks").insert([{
         title: values.title,
         notes: values.notes || null,
@@ -177,37 +189,26 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
         status: values.status,
         priority: values.priority,
         task_type: "other",
+        tenant_id: tenantId,
       }]);
       if (error) throw error;
 
-      // Get tenant_id for automation
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: tenantUser } = await supabase
-          .from("tenant_users")
-          .select("tenant_id")
-          .eq("user_id", user.id)
-          .single();
-
-        if (tenantUser) {
-          // Trigger automation
-          await supabase.functions.invoke('trigger-automation', {
-            body: {
-              trigger_type: 'task_assigned',
-              tenant_id: tenantUser.tenant_id,
-              data: {
-                task_title: values.title,
-                task_notes: values.notes || '',
-                campaigner_name: selectedCampaigner?.full_name || '',
-                client_name: selectedClient ? selectedClient.name : 'משימה כללית',
-                priority: values.priority,
-                status: values.status,
-                due_date: values.due_date || '',
-              }
-            }
-          });
+      // Trigger automation
+      await supabase.functions.invoke('trigger-automation', {
+        body: {
+          trigger_type: 'task_assigned',
+          tenant_id: tenantId,
+          data: {
+            task_title: values.title,
+            task_notes: values.notes || '',
+            campaigner_name: selectedCampaigner?.full_name || '',
+            client_name: selectedClient ? selectedClient.name : 'משימה כללית',
+            priority: values.priority,
+            status: values.status,
+            due_date: values.due_date || '',
+          }
         }
-      }
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });

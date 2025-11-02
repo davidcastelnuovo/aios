@@ -48,15 +48,19 @@ serve(async (req) => {
     if (expiresAt <= new Date()) {
       console.log('Token expired, refreshing...');
       
-      const clientId = "152366216077-3ih8o0lpeit12nu99k5tjtfig0l0obdg.apps.googleusercontent.com";
+      const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
       const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
+
+      if (!clientId || !clientSecret) {
+        throw new Error('Missing Google OAuth credentials');
+      }
 
       const refreshResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           client_id: clientId,
-          client_secret: clientSecret!,
+          client_secret: clientSecret,
           refresh_token: tokenData.refresh_token,
           grant_type: 'refresh_token',
         }),
