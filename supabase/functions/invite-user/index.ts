@@ -277,7 +277,7 @@ serve(async (req: Request) => {
 
     console.log("Invitation token created:", invitation);
 
-    // Build invitation link (force origin only)
+    // Build simple invitation link to auth page
     const baseUrlInput2 = baseUrl || "https://after-lead.lovable.app";
     let safeBaseUrl2: string;
     try {
@@ -287,12 +287,15 @@ serve(async (req: Request) => {
       const parts = baseUrlInput2.split("/").slice(0, 3);
       safeBaseUrl2 = parts.join("/");
     }
-    const invitationLink = `${safeBaseUrl2.replace(/\/+$/, "")}/auth?token=${token_value}`;
+    const invitationLink = `${safeBaseUrl2.replace(/\/+$/, "")}/auth`;
 
     // Send invitation email via Supabase Auth
     try {
       const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
         redirectTo: invitationLink,
+        data: {
+          invitation_id: invitation.id,
+        }
       });
 
       if (inviteError) {
@@ -304,31 +307,8 @@ serve(async (req: Request) => {
       console.error("Invitation email exception:", e);
     }
 
-    // Store invitation details for later user creation
-    const inviteData = {
-      email,
-      fullName,
-      role,
-      agencyIds,
-      modulePermissions,
-      campaignerId,
-      salesPersonId,
-      tenantId,
-      token: token_value,
-    };
-
-
-    // Return success with direct invitation link
-    const baseUrlInput3 = baseUrl || "https://after-lead.lovable.app";
-    let safeBaseUrl3: string;
-    try {
-      const u = new URL(baseUrlInput3);
-      safeBaseUrl3 = u.origin;
-    } catch {
-      const parts = baseUrlInput3.split("/").slice(0, 3);
-      safeBaseUrl3 = parts.join("/");
-    }
-    const directInvitationLink = `${safeBaseUrl3.replace(/\/+$/, "")}/auth?token=${token_value}`;
+    // Return success with invitation link
+    const directInvitationLink = `${safeBaseUrl2.replace(/\/+$/, "")}/auth`;
 
     return new Response(
       JSON.stringify({

@@ -61,13 +61,37 @@ useEffect(() => {
 
 // Ensure we auto-redirect when a session becomes available (e.g., after Google OAuth)
 useEffect(() => {
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
     if (session?.user) {
+      // Try to process invitation if exists
+      try {
+        const { data, error } = await supabase.functions.invoke("process-user-invitation", {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+        
+        if (error) {
+          console.error("Error processing invitation:", error);
+        } else if (data?.error === "NO_INVITATION") {
+          toast({
+            title: "אין הזמנה",
+            description: data.message,
+            variant: "destructive",
+          });
+          // Sign out user without invitation
+          await supabase.auth.signOut();
+          return;
+        }
+      } catch (e) {
+        console.error("Exception processing invitation:", e);
+      }
+      
       navigate("/my-profile");
     }
   });
   return () => subscription.unsubscribe();
-}, [navigate]);
+}, [navigate, toast]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
