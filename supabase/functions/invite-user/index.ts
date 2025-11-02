@@ -310,6 +310,46 @@ serve(async (req: Request) => {
         throw new Error(inviteError.message || "Failed to send invitation email");
       } else {
         console.log("Invitation email sent successfully via Supabase Auth to:", email);
+        const newUserId = inviteData?.user?.id;
+        if (newUserId) {
+          // Create profile with pending status so the user appears in the org list immediately
+          await supabaseAdmin
+            .from("profiles")
+            .upsert({ id: newUserId, email, full_name: fullName || null, status: 'pending' }, { onConflict: "id" });
+
+          if (role) {
+            await supabaseAdmin
+              .from("user_roles")
+              .upsert({ user_id: newUserId, role }, { onConflict: 'user_id,role' });
+          }
+
+          // Link invited user to tenant immediately so owners can see them
+          const { data: existingTU } = await supabaseAdmin
+            .from("tenant_users")
+            .select("id")
+            .eq("user_id", newUserId)
+            .eq("tenant_id", tenantIdFinal)
+            .maybeSingle();
+          if (!existingTU) {
+            await supabaseAdmin
+              .from("tenant_users")
+              .insert({ user_id: newUserId, tenant_id: tenantIdFinal, role: role || 'member' });
+          }
+
+          // Optionally attach campaigner/sales person ids provided
+          if (campaignerId) {
+            await supabaseAdmin
+              .from("profiles")
+              .update({ campaigner_id: campaignerId })
+              .eq("id", newUserId);
+          }
+          if (salesPersonId) {
+            await supabaseAdmin
+              .from("profiles")
+              .update({ sales_person_id: salesPersonId })
+              .eq("id", newUserId);
+          }
+        }
       }
     } catch (e) {
       console.error("Invitation email exception:", e);
