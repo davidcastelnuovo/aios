@@ -1296,7 +1296,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
           <Table className="min-w-[750px]">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow className="whitespace-nowrap">
-                <TableHead className="text-center sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-20 w-[50px]">
+                <TableHead className="text-center sticky right-0 bg-background z-20 w-[50px]">
                   <Checkbox
                     checked={isAllSelected}
                     onCheckedChange={handleSelectAll}
@@ -1314,7 +1314,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
             <TableBody>
             {stageLeads.map((lead: any) => (
               <TableRow key={lead.id} className="whitespace-nowrap">
-                <TableCell className="text-center sticky right-0 bg-background shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] z-10 w-[50px]">
+                <TableCell className="text-center sticky right-0 bg-background z-10 w-[50px]">
                   <Checkbox
                     checked={selectedLeads.includes(lead.id)}
                     onCheckedChange={(checked) => handleSelectLead(lead.id, checked as boolean)}
