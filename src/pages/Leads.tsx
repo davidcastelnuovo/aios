@@ -41,6 +41,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { ResizableTable, ColumnConfig } from "@/components/ResizableTable";
 
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100/50", borderColor: "border-blue-500" },
@@ -1290,129 +1291,132 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
         </div>
       )}
 
-      {/* Scroll container with visible scrollbars */}
-      <ScrollArea className="w-full h-[540px] rounded-md border" dir="rtl">
-        <div className="min-w-full">
-           <Table className="min-w-[750px]">
-            <TableHeader className="sticky top-0 z-10 bg-muted/50">
-              <TableRow className="whitespace-nowrap border-b hover:bg-transparent">
-                <TableHead className="text-center sticky right-0 z-20 w-[50px] h-12 border-l">
-                  <Checkbox
-                    checked={isAllSelected}
-                    onCheckedChange={handleSelectAll}
-                    aria-label="בחר הכל"
-                  />
-                </TableHead>
-                <TableHead className="text-right sticky right-[50px] border-l z-20 w-[100px] h-12">שם</TableHead>
-                <TableHead className="text-right border-l w-[130px] h-12">טלפון</TableHead>
-                <TableHead className="text-right border-l w-[170px] h-12">שם חברה</TableHead>
-                <TableHead className="text-right border-l w-[130px] h-12">שלב במשפך</TableHead>
-                <TableHead className="text-right border-l w-[130px] h-12">סטטוס</TableHead>
-                <TableHead className="text-right w-[80px] h-12">פעולות</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-            {stageLeads.map((lead: any, index: number) => (
-              <TableRow key={lead.id} className={`whitespace-nowrap border-b hover:bg-muted/30 ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
-                <TableCell className={`text-center sticky right-0 z-10 w-[50px] h-12 border-l ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
-                  <Checkbox
-                    checked={selectedLeads.includes(lead.id)}
-                    onCheckedChange={(checked) => handleSelectLead(lead.id, checked as boolean)}
-                    aria-label={`בחר ${lead.contact_name || lead.company_name}`}
-                  />
-                </TableCell>
-                <TableCell className={`font-medium sticky right-[50px] border-l z-10 w-[100px] h-12 ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}>
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{lead.contact_name || "-"}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="w-[130px] h-12 border-l">
-                  {lead.phone ? (
-                    <a href={`tel:${lead.phone}`} className="hover:underline flex items-center gap-1">
-                      <Phone className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{lead.phone}</span>
-                    </a>
-                  ) : "-"}
-                </TableCell>
-                <TableCell className="w-[180px] h-12 border-l">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{lead.company_name}</span>
-                  </div>
-                </TableCell>
-                <TableCell className="w-[140px] h-12 border-l">
-                  <Select
-                    value={lead.status}
-                    onValueChange={(value) => 
-                      updateLeadStatus.mutate({ 
-                        leadId: lead.id, 
-                        newStatus: value as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
-                      })
-                    }
-                  >
-                    <SelectTrigger className={`h-8 w-full border-2 ${
-                      PIPELINE_STAGES.find(s => s.id === lead.status)?.bgClass || ""
-                    }`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background z-50">
-                      {PIPELINE_STAGES.map((s) => (
-                        <SelectItem 
-                          key={s.id} 
-                          value={s.id}
-                          className={s.bgClass}
-                        >
-                          {s.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </TableCell>
-                <TableCell className="w-[140px] h-12 border-l">
-                  <Select
-                    value={lead.response_status || "none"}
-                    onValueChange={(value) => 
-                      updateLeadResponseStatus.mutate({ 
-                        leadId: lead.id, 
-                        responseStatus: value === "none" ? null : value as "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant"
-                      })
-                    }
-                  >
-                    <SelectTrigger className={`h-8 w-full border-2 ${
-                      lead.response_status 
-                        ? RESPONSE_STATUS_OPTIONS.find(s => s.id === lead.response_status)?.color || ""
-                        : "bg-background"
-                    }`}>
-                      <SelectValue placeholder="בחר סטטוס" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background z-50">
-                      <SelectItem value="none">ללא סטטוס</SelectItem>
-                      {RESPONSE_STATUS_OPTIONS.map((status) => (
-                        <SelectItem 
-                          key={status.id} 
-                          value={status.id}
-                          className={status.color}
-                        >
-                          {status.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                 </TableCell>
-                 <TableCell className="w-[80px] h-12">
-                   <div className="flex justify-center">
-                     <EditLeadDialog lead={lead} />
-                   </div>
-                 </TableCell>
-               </TableRow>
-             ))}
-            </TableBody>
-          </Table>
-        </div>
-        <ScrollBar orientation="horizontal" className="h-3" />
-        <ScrollBar orientation="vertical" />
-      </ScrollArea>
+      {/* Resizable Table */}
+      <div className="h-[540px]" dir="rtl">
+        <ResizableTable
+          columns={[
+            { 
+              id: "name", 
+              label: "שם", 
+              width: 120, 
+              sticky: true,
+              render: (lead: any) => (
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{lead.contact_name || "-"}</span>
+                </div>
+              )
+            },
+            { 
+              id: "phone", 
+              label: "טלפון", 
+              width: 130,
+              render: (lead: any) => lead.phone ? (
+                <a href={`tel:${lead.phone}`} className="hover:underline flex items-center gap-1">
+                  <Phone className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{lead.phone}</span>
+                </a>
+              ) : "-"
+            },
+            { 
+              id: "company", 
+              label: "שם חברה", 
+              width: 170,
+              render: (lead: any) => (
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{lead.company_name}</span>
+                </div>
+              )
+            },
+            { 
+              id: "status", 
+              label: "שלב במשפך", 
+              width: 150,
+              render: (lead: any) => (
+                <Select
+                  value={lead.status}
+                  onValueChange={(value) => 
+                    updateLeadStatus.mutate({ 
+                      leadId: lead.id, 
+                      newStatus: value as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
+                    })
+                  }
+                >
+                  <SelectTrigger className={`h-8 w-full border-2 ${
+                    PIPELINE_STAGES.find(s => s.id === lead.status)?.bgClass || ""
+                  }`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    {PIPELINE_STAGES.map((s) => (
+                      <SelectItem 
+                        key={s.id} 
+                        value={s.id}
+                        className={s.bgClass}
+                      >
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )
+            },
+            { 
+              id: "response_status", 
+              label: "סטטוס", 
+              width: 150,
+              render: (lead: any) => (
+                <Select
+                  value={lead.response_status || "none"}
+                  onValueChange={(value) => 
+                    updateLeadResponseStatus.mutate({ 
+                      leadId: lead.id, 
+                      responseStatus: value === "none" ? null : value as "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant"
+                    })
+                  }
+                >
+                  <SelectTrigger className={`h-8 w-full border-2 ${
+                    lead.response_status 
+                      ? RESPONSE_STATUS_OPTIONS.find(s => s.id === lead.response_status)?.color || ""
+                      : "bg-background"
+                  }`}>
+                    <SelectValue placeholder="בחר סטטוס" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="none">ללא סטטוס</SelectItem>
+                    {RESPONSE_STATUS_OPTIONS.map((status) => (
+                      <SelectItem 
+                        key={status.id} 
+                        value={status.id}
+                        className={status.color}
+                      >
+                        {status.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )
+            },
+            { 
+              id: "actions", 
+              label: "פעולות", 
+              width: 90,
+              render: (lead: any) => (
+                <div className="flex justify-center">
+                  <EditLeadDialog lead={lead} />
+                </div>
+              )
+            },
+          ]}
+          data={stageLeads}
+          checkboxColumn={{
+            checked: stageLeads.map(lead => selectedLeads.includes(lead.id)),
+            onCheckedChange: (index, checked) => handleSelectLead(stageLeads[index].id, checked),
+            onSelectAll: handleSelectAll
+          }}
+        />
+      </div>
      </div>
    );
  }
