@@ -30,10 +30,10 @@ serve(async (req) => {
       // Get user from state parameter if needed, or use service role to update
       console.log('Exchanging code for tokens...');
 
-      const clientId = "152366216077-3ih8o0lpeit12nu99k5tjtfig0l0obdg.apps.googleusercontent.com";
+      const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
       const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
       const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/google-calendar-auth?action=callback`;
-      // Ensure redirectUri matches the one used in the initial auth request
+      if (!clientId) throw new Error('Missing GOOGLE_CLIENT_ID secret');
 
       // Exchange code for tokens
       const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -110,7 +110,7 @@ serve(async (req) => {
     const requestBody = await req.json();
     const action = requestBody.action;
 
-    const clientId = "152366216077-3ih8o0lpeit12nu99k5tjtfig0l0obdg.apps.googleusercontent.com";
+    const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
     const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
     const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/google-calendar-auth?action=callback`;
 
@@ -118,6 +118,8 @@ serve(async (req) => {
 
     // Initial auth request - redirect to Google
     if (action === 'init') {
+      if (!clientId) throw new Error('Missing GOOGLE_CLIENT_ID secret');
+      
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
         client_id: clientId,
         redirect_uri: redirectUri,
