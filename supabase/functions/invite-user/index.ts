@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { Resend } from "https://esm.sh/resend@2.0.0";
+import { generateInvitationEmailHTML } from "./_templates/invitation-email.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -289,22 +291,33 @@ serve(async (req: Request) => {
     }
     const invitationLink = `${safeBaseUrl2.replace(/\/+$/, "")}/auth`;
 
-    // Send invitation email via Supabase Auth
+    // Send custom invitation email via Resend
     try {
-      const { data: inviteData, error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-        redirectTo: invitationLink,
-        data: {
-          invitation_id: invitation.id,
-        }
+      const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+      
+      const html = generateInvitationEmailHTML(
+        fullName || email,
+        getRoleNameInHebrew(role || ""),
+        invitationLink
+      );
+
+      const { error: emailError } = await resend.emails.send({
+        from: "מערכת ניהול סוכנויות <onboarding@resend.dev>",
+        to: [email],
+        subject: "הוזמנת להצטרף למערכת ניהול סוכנויות",
+        html,
       });
 
-      if (inviteError) {
-        console.error("Error sending invitation email:", inviteError);
-      } else {
-        console.log("Invitation email sent successfully via Supabase Auth to:", email);
+      if (emailError) {
+        console.error("Error sending invitation email via Resend:", emailError);
+        throw emailError;
       }
+      
+      console.log("Invitation email sent successfully via Resend to:", email);
     } catch (e) {
       console.error("Invitation email exception:", e);
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      throw new Error(`Failed to send invitation email: ${errorMessage}`);
     }
 
     // Return success with invitation link
