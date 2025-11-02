@@ -1163,7 +1163,7 @@ export type Database = {
         Row: {
           agency_id: string
           campaigner_id: string
-          client_id: string
+          client_id: string | null
           created_at: string
           due_date: string | null
           id: string
@@ -1178,7 +1178,7 @@ export type Database = {
         Insert: {
           agency_id: string
           campaigner_id: string
-          client_id: string
+          client_id?: string | null
           created_at?: string
           due_date?: string | null
           id?: string
@@ -1193,7 +1193,7 @@ export type Database = {
         Update: {
           agency_id?: string
           campaigner_id?: string
-          client_id?: string
+          client_id?: string | null
           created_at?: string
           due_date?: string | null
           id?: string

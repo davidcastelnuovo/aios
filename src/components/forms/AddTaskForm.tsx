@@ -50,10 +50,23 @@ const formSchema = z.object({
   title: z.string().min(1, "שם המשימה הוא שדה חובה"),
   notes: z.string().optional(),
   campaigner_id: z.string().min(1, "יש לבחור קמפיינר"),
-  client_id: z.string().min(1, "יש לבחור לקוח"),
+  task_category: z.enum(["client", "general"]),
+  client_id: z.string().optional(),
+  agency_id: z.string().optional(),
   due_date: z.string().optional(),
   status: z.enum(["open", "in_progress", "done"]),
   priority: z.enum(["low", "medium", "high"]),
+}).refine((data) => {
+  if (data.task_category === "client" && !data.client_id) {
+    return false;
+  }
+  if (data.task_category === "general" && !data.agency_id) {
+    return false;
+  }
+  return true;
+}, {
+  message: "יש לבחור לקוח למשימת לקוח או סוכנות למשימה כללית",
+  path: ["client_id"],
 });
 
 interface AddTaskFormProps {
@@ -66,6 +79,7 @@ interface AddTaskFormProps {
 export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, triggerButton }: AddTaskFormProps) {
   const [open, setOpen] = useState(false);
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
+  const [taskCategory, setTaskCategory] = useState<"client" | "general">(clientId ? "client" : "general");
   const queryClient = useQueryClient();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -74,7 +88,9 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
       title: "",
       notes: "",
       campaigner_id: defaultCampaignerId || "",
+      task_category: clientId ? "client" : "general",
       client_id: clientId || "",
+      agency_id: agencyId || "",
       due_date: "",
       status: "open",
       priority: "medium",
@@ -116,12 +132,36 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
     },
   });
 
+  const { data: agencies } = useQuery({
+    queryKey: ["agencies"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("*")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
-      // Get agency_id from the selected client
-      const selectedClient = clients?.find(c => c.id === values.client_id);
-      if (!selectedClient?.agency_id) {
-        throw new Error("הלקוח שנבחר לא משויך לסוכנות");
+      let selectedClient = null;
+      let finalAgencyId = null;
+
+      if (values.task_category === "client") {
+        // Get agency_id from the selected client
+        selectedClient = clients?.find(c => c.id === values.client_id);
+        if (!selectedClient?.agency_id) {
+          throw new Error("הלקוח שנבחר לא משויך לסוכנות");
+        }
+        finalAgencyId = selectedClient.agency_id;
+      } else {
+        // For general tasks, use the selected agency
+        if (!values.agency_id) {
+          throw new Error("יש לבחור סוכנות למשימה כללית");
+        }
+        finalAgencyId = values.agency_id;
       }
 
       // Get campaigner name
@@ -131,8 +171,8 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
         title: values.title,
         notes: values.notes || null,
         campaigner_id: values.campaigner_id,
-        client_id: values.client_id,
-        agency_id: selectedClient.agency_id,
+        client_id: values.task_category === "client" ? values.client_id : null,
+        agency_id: finalAgencyId,
         due_date: values.due_date || null,
         status: values.status,
         priority: values.priority,
@@ -159,7 +199,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
                 task_title: values.title,
                 task_notes: values.notes || '',
                 campaigner_name: selectedCampaigner?.full_name || '',
-                client_name: selectedClient.name,
+                client_name: selectedClient ? selectedClient.name : 'משימה כללית',
                 priority: values.priority,
                 status: values.status,
                 due_date: values.due_date || '',
@@ -229,6 +269,35 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
               )}
             />
 
+            <FormField
+              control={form.control}
+              name="task_category"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>סוג משימה</FormLabel>
+                  <Select 
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      setTaskCategory(value as "client" | "general");
+                    }} 
+                    value={field.value}
+                    disabled={!!clientId}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר סוג משימה" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-background z-50">
+                      <SelectItem value="client">משימה ללקוח</SelectItem>
+                      <SelectItem value="general">משימה כללית</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
@@ -285,64 +354,95 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="client_id"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel>לקוח</FormLabel>
-                  <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
-                    <PopoverTrigger asChild>
+            {taskCategory === "client" ? (
+              <FormField
+                control={form.control}
+                name="client_id"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>לקוח</FormLabel>
+                    <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            disabled={!!clientId}
+                            className={cn(
+                              "justify-between",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value
+                              ? clients?.find((client) => client.id === field.value)?.name
+                              : "בחר לקוח"}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0 bg-background" align="start">
+                        <Command>
+                          <CommandInput placeholder="חפש לקוח..." />
+                          <CommandList>
+                            <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
+                            <CommandGroup>
+                              {clients?.map((client) => (
+                                <CommandItem
+                                  key={client.id}
+                                  value={client.name}
+                                  onSelect={() => {
+                                    form.setValue("client_id", client.id);
+                                    setClientPopoverOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      field.value === client.id ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  {client.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : (
+              <FormField
+                control={form.control}
+                name="agency_id"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>סוכנות</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value}
+                      disabled={!!agencyId}
+                    >
                       <FormControl>
-                        <Button
-                          variant="outline"
-                          role="combobox"
-                          disabled={!!clientId}
-                          className={cn(
-                            "justify-between",
-                            !field.value && "text-muted-foreground"
-                          )}
-                        >
-                          {field.value
-                            ? clients?.find((client) => client.id === field.value)?.name
-                            : "בחר לקוח"}
-                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
+                        <SelectTrigger>
+                          <SelectValue placeholder="בחר סוכנות" />
+                        </SelectTrigger>
                       </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[300px] p-0 bg-background" align="start">
-                      <Command>
-                        <CommandInput placeholder="חפש לקוח..." />
-                        <CommandList>
-                          <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
-                          <CommandGroup>
-                            {clients?.map((client) => (
-                              <CommandItem
-                                key={client.id}
-                                value={client.name}
-                                onSelect={() => {
-                                  form.setValue("client_id", client.id);
-                                  setClientPopoverOpen(false);
-                                }}
-                              >
-                                <Check
-                                  className={cn(
-                                    "mr-2 h-4 w-4",
-                                    field.value === client.id ? "opacity-100" : "opacity-0"
-                                  )}
-                                />
-                                {client.name}
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                      <SelectContent className="bg-background z-50">
+                        {agencies?.map((agency) => (
+                          <SelectItem key={agency.id} value={agency.id}>
+                            {agency.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}
