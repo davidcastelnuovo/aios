@@ -841,9 +841,11 @@ export default function Users() {
                             }}
                           >
                             <SelectTrigger className="h-8 text-sm">
-                              <SelectValue placeholder="בחר תפקיד" />
+                              <SelectValue>
+                                {user.role ? roleLabels[user.role] : <span className="text-muted-foreground">-</span>}
+                              </SelectValue>
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-background z-50">
                               {Object.entries(roleLabels).map(([value, label]) => (
                                 <SelectItem key={value} value={value}>
                                   {label}
@@ -1030,9 +1032,11 @@ export default function Users() {
                         }}
                       >
                         <SelectTrigger className="w-[140px]">
-                          <SelectValue placeholder="בחר תפקיד" />
+                          <SelectValue>
+                            {user.role ? roleLabels[user.role] : <span className="text-muted-foreground">-</span>}
+                          </SelectValue>
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="bg-background z-50">
                           {Object.entries(roleLabels).map(([value, label]) => (
                             <SelectItem key={value} value={value}>
                               {label}
