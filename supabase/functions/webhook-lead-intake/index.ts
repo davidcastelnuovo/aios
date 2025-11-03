@@ -43,11 +43,13 @@ Deno.serve(async (req) => {
     let tenantId: string | null = null
     
     if (!agencyId) {
-      const { data: agencies } = await supabase
+      const { data: agencies, error: agencyError } = await supabase
         .from('agencies')
         .select('id, tenant_id')
         .eq('status', 'active')
         .limit(1)
+      
+      console.log('Default agency query result:', agencies, agencyError)
       
       if (agencies && agencies.length > 0) {
         agencyId = agencies[0].id
@@ -55,16 +57,20 @@ Deno.serve(async (req) => {
       }
     } else {
       // Get tenant_id for the provided agency
-      const { data: agency } = await supabase
+      const { data: agency, error: agencyError } = await supabase
         .from('agencies')
         .select('tenant_id')
         .eq('id', agencyId)
         .single()
       
+      console.log('Agency tenant_id query result:', agency, agencyError)
+      
       if (agency) {
         tenantId = agency.tenant_id
       }
     }
+    
+    console.log('Final agencyId:', agencyId, 'tenantId:', tenantId)
 
     if (!agencyId) {
       return new Response(
