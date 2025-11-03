@@ -602,10 +602,20 @@ export default function Tasks() {
                       <SelectItem value="all">כל הקמפיינרים</SelectItem>
                       {campaigners
                         ?.filter((campaigner) => {
+                          // Filter by selected role tab (SEO / קמפיינר)
+                          if (selectedRole !== "all" && campaigner.role) {
+                            // If SEO tab is selected, show only SEO campaigners
+                            // If קמפיינר tab is selected, show only קמפיינר campaigners
+                            if (!campaigner.role.includes(selectedRole)) {
+                              return false;
+                            }
+                          }
+                          
                           // If user is a campaigner with roles, show only campaigners with overlapping roles
                           if (isCampaigner && currentUserRole && currentUserRole.length > 0 && campaigner.role) {
                             return currentUserRole.some(userRole => campaigner.role?.includes(userRole));
                           }
+                          
                           // Otherwise show all
                           return true;
                         })
