@@ -41,7 +41,7 @@ interface OnboardingItem {
   due_date: string | null;
   created_at: string;
   updated_at: string;
-  clients: { name: string } | null;
+  clients: { name: string; is_seo_client: boolean | null } | null;
   campaigners: { full_name: string } | null;
 }
 
@@ -80,7 +80,7 @@ export default function ClientOnboarding() {
         .from("client_onboarding")
         .select(`
           *,
-          clients (name),
+          clients (name, is_seo_client),
           campaigners (full_name)
         `)
         .order("created_at", { ascending: false });
@@ -119,6 +119,26 @@ export default function ClientOnboarding() {
     },
     enabled: !!campaignerId && isCampaigner && !isTeamManager && !isOwner,
   });
+
+  // Get campaigner role to check if SEO-only staff
+  const { data: campaignerRole } = useQuery({
+    queryKey: ["campaigner-role", campaignerId],
+    queryFn: async () => {
+      if (!campaignerId) return null;
+      const { data } = await supabase
+        .from("campaigners")
+        .select("role")
+        .eq("id", campaignerId)
+        .single();
+      return data?.role || null;
+    },
+    enabled: !!campaignerId && isCampaigner,
+  });
+
+  const isSeoStaffOnly = campaignerRole && 
+    campaignerRole.includes('SEO') && 
+    !campaignerRole.includes('קמפיינר') && 
+    !campaignerRole.includes('מנהל צוות');
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: OnboardingStatus }) => {
@@ -161,6 +181,13 @@ export default function ClientOnboarding() {
       // No agency access - show nothing
       accessibleItems = [];
     }
+  }
+
+  // SEO staff filter: only see SEO clients
+  if (isSeoStaffOnly) {
+    accessibleItems = accessibleItems?.filter(item => 
+      item.clients?.is_seo_client === true
+    );
   }
 
   // Then apply agency filter (works for all roles including campaigners)
