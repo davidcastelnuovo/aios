@@ -834,14 +834,16 @@ export default function Users() {
                         </Button>
                         <Select
                           value={user.role || ""}
-                          onValueChange={(role) =>
+                          onValueChange={(role) => {
+                            console.log("Users: change role", user.id, role);
+                            toast.info("מעדכן תפקיד...");
                             updateRoleMutation.mutate({
                               userId: user.id,
                               role: role as UserRole,
-                            })
-                          }
+                            });
+                          }}
                         >
-                          <SelectTrigger className="w-full">
+                          <SelectTrigger className="w-full" onClick={(e) => e.stopPropagation()}>
                             <SelectValue placeholder="שנה תפקיד" />
                           </SelectTrigger>
                           <SelectContent>
@@ -995,14 +997,16 @@ export default function Users() {
                       <div className="flex gap-2">
                         <Select
                           value={user.role || ""}
-                          onValueChange={(role) =>
+                          onValueChange={(role) => {
+                            console.log("Users: change role", user.id, role);
+                            toast.info("מעדכן תפקיד...");
                             updateRoleMutation.mutate({
                               userId: user.id,
                               role: role as UserRole,
-                            })
-                          }
+                            });
+                          }}
                         >
-                          <SelectTrigger className="w-[140px]">
+                          <SelectTrigger className="w-[140px]" onClick={(e) => e.stopPropagation()}>
                             <SelectValue placeholder="בחר תפקיד" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1233,14 +1237,16 @@ export default function Users() {
                     </Button>
                     <Select
                       value={user.role || ""}
-                      onValueChange={(value) =>
+                      onValueChange={(value) => {
+                        console.log("Users: change role", user.id, value);
+                        toast.info("מעדכן תפקיד...");
                         updateRoleMutation.mutate({
                           userId: user.id,
                           role: value as UserRole,
-                        })
-                      }
+                        });
+                      }}
                     >
-                      <SelectTrigger className="w-full">
+                      <SelectTrigger className="w-full" onClick={(e) => e.stopPropagation()}>
                         <SelectValue placeholder="שנה תפקיד" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1426,12 +1432,14 @@ export default function Users() {
                             </Button>
                             <Select
                               value={user.role || ""}
-                              onValueChange={(value) =>
+                              onValueChange={(value) => {
+                                console.log("Users: change role", user.id, value);
+                                toast.info("מעדכן תפקיד...");
                                 updateRoleMutation.mutate({
                                   userId: user.id,
                                   role: value as UserRole,
-                                })
-                              }
+                                });
+                              }}
                             >
                               <SelectTrigger className="h-8 w-[140px]">
                                 <SelectValue placeholder="שנה תפקיד" />
