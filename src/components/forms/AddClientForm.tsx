@@ -5,6 +5,7 @@ import * as z from "zod";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import {
   Dialog,
   DialogContent,
@@ -51,6 +52,22 @@ type FormValues = z.infer<typeof formSchema>;
 export function AddClientForm() {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
+  const { userId } = useCurrentUser();
+
+  const { data: tenantId } = useQuery({
+    queryKey: ["user-tenant-id", userId],
+    queryFn: async () => {
+      if (!userId) return null;
+      const { data, error } = await supabase
+        .from("tenant_users")
+        .select("tenant_id")
+        .eq("user_id", userId)
+        .single();
+      if (error) throw error;
+      return data?.tenant_id;
+    },
+    enabled: !!userId,
+  });
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -82,9 +99,13 @@ export function AddClientForm() {
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
+      if (!tenantId) {
+        throw new Error("לא נמצא tenant_id למשתמש");
+      }
       const { error } = await supabase.from("clients").insert({
         name: values.name,
         agency_id: values.agency_id,
+        tenant_id: tenantId,
         phone: values.phone || null,
         email: values.email || null,
         folder_link: values.folder_link || null,
