@@ -615,7 +615,7 @@ export default function Users() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="campaigner">קמפיינר משויך (אופציונלי)</Label>
+                  <Label htmlFor="campaigner">איש צוות (אופציונלי)</Label>
                   <Select
                     value={selectedCampaignerId || "none"}
                     onValueChange={(value) => setSelectedCampaignerId(value === "none" ? "" : value)}
@@ -856,7 +856,7 @@ export default function Users() {
                         </div>
                         
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">קמפיינר משויך:</p>
+                          <p className="text-xs text-muted-foreground mb-1">איש צוות:</p>
                           <Select
                             value={user.campaigner_id || "none"}
                             onValueChange={(value) => {
@@ -992,7 +992,7 @@ export default function Users() {
                         <TableHead className="text-right">שם מלא</TableHead>
                         <TableHead className="text-right">אימייל</TableHead>
                         <TableHead className="text-right">תפקידים</TableHead>
-                        <TableHead className="text-right">קמפיינר משויך</TableHead>
+                        <TableHead className="text-right">איש צוות</TableHead>
                         <TableHead className="text-right">איש מכירות</TableHead>
                         <TableHead className="text-right">סוכנויות איש מכירות</TableHead>
                         <TableHead className="text-right">פעולות</TableHead>
@@ -1378,7 +1378,7 @@ export default function Users() {
                       <TableHead className="text-right">שם מלא</TableHead>
                       <TableHead className="text-right">אימייל</TableHead>
                       <TableHead className="text-right">תפקידים</TableHead>
-                      <TableHead className="text-right">קמפיינר משויך</TableHead>
+                      <TableHead className="text-right">איש צוות</TableHead>
                       <TableHead className="text-right">איש מכירות</TableHead>
                       <TableHead className="text-right">סוכנויות איש מכירות</TableHead>
                       <TableHead className="text-right">סטטוס</TableHead>
