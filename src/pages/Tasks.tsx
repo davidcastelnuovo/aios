@@ -536,6 +536,33 @@ export default function Tasks() {
             <h2 className="text-2xl md:text-3xl font-bold">משימות</h2>
           </div>
           
+          {/* Quick filter tabs for SEO/Campaigns */}
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant={selectedRole === "all" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedRole("all")}
+            >
+              כל המשימות
+            </Button>
+            <Button
+              variant={selectedRole === "SEO" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedRole("SEO")}
+            >
+              משימות SEO
+            </Button>
+            <Button
+              variant={selectedRole === "קמפיינר" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedRole("קמפיינר")}
+            >
+              משימות קמפיינים
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
           <div className="flex gap-3 flex-wrap md:flex-nowrap w-full md:w-auto items-stretch">
             {/* View mode toggle */}
             <div className="flex gap-1 border rounded-md p-1">
