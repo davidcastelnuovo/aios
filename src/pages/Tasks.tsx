@@ -225,9 +225,9 @@ export default function Tasks() {
 
   if (!isOwner) {
     if (isSeo && campaignerId) {
-      // SEO users see only their own assigned tasks for SEO clients
+      // SEO users see only tasks where BOTH the assigned campaigner is SEO AND the client is SEO
       accessibleTasks = tasks?.filter(task => 
-        task.campaigner_id === campaignerId &&
+        task.campaigners?.role?.includes('SEO') &&
         task.clients?.is_seo_client === true
       );
     } else if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
