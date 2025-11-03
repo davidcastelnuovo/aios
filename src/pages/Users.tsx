@@ -27,8 +27,6 @@ import { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialog";
 import { EditUserPermissionsDialog } from "@/components/forms/EditUserPermissionsDialog";
-import { EditUserCampaignerDialog } from "@/components/forms/EditUserCampaignerDialog";
-import { EditUserSalesPersonDialog } from "@/components/forms/EditUserSalesPersonDialog";
 import { EditUserNameDialog } from "@/components/forms/EditUserNameDialog";
 import EditSalesPersonAgenciesDialog from "@/components/forms/EditSalesPersonAgenciesDialog";
 import {
@@ -83,10 +81,6 @@ export default function Users() {
   const [editAgenciesUserEmail, setEditAgenciesUserEmail] = useState<string>("");
   const [editPermissionsUserId, setEditPermissionsUserId] = useState<string | null>(null);
   const [editPermissionsUserEmail, setEditPermissionsUserEmail] = useState<string>("");
-  const [editCampaignerUserId, setEditCampaignerUserId] = useState<string | null>(null);
-  const [editCampaignerUserEmail, setEditCampaignerUserEmail] = useState<string>("");
-  const [editSalesPersonUserId, setEditSalesPersonUserId] = useState<string | null>(null);
-  const [editSalesPersonUserEmail, setEditSalesPersonUserEmail] = useState<string>("");
   const [editNameUserId, setEditNameUserId] = useState<string | null>(null);
   const [editNameUserEmail, setEditNameUserEmail] = useState<string>("");
   const [editNameUserFullName, setEditNameUserFullName] = useState<string>("");
@@ -276,6 +270,56 @@ export default function Users() {
     },
     onError: (error: Error) => {
       toast.error("שגיאה בעדכון תפקיד: " + error.message);
+    },
+  });
+
+  const updateCampaignerMutation = useMutation({
+    mutationFn: async ({
+      userId,
+      campaignerId,
+    }: {
+      userId: string;
+      campaignerId: string | null;
+    }) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ campaigner_id: campaignerId })
+        .eq("id", userId);
+      
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
+      toast.success("קמפיינר עודכן בהצלחה");
+    },
+    onError: (error: Error) => {
+      toast.error("שגיאה בעדכון קמפיינר: " + error.message);
+    },
+  });
+
+  const updateSalesPersonMutation = useMutation({
+    mutationFn: async ({
+      userId,
+      salesPersonId,
+    }: {
+      userId: string;
+      salesPersonId: string | null;
+    }) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ sales_person_id: salesPersonId })
+        .eq("id", userId);
+      
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
+      toast.success("איש מכירות עודכן בהצלחה");
+    },
+    onError: (error: Error) => {
+      toast.error("שגיאה בעדכון איש מכירות: " + error.message);
     },
   });
 
@@ -811,32 +855,60 @@ export default function Users() {
                         
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">קמפיינר משויך:</p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setEditCampaignerUserId(user.id);
-                              setEditCampaignerUserEmail(user.email);
+                          <Select
+                            value={user.campaigner_id || "none"}
+                            onValueChange={(value) => {
+                              updateCampaignerMutation.mutate({
+                                userId: user.id,
+                                campaignerId: value === "none" ? null : value,
+                              });
                             }}
-                            className="h-8 text-sm w-full justify-start"
                           >
-                            {user.campaigner_name || "בחר קמפיינר"}
-                          </Button>
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue>
+                                {user.campaigner_name || <span className="text-muted-foreground">-</span>}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent className="bg-background z-50">
+                              <SelectItem value="none">
+                                <span className="text-muted-foreground">ללא שיוך</span>
+                              </SelectItem>
+                              {campaigners?.map((campaigner) => (
+                                <SelectItem key={campaigner.id} value={campaigner.id}>
+                                  {campaigner.full_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         
                         <div>
                           <p className="text-xs text-muted-foreground mb-1">איש מכירות:</p>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setEditSalesPersonUserId(user.id);
-                              setEditSalesPersonUserEmail(user.email);
+                          <Select
+                            value={user.sales_person_id || "none"}
+                            onValueChange={(value) => {
+                              updateSalesPersonMutation.mutate({
+                                userId: user.id,
+                                salesPersonId: value === "none" ? null : value,
+                              });
                             }}
-                            className="h-8 text-sm w-full justify-start"
                           >
-                            {user.sales_person_name || "בחר איש מכירות"}
-                          </Button>
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue>
+                                {user.sales_person_name || <span className="text-muted-foreground">-</span>}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent className="bg-background z-50">
+                              <SelectItem value="none">
+                                <span className="text-muted-foreground">ללא שיוך</span>
+                              </SelectItem>
+                              {salesPeople?.map((salesPerson) => (
+                                <SelectItem key={salesPerson.id} value={salesPerson.id}>
+                                  {salesPerson.full_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                       </div>
                       
@@ -969,31 +1041,59 @@ export default function Users() {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setEditCampaignerUserId(user.id);
-                          setEditCampaignerUserEmail(user.email);
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Select
+                        value={user.campaigner_id || "none"}
+                        onValueChange={(value) => {
+                          updateCampaignerMutation.mutate({
+                            userId: user.id,
+                            campaignerId: value === "none" ? null : value,
+                          });
                         }}
-                        className="h-8 text-sm w-full justify-start"
                       >
-                        {user.campaigner_name || "בחר קמפיינר"}
-                      </Button>
+                        <SelectTrigger className="h-8 w-[140px]">
+                          <SelectValue>
+                            {user.campaigner_name || <span className="text-muted-foreground">-</span>}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent className="bg-background z-50">
+                          <SelectItem value="none">
+                            <span className="text-muted-foreground">ללא שיוך</span>
+                          </SelectItem>
+                          {campaigners?.map((campaigner) => (
+                            <SelectItem key={campaigner.id} value={campaigner.id}>
+                              {campaigner.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setEditSalesPersonUserId(user.id);
-                          setEditSalesPersonUserEmail(user.email);
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Select
+                        value={user.sales_person_id || "none"}
+                        onValueChange={(value) => {
+                          updateSalesPersonMutation.mutate({
+                            userId: user.id,
+                            salesPersonId: value === "none" ? null : value,
+                          });
                         }}
-                        className="h-8 text-sm w-full justify-start"
                       >
-                        {user.sales_person_name || "בחר איש מכירות"}
-                      </Button>
+                        <SelectTrigger className="h-8 w-[140px]">
+                          <SelectValue>
+                            {user.sales_person_name || <span className="text-muted-foreground">-</span>}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent className="bg-background z-50">
+                          <SelectItem value="none">
+                            <span className="text-muted-foreground">ללא שיוך</span>
+                          </SelectItem>
+                          {salesPeople?.map((salesPerson) => (
+                            <SelectItem key={salesPerson.id} value={salesPerson.id}>
+                              {salesPerson.full_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>
                       {user.sales_person_id ? (
@@ -1176,64 +1276,42 @@ export default function Users() {
                   )}
                   
                   <div className="flex flex-wrap gap-2 pt-2 border-t">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditNameUserId(user.id);
-                        setEditNameUserEmail(user.email);
-                        setEditNameUserFullName(user.full_name || "");
-                      }}
-                      className="flex-1"
-                    >
-                      ערוך שם
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditCampaignerUserId(user.id);
-                        setEditCampaignerUserEmail(user.email);
-                      }}
-                      className="flex-1"
-                    >
-                      קמפיינר
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditSalesPersonUserId(user.id);
-                        setEditSalesPersonUserEmail(user.email);
-                      }}
-                      className="flex-1"
-                    >
-                      מכירות
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditAgenciesUserId(user.id);
-                        setEditAgenciesUserEmail(user.email);
-                      }}
-                      className="flex-1"
-                    >
-                      <Settings className="h-3 w-3 ml-1" />
-                      סוכנויות
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setEditPermissionsUserId(user.id);
-                        setEditPermissionsUserEmail(user.email);
-                      }}
-                      className="flex-1"
-                    >
-                      <Lock className="h-3 w-3 ml-1" />
-                      הרשאות
-                    </Button>
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       onClick={() => {
+                         setEditNameUserId(user.id);
+                         setEditNameUserEmail(user.email);
+                         setEditNameUserFullName(user.full_name || "");
+                       }}
+                       className="flex-1"
+                     >
+                       ערוך שם
+                     </Button>
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       onClick={() => {
+                         setEditAgenciesUserId(user.id);
+                         setEditAgenciesUserEmail(user.email);
+                       }}
+                       className="flex-1"
+                     >
+                       <Settings className="h-3 w-3 ml-1" />
+                       סוכנויות
+                     </Button>
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       onClick={() => {
+                         setEditPermissionsUserId(user.id);
+                         setEditPermissionsUserEmail(user.email);
+                       }}
+                       className="flex-1"
+                     >
+                       <Lock className="h-3 w-3 ml-1" />
+                       הרשאות
+                     </Button>
                     <Select
                       value={user.role || ""}
                       onValueChange={(value) => {
@@ -1336,40 +1414,58 @@ export default function Users() {
                           )}
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm">
-                              {user.campaigner_name || "-"}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setEditCampaignerUserId(user.id);
-                                setEditCampaignerUserEmail(user.email);
-                              }}
-                              className="h-6 px-2 text-xs"
-                            >
-                              ערוך
-                            </Button>
-                          </div>
+                          <Select
+                            value={user.campaigner_id || "none"}
+                            onValueChange={(value) => {
+                              updateCampaignerMutation.mutate({
+                                userId: user.id,
+                                campaignerId: value === "none" ? null : value,
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="h-8 w-[140px]">
+                              <SelectValue>
+                                {user.campaigner_name || <span className="text-muted-foreground">-</span>}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent className="bg-background z-50">
+                              <SelectItem value="none">
+                                <span className="text-muted-foreground">ללא שיוך</span>
+                              </SelectItem>
+                              {campaigners?.map((campaigner) => (
+                                <SelectItem key={campaigner.id} value={campaigner.id}>
+                                  {campaigner.full_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm">
-                              {user.sales_person_name || "-"}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                setEditSalesPersonUserId(user.id);
-                                setEditSalesPersonUserEmail(user.email);
-                              }}
-                              className="h-6 px-2 text-xs"
-                            >
-                              ערוך
-                            </Button>
-                          </div>
+                          <Select
+                            value={user.sales_person_id || "none"}
+                            onValueChange={(value) => {
+                              updateSalesPersonMutation.mutate({
+                                userId: user.id,
+                                salesPersonId: value === "none" ? null : value,
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="h-8 w-[140px]">
+                              <SelectValue>
+                                {user.sales_person_name || <span className="text-muted-foreground">-</span>}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent className="bg-background z-50">
+                              <SelectItem value="none">
+                                <span className="text-muted-foreground">ללא שיוך</span>
+                              </SelectItem>
+                              {salesPeople?.map((salesPerson) => (
+                                <SelectItem key={salesPerson.id} value={salesPerson.id}>
+                                  {salesPerson.full_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell>
                           {user.sales_person_id ? (
@@ -1562,31 +1658,6 @@ export default function Users() {
           }}
           userId={editPermissionsUserId}
           userEmail={editPermissionsUserEmail}
-        />
-      )}
-
-      {editCampaignerUserId && (
-        <EditUserCampaignerDialog
-          open={!!editCampaignerUserId}
-          onOpenChange={(open) => {
-            if (!open) {
-              setEditCampaignerUserId(null);
-              setEditCampaignerUserEmail("");
-            }
-          }}
-          userId={editCampaignerUserId}
-          userEmail={editCampaignerUserEmail}
-        />
-      )}
-
-      {editSalesPersonUserId && (
-        <EditUserSalesPersonDialog
-          userId={editSalesPersonUserId}
-          userEmail={editSalesPersonUserEmail}
-          onClose={() => {
-            setEditSalesPersonUserId(null);
-            setEditSalesPersonUserEmail("");
-          }}
         />
       )}
 
