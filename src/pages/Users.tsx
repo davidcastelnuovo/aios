@@ -54,6 +54,7 @@ const roleLabels: Record<UserRole, string> = {
   campaigner: "קמפיינר",
   sales_person: "איש מכירות",
   super_admin: "סופר אדמין",
+  seo: "SEO",
 };
 
 const roleBadgeColors: Record<UserRole, string> = {
@@ -62,6 +63,7 @@ const roleBadgeColors: Record<UserRole, string> = {
   campaigner: "bg-orange-500",
   sales_person: "bg-blue-500",
   super_admin: "bg-red-500",
+  seo: "bg-teal-500",
 };
 
 export default function Users() {

@@ -1564,6 +1564,7 @@ export type Database = {
         | "campaigner"
         | "sales_person"
         | "super_admin"
+        | "seo"
       automation_action: "webhook" | "email" | "notification"
       automation_trigger:
         | "task_assigned"
@@ -1750,6 +1751,7 @@ export const Constants = {
         "campaigner",
         "sales_person",
         "super_admin",
+        "seo",
       ],
       automation_action: ["webhook", "email", "notification"],
       automation_trigger: [
