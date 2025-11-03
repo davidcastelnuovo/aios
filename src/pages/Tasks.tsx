@@ -276,7 +276,17 @@ export default function Tasks() {
   // Then filter by campaigner and role
   let filteredTasks = accessibleTasks?.filter(t => {
     const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
-    const matchesRole = selectedRole === "all" || (t.campaigners?.role && t.campaigners.role.includes(selectedRole));
+    
+    // For SEO filter: BOTH campaigner must be SEO AND client must be SEO client
+    let matchesRole = false;
+    if (selectedRole === "all") {
+      matchesRole = true;
+    } else if (selectedRole === "SEO") {
+      matchesRole = (t.campaigners?.role?.includes('SEO')) && (t.clients?.is_seo_client === true);
+    } else {
+      matchesRole = (t.campaigners?.role && t.campaigners.role.includes(selectedRole));
+    }
+    
     return matchesCampaigner && matchesRole;
   }) || [];
 
