@@ -11,6 +11,7 @@ import { useUserRole } from "@/hooks/useUserRole";
 import { CalendarIframeSettings } from "@/components/CalendarIframeSettings";
 import { useState } from "react";
 import { DndContext, DragOverlay, closestCorners, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, useDroppable } from "@dnd-kit/core";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
@@ -531,114 +532,94 @@ export default function Tasks() {
       onDragEnd={handleDragEnd}
     >
       <div className="space-y-4 md:space-y-6 p-6">
-        {/* Header with title and quick filters */}
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        {/* Header with tabs on right, filters on left */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          {/* Right side: Title and tabs */}
+          <div className="flex flex-col gap-3">
             <h2 className="text-2xl md:text-3xl font-bold">משימות</h2>
-            
-            {/* Quick filter tabs for SEO/Campaigns */}
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                variant={selectedRole === "all" ? "default" : "outline"}
-                size="default"
-                onClick={() => setSelectedRole("all")}
-                className="flex-1 md:flex-none min-w-[120px]"
-              >
-                כל המשימות
-              </Button>
-              <Button
-                variant={selectedRole === "SEO" ? "default" : "outline"}
-                size="default"
-                onClick={() => setSelectedRole("SEO")}
-                className="flex-1 md:flex-none min-w-[120px]"
-              >
-                משימות SEO
-              </Button>
-              <Button
-                variant={selectedRole === "קמפיינר" ? "default" : "outline"}
-                size="default"
-                onClick={() => setSelectedRole("קמפיינר")}
-                className="flex-1 md:flex-none min-w-[120px]"
-              >
-                משימות קמפיינים
-              </Button>
-            </div>
+            <Tabs value={selectedRole} onValueChange={setSelectedRole} dir="rtl">
+              <TabsList className="bg-muted">
+                <TabsTrigger value="all">כל המשימות</TabsTrigger>
+                <TabsTrigger value="SEO">משימות SEO</TabsTrigger>
+                <TabsTrigger value="קמפיינר">משימות קמפיינים</TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
-        </div>
 
-        {/* Filters and controls */}
-        <div className="flex flex-col md:flex-row md:items-center gap-4">
-          <div className="flex gap-3 flex-wrap md:flex-nowrap w-full md:w-auto items-stretch">
-            {/* View mode toggle */}
-            <div className="flex gap-1 border rounded-md p-1">
-              <Button
-                variant={viewMode === "kanban" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("kanban")}
-                title="תצוגת לוח"
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "table" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("table")}
-                title="תצוגת טבלה"
-              >
-                <TableIcon className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "calendar" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("calendar")}
-                title="יומן"
-              >
-                <CalendarIcon className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            <div className="h-8 w-px bg-border"></div>
-            
-            {/* Hide completed toggle */}
-            <div className="flex items-center gap-2" dir="ltr">
-              <Label htmlFor="hide-completed" className="cursor-pointer whitespace-nowrap">
-                הסתר הושלמו
-              </Label>
-              <Switch
-                id="hide-completed"
-                checked={hideCompleted}
-                onCheckedChange={setHideCompleted}
-              />
-            </div>
-            
-            {/* Hide campaigner filter for pure campaigners */}
-            {!(isCampaigner && !isTeamManager && !isOwner) && (
-              <div className="w-full md:w-48">
-                <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="כל הקמפיינרים" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-50">
-                    <SelectItem value="all">כל הקמפיינרים</SelectItem>
-                    {campaigners
-                      ?.filter((campaigner) => {
-                        // If user is a campaigner with roles, show only campaigners with overlapping roles
-                        if (isCampaigner && currentUserRole && currentUserRole.length > 0 && campaigner.role) {
-                          return currentUserRole.some(userRole => campaigner.role?.includes(userRole));
-                        }
-                        // Otherwise show all
-                        return true;
-                      })
-                      .map((campaigner) => (
-                        <SelectItem key={campaigner.id} value={campaigner.id}>
-                          {campaigner.full_name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+          {/* Left side: Filters and controls */}
+          <div className="flex flex-col md:flex-row md:items-center gap-4 md:mr-auto">
+            <div className="flex gap-3 flex-wrap md:flex-nowrap w-full md:w-auto items-stretch">
+              {/* View mode toggle */}
+              <div className="flex gap-1 border rounded-md p-1">
+                <Button
+                  variant={viewMode === "kanban" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("kanban")}
+                  title="תצוגת לוח"
+                >
+                  <LayoutGrid className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === "table" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("table")}
+                  title="תצוגת טבלה"
+                >
+                  <TableIcon className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === "calendar" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("calendar")}
+                  title="יומן"
+                >
+                  <CalendarIcon className="h-4 w-4" />
+                </Button>
               </div>
-            )}
-            <div className="w-full md:w-auto"><AddTaskForm /></div>
+              
+              <div className="h-8 w-px bg-border"></div>
+              
+              {/* Hide completed toggle */}
+              <div className="flex items-center gap-2" dir="ltr">
+                <Label htmlFor="hide-completed" className="cursor-pointer whitespace-nowrap">
+                  הסתר הושלמו
+                </Label>
+                <Switch
+                  id="hide-completed"
+                  checked={hideCompleted}
+                  onCheckedChange={setHideCompleted}
+                />
+              </div>
+              
+              {/* Hide campaigner filter for pure campaigners */}
+              {!(isCampaigner && !isTeamManager && !isOwner) && (
+                <div className="w-full md:w-48">
+                  <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="כל הקמפיינרים" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      <SelectItem value="all">כל הקמפיינרים</SelectItem>
+                      {campaigners
+                        ?.filter((campaigner) => {
+                          // If user is a campaigner with roles, show only campaigners with overlapping roles
+                          if (isCampaigner && currentUserRole && currentUserRole.length > 0 && campaigner.role) {
+                            return currentUserRole.some(userRole => campaigner.role?.includes(userRole));
+                          }
+                          // Otherwise show all
+                          return true;
+                        })
+                        .map((campaigner) => (
+                          <SelectItem key={campaigner.id} value={campaigner.id}>
+                            {campaigner.full_name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div className="w-full md:w-auto"><AddTaskForm /></div>
+            </div>
           </div>
         </div>
 
