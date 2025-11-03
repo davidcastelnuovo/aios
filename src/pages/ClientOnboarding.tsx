@@ -157,6 +157,9 @@ export default function ClientOnboarding() {
       accessibleItems = onboardingItems?.filter(item => 
         userAgencyIds.includes(item.agency_id)
       );
+    } else {
+      // No agency access - show nothing
+      accessibleItems = [];
     }
   }
 
