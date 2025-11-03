@@ -606,23 +606,6 @@ export default function Tasks() {
               />
             </div>
             
-            <div className="h-8 w-px bg-border"></div>
-            
-            {/* Role filter */}
-            <div className="w-full md:w-40">
-              <Select value={selectedRole} onValueChange={setSelectedRole}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="כל התפקידים" />
-                </SelectTrigger>
-                <SelectContent className="bg-background z-50">
-                  <SelectItem value="all">כל התפקידים</SelectItem>
-                  <SelectItem value="קמפיינר">קמפיינר</SelectItem>
-                  <SelectItem value="SEO">SEO</SelectItem>
-                  <SelectItem value="מנהל צוות">מנהל צוות</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
             {/* Hide campaigner filter for pure campaigners */}
             {!(isCampaigner && !isTeamManager && !isOwner) && (
               <div className="w-full md:w-48">
