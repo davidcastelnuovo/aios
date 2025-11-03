@@ -224,7 +224,13 @@ export default function Tasks() {
   let accessibleTasks = tasks;
 
   if (!isOwner) {
-    if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
+    if (isSeo && userAgencyIds && userAgencyIds.length > 0) {
+      // SEO users see ALL SEO tasks in their agencies (regardless of assignment)
+      accessibleTasks = tasks?.filter(task => 
+        userAgencyIds.includes(getTaskAgencyId(task)) && 
+        task.clients?.is_seo_client === true
+      );
+    } else if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
       // Team managers see all tasks in their agencies (including all team members)
       accessibleTasks = tasks?.filter(task => 
         userAgencyIds.includes(getTaskAgencyId(task))
@@ -241,13 +247,6 @@ export default function Tasks() {
         userAgencyIds.includes(getTaskAgencyId(task))
       );
     }
-  }
-
-  // SEO filter: SEO users can ONLY see tasks for SEO clients
-  if (isSeo) {
-    accessibleTasks = accessibleTasks?.filter(task => 
-      task.clients?.is_seo_client === true
-    );
   }
 
   // Apply agency filter - always filter by client's agency or task's agency
