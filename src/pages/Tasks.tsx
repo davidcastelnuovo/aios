@@ -224,10 +224,10 @@ export default function Tasks() {
   let accessibleTasks = tasks;
 
   if (!isOwner) {
-    if (isSeo && userAgencyIds && userAgencyIds.length > 0) {
-      // SEO users see ALL SEO tasks in their agencies (regardless of assignment)
+    if (isSeo && campaignerId) {
+      // SEO users see only their own assigned tasks for SEO clients
       accessibleTasks = tasks?.filter(task => 
-        userAgencyIds.includes(getTaskAgencyId(task)) && 
+        task.campaigner_id === campaignerId &&
         task.clients?.is_seo_client === true
       );
     } else if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
