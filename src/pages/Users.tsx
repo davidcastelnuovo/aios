@@ -852,7 +852,7 @@ export default function Users() {
                           <SelectTrigger className="w-full" onClick={(e) => e.stopPropagation()}>
                             <SelectValue placeholder="שנה תפקיד" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="bg-background z-50">
                             {Object.entries(roleLabels).map(([value, label]) => (
                               <SelectItem key={value} value={value}>
                                 {label}
@@ -1015,7 +1015,7 @@ export default function Users() {
                           <SelectTrigger className="w-[140px]" onClick={(e) => e.stopPropagation()}>
                             <SelectValue placeholder="בחר תפקיד" />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="bg-background z-50">
                             {Object.entries(roleLabels).map(([value, label]) => (
                               <SelectItem key={value} value={value}>
                                 {label}
