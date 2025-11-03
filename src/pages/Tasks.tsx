@@ -531,37 +531,42 @@ export default function Tasks() {
       onDragEnd={handleDragEnd}
     >
       <div className="space-y-4 md:space-y-6 p-6">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-          <div>
+        {/* Header with title and quick filters */}
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <h2 className="text-2xl md:text-3xl font-bold">משימות</h2>
-          </div>
-          
-          {/* Quick filter tabs for SEO/Campaigns */}
-          <div className="flex gap-2 flex-wrap">
-            <Button
-              variant={selectedRole === "all" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedRole("all")}
-            >
-              כל המשימות
-            </Button>
-            <Button
-              variant={selectedRole === "SEO" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedRole("SEO")}
-            >
-              משימות SEO
-            </Button>
-            <Button
-              variant={selectedRole === "קמפיינר" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedRole("קמפיינר")}
-            >
-              משימות קמפיינים
-            </Button>
+            
+            {/* Quick filter tabs for SEO/Campaigns */}
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant={selectedRole === "all" ? "default" : "outline"}
+                size="default"
+                onClick={() => setSelectedRole("all")}
+                className="flex-1 md:flex-none min-w-[120px]"
+              >
+                כל המשימות
+              </Button>
+              <Button
+                variant={selectedRole === "SEO" ? "default" : "outline"}
+                size="default"
+                onClick={() => setSelectedRole("SEO")}
+                className="flex-1 md:flex-none min-w-[120px]"
+              >
+                משימות SEO
+              </Button>
+              <Button
+                variant={selectedRole === "קמפיינר" ? "default" : "outline"}
+                size="default"
+                onClick={() => setSelectedRole("קמפיינר")}
+                className="flex-1 md:flex-none min-w-[120px]"
+              >
+                משימות קמפיינים
+              </Button>
+            </div>
           </div>
         </div>
 
+        {/* Filters and controls */}
         <div className="flex flex-col md:flex-row md:items-center gap-4">
           <div className="flex gap-3 flex-wrap md:flex-nowrap w-full md:w-auto items-stretch">
             {/* View mode toggle */}
