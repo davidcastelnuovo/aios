@@ -780,26 +780,65 @@ export default function Users() {
                           <div className="font-medium">{user.full_name || "-"}</div>
                           <div className="text-sm text-muted-foreground">{user.email}</div>
                         </div>
-                        {user.role && (
-                          <Badge className={roleBadgeColors[user.role]}>
-                            {roleLabels[user.role]}
-                          </Badge>
-                        )}
                       </div>
                       
-                      {user.campaigner_name && (
-                        <div className="text-sm">
-                          <span className="text-muted-foreground">קמפיינר: </span>
-                          <span>{user.campaigner_name}</span>
+                      <div className="space-y-2">
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">תפקיד:</p>
+                          <Select
+                            value={user.role || ""}
+                            onValueChange={(role) => {
+                              console.log("Users: change role", user.id, role);
+                              toast.info("מעדכן תפקיד...");
+                              updateRoleMutation.mutate({
+                                userId: user.id,
+                                role: role as UserRole,
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue placeholder="בחר תפקיד" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(roleLabels).map(([value, label]) => (
+                                <SelectItem key={value} value={value}>
+                                  {label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
-                      )}
-                      
-                      {user.sales_person_name && (
-                        <div className="text-sm">
-                          <span className="text-muted-foreground">איש מכירות: </span>
-                          <span>{user.sales_person_name}</span>
+                        
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">קמפיינר משויך:</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditCampaignerUserId(user.id);
+                              setEditCampaignerUserEmail(user.email);
+                            }}
+                            className="h-8 text-sm w-full justify-start"
+                          >
+                            {user.campaigner_name || "בחר קמפיינר"}
+                          </Button>
                         </div>
-                      )}
+                        
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">איש מכירות:</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setEditSalesPersonUserId(user.id);
+                              setEditSalesPersonUserEmail(user.email);
+                            }}
+                            className="h-8 text-sm w-full justify-start"
+                          >
+                            {user.sales_person_name || "בחר איש מכירות"}
+                          </Button>
+                        </div>
+                      </div>
                       
                       <div className="flex flex-wrap gap-2 pt-2 border-t">
                         <Button
@@ -838,28 +877,6 @@ export default function Users() {
                           <Lock className="h-3 w-3 ml-1" />
                           הרשאות
                         </Button>
-                        <Select
-                          value={user.role || ""}
-                          onValueChange={(role) => {
-                            console.log("Users: change role", user.id, role);
-                            toast.info("מעדכן תפקיד...");
-                            updateRoleMutation.mutate({
-                              userId: user.id,
-                              role: role as UserRole,
-                            });
-                          }}
-                        >
-                          <SelectTrigger className="w-full" onClick={(e) => e.stopPropagation()}>
-                            <SelectValue placeholder="שנה תפקיד" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(roleLabels).map(([value, label]) => (
-                              <SelectItem key={value} value={value}>
-                                {label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
                         <div className="flex gap-2 w-full">
                           <Button
                             variant="outline"
@@ -929,100 +946,76 @@ export default function Users() {
                     </TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      {user.role ? (
-                        <Badge className={roleBadgeColors[user.role]}>
-                          {roleLabels[user.role]}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">
-                          אין תפקיד
-                        </span>
-                      )}
+                      <Select
+                        value={user.role || ""}
+                        onValueChange={(role) => {
+                          console.log("Users: change role", user.id, role);
+                          toast.info("מעדכן תפקיד...");
+                          updateRoleMutation.mutate({
+                            userId: user.id,
+                            role: role as UserRole,
+                          });
+                        }}
+                      >
+                        <SelectTrigger className="w-[140px]">
+                          <SelectValue placeholder="בחר תפקיד" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(roleLabels).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm">
-                          {user.campaigner_name || "-"}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditCampaignerUserId(user.id);
-                            setEditCampaignerUserEmail(user.email);
-                          }}
-                          className="h-6 px-2 text-xs"
-                        >
-                          ערוך
-                        </Button>
-                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditCampaignerUserId(user.id);
+                          setEditCampaignerUserEmail(user.email);
+                        }}
+                        className="h-8 text-sm w-full justify-start"
+                      >
+                        {user.campaigner_name || "בחר קמפיינר"}
+                      </Button>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm">
-                          {user.sales_person_name || "-"}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setEditSalesPersonUserId(user.id);
-                            setEditSalesPersonUserEmail(user.email);
-                          }}
-                          className="h-6 px-2 text-xs"
-                        >
-                          ערוך
-                        </Button>
-                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditSalesPersonUserId(user.id);
+                          setEditSalesPersonUserEmail(user.email);
+                        }}
+                        className="h-8 text-sm w-full justify-start"
+                      >
+                        {user.sales_person_name || "בחר איש מכירות"}
+                      </Button>
                     </TableCell>
                     <TableCell>
                       {user.sales_person_id ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm">
-                            {salesPeopleWithAgencies?.find(sp => sp.id === user.sales_person_id)?.agencies.map(a => a.name).join(", ") || "אין סוכנויות"}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              const salesPerson = salesPeopleWithAgencies?.find(sp => sp.id === user.sales_person_id);
-                              if (salesPerson) {
-                                setEditSalesPersonAgencies(salesPerson);
-                              }
-                            }}
-                            className="h-6 px-2 text-xs"
-                          >
-                            ערוך סוכנויות
-                          </Button>
-                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const salesPerson = salesPeopleWithAgencies?.find(sp => sp.id === user.sales_person_id);
+                            if (salesPerson) {
+                              setEditSalesPersonAgencies(salesPerson);
+                            }
+                          }}
+                          className="h-8 text-sm w-full justify-start"
+                        >
+                          {salesPeopleWithAgencies?.find(sp => sp.id === user.sales_person_id)?.agencies.map(a => a.name).join(", ") || "אין סוכנויות"}
+                        </Button>
                       ) : (
                         <span className="text-sm text-muted-foreground">-</span>
                       )}
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Select
-                          value={user.role || ""}
-                          onValueChange={(role) => {
-                            console.log("Users: change role", user.id, role);
-                            toast.info("מעדכן תפקיד...");
-                            updateRoleMutation.mutate({
-                              userId: user.id,
-                              role: role as UserRole,
-                            });
-                          }}
-                        >
-                          <SelectTrigger className="w-[140px]" onClick={(e) => e.stopPropagation()}>
-                            <SelectValue placeholder="בחר תפקיד" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(roleLabels).map(([value, label]) => (
-                              <SelectItem key={value} value={value}>
-                                {label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
                         <Button
                           variant="outline"
                           size="icon"
