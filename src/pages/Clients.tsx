@@ -590,7 +590,7 @@ export default function Clients() {
                 </div>
               )}
               
-              <div className="pt-2 border-t">
+              <div className="pt-2 border-t" onClick={(e) => e.stopPropagation()}>
                 <AddTaskForm 
                   clientId={client.id} 
                   agencyId={client.agency_id}
@@ -599,7 +599,6 @@ export default function Clients() {
                       size="sm" 
                       variant="outline" 
                       className="w-full gap-2"
-                      onClick={(e) => e.stopPropagation()}
                     >
                       <Plus className="h-4 w-4" />
                       הוסף משימה
