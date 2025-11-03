@@ -1407,15 +1407,30 @@ export default function Users() {
                         </TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>
-                          {user.role ? (
-                            <Badge className={roleBadgeColors[user.role]}>
-                              {roleLabels[user.role]}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">
-                              אין תפקיד
-                            </span>
-                          )}
+                          <Select
+                            value={user.role || ""}
+                            onValueChange={(role) => {
+                              console.log("Users: change role", user.id, role);
+                              toast.info("מעדכן תפקיד...");
+                              updateRoleMutation.mutate({
+                                userId: user.id,
+                                role: role as UserRole,
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="w-[140px]">
+                              <SelectValue>
+                                {user.role ? roleLabels[user.role] : <span className="text-muted-foreground">-</span>}
+                              </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent className="bg-background z-50">
+                              {Object.entries(roleLabels).map(([value, label]) => (
+                                <SelectItem key={value} value={value}>
+                                  {label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell>
                           <Select
