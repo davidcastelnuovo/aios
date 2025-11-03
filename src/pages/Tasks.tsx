@@ -112,7 +112,7 @@ export default function Tasks() {
   const [hideCompleted, setHideCompleted] = useState(false);
   const { selectedAgency } = useAgency();
   const { userAgencyIds } = useUserAgencies();
-  const { campaignerId, isCampaigner, isTeamManager, isOwner } = useUserRole();
+  const { campaignerId, isCampaigner, isTeamManager, isOwner, isSeo } = useUserRole();
   const queryClient = useQueryClient();
 
   const sensors = useSensors(
@@ -131,7 +131,7 @@ export default function Tasks() {
         .select(`
           *,
           agencies (name),
-          clients (agency_id, name),
+          clients (agency_id, name, is_seo_client),
           campaigners (full_name, role),
           task_updates (id)
         `)
@@ -241,6 +241,13 @@ export default function Tasks() {
         userAgencyIds.includes(getTaskAgencyId(task))
       );
     }
+  }
+
+  // SEO filter: SEO users can ONLY see tasks for SEO clients
+  if (isSeo) {
+    accessibleTasks = accessibleTasks?.filter(task => 
+      task.clients?.is_seo_client === true
+    );
   }
 
   // Apply agency filter - always filter by client's agency or task's agency
