@@ -40,15 +40,29 @@ Deno.serve(async (req) => {
 
     // Get default agency if not provided
     let agencyId = payload.agency_id
+    let tenantId: string | null = null
+    
     if (!agencyId) {
       const { data: agencies } = await supabase
         .from('agencies')
-        .select('id')
+        .select('id, tenant_id')
         .eq('status', 'active')
         .limit(1)
       
       if (agencies && agencies.length > 0) {
         agencyId = agencies[0].id
+        tenantId = agencies[0].tenant_id
+      }
+    } else {
+      // Get tenant_id for the provided agency
+      const { data: agency } = await supabase
+        .from('agencies')
+        .select('tenant_id')
+        .eq('id', agencyId)
+        .single()
+      
+      if (agency) {
+        tenantId = agency.tenant_id
       }
     }
 
@@ -96,6 +110,7 @@ Deno.serve(async (req) => {
         products: payload.products || null,
         industry: payload.industry || null,
         agency_id: agencyId,
+        tenant_id: tenantId,
         status: 'new'
       })
       .select()
