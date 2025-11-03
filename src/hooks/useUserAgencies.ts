@@ -3,10 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "./useUserRole";
 
 export function useUserAgencies() {
-  const { isOwner, isTeamManager, isCampaigner, isSalesPerson, userId, salesPersonAgencyIds } = useUserRole();
+  const { isOwner, isTeamManager, isCampaigner, isSalesPerson, userId, salesPersonAgencyIds, campaignerId } = useUserRole();
 
   const { data: userAgencyIds, isLoading } = useQuery({
-    queryKey: ["user-agency-ids", userId, isOwner, isTeamManager, isCampaigner, isSalesPerson],
+    queryKey: ["user-agency-ids", userId, isOwner, isTeamManager, isCampaigner, isSalesPerson, campaignerId],
     queryFn: async () => {
       if (isOwner) {
         return null; // null means "all agencies"
