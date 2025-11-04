@@ -277,15 +277,35 @@ export default function Tasks() {
   let filteredTasks = accessibleTasks?.filter(t => {
     const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
     
+    console.log('🎯 Task filtering:', {
+      taskTitle: t.title,
+      selectedRole,
+      campaignerRole: t.campaigners?.role,
+      isArrayRole: Array.isArray(t.campaigners?.role),
+      isSeoClient: t.clients?.is_seo_client
+    });
+    
     // For SEO filter: BOTH campaigner must be SEO AND client must be SEO client
     let matchesRole = false;
     if (selectedRole === "all") {
       matchesRole = true;
     } else if (selectedRole === "SEO") {
       matchesRole = (t.campaigners?.role?.includes('SEO')) && (t.clients?.is_seo_client === true);
+    } else if (selectedRole === "קמפיינר") {
+      // For "קמפיינר" tab: show tasks where campaigner has קמפיינר role
+      // OR campaigner has any non-SEO role
+      // OR campaigner role is null/empty (treat as regular campaigner)
+      const hasRole = t.campaigners?.role;
+      if (!hasRole || (Array.isArray(hasRole) && hasRole.length === 0)) {
+        matchesRole = true; // No role = regular campaigner
+      } else {
+        matchesRole = hasRole.includes('קמפיינר') || !hasRole.includes('SEO');
+      }
     } else {
       matchesRole = (t.campaigners?.role && t.campaigners.role.includes(selectedRole));
     }
+    
+    console.log('🎯 Match result:', { matchesCampaigner, matchesRole });
     
     return matchesCampaigner && matchesRole;
   }) || [];
