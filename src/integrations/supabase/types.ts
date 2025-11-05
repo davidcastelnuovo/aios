@@ -1539,6 +1539,7 @@ export type Database = {
         Args: { _setting_key: string; _tenant_id: string }
         Returns: Json
       }
+      get_effective_tenant_id: { Args: never; Returns: string }
       get_user_agency_ids: { Args: { _user_id: string }; Returns: string[] }
       get_user_campaigner_id: { Args: { _user_id: string }; Returns: string }
       get_user_sales_person_agency_ids: {
