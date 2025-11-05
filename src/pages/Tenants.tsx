@@ -56,22 +56,31 @@ export default function Tenants() {
       return;
     }
 
+    console.log("Switching to tenant:", tenantId);
+
     // Super admins can access any tenant
     if (isSuperAdmin) {
       localStorage.setItem("selectedTenantId", tenantId);
-      window.location.reload();
+      toast({
+        title: "עובר לארגון...",
+        description: "המערכת עוברת לארגון החדש",
+      });
+      // Navigate to dashboard instead of just reloading
+      window.location.href = "/";
       return;
     }
 
     // Check if user has access to this tenant
-    const { data: access } = await supabase
+    const { data: access, error } = await supabase
       .from("tenant_users")
       .select("*")
       .eq("user_id", user.id)
       .eq("tenant_id", tenantId)
-      .single();
+      .maybeSingle();
 
-    if (!access) {
+    console.log("Access check:", { access, error });
+
+    if (error || !access) {
       toast({
         title: "אין הרשאה",
         description: "אין לך גישה לארגון זה",
@@ -83,8 +92,13 @@ export default function Tenants() {
     // Store selected tenant in localStorage for app to use
     localStorage.setItem("selectedTenantId", tenantId);
     
-    // Reload to apply tenant context
-    window.location.reload();
+    toast({
+      title: "עובר לארגון...",
+      description: "המערכת עוברת לארגון החדש",
+    });
+
+    // Navigate to dashboard
+    window.location.href = "/";
   };
 
   if (isLoading) {
@@ -128,18 +142,25 @@ export default function Tenants() {
       </div>
 
       <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        {tenants?.map((tenant) => (
+        {tenants?.map((tenant) => {
+          const isCurrentTenant = currentTenant && (currentTenant as any).id === tenant.id;
+          return (
           <Card
             key={tenant.id}
-            className="hover:shadow-lg transition-shadow cursor-pointer active:scale-95"
+            className={`hover:shadow-lg transition-all cursor-pointer active:scale-95 ${
+              isCurrentTenant ? 'ring-2 ring-primary shadow-xl border-primary' : ''
+            }`}
             onClick={() => handleTenantClick(tenant.id)}
           >
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="space-y-1 flex-1 min-w-0">
                   <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                    <Building2 className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0" />
+                    <Building2 className={`h-4 w-4 md:h-5 md:w-5 flex-shrink-0 ${isCurrentTenant ? 'text-primary' : ''}`} />
                     <span className="truncate">{tenant.name}</span>
+                    {isCurrentTenant && (
+                      <Badge variant="default" className="text-xs mr-auto">ארגון נוכחי</Badge>
+                    )}
                   </CardTitle>
                   {(tenant as any).parent && (
                     <CardDescription className="text-xs flex items-center gap-1">
@@ -203,7 +224,8 @@ export default function Tenants() {
               )}
             </CardContent>
           </Card>
-        ))}
+        );
+        })}
       </div>
 
       {tenants?.length === 0 && (
