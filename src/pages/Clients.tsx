@@ -13,6 +13,7 @@ import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import {
   Select,
   SelectContent,
@@ -57,10 +58,12 @@ export default function Clients() {
   const [deletingClient, setDeletingClient] = useState<any>(null);
   const [editingFolderLink, setEditingFolderLink] = useState<{ clientId: string; link: string } | null>(null);
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const { data: clients, isLoading } = useQuery({
-    queryKey: ["clients", campaignerId, isCampaigner, isTeamManager, isOwner],
+    queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner],
     queryFn: async () => {
+      if (!tenantId) return [] as any[];
       const selectStr = (isCampaigner && !isTeamManager && !isOwner)
         ? `
           *,
@@ -88,6 +91,7 @@ export default function Clients() {
       let query = supabase
         .from("clients")
         .select(selectStr)
+        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
 
       if (isCampaigner && !isTeamManager && !isOwner && campaignerId) {
@@ -98,32 +102,38 @@ export default function Clients() {
       if (error) throw error;
       return data;
     },
-    enabled: !(isCampaigner && !isTeamManager && !isOwner) || !!campaignerId,
+    enabled: (!(isCampaigner && !isTeamManager && !isOwner) || !!campaignerId) && !!tenantId,
   });
 
   const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
+    queryKey: ["agencies", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [] as any[];
       const { data, error } = await supabase
         .from("agencies")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .order("name");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const { data: campaigners } = useQuery({
-    queryKey: ["campaigners"],
+    queryKey: ["campaigners", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [] as any[];
       const { data, error } = await supabase
         .from("campaigners")
         .select("id, full_name")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   // Fetch client-team mapping for campaigner filter (for managers/owners)

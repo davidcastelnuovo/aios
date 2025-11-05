@@ -5,7 +5,7 @@ import * as z from "zod";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import {
   Dialog,
   DialogContent,
@@ -52,33 +52,21 @@ type FormValues = z.infer<typeof formSchema>;
 export function AddClientForm() {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
-  const { userId } = useCurrentUser();
-
-  const { data: tenantId } = useQuery({
-    queryKey: ["user-tenant-id", userId],
-    queryFn: async () => {
-      if (!userId) return null;
-      const { data, error } = await supabase
-        .from("tenant_users")
-        .select("tenant_id")
-        .eq("user_id", userId)
-        .single();
-      if (error) throw error;
-      return data?.tenant_id;
-    },
-    enabled: !!userId,
-  });
+  const { tenantId } = useCurrentTenant();
 
   const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
+    queryKey: ["agencies", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [] as any[];
       const { data, error } = await supabase
         .from("agencies")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .order("name");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const form = useForm<FormValues>({

@@ -40,6 +40,16 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useTenant } from "@/contexts/TenantContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useTenant } from "@/contexts/TenantContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const menuItems = [
   { title: "סוכנויות", url: "/agencies", icon: Building2, module: "agencies" as const },
@@ -74,6 +84,39 @@ export function AppSidebar() {
   const { hasPermission, isLoading } = useUserPermissions();
   const isCollapsed = state === "collapsed";
 
+  const { userId } = useCurrentUser();
+  const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
+
+  const { data: userTenants } = useQuery({
+    queryKey: ["user-tenants", userId],
+    queryFn: async () => {
+      if (!userId) return [] as any[];
+      const { data, error } = await supabase
+        .from("tenant_users")
+        .select("tenant_id, tenants(id, name)")
+        .eq("user_id", userId);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userId,
+  });
+
+  const handleTenantChange = async (tenantId: string) => {
+    try {
+      await (supabase as any)
+        .from("user_active_tenant")
+        .upsert({
+          user_id: userId,
+          tenant_id: tenantId,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
+      setCurrentTenantId(tenantId);
+      window.location.reload();
+    } catch (e) {
+      console.error("Error switching tenant:", e);
+    }
+  };
+
   const handleLinkClick = () => {
     if (isMobile) {
       setOpenMobile(false);
@@ -107,7 +150,28 @@ export function AppSidebar() {
       <SidebarHeader className="border-b p-2">
         <div className="flex items-center justify-between">
           {!isCollapsed && (
-            <span className="text-sm font-semibold px-2">תפריט</span>
+            <div className="flex flex-col gap-1 px-2">
+              <span className="text-sm font-semibold">תפריט</span>
+              <div className="flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+                {userTenants && userTenants.length > 1 ? (
+                  <Select value={currentTenantId || ""} onValueChange={handleTenantChange}>
+                    <SelectTrigger className="h-8 w-[180px] bg-background border-2">
+                      <SelectValue placeholder="בחר ארגון" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[100]">
+                      {userTenants.map((ut: any) => (
+                        <SelectItem key={ut.tenant_id} value={ut.tenant_id}>
+                          {ut.tenants?.name || "ארגון"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className="text-xs text-muted-foreground">{currentTenant?.name || "—"}</span>
+                )}
+              </div>
+            </div>
           )}
           <button
             onClick={toggleSidebar}

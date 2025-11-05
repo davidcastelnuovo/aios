@@ -2,7 +2,7 @@ import { createContext, useContext, useState, ReactNode, useEffect, useRef } fro
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
-
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface AgencyContextType {
   selectedAgency: string;
@@ -25,8 +25,7 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
   const [selectedAgency, setSelectedAgency] = useState<string>(getInitialSelectedAgency());
   const didSetDefault = useRef(false);
   const { userAgencyIds } = useUserAgencies();
-
-  
+  const { tenantId } = useCurrentTenant();
 
   // Persist selection
   useEffect(() => {
@@ -37,11 +36,13 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
 
   // Get all agencies for the filter - filtered by RLS so users only see their agencies
   const { data: allAgencies, isLoading: isLoadingAgencies } = useQuery({
-    queryKey: ["agencies-filter"],
+    queryKey: ["agencies-filter", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [] as any[];
       const { data, error } = await supabase
         .from("agencies")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .order("name");
       
       if (error) {
@@ -53,6 +54,7 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     },
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
+    enabled: !!tenantId,
   });
 
   // Agencies available (RLS-filtered)

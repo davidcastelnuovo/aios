@@ -46,6 +46,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500" },
@@ -410,9 +411,11 @@ export default function Leads() {
   const [selectedMobileStage, setSelectedMobileStage] = useState<string>("new");
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
 
+  const { tenantId } = useCurrentTenant();
   const { data: leads, isLoading, refetch } = useQuery({
-    queryKey: ["leads", selectedAgency],
+    queryKey: ["leads", tenantId, selectedAgency],
     queryFn: async () => {
+      if (!tenantId) return [] as any[];
       let query = supabase
         .from("leads")
         .select(`
@@ -439,6 +442,7 @@ export default function Leads() {
           agencies (name),
           sales_people (full_name)
         `)
+        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
 
       if (selectedAgency && selectedAgency !== "all") {
@@ -449,18 +453,22 @@ export default function Leads() {
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   // Fetch products for lookup
   const { data: allProducts } = useQuery({
-    queryKey: ["products-lookup"],
+    queryKey: ["products-lookup", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [] as any[];
       const { data, error } = await supabase
         .from("products")
-        .select("id, name, price");
+        .select("id, name, price")
+        .eq("tenant_id", tenantId);
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   // Create products lookup map
