@@ -10,6 +10,7 @@ import { useAgency } from "@/contexts/AgencyContext";
 import { useEffect } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useQuery } from "@tanstack/react-query";
+import { useTenant } from "@/contexts/TenantContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +34,55 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { toast } = useToast();
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
   const { userId } = useCurrentUser();
+  const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
+
+  // Fetch available tenants for the user
+  const { data: userTenants } = useQuery({
+    queryKey: ["user-tenants", userId],
+    queryFn: async () => {
+      if (!userId) return [];
+      const { data, error } = await supabase
+        .from("tenant_users")
+        .select("tenant_id, tenants(id, name)")
+        .eq("user_id", userId);
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!userId,
+  });
+
+  const handleTenantChange = async (tenantId: string) => {
+    try {
+      // Update user_active_tenant in the database
+      await (supabase as any)
+        .from("user_active_tenant")
+        .upsert({
+          user_id: userId,
+          tenant_id: tenantId,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: "user_id"
+        });
+
+      setCurrentTenantId(tenantId);
+      
+      toast({
+        title: "עובר לארגון...",
+        description: "המערכת עוברת לארגון החדש",
+      });
+
+      // Reload to refresh all data
+      window.location.reload();
+    } catch (error) {
+      console.error("Error switching tenant:", error);
+      toast({
+        title: "שגיאה",
+        description: "לא הצלחנו לעבור לארגון החדש",
+        variant: "destructive",
+      });
+    }
+  };
 
   // Check user status and process invitation if pending
   const { data: userProfile } = useQuery({
@@ -121,6 +171,24 @@ export function AppLayout({ children }: AppLayoutProps) {
               </h1>
             </div>
             <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+              {userTenants && userTenants.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground hidden sm:inline">ארגון:</span>
+                  <Select value={currentTenantId || ""} onValueChange={handleTenantChange}>
+                    <SelectTrigger className="w-[160px] md:w-[220px] bg-background border-2">
+                      <Building2 className="h-4 w-4 mr-2 flex-shrink-0" />
+                      <SelectValue placeholder="בחר ארגון" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-[100]">
+                      {userTenants.map((ut: any) => (
+                        <SelectItem key={ut.tenant_id} value={ut.tenant_id}>
+                          {ut.tenants?.name || "ארגון"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               {agencies && agencies.length > 0 && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground hidden sm:inline">סוכנות:</span>
