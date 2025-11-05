@@ -45,6 +45,20 @@ export default function Tenants() {
 
     // Super admins can access any tenant
     if (isSuperAdmin) {
+      // Ensure super admin appears in tenant dropdown by being a member
+      const { data: existingMembership } = await supabase
+        .from("tenant_users")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+
+      if (!existingMembership) {
+        await (supabase as any)
+          .from("tenant_users")
+          .insert({ user_id: user.id, tenant_id: tenantId, role: "member" });
+      }
+
       // Update user_active_tenant in the database
       await (supabase as any)
         .from("user_active_tenant")
@@ -52,16 +66,13 @@ export default function Tenants() {
           user_id: user.id,
           tenant_id: tenantId,
           updated_at: new Date().toISOString(),
-        }, {
-          onConflict: "user_id"
-        });
+        }, { onConflict: "user_id" });
 
       localStorage.setItem("selectedTenantId", tenantId);
       toast({
         title: "עובר לארגון...",
         description: "המערכת עוברת לארגון החדש",
       });
-      // Navigate to dashboard instead of just reloading
       window.location.href = "/";
       return;
     }
