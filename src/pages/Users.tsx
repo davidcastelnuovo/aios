@@ -195,11 +195,26 @@ export default function Users() {
   });
 
   const { data: users, isLoading } = useQuery({
-    queryKey: ["users-with-roles"],
+    queryKey: ["users-with-roles", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
+
+      // First, get user IDs that belong to this tenant
+      const { data: tenantUsers, error: tenantUsersError } = await supabase
+        .from("tenant_users")
+        .select("user_id")
+        .eq("tenant_id", tenantId);
+
+      if (tenantUsersError) throw tenantUsersError;
+      
+      const tenantUserIds = tenantUsers?.map(tu => tu.user_id) || [];
+      
+      if (tenantUserIds.length === 0) return [];
+
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, email, full_name, status, campaigner_id, sales_person_id, campaigners(full_name), sales_people(full_name)");
+        .select("id, email, full_name, status, campaigner_id, sales_person_id, campaigners(full_name), sales_people(full_name)")
+        .in("id", tenantUserIds);
 
       if (profilesError) throw profilesError;
 
