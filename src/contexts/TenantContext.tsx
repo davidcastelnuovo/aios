@@ -51,25 +51,40 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     updateActiveTenant();
   }, [currentTenantId]);
 
-  // Get current user's tenant
+  // Get current user's active tenant (priority) or first tenant
   const { data: userTenant, isLoading: isLoadingUserTenant } = useQuery({
     queryKey: ["user-tenant"],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
 
+      // First, try to get the active tenant from user_active_tenant
+      const { data: activeTenant, error: activeTenantError } = await (supabase as any)
+        .from("user_active_tenant")
+        .select("tenant_id, tenants(id, name, status)")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!activeTenantError && activeTenant) {
+        console.log("Found active tenant:", activeTenant);
+        return activeTenant as any;
+      }
+
+      // If no active tenant, get the first available tenant
       const { data, error } = await supabase
         .from("tenant_users")
         .select("tenant_id, tenants(id, name, status)")
         .eq("user_id", user.id)
-        .single();
+        .limit(1)
+        .maybeSingle();
       
       if (error) {
         console.error("Error fetching user tenant:", error);
         return null;
       }
       
-      return data;
+      console.log("Using first available tenant:", data);
+      return data as any;
     },
     staleTime: 1000 * 60 * 5,
   });
