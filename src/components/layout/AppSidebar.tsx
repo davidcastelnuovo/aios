@@ -145,9 +145,7 @@ export function AppSidebar() {
       <SidebarHeader className="border-b p-2">
         <div className="flex items-center justify-between">
           {!isCollapsed && (
-            <div className="flex flex-col gap-1 px-2">
-              <span className="text-sm font-semibold">תפריט</span>
-              <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-2">
                 <Building2 className="h-4 w-4 text-sidebar-foreground" />
                 {userTenants && userTenants.length > 1 ? (
                   <Select value={currentTenantId || ""} onValueChange={handleTenantChange}>
@@ -169,7 +167,6 @@ export function AppSidebar() {
                 ) : (
                   <span className="text-xs text-sidebar-foreground">{currentTenant?.name || "—"}</span>
                 )}
-              </div>
             </div>
           )}
           <button
