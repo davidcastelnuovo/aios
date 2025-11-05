@@ -88,6 +88,7 @@ Deno.serve(async (req) => {
     // Map source if needed
     const sourceMap: Record<string, string> = {
       'website': 'website',
+      'אתר': 'website',
       'form': 'website',
       'contact_form': 'website',
       'make': 'other',
