@@ -126,10 +126,16 @@ export default function TimeTracking() {
     mutationFn: async () => {
       // Ensure we have a campaigner_id, fetch if missing
       let campaignerId = profile?.campaigner_id as string | null | undefined;
+
+      // Get current user for secure lookups
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
       if (!campaignerId) {
         const { data, error } = await supabase
           .from("profiles")
           .select("campaigner_id")
+          .eq("id", user.id)
           .maybeSingle();
         if (error) throw error;
         campaignerId = data?.campaigner_id;
@@ -139,11 +145,17 @@ export default function TimeTracking() {
         throw new Error("לא נמצא קמפיינר משויך למשתמש. יש לשייך קמפיינר בפרופיל.");
       }
 
+      // Fetch tenant_id to satisfy RLS policy
+      const { data: tenantId, error: tenantErr } = await supabase.rpc("get_user_tenant_id", { _user_id: user.id });
+      if (tenantErr) throw tenantErr;
+      if (!tenantId) throw new Error("לא נמצא טננט למשתמש. יש לשייך משתמש לטננט.");
+
       const { error } = await supabase
         .from("time_entries")
         .insert({
           campaigner_id: campaignerId,
           start_time: new Date().toISOString(),
+          tenant_id: tenantId as string,
         });
 
       if (error) throw error;
