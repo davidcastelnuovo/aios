@@ -3,6 +3,9 @@ project_id = "jnzguisakdtcollxmgzd"
 [functions.create-invitation-link]
 verify_jwt = true
 
+[functions.signup-tenant]
+verify_jwt = false
+
 [functions.signup-with-invitation]
 verify_jwt = false
 

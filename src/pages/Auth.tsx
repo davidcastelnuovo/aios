@@ -644,6 +644,19 @@ useEffect(() => {
                   </svg>
                   הרשם עם Google
                 </Button>
+                
+                <div className="text-center text-sm mt-4">
+                  <span className="text-muted-foreground">רוצה לפתוח ארגון חדש? </span>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="p-0 h-auto font-normal"
+                    onClick={() => navigate("/signup")}
+                    disabled={loading}
+                  >
+                    הירשם כאן
+                  </Button>
+                </div>
               </form>
             </TabsContent>
           </Tabs>
