@@ -1,4 +1,4 @@
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { LogOut, Building2 } from "lucide-react";
 import logo from "@/assets/logo.png";
@@ -165,7 +165,6 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div className="flex-1 flex flex-col overflow-x-hidden">
           <header className="sticky top-0 z-50 h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 gap-2 md:gap-4 flex-shrink-0">
             <div className="flex items-center gap-2 md:gap-4 min-w-0">
-              <SidebarTrigger className="hover:bg-accent transition-colors" />
               <h1 className="text-sm md:text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
                 מערכת ניהול סוכנויות
               </h1>
