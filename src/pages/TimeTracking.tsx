@@ -94,7 +94,7 @@ export default function TimeTracking() {
       if (error) throw error;
       return data;
     },
-    enabled: !!profile?.campaigner_id,
+    enabled: selectedCampaigner === "me" ? !!profile?.campaigner_id : true,
     refetchInterval: 5000,
   });
 
@@ -119,7 +119,7 @@ export default function TimeTracking() {
       if (error) throw error;
       return data;
     },
-    enabled: !!profile?.campaigner_id,
+    enabled: selectedCampaigner === "me" ? !!profile?.campaigner_id : true,
   });
 
   const startTimerMutation = useMutation({
