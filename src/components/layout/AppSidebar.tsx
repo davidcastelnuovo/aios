@@ -45,11 +45,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenant } from "@/contexts/TenantContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useCurrentUser } from "@/hooks/useCurrentUser";
-import { useTenant } from "@/contexts/TenantContext";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const menuItems = [
   { title: "סוכנויות", url: "/agencies", icon: Building2, module: "agencies" as const },

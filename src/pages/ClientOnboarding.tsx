@@ -27,6 +27,7 @@ import AddOnboardingForm from "@/components/forms/AddOnboardingForm";
 import EditOnboardingDialog from "@/components/forms/EditOnboardingDialog";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import { Button } from "@/components/ui/button";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 type OnboardingStatus = "research_meeting" | "receiving_access" | "setup_and_content" | "campaign_live";
 
@@ -58,6 +59,7 @@ export default function ClientOnboarding() {
   const [editingItem, setEditingItem] = useState<OnboardingItem | null>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const { tenantId } = useCurrentTenant();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -74,8 +76,9 @@ export default function ClientOnboarding() {
   );
 
   const { data: onboardingItems, isLoading } = useQuery({
-    queryKey: ["client-onboarding", selectedAgency],
+    queryKey: ["client-onboarding", tenantId, selectedAgency],
     queryFn: async () => {
+      if (!tenantId) return [] as OnboardingItem[];
       let query = supabase
         .from("client_onboarding")
         .select(`
@@ -83,27 +86,30 @@ export default function ClientOnboarding() {
           clients (name, is_seo_client),
           campaigners (full_name)
         `)
+        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
-
-      // Filter by selected agency is now done in filteredItems, not here
 
       const { data, error } = await query;
       if (error) throw error;
       return data as OnboardingItem[];
     },
+    enabled: !!tenantId,
   });
 
   const { data: campaigners } = useQuery({
-    queryKey: ["campaigners"],
+    queryKey: ["campaigners", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [] as Campaigner[];
       const { data, error } = await supabase
         .from("campaigners")
         .select("id, full_name")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
       if (error) throw error;
       return data as Campaigner[];
     },
+    enabled: !!tenantId,
   });
 
   // Get client IDs for the campaigner

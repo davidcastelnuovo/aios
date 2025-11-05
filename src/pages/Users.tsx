@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import {
   Table,
   TableBody,
@@ -91,10 +92,12 @@ export default function Users() {
   } | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
   const [agencyFilter, setAgencyFilter] = useState<string>("all");
+  const { tenantId } = useCurrentTenant();
 
   const { data: agencies } = useQuery({
-    queryKey: ["agencies-for-invite", currentUserId],
+    queryKey: ["agencies-for-invite", tenantId, currentUserId],
     queryFn: async () => {
+      if (!tenantId) return [] as any[];
       // Get current user's roles
       const { data: userRoles } = await supabase
         .from("user_roles")
@@ -105,47 +108,55 @@ export default function Users() {
       const isOwnerRole = roles.includes("owner");
       
       if (isOwnerRole) {
-        // Owner sees all agencies
         const { data, error } = await supabase
           .from("agencies")
           .select("id, name")
+          .eq("tenant_id", tenantId)
           .order("name");
         if (error) throw error;
         return data;
       }
-      return [];
+      return [] as any[];
     },
+    enabled: !!tenantId,
   });
 
   const { data: campaigners } = useQuery({
-    queryKey: ["campaigners-for-invite"],
+    queryKey: ["campaigners-for-invite", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [] as any[];
       const { data, error } = await supabase
         .from("campaigners")
         .select("id, full_name")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const { data: salesPeople } = useQuery({
-    queryKey: ["sales-people-for-invite"],
+    queryKey: ["sales-people-for-invite", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [] as any[];
       const { data, error } = await supabase
         .from("sales_people")
         .select("id, full_name")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const { data: salesPeopleWithAgencies } = useQuery({
-    queryKey: ["sales-people-with-agencies"],
+    queryKey: ["sales-people-with-agencies", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [] as any[];
       const { data, error } = await supabase
         .from("sales_people")
         .select(`
@@ -155,7 +166,8 @@ export default function Users() {
             agency_id,
             agencies(id, name)
           )
-        `);
+        `)
+        .eq("tenant_id", tenantId);
       
       if (error) throw error;
       
@@ -165,6 +177,7 @@ export default function Users() {
         agencies: sp.sales_person_agencies.map((spa: any) => spa.agencies).filter(Boolean),
       }));
     },
+    enabled: !!tenantId,
   });
 
   const { data: tenants } = useQuery({

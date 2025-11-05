@@ -34,6 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 // Faster bubble pop animation for task completion
 const playBubbleAnimation = () => {
@@ -124,8 +125,9 @@ export default function Tasks() {
   );
 
   const { data: tasks, isLoading } = useQuery({
-    queryKey: ["tasks"],
+    queryKey: ["tasks", tenantId, selectedAgency],
     queryFn: async () => {
+      if (!tenantId) return [] as any[];
       let query = supabase
         .from("tasks")
         .select(`
@@ -135,6 +137,7 @@ export default function Tasks() {
           campaigners (full_name, role),
           task_updates (id)
         `)
+        .eq("tenant_id", tenantId)
         .order("due_date", { ascending: true });
 
       const { data, error } = await query;
@@ -144,14 +147,17 @@ export default function Tasks() {
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
+    enabled: !!tenantId,
   });
 
   const { data: campaigners } = useQuery({
-    queryKey: ["campaigners"],
+    queryKey: ["campaigners", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [] as any[];
       const { data, error } = await supabase
         .from("campaigners")
         .select("*")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
       if (error) throw error;
@@ -160,6 +166,7 @@ export default function Tasks() {
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
+    enabled: !!tenantId,
   });
 
   // Get current user's campaigner role

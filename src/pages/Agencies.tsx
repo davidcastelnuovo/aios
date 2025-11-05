@@ -6,28 +6,27 @@ import { Building2, Phone, Mail, Calendar } from "lucide-react";
 import { AddAgencyForm } from "@/components/forms/AddAgencyForm";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 export default function Agencies() {
   const { userId, isOwner } = useUserRole();
   const { userAgencyIds } = useUserAgencies();
+  const { tenantId } = useCurrentTenant();
   
   const { data: agencies, isLoading } = useQuery({
-    queryKey: ["agencies-list", userId, userAgencyIds],
+    queryKey: ["agencies-list", tenantId, userId, userAgencyIds],
     queryFn: async () => {
-      // RLS policies now handle all tenant isolation and role-based access
-      // No need for manual filtering - the database enforces:
-      // 1. Tenant isolation (tenant_id check)
-      // 2. Owners see all agencies in their tenant
-      // 3. Team managers see only agencies they manage (user_managed_agencies)
-      // 4. Campaigners see only agencies they're assigned to (campaigner_agencies)
+      if (!tenantId) return [] as any[];
       const { data, error } = await supabase
         .from("agencies")
         .select("*")
+        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
       
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const getStatusColor = (status: string) => {

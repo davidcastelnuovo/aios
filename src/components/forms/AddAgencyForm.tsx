@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus } from "lucide-react";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם הסוכנות הוא שדה חובה"),
@@ -47,6 +48,7 @@ type FormValues = z.infer<typeof formSchema>;
 export function AddAgencyForm() {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -63,8 +65,10 @@ export function AddAgencyForm() {
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
+      if (!tenantId) throw new Error("לא נמצא tenant_id");
       const { error } = await supabase.from("agencies").insert({
         name: values.name,
+        tenant_id: tenantId,
         contact_name: values.contact_name || null,
         phone: values.phone || null,
         email: values.email || null,
