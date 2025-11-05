@@ -22,13 +22,33 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   // Persist tenant selection
   useEffect(() => {
-    try {
-      if (currentTenantId) {
-        localStorage.setItem("selectedTenantId", currentTenantId);
-      } else {
-        localStorage.removeItem("selectedTenantId");
+    const updateActiveTenant = async () => {
+      try {
+        if (currentTenantId) {
+          localStorage.setItem("selectedTenantId", currentTenantId);
+          
+          // Update user_active_tenant in the database
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            await (supabase as any)
+              .from("user_active_tenant")
+              .upsert({
+                user_id: user.id,
+                tenant_id: currentTenantId,
+                updated_at: new Date().toISOString(),
+              }, {
+                onConflict: "user_id"
+              });
+          }
+        } else {
+          localStorage.removeItem("selectedTenantId");
+        }
+      } catch (error) {
+        console.error("Error updating active tenant:", error);
       }
-    } catch {}
+    };
+    
+    updateActiveTenant();
   }, [currentTenantId]);
 
   // Get current user's tenant

@@ -60,6 +60,17 @@ export default function Tenants() {
 
     // Super admins can access any tenant
     if (isSuperAdmin) {
+      // Update user_active_tenant in the database
+      await (supabase as any)
+        .from("user_active_tenant")
+        .upsert({
+          user_id: user.id,
+          tenant_id: tenantId,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: "user_id"
+        });
+
       localStorage.setItem("selectedTenantId", tenantId);
       toast({
         title: "עובר לארגון...",
@@ -88,6 +99,17 @@ export default function Tenants() {
       });
       return;
     }
+
+    // Update user_active_tenant in the database
+    await (supabase as any)
+      .from("user_active_tenant")
+      .upsert({
+        user_id: user.id,
+        tenant_id: tenantId,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: "user_id"
+      });
 
     // Store selected tenant in localStorage for app to use
     localStorage.setItem("selectedTenantId", tenantId);
