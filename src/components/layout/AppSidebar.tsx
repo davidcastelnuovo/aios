@@ -157,7 +157,7 @@ export function AppSidebar() {
                         <SelectItem 
                           key={ut.tenant_id} 
                           value={ut.tenant_id}
-                          className="text-sidebar-foreground hover:bg-sidebar-accent focus:bg-sidebar-accent"
+                          className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus:bg-sidebar-accent focus:text-sidebar-accent-foreground cursor-pointer"
                         >
                           {ut.tenants?.name || "ארגון"}
                         </SelectItem>
