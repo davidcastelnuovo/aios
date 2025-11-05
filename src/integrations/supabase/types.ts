@@ -1448,6 +1448,27 @@ export type Database = {
           },
         ]
       }
+      user_active_tenant: {
+        Row: {
+          created_at: string
+          tenant_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          tenant_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_managed_agencies: {
         Row: {
           agency_id: string
