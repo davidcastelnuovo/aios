@@ -27,17 +27,35 @@ interface AddTenantFormProps {
   onSuccess?: () => void;
   asDialog?: boolean;
   parentTenantId?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function AddTenantForm({ onSuccess, asDialog = true, parentTenantId }: AddTenantFormProps) {
+export function AddTenantForm({ 
+  onSuccess, 
+  asDialog = true, 
+  parentTenantId,
+  open: controlledOpen,
+  onOpenChange 
+}: AddTenantFormProps) {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     contact_name: "",
     contact_email: "",
     notes: "",
   });
+
+  // Use controlled or internal state
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = (value: boolean) => {
+    if (onOpenChange) {
+      onOpenChange(value);
+    } else {
+      setInternalOpen(value);
+    }
+  };
 
   const { data: tenants } = useQuery({
     queryKey: ["tenants"],

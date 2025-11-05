@@ -13,6 +13,7 @@ import { useTenant } from "@/contexts/TenantContext";
 export default function Tenants() {
   const { toast } = useToast();
   const [selectedTenant, setSelectedTenant] = useState<string | null>(null);
+  const [subTenantParentId, setSubTenantParentId] = useState<string | null>(null);
   const { isSuperAdmin, isOwner } = useUserRole();
   const canManageTenants = isSuperAdmin || isOwner;
 
@@ -220,7 +221,7 @@ export default function Tenants() {
                     className="w-full"
                     onClick={(e) => {
                       e.stopPropagation();
-                      // TODO: Open AddTenantForm with parentTenantId={tenant.id}
+                      setSubTenantParentId(tenant.id);
                     }}
                   >
                     <Plus className="h-3 w-3 ml-1" />
@@ -244,6 +245,19 @@ export default function Tenants() {
             {canManageTenants && <AddTenantForm />}
           </CardContent>
         </Card>
+      )}
+
+      {/* Dialog for creating sub-tenant */}
+      {subTenantParentId && (
+        <AddTenantForm
+          asDialog
+          parentTenantId={subTenantParentId}
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setSubTenantParentId(null);
+          }}
+          onSuccess={() => setSubTenantParentId(null)}
+        />
       )}
     </div>
   );
