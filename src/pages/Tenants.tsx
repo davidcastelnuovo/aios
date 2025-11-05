@@ -7,17 +7,19 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Building2, Users, Settings } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
+import { useUserRole } from "@/hooks/useUserRole";
 
 export default function Tenants() {
   const { toast } = useToast();
   const [selectedTenant, setSelectedTenant] = useState<string | null>(null);
+  const { isSuperAdmin } = useUserRole();
 
   const { data: tenants, isLoading } = useQuery({
     queryKey: ["tenants"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("tenants")
-        .select("*")
+        .select("*, parent:tenants!parent_tenant_id(name)")
         .order("name");
       
       if (error) throw error;
@@ -98,7 +100,7 @@ export default function Tenants() {
             ארגון נוכחי: <strong>{(currentTenant as any).tenants.name}</strong>
           </p>
         )}
-        <AddTenantForm />
+        {isSuperAdmin && <AddTenantForm />}
       </div>
 
       {/* Desktop Header */}
@@ -114,7 +116,7 @@ export default function Tenants() {
             </p>
           )}
         </div>
-        <AddTenantForm />
+        {isSuperAdmin && <AddTenantForm />}
       </div>
 
       <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
@@ -131,6 +133,12 @@ export default function Tenants() {
                     <Building2 className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0" />
                     <span className="truncate">{tenant.name}</span>
                   </CardTitle>
+                  {(tenant as any).parent && (
+                    <CardDescription className="text-xs flex items-center gap-1">
+                      <span>תת-ארגון של:</span>
+                      <span className="font-medium">{(tenant as any).parent.name}</span>
+                    </CardDescription>
+                  )}
                   {tenant.subdomain && (
                     <CardDescription className="text-xs truncate">
                       {tenant.subdomain}.lovableproject.com
@@ -169,6 +177,22 @@ export default function Tenants() {
                   </p>
                 )}
               </div>
+              {isSuperAdmin && (
+                <div className="mt-3 pt-3 border-t">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // TODO: Open AddTenantForm with parentTenantId={tenant.id}
+                    }}
+                  >
+                    <Plus className="h-3 w-3 ml-1" />
+                    צור תת-ארגון
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -181,7 +205,7 @@ export default function Tenants() {
             <p className="text-muted-foreground mb-4">
               אין עדיין ארגונים במערכת
             </p>
-            <AddTenantForm />
+            {isSuperAdmin && <AddTenantForm />}
           </CardContent>
         </Card>
       )}

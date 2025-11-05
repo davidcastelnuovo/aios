@@ -1355,6 +1355,7 @@ export type Database = {
           id: string
           name: string
           notes: string | null
+          parent_tenant_id: string | null
           settings: Json | null
           status: Database["public"]["Enums"]["tenant_status"]
           subdomain: string | null
@@ -1368,6 +1369,7 @@ export type Database = {
           id?: string
           name: string
           notes?: string | null
+          parent_tenant_id?: string | null
           settings?: Json | null
           status?: Database["public"]["Enums"]["tenant_status"]
           subdomain?: string | null
@@ -1381,13 +1383,22 @@ export type Database = {
           id?: string
           name?: string
           notes?: string | null
+          parent_tenant_id?: string | null
           settings?: Json | null
           status?: Database["public"]["Enums"]["tenant_status"]
           subdomain?: string | null
           trial_ends_at?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tenants_parent_tenant_id_fkey"
+            columns: ["parent_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       time_entries: {
         Row: {

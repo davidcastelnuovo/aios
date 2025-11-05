@@ -1,0 +1,193 @@
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+interface CreateTenantRequest {
+  tenant_name: string;
+  contact_name: string;
+  contact_email: string;
+  notes?: string;
+  parent_tenant_id?: string;
+}
+
+serve(async (req: Request) => {
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error("Missing environment variables");
+    }
+
+    // Get current user from auth header
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Missing authorization header" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    
+    // Verify user is super_admin
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Check if user is super_admin
+    const { data: userRoles } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "super_admin")
+      .maybeSingle();
+
+    if (!userRoles) {
+      return new Response(
+        JSON.stringify({ error: "Only super admins can create tenants" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const payload: CreateTenantRequest = await req.json();
+    
+    if (!payload.tenant_name || !payload.contact_email) {
+      return new Response(
+        JSON.stringify({ error: "tenant_name and contact_email are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Step 1: Create the tenant
+    const { data: newTenant, error: tenantError } = await supabase
+      .from("tenants")
+      .insert({
+        name: payload.tenant_name,
+        contact_name: payload.contact_name,
+        contact_email: payload.contact_email,
+        notes: payload.notes,
+        parent_tenant_id: payload.parent_tenant_id || null,
+        status: "active",
+      })
+      .select()
+      .single();
+
+    if (tenantError || !newTenant) {
+      console.error("Error creating tenant:", tenantError);
+      throw new Error("Failed to create tenant: " + tenantError?.message);
+    }
+
+    console.log("✅ Tenant created:", newTenant.id);
+
+    // Step 2: Create invitation token for owner
+    const invitationToken = crypto.randomUUID();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
+
+    // All available modules that owner should have access to
+    const allModules = [
+      "dashboard",
+      "clients",
+      "leads",
+      "tasks",
+      "agencies",
+      "campaigners",
+      "sales_people",
+      "suppliers",
+      "client_onboarding",
+      "finance",
+      "finance_view",
+      "users",
+      "tenants",
+      "reports",
+      "sales_dashboard",
+      "lead_integrations",
+      "time_tracking",
+      "automations",
+    ];
+
+    const { data: invitation, error: invitationError } = await supabase
+      .from("invitation_tokens")
+      .insert({
+        tenant_id: newTenant.id,
+        created_by: user.id,
+        token: invitationToken,
+        email: payload.contact_email,
+        expires_at: expiresAt.toISOString(),
+        metadata: {
+          role: "owner",
+          fullName: payload.contact_name,
+          tenant_name: payload.tenant_name,
+          modulePermissions: allModules, // Grant access to all modules
+        },
+      })
+      .select()
+      .single();
+
+    if (invitationError || !invitation) {
+      console.error("Error creating invitation:", invitationError);
+      throw new Error("Failed to create invitation: " + invitationError?.message);
+    }
+
+    console.log("✅ Invitation created:", invitation.id);
+
+    // Step 3: Send invitation email
+    const invitationUrl = `${req.headers.get("origin") || supabaseUrl}/auth?token=${invitationToken}`;
+    
+    console.log("📧 Invitation URL:", invitationUrl);
+
+    // TODO: Send actual email using your email service
+    // For now, we'll just log the invitation URL
+    console.log(`
+      📧 Invitation Details:
+      - Email: ${payload.contact_email}
+      - Name: ${payload.contact_name}
+      - Organization: ${payload.tenant_name}
+      - URL: ${invitationUrl}
+    `);
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        tenant: newTenant,
+        invitation: {
+          id: invitation.id,
+          token: invitationToken,
+          email: payload.contact_email,
+          invitation_url: invitationUrl,
+        },
+        message: "Tenant created successfully. Invitation sent to owner.",
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+
+  } catch (error: any) {
+    console.error("Error in create-tenant-with-owner:", error);
+    return new Response(
+      JSON.stringify({ error: error.message || "Internal server error" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+});

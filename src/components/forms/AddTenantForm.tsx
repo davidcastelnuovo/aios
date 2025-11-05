@@ -1,10 +1,17 @@
 import { useState } from "react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -19,9 +26,10 @@ import { Loader2, Plus } from "lucide-react";
 interface AddTenantFormProps {
   onSuccess?: () => void;
   asDialog?: boolean;
+  parentTenantId?: string;
 }
 
-export function AddTenantForm({ onSuccess, asDialog = true }: AddTenantFormProps) {
+export function AddTenantForm({ onSuccess, asDialog = true, parentTenantId }: AddTenantFormProps) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -31,32 +39,69 @@ export function AddTenantForm({ onSuccess, asDialog = true }: AddTenantFormProps
     notes: "",
   });
 
-  const addTenantMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      const { data: tenant, error } = await supabase
+  const { data: tenants } = useQuery({
+    queryKey: ["tenants"],
+    queryFn: async () => {
+      const { data, error } = await supabase
         .from("tenants")
-        .insert({
-          name: data.name,
-          contact_name: data.contact_name,
-          contact_email: data.contact_email,
-          notes: data.notes,
-          status: "active",
-        })
-        .select()
-        .single();
+        .select("id, name")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const [selectedParentTenant, setSelectedParentTenant] = useState<string>(parentTenantId || "");
+
+  const addTenantMutation = useMutation({
+    mutationFn: async (data: typeof formData & { parent_tenant_id?: string }) => {
+      // Call edge function to create tenant with owner invitation
+      const { data: result, error } = await supabase.functions.invoke(
+        "create-tenant-with-owner",
+        {
+          body: {
+            tenant_name: data.name,
+            contact_name: data.contact_name,
+            contact_email: data.contact_email,
+            notes: data.notes,
+            parent_tenant_id: data.parent_tenant_id || null,
+          },
+        }
+      );
 
       if (error) throw error;
-      return tenant;
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["tenants"] });
-      toast.success("הארגון נוסף בהצלחה");
+      
+      // Show invitation URL to admin
+      if (result?.invitation?.invitation_url) {
+        toast.success(
+          <div className="space-y-2">
+            <p>הארגון נוסף בהצלחה!</p>
+            <p className="text-xs">קישור הזמנה ל-owner נשלח ל: {formData.contact_email}</p>
+            <a 
+              href={result.invitation.invitation_url} 
+              target="_blank" 
+              className="text-xs underline block"
+            >
+              {result.invitation.invitation_url}
+            </a>
+          </div>,
+          { duration: 10000 }
+        );
+      } else {
+        toast.success("הארגון נוסף בהצלחה!");
+      }
+      
       setFormData({
         name: "",
         contact_name: "",
         contact_email: "",
         notes: "",
       });
+      setSelectedParentTenant("");
       setOpen(false);
       onSuccess?.();
     },
@@ -67,7 +112,10 @@ export function AddTenantForm({ onSuccess, asDialog = true }: AddTenantFormProps
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    addTenantMutation.mutate(formData);
+    addTenantMutation.mutate({
+      ...formData,
+      parent_tenant_id: selectedParentTenant || undefined,
+    });
   };
 
   const formContent = (
@@ -84,25 +132,52 @@ export function AddTenantForm({ onSuccess, asDialog = true }: AddTenantFormProps
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="contact_name">שם איש קשר</Label>
+        <Label htmlFor="contact_name">שם איש קשר *</Label>
         <Input
           id="contact_name"
           value={formData.contact_name}
           onChange={(e) => setFormData({ ...formData, contact_name: e.target.value })}
           placeholder="שם מלא"
+          required
         />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="contact_email">אימייל איש קשר</Label>
+        <Label htmlFor="contact_email">אימייל איש קשר (owner) *</Label>
         <Input
           id="contact_email"
           type="email"
           value={formData.contact_email}
           onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
           placeholder="email@example.com"
+          required
         />
+        <p className="text-xs text-muted-foreground">
+          משתמש זה יקבל הרשאות owner מלאות לארגון
+        </p>
       </div>
+
+      {!parentTenantId && tenants && tenants.length > 0 && (
+        <div className="space-y-2">
+          <Label htmlFor="parent_tenant">ארגון אב (אופציונלי)</Label>
+          <Select value={selectedParentTenant} onValueChange={setSelectedParentTenant}>
+            <SelectTrigger id="parent_tenant">
+              <SelectValue placeholder="בחר ארגון אב אם זה תת-ארגון" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">ללא ארגון אב (ארגון עצמאי)</SelectItem>
+              {tenants.map((tenant) => (
+                <SelectItem key={tenant.id} value={tenant.id}>
+                  {tenant.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            תת-ארגון יקבל העתק של כל המבנה והטבלאות של הארגון האב
+          </p>
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="notes">הערות</Label>
@@ -134,10 +209,10 @@ export function AddTenantForm({ onSuccess, asDialog = true }: AddTenantFormProps
           {addTenantMutation.isPending ? (
             <>
               <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-              מוסיף...
+              יוצר ושולח הזמנה...
             </>
           ) : (
-            "הוסף ארגון"
+            "צור ארגון ושלח הזמנה"
           )}
         </Button>
       </div>
@@ -160,7 +235,7 @@ export function AddTenantForm({ onSuccess, asDialog = true }: AddTenantFormProps
         <DialogHeader>
           <DialogTitle>הוספת ארגון חדש</DialogTitle>
           <DialogDescription>
-            צור ארגון חדש במערכת. לאחר היצירה תוכל להוסיף משתמשים לארגון.
+            צור ארגון חדש והזמן owner לניהול הארגון. ה-owner יקבל גישה מלאה לכל המודולים.
           </DialogDescription>
         </DialogHeader>
         {formContent}
