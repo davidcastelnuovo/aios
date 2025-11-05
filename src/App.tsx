@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppLayout } from "./components/layout/AppLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AgencyProvider } from "./contexts/AgencyContext";
+import { TenantProvider } from "./contexts/TenantContext";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import Setup from "./pages/Setup";
@@ -37,8 +38,9 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AgencyProvider>
-          <Routes>
+        <TenantProvider>
+          <AgencyProvider>
+            <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/setup" element={<Setup />} />
             <Route path="/" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
@@ -61,8 +63,9 @@ const App = () => (
             <Route path="/automations" element={<ProtectedRoute requiredPermission="automations"><AppLayout><Automations /></AppLayout></ProtectedRoute>} />
             <Route path="/products" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Products /></AppLayout></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AgencyProvider>
+            </Routes>
+          </AgencyProvider>
+        </TenantProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
