@@ -38,22 +38,36 @@ Deno.serve(async (req) => {
 
     // No required fields - accept all leads even with empty fields
 
-    // Get default agency if not provided
+    // Get default agency if not provided - default to "promo"
     let agencyId = payload.agency_id
     let tenantId: string | null = null
     
     if (!agencyId) {
+      // Look for "promo" agency first
       const { data: agencies, error: agencyError } = await supabase
         .from('agencies')
-        .select('id, tenant_id')
+        .select('id, tenant_id, name')
         .eq('status', 'active')
+        .ilike('name', '%promo%')
         .limit(1)
       
-      console.log('Default agency query result:', agencies, agencyError)
+      console.log('Promo agency query result:', agencies, agencyError)
       
       if (agencies && agencies.length > 0) {
         agencyId = agencies[0].id
         tenantId = agencies[0].tenant_id
+      } else {
+        // Fallback to any active agency if promo not found
+        const { data: fallbackAgencies } = await supabase
+          .from('agencies')
+          .select('id, tenant_id')
+          .eq('status', 'active')
+          .limit(1)
+        
+        if (fallbackAgencies && fallbackAgencies.length > 0) {
+          agencyId = fallbackAgencies[0].id
+          tenantId = fallbackAgencies[0].tenant_id
+        }
       }
     } else {
       // Get tenant_id for the provided agency
