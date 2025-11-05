@@ -115,6 +115,7 @@ export default function Tasks() {
   const { userAgencyIds } = useUserAgencies();
   const { campaignerId, isCampaigner, isTeamManager, isOwner, isSeo } = useUserRole();
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {

@@ -5,16 +5,20 @@ import { useAgency } from "@/contexts/AgencyContext";
 import { Target, Users, TrendingUp, DollarSign, Clock, CheckCircle2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { format, subDays, startOfDay } from "date-fns";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 export default function SalesDashboard() {
   const { selectedAgency } = useAgency();
+  const { tenantId } = useCurrentTenant();
 
   const { data: leadsStats, isLoading: leadsLoading } = useQuery({
-    queryKey: ["leads-stats", selectedAgency],
+    queryKey: ["leads-stats", tenantId, selectedAgency],
     queryFn: async () => {
+      if (!tenantId) return null;
       let query = supabase
         .from("leads")
-        .select("status, estimated_deal_value, monthly_budget, three_month_budget");
+        .select("status, estimated_deal_value, monthly_budget, three_month_budget")
+        .eq("tenant_id", tenantId);
 
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
@@ -58,14 +62,17 @@ export default function SalesDashboard() {
 
       return stats;
     },
+    enabled: !!tenantId,
   });
 
   const { data: salesPeopleStats } = useQuery({
-    queryKey: ["sales-people-stats", selectedAgency],
+    queryKey: ["sales-people-stats", tenantId, selectedAgency],
     queryFn: async () => {
+      if (!tenantId) return null;
       let query = supabase
         .from("sales_people")
-        .select("id, full_name, active");
+        .select("id, full_name, active")
+        .eq("tenant_id", tenantId);
 
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
@@ -79,14 +86,17 @@ export default function SalesDashboard() {
         active: data.filter(sp => sp.active).length,
       };
     },
+    enabled: !!tenantId,
   });
 
   const { data: timelineData } = useQuery({
-    queryKey: ["leads-timeline", selectedAgency],
+    queryKey: ["leads-timeline", tenantId, selectedAgency],
     queryFn: async () => {
+      if (!tenantId) return [];
       let query = supabase
         .from("leads")
-        .select("created_at, status, updated_at, won_date, proposal_sent_date");
+        .select("created_at, status, updated_at, won_date, proposal_sent_date")
+        .eq("tenant_id", tenantId);
 
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
@@ -144,6 +154,7 @@ export default function SalesDashboard() {
 
       return last30Days;
     },
+    enabled: !!tenantId,
   });
 
   if (leadsLoading) {

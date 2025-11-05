@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useAgency } from "@/contexts/AgencyContext";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const formSchema = z.object({
   full_name: z.string().min(1, "שם מלא הוא שדה חובה"),
@@ -32,6 +33,7 @@ export function AddSalesPersonForm() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
+  const { tenantId } = useCurrentTenant();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -47,19 +49,24 @@ export function AddSalesPersonForm() {
   });
 
   const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
+    queryKey: ["agencies", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("agencies")
         .select("*")
+        .eq("tenant_id", tenantId)
         .order("name");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
+      if (!tenantId) throw new Error("לא נמצא tenant_id");
+      
       const submitData: any = {
         full_name: values.full_name,
         email: values.email || null,
@@ -68,6 +75,7 @@ export function AddSalesPersonForm() {
         agency_id: values.agency_id,
         notes: values.notes || null,
         folder_link: values.folder_link || null,
+        tenant_id: tenantId,
       };
 
       const { data, error } = await supabase

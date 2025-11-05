@@ -7,61 +7,73 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 export default function Dashboard() {
   const { selectedAgency } = useAgency();
+  const { tenantId } = useCurrentTenant();
   const { userAgencyIds } = useUserAgencies();
   const { isOwner } = useUserRole();
   const [selectedClient, setSelectedClient] = useState<string>("all");
   const [selectedSupplier, setSelectedSupplier] = useState<string>("all");
 
   const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
+    queryKey: ["agencies", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("agencies")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .eq("status", "active")
         .order("name");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const { data: clients } = useQuery({
-    queryKey: ["clients"],
+    queryKey: ["clients", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("clients")
         .select("id, name, agency_id")
+        .eq("tenant_id", tenantId)
         .eq("status", "active")
         .order("name");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const { data: suppliers } = useQuery({
-    queryKey: ["suppliers"],
+    queryKey: ["suppliers", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("suppliers")
         .select("id, name, related_campaigner_id")
+        .eq("tenant_id", tenantId)
         .order("name");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const { data: stats } = useQuery({
-    queryKey: ["dashboard-stats", selectedAgency, selectedClient, selectedSupplier],
+    queryKey: ["dashboard-stats", tenantId, selectedAgency, selectedClient, selectedSupplier],
     queryFn: async () => {
-      let agencyQuery = supabase.from("agencies").select("*", { count: "exact", head: true });
-      let clientQuery = supabase.from("clients").select("*", { count: "exact", head: true });
-      let campaignerQuery = supabase.from("campaigners").select("*", { count: "exact", head: true });
-      let taskQuery = supabase.from("tasks").select("*").eq("status", "open");
-      let activeClientsQuery = supabase.from("clients").select("id, retainer, agency_id").eq("status", "active");
-      let leadsQuery = supabase.from("leads").select("estimated_deal_value, monthly_budget, three_month_budget, status");
+      if (!tenantId) return null;
+      let agencyQuery = supabase.from("agencies").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
+      let clientQuery = supabase.from("clients").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
+      let campaignerQuery = supabase.from("campaigners").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
+      let taskQuery = supabase.from("tasks").select("*").eq("tenant_id", tenantId).eq("status", "open");
+      let activeClientsQuery = supabase.from("clients").select("id, retainer, agency_id").eq("tenant_id", tenantId).eq("status", "active");
+      let leadsQuery = supabase.from("leads").select("estimated_deal_value, monthly_budget, three_month_budget, status").eq("tenant_id", tenantId);
       
       // אם בחרנו ספק, נמצא את הקמפיינר הקשור אליו
       let relatedCampaignerId = null;
@@ -120,7 +132,7 @@ export default function Dashboard() {
       }, 0);
 
       // עכשיו שואלים את finance עם הסינון הנכון
-      let financeQuery = supabase.from("finance").select("type, amount, client_id");
+      let financeQuery = supabase.from("finance").select("type, amount, client_id").eq("tenant_id", tenantId);
       
       if (selectedAgency !== "all") {
         financeQuery = financeQuery.eq("agency_id", selectedAgency);
@@ -151,7 +163,8 @@ export default function Dashboard() {
       // משיכת תשלומים ידניים מספקים
       let suppliersQuery = supabase
         .from("suppliers")
-        .select("id, payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3");
+        .select("id, payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3")
+        .eq("tenant_id", tenantId);
       
       if (selectedSupplier !== "all") {
         suppliersQuery = suppliersQuery.eq("id", selectedSupplier);
@@ -184,6 +197,7 @@ export default function Dashboard() {
         profit: totalIncome - totalExpense,
       };
     },
+    enabled: !!tenantId,
   });
 
   const statCards = [

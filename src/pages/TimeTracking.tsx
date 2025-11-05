@@ -29,8 +29,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 export default function TimeTracking() {
+  const { tenantId } = useCurrentTenant();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("me");
   const [editingEntry, setEditingEntry] = useState<any>(null);
@@ -61,21 +63,25 @@ export default function TimeTracking() {
   });
 
   const { data: campaigners } = useQuery({
-    queryKey: ["campaigners"],
+    queryKey: ["campaigners", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("campaigners")
         .select("*")
+        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const { data: activeEntry } = useQuery({
-    queryKey: ["active-time-entry", selectedCampaigner === "me" ? profile?.campaigner_id : selectedCampaigner],
+    queryKey: ["active-time-entry", tenantId, selectedCampaigner === "me" ? profile?.campaigner_id : selectedCampaigner],
     queryFn: async () => {
+      if (!tenantId) return null;
       const campaignerId = selectedCampaigner === "me" ? profile?.campaigner_id : selectedCampaigner;
       if (!campaignerId) return null;
 
@@ -85,6 +91,7 @@ export default function TimeTracking() {
           *,
           campaigners (full_name)
         `)
+        .eq("tenant_id", tenantId)
         .eq("campaigner_id", campaignerId)
         .is("end_time", null)
         .order("start_time", { ascending: false })
@@ -94,19 +101,21 @@ export default function TimeTracking() {
       if (error) throw error;
       return data;
     },
-    enabled: selectedCampaigner === "me" ? !!profile?.campaigner_id : true,
+    enabled: !!tenantId && (selectedCampaigner === "me" ? !!profile?.campaigner_id : true),
     refetchInterval: 5000,
   });
 
   const { data: timeEntries } = useQuery({
-    queryKey: ["time-entries", selectedCampaigner],
+    queryKey: ["time-entries", tenantId, selectedCampaigner],
     queryFn: async () => {
+      if (!tenantId) return [];
       let query = supabase
         .from("time_entries")
         .select(`
           *,
           campaigners (full_name)
         `)
+        .eq("tenant_id", tenantId)
         .order("start_time", { ascending: false });
 
       if (selectedCampaigner === "me" && profile?.campaigner_id) {
@@ -119,7 +128,7 @@ export default function TimeTracking() {
       if (error) throw error;
       return data;
     },
-    enabled: selectedCampaigner === "me" ? !!profile?.campaigner_id : true,
+    enabled: !!tenantId && (selectedCampaigner === "me" ? !!profile?.campaigner_id : true),
   });
 
   const startTimerMutation = useMutation({

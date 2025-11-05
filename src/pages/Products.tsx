@@ -25,6 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface Product {
   id: string;
@@ -36,21 +37,25 @@ interface Product {
 
 export default function Products() {
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
   const { data: products = [], isLoading } = useQuery({
-    queryKey: ["products"],
+    queryKey: ["products", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("products")
         .select("*")
+        .eq("tenant_id", tenantId)
         .order("name");
       
       if (error) throw error;
       return data as Product[];
     },
+    enabled: !!tenantId,
   });
 
   const deleteMutation = useMutation({

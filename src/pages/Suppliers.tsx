@@ -8,14 +8,17 @@ import { EditSupplierDialog } from "@/components/forms/EditSupplierDialog";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 export default function Suppliers() {
   const [editingSupplier, setEditingSupplier] = useState<any>(null);
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   
   const { data: suppliers, isLoading } = useQuery({
-    queryKey: ["suppliers"],
+    queryKey: ["suppliers", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("suppliers")
         .select(`
@@ -24,10 +27,12 @@ export default function Suppliers() {
           agency_2:agencies!suppliers_agency_id_2_fkey(name),
           agency_3:agencies!suppliers_agency_id_3_fkey(name)
         `)
+        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const deleteSupplierMutation = useMutation({

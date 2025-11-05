@@ -7,16 +7,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 export default function Finance() {
   const { selectedAgency } = useAgency();
+  const { tenantId } = useCurrentTenant();
   const { userAgencyIds } = useUserAgencies();
   const { campaignerId, isCampaigner, isTeamManager, isOwner } = useUserRole();
 
 
   const { data: financeRecords, isLoading } = useQuery({
-    queryKey: ["finance"],
+    queryKey: ["finance", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("finance")
         .select(`
@@ -25,22 +28,27 @@ export default function Finance() {
           clients (name),
           suppliers (name)
         `)
+        .eq("tenant_id", tenantId)
         .order("date", { ascending: false });
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const { data: clients } = useQuery({
-    queryKey: ["clients"],
+    queryKey: ["clients", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("clients")
         .select("id, retainer, agency_id")
+        .eq("tenant_id", tenantId)
         .eq("status", "active");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   // Get client IDs for the campaigner
@@ -60,11 +68,13 @@ export default function Finance() {
 
   // משיכת תשלומים ידניים מספקים
   const { data: manualSupplierPayments } = useQuery({
-    queryKey: ["manual-supplier-payments", selectedAgency],
+    queryKey: ["manual-supplier-payments", tenantId, selectedAgency],
     queryFn: async () => {
+      if (!tenantId) return 0;
       const { data, error } = await supabase
         .from("suppliers")
-        .select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3");
+        .select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3")
+        .eq("tenant_id", tenantId);
       
       if (error) throw error;
       
@@ -81,6 +91,7 @@ export default function Finance() {
       
       return total;
     },
+    enabled: !!tenantId,
   });
 
   // First filter by role

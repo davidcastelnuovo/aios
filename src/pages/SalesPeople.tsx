@@ -9,17 +9,21 @@ import { AddSalesPersonForm } from "@/components/forms/AddSalesPersonForm";
 import { EditSalesPersonDialog } from "@/components/forms/EditSalesPersonDialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/contexts/AgencyContext";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 export default function SalesPeople() {
   const { toast } = useToast();
   const { selectedAgency } = useAgency();
+  const { tenantId } = useCurrentTenant();
 
   const { data: salesPeople, isLoading, refetch } = useQuery({
-    queryKey: ["sales-people", selectedAgency],
+    queryKey: ["sales-people", tenantId, selectedAgency],
     queryFn: async () => {
+      if (!tenantId) return [];
       let query = supabase
         .from("sales_people")
         .select("*, agencies (name)")
+        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
 
       if (selectedAgency && selectedAgency !== "all") {
@@ -30,6 +34,7 @@ export default function SalesPeople() {
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const handleDelete = async (id: string) => {
