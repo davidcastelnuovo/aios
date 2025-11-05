@@ -11,6 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
@@ -53,7 +54,7 @@ const formSchema = z.object({
   itai_meeting_date: z.date().optional(),
   sale_date: z.date().optional(),
   industry: z.string().optional(),
-  products: z.string().optional(),
+  products: z.array(z.string()).optional(),
   notes: z.string().optional(),
   sales_person_id: z.string().optional(),
   agency_id: z.string().optional(),
@@ -98,7 +99,7 @@ const form = useForm<FormValues>({
       itai_meeting_date: lead.itai_meeting_date ? new Date(lead.itai_meeting_date) : undefined,
       sale_date: lead.sale_date ? new Date(lead.sale_date) : undefined,
       industry: lead.industry || "",
-      products: lead.products || "",
+      products: lead.products ? JSON.parse(lead.products) : [],
       notes: lead.notes || "",
       sales_person_id: lead.sales_person_id || "",
       agency_id: lead.agency_id || "",
@@ -179,7 +180,7 @@ const updateMutation = useMutation({
         proposal_date: values.proposal_date || null,
         sale_date: values.sale_date || null,
         industry: values.industry || null,
-        products: values.products || null,
+        products: values.products && values.products.length > 0 ? JSON.stringify(values.products) : null,
         notes: values.notes || null,
         sales_person_id: values.sales_person_id || null,
         agency_id: values.agency_id || null,
@@ -639,35 +640,55 @@ const updateMutation = useMutation({
                 <FormField
                   control={form.control}
                   name="products"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">מוצרים/שירותים</FormLabel>
-                      <Select 
-                        onValueChange={(value) => {
-                          field.onChange(value);
-                          const selectedProduct = products?.find(p => p.id === value);
-                          if (selectedProduct) {
-                            form.setValue("estimated_deal_value", selectedProduct.price.toString());
-                          }
-                        }} 
-                        defaultValue={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger className="text-right rounded-lg border-2 h-11">
-                            <SelectValue placeholder="בחר מוצר/שירות" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent className="bg-background z-[100] text-right" align="end">
+                  render={({ field }) => {
+                    const selectedProducts = field.value || [];
+                    
+                    const handleToggleProduct = (productId: string) => {
+                      const currentProducts = [...selectedProducts];
+                      const index = currentProducts.indexOf(productId);
+                      
+                      if (index > -1) {
+                        currentProducts.splice(index, 1);
+                      } else {
+                        currentProducts.push(productId);
+                      }
+                      
+                      field.onChange(currentProducts);
+                      
+                      // Calculate total price
+                      const totalPrice = currentProducts.reduce((sum, id) => {
+                        const product = products?.find(p => p.id === id);
+                        return sum + (product ? parseFloat(product.price.toString()) : 0);
+                      }, 0);
+                      
+                      form.setValue("estimated_deal_value", totalPrice.toString());
+                    };
+                    
+                    return (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">מוצרים/שירותים (בחר אחד או יותר)</FormLabel>
+                        <div className="space-y-2 border-2 rounded-lg p-4 bg-background">
                           {products?.map((product) => (
-                            <SelectItem key={product.id} value={product.id}>
-                              {product.name}
-                            </SelectItem>
+                            <div key={product.id} className="flex items-center space-x-2 space-x-reverse">
+                              <Checkbox
+                                id={product.id}
+                                checked={selectedProducts.includes(product.id)}
+                                onCheckedChange={() => handleToggleProduct(product.id)}
+                              />
+                              <label
+                                htmlFor={product.id}
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1 flex justify-between items-center"
+                              >
+                                <span>{product.name}</span>
+                                <span className="text-muted-foreground">₪{parseFloat(product.price.toString()).toLocaleString()}</span>
+                              </label>
+                            </div>
                           ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
                 />
 
                 <FormField
