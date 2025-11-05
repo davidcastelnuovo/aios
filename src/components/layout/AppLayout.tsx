@@ -171,24 +171,6 @@ export function AppLayout({ children }: AppLayoutProps) {
               </h1>
             </div>
             <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
-              {userTenants && userTenants.length > 1 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground hidden sm:inline">ארגון:</span>
-                  <Select value={currentTenantId || ""} onValueChange={handleTenantChange}>
-                    <SelectTrigger className="w-[160px] md:w-[220px] bg-background border-2">
-                      <Building2 className="h-4 w-4 mr-2 flex-shrink-0" />
-                      <SelectValue placeholder="בחר ארגון" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background z-[100]">
-                      {userTenants.map((ut: any) => (
-                        <SelectItem key={ut.tenant_id} value={ut.tenant_id}>
-                          {ut.tenants?.name || "ארגון"}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
               {agencies && agencies.length > 0 && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground hidden sm:inline">סוכנות:</span>

@@ -148,22 +148,26 @@ export function AppSidebar() {
             <div className="flex flex-col gap-1 px-2">
               <span className="text-sm font-semibold">תפריט</span>
               <div className="flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-muted-foreground" />
+                <Building2 className="h-4 w-4 text-sidebar-foreground" />
                 {userTenants && userTenants.length > 1 ? (
                   <Select value={currentTenantId || ""} onValueChange={handleTenantChange}>
-                    <SelectTrigger className="h-8 w-[180px] bg-background border-2">
+                    <SelectTrigger className="h-8 w-[180px] bg-sidebar text-sidebar-foreground border-sidebar-border hover:bg-sidebar-accent">
                       <SelectValue placeholder="בחר ארגון" />
                     </SelectTrigger>
-                    <SelectContent className="bg-background z-[100]">
+                    <SelectContent className="bg-sidebar border-sidebar-border z-[100]">
                       {userTenants.map((ut: any) => (
-                        <SelectItem key={ut.tenant_id} value={ut.tenant_id}>
+                        <SelectItem 
+                          key={ut.tenant_id} 
+                          value={ut.tenant_id}
+                          className="text-sidebar-foreground hover:bg-sidebar-accent focus:bg-sidebar-accent"
+                        >
                           {ut.tenants?.name || "ארגון"}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 ) : (
-                  <span className="text-xs text-muted-foreground">{currentTenant?.name || "—"}</span>
+                  <span className="text-xs text-sidebar-foreground">{currentTenant?.name || "—"}</span>
                 )}
               </div>
             </div>
