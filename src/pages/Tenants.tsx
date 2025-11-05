@@ -8,6 +8,7 @@ import { Plus, Building2, Users, Settings } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useTenant } from "@/contexts/TenantContext";
 
 export default function Tenants() {
   const { toast } = useToast();
@@ -15,35 +16,18 @@ export default function Tenants() {
   const { isSuperAdmin, isOwner } = useUserRole();
   const canManageTenants = isSuperAdmin || isOwner;
 
+  const { currentTenantId, currentTenant } = useTenant();
+
   const { data: tenants, isLoading } = useQuery({
     queryKey: ["tenants"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("tenants")
-        .select("*, parent:tenants!parent_tenant_id(name)")
-        .order("name");
-      
-      if (error) throw error;
-      return data;
+      const { data, error } = await supabase.functions.invoke("list-user-tenants", {});
+      if (error) throw error as any;
+      return (data as any)?.tenants || [];
     },
   });
 
-  const { data: currentTenant } = useQuery({
-    queryKey: ["current-tenant"],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-
-      const { data, error } = await supabase
-        .from("tenant_users")
-        .select("tenant_id, tenants(name)")
-        .eq("user_id", user.id)
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-  });
+  const currentName = (tenants || []).find((t: any) => t.id === currentTenantId)?.name || (currentTenant as any)?.name;
 
   const handleTenantClick = async (tenantId: string) => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -139,9 +123,9 @@ export default function Tenants() {
           <Building2 className="h-6 w-6" />
           ניהול ארגונים
         </h1>
-        {currentTenant && (
+        {currentTenantId && (
           <p className="text-sm text-muted-foreground">
-            ארגון נוכחי: <strong>{(currentTenant as any).tenants.name}</strong>
+            ארגון נוכחי: <strong>{currentName}</strong>
           </p>
         )}
         {canManageTenants && <AddTenantForm />}
@@ -154,9 +138,9 @@ export default function Tenants() {
             <Building2 className="h-8 w-8" />
             ניהול ארגונים
           </h1>
-          {currentTenant && (
+          {currentTenantId && (
             <p className="text-muted-foreground mt-2">
-              ארגון נוכחי: <strong>{(currentTenant as any).tenants.name}</strong>
+              ארגון נוכחי: <strong>{currentName}</strong>
             </p>
           )}
         </div>
@@ -165,7 +149,7 @@ export default function Tenants() {
 
       <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {tenants?.map((tenant) => {
-          const isCurrentTenant = currentTenant && (currentTenant as any).id === tenant.id;
+          const isCurrentTenant = currentTenantId === tenant.id;
           return (
           <Card
             key={tenant.id}

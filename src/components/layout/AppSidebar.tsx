@@ -86,15 +86,13 @@ export function AppSidebar() {
     queryKey: ["user-tenants", userId],
     queryFn: async () => {
       if (!userId) return [] as any[];
-      const { data, error } = await supabase
-        .from("tenant_users")
-        .select("tenant_id, tenants(id, name)")
-        .eq("user_id", userId);
-      if (error) throw error;
-      return data;
+      const { data, error } = await supabase.functions.invoke("list-user-tenants", {});
+      if (error) throw error as any;
+      return (data as any)?.tenants || [];
     },
     enabled: !!userId,
   });
+  const currentTenantName = (userTenants || []).find((t: any) => t.id === currentTenantId)?.name || currentTenant?.name;
 
   const handleTenantChange = async (tenantId: string) => {
     try {
@@ -153,19 +151,19 @@ export function AppSidebar() {
                       <SelectValue placeholder="בחר ארגון" />
                     </SelectTrigger>
                     <SelectContent className="bg-sidebar border-sidebar-border z-[100]">
-                      {userTenants.map((ut: any) => (
+                      {userTenants.map((t: any) => (
                         <SelectItem 
-                          key={ut.tenant_id} 
-                          value={ut.tenant_id}
+                          key={t.id} 
+                          value={t.id}
                           className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus:bg-sidebar-accent focus:text-sidebar-accent-foreground cursor-pointer"
                         >
-                          {ut.tenants?.name || "ארגון"}
+                          {t.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 ) : (
-                  <span className="text-xs text-sidebar-foreground">{currentTenant?.name || "—"}</span>
+                  <span className="text-xs text-sidebar-foreground">{currentTenantName || "—"}</span>
                 )}
             </div>
           )}
