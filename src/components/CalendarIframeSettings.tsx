@@ -47,14 +47,28 @@ const [eventEnd, setEventEnd] = useState("");
   // Connect to Google Calendar
   const connectMutation = useMutation({
     mutationFn: async () => {
-      console.log('Starting Google Calendar connection...');
+      console.log('Starting Google Calendar connection for user:', userId);
       const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
         body: { action: 'init' }
       });
 
-      console.log('Response from google-calendar-auth:', { data, error });
+      console.log('Response from google-calendar-auth:', { 
+        data, 
+        error,
+        hasAuthUrl: !!data?.authUrl,
+        authUrlLength: data?.authUrl?.length 
+      });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error from edge function:', error);
+        throw error;
+      }
+      
+      if (!data?.authUrl) {
+        console.error('No authUrl in response!', data);
+        throw new Error('לא התקבל קישור התחברות מהשרת');
+      }
+      
       return data;
     },
     onSuccess: (data) => {

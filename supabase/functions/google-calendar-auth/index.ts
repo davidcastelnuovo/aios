@@ -118,8 +118,11 @@ serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
-      throw new Error('Unauthorized');
+      console.error('Auth error:', userError);
+      throw new Error('Unauthorized - user not authenticated');
     }
+    
+    console.log('Authenticated user:', user.id, user.email);
 
     const requestBody = await req.json();
     const action = requestBody.action;
@@ -132,7 +135,12 @@ serve(async (req) => {
 
     // Initial auth request - redirect to Google
     if (action === 'init') {
-      if (!clientId) throw new Error('Missing GOOGLE_CLIENT_ID secret');
+      if (!clientId) {
+        console.error('GOOGLE_CLIENT_ID is missing!');
+        throw new Error('Missing GOOGLE_CLIENT_ID secret');
+      }
+      
+      console.log('Creating auth URL for user:', user.id, user.email);
       
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({
         client_id: clientId,
@@ -144,7 +152,7 @@ serve(async (req) => {
         state: user.id, // Pass user ID in state for callback
       })}`;
 
-      console.log('Redirecting to Google auth...');
+      console.log('Auth URL created successfully, redirecting to Google auth...');
 
       return new Response(JSON.stringify({ authUrl }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
