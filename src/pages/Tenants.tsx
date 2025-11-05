@@ -56,6 +56,13 @@ export default function Tenants() {
       return;
     }
 
+    // Super admins can access any tenant
+    if (isSuperAdmin) {
+      localStorage.setItem("selectedTenantId", tenantId);
+      window.location.reload();
+      return;
+    }
+
     // Check if user has access to this tenant
     const { data: access } = await supabase
       .from("tenant_users")

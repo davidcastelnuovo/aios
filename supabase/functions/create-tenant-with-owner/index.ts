@@ -94,7 +94,23 @@ serve(async (req: Request) => {
 
     console.log("✅ Tenant created:", newTenant.id);
 
-    // Step 2: Create invitation token for owner
+    // Step 2: Add creating user to tenant_users so they can access the new tenant
+    const { error: tenantUserError } = await supabase
+      .from("tenant_users")
+      .insert({
+        tenant_id: newTenant.id,
+        user_id: user.id,
+        role: "owner"
+      });
+
+    if (tenantUserError) {
+      console.error("Error adding user to tenant_users:", tenantUserError);
+      // Continue anyway - the user can still be added later
+    } else {
+      console.log("✅ User added to tenant_users");
+    }
+
+    // Step 3: Create invitation token for owner
     const invitationToken = crypto.randomUUID();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7); // Expires in 7 days
@@ -146,7 +162,7 @@ serve(async (req: Request) => {
 
     console.log("✅ Invitation created:", invitation.id);
 
-    // Step 3: Send invitation email
+    // Step 4: Send invitation email
     const invitationUrl = `${req.headers.get("origin") || supabaseUrl}/auth?token=${invitationToken}`;
     
     console.log("📧 Invitation URL:", invitationUrl);
