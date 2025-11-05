@@ -11,16 +11,20 @@ import { EditCampaignerDialog } from "@/components/forms/EditCampaignerDialog";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 export default function Campaigners() {
   const [expandedCampaigner, setExpandedCampaigner] = useState<string | null>(null);
   const [tempAmounts, setTempAmounts] = useState<Record<string, number>>({});
   const { canViewFinance } = useUserPermissions();
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
   
   const { data: campaigners, isLoading } = useQuery({
-    queryKey: ["campaigners"],
+    queryKey: ["campaigners", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
+      
       const { data, error } = await supabase
         .from("campaigners")
         .select(`
@@ -36,6 +40,7 @@ export default function Campaigners() {
             clients(id, name, status)
           )
         `)
+        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
       
       if (error) throw error;
