@@ -99,7 +99,16 @@ const form = useForm<FormValues>({
       itai_meeting_date: lead.itai_meeting_date ? new Date(lead.itai_meeting_date) : undefined,
       sale_date: lead.sale_date ? new Date(lead.sale_date) : undefined,
       industry: lead.industry || "",
-      products: lead.products ? JSON.parse(lead.products) : [],
+      products: (() => {
+        if (!lead.products) return [];
+        try {
+          const parsed = JSON.parse(lead.products);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          // Old data format - single product ID as string
+          return lead.products ? [lead.products] : [];
+        }
+      })(),
       notes: lead.notes || "",
       sales_person_id: lead.sales_person_id || "",
       agency_id: lead.agency_id || "",
