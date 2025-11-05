@@ -58,33 +58,36 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
 
-      // First, try to get the active tenant from user_active_tenant
-      const { data: activeTenant, error: activeTenantError } = await (supabase as any)
-        .from("user_active_tenant")
-        .select("tenant_id, tenants(id, name, status)")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (!activeTenantError && activeTenant) {
-        console.log("Found active tenant:", activeTenant);
-        return activeTenant as any;
-      }
-
-      // If no active tenant, get the first available tenant
-      const { data, error } = await supabase
+      // Get all user's tenants
+      const { data: userTenants, error: tenantsError } = await supabase
         .from("tenant_users")
         .select("tenant_id, tenants(id, name, status)")
-        .eq("user_id", user.id)
-        .limit(1)
-        .maybeSingle();
-      
-      if (error) {
-        console.error("Error fetching user tenant:", error);
+        .eq("user_id", user.id);
+
+      if (tenantsError || !userTenants || userTenants.length === 0) {
+        console.log("No tenants found for user");
         return null;
       }
-      
-      console.log("Using first available tenant:", data);
-      return data as any;
+
+      // Try to get the active tenant from user_active_tenant
+      const { data: activeTenant, error: activeTenantError } = await (supabase as any)
+        .from("user_active_tenant")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      // Check if active tenant is in user's available tenants
+      if (!activeTenantError && activeTenant) {
+        const matchingTenant = userTenants.find((t: any) => t.tenant_id === activeTenant.tenant_id);
+        if (matchingTenant) {
+          console.log("Found active tenant:", matchingTenant);
+          return matchingTenant as any;
+        }
+      }
+
+      // Otherwise return first available tenant
+      console.log("Using first available tenant:", userTenants[0]);
+      return userTenants[0] as any;
     },
     staleTime: 1000 * 60 * 5,
   });

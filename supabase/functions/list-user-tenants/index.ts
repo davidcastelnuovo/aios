@@ -41,7 +41,7 @@ serve(async (req: Request) => {
     // Fetch tenants the user belongs to
     const { data, error } = await supabase
       .from("tenant_users")
-      .select("tenants:id, tenants(name)", { head: false })
+      .select("tenant_id, tenants(id, name)")
       .eq("user_id", user.id);
 
     if (error) {
@@ -51,8 +51,8 @@ serve(async (req: Request) => {
 
     // Normalize to a simple array of { id, name }
     const tenants = (data || []).map((row: any) => ({
-      id: row.tenants?.id ?? row.tenants?.[0]?.id,
-      name: row.tenants?.name ?? row.tenants?.[0]?.name,
+      id: row.tenants?.id,
+      name: row.tenants?.name,
     })).filter((t: any) => t.id && t.name);
 
     return new Response(JSON.stringify({ tenants }), {
