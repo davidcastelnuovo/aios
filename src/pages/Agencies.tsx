@@ -14,17 +14,17 @@ export default function Agencies() {
   const { data: agencies, isLoading } = useQuery({
     queryKey: ["agencies-list", userId, userAgencyIds],
     queryFn: async () => {
-      let query = supabase
+      // RLS policies now handle all tenant isolation and role-based access
+      // No need for manual filtering - the database enforces:
+      // 1. Tenant isolation (tenant_id check)
+      // 2. Owners see all agencies in their tenant
+      // 3. Team managers see only agencies they manage (user_managed_agencies)
+      // 4. Campaigners see only agencies they're assigned to (campaigner_agencies)
+      const { data, error } = await supabase
         .from("agencies")
         .select("*")
         .order("created_at", { ascending: false });
-
-      // If not owner and has specific agency IDs, filter by them
-      if (!isOwner && userAgencyIds && userAgencyIds.length > 0) {
-        query = query.in("id", userAgencyIds);
-      }
       
-      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
