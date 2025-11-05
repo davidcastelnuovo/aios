@@ -9,6 +9,7 @@ import { Plus, Zap, Activity, Trash2, Edit, TestTube } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddAutomationForm } from "@/components/forms/AddAutomationForm";
 import { EditAutomationDialog } from "@/components/forms/EditAutomationDialog";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import {
   Dialog,
   DialogContent,
@@ -49,14 +50,18 @@ export default function Automations() {
   const [selectedAutomationId, setSelectedAutomationId] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedAutomation, setSelectedAutomation] = useState<any>(null);
+  const { tenantId } = useCurrentTenant();
 
   // Fetch automations
   const { data: automations, isLoading } = useQuery({
-    queryKey: ["automations"],
+    queryKey: ["automations", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
+      
       const { data, error } = await supabase
         .from("automations")
         .select("*")
+        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
       
       if (error) throw error;
