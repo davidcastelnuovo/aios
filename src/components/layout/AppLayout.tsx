@@ -106,7 +106,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   useEffect(() => {
     const processInvitation = async () => {
-      if (!userId || !userProfile || userProfile.status !== 'pending') return;
+      // Only process invitation if user has 'pending' status
+      if (!userId || !userProfile || userProfile.status !== 'pending') {
+        return;
+      }
 
       try {
         const { data: session } = await supabase.auth.getSession();

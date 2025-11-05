@@ -31,6 +31,22 @@ serve(async (req: Request) => {
 
     console.log("Processing invitation for user:", user.email);
 
+    // Check if user already has an active profile (status = 'active')
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("status")
+      .eq("id", user.id)
+      .single();
+
+    // If user is already active, skip invitation processing
+    if (profileData?.status === 'active') {
+      console.log("User already active, skipping invitation processing");
+      return new Response(
+        JSON.stringify({ success: true, message: "User already active" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
+      );
+    }
+
     // Check if user already has a tenant
     const { data: existingTenant } = await supabase
       .from("tenant_users")
@@ -40,6 +56,13 @@ serve(async (req: Request) => {
 
     if (existingTenant) {
       console.log("User already has a tenant, skipping");
+      
+      // Update profile status to active
+      await supabase
+        .from("profiles")
+        .update({ status: 'active' })
+        .eq("id", user.id);
+      
       return new Response(
         JSON.stringify({ success: true, message: "User already has a tenant" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
