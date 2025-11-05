@@ -50,17 +50,16 @@ serve(async (req: Request) => {
       );
     }
 
-    // Check if user is super_admin
+    // Check if user is super_admin or owner
     const { data: userRoles } = await supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", user.id)
-      .eq("role", "super_admin")
-      .maybeSingle();
+      .in("role", ["super_admin", "owner"]);
 
-    if (!userRoles) {
+    if (!userRoles || userRoles.length === 0) {
       return new Response(
-        JSON.stringify({ error: "Only super admins can create tenants" }),
+        JSON.stringify({ error: "Only super admins and owners can create tenants" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

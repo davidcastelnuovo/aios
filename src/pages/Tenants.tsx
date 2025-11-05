@@ -12,7 +12,8 @@ import { useUserRole } from "@/hooks/useUserRole";
 export default function Tenants() {
   const { toast } = useToast();
   const [selectedTenant, setSelectedTenant] = useState<string | null>(null);
-  const { isSuperAdmin } = useUserRole();
+  const { isSuperAdmin, isOwner } = useUserRole();
+  const canManageTenants = isSuperAdmin || isOwner;
 
   const { data: tenants, isLoading } = useQuery({
     queryKey: ["tenants"],
@@ -100,7 +101,7 @@ export default function Tenants() {
             ארגון נוכחי: <strong>{(currentTenant as any).tenants.name}</strong>
           </p>
         )}
-        {isSuperAdmin && <AddTenantForm />}
+        {canManageTenants && <AddTenantForm />}
       </div>
 
       {/* Desktop Header */}
@@ -116,7 +117,7 @@ export default function Tenants() {
             </p>
           )}
         </div>
-        {isSuperAdmin && <AddTenantForm />}
+        {canManageTenants && <AddTenantForm />}
       </div>
 
       <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
@@ -177,7 +178,7 @@ export default function Tenants() {
                   </p>
                 )}
               </div>
-              {isSuperAdmin && (
+              {canManageTenants && (
                 <div className="mt-3 pt-3 border-t">
                   <Button
                     size="sm"
@@ -205,7 +206,7 @@ export default function Tenants() {
             <p className="text-muted-foreground mb-4">
               אין עדיין ארגונים במערכת
             </p>
-            {isSuperAdmin && <AddTenantForm />}
+            {canManageTenants && <AddTenantForm />}
           </CardContent>
         </Card>
       )}
