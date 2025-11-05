@@ -26,7 +26,7 @@ export type ModulePermission =
 
 export function useUserPermissions() {
   const { user } = useCurrentUser();
-  const { isOwner } = useUserRole();
+  const { isOwner, isSuperAdmin } = useUserRole();
   const queryClient = useQueryClient();
 
   const { data: permissionsData, isLoading: queryLoading } = useQuery({
@@ -89,9 +89,12 @@ export function useUserPermissions() {
     // While loading or user unknown, do NOT allow (prevents leaks)
     if (isLoading) return false;
 
+    // Super admins can access all modules in the UI
+    if (isSuperAdmin) return true;
+
     const { permissions, hasAnyPermissions } = permissionsData || { permissions: null, hasAnyPermissions: false };
 
-    // For admin-only and sales-related modules, require an explicit allow flag in DB
+    // Modules requiring explicit allow unless owner override
     const restrictedModules: ModulePermission[] = [
       "sales_dashboard",
       "leads",
@@ -100,17 +103,22 @@ export function useUserPermissions() {
       "automations",
       "tenants",
     ];
+
+    // Owners always see Tenants in the UI
+    if (module === "tenants" && isOwner) return true;
+
     if (restrictedModules.includes(module)) {
       return permissions?.[module] === true;
     }
 
-    // If user has no permissions defined at all, only owners get full access
+    // If user has no permissions defined at all, owners get full access baseline
     if (!hasAnyPermissions) return isOwner;
 
     return permissions?.[module] === true;
   };
 
   const canViewFinance = (): boolean => {
+    if (isSuperAdmin || isOwner) return true;
     return hasPermission("finance_view");
   };
 
