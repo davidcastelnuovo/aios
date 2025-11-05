@@ -165,9 +165,6 @@ export default function Tenants() {
                   <CardTitle className="flex items-center gap-2 text-base md:text-lg">
                     <Building2 className={`h-4 w-4 md:h-5 md:w-5 flex-shrink-0 ${isCurrentTenant ? 'text-primary' : ''}`} />
                     <span className="truncate">{tenant.name}</span>
-                    {isCurrentTenant && (
-                      <Badge variant="default" className="text-xs mr-auto">ארגון נוכחי</Badge>
-                    )}
                   </CardTitle>
                   {(tenant as any).parent && (
                     <CardDescription className="text-xs flex items-center gap-1">
@@ -181,12 +178,11 @@ export default function Tenants() {
                     </CardDescription>
                   )}
                 </div>
-                <Badge
-                  variant={tenant.status === "active" ? "default" : "secondary"}
-                  className="text-xs flex-shrink-0"
-                >
-                  {tenant.status === "active" ? "פעיל" : "לא פעיל"}
-                </Badge>
+                {tenant.status && tenant.status !== "active" && (
+                  <Badge variant="secondary" className="text-xs flex-shrink-0">
+                    לא פעיל
+                  </Badge>
+                )}
               </div>
             </CardHeader>
             <CardContent className="pt-0">
