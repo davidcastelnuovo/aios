@@ -86,16 +86,24 @@ export default function SignUp() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted p-4">
-      <Card className="w-full max-w-md">
+      <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="space-y-1 text-center">
-          <img src={logo} alt="Logo" className="h-16 w-16 mx-auto mb-4" />
-          <CardTitle className="text-2xl md:text-3xl flex items-center justify-center gap-2">
-            <Building2 className="h-6 w-6" />
-            הרשמה לארגון חדש
+          <img src={logo} alt="AfterLead" className="h-16 w-16 mx-auto mb-4" />
+          <CardTitle className="text-2xl md:text-3xl font-bold">
+            AfterLead
           </CardTitle>
-          <CardDescription>
-            צור ארגון חדש והתחל לנהל את העסק שלך
+          <CardDescription className="text-base font-medium">
+            מערכת לניהול סוכנויות שיווק ופרסום
           </CardDescription>
+          <div className="pt-2">
+            <CardTitle className="text-xl flex items-center justify-center gap-2">
+              <Building2 className="h-5 w-5" />
+              הרשמה לארגון חדש
+            </CardTitle>
+            <CardDescription className="text-sm mt-1">
+              צור ארגון חדש והתחל לנהל את העסק שלך
+            </CardDescription>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
