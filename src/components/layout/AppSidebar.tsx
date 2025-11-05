@@ -86,30 +86,20 @@ export function AppSidebar() {
     queryKey: ["user-tenants", userId],
     queryFn: async () => {
       if (!userId) return [] as any[];
-      
-      const { data: userTenantsData, error: tenantsError } = await supabase
-        .from("tenant_users")
-        .select("tenant_id, tenants(id, name, status)")
-        .eq("user_id", userId);
-
-      if (tenantsError) {
-        console.error("Error fetching user tenants:", tenantsError);
-        return [];
-      }
-
-      console.log("User tenants fetched:", userTenantsData?.length || 0);
-      return userTenantsData || [];
+      const { data, error } = await supabase.functions.invoke("list-user-tenants", {});
+      if (error) throw error as any;
+      return (data as any)?.tenants || [];
     },
     enabled: !!userId,
   });
 
-  const currentTenantName = (userTenants || []).find((t: any) => t.tenant_id === currentTenantId)?.tenants?.name || currentTenant?.name;
+  const currentTenantName = (userTenants || []).find((t: any) => t.id === currentTenantId)?.name || currentTenant?.name;
   
   console.log("Current tenant dropdown:", {
     totalTenants: userTenants?.length,
     currentTenantId,
     currentTenantName,
-    tenants: userTenants?.map((t: any) => ({ id: t.tenant_id, name: t.tenants?.name }))
+    tenants: userTenants?.map((t: any) => ({ id: t.id, name: t.name }))
   });
 
   const handleTenantChange = async (tenantId: string) => {
@@ -168,14 +158,14 @@ export function AppSidebar() {
                     <SelectTrigger className="h-8 w-[180px] bg-sidebar text-sidebar-foreground border-sidebar-border hover:bg-sidebar-accent">
                       <SelectValue placeholder="בחר ארגון" />
                     </SelectTrigger>
-                    <SelectContent className="bg-sidebar border-sidebar-border z-[100]">
+                    <SelectContent className="bg-sidebar border-sidebar-border z-[1000]">
                       {userTenants.map((t: any) => (
                         <SelectItem 
-                          key={t.tenant_id} 
-                          value={t.tenant_id}
+                          key={t.id} 
+                          value={t.id}
                           className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus:bg-sidebar-accent focus:text-sidebar-accent-foreground cursor-pointer"
                         >
-                          {t.tenants?.name}
+                          {t.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

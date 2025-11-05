@@ -92,6 +92,7 @@ export function AddTenantForm({
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      queryClient.invalidateQueries({ queryKey: ["user-tenants"] });
       
       // Show invitation URL to admin
       if (result?.invitation?.invitation_url) {
