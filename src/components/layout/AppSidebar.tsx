@@ -86,13 +86,31 @@ export function AppSidebar() {
     queryKey: ["user-tenants", userId],
     queryFn: async () => {
       if (!userId) return [] as any[];
-      const { data, error } = await supabase.functions.invoke("list-user-tenants", {});
-      if (error) throw error as any;
-      return (data as any)?.tenants || [];
+      
+      const { data: userTenantsData, error: tenantsError } = await supabase
+        .from("tenant_users")
+        .select("tenant_id, tenants(id, name, status)")
+        .eq("user_id", userId);
+
+      if (tenantsError) {
+        console.error("Error fetching user tenants:", tenantsError);
+        return [];
+      }
+
+      console.log("User tenants fetched:", userTenantsData?.length || 0);
+      return userTenantsData || [];
     },
     enabled: !!userId,
   });
-  const currentTenantName = (userTenants || []).find((t: any) => t.id === currentTenantId)?.name || currentTenant?.name;
+
+  const currentTenantName = (userTenants || []).find((t: any) => t.tenant_id === currentTenantId)?.tenants?.name || currentTenant?.name;
+  
+  console.log("Current tenant dropdown:", {
+    totalTenants: userTenants?.length,
+    currentTenantId,
+    currentTenantName,
+    tenants: userTenants?.map((t: any) => ({ id: t.tenant_id, name: t.tenants?.name }))
+  });
 
   const handleTenantChange = async (tenantId: string) => {
     try {
@@ -153,11 +171,11 @@ export function AppSidebar() {
                     <SelectContent className="bg-sidebar border-sidebar-border z-[100]">
                       {userTenants.map((t: any) => (
                         <SelectItem 
-                          key={t.id} 
-                          value={t.id}
+                          key={t.tenant_id} 
+                          value={t.tenant_id}
                           className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus:bg-sidebar-accent focus:text-sidebar-accent-foreground cursor-pointer"
                         >
-                          {t.name}
+                          {t.tenants?.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
