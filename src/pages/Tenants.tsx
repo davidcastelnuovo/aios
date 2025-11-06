@@ -34,7 +34,7 @@ export default function Tenants() {
     },
   });
 
-  // שליפת מספר הסוכנויות המשותפות לכל tenant
+  // שליפת מספר הסוכנויות המשותפות לכל tenant + פרטי הסוכנויות
   const { data: agencyCounts } = useQuery({
     queryKey: ["agency-tenant-access-counts", currentTenantId],
     queryFn: async () => {
@@ -42,17 +42,21 @@ export default function Tenants() {
 
       const { data, error } = await supabase
         .from("agency_tenant_access")
-        .select("accessing_tenant_id, agency_id")
+        .select("accessing_tenant_id, agency_id, agencies(name)")
         .eq("source_tenant_id", currentTenantId);
 
       if (error) throw error;
 
-      const counts: Record<string, number> = {};
+      const countsWithDetails: Record<string, { count: number; agencies: any[] }> = {};
       data.forEach((item) => {
-        counts[item.accessing_tenant_id] = (counts[item.accessing_tenant_id] || 0) + 1;
+        if (!countsWithDetails[item.accessing_tenant_id]) {
+          countsWithDetails[item.accessing_tenant_id] = { count: 0, agencies: [] };
+        }
+        countsWithDetails[item.accessing_tenant_id].count += 1;
+        countsWithDetails[item.accessing_tenant_id].agencies.push(item.agencies);
       });
 
-      return counts;
+      return countsWithDetails;
     },
     enabled: !!currentTenantId,
   });
@@ -248,12 +252,41 @@ export default function Tenants() {
                     {tenant.notes}
                   </p>
                 )}
-                {agencyCounts && agencyCounts[tenant.id] > 0 && (
-                  <div className="flex items-center gap-2 pt-2">
-                    <LinkIcon className="w-4 h-4 text-muted-foreground" />
-                    <Badge variant="secondary" className="text-xs">
-                      {agencyCounts[tenant.id]} סוכנויות משותפות
-                    </Badge>
+                {agencyCounts && agencyCounts[tenant.id] && agencyCounts[tenant.id].count > 0 && (
+                  <div className="flex flex-col gap-1 pt-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <LinkIcon className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                        <Badge variant="secondary" className="text-xs">
+                          {agencyCounts[tenant.id].count} סוכנויות משותפות
+                        </Badge>
+                      </div>
+                      {canManageTenants && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTenantForAgencies({
+                              id: tenant.id,
+                              name: tenant.name,
+                            });
+                            setAgenciesDialogOpen(true);
+                          }}
+                        >
+                          <LinkIcon className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground mr-6">
+                      {agencyCounts[tenant.id].agencies.map((a: any, idx: number) => (
+                        <span key={idx}>
+                          {a?.name || 'לא ידוע'}
+                          {idx < agencyCounts[tenant.id].agencies.length - 1 && ', '}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
