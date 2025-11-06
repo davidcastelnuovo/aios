@@ -118,9 +118,24 @@ export default function Clients() {
   });
 
   const ownedAgencyIds = (ownedAgencies || []).map((a: any) => a.id);
-  const canViewClientFinance = (agencyId: string) => {
-    if (!canViewFinance()) return false;
-    return ownedAgencyIds.includes(agencyId);
+
+  // Fetch tenant-specific financial data for clients
+  const { data: clientFinancialData } = useQuery({
+    queryKey: ["client-tenant-financial-data", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("client_tenant_financial_data")
+        .select("*")
+        .eq("tenant_id", tenantId);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  const getClientFinancialData = (clientId: string) => {
+    return clientFinancialData?.find((f: any) => f.client_id === clientId) || null;
   };
 
   const { data: clients, isLoading } = useQuery({
@@ -493,16 +508,20 @@ export default function Clients() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {canViewClientFinance(client.agency_id) && client.retainer && (
-                <div className="flex items-center gap-2">
-                  <Coins className="h-4 w-4 text-muted-foreground" />
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">ריטיינר:</span>
-                    <span className="font-medium mr-2">₪{Number(client.retainer).toLocaleString()}</span>
-                    <span className="text-muted-foreground">לחודש</span>
+              {(() => {
+                const financialData = getClientFinancialData(client.id);
+                const retainerValue = financialData?.retainer || (ownedAgencyIds.includes(client.agency_id) ? client.retainer : null);
+                return canViewFinance() && retainerValue ? (
+                  <div className="flex items-center gap-2">
+                    <Coins className="h-4 w-4 text-muted-foreground" />
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">ריטיינר:</span>
+                      <span className="font-medium mr-2">₪{Number(retainerValue).toLocaleString()}</span>
+                      <span className="text-muted-foreground">לחודש</span>
+                    </div>
                   </div>
-                </div>
-              )}
+                ) : null;
+              })()}
               {client.website && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Globe className="h-4 w-4" />
@@ -752,21 +771,29 @@ export default function Clients() {
                     </Select>
                   </TableCell>
                   <TableCell className="py-4">
-                    {canViewClientFinance(client.agency_id) && client.retainer ? (
-                      <div className="flex items-center gap-1 font-medium">
-                        <Coins className="h-4 w-4 text-muted-foreground" />
-                        <span>₪{Number(client.retainer).toLocaleString()}</span>
-                      </div>
-                    ) : canViewClientFinance(client.agency_id) ? <span className="text-muted-foreground">-</span> : <span className="text-muted-foreground">מוסתר</span>}
+                    {(() => {
+                      const financialData = getClientFinancialData(client.id);
+                      const retainerValue = financialData?.retainer || (ownedAgencyIds.includes(client.agency_id) ? client.retainer : null);
+                      return canViewFinance() && retainerValue ? (
+                        <div className="flex items-center gap-1 font-medium">
+                          <Coins className="h-4 w-4 text-muted-foreground" />
+                          <span>₪{Number(retainerValue).toLocaleString()}</span>
+                        </div>
+                      ) : canViewFinance() ? <span className="text-muted-foreground">-</span> : <span className="text-muted-foreground">מוסתר</span>;
+                    })()}
                   </TableCell>
 
                   <TableCell className="py-4">
-                    {canViewClientFinance(client.agency_id) && client.monthly_budget ? (
-                      <div className="flex items-center gap-1 font-medium">
-                        <Coins className="h-4 w-4 text-muted-foreground" />
-                        <span>₪{Number(client.monthly_budget).toLocaleString()}</span>
-                      </div>
-                    ) : canViewClientFinance(client.agency_id) ? <span className="text-muted-foreground">-</span> : <span className="text-muted-foreground">מוסתר</span>}
+                    {(() => {
+                      const financialData = getClientFinancialData(client.id);
+                      const budgetValue = financialData?.monthly_budget || (ownedAgencyIds.includes(client.agency_id) ? client.monthly_budget : null);
+                      return canViewFinance() && budgetValue ? (
+                        <div className="flex items-center gap-1 font-medium">
+                          <Coins className="h-4 w-4 text-muted-foreground" />
+                          <span>₪{Number(budgetValue).toLocaleString()}</span>
+                        </div>
+                      ) : canViewFinance() ? <span className="text-muted-foreground">-</span> : <span className="text-muted-foreground">מוסתר</span>;
+                    })()}
                   </TableCell>
                   <TableCell className="py-4">
                     {client.phone ? (

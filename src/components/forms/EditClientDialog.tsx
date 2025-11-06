@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -33,7 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { Loader2, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
-import { useAgencyOwnership } from "@/hooks/useAgencyOwnership";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח נדרש"),
   agency_id: z.string().min(1, "סוכנות נדרשת"),
@@ -56,6 +57,7 @@ interface EditClientDialogProps {
 
 export function EditClientDialog({ client, open, onOpenChange }: EditClientDialogProps) {
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -157,22 +159,53 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       phone: client.phone || "",
       email: client.email || "",
       folder_link: client.folder_link || "",
-      retainer: client.retainer?.toString() || "",
-      monthly_budget: client.monthly_budget?.toString() || "",
+      retainer: "",
+      monthly_budget: "",
       website: client.website || "",
       notes: client.notes || "",
       status: client.status || "active",
       is_seo_client: client.is_seo_client || false,
     },
   });
-
+  
   const { canViewFinance } = useUserPermissions();
-  const { data: ownsAgency } = useAgencyOwnership(client?.agency_id);
-  const showFinanceFields = canViewFinance() && ownsAgency;
+  
+  // Fetch tenant-specific financial data
+  const { data: financialData } = useQuery({
+    queryKey: ["client-financial-data", client?.id, tenantId],
+    queryFn: async () => {
+      if (!client?.id || !tenantId) return null;
+      const { data, error } = await supabase
+        .from("client_tenant_financial_data")
+        .select("*")
+        .eq("client_id", client.id)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    },
+    enabled: !!client?.id && !!tenantId && open,
+  });
+  
+  // Update financial fields when financialData is loaded
+  useEffect(() => {
+    if (financialData) {
+      form.setValue("retainer", financialData.retainer?.toString() || "");
+      form.setValue("monthly_budget", financialData.monthly_budget?.toString() || "");
+    } else {
+      // Fallback to client's own data if no tenant-specific data exists
+      form.setValue("retainer", client.retainer?.toString() || "");
+      form.setValue("monthly_budget", client.monthly_budget?.toString() || "");
+    }
+  }, [financialData, client, form]);
+
+  const showFinanceFields = canViewFinance();
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
-      // Update client data
+      if (!tenantId) throw new Error("Tenant ID not found");
+      
+      // Update client data (without financial fields)
       const { error: clientError } = await supabase
         .from("clients")
         .update({
@@ -181,8 +214,6 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
           phone: values.phone || null,
           email: values.email || null,
           folder_link: values.folder_link || null,
-          retainer: values.retainer ? parseFloat(values.retainer) : null,
-          monthly_budget: values.monthly_budget ? parseFloat(values.monthly_budget) : null,
           website: values.website || null,
           notes: values.notes || null,
           status: values.status,
@@ -191,10 +222,30 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         .eq("id", client.id);
 
       if (clientError) throw clientError;
+      
+      // Update or insert tenant-specific financial data
+      if (canViewFinance()) {
+        const financialPayload = {
+          client_id: client.id,
+          tenant_id: tenantId,
+          retainer: values.retainer ? parseFloat(values.retainer) : null,
+          monthly_budget: values.monthly_budget ? parseFloat(values.monthly_budget) : null,
+        };
+        
+        const { error: financialError } = await supabase
+          .from("client_tenant_financial_data")
+          .upsert(financialPayload, {
+            onConflict: "client_id,tenant_id",
+          });
+        
+        if (financialError) throw financialError;
+      }
     },
     onSuccess: () => {
       toast.success("הלקוח עודכן בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["client-tenant-financial-data"] });
+      queryClient.invalidateQueries({ queryKey: ["client-financial-data"] });
       onOpenChange(false);
     },
     onError: (error: any) => {

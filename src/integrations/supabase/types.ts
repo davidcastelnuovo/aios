@@ -493,6 +493,54 @@ export type Database = {
           },
         ]
       }
+      client_tenant_financial_data: {
+        Row: {
+          client_id: string
+          created_at: string
+          id: string
+          monthly_budget: number | null
+          notes: string | null
+          retainer: number | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          id?: string
+          monthly_budget?: number | null
+          notes?: string | null
+          retainer?: number | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          id?: string
+          monthly_budget?: number | null
+          notes?: string | null
+          retainer?: number | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_tenant_financial_data_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_tenant_financial_data_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           agency_id: string
