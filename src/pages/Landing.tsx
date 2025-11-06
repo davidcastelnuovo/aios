@@ -12,7 +12,12 @@ import {
   ArrowLeft,
   Sparkles,
   Target,
-  Activity
+  Activity,
+  CheckSquare,
+  UserPlus,
+  Star,
+  Building2,
+  Layers
 } from "lucide-react";
 
 const Landing = () => {
@@ -25,29 +30,68 @@ const Landing = () => {
       description: "פתח חשבונות ללקוחות שלך ונהל אותם כולם ממקום אחד"
     },
     {
+      icon: CheckSquare,
+      title: "ניהול משימות",
+      description: "מערכת משימות מתקדמת לניהול פרויקטים ועבודות עבור כל הלקוחות"
+    },
+    {
+      icon: UserPlus,
+      title: "קליטת לקוחות חכמה",
+      description: "תהליך אונבורדינג מסודר שעוזר ללקוחות החדשים שלך להתחיל מהר"
+    },
+    {
+      icon: Building2,
+      title: "ניהול סוכנויות מרובות",
+      description: "נהל עשרות סוכנויות ומאות לקוחות במערכת אחת"
+    },
+    {
+      icon: Layers,
+      title: "ניהול קמפיינרים וצוותים",
+      description: "צור צוותי מכירות וקמפיינרים עם הרשאות וגישות מותאמות"
+    },
+    {
+      icon: Target,
+      title: "ניהול לידים מתקדם",
+      description: "עקוב אחרי כל ליד מרגע הכניסה עד סגירת העסקה"
+    },
+    {
       icon: TrendingUp,
       title: "הכנסות נוספות",
       description: "הרווח יותר על ידי מכירת שירותי CRM ללקוחות שלך"
     },
     {
-      icon: Zap,
-      title: "אוטומציות חכמות",
-      description: "חסוך זמן ללקוחות שלך עם אוטומציות שמטפלות בתהליכי מכירה"
-    },
-    {
-      icon: Target,
-      title: "ניהול לידים מתקדם",
-      description: "עזור ללקוחות שלך לעקוב אחרי כל ליד עד לסגירת העסקה"
-    },
-    {
       icon: BarChart3,
       title: "תובנות בזמן אמת",
-      description: "דשבורדים מתקדמים שמראים ללקוחות שלך את הביצועים שלהם"
+      description: "דשבורדים מתקדמים עם גרפים ודוחות מפורטים"
     },
     {
       icon: Shield,
       title: "הפרדה מלאה",
       description: "כל לקוח נהנה מסביבה מבודדת ומאובטחת לחלוטין"
+    }
+  ];
+
+  const testimonials = [
+    {
+      name: "יעל כהן",
+      role: "מנהלת סוכנות דיגיטל",
+      company: "Digital Growth",
+      text: "AfterLead שינתה את הדרך שבה אנחנו נותנים שירות ללקוחות שלנו. עכשיו אנחנו יכולים לנהל 50+ לקוחות בקלות ולתת להם CRM מקצועי.",
+      rating: 5
+    },
+    {
+      name: "דוד לוי",
+      role: "מייסד",
+      company: "LeadMasters",
+      text: "המערכת הזאת לא רק עזרה לנו לנהל את הלקוחות שלנו טוב יותר, היא גם הפכה להיות מקור הכנסה נוסף משמעותי לסוכנות.",
+      rating: 5
+    },
+    {
+      name: "שרה אברהם",
+      role: "מנהלת מכירות",
+      company: "SalesBoost",
+      text: "הפיצ'רים של ניהול צוותים וקמפיינרים מושלמים. הצוות שלי עובד בצורה הרבה יותר מסונכרנת והלקוחות שלנו מאוד מרוצים.",
+      rating: 5
     }
   ];
 
@@ -177,10 +221,115 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Screenshot/Demo Section */}
+      <section className="py-20">
+        <div className="container mx-auto px-4">
+          <div className="max-w-6xl mx-auto">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold mb-4">
+                צפה במערכת בפעולה
+              </h2>
+              <p className="text-xl text-muted-foreground">
+                ממשק נקי ואינטואיטיבי שקל לעבוד איתו
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8">
+              <Card className="overflow-hidden border-2">
+                <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8 h-64 flex items-center justify-center">
+                  <div className="text-center">
+                    <BarChart3 className="h-24 w-24 text-primary mx-auto mb-4" />
+                    <p className="text-lg font-semibold">דשבורד מכירות מתקדם</p>
+                    <p className="text-muted-foreground text-sm mt-2">גרפים ותובנות בזמן אמת</p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="overflow-hidden border-2">
+                <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8 h-64 flex items-center justify-center">
+                  <div className="text-center">
+                    <Users className="h-24 w-24 text-primary mx-auto mb-4" />
+                    <p className="text-lg font-semibold">ניהול לקוחות חכם</p>
+                    <p className="text-muted-foreground text-sm mt-2">כל המידע במקום אחד</p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="overflow-hidden border-2">
+                <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8 h-64 flex items-center justify-center">
+                  <div className="text-center">
+                    <Target className="h-24 w-24 text-primary mx-auto mb-4" />
+                    <p className="text-lg font-semibold">מעקב אחר לידים</p>
+                    <p className="text-muted-foreground text-sm mt-2">מליד להזדמנות לעסקה</p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="overflow-hidden border-2">
+                <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8 h-64 flex items-center justify-center">
+                  <div className="text-center">
+                    <CheckSquare className="h-24 w-24 text-primary mx-auto mb-4" />
+                    <p className="text-lg font-semibold">ניהול משימות</p>
+                    <p className="text-muted-foreground text-sm mt-2">תעדוף וארגון חכם</p>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials Section */}
+      <section className="py-20">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              מה אומרים הלקוחות שלנו
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              סוכנויות דיגיטל שכבר משתמשות ב-AfterLead ורואות תוצאות
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            {testimonials.map((testimonial, index) => (
+              <Card key={index} className="border-2 hover:shadow-lg transition-all duration-300">
+                <CardContent className="p-6">
+                  <div className="flex mb-4">
+                    {[...Array(testimonial.rating)].map((_, i) => (
+                      <Star key={i} className="h-5 w-5 fill-primary text-primary" />
+                    ))}
+                  </div>
+                  <p className="text-muted-foreground mb-6 italic">
+                    "{testimonial.text}"
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full gradient-primary flex items-center justify-center text-white font-bold">
+                      {testimonial.name.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="font-semibold">{testimonial.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {testimonial.role}, {testimonial.company}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Stats Section */}
       <section className="py-20 bg-muted/30">
         <div className="container mx-auto px-4">
-          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              המספרים מדברים בעד עצמם
+            </h2>
+          </div>
+          <div className="grid md:grid-cols-4 gap-8 max-w-5xl mx-auto">
             <div className="text-center">
               <div className="text-4xl md:text-5xl font-bold gradient-primary bg-clip-text text-transparent mb-2">
                 +35%
@@ -189,7 +338,7 @@ const Landing = () => {
             </div>
             <div className="text-center">
               <div className="text-4xl md:text-5xl font-bold gradient-primary bg-clip-text text-transparent mb-2">
-                דקות
+                5 דק'
               </div>
               <p className="text-muted-foreground">לפתוח חשבון לקוח חדש</p>
             </div>
@@ -198,6 +347,65 @@ const Landing = () => {
                 100%
               </div>
               <p className="text-muted-foreground">הפרדה בין לקוחות</p>
+            </div>
+            <div className="text-center">
+              <div className="text-4xl md:text-5xl font-bold gradient-primary bg-clip-text text-transparent mb-2">
+                24/7
+              </div>
+              <p className="text-muted-foreground">תמיכה בעברית</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works Section */}
+      <section className="py-20">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              איך זה עובד?
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              4 שלבים פשוטים להתחיל לצמוח
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-4 gap-8 max-w-6xl mx-auto">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full gradient-primary text-white text-2xl font-bold flex items-center justify-center mx-auto mb-4">
+                1
+              </div>
+              <h3 className="text-xl font-semibold mb-2">הרשמה</h3>
+              <p className="text-muted-foreground">
+                הירשם למערכת תוך 2 דקות והתחל להגדיר את הסוכנות שלך
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full gradient-primary text-white text-2xl font-bold flex items-center justify-center mx-auto mb-4">
+                2
+              </div>
+              <h3 className="text-xl font-semibold mb-2">הוספת לקוחות</h3>
+              <p className="text-muted-foreground">
+                צור חשבונות ללקוחות שלך והגדר להם גישה לסביבה שלהם
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full gradient-primary text-white text-2xl font-bold flex items-center justify-center mx-auto mb-4">
+                3
+              </div>
+              <h3 className="text-xl font-semibold mb-2">ניהול מכירות</h3>
+              <p className="text-muted-foreground">
+                עקוב אחרי לידים, משימות ועסקאות של כל הלקוחות שלך
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full gradient-primary text-white text-2xl font-bold flex items-center justify-center mx-auto mb-4">
+                4
+              </div>
+              <h3 className="text-xl font-semibold mb-2">צמיחה</h3>
+              <p className="text-muted-foreground">
+                צפה בלקוחות שלך צומחים ובהכנסות שלך עולות
+              </p>
             </div>
           </div>
         </div>
