@@ -106,15 +106,11 @@ export default function Clients() {
     queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner, selectedAgency, (agencies?.length || 0)],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
-      const selectStr = `
+        const selectStr = `
           *,
           agencies (name),
           client_team (
-            campaigner_id,
-            campaigners!inner (
-              id,
-              full_name
-            )
+            campaigner_id
           )
         `;
 
@@ -144,9 +140,6 @@ export default function Clients() {
     queryKey: ["campaigners", tenantId],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
-      
-      // The campaigners query already gets filtered by RLS
-      // RLS includes campaigners from owned tenant + shared agencies
       const { data, error } = await supabase
         .from("campaigners")
         .select("id, full_name")
@@ -155,7 +148,8 @@ export default function Clients() {
       if (error) throw error;
       return data;
     },
-    enabled: !!tenantId,
+    // Temporarily disabled due to backend policy recursion; UI falls back gracefully
+    enabled: false,
   });
 
   // Fetch client-team mapping for campaigner filter (for managers/owners)
