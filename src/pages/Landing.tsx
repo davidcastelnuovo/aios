@@ -180,13 +180,57 @@ const Landing = () => {
               </Button>
             </div>
 
-            {/* Growth Animation */}
-            <div className="flex items-end justify-center gap-3 pt-12 h-32">
-              <div className="w-12 bg-primary/20 rounded-t-lg animate-[grow_2s_ease-in-out_infinite] [animation-delay:0s]" style={{animationName: 'grow1'}} />
-              <div className="w-12 bg-primary/40 rounded-t-lg animate-[grow_2s_ease-in-out_infinite] [animation-delay:0.2s]" style={{animationName: 'grow2'}} />
-              <div className="w-12 bg-primary/60 rounded-t-lg animate-[grow_2s_ease-in-out_infinite] [animation-delay:0.4s]" style={{animationName: 'grow3'}} />
-              <div className="w-12 bg-primary/80 rounded-t-lg animate-[grow_2s_ease-in-out_infinite] [animation-delay:0.6s]" style={{animationName: 'grow4'}} />
-              <div className="w-12 bg-primary rounded-t-lg animate-[grow_2s_ease-in-out_infinite] [animation-delay:0.8s]" style={{animationName: 'grow5'}} />
+            {/* Sales Pipeline Animation */}
+            <div className="flex items-center justify-center gap-4 pt-12 px-4 overflow-x-auto">
+              <div className="flex flex-col items-center gap-2 min-w-[100px]">
+                <div className="w-24 h-24 rounded-2xl bg-primary/20 flex items-center justify-center relative overflow-hidden">
+                  <Target className="h-10 w-10 text-primary z-10" />
+                  <div className="absolute inset-0 animate-ping bg-primary/30 rounded-2xl" style={{animationDuration: '2s'}} />
+                </div>
+                <span className="text-sm font-semibold text-muted-foreground">לידים</span>
+              </div>
+
+              <div className="flex items-center gap-2 animate-pulse">
+                <div className="w-3 h-3 rounded-full bg-primary" />
+                <ArrowLeft className="h-6 w-6 text-primary" />
+                <div className="w-3 h-3 rounded-full bg-primary animate-bounce" />
+              </div>
+
+              <div className="flex flex-col items-center gap-2 min-w-[100px]">
+                <div className="w-24 h-24 rounded-2xl bg-primary/30 flex items-center justify-center relative overflow-hidden">
+                  <Activity className="h-10 w-10 text-primary z-10" />
+                  <div className="absolute inset-0 animate-ping bg-primary/40 rounded-2xl" style={{animationDuration: '2.2s', animationDelay: '0.3s'}} />
+                </div>
+                <span className="text-sm font-semibold text-muted-foreground">הצעות</span>
+              </div>
+
+              <div className="flex items-center gap-2 animate-pulse" style={{animationDelay: '0.3s'}}>
+                <div className="w-3 h-3 rounded-full bg-primary" />
+                <ArrowLeft className="h-6 w-6 text-primary" />
+                <div className="w-3 h-3 rounded-full bg-primary animate-bounce" style={{animationDelay: '0.3s'}} />
+              </div>
+
+              <div className="flex flex-col items-center gap-2 min-w-[100px]">
+                <div className="w-24 h-24 rounded-2xl bg-primary/40 flex items-center justify-center relative overflow-hidden">
+                  <Users className="h-10 w-10 text-primary z-10" />
+                  <div className="absolute inset-0 animate-ping bg-primary/50 rounded-2xl" style={{animationDuration: '2.4s', animationDelay: '0.6s'}} />
+                </div>
+                <span className="text-sm font-semibold text-muted-foreground">משא ומתן</span>
+              </div>
+
+              <div className="flex items-center gap-2 animate-pulse" style={{animationDelay: '0.6s'}}>
+                <div className="w-3 h-3 rounded-full bg-primary" />
+                <ArrowLeft className="h-6 w-6 text-primary" />
+                <div className="w-3 h-3 rounded-full bg-primary animate-bounce" style={{animationDelay: '0.6s'}} />
+              </div>
+
+              <div className="flex flex-col items-center gap-2 min-w-[100px]">
+                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center relative overflow-hidden shadow-lg">
+                  <CheckCircle2 className="h-10 w-10 text-white z-10 animate-bounce" />
+                  <div className="absolute inset-0 animate-ping bg-accent/60 rounded-2xl" style={{animationDuration: '2.6s', animationDelay: '0.9s'}} />
+                </div>
+                <span className="text-sm font-semibold text-primary">סגירה! 🎉</span>
+              </div>
             </div>
 
             <div className="flex items-center justify-center gap-8 pt-4 text-sm text-muted-foreground">
@@ -205,29 +249,6 @@ const Landing = () => {
             </div>
           </div>
         </div>
-
-        <style>{`
-          @keyframes grow1 {
-            0%, 100% { height: 40%; }
-            50% { height: 70%; }
-          }
-          @keyframes grow2 {
-            0%, 100% { height: 50%; }
-            50% { height: 80%; }
-          }
-          @keyframes grow3 {
-            0%, 100% { height: 60%; }
-            50% { height: 90%; }
-          }
-          @keyframes grow4 {
-            0%, 100% { height: 70%; }
-            50% { height: 95%; }
-          }
-          @keyframes grow5 {
-            0%, 100% { height: 80%; }
-            50% { height: 100%; }
-          }
-        `}</style>
       </section>
 
       {/* Screenshot/Demo Section */}
