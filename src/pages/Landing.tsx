@@ -21,43 +21,43 @@ const Landing = () => {
   const features = [
     {
       icon: Users,
-      title: "ניהול לידים מתקדם",
-      description: "עקוב אחרי כל ליד מהרגע הראשון ועד לסגירת העסקה"
+      title: "ניהול לקוחות מרובים",
+      description: "פתח חשבונות ללקוחות שלך ונהל אותם כולם ממקום אחד"
     },
     {
-      icon: BarChart3,
-      title: "דשבורד מכירות",
-      description: "תובנות בזמן אמת על ביצועי המכירות וההמרות שלך"
+      icon: TrendingUp,
+      title: "הכנסות נוספות",
+      description: "הרווח יותר על ידי מכירת שירותי CRM ללקוחות שלך"
     },
     {
       icon: Zap,
       title: "אוטומציות חכמות",
-      description: "חסוך זמן יקר עם אוטומציות שמטפלות בתהליכים החוזרים"
+      description: "חסוך זמן ללקוחות שלך עם אוטומציות שמטפלות בתהליכי מכירה"
     },
     {
       icon: Target,
-      title: "ניהול סוכנויות",
-      description: "נהל מספר סוכנויות ממקום אחד עם הרשאות מתקדמות"
+      title: "ניהול לידים מתקדם",
+      description: "עזור ללקוחות שלך לעקוב אחרי כל ליד עד לסגירת העסקה"
     },
     {
-      icon: Activity,
-      title: "מעקב משימות",
-      description: "עקוב אחר המשימות של הצוות ותזמן פגישות בקלות"
+      icon: BarChart3,
+      title: "תובנות בזמן אמת",
+      description: "דשבורדים מתקדמים שמראים ללקוחות שלך את הביצועים שלהם"
     },
     {
       icon: Shield,
-      title: "אבטחה מתקדמת",
-      description: "הגנה מלאה על המידע שלך עם RLS ואימות דו-שלבי"
+      title: "הפרדה מלאה",
+      description: "כל לקוח נהנה מסביבה מבודדת ומאובטחת לחלוטין"
     }
   ];
 
   const benefits = [
-    "הגדל את שיעור ההמרות שלך ב-40%",
-    "חסוך עד 20 שעות עבודה בשבוע",
-    "נהל את כל צוות המכירות ממקום אחד",
-    "קבל תובנות בזמן אמת על הביצועים",
-    "התאם אישית את המערכת לצרכים שלך",
-    "תמיכה מקצועית בעברית"
+    "הצע שירות CRM מתקדם ללקוחות שלך והרווח יותר",
+    "נהל עשרות לקוחות ממקום אחד בקלות",
+    "פתח חשבונות חדשים ללקוחות תוך דקות",
+    "עזור ללקוחות שלך להגדיל את המכירות שלהם",
+    "הפרדה מלאה בין הלקוחות - כל אחד בסביבה מבודדת",
+    "תמיכה ושירות מקצועי בעברית"
   ];
 
   return (
@@ -67,7 +67,7 @@ const Landing = () => {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg gradient-primary" />
-            <span className="text-xl font-bold">CRM Pro</span>
+            <span className="text-xl font-bold">AfterLead</span>
           </div>
           <Button 
             variant="ghost" 
@@ -88,17 +88,17 @@ const Landing = () => {
           <div className="max-w-3xl mx-auto text-center space-y-8">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium">
               <Sparkles className="h-4 w-4" />
-              המערכת המתקדמת לניהול מכירות
+              הפתרון המושלם לסוכנויות דיגיטל
             </div>
             <h1 className="text-4xl md:text-6xl font-bold">
-              נהל את עסק המכירות שלך
+              צמח יותר, הרווח יותר
               <span className="block gradient-primary bg-clip-text text-transparent mt-2">
-                בצורה החכמה ביותר
+                תן ללקוחות שלך להצליח
               </span>
             </h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              מערכת CRM מתקדמת שמאפשרת לך לעקוב אחר לידים, לנהל צוותי מכירות, 
-              ולהגדיל את ההכנסות שלך - הכל במקום אחד
+              AfterLead היא מערכת ניהול מכירות שמאפשרת לך כסוכנות דיגיטל לנהל את הלקוחות שלך,
+              לפתוח להם חשבונות ולעזור להם לצמוח - ובדרך גם להרוויח יותר
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               <Button 
@@ -127,10 +127,10 @@ const Landing = () => {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-4">
-              כל מה שאתה צריך במקום אחד
+              כל מה שהסוכנות שלך צריכה
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              מערכת מקיפה עם כל הכלים שצוות המכירות שלך צריך כדי להצליח
+              נהל את כל הלקוחות שלך ממקום אחד ותן להם שירות ברמה הבאה
             </p>
           </div>
 
@@ -158,10 +158,10 @@ const Landing = () => {
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-16">
               <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                למה לבחור ב-CRM Pro?
+                למה לבחור ב-AfterLead?
               </h2>
               <p className="text-xl text-muted-foreground">
-                תוצאות מוכחות שעובדות עבור עסקים כמוך
+                תוצאות מוכחות שעובדות עבור סוכנויות דיגיטל
               </p>
             </div>
 
@@ -183,21 +183,21 @@ const Landing = () => {
           <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
             <div className="text-center">
               <div className="text-4xl md:text-5xl font-bold gradient-primary bg-clip-text text-transparent mb-2">
-                +40%
+                +35%
               </div>
-              <p className="text-muted-foreground">עלייה בשיעור ההמרות</p>
+              <p className="text-muted-foreground">הכנסות נוספות לסוכנות</p>
             </div>
             <div className="text-center">
               <div className="text-4xl md:text-5xl font-bold gradient-primary bg-clip-text text-transparent mb-2">
-                20
+                דקות
               </div>
-              <p className="text-muted-foreground">שעות חיסכון בשבוע</p>
+              <p className="text-muted-foreground">לפתוח חשבון לקוח חדש</p>
             </div>
             <div className="text-center">
               <div className="text-4xl md:text-5xl font-bold gradient-primary bg-clip-text text-transparent mb-2">
                 100%
               </div>
-              <p className="text-muted-foreground">שביעות רצון לקוחות</p>
+              <p className="text-muted-foreground">הפרדה בין לקוחות</p>
             </div>
           </div>
         </div>
@@ -209,10 +209,10 @@ const Landing = () => {
           <Card className="max-w-4xl mx-auto border-2 border-primary/20 shadow-lg gradient-primary">
             <CardContent className="p-8 md:p-12 text-center text-white">
               <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                מוכן להתחיל את המסע?
+                מוכן להצמיח את הסוכנות שלך?
               </h2>
               <p className="text-xl mb-8 text-white/90 max-w-2xl mx-auto">
-                הצטרף לאלפי עסקים שכבר משתמשים ב-CRM Pro כדי לנהל את המכירות שלהם בצורה חכמה יותר
+                הצטרף לסוכנויות דיגיטל שכבר משתמשות ב-AfterLead כדי לתת ללקוחות שלהן שירות ברמה הבאה
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button 
@@ -241,7 +241,7 @@ const Landing = () => {
       {/* Footer */}
       <footer className="border-t py-8 bg-card/50">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>© 2025 CRM Pro. כל הזכויות שמורות.</p>
+          <p>© 2025 AfterLead. כל הזכויות שמורות.</p>
         </div>
       </footer>
     </div>
