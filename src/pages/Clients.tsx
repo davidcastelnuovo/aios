@@ -64,19 +64,7 @@ export default function Clients() {
     queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
-      const selectStr = (isCampaigner && !isTeamManager && !isOwner)
-        ? `
-          *,
-          agencies (name),
-          client_team!inner (
-            campaigner_id,
-            campaigners!inner (
-              id,
-              full_name
-            )
-          )
-        `
-        : `
+        const selectStr = `
           *,
           agencies (name),
           client_team (
@@ -91,12 +79,8 @@ export default function Clients() {
       let query = supabase
         .from("clients")
         .select(selectStr)
-        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
 
-      if (isCampaigner && !isTeamManager && !isOwner && campaignerId) {
-        query = query.eq("client_team.campaigner_id", campaignerId);
-      }
 
       const { data, error } = await query;
       if (error) throw error;
