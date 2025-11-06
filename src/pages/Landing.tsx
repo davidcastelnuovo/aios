@@ -20,6 +20,7 @@ import {
   Layers
 } from "lucide-react";
 import dashboardScreenshot from "@/assets/dashboard-screenshot.png";
+import analyticsDashboard from "@/assets/analytics-dashboard.png";
 import leadsScreenshot from "@/assets/leads-screenshot.png";
 import clientsScreenshot from "@/assets/clients-screenshot.png";
 import tasksScreenshot from "@/assets/tasks-screenshot.png";
@@ -239,19 +240,19 @@ const Landing = () => {
             </div>
 
             <div className="grid md:grid-cols-2 gap-8">
-              <Card className="overflow-hidden border-2 hover:shadow-2xl transition-all duration-300">
+              <Card className="overflow-hidden border-2 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
                 <img 
-                  src={dashboardScreenshot} 
-                  alt="דשבורד מכירות מתקדם" 
+                  src={analyticsDashboard} 
+                  alt="דשבורד אנליטיקה עם KPIs" 
                   className="w-full h-auto object-cover"
                 />
                 <CardContent className="p-6">
-                  <h3 className="text-xl font-semibold mb-2">דשבורד מכירות מתקדם</h3>
-                  <p className="text-muted-foreground">גרפים ותובנות בזמן אמת לניהול מכירות אפקטיבי</p>
+                  <h3 className="text-xl font-semibold mb-2">דשבורד אנליטיקה</h3>
+                  <p className="text-muted-foreground">מעקב אחר לידים, הצעות מחיר, סגירות וגרפי צמיחה</p>
                 </CardContent>
               </Card>
 
-              <Card className="overflow-hidden border-2 hover:shadow-2xl transition-all duration-300">
+              <Card className="overflow-hidden border-2 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
                 <img 
                   src={leadsScreenshot} 
                   alt="ניהול לידים חכם" 
@@ -263,7 +264,7 @@ const Landing = () => {
                 </CardContent>
               </Card>
 
-              <Card className="overflow-hidden border-2 hover:shadow-2xl transition-all duration-300">
+              <Card className="overflow-hidden border-2 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
                 <img 
                   src={clientsScreenshot} 
                   alt="ניהול לקוחות" 
@@ -275,7 +276,7 @@ const Landing = () => {
                 </CardContent>
               </Card>
 
-              <Card className="overflow-hidden border-2 hover:shadow-2xl transition-all duration-300">
+              <Card className="overflow-hidden border-2 hover:shadow-2xl hover:-translate-y-2 transition-all duration-300">
                 <img 
                   src={tasksScreenshot} 
                   alt="ניהול משימות" 
