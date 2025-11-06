@@ -61,32 +61,44 @@ export function EditUserAgenciesDialog({
     queryFn: async () => {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("campaigner_id")
+        .select("campaigner_id, sales_person_id")
         .eq("id", userId)
         .single();
 
-      if (!profile?.campaigner_id) {
-        return [];
+      // Try campaigner agencies first
+      if (profile?.campaigner_id) {
+        const { data: links, error } = await supabase
+          .from("campaigner_agencies")
+          .select("agency_id")
+          .eq("campaigner_id", profile.campaigner_id);
+
+        if (error) throw error;
+        return links?.map(link => link.agency_id) || [];
       }
 
-      const { data: links, error } = await supabase
-        .from("campaigner_agencies")
-        .select("agency_id")
-        .eq("campaigner_id", profile.campaigner_id);
+      // Try sales person agencies
+      if (profile?.sales_person_id) {
+        const { data: links, error } = await supabase
+          .from("sales_person_agencies")
+          .select("agency_id")
+          .eq("sales_person_id", profile.sales_person_id);
 
-      if (error) throw error;
-      return links?.map(link => link.agency_id) || [];
+        if (error) throw error;
+        return links?.map(link => link.agency_id) || [];
+      }
+
+      return [];
     },
     enabled: open && !!userId,
   });
 
-  // Fetch whether user has a campaigner assigned
+  // Fetch whether user has a campaigner or sales person assigned
   const { data: userProfile } = useQuery({
     queryKey: ["user-profile-campaigner", userId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("profiles")
-        .select("campaigner_id")
+        .select("campaigner_id, sales_person_id")
         .eq("id", userId)
         .single();
       if (error) throw error;
@@ -95,7 +107,8 @@ export function EditUserAgenciesDialog({
     enabled: open && !!userId,
   });
 
-  const hasCampaigner = !!userProfile?.campaigner_id;
+  const hasAssignment = !!(userProfile?.campaigner_id || userProfile?.sales_person_id);
+  const userType = userProfile?.campaigner_id ? 'campaigner' : userProfile?.sales_person_id ? 'sales_person' : null;
 
   // Update selected agencies when current agencies load
   useEffect(() => {
@@ -134,12 +147,47 @@ export function EditUserAgenciesDialog({
     },
   });
 
-  const handleSave = () => {
-    if (!hasCampaigner) {
-      toast.error("לא ניתן לעדכן סוכנויות: המשתמש לא משויך לקמפיינר");
+  const handleSave = async () => {
+    if (!hasAssignment) {
+      toast.error("לא ניתן לעדכן סוכנויות: המשתמש לא משויך לקמפיינר או לאיש מכירות");
       return;
     }
-    updateAgenciesMutation.mutate(selectedAgencies);
+
+    try {
+      // Handle based on user type
+      if (userType === 'sales_person' && userProfile?.sales_person_id) {
+        // Update sales_person_agencies
+        const { error: deleteError } = await supabase
+          .from("sales_person_agencies")
+          .delete()
+          .eq("sales_person_id", userProfile.sales_person_id);
+
+        if (deleteError) throw deleteError;
+
+        if (selectedAgencies.length > 0) {
+          const { error: insertError } = await supabase
+            .from("sales_person_agencies")
+            .insert(
+              selectedAgencies.map(agencyId => ({
+                sales_person_id: userProfile.sales_person_id,
+                agency_id: agencyId,
+              }))
+            );
+
+          if (insertError) throw insertError;
+        }
+
+        queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+        queryClient.invalidateQueries({ queryKey: ["user-agencies", userId] });
+        toast.success("הסוכנויות עודכנו בהצלחה");
+        onOpenChange(false);
+      } else {
+        // Use the edge function for campaigners
+        updateAgenciesMutation.mutate(selectedAgencies);
+      }
+    } catch (error: any) {
+      toast.error("שגיאה בעדכון סוכנויות: " + error.message);
+    }
   };
 
   return (
@@ -152,11 +200,11 @@ export function EditUserAgenciesDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          {!hasCampaigner && (
+          {!hasAssignment && (
             <Alert>
-              <AlertTitle>המשתמש לא משויך לקמפיינר</AlertTitle>
+              <AlertTitle>המשתמש לא משויך לקמפיינר או איש מכירות</AlertTitle>
               <AlertDescription>
-                יש לשייך קמפיינר למשתמש לפני עדכון סוכנויות.
+                יש לשייך קמפיינר או איש מכירות למשתמש לפני עדכון סוכנויות.
               </AlertDescription>
             </Alert>
           )}
@@ -200,7 +248,7 @@ export function EditUserAgenciesDialog({
           <div className="flex gap-2">
             <Button
               onClick={handleSave}
-              disabled={updateAgenciesMutation.isPending || !hasCampaigner}
+              disabled={updateAgenciesMutation.isPending || !hasAssignment}
               className="flex-1"
             >
               {updateAgenciesMutation.isPending ? "שומר..." : "שמור שינויים"}
