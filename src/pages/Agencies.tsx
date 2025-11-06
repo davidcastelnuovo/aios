@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Phone, Mail, Calendar } from "lucide-react";
+import { Building2, Phone, Mail, Calendar, Link as LinkIcon } from "lucide-react";
 import { AddAgencyForm } from "@/components/forms/AddAgencyForm";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
@@ -17,14 +17,58 @@ export default function Agencies() {
     queryKey: ["agencies-list", tenantId, userId, userAgencyIds],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
-      const { data, error } = await supabase
+      
+      // Get owned agencies
+      const { data: ownedAgencies, error: ownedError } = await supabase
         .from("agencies")
-        .select("*")
+        .select("*, is_owned:tenant_id")
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
       
-      if (error) throw error;
-      return data;
+      if (ownedError) throw ownedError;
+      
+      // Get shared agencies via agency_tenant_access
+      const { data: sharedAccess, error: sharedError } = await supabase
+        .from("agency_tenant_access")
+        .select(`
+          agency_id,
+          agencies (
+            id,
+            name,
+            status,
+            contact_name,
+            phone,
+            email,
+            start_date,
+            notes,
+            created_at
+          )
+        `)
+        .eq("accessing_tenant_id", tenantId);
+      
+      if (sharedError) throw sharedError;
+      
+      // Mark owned agencies
+      const markedOwned = (ownedAgencies || []).map(a => ({ ...a, is_owned: true }));
+      
+      // Extract and mark shared agencies
+      const shared = (sharedAccess || [])
+        .map(s => s.agencies)
+        .filter(Boolean)
+        .map(a => ({ ...a, is_owned: false }));
+      
+      // Combine and remove duplicates
+      const combined = [...markedOwned, ...shared];
+      const uniqueMap = new Map();
+      combined.forEach(agency => {
+        if (agency && agency.id && !uniqueMap.has(agency.id)) {
+          uniqueMap.set(agency.id, agency);
+        }
+      });
+      
+      return Array.from(uniqueMap.values()).sort((a: any, b: any) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
     },
     enabled: !!tenantId,
   });
@@ -78,7 +122,15 @@ export default function Agencies() {
                     <Building2 className="h-5 w-5 text-primary" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg">{agency.name}</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-lg">{agency.name}</CardTitle>
+                      {!agency.is_owned && (
+                        <Badge variant="secondary" className="text-xs">
+                          <LinkIcon className="h-3 w-3 mr-1" />
+                          משותף
+                        </Badge>
+                      )}
+                    </div>
                     {agency.contact_name && (
                       <p className="text-sm text-muted-foreground">{agency.contact_name}</p>
                     )}
