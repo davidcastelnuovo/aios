@@ -45,6 +45,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenant } from "@/contexts/TenantContext";
+import { useTheme } from "@/contexts/ThemeContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const menuItems = [
@@ -79,6 +80,7 @@ const salesMenuItems = [
 export function AppSidebar() {
   const { state, setOpenMobile, isMobile, toggleSidebar } = useSidebar();
   const { hasPermission, isLoading } = useUserPermissions();
+  const { logoUrl } = useTheme();
   const isCollapsed = state === "collapsed";
 
   const { userId } = useCurrentUser();
@@ -181,7 +183,11 @@ export function AppSidebar() {
         <div className="flex items-center justify-between">
           {!isCollapsed && (
             <div className="flex items-center gap-2 px-2">
-                <Building2 className="h-4 w-4 text-sidebar-foreground" />
+                {logoUrl ? (
+                  <img src={logoUrl} alt="Logo" className="h-8 w-auto object-contain" />
+                ) : (
+                  <Building2 className="h-4 w-4 text-sidebar-foreground" />
+                )}
                 {userTenants && userTenants.length > 1 ? (
                   <Select value={currentTenantId || ""} onValueChange={handleTenantChange}>
                     <SelectTrigger className="h-8 w-[180px] bg-sidebar text-sidebar-foreground border-sidebar-border hover:bg-sidebar-accent">

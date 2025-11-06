@@ -1,10 +1,15 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useTenant } from './TenantContext';
+import { useQuery } from '@tanstack/react-query';
 
 export type ColorPalette = 'default' | 'green-gradient' | 'blue' | 'purple' | 'orange';
 
 interface ThemeContextType {
   palette: ColorPalette;
-  setPalette: (palette: ColorPalette) => void;
+  setPalette: (palette: ColorPalette) => Promise<void>;
+  logoUrl: string | null;
+  setLogoUrl: (url: string | null) => Promise<void>;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -46,15 +51,83 @@ const palettes = {
 };
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
-  const [palette, setPaletteState] = useState<ColorPalette>(() => {
-    const saved = localStorage.getItem('color-palette');
-    return (saved as ColorPalette) || 'default';
+  const { currentTenantId } = useTenant();
+  const [palette, setPaletteState] = useState<ColorPalette>('default');
+  const [logoUrl, setLogoUrlState] = useState<string | null>(null);
+
+  // Load tenant branding settings
+  const { data: brandingSettings } = useQuery({
+    queryKey: ['tenant-branding', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      
+      const { data, error } = await supabase
+        .from('tenant_settings')
+        .select('setting_value')
+        .eq('tenant_id', currentTenantId)
+        .eq('setting_key', 'branding')
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data?.setting_value;
+    },
+    enabled: !!currentTenantId,
   });
 
-  const setPalette = (newPalette: ColorPalette) => {
+  // Apply branding when loaded
+  useEffect(() => {
+    if (brandingSettings) {
+      const settings = brandingSettings as { colorPalette?: ColorPalette; logoUrl?: string };
+      const colorPalette = settings.colorPalette || 'default';
+      const logo = settings.logoUrl || null;
+      
+      setPaletteState(colorPalette);
+      setLogoUrlState(logo);
+      applyPalette(colorPalette);
+    }
+  }, [brandingSettings]);
+
+  const setPalette = async (newPalette: ColorPalette) => {
+    if (!currentTenantId) return;
+    
     setPaletteState(newPalette);
-    localStorage.setItem('color-palette', newPalette);
     applyPalette(newPalette);
+    
+    // Save to tenant_settings
+    const currentSettings = (brandingSettings as { colorPalette?: ColorPalette; logoUrl?: string }) || {};
+    await supabase
+      .from('tenant_settings')
+      .upsert({
+        tenant_id: currentTenantId,
+        setting_key: 'branding',
+        setting_value: {
+          ...currentSettings,
+          colorPalette: newPalette,
+        },
+      }, {
+        onConflict: 'tenant_id,setting_key',
+      });
+  };
+
+  const setLogoUrl = async (url: string | null) => {
+    if (!currentTenantId) return;
+    
+    setLogoUrlState(url);
+    
+    // Save to tenant_settings
+    const currentSettings = (brandingSettings as { colorPalette?: ColorPalette; logoUrl?: string }) || {};
+    await supabase
+      .from('tenant_settings')
+      .upsert({
+        tenant_id: currentTenantId,
+        setting_key: 'branding',
+        setting_value: {
+          ...currentSettings,
+          logoUrl: url,
+        },
+      }, {
+        onConflict: 'tenant_id,setting_key',
+      });
   };
 
   const applyPalette = (paletteKey: ColorPalette) => {
@@ -76,7 +149,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   }, [palette]);
 
   return (
-    <ThemeContext.Provider value={{ palette, setPalette }}>
+    <ThemeContext.Provider value={{ palette, setPalette, logoUrl, setLogoUrl }}>
       {children}
     </ThemeContext.Provider>
   );
