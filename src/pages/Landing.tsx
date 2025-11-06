@@ -34,27 +34,27 @@ const Landing = () => {
 
   const features = [
     {
-      icon: Users,
+      icon: Sparkles,
       title: "ניהול לקוחות מרובים",
       description: "פתח חשבונות ללקוחות שלך ונהל אותם כולם ממקום אחד"
     },
     {
-      icon: CheckSquare,
+      icon: Zap,
       title: "ניהול משימות",
       description: "מערכת משימות מתקדמת לניהול פרויקטים ועבודות עבור כל הלקוחות"
     },
     {
-      icon: UserPlus,
+      icon: Rocket,
       title: "קליטת לקוחות חכמה",
       description: "תהליך אונבורדינג מסודר שעוזר ללקוחות החדשים שלך להתחיל מהר"
     },
     {
-      icon: Building2,
+      icon: Layers,
       title: "ניהול סוכנויות מרובות",
       description: "נהל עשרות סוכנויות ומאות לקוחות במערכת אחת"
     },
     {
-      icon: Layers,
+      icon: Users,
       title: "ניהול קמפיינרים וצוותים",
       description: "צור צוותי מכירות וקמפיינרים עם הרשאות וגישות מותאמות"
     },
@@ -328,8 +328,8 @@ const Landing = () => {
             {features.map((feature, index) => (
               <Card key={index} className="group border-2 hover:border-primary/50 transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
                 <CardHeader>
-                  <div className="w-14 h-14 rounded-xl gradient-primary flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    <feature.icon className="h-7 w-7 text-white" />
+                  <div className="w-14 h-14 rounded-xl gradient-primary flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
+                    <feature.icon className="h-7 w-7 text-white drop-shadow-lg" />
                   </div>
                   <CardTitle className="text-xl">{feature.title}</CardTitle>
                   <CardDescription className="text-base leading-relaxed">
