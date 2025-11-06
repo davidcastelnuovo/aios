@@ -1325,7 +1325,7 @@ export type Database = {
           due_date: string | null
           id: string
           notes: string | null
-          priority: Database["public"]["Enums"]["priority_level"]
+          priority: number
           status: Database["public"]["Enums"]["task_status"]
           task_type: Database["public"]["Enums"]["task_type"] | null
           tenant_id: string
@@ -1340,7 +1340,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           notes?: string | null
-          priority?: Database["public"]["Enums"]["priority_level"]
+          priority?: number
           status?: Database["public"]["Enums"]["task_status"]
           task_type?: Database["public"]["Enums"]["task_type"] | null
           tenant_id: string
@@ -1355,7 +1355,7 @@ export type Database = {
           due_date?: string | null
           id?: string
           notes?: string | null
-          priority?: Database["public"]["Enums"]["priority_level"]
+          priority?: number
           status?: Database["public"]["Enums"]["task_status"]
           task_type?: Database["public"]["Enums"]["task_type"] | null
           tenant_id?: string

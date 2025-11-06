@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import confetti from "canvas-confetti";
 import {
   Select,
@@ -225,6 +226,23 @@ export default function Tasks() {
     },
   });
 
+  const updateTaskPriorityMutation = useMutation({
+    mutationFn: async ({ taskId, priority }: { taskId: string; priority: number }) => {
+      const { error } = await supabase
+        .from("tasks")
+        .update({ priority })
+        .eq("id", taskId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.success("דחיפות המשימה עודכנה");
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון הדחיפות");
+    },
+  });
+
   // Filter logic: Role-based access, then global agency filter
   const getTaskAgencyId = (t: any) => t?.clients?.agency_id ?? t?.agency_id;
   let accessibleTasks = tasks;
@@ -341,30 +359,16 @@ export default function Tasks() {
     done: tasksByStatus.done.map(t => ({ title: t.title, agency: t.agencies?.name, client_agency_id: t.clients?.agency_id }))
   });
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return "bg-destructive/10 text-destructive border-destructive/20";
-      case "medium":
-        return "bg-yellow-500/10 text-yellow-600 border-yellow-500/20";
-      case "low":
-        return "bg-success/10 text-success border-success/20";
-      default:
-        return "";
-    }
+  const getPriorityColor = (priority: number) => {
+    // Blue (low) to Red (high) gradient
+    const hue = 240 - ((priority - 1) / 9) * 240; // 240 (blue) to 0 (red)
+    return `hsl(${hue}, 70%, 50%)`;
   };
 
-  const getPriorityText = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return "גבוה";
-      case "medium":
-        return "בינוני";
-      case "low":
-        return "נמוך";
-      default:
-        return priority;
-    }
+  const getPriorityText = (priority: number) => {
+    if (priority >= 8) return "דחיפות גבוהה";
+    if (priority >= 5) return "דחיפות בינונית";
+    return "דחיפות נמוכה";
   };
 
   const getStatusColor = (status: string) => {
@@ -505,9 +509,6 @@ export default function Tasks() {
                 </div>
                 <h4 className="font-medium text-sm truncate">{task.title}</h4>
               </div>
-              <Badge variant="outline" className={`text-xs flex-shrink-0 ${getPriorityColor(task.priority)}`}>
-                {getPriorityText(task.priority)}
-              </Badge>
             </div>
 
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
@@ -516,12 +517,35 @@ export default function Tasks() {
             </div>
             
             {task.due_date && (
-              <div className={`flex items-center gap-1.5 text-xs mb-2 ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
+              <div className={`flex items-center gap-1.5 text-xs mb-3 ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive font-medium' : 'text-muted-foreground'}`}>
                 {isOverdue(task.due_date) && task.status !== 'done' && <AlertCircle className="h-3 w-3" />}
                 <CalendarIcon className="h-3 w-3" />
                 <span>{new Date(task.due_date).toLocaleDateString("he-IL")}</span>
               </div>
             )}
+
+            {/* Priority Slider */}
+            <div className="space-y-2 mb-3" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">{getPriorityText(task.priority)}</span>
+                <span className="text-xs font-medium" style={{ color: getPriorityColor(task.priority) }}>
+                  {task.priority}/10
+                </span>
+              </div>
+              <Slider
+                value={[task.priority]}
+                onValueChange={(value) => {
+                  updateTaskPriorityMutation.mutate({ 
+                    taskId: task.id, 
+                    priority: value[0] 
+                  });
+                }}
+                min={1}
+                max={10}
+                step={1}
+                className="cursor-pointer"
+              />
+            </div>
 
             <div className="pt-2 border-t mt-2" onClick={(e) => e.stopPropagation()}>
               <p className="text-xs text-muted-foreground mb-1">שנה סטטוס:</p>
@@ -783,11 +807,13 @@ export default function Tasks() {
                         <span>{task.campaigners?.full_name}</span>
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={getPriorityColor(task.priority)}>
-                        {getPriorityText(task.priority)}
-                      </Badge>
-                    </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium" style={{ color: getPriorityColor(task.priority) }}>
+                            {task.priority}/10
+                          </span>
+                        </div>
+                      </TableCell>
                     <TableCell>
                       {task.due_date ? (
                         <div className={`flex items-center gap-2 ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive font-medium' : ''}`}>

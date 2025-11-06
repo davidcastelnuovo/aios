@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Slider } from "@/components/ui/slider";
 import {
   Select,
   SelectContent,
@@ -55,7 +56,7 @@ const formSchema = z.object({
   agency_id: z.string().optional(),
   due_date: z.string().optional(),
   status: z.enum(["open", "in_progress", "done"]),
-  priority: z.enum(["low", "medium", "high"]),
+  priority: z.number().min(1).max(10),
 }).refine((data) => {
   if (data.task_category === "client" && !data.client_id) {
     return false;
@@ -93,7 +94,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
       agency_id: agencyId || "",
       due_date: "",
       status: "open",
-      priority: "medium",
+      priority: 5,
     },
   });
 
@@ -328,30 +329,41 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
               <FormField
                 control={form.control}
                 name="priority"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>דחיפות</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger className={cn(
-                          "border-0 text-white font-medium",
-                          field.value === "high" && "bg-red-400 hover:bg-red-500",
-                          field.value === "medium" && "bg-orange-400 hover:bg-orange-500",
-                          field.value === "low" && "bg-purple-400 hover:bg-purple-500",
-                          !field.value && "bg-muted text-muted-foreground"
-                        )}>
-                          <SelectValue placeholder="בחר דחיפות" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-background z-50">
-                        <SelectItem value="high" className="text-red-600 focus:text-red-600 focus:bg-red-50">גבוה</SelectItem>
-                        <SelectItem value="medium" className="text-orange-600 focus:text-orange-600 focus:bg-orange-50">בינוני</SelectItem>
-                        <SelectItem value="low" className="text-purple-600 focus:text-purple-600 focus:bg-purple-50">נמוך</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                render={({ field }) => {
+                  const getPriorityColor = (priority: number) => {
+                    const hue = 240 - ((priority - 1) / 9) * 240;
+                    return `hsl(${hue}, 70%, 50%)`;
+                  };
+                  
+                  const getPriorityText = (priority: number) => {
+                    if (priority >= 8) return "דחיפות גבוהה";
+                    if (priority >= 5) return "דחיפות בינונית";
+                    return "דחיפות נמוכה";
+                  };
+
+                  return (
+                    <FormItem>
+                      <FormLabel>דחיפות</FormLabel>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">{getPriorityText(field.value)}</span>
+                          <span className="text-sm font-medium" style={{ color: getPriorityColor(field.value) }}>
+                            {field.value}/10
+                          </span>
+                        </div>
+                        <Slider
+                          value={[field.value]}
+                          onValueChange={(value) => field.onChange(value[0])}
+                          min={1}
+                          max={10}
+                          step={1}
+                          className="cursor-pointer"
+                        />
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
               />
             </div>
 
