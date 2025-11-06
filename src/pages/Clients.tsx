@@ -93,13 +93,39 @@ export default function Clients() {
     queryKey: ["agencies", tenantId],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
-      const { data, error } = await supabase
+      
+      // Get owned agencies
+      const { data: ownedAgencies, error: ownedError } = await supabase
         .from("agencies")
         .select("id, name")
         .eq("tenant_id", tenantId)
         .order("name");
-      if (error) throw error;
-      return data;
+      
+      if (ownedError) throw ownedError;
+      
+      // Get shared agencies via agency_tenant_access
+      const { data: sharedAccess, error: sharedError } = await supabase
+        .from("agency_tenant_access")
+        .select("agency_id, agencies(id, name)")
+        .eq("accessing_tenant_id", tenantId);
+      
+      if (sharedError) throw sharedError;
+      
+      // Combine owned and shared agencies
+      const shared = sharedAccess?.map(s => s.agencies).filter(Boolean) || [];
+      const combined = [...(ownedAgencies || []), ...shared];
+      
+      // Remove duplicates
+      const uniqueMap = new Map();
+      combined.forEach(agency => {
+        if (agency && agency.id) {
+          uniqueMap.set(agency.id, agency);
+        }
+      });
+      
+      return Array.from(uniqueMap.values()).sort((a, b) => 
+        a.name.localeCompare(b.name)
+      );
     },
     enabled: !!tenantId,
   });
@@ -108,6 +134,9 @@ export default function Clients() {
     queryKey: ["campaigners", tenantId],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
+      
+      // The campaigners query already gets filtered by RLS
+      // RLS includes campaigners from owned tenant + shared agencies
       const { data, error } = await supabase
         .from("campaigners")
         .select("id, full_name")
