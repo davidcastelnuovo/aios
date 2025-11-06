@@ -120,7 +120,7 @@ const Landing = () => {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={logoM} alt="AfterLead" className="w-10 h-10" />
-            <span className="text-xl font-bold">AfterLead Marketing</span>
+            <span className="text-xl font-bold">AfterLead</span>
           </div>
           <Button 
             variant="ghost" 
