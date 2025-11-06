@@ -110,7 +110,11 @@ export default function Clients() {
           *,
           agencies (name),
           client_team (
-            campaigner_id
+            campaigner_id,
+            campaigners!inner (
+              id,
+              full_name
+            )
           )
         `;
 
@@ -148,8 +152,7 @@ export default function Clients() {
       if (error) throw error;
       return data;
     },
-    // Temporarily disabled due to backend policy recursion; UI falls back gracefully
-    enabled: false,
+    enabled: !!tenantId,
   });
 
   // Fetch client-team mapping for campaigner filter (for managers/owners)

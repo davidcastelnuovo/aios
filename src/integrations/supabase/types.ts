@@ -1634,6 +1634,10 @@ export type Database = {
       }
       is_seo_staff: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      user_can_view_campaigner: {
+        Args: { _campaigner_id: string; _user_id: string }
+        Returns: boolean
+      }
       user_has_agency_access: {
         Args: { _agency_id: string; _user_id: string }
         Returns: boolean
