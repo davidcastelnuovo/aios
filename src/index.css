@@ -46,10 +46,15 @@ All colors MUST be HSL.
 
     --radius: 0.75rem;
     
+    /* Primary glow - lighter version of primary */
+    --primary-glow: 162 61% 62%;
+    
     /* Deep Blue to Jade gradient */
     --gradient-primary: linear-gradient(135deg, hsl(209, 59%, 10%), hsl(162, 61%, 52%));
     /* Jade to Toxic Green gradient */
     --gradient-success: linear-gradient(135deg, hsl(162, 61%, 52%), hsl(142, 94%, 49%));
+    /* Subtle gradient for backgrounds */
+    --gradient-subtle: linear-gradient(180deg, hsl(162, 61%, 97%), hsl(0, 0%, 100%));
     --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
@@ -145,6 +150,10 @@ html {
   
   .gradient-success {
     background: var(--gradient-success);
+  }
+  
+  .gradient-subtle {
+    background: var(--gradient-subtle);
   }
   
   .shadow-card {

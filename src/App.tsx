@@ -7,7 +7,9 @@ import { AppLayout } from "./components/layout/AppLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AgencyProvider } from "./contexts/AgencyContext";
 import { TenantProvider } from "./contexts/TenantContext";
+import { ThemeProvider } from "./contexts/ThemeContext";
 import Dashboard from "./pages/Dashboard";
+import Branding from "./pages/Branding";
 import Auth from "./pages/Auth";
 import SignUp from "./pages/SignUp";
 import Setup from "./pages/Setup";
@@ -40,9 +42,10 @@ const App = () => (
       <TooltipProvider delayDuration={0} skipDelayDuration={0}>
         <Toaster />
         <Sonner />
-        <TenantProvider>
-          <AgencyProvider>
-            <Routes>
+        <ThemeProvider>
+          <TenantProvider>
+            <AgencyProvider>
+              <Routes>
             <Route path="/landing" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/signup" element={<SignUp />} />
@@ -66,10 +69,12 @@ const App = () => (
             <Route path="/tenants" element={<ProtectedRoute requiredPermission="tenants"><AppLayout><Tenants /></AppLayout></ProtectedRoute>} />
             <Route path="/automations" element={<ProtectedRoute requiredPermission="automations"><AppLayout><Automations /></AppLayout></ProtectedRoute>} />
             <Route path="/products" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Products /></AppLayout></ProtectedRoute>} />
+            <Route path="/branding" element={<ProtectedRoute><AppLayout><Branding /></AppLayout></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
             </Routes>
-          </AgencyProvider>
-        </TenantProvider>
+            </AgencyProvider>
+          </TenantProvider>
+        </ThemeProvider>
       </TooltipProvider>
     </BrowserRouter>
   </QueryClientProvider>

@@ -22,6 +22,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Package,
+  Palette,
 } from "lucide-react";
 import {
   Sidebar,
@@ -54,6 +55,7 @@ const menuItems = [
   { title: "שעון נוכחות", url: "/time-tracking", icon: Clock, module: "time_tracking" as const },
   { title: "צוות", url: "/campaigners", icon: Megaphone, module: "campaigners" as const },
   { title: "ניהול משתמשים", url: "/users", icon: ShieldCheck, module: "users" as const },
+  { title: "התאמת מערכת", url: "/branding", icon: Palette, module: null },
   { title: "אזור אישי", url: "/my-profile", icon: User, module: null },
 ];
 
