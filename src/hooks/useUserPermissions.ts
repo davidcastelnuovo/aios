@@ -22,7 +22,8 @@ export type ModulePermission =
   | "lead_integrations" // Lead integrations
   | "finance_view" // Special permission for viewing financial data
   | "automations" // Automations management (admin only)
-  | "tenants"; // Tenant management (admin only)
+  | "tenants" // Tenant management (admin only)
+  | "branding"; // System branding and customization
 
 export function useUserPermissions() {
   const { user } = useCurrentUser();
