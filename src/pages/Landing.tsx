@@ -414,46 +414,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Stats Section */}
-      <section className="py-24 bg-muted/30">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-12 space-y-4">
-            <h2 className="text-4xl md:text-5xl font-bold">
-              המספרים מדברים בעד עצמם
-            </h2>
-            <p className="text-xl text-muted-foreground">
-              תוצאות אמיתיות מסוכנויות שמשתמשות ב-AfterLead
-            </p>
-          </div>
-          <div className="grid md:grid-cols-4 gap-8 max-w-5xl mx-auto">
-            <Card className="text-center p-6 border-2 hover:border-primary/50 transition-all">
-              <div className="text-5xl md:text-6xl font-bold gradient-primary bg-clip-text text-transparent mb-3">
-                +35%
-              </div>
-              <p className="text-muted-foreground font-medium">הכנסות נוספות לסוכנות</p>
-            </Card>
-            <Card className="text-center p-6 border-2 hover:border-primary/50 transition-all">
-              <div className="text-5xl md:text-6xl font-bold gradient-primary bg-clip-text text-transparent mb-3">
-                5 דק'
-              </div>
-              <p className="text-muted-foreground font-medium">לפתוח חשבון לקוח חדש</p>
-            </Card>
-            <Card className="text-center p-6 border-2 hover:border-primary/50 transition-all">
-              <div className="text-5xl md:text-6xl font-bold gradient-primary bg-clip-text text-transparent mb-3">
-                100%
-              </div>
-              <p className="text-muted-foreground font-medium">הפרדה בין לקוחות</p>
-            </Card>
-            <Card className="text-center p-6 border-2 hover:border-primary/50 transition-all">
-              <div className="text-5xl md:text-6xl font-bold gradient-primary bg-clip-text text-transparent mb-3">
-                24/7
-              </div>
-              <p className="text-muted-foreground font-medium">תמיכה בעברית</p>
-            </Card>
-          </div>
-        </div>
-      </section>
-
       {/* How It Works Section */}
       <section className="py-20">
         <div className="container mx-auto px-4">
