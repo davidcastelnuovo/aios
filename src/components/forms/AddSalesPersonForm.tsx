@@ -52,13 +52,55 @@ export function AddSalesPersonForm() {
     queryKey: ["agencies", tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
+      
+      // Get owned agencies
+      const { data: ownedAgencies, error: ownedError } = await supabase
         .from("agencies")
         .select("*")
         .eq("tenant_id", tenantId)
         .order("name");
-      if (error) throw error;
-      return data;
+      
+      if (ownedError) throw ownedError;
+      
+      // Get shared agencies via agency_tenant_access
+      const { data: sharedAccess, error: sharedError } = await supabase
+        .from("agency_tenant_access")
+        .select(`
+          agency_id,
+          agencies (
+            id,
+            name,
+            status,
+            contact_name,
+            phone,
+            email,
+            start_date,
+            notes,
+            created_at,
+            tenant_id
+          )
+        `)
+        .eq("accessing_tenant_id", tenantId);
+      
+      if (sharedError) throw sharedError;
+      
+      // Extract shared agencies
+      const shared = (sharedAccess || [])
+        .map(s => s.agencies)
+        .filter(Boolean);
+      
+      // Combine and remove duplicates
+      const combined = [...(ownedAgencies || []), ...shared];
+      const uniqueMap = new Map();
+      combined.forEach(agency => {
+        if (agency && agency.id && !uniqueMap.has(agency.id)) {
+          uniqueMap.set(agency.id, agency);
+        }
+      });
+      
+      return Array.from(uniqueMap.values()).sort((a: any, b: any) => 
+        a.name.localeCompare(b.name, 'he')
+      );
     },
     enabled: !!tenantId,
   });
