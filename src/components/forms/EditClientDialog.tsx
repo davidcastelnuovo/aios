@@ -32,7 +32,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Loader2, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-
+import { useUserPermissions } from "@/hooks/useUserPermissions";
+import { useAgencyOwnership } from "@/hooks/useAgencyOwnership";
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח נדרש"),
   agency_id: z.string().min(1, "סוכנות נדרשת"),
@@ -165,6 +166,9 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
     },
   });
 
+  const { canViewFinance } = useUserPermissions();
+  const { data: ownsAgency } = useAgencyOwnership(client?.agency_id);
+  const showFinanceFields = canViewFinance() && ownsAgency;
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
@@ -297,35 +301,37 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
+            {showFinanceFields && (
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                    control={form.control}
+                    name="retainer"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ריטיינר (₪)</FormLabel>
+                        <FormControl>
+                          <Input {...field} type="number" />
+                        </FormControl>
+                        <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
                   control={form.control}
-                  name="retainer"
+                  name="monthly_budget"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>ריטיינר (₪)</FormLabel>
+                      <FormLabel>תקציב חודשי (₪)</FormLabel>
                       <FormControl>
                         <Input {...field} type="number" />
                       </FormControl>
                       <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="monthly_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>תקציב חודשי (₪)</FormLabel>
-                    <FormControl>
-                      <Input {...field} type="number" />
-                    </FormControl>
-                    <FormMessage />
-                    </FormItem>
-                  )}
-                />
-            </div>
+                      </FormItem>
+                    )}
+                  />
+              </div>
+            )}
 
             <FormField
               control={form.control}

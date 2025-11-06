@@ -102,6 +102,27 @@ export default function Clients() {
     enabled: !!tenantId,
   });
 
+  // Owned agencies only (to determine finance visibility)
+  const { data: ownedAgencies } = useQuery({
+    queryKey: ["owned-agencies", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [] as any[];
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id")
+        .eq("tenant_id", tenantId);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId,
+  });
+
+  const ownedAgencyIds = (ownedAgencies || []).map((a: any) => a.id);
+  const canViewClientFinance = (agencyId: string) => {
+    if (!canViewFinance()) return false;
+    return ownedAgencyIds.includes(agencyId);
+  };
+
   const { data: clients, isLoading } = useQuery({
     queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner, selectedAgency, (agencies?.length || 0)],
     queryFn: async () => {
@@ -472,7 +493,7 @@ export default function Clients() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {canViewFinance() && client.retainer && (
+              {canViewClientFinance(client.agency_id) && client.retainer && (
                 <div className="flex items-center gap-2">
                   <Coins className="h-4 w-4 text-muted-foreground" />
                   <div className="text-sm">
@@ -731,21 +752,21 @@ export default function Clients() {
                     </Select>
                   </TableCell>
                   <TableCell className="py-4">
-                    {canViewFinance() && client.retainer ? (
+                    {canViewClientFinance(client.agency_id) && client.retainer ? (
                       <div className="flex items-center gap-1 font-medium">
                         <Coins className="h-4 w-4 text-muted-foreground" />
                         <span>₪{Number(client.retainer).toLocaleString()}</span>
                       </div>
-                    ) : canViewFinance() ? <span className="text-muted-foreground">-</span> : <span className="text-muted-foreground">מוסתר</span>}
+                    ) : canViewClientFinance(client.agency_id) ? <span className="text-muted-foreground">-</span> : <span className="text-muted-foreground">מוסתר</span>}
                   </TableCell>
 
                   <TableCell className="py-4">
-                    {canViewFinance() && client.monthly_budget ? (
+                    {canViewClientFinance(client.agency_id) && client.monthly_budget ? (
                       <div className="flex items-center gap-1 font-medium">
                         <Coins className="h-4 w-4 text-muted-foreground" />
                         <span>₪{Number(client.monthly_budget).toLocaleString()}</span>
                       </div>
-                    ) : canViewFinance() ? <span className="text-muted-foreground">-</span> : <span className="text-muted-foreground">מוסתר</span>}
+                    ) : canViewClientFinance(client.agency_id) ? <span className="text-muted-foreground">-</span> : <span className="text-muted-foreground">מוסתר</span>}
                   </TableCell>
                   <TableCell className="py-4">
                     {client.phone ? (
