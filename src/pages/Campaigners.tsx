@@ -133,7 +133,10 @@ export default function Campaigners() {
                     )}
                     {campaigner.campaigner_agencies && campaigner.campaigner_agencies.length > 0 && (
                       <p className="text-xs text-muted-foreground mt-1">
-                        {campaigner.campaigner_agencies.map((ca: any) => ca.agencies.name).join(", ")}
+                        {(campaigner.campaigner_agencies || [])
+                          .map((ca: any) => ca?.agencies?.name)
+                          .filter(Boolean)
+                          .join(", ") || "—"}
                       </p>
                     )}
                   </div>
@@ -191,7 +194,7 @@ export default function Campaigners() {
                         <TableBody>
                           {campaigner.client_team.map((assignment: any) => (
                             <TableRow key={assignment.id}>
-                              <TableCell className="font-medium">{assignment.clients.name}</TableCell>
+                              <TableCell className="font-medium">{assignment.clients?.name ?? "—"}</TableCell>
                               {canViewFinance() && (
                                 <TableCell>
                                   <Input
