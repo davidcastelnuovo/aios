@@ -67,6 +67,61 @@ export type Database = {
           },
         ]
       }
+      agency_tenant_access: {
+        Row: {
+          access_level: string | null
+          accessing_tenant_id: string
+          agency_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          source_tenant_id: string
+        }
+        Insert: {
+          access_level?: string | null
+          accessing_tenant_id: string
+          agency_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          source_tenant_id: string
+        }
+        Update: {
+          access_level?: string | null
+          accessing_tenant_id?: string
+          agency_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          source_tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agency_tenant_access_accessing_tenant_id_fkey"
+            columns: ["accessing_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agency_tenant_access_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agency_tenant_access_source_tenant_id_fkey"
+            columns: ["source_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_logs: {
         Row: {
           automation_id: string
@@ -1583,7 +1638,15 @@ export type Database = {
         Args: { _agency_id: string; _user_id: string }
         Returns: boolean
       }
+      user_has_cross_tenant_agency_access: {
+        Args: { _agency_id: string; _user_id: string }
+        Returns: boolean
+      }
       user_manages_agency: {
+        Args: { _agency_id: string; _user_id: string }
+        Returns: boolean
+      }
+      user_owns_agency: {
         Args: { _agency_id: string; _user_id: string }
         Returns: boolean
       }

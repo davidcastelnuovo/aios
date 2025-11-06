@@ -4,9 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Building2, Users, Settings } from "lucide-react";
+import { Plus, Building2, Users, Settings, Link as LinkIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
+import EditTenantAgenciesDialog from "@/components/forms/EditTenantAgenciesDialog";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTenant } from "@/contexts/TenantContext";
 
@@ -14,6 +15,11 @@ export default function Tenants() {
   const { toast } = useToast();
   const [selectedTenant, setSelectedTenant] = useState<string | null>(null);
   const [subTenantParentId, setSubTenantParentId] = useState<string | null>(null);
+  const [agenciesDialogOpen, setAgenciesDialogOpen] = useState(false);
+  const [selectedTenantForAgencies, setSelectedTenantForAgencies] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const { isSuperAdmin, isOwner } = useUserRole();
   const canManageTenants = isSuperAdmin || isOwner;
 
@@ -26,6 +32,29 @@ export default function Tenants() {
       if (error) throw error as any;
       return (data as any)?.tenants || [];
     },
+  });
+
+  // שליפת מספר הסוכנויות המשותפות לכל tenant
+  const { data: agencyCounts } = useQuery({
+    queryKey: ["agency-tenant-access-counts", currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return {};
+
+      const { data, error } = await supabase
+        .from("agency_tenant_access")
+        .select("accessing_tenant_id, agency_id")
+        .eq("source_tenant_id", currentTenantId);
+
+      if (error) throw error;
+
+      const counts: Record<string, number> = {};
+      data.forEach((item) => {
+        counts[item.accessing_tenant_id] = (counts[item.accessing_tenant_id] || 0) + 1;
+      });
+
+      return counts;
+    },
+    enabled: !!currentTenantId,
   });
 
   const currentName = (tenants || []).find((t: any) => t.id === currentTenantId)?.name || (currentTenant as any)?.name;
@@ -219,9 +248,17 @@ export default function Tenants() {
                     {tenant.notes}
                   </p>
                 )}
+                {agencyCounts && agencyCounts[tenant.id] > 0 && (
+                  <div className="flex items-center gap-2 pt-2">
+                    <LinkIcon className="w-4 h-4 text-muted-foreground" />
+                    <Badge variant="secondary" className="text-xs">
+                      {agencyCounts[tenant.id]} סוכנויות משותפות
+                    </Badge>
+                  </div>
+                )}
               </div>
               {canManageTenants && (
-                <div className="mt-3 pt-3 border-t">
+                <div className="mt-3 pt-3 border-t space-y-2">
                   <Button
                     size="sm"
                     variant="outline"
@@ -234,6 +271,24 @@ export default function Tenants() {
                     <Plus className="h-3 w-3 ml-1" />
                     צור תת-ארגון
                   </Button>
+                  {tenant.id !== currentTenantId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedTenantForAgencies({
+                          id: tenant.id,
+                          name: tenant.name,
+                        });
+                        setAgenciesDialogOpen(true);
+                      }}
+                    >
+                      <LinkIcon className="h-3 w-3 ml-1" />
+                      ניהול גישות לסוכנויות
+                    </Button>
+                  )}
                 </div>
               )}
             </CardContent>
@@ -264,6 +319,15 @@ export default function Tenants() {
             if (!open) setSubTenantParentId(null);
           }}
           onSuccess={() => setSubTenantParentId(null)}
+        />
+      )}
+
+      {/* Dialog for managing agency access */}
+      {selectedTenantForAgencies && (
+        <EditTenantAgenciesDialog
+          open={agenciesDialogOpen}
+          onOpenChange={setAgenciesDialogOpen}
+          tenant={selectedTenantForAgencies}
         />
       )}
     </div>
