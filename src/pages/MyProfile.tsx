@@ -245,22 +245,7 @@ export default function MyProfile() {
   const isSalesPerson = !!profile?.sales_person_id;
   const isCampaigner = !!profile?.campaigner_id;
 
-  if (!isSalesPerson && !isCampaigner) {
-    return (
-      <div className="space-y-6 p-6">
-        <div>
-          <h2 className="text-3xl font-bold">אזור אישי</h2>
-        </div>
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-muted-foreground">לא נמצא פרופיל עבור המשתמש שלך.</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const person = isSalesPerson ? salesPerson : profile.campaigners;
+  const person = isSalesPerson ? salesPerson : profile?.campaigners;
   const totalPayment = isCampaigner ? calculateTotal() : 0;
 
   return (
@@ -278,10 +263,12 @@ export default function MyProfile() {
       <Card className="shadow-card">
         <CardHeader className="border-b bg-muted/30">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-2xl">{person?.full_name || profile?.full_name || ""}</CardTitle>
-            <Badge variant={person?.active ? "default" : "secondary"}>
-              {person?.active ? "פעיל" : "לא פעיל"}
-            </Badge>
+            <CardTitle className="text-2xl">{person?.full_name || profile?.full_name || profile?.email || ""}</CardTitle>
+            {person?.active !== undefined && (
+              <Badge variant={person?.active ? "default" : "secondary"}>
+                {person?.active ? "פעיל" : "לא פעיל"}
+              </Badge>
+            )}
           </div>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
@@ -292,19 +279,17 @@ export default function MyProfile() {
               פרטי קשר
             </h3>
             <div className="grid gap-3">
-              {person.phone && (
+              <div className="flex items-center gap-3 text-sm">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <span>{profile?.email || ""}</span>
+              </div>
+              {person?.phone && (
                 <div className="flex items-center gap-3 text-sm">
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <span dir="ltr">{person.phone}</span>
                 </div>
               )}
-              {person.email && (
-                <div className="flex items-center gap-3 text-sm">
-                  <Mail className="h-4 w-4 text-muted-foreground" />
-                  <span>{person.email}</span>
-                </div>
-              )}
-              {person.folder_link && (
+              {person?.folder_link && (
                 <div className="flex items-center gap-3 text-sm">
                   <Folder className="h-4 w-4 text-muted-foreground" />
                   <a

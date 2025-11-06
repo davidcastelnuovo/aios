@@ -38,22 +38,46 @@ serve(async (req: Request) => {
       });
     }
 
-    // Fetch tenants the user belongs to
-    const { data, error } = await supabase
-      .from("tenant_users")
-      .select("tenant_id, tenants(id, name)")
+    // Check if user is super admin
+    const { data: rolesData } = await supabase
+      .from("user_roles")
+      .select("role")
       .eq("user_id", user.id);
+    
+    const isSuperAdmin = rolesData?.some((r: any) => r.role === "super_admin");
 
-    if (error) {
-      console.error("Error fetching user tenants:", error);
-      throw new Error("Failed to fetch user tenants");
+    let tenants: any[] = [];
+
+    if (isSuperAdmin) {
+      // Super admins can see all tenants
+      const { data: allTenants, error: allTenantsError } = await supabase
+        .from("tenants")
+        .select("id, name")
+        .order("name");
+      
+      if (allTenantsError) {
+        console.error("Error fetching all tenants:", allTenantsError);
+        throw new Error("Failed to fetch tenants");
+      }
+      
+      tenants = allTenants || [];
+    } else {
+      // Regular users see only their tenants
+      const { data, error } = await supabase
+        .from("tenant_users")
+        .select("tenant_id, tenants(id, name)")
+        .eq("user_id", user.id);
+
+      if (error) {
+        console.error("Error fetching user tenants:", error);
+        throw new Error("Failed to fetch user tenants");
+      }
+
+      tenants = (data || []).map((row: any) => ({
+        id: row.tenants?.id,
+        name: row.tenants?.name,
+      })).filter((t: any) => t.id && t.name);
     }
-
-    // Normalize to a simple array of { id, name }
-    const tenants = (data || []).map((row: any) => ({
-      id: row.tenants?.id,
-      name: row.tenants?.name,
-    })).filter((t: any) => t.id && t.name);
 
     return new Response(JSON.stringify({ tenants }), {
       status: 200,
