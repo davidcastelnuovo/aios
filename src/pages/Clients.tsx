@@ -60,35 +60,7 @@ export default function Clients() {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
-  const { data: clients, isLoading } = useQuery({
-    queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner],
-    queryFn: async () => {
-      if (!tenantId) return [] as any[];
-        const selectStr = `
-          *,
-          agencies (name),
-          client_team (
-            campaigner_id,
-            campaigners!inner (
-              id,
-              full_name
-            )
-          )
-        `;
-
-      let query = supabase
-        .from("clients")
-        .select(selectStr)
-        .order("created_at", { ascending: false });
-
-
-      const { data, error } = await query;
-      if (error) throw error;
-      return data;
-    },
-    enabled: (!(isCampaigner && !isTeamManager && !isOwner) || !!campaignerId) && !!tenantId,
-  });
-
+  // Fetch agencies (owned + shared) first for client scoping
   const { data: agencies } = useQuery({
     queryKey: ["agencies", tenantId],
     queryFn: async () => {
@@ -129,6 +101,44 @@ export default function Clients() {
     },
     enabled: !!tenantId,
   });
+
+  const { data: clients, isLoading } = useQuery({
+    queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner, selectedAgency, (agencies?.length || 0)],
+    queryFn: async () => {
+      if (!tenantId) return [] as any[];
+      const selectStr = `
+          *,
+          agencies (name),
+          client_team (
+            campaigner_id,
+            campaigners!inner (
+              id,
+              full_name
+            )
+          )
+        `;
+
+      let query = supabase
+        .from("clients")
+        .select(selectStr)
+        .order("created_at", { ascending: false });
+
+      // Scope by agency: if a specific agency is selected use it, otherwise include
+      // all agencies accessible to this tenant (owned + shared)
+      if (selectedAgency && selectedAgency !== "all") {
+        query = query.eq("agency_id", selectedAgency);
+      } else if (agencies && agencies.length > 0) {
+        const ids = agencies.map((a: any) => a.id);
+        query = query.in("agency_id", ids);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data;
+    },
+    enabled: (!(isCampaigner && !isTeamManager && !isOwner) || !!campaignerId) && !!tenantId && (!!agencies || (selectedAgency && selectedAgency !== "all")),
+  });
+
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners", tenantId],
