@@ -86,7 +86,6 @@ export default function ClientOnboarding() {
           clients (name, is_seo_client),
           campaigners (full_name)
         `)
-        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
 
       const { data, error } = await query;
@@ -103,7 +102,6 @@ export default function ClientOnboarding() {
       const { data, error } = await supabase
         .from("campaigners")
         .select("id, full_name")
-        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
       if (error) throw error;

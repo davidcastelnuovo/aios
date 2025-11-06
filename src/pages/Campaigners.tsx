@@ -40,7 +40,6 @@ export default function Campaigners() {
             clients(id, name, status)
           )
         `)
-        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
       
       if (error) throw error;

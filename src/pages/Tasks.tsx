@@ -138,7 +138,6 @@ export default function Tasks() {
           campaigners (full_name, role),
           task_updates (id)
         `)
-        .eq("tenant_id", tenantId)
         .order("due_date", { ascending: true });
 
       const { data, error } = await query;
@@ -158,7 +157,6 @@ export default function Tasks() {
       const { data, error } = await supabase
         .from("campaigners")
         .select("*")
-        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
       if (error) throw error;

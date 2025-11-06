@@ -69,7 +69,6 @@ export default function TimeTracking() {
       const { data, error } = await supabase
         .from("campaigners")
         .select("*")
-        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
       if (error) throw error;
@@ -91,7 +90,6 @@ export default function TimeTracking() {
           *,
           campaigners (full_name)
         `)
-        .eq("tenant_id", tenantId)
         .eq("campaigner_id", campaignerId)
         .is("end_time", null)
         .order("start_time", { ascending: false })
@@ -115,7 +113,6 @@ export default function TimeTracking() {
           *,
           campaigners (full_name)
         `)
-        .eq("tenant_id", tenantId)
         .order("start_time", { ascending: false });
 
       if (selectedCampaigner === "me" && profile?.campaigner_id) {

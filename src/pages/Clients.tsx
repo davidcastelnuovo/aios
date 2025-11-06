@@ -111,7 +111,6 @@ export default function Clients() {
       const { data, error } = await supabase
         .from("campaigners")
         .select("id, full_name")
-        .eq("tenant_id", tenantId)
         .eq("active", true)
         .order("full_name");
       if (error) throw error;
