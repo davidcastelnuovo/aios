@@ -19,6 +19,10 @@ import {
   Building2,
   Layers
 } from "lucide-react";
+import dashboardScreenshot from "@/assets/dashboard-screenshot.png";
+import leadsScreenshot from "@/assets/leads-screenshot.png";
+import clientsScreenshot from "@/assets/clients-screenshot.png";
+import tasksScreenshot from "@/assets/tasks-screenshot.png";
 
 const Landing = () => {
   const navigate = useNavigate();
@@ -235,44 +239,52 @@ const Landing = () => {
             </div>
 
             <div className="grid md:grid-cols-2 gap-8">
-              <Card className="overflow-hidden border-2">
-                <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8 h-64 flex items-center justify-center">
-                  <div className="text-center">
-                    <BarChart3 className="h-24 w-24 text-primary mx-auto mb-4" />
-                    <p className="text-lg font-semibold">דשבורד מכירות מתקדם</p>
-                    <p className="text-muted-foreground text-sm mt-2">גרפים ותובנות בזמן אמת</p>
-                  </div>
-                </div>
+              <Card className="overflow-hidden border-2 hover:shadow-2xl transition-all duration-300">
+                <img 
+                  src={dashboardScreenshot} 
+                  alt="דשבורד מכירות מתקדם" 
+                  className="w-full h-auto object-cover"
+                />
+                <CardContent className="p-6">
+                  <h3 className="text-xl font-semibold mb-2">דשבורד מכירות מתקדם</h3>
+                  <p className="text-muted-foreground">גרפים ותובנות בזמן אמת לניהול מכירות אפקטיבי</p>
+                </CardContent>
               </Card>
 
-              <Card className="overflow-hidden border-2">
-                <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8 h-64 flex items-center justify-center">
-                  <div className="text-center">
-                    <Users className="h-24 w-24 text-primary mx-auto mb-4" />
-                    <p className="text-lg font-semibold">ניהול לקוחות חכם</p>
-                    <p className="text-muted-foreground text-sm mt-2">כל המידע במקום אחד</p>
-                  </div>
-                </div>
+              <Card className="overflow-hidden border-2 hover:shadow-2xl transition-all duration-300">
+                <img 
+                  src={leadsScreenshot} 
+                  alt="ניהול לידים חכם" 
+                  className="w-full h-auto object-cover"
+                />
+                <CardContent className="p-6">
+                  <h3 className="text-xl font-semibold mb-2">מעקב אחר לידים</h3>
+                  <p className="text-muted-foreground">טבלה מתקדמת עם כל המידע הדרוש למעקב אחר לידים</p>
+                </CardContent>
               </Card>
 
-              <Card className="overflow-hidden border-2">
-                <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8 h-64 flex items-center justify-center">
-                  <div className="text-center">
-                    <Target className="h-24 w-24 text-primary mx-auto mb-4" />
-                    <p className="text-lg font-semibold">מעקב אחר לידים</p>
-                    <p className="text-muted-foreground text-sm mt-2">מליד להזדמנות לעסקה</p>
-                  </div>
-                </div>
+              <Card className="overflow-hidden border-2 hover:shadow-2xl transition-all duration-300">
+                <img 
+                  src={clientsScreenshot} 
+                  alt="ניהול לקוחות" 
+                  className="w-full h-auto object-cover"
+                />
+                <CardContent className="p-6">
+                  <h3 className="text-xl font-semibold mb-2">ניהול לקוחות</h3>
+                  <p className="text-muted-foreground">כרטיסי לקוחות עם כל המידע החשוב במקום אחד</p>
+                </CardContent>
               </Card>
 
-              <Card className="overflow-hidden border-2">
-                <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-8 h-64 flex items-center justify-center">
-                  <div className="text-center">
-                    <CheckSquare className="h-24 w-24 text-primary mx-auto mb-4" />
-                    <p className="text-lg font-semibold">ניהול משימות</p>
-                    <p className="text-muted-foreground text-sm mt-2">תעדוף וארגון חכם</p>
-                  </div>
-                </div>
+              <Card className="overflow-hidden border-2 hover:shadow-2xl transition-all duration-300">
+                <img 
+                  src={tasksScreenshot} 
+                  alt="ניהול משימות" 
+                  className="w-full h-auto object-cover"
+                />
+                <CardContent className="p-6">
+                  <h3 className="text-xl font-semibold mb-2">ניהול משימות</h3>
+                  <p className="text-muted-foreground">לוח קאנבאן לניהול משימות ופרויקטים</p>
+                </CardContent>
               </Card>
             </div>
           </div>
