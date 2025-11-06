@@ -11,6 +11,7 @@ import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import SignUp from "./pages/SignUp";
 import Setup from "./pages/Setup";
+import Landing from "./pages/Landing";
 import Agencies from "./pages/Agencies";
 import Clients from "./pages/Clients";
 import Campaigners from "./pages/Campaigners";
@@ -42,6 +43,7 @@ const App = () => (
         <TenantProvider>
           <AgencyProvider>
             <Routes>
+            <Route path="/landing" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/setup" element={<Setup />} />
