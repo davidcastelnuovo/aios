@@ -19,9 +19,21 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Loader2, Plus } from "lucide-react";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 interface AddTenantFormProps {
   onSuccess?: () => void;
@@ -39,7 +51,10 @@ export function AddTenantForm({
   onOpenChange 
 }: AddTenantFormProps) {
   const queryClient = useQueryClient();
+  const { userId } = useCurrentUser();
   const [internalOpen, setInternalOpen] = useState(false);
+  const [showSwitchDialog, setShowSwitchDialog] = useState(false);
+  const [newTenantId, setNewTenantId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     contact_name: "",
@@ -91,8 +106,14 @@ export function AddTenantForm({
       return result;
     },
     onSuccess: (result) => {
-      queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      // Invalidate all user-tenants queries (with any suffix)
       queryClient.invalidateQueries({ queryKey: ["user-tenants"] });
+      queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      
+      // Store new tenant ID for switch dialog
+      if (result?.tenant?.id) {
+        setNewTenantId(result.tenant.id);
+      }
       
       // Show invitation URL to admin
       if (result?.invitation?.invitation_url) {
@@ -122,12 +143,36 @@ export function AddTenantForm({
       });
       setSelectedParentTenant("");
       setOpen(false);
+      
+      // Show switch dialog
+      setShowSwitchDialog(true);
+      
       onSuccess?.();
     },
     onError: (error: Error) => {
       toast.error("שגיאה בהוספת ארגון: " + error.message);
     },
   });
+
+  const handleSwitchToNewTenant = async () => {
+    if (!newTenantId || !userId) return;
+    
+    try {
+      await supabase
+        .from("user_active_tenant")
+        .upsert({
+          user_id: userId,
+          tenant_id: newTenantId,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
+      
+      localStorage.setItem("selectedTenantId", newTenantId);
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Error switching to new tenant:", error);
+      toast.error("שגיאה במעבר לארגון החדש");
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -239,26 +284,69 @@ export function AddTenantForm({
   );
 
   if (!asDialog) {
-    return formContent;
+    return (
+      <>
+        {formContent}
+        <AlertDialog open={showSwitchDialog} onOpenChange={setShowSwitchDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>הארגון נוצר בהצלחה!</AlertDialogTitle>
+              <AlertDialogDescription>
+                האם תרצה לעבור לארגון החדש עכשיו?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setShowSwitchDialog(false)}>
+                הישאר בארגון הנוכחי
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={handleSwitchToNewTenant}>
+                עבור לארגון החדש
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
+    );
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="w-full md:w-auto">
-          <Plus className="h-4 w-4 ml-2" />
-          ארגון חדש
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>הוספת ארגון חדש</DialogTitle>
-          <DialogDescription>
-            צור ארגון חדש והזמן owner לניהול הארגון. ה-owner יקבל גישה מלאה לכל המודולים.
-          </DialogDescription>
-        </DialogHeader>
-        {formContent}
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button className="w-full md:w-auto">
+            <Plus className="h-4 w-4 ml-2" />
+            ארגון חדש
+          </Button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>הוספת ארגון חדש</DialogTitle>
+            <DialogDescription>
+              צור ארגון חדש והזמן owner לניהול הארגון. ה-owner יקבל גישה מלאה לכל המודולים.
+            </DialogDescription>
+          </DialogHeader>
+          {formContent}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={showSwitchDialog} onOpenChange={setShowSwitchDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>הארגון נוצר בהצלחה!</AlertDialogTitle>
+            <AlertDialogDescription>
+              האם תרצה לעבור לארגון החדש עכשיו?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowSwitchDialog(false)}>
+              הישאר בארגון הנוכחי
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleSwitchToNewTenant}>
+              עבור לארגון החדש
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

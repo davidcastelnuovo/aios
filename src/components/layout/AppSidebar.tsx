@@ -104,13 +104,40 @@ export function AppSidebar() {
 
   const handleTenantChange = async (tenantId: string) => {
     try {
-      await (supabase as any)
+      // Check if user is super admin
+      const { data: roles } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "super_admin");
+      
+      const isSuperAdmin = roles && roles.length > 0;
+      
+      // If super admin, ensure they're a member of the tenant
+      if (isSuperAdmin) {
+        const { data: existingMembership } = await supabase
+          .from("tenant_users")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("tenant_id", tenantId)
+          .maybeSingle();
+        
+        if (!existingMembership) {
+          await supabase
+            .from("tenant_users")
+            .insert({ user_id: userId, tenant_id: tenantId, role: "member" });
+        }
+      }
+      
+      // Update active tenant
+      await supabase
         .from("user_active_tenant")
         .upsert({
           user_id: userId,
           tenant_id: tenantId,
           updated_at: new Date().toISOString(),
         }, { onConflict: "user_id" });
+      
       setCurrentTenantId(tenantId);
       window.location.reload();
     } catch (e) {

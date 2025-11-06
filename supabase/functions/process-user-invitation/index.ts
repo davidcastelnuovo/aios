@@ -210,6 +210,15 @@ serve(async (req: Request) => {
       })
       .eq("id", invitation.id);
 
+    // Set active tenant for the user (so they automatically switch to new tenant)
+    await supabase
+      .from("user_active_tenant")
+      .upsert({
+        user_id: user.id,
+        tenant_id: invitation.tenant_id,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id" });
+
     console.log("Successfully processed invitation for", user.email);
 
     return new Response(
