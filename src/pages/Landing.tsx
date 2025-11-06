@@ -20,14 +20,14 @@ import {
   Palette,
   Rocket,
   ArrowRight,
+  Smartphone,
   type LucideIcon
 } from "lucide-react";
 import logoM from "@/assets/logo.png";
-import dashboardScreenshot from "@/assets/dashboard-screenshot.png";
-import analyticsDashboard from "@/assets/analytics-dashboard.png";
-import leadsScreenshot from "@/assets/leads-screenshot.png";
-import clientsScreenshot from "@/assets/clients-screenshot.png";
-import tasksScreenshot from "@/assets/tasks-screenshot.png";
+import mobileLeads from "@/assets/mobile-leads.jpg";
+import mobilePipeline from "@/assets/mobile-pipeline.jpg";
+import mobileFinance from "@/assets/mobile-finance.jpg";
+import mobileTasks from "@/assets/mobile-tasks.jpg";
 
 const Landing = () => {
   const navigate = useNavigate();
@@ -215,46 +215,29 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Screenshot/Demo Section */}
+      {/* Screenshots Section */}
       <section className="py-24 bg-muted/30">
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto">
             <div className="text-center mb-16 space-y-4">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-4">
+                <Smartphone className="h-4 w-4" />
+                התאמה מלאה למובייל
+              </div>
               <h2 className="text-4xl md:text-5xl font-bold">
                 צפה במערכת בפעולה
               </h2>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                ממשק נקי, מודרני ואינטואיטיבי שנבנה במיוחד לסוכנויות דיגיטל
+                ממשק נקי, מודרני ואינטואיטיבי שעובד מצוין במובייל, טאבלט ומחשב
               </p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-8">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
               <Card className="group overflow-hidden border-2 hover:border-primary/50 hover:shadow-2xl hover:-translate-y-2 transition-all duration-500">
-                <div className="overflow-hidden">
+                <div className="overflow-hidden bg-gradient-to-br from-muted/50 to-background">
                   <img 
-                    src={analyticsDashboard} 
-                    alt="דשבורד אנליטיקה עם KPIs" 
-                    className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                </div>
-                <CardContent className="p-6">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <BarChart3 className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="text-xl font-semibold mb-2">דשבורד אנליטיקה</h3>
-                      <p className="text-muted-foreground">מעקב בזמן אמת אחר לידים, הצעות מחיר, סגירות וגרפי צמיחה</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="group overflow-hidden border-2 hover:border-primary/50 hover:shadow-2xl hover:-translate-y-2 transition-all duration-500">
-                <div className="overflow-hidden">
-                  <img 
-                    src={leadsScreenshot} 
-                    alt="ניהול לידים חכם" 
+                    src={mobileLeads} 
+                    alt="ניהול לידים במובייל" 
                     className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 </div>
@@ -264,39 +247,60 @@ const Landing = () => {
                       <Target className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-semibold mb-2">מעקב אחר לידים</h3>
-                      <p className="text-muted-foreground">טבלה מתקדמת עם פילטרים וחיפוש למעקב יעיל אחר כל ליד</p>
+                      <h3 className="text-lg font-semibold mb-2">ניהול לידים</h3>
+                      <p className="text-sm text-muted-foreground">מעקב אחר כל ליד עם פילטרים חכמים ומשפך מכירות</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
               <Card className="group overflow-hidden border-2 hover:border-primary/50 hover:shadow-2xl hover:-translate-y-2 transition-all duration-500">
-                <div className="overflow-hidden">
+                <div className="overflow-hidden bg-gradient-to-br from-muted/50 to-background">
                   <img 
-                    src={clientsScreenshot} 
-                    alt="ניהול לקוחות" 
+                    src={mobilePipeline} 
+                    alt="משפך מכירות במובייל" 
                     className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 </div>
                 <CardContent className="p-6">
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Users className="h-5 w-5 text-primary" />
+                      <TrendingUp className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-semibold mb-2">ניהול לקוחות</h3>
-                      <p className="text-muted-foreground">כרטיסי לקוחות מסודרים עם כל המידע החשוב במקום אחד</p>
+                      <h3 className="text-lg font-semibold mb-2">משפך מכירות</h3>
+                      <p className="text-sm text-muted-foreground">ניתוח שלבי המכירה בצורה ויזואלית וברורה</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
               <Card className="group overflow-hidden border-2 hover:border-primary/50 hover:shadow-2xl hover:-translate-y-2 transition-all duration-500">
-                <div className="overflow-hidden">
+                <div className="overflow-hidden bg-gradient-to-br from-muted/50 to-background">
                   <img 
-                    src={tasksScreenshot} 
-                    alt="ניהול משימות" 
+                    src={mobileFinance} 
+                    alt="ניהול כספים במובייל" 
+                    className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                </div>
+                <CardContent className="p-6">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <BarChart3 className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold mb-2">ניהול כספים</h3>
+                      <p className="text-sm text-muted-foreground">מעקב אחר הכנסות, הוצאות ורווחים בזמן אמת</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="group overflow-hidden border-2 hover:border-primary/50 hover:shadow-2xl hover:-translate-y-2 transition-all duration-500">
+                <div className="overflow-hidden bg-gradient-to-br from-muted/50 to-background">
+                  <img 
+                    src={mobileTasks} 
+                    alt="ניהול משימות במובייל" 
                     className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 </div>
@@ -306,8 +310,8 @@ const Landing = () => {
                       <CheckSquare className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-semibold mb-2">ניהול משימות</h3>
-                      <p className="text-muted-foreground">לוח קאנבאן דינמי לניהול משימות ופרויקטים בצורה ויזואלית</p>
+                      <h3 className="text-lg font-semibold mb-2">ניהול משימות</h3>
+                      <p className="text-sm text-muted-foreground">ארגון משימות ופרויקטים עם שעון נוכחות מובנה</p>
                     </div>
                   </div>
                 </CardContent>
