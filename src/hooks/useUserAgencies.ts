@@ -53,6 +53,23 @@ export function useUserAgencies() {
         managed?.forEach((m) => aggregated.add(m.agency_id));
       }
 
+      // Get shared agencies via agency_tenant_access
+      const { data: tenantData } = await supabase
+        .from("tenant_users")
+        .select("tenant_id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (tenantData?.tenant_id) {
+        const { data: sharedAgencies, error: sharedErr } = await supabase
+          .from("agency_tenant_access")
+          .select("agency_id")
+          .eq("accessing_tenant_id", tenantData.tenant_id);
+
+        if (sharedErr) throw sharedErr;
+        sharedAgencies?.forEach((s) => aggregated.add(s.agency_id));
+      }
+
       return Array.from(aggregated);
     },
     enabled: !!userId,

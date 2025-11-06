@@ -34,23 +34,49 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, [selectedAgency]);
 
-  // Get all agencies for the filter - filtered by RLS so users only see their agencies
+  // Get all agencies for the filter - including shared agencies
   const { data: allAgencies, isLoading: isLoadingAgencies } = useQuery({
     queryKey: ["agencies-filter", tenantId],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
-      const { data, error } = await supabase
+      
+      // Get agencies owned by current tenant
+      const { data: ownedAgencies, error: ownedError } = await supabase
         .from("agencies")
         .select("id, name")
         .eq("tenant_id", tenantId)
         .order("name");
       
-      if (error) {
-        console.error("Error fetching agencies:", error);
+      if (ownedError) {
+        console.error("Error fetching owned agencies:", ownedError);
         return [];
       }
       
-      return data || [];
+      // Get shared agencies via agency_tenant_access
+      const { data: sharedAccess, error: sharedError } = await supabase
+        .from("agency_tenant_access")
+        .select("agency_id, agencies(id, name)")
+        .eq("accessing_tenant_id", tenantId);
+      
+      if (sharedError) {
+        console.error("Error fetching shared agencies:", sharedError);
+      }
+      
+      // Combine owned and shared agencies
+      const shared = sharedAccess?.map(s => s.agencies).filter(Boolean) || [];
+      const combined = [...(ownedAgencies || []), ...shared];
+      
+      // Remove duplicates and sort
+      const uniqueMap = new Map();
+      combined.forEach(agency => {
+        if (agency && agency.id) {
+          uniqueMap.set(agency.id, agency);
+        }
+      });
+      
+      return Array.from(uniqueMap.values()).sort((a, b) => 
+        a.name.localeCompare(b.name)
+      );
     },
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
     refetchOnWindowFocus: false, // Don't refetch when window regains focus
