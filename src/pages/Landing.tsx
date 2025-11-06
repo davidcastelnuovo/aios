@@ -17,10 +17,10 @@ import {
   UserPlus,
   Star,
   Building2,
-  Layers,
   Palette,
   Rocket,
-  ArrowRight
+  ArrowRight,
+  type LucideIcon
 } from "lucide-react";
 import logoM from "@/assets/logo.png";
 import dashboardScreenshot from "@/assets/dashboard-screenshot.png";
@@ -32,7 +32,12 @@ import tasksScreenshot from "@/assets/tasks-screenshot.png";
 const Landing = () => {
   const navigate = useNavigate();
 
-  const features = [
+  const features: Array<{
+    icon?: LucideIcon;
+    customIcon?: string;
+    title: string;
+    description: string;
+  }> = [
     {
       icon: Sparkles,
       title: "ניהול לקוחות מרובים",
@@ -49,7 +54,7 @@ const Landing = () => {
       description: "תהליך אונבורדינג מסודר שעוזר ללקוחות החדשים שלך להתחיל מהר"
     },
     {
-      icon: Layers,
+      customIcon: logoM,
       title: "ניהול סוכנויות מרובות",
       description: "נהל עשרות סוכנויות ומאות לקוחות במערכת אחת"
     },
@@ -329,7 +334,11 @@ const Landing = () => {
               <Card key={index} className="group border-2 hover:border-primary/50 transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
                 <CardHeader>
                   <div className="w-14 h-14 rounded-xl gradient-primary flex items-center justify-center mb-4 group-hover:scale-110 transition-transform shadow-lg">
-                    <feature.icon className="h-7 w-7 text-white drop-shadow-lg" />
+                    {feature.customIcon ? (
+                      <img src={feature.customIcon} alt="" className="h-8 w-8 object-contain drop-shadow-lg" />
+                    ) : feature.icon ? (
+                      <feature.icon className="h-7 w-7 text-white drop-shadow-lg" />
+                    ) : null}
                   </div>
                   <CardTitle className="text-xl">{feature.title}</CardTitle>
                   <CardDescription className="text-base leading-relaxed">
