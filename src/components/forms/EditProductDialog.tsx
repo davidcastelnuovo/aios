@@ -19,7 +19,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -28,6 +29,7 @@ const formSchema = z.object({
   description: z.string().optional(),
   price: z.string().min(1, "מחיר המוצר הוא שדה חובה"),
   active: z.boolean(),
+  agency_id: z.string().optional(),
 });
 
 interface Product {
@@ -36,6 +38,7 @@ interface Product {
   description: string | null;
   price: number;
   active: boolean;
+  agency_id?: string | null;
 }
 
 interface EditProductDialogProps {
@@ -51,6 +54,39 @@ export default function EditProductDialog({
 }: EditProductDialogProps) {
   const queryClient = useQueryClient();
 
+  // Fetch tenant ID
+  const { data: tenantId } = useQuery({
+    queryKey: ["user-tenant-id"],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      
+      const { data } = await supabase
+        .from("tenant_users")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      
+      return data?.tenant_id || null;
+    },
+  });
+
+  // Fetch owned agencies
+  const { data: agencies } = useQuery({
+    queryKey: ["owned-agencies", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", tenantId)
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -58,6 +94,7 @@ export default function EditProductDialog({
       description: product.description || "",
       price: product.price.toString(),
       active: product.active,
+      agency_id: product.agency_id || "",
     },
   });
 
@@ -70,6 +107,7 @@ export default function EditProductDialog({
           description: values.description || null,
           price: parseFloat(values.price),
           active: values.active,
+          agency_id: values.agency_id || null,
         })
         .eq("id", product.id);
 
@@ -133,6 +171,32 @@ export default function EditProductDialog({
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="agency_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>סוכנות (אופציונלי)</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר סוכנות או השאר כללי" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">כללי (ללא סוכנות)</SelectItem>
+                      {agencies?.map((agency: any) => (
+                        <SelectItem key={agency.id} value={agency.id}>
+                          {agency.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ const formSchema = z.object({
   description: z.string().optional(),
   price: z.string().min(1, "מחיר המוצר הוא שדה חובה"),
   active: z.boolean().default(true),
+  agency_id: z.string().optional(),
 });
 
 interface AddProductFormProps {
@@ -47,6 +49,22 @@ export default function AddProductForm({ onSuccess }: AddProductFormProps) {
     },
   });
 
+  // Fetch owned agencies
+  const { data: agencies } = useQuery({
+    queryKey: ["owned-agencies", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", tenantId)
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -54,6 +72,7 @@ export default function AddProductForm({ onSuccess }: AddProductFormProps) {
       description: "",
       price: "",
       active: true,
+      agency_id: "",
     },
   });
 
@@ -65,6 +84,7 @@ export default function AddProductForm({ onSuccess }: AddProductFormProps) {
         price: parseFloat(values.price),
         active: values.active,
         tenant_id: tenantId,
+        agency_id: values.agency_id || null,
       });
 
       if (error) throw error;
@@ -122,6 +142,32 @@ export default function AddProductForm({ onSuccess }: AddProductFormProps) {
             )}
           />
         </div>
+
+        <FormField
+          control={form.control}
+          name="agency_id"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>סוכנות (אופציונלי)</FormLabel>
+              <Select onValueChange={field.onChange} value={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחר סוכנות או השאר כללי" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="">כללי (ללא סוכנות)</SelectItem>
+                  {agencies?.map((agency: any) => (
+                    <SelectItem key={agency.id} value={agency.id}>
+                      {agency.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
         <FormField
           control={form.control}

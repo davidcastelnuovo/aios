@@ -986,6 +986,7 @@ export type Database = {
       products: {
         Row: {
           active: boolean
+          agency_id: string | null
           created_at: string
           description: string | null
           id: string
@@ -996,6 +997,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          agency_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -1006,6 +1008,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          agency_id?: string | null
           created_at?: string
           description?: string | null
           id?: string
@@ -1015,6 +1018,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "products_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "products_tenant_id_fkey"
             columns: ["tenant_id"]
