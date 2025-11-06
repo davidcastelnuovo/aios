@@ -182,56 +182,13 @@ const Landing = () => {
               </Button>
             </div>
 
-            {/* Sales Pipeline Animation */}
-            <div className="flex items-center justify-center gap-4 pt-12 px-4 overflow-x-auto">
-              <div className="flex flex-col items-center gap-2 min-w-[100px]">
-                <div className="w-24 h-24 rounded-2xl bg-primary/20 flex items-center justify-center relative overflow-hidden">
-                  <Target className="h-10 w-10 text-primary z-10" />
-                  <div className="absolute inset-0 animate-ping bg-primary/30 rounded-2xl" style={{animationDuration: '2s'}} />
-                </div>
-                <span className="text-sm font-semibold text-muted-foreground">לידים</span>
-              </div>
-
-              <div className="flex items-center gap-2 animate-pulse">
-                <div className="w-3 h-3 rounded-full bg-primary" />
-                <ArrowLeft className="h-6 w-6 text-primary" />
-                <div className="w-3 h-3 rounded-full bg-primary animate-bounce" />
-              </div>
-
-              <div className="flex flex-col items-center gap-2 min-w-[100px]">
-                <div className="w-24 h-24 rounded-2xl bg-primary/30 flex items-center justify-center relative overflow-hidden">
-                  <Activity className="h-10 w-10 text-primary z-10" />
-                  <div className="absolute inset-0 animate-ping bg-primary/40 rounded-2xl" style={{animationDuration: '2.2s', animationDelay: '0.3s'}} />
-                </div>
-                <span className="text-sm font-semibold text-muted-foreground">הצעות</span>
-              </div>
-
-              <div className="flex items-center gap-2 animate-pulse" style={{animationDelay: '0.3s'}}>
-                <div className="w-3 h-3 rounded-full bg-primary" />
-                <ArrowLeft className="h-6 w-6 text-primary" />
-                <div className="w-3 h-3 rounded-full bg-primary animate-bounce" style={{animationDelay: '0.3s'}} />
-              </div>
-
-              <div className="flex flex-col items-center gap-2 min-w-[100px]">
-                <div className="w-24 h-24 rounded-2xl bg-primary/40 flex items-center justify-center relative overflow-hidden">
-                  <Users className="h-10 w-10 text-primary z-10" />
-                  <div className="absolute inset-0 animate-ping bg-primary/50 rounded-2xl" style={{animationDuration: '2.4s', animationDelay: '0.6s'}} />
-                </div>
-                <span className="text-sm font-semibold text-muted-foreground">משא ומתן</span>
-              </div>
-
-              <div className="flex items-center gap-2 animate-pulse" style={{animationDelay: '0.6s'}}>
-                <div className="w-3 h-3 rounded-full bg-primary" />
-                <ArrowLeft className="h-6 w-6 text-primary" />
-                <div className="w-3 h-3 rounded-full bg-primary animate-bounce" style={{animationDelay: '0.6s'}} />
-              </div>
-
-              <div className="flex flex-col items-center gap-2 min-w-[100px]">
-                <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center relative overflow-hidden shadow-lg">
-                  <CheckCircle2 className="h-10 w-10 text-white z-10 animate-bounce" />
-                  <div className="absolute inset-0 animate-ping bg-accent/60 rounded-2xl" style={{animationDuration: '2.6s', animationDelay: '0.9s'}} />
-                </div>
-                <span className="text-sm font-semibold text-primary">סגירה! 🎉</span>
+            {/* Growth Chart */}
+            <div className="flex items-end justify-center gap-3 h-32 pt-12">
+              <div className="w-16 bg-primary/40 rounded-t-xl" style={{height: '40%'}} />
+              <div className="w-16 bg-primary/60 rounded-t-xl" style={{height: '60%'}} />
+              <div className="w-16 bg-primary/80 rounded-t-xl" style={{height: '80%'}} />
+              <div className="w-16 bg-primary rounded-t-xl relative overflow-hidden" style={{height: '100%'}}>
+                <div className="absolute inset-0 bg-gradient-to-t from-primary to-accent animate-pulse" />
               </div>
             </div>
 
