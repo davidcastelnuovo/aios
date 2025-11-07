@@ -334,10 +334,10 @@ const Landing = () => {
           <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             {/* Left Side - Text Content */}
             <div className="space-y-6 order-2 lg:order-1">
-              <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold leading-tight">
+              <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold leading-tight text-foreground">
                 ניהול לקוחות,
                 <br />
-                <span className="bg-primary text-primary-foreground px-3 py-1 rounded-lg">חכם ופשוט</span>
+                <span className="bg-primary/10 text-primary px-3 py-1 rounded-lg border border-primary/20">חכם ופשוט</span>
               </h2>
               <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">
                 פלטפורמה מקיפה לניהול סוכנויות דיגיטל. נהל לקוחות, לידים, משימות וצוותים - הכל במקום אחד.
