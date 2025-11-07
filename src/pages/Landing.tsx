@@ -33,7 +33,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import logoM from "@/assets/logo.png";
-import heroCards from "@/assets/hero-cards-new.png";
+import heroCards from "@/assets/hero-cards-updated.png";
 import mobileLeads from "@/assets/mobile-leads.jpg";
 import mobilePipeline from "@/assets/mobile-pipeline.jpg";
 import mobileFinance from "@/assets/mobile-finance.jpg";
@@ -361,7 +361,7 @@ const Landing = () => {
 
             {/* Right Side - Image */}
             <div className="relative order-1 lg:order-2">
-              <div className="relative w-full aspect-video">
+              <div className="relative w-full aspect-video scale-110">
                 <img 
                   src={heroCards} 
                   alt="AfterLead Platform Cards" 
