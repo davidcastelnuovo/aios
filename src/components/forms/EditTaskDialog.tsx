@@ -581,14 +581,17 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                             {field.value}/10
                           </span>
                         </div>
-                        <Slider
-                          value={[field.value]}
-                          onValueChange={(value) => field.onChange(value[0])}
-                          min={1}
-                          max={10}
-                          step={1}
-                          className="cursor-pointer"
-                        />
+                        <div style={{ ['--slider-color' as any]: getPriorityColor(field.value) }}>
+                          <Slider
+                            value={[field.value]}
+                            onValueChange={(value) => field.onChange(value[0])}
+                            min={1}
+                            max={10}
+                            step={1}
+                            className="cursor-pointer [&_[role=slider]]:border-[var(--slider-color)] [&_.bg-primary]:bg-[var(--slider-color)]"
+                            style={{ ['--slider-color' as any]: getPriorityColor(field.value) }}
+                          />
+                        </div>
                       </div>
                       <FormMessage />
                     </FormItem>
