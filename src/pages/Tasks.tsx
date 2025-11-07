@@ -112,6 +112,7 @@ export default function Tasks() {
   const [activeTask, setActiveTask] = useState<any>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table" | "calendar">("kanban");
   const [hideCompleted, setHideCompleted] = useState(false);
+  const [sortBy, setSortBy] = useState<"priority" | "due_date" | "status">("priority");
   const { selectedAgency } = useAgency();
   const { userAgencyIds } = useUserAgencies();
   const { campaignerId, isCampaigner, isTeamManager, isOwner, isSeo } = useUserRole();
@@ -339,7 +340,29 @@ export default function Tasks() {
     filteredTasks = filteredTasks.filter(t => t.status !== "done");
   }
 
-  console.log('✅ Final filteredTasks:', filteredTasks?.map(t => ({
+  // Sort tasks based on selected sort option
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    switch (sortBy) {
+      case "priority":
+        // Higher priority first (10 -> 1)
+        return (b.priority || 5) - (a.priority || 5);
+      case "due_date":
+        // Earlier due dates first, null dates last
+        if (!a.due_date && !b.due_date) return 0;
+        if (!a.due_date) return 1;
+        if (!b.due_date) return -1;
+        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+      case "status":
+        // Order: open -> in_progress -> done
+        const statusOrder = { open: 0, in_progress: 1, done: 2 };
+        return (statusOrder[a.status as keyof typeof statusOrder] || 0) - 
+               (statusOrder[b.status as keyof typeof statusOrder] || 0);
+      default:
+        return 0;
+    }
+  });
+
+  console.log('✅ Final filteredTasks:', sortedTasks?.map(t => ({
     title: t.title,
     agency_id: t.agency_id,
     client_agency_id: t.clients?.agency_id,
@@ -348,9 +371,9 @@ export default function Tasks() {
   })));
 
   const tasksByStatus = {
-    open: filteredTasks?.filter(t => t.status === "open") || [],
-    in_progress: filteredTasks?.filter(t => t.status === "in_progress") || [],
-    done: filteredTasks?.filter(t => t.status === "done") || [],
+    open: sortedTasks?.filter(t => t.status === "open") || [],
+    in_progress: sortedTasks?.filter(t => t.status === "in_progress") || [],
+    done: sortedTasks?.filter(t => t.status === "done") || [],
   };
 
   console.log('📊 Tasks by status:', {
@@ -694,6 +717,21 @@ export default function Tasks() {
                   </Select>
                 </div>
               )}
+              
+              {/* Sort by dropdown */}
+              <div className="w-full md:w-48">
+                <Select value={sortBy} onValueChange={(value: "priority" | "due_date" | "status") => setSortBy(value)}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="מיין לפי" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="priority">מיין לפי דחיפות</SelectItem>
+                    <SelectItem value="due_date">מיין לפי תאריך יעד</SelectItem>
+                    <SelectItem value="status">מיין לפי סטטוס</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
               <div className="w-full md:w-auto"><AddTaskForm /></div>
             </div>
           </div>
@@ -780,7 +818,7 @@ export default function Tasks() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTasks?.map((task) => (
+                {sortedTasks?.map((task) => (
                   <TableRow 
                     key={task.id}
                     className="cursor-pointer hover:bg-accent/50"
