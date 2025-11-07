@@ -739,7 +739,7 @@ const Landing = () => {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-primary" />
-                    <span className="text-sm">עד 100 לידים</span>
+                    <span className="text-sm">עד 100 לידים בחודש</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-primary" />
@@ -751,7 +751,7 @@ const Landing = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-primary" />
-                    <span className="text-sm">תמיכה בעברית</span>
+                    <span className="text-sm">תמיכה בצ׳ט בעברית</span>
                   </div>
                 </div>
                 <Button className="w-full" onClick={() => navigate("/signup")}>
@@ -778,15 +778,19 @@ const Landing = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-primary" />
-                    <span className="text-sm">עד 10 משתמשים</span>
+                    <span className="text-sm">משתמשים ללא הגבלה</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-primary" />
-                    <span className="text-sm">כל התכונות המתקדמות</span>
+                    <span className="text-sm">עד 5 תת חשבונות ללקוחות שלך</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-primary" />
-                    <span className="text-sm">אוטומציות חכמות</span>
+                    <span className="text-sm">כל תת חשבון נוסף 50 ש״ח לחודש</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">אוטומציות</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-primary" />
@@ -803,30 +807,26 @@ const Landing = () => {
             <Card className="border-2 hover:border-primary/50 transition-all">
               <CardHeader>
                 <CardTitle className="text-2xl">ארגוני</CardTitle>
-                <div className="text-4xl font-bold mt-4">מותאם</div>
-                <p className="text-muted-foreground">לפי צורך</p>
+                <div className="text-4xl font-bold mt-4">₪497</div>
+                <p className="text-muted-foreground">לחודש</p>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-primary" />
-                    <span className="text-sm">הכל ללא הגבלה</span>
+                    <span className="text-sm">כל מה שיש בחבילות הקודמות</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-primary" />
-                    <span className="text-sm">מספר משתמשים בהתאמה</span>
+                    <span className="text-sm">אפשרות SaaS וריסלינג</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-primary" />
-                    <span className="text-sm">התאמות אישיות</span>
+                    <span className="text-sm">עד 50 תת חשבונות כלול במחיר</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-primary" />
-                    <span className="text-sm">מנהל חשבון ייעודי</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-primary" />
-                    <span className="text-sm">SLA מובטח</span>
+                    <span className="text-sm">25 ש״ח לתת חשבון נוסף מעל 50</span>
                   </div>
                 </div>
                 <Button variant="outline" className="w-full" onClick={() => navigate("/auth")}>
