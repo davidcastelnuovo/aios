@@ -561,19 +561,26 @@ export default function Tasks() {
                   {task.priority}/10
                 </span>
               </div>
-              <Slider
-                value={[task.priority]}
-                onValueChange={(value) => {
-                  updateTaskPriorityMutation.mutate({ 
-                    taskId: task.id, 
-                    priority: value[0] 
-                  });
-                }}
-                min={1}
-                max={10}
-                step={1}
-                className="cursor-pointer"
-              />
+              <div style={{ 
+                ['--slider-color' as any]: getPriorityColor(task.priority)
+              }}>
+                <Slider
+                  value={[task.priority]}
+                  onValueChange={(value) => {
+                    updateTaskPriorityMutation.mutate({ 
+                      taskId: task.id, 
+                      priority: value[0] 
+                    });
+                  }}
+                  min={1}
+                  max={10}
+                  step={1}
+                  className="cursor-pointer [&_[role=slider]]:border-[var(--slider-color)] [&_.bg-primary]:bg-[var(--slider-color)]"
+                  style={{
+                    ['--slider-color' as any]: getPriorityColor(task.priority)
+                  }}
+                />
+              </div>
             </div>
 
             <div className="pt-2 border-t mt-2" onClick={(e) => e.stopPropagation()}>
