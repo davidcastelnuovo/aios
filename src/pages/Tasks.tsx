@@ -548,7 +548,13 @@ export default function Tasks() {
             )}
 
             {/* Priority Slider */}
-            <div className="space-y-2 mb-3" onClick={(e) => e.stopPropagation()}>
+            <div 
+              className="space-y-2 mb-3" 
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+            >
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">{getPriorityText(task.priority)}</span>
                 <span className="text-xs font-medium" style={{ color: getPriorityColor(task.priority) }}>
