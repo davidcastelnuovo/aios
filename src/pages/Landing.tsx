@@ -333,7 +333,7 @@ const Landing = () => {
           {/* Main Content - Two Columns */}
           <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
             {/* Left Side - Text Content */}
-            <div className="space-y-6 order-2 lg:order-1">
+            <div className="space-y-6 order-2 lg:order-1 relative z-10 lg:pr-5">
               <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold leading-tight text-foreground">
                 ניהול לקוחות,
                 <br />
