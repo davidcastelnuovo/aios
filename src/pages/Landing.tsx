@@ -33,7 +33,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import logoM from "@/assets/logo.png";
-import heroCards from "@/assets/hero-cards.png";
+import heroCards from "@/assets/hero-cards-transparent.png";
 import mobileLeads from "@/assets/mobile-leads.jpg";
 import mobilePipeline from "@/assets/mobile-pipeline.jpg";
 import mobileFinance from "@/assets/mobile-finance.jpg";
@@ -332,9 +332,9 @@ const Landing = () => {
             {/* Left Side - Text Content */}
             <div className="space-y-6 order-2 lg:order-1">
               <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold leading-tight">
-                CRM שבאמת
+                CRM <span className="bg-primary text-primary-foreground px-3 py-1 rounded-lg">שבאמת</span>
                 <br />
-                <span className="gradient-primary bg-clip-text text-transparent">חכם</span>
+                חכם
               </h2>
               <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">
                 AfterLead CRM היא המקור היחיד של אמת שמחבר את כל נתוני העסק שלך. עם בינה מלאכותית מובנית שעוזרת לך לנהל לקוחות, לידים ומכירות בצורה החכמה ביותר.
