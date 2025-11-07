@@ -531,7 +531,7 @@ const Landing = () => {
         <div className="container mx-auto px-4">
           <div className="flex flex-col items-center gap-6 text-center">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg gradient-primary" />
+              <img src={logoM} alt="AfterLead" className="w-10 h-10" />
               <span className="text-2xl font-bold">AfterLead</span>
             </div>
             <p className="text-muted-foreground max-w-md">
