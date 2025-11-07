@@ -1,5 +1,13 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
+} from "@/components/ui/navigation-menu";
 import { useNavigate } from "react-router-dom";
 import { 
   BarChart3, 
@@ -21,6 +29,7 @@ import {
   Rocket,
   ArrowRight,
   Smartphone,
+  DollarSign,
   type LucideIcon
 } from "lucide-react";
 import logoM from "@/assets/logo.png";
@@ -122,19 +131,180 @@ const Landing = () => {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <img src={logoM} alt="AfterLead" className="w-10 h-10" />
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            {/* Logo */}
+            <div className="flex items-center gap-3">
+              <img src={logoM} alt="AfterLead" className="w-10 h-10" />
+              <span className="text-xl font-bold">AfterLead</span>
+            </div>
+
+            {/* Navigation Menu */}
+            <NavigationMenu className="hidden lg:flex">
+              <NavigationMenuList>
+                <NavigationMenuItem>
+                  <NavigationMenuTrigger>המוצר</NavigationMenuTrigger>
+                  <NavigationMenuContent>
+                    <div className="grid gap-3 p-6 w-[500px]">
+                      <div className="grid grid-cols-2 gap-4">
+                        <NavigationMenuLink asChild>
+                          <a
+                            className="group grid h-auto w-full items-center gap-3 rounded-md p-4 hover:bg-accent"
+                            href="#features"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <Target className="h-4 w-4 text-primary" />
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium">ניהול לידים</div>
+                                <p className="text-xs text-muted-foreground">מעקב אחר כל ליד</p>
+                              </div>
+                            </div>
+                          </a>
+                        </NavigationMenuLink>
+                        <NavigationMenuLink asChild>
+                          <a
+                            className="group grid h-auto w-full items-center gap-3 rounded-md p-4 hover:bg-accent"
+                            href="#features"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <Users className="h-4 w-4 text-primary" />
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium">ניהול צוותים</div>
+                                <p className="text-xs text-muted-foreground">צוותי מכירות מסונכרנים</p>
+                              </div>
+                            </div>
+                          </a>
+                        </NavigationMenuLink>
+                        <NavigationMenuLink asChild>
+                          <a
+                            className="group grid h-auto w-full items-center gap-3 rounded-md p-4 hover:bg-accent"
+                            href="#features"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <BarChart3 className="h-4 w-4 text-primary" />
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium">אנליטיקס</div>
+                                <p className="text-xs text-muted-foreground">דוחות ותובנות בזמן אמת</p>
+                              </div>
+                            </div>
+                          </a>
+                        </NavigationMenuLink>
+                        <NavigationMenuLink asChild>
+                          <a
+                            className="group grid h-auto w-full items-center gap-3 rounded-md p-4 hover:bg-accent"
+                            href="#features"
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                <CheckSquare className="h-4 w-4 text-primary" />
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium">ניהול משימות</div>
+                                <p className="text-xs text-muted-foreground">ארגון פרויקטים ועבודות</p>
+                              </div>
+                            </div>
+                          </a>
+                        </NavigationMenuLink>
+                      </div>
+                    </div>
+                  </NavigationMenuContent>
+                </NavigationMenuItem>
+
+                <NavigationMenuItem>
+                  <NavigationMenuTrigger>פתרונות</NavigationMenuTrigger>
+                  <NavigationMenuContent>
+                    <div className="grid gap-3 p-6 w-[400px]">
+                      <NavigationMenuLink asChild>
+                        <a
+                          className="group grid h-auto w-full items-center gap-3 rounded-md p-4 hover:bg-accent"
+                          href="#features"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                              <Building2 className="h-4 w-4 text-primary" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium">לסוכנויות דיגיטל</div>
+                              <p className="text-xs text-muted-foreground">נהל מאות לקוחות בקלות</p>
+                            </div>
+                          </div>
+                        </a>
+                      </NavigationMenuLink>
+                      <NavigationMenuLink asChild>
+                        <a
+                          className="group grid h-auto w-full items-center gap-3 rounded-md p-4 hover:bg-accent"
+                          href="#features"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                              <TrendingUp className="h-4 w-4 text-primary" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium">לצוותי מכירות</div>
+                              <p className="text-xs text-muted-foreground">הגדל את המכירות שלך</p>
+                            </div>
+                          </div>
+                        </a>
+                      </NavigationMenuLink>
+                      <NavigationMenuLink asChild>
+                        <a
+                          className="group grid h-auto w-full items-center gap-3 rounded-md p-4 hover:bg-accent"
+                          href="#features"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                              <Sparkles className="h-4 w-4 text-primary" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium">לעסקים קטנים</div>
+                              <p className="text-xs text-muted-foreground">התחל בחינם ללא מחויבות</p>
+                            </div>
+                          </div>
+                        </a>
+                      </NavigationMenuLink>
+                    </div>
+                  </NavigationMenuContent>
+                </NavigationMenuItem>
+
+                <NavigationMenuItem>
+                  <NavigationMenuLink asChild>
+                    <a
+                      className="group inline-flex h-10 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50"
+                      href="#pricing"
+                    >
+                      מחירים
+                    </a>
+                  </NavigationMenuLink>
+                </NavigationMenuItem>
+              </NavigationMenuList>
+            </NavigationMenu>
+
+            {/* CTA Buttons */}
+            <div className="flex items-center gap-3">
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => navigate("/auth")}
+                className="hidden md:flex"
+              >
+                התחבר
+              </Button>
+              <Button 
+                size="sm"
+                onClick={() => navigate("/signup")}
+                className="shadow-lg"
+              >
+                התחל בחינם
+                <Rocket className="mr-2 h-4 w-4" />
+              </Button>
+            </div>
           </div>
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => navigate("/auth")}
-            className="gap-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            התחבר למערכת
-          </Button>
         </div>
       </header>
 
@@ -153,17 +323,13 @@ const Landing = () => {
             
             <div className="space-y-6">
               <h1 className="text-5xl md:text-7xl font-bold leading-tight font-heebo">
-                <span className="block">יצירה, צמיחה והתרחבות</span>
+                <span className="block">פלטפורמת CRM לסוכנויות</span>
+                <span className="block gradient-primary bg-clip-text text-transparent">שרוצות לצמוח</span>
               </h1>
               
-              <p className="text-2xl md:text-3xl font-semibold gradient-primary bg-clip-text text-transparent">
-                AfterLead עוזרת לעסקים לצמוח
-              </p>
-              
               <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-                פלטפורמת CRM מתקדמת שמאפשרת לסוכנויות דיגיטל לנהל מאות לקוחות,
-                <br className="hidden md:block" />
-                לפתוח להם חשבונות ולהפוך את השירות שלהם למקור הכנסה נוסף
+                הנתונים שלך ראויים למשהו יותר טוב מספריידשיטים. AfterLead מאחדת את כל נתוני הלקוחות שלך במקום אחד, עם בינה מלאכותית שעוזרת להבין ולפעול מהר יותר. <br className="hidden md:block" />
+                ובניגוד לתקופת ניסיון, זה 100% חינם ללא תאריך תפוגה.
               </p>
             </div>
             
@@ -322,14 +488,14 @@ const Landing = () => {
       </section>
 
       {/* Features Section */}
-      <section className="py-24">
+      <section id="features" className="py-24">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16 space-y-4">
             <h2 className="text-4xl md:text-5xl font-bold">
-              כל מה שהסוכנות שלך צריכה
+              פיצ'רים מתקדמים למקסימום צמיחה
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              פלטפורמה מקיפה שמכסה את כל צרכי הניהול של סוכנות דיגיטל מודרנית
+              כלים חכמים שעוזרים לך לנהל לקוחות בצורה יעילה יותר ולהגדיל מכירות
             </p>
           </div>
 
@@ -467,6 +633,207 @@ const Landing = () => {
                 צפה בלקוחות שלך צומחים ובהכנסות שלך עולות
               </p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Value Proposition Section */}
+      <section className="py-24 bg-muted/30">
+        <div className="container mx-auto px-4">
+          <div className="max-w-6xl mx-auto">
+            <div className="grid md:grid-cols-2 gap-16 items-center">
+              <div className="space-y-6">
+                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-semibold">
+                  <Sparkles className="h-4 w-4" />
+                  מופעל על ידי בינה מלאכותית
+                </div>
+                <h2 className="text-4xl md:text-5xl font-bold leading-tight">
+                  הצמחת עסק זה קשה.
+                  <span className="block gradient-primary bg-clip-text text-transparent mt-2">
+                    AfterLead הופכת את זה לקל יותר.
+                  </span>
+                </h2>
+                <p className="text-lg text-muted-foreground leading-relaxed">
+                  כלים מנותקים ונתונים מפוזרים מאטים אותך. AfterLead מחברת הכל — וכולם — במקום אחד כדי להפוך את הצמיחה לקלה יותר ממה שחשבת.
+                </p>
+                <p className="text-lg text-muted-foreground leading-relaxed">
+                  כשאתה מוכן ליותר, שדרג כדי לקבל פונקציונליות CRM משופרת שבנויה על מה שכבר יש לך. אין התחלות מחדש, אין כאבי ראש של העברת נתונים.
+                </p>
+                <div className="flex gap-4 pt-4">
+                  <Button size="lg" onClick={() => navigate("/signup")}>
+                    התחל בחינם
+                  </Button>
+                  <Button size="lg" variant="outline">
+                    למד עוד על AfterLead Premium
+                  </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-6">
+                <Card className="p-6 border-2 hover:border-primary/50 transition-all">
+                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                    <Target className="h-6 w-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">ניהול קשרים</h3>
+                  <p className="text-sm text-muted-foreground">
+                    צור קשרים, שמור על עדכניות, תעד פעילויות מכירה, וצפה בהיסטוריית התקשורת - הכל במקום אחד.
+                  </p>
+                </Card>
+                <Card className="p-6 border-2 hover:border-primary/50 transition-all">
+                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                    <TrendingUp className="h-6 w-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">ניהול עסקאות</h3>
+                  <p className="text-sm text-muted-foreground">
+                    אחסן, עקוב, נהל ודווח על העסקאות או "ההזדמנויות" שהצוות שלך עובד עליהן.
+                  </p>
+                </Card>
+                <Card className="p-6 border-2 hover:border-primary/50 transition-all">
+                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                    <CheckSquare className="h-6 w-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">משימות ופעילויות</h3>
+                  <p className="text-sm text-muted-foreground">
+                    עקוב אחר כל המשימות והפעילויות שעוזרות לך לבנות קשרי לקוחות חזקים, ממש בתוך ה-CRM שלך.
+                  </p>
+                </Card>
+                <Card className="p-6 border-2 hover:border-primary/50 transition-all">
+                  <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                    <BarChart3 className="h-6 w-6 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-semibold mb-2">דשבורד דיווחים</h3>
+                  <p className="text-sm text-muted-foreground">
+                    צור מקור אמת יחיד לכל נתוני השיווק, המכירות והשירות שלך, נגיש לכל הצוות שלך.
+                  </p>
+                </Card>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section id="pricing" className="py-24">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16 space-y-4">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-semibold mb-4">
+              <DollarSign className="h-4 w-4" />
+              מחירים שקופים
+            </div>
+            <h2 className="text-4xl md:text-5xl font-bold">
+              תמחור פשוט. מחירים הוגנים.
+            </h2>
+            <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+              התחל בחינם ללא מחויבות. שדרג רק כשאתה מוכן
+            </p>
+          </div>
+
+          <div className="max-w-5xl mx-auto grid md:grid-cols-3 gap-8">
+            {/* Free Plan */}
+            <Card className="border-2 hover:border-primary/50 transition-all">
+              <CardHeader>
+                <CardTitle className="text-2xl">חינם</CardTitle>
+                <div className="text-4xl font-bold mt-4">₪0</div>
+                <p className="text-muted-foreground">לנצח</p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">עד 100 לידים</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">משתמש אחד</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">כל התכונות הבסיסיות</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">תמיכה בעברית</span>
+                  </div>
+                </div>
+                <Button className="w-full" onClick={() => navigate("/signup")}>
+                  התחל בחינם
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Pro Plan */}
+            <Card className="border-2 border-primary relative shadow-2xl scale-105">
+              <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary text-primary-foreground rounded-full text-sm font-semibold">
+                הכי פופולרי
+              </div>
+              <CardHeader>
+                <CardTitle className="text-2xl">מקצועי</CardTitle>
+                <div className="text-4xl font-bold mt-4">₪299</div>
+                <p className="text-muted-foreground">לחודש</p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">לידים ללא הגבלה</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">עד 10 משתמשים</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">כל התכונות המתקדמות</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">אוטומציות חכמות</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">תמיכה מועדפת</span>
+                  </div>
+                </div>
+                <Button className="w-full" onClick={() => navigate("/signup")}>
+                  התחל ניסיון חינם
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Enterprise Plan */}
+            <Card className="border-2 hover:border-primary/50 transition-all">
+              <CardHeader>
+                <CardTitle className="text-2xl">ארגוני</CardTitle>
+                <div className="text-4xl font-bold mt-4">מותאם</div>
+                <p className="text-muted-foreground">לפי צורך</p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">הכל ללא הגבלה</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">מספר משתמשים בהתאמה</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">התאמות אישיות</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">מנהל חשבון ייעודי</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <span className="text-sm">SLA מובטח</span>
+                  </div>
+                </div>
+                <Button variant="outline" className="w-full" onClick={() => navigate("/auth")}>
+                  צור קשר
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </section>
