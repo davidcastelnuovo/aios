@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Check, ChevronsUpDown, Send, FileText, MessageSquare, Settings, Pencil, Trash2 } from "lucide-react";
+import { Check, ChevronsUpDown, Send, FileText, MessageSquare, Settings, Pencil, Trash2, Upload, X, File, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Command,
@@ -78,6 +78,9 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
   const [activeTab, setActiveTab] = useState("details");
   const [editingUpdateId, setEditingUpdateId] = useState<string | null>(null);
   const [editingUpdateContent, setEditingUpdateContent] = useState("");
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
 
@@ -170,20 +173,44 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     },
   });
 
+  const uploadFiles = async (files: File[]): Promise<{ name: string; path: string; type: string; size: number }[]> => {
+    const uploadPromises = files.map(async (file) => {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${userId}/${task.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('task-attachments')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      return {
+        name: file.name,
+        path: fileName,
+        type: file.type,
+        size: file.size,
+      };
+    });
+
+    return Promise.all(uploadPromises);
+  };
+
   const addUpdateMutation = useMutation({
-    mutationFn: async (content: string) => {
+    mutationFn: async ({ content, attachments }: { content: string; attachments: any[] }) => {
       const { error } = await supabase
         .from("task_updates")
         .insert({
           task_id: task.id,
           user_id: userId,
           content,
+          attachments,
         });
       if (error) throw error;
     },
     onSuccess: () => {
       refetchUpdates();
       setNewUpdate("");
+      setUploadedFiles([]);
       toast.success("העדכון נוסף בהצלחה");
     },
     onError: (error: Error) => {
@@ -231,9 +258,88 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     mutation.mutate(values);
   };
 
-  const handleAddUpdate = () => {
-    if (!newUpdate.trim()) return;
-    addUpdateMutation.mutate(newUpdate);
+  const handleAddUpdate = async () => {
+    if (!newUpdate.trim() && uploadedFiles.length === 0) return;
+    
+    setIsUploading(true);
+    try {
+      const attachments = uploadedFiles.length > 0 
+        ? await uploadFiles(uploadedFiles)
+        : [];
+      
+      addUpdateMutation.mutate({
+        content: newUpdate,
+        attachments,
+      });
+    } catch (error: any) {
+      toast.error(`שגיאה בהעלאת קבצים: ${error.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    const validFiles = files.filter(file => {
+      const isValidType = file.type.startsWith('image/') || file.type === 'application/pdf';
+      const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB
+      
+      if (!isValidType) {
+        toast.error(`${file.name}: רק תמונות ו-PDF מותרים`);
+        return false;
+      }
+      if (!isValidSize) {
+        toast.error(`${file.name}: הקובץ גדול מדי (מקסימום 10MB)`);
+        return false;
+      }
+      return true;
+    });
+    
+    setUploadedFiles(prev => [...prev, ...validFiles]);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    const validFiles = files.filter(file => {
+      const isValidType = file.type.startsWith('image/') || file.type === 'application/pdf';
+      const isValidSize = file.size <= 10 * 1024 * 1024;
+      
+      if (!isValidType) {
+        toast.error(`${file.name}: רק תמונות ו-PDF מותרים`);
+        return false;
+      }
+      if (!isValidSize) {
+        toast.error(`${file.name}: הקובץ גדול מדי (מקסימום 10MB)`);
+        return false;
+      }
+      return true;
+    });
+    
+    setUploadedFiles(prev => [...prev, ...validFiles]);
+  };
+
+  const removeFile = (index: number) => {
+    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const getFileUrl = (path: string) => {
+    const { data } = supabase.storage
+      .from('task-attachments')
+      .getPublicUrl(path);
+    return data.publicUrl;
   };
 
   const handleEditUpdate = (updateId: string, currentContent: string) => {
@@ -449,8 +555,8 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                              </div>
                           </div>
                         ) : (
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 space-y-1">
+                           <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 space-y-2">
                               <div className="flex items-center gap-2">
                                 <span className="text-xs font-medium text-muted-foreground">
                                   {update.profiles?.full_name || update.profiles?.email || "משתמש"}
@@ -459,9 +565,31 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                                   {format(new Date(update.created_at), "d בMMMM, HH:mm", { locale: he })}
                                 </span>
                               </div>
-                              <p className="text-sm whitespace-pre-wrap">
-                                {update.content}
-                              </p>
+                              {update.content && (
+                                <p className="text-sm whitespace-pre-wrap">
+                                  {update.content}
+                                </p>
+                              )}
+                              {update.attachments && Array.isArray(update.attachments) && update.attachments.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {update.attachments.map((file: any, idx: number) => (
+                                    <a
+                                      key={idx}
+                                      href={getFileUrl(file.path)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md hover:bg-muted/80 transition-colors text-sm"
+                                    >
+                                      {file.type?.startsWith('image/') ? (
+                                        <ImageIcon className="h-4 w-4" />
+                                      ) : (
+                                        <File className="h-4 w-4" />
+                                      )}
+                                      <span className="truncate max-w-[150px]">{file.name}</span>
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                             {update.user_id === userId && (
                               <div className="flex gap-1">
@@ -497,32 +625,94 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                   </div>
 
                    {/* Add New Update */}
-                   <div className="flex gap-2 pt-4 border-t" dir="rtl">
-                     <Button
-                       type="button"
-                       size="icon"
-                       onClick={handleAddUpdate}
-                       disabled={!newUpdate.trim() || addUpdateMutation.isPending}
-                       className="self-end"
+                   <div className="space-y-3 pt-4 border-t">
+                     {/* File Upload Area */}
+                     <div
+                       className={cn(
+                         "border-2 border-dashed rounded-lg p-4 transition-colors",
+                         isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25",
+                         "hover:border-primary/50"
+                       )}
+                       onDragOver={handleDragOver}
+                       onDragLeave={handleDragLeave}
+                       onDrop={handleDrop}
                      >
-                       <Send className="h-4 w-4" />
-                     </Button>
-                     <Textarea
-                       value={newUpdate}
-                       onChange={(e) => setNewUpdate(e.target.value)}
-                       placeholder="הוסף עדכון חדש..."
-                       rows={3}
-                       className="flex-1"
-                       onKeyDown={(e) => {
-                         if (e.key === "Enter" && e.ctrlKey) {
-                           handleAddUpdate();
-                         }
-                       }}
-                     />
+                       <div className="flex flex-col items-center gap-2 text-center">
+                         <Upload className="h-8 w-8 text-muted-foreground" />
+                         <p className="text-sm text-muted-foreground">
+                           גרור קבצים לכאן או
+                           <label className="text-primary cursor-pointer hover:underline mr-1">
+                             בחר קבצים
+                             <input
+                               type="file"
+                               className="hidden"
+                               multiple
+                               accept="image/*,.pdf"
+                               onChange={handleFileSelect}
+                             />
+                           </label>
+                         </p>
+                         <p className="text-xs text-muted-foreground">
+                           תמונות או PDF עד 10MB
+                         </p>
+                       </div>
+                     </div>
+
+                     {/* Uploaded Files Preview */}
+                     {uploadedFiles.length > 0 && (
+                       <div className="flex flex-wrap gap-2">
+                         {uploadedFiles.map((file, index) => (
+                           <div
+                             key={index}
+                             className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md text-sm"
+                           >
+                             {file.type.startsWith('image/') ? (
+                               <ImageIcon className="h-4 w-4" />
+                             ) : (
+                               <File className="h-4 w-4" />
+                             )}
+                             <span className="truncate max-w-[150px]">{file.name}</span>
+                             <Button
+                               type="button"
+                               variant="ghost"
+                               size="icon"
+                               className="h-5 w-5"
+                               onClick={() => removeFile(index)}
+                             >
+                               <X className="h-3 w-3" />
+                             </Button>
+                           </div>
+                         ))}
+                       </div>
+                     )}
+
+                     <div className="flex gap-2" dir="rtl">
+                       <Button
+                         type="button"
+                         size="icon"
+                         onClick={handleAddUpdate}
+                         disabled={(!newUpdate.trim() && uploadedFiles.length === 0) || addUpdateMutation.isPending || isUploading}
+                         className="self-end"
+                       >
+                         <Send className="h-4 w-4" />
+                       </Button>
+                       <Textarea
+                         value={newUpdate}
+                         onChange={(e) => setNewUpdate(e.target.value)}
+                         placeholder="הוסף עדכון חדש..."
+                         rows={3}
+                         className="flex-1"
+                         onKeyDown={(e) => {
+                           if (e.key === "Enter" && e.ctrlKey) {
+                             handleAddUpdate();
+                           }
+                         }}
+                       />
+                     </div>
+                     <p className="text-xs text-muted-foreground text-right">
+                       לחץ Ctrl+Enter לשליחה מהירה
+                     </p>
                    </div>
-                   <p className="text-xs text-muted-foreground text-right">
-                     לחץ Ctrl+Enter לשליחה מהירה
-                   </p>
                 </div>
               </TabsContent>
 
