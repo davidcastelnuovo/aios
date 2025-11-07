@@ -34,6 +34,8 @@ import Automations from "./pages/Automations";
 import Products from "./pages/Products";
 import AccountingIntegrations from "./pages/AccountingIntegrations";
 import AISupport from "./pages/AISupport";
+import MenuManagement from "./pages/MenuManagement";
+import FieldsManagement from "./pages/FieldsManagement";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -74,6 +76,8 @@ const App = () => (
             <Route path="/branding" element={<ProtectedRoute requiredPermission="branding"><AppLayout><Branding /></AppLayout></ProtectedRoute>} />
             <Route path="/accounting-integrations" element={<ProtectedRoute requiredPermission="accounting"><AppLayout><AccountingIntegrations /></AppLayout></ProtectedRoute>} />
             <Route path="/ai-support" element={<ProtectedRoute requiredPermission="ai_support"><AppLayout><AISupport /></AppLayout></ProtectedRoute>} />
+            <Route path="/menu-management" element={<ProtectedRoute requiredPermission="menu_management"><AppLayout><MenuManagement /></AppLayout></ProtectedRoute>} />
+            <Route path="/fields-management" element={<ProtectedRoute requiredPermission="fields_management"><AppLayout><FieldsManagement /></AppLayout></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
             </Routes>
             </AgencyProvider>

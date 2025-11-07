@@ -25,7 +25,9 @@ export type ModulePermission =
   | "tenants" // Tenant management (admin only)
   | "branding" // System branding and customization
   | "accounting" // Accounting integrations (admin only)
-  | "ai_support"; // AI Support chatbot
+  | "ai_support" // AI Support chatbot
+  | "menu_management" // Menu customization (owner only)
+  | "fields_management"; // Custom fields management (owner only)
 
 export function useUserPermissions() {
   const { user } = useCurrentUser();
@@ -105,10 +107,12 @@ export function useUserPermissions() {
       "lead_integrations",
       "automations",
       "tenants",
+      "menu_management",
+      "fields_management",
     ];
 
-    // Owners always see Tenants in the UI
-    if (module === "tenants" && isOwner) return true;
+    // Owners always see Tenants, Menu Management, and Fields Management in the UI
+    if ((module === "tenants" || module === "menu_management" || module === "fields_management") && isOwner) return true;
 
     if (restrictedModules.includes(module)) {
       return permissions?.[module] === true;

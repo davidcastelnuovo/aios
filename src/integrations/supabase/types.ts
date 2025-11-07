@@ -646,6 +646,51 @@ export type Database = {
           },
         ]
       }
+      custom_fields: {
+        Row: {
+          created_at: string
+          entity_type: string
+          field_key: string
+          field_label: string
+          field_type: string
+          id: string
+          is_required: boolean
+          is_visible: boolean
+          options: Json | null
+          sort_order: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          entity_type: string
+          field_key: string
+          field_label: string
+          field_type: string
+          id?: string
+          is_required?: boolean
+          is_visible?: boolean
+          options?: Json | null
+          sort_order?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          entity_type?: string
+          field_key?: string
+          field_label?: string
+          field_type?: string
+          id?: string
+          is_required?: boolean
+          is_visible?: boolean
+          options?: Json | null
+          sort_order?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       finance: {
         Row: {
           agency_id: string
@@ -1012,6 +1057,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      menu_items: {
+        Row: {
+          created_at: string
+          custom_label: string | null
+          icon: string | null
+          id: string
+          is_visible: boolean
+          menu_key: string
+          original_label: string
+          route: string
+          sort_order: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          custom_label?: string | null
+          icon?: string | null
+          id?: string
+          is_visible?: boolean
+          menu_key: string
+          original_label: string
+          route: string
+          sort_order?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          custom_label?: string | null
+          icon?: string | null
+          id?: string
+          is_visible?: boolean
+          menu_key?: string
+          original_label?: string
+          route?: string
+          sort_order?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       products: {
         Row: {
@@ -1764,6 +1851,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      initialize_tenant_menu_items: {
+        Args: { _tenant_id: string }
+        Returns: undefined
       }
       is_seo_staff: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
