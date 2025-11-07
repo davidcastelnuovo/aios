@@ -11,7 +11,14 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-const systemPrompt = `אתה עוזר AI של מערכת ניהול קמפיינים דיגיטליים. המערכת מנהלת סוכנויות, לקוחות, קמפיינרים, משימות ולידים.
+function buildSystemPrompt(userName: string, userEmail: string, campaignerName?: string, campaignerId?: string) {
+  return `אתה עוזר AI אישי של מערכת ניהול קמפיינים דיגיטליים.
+
+👤 **אתה מדבר עם:**
+- **שם:** ${userName}
+- **אימייל:** ${userEmail}
+${campaignerName ? `- **תפקיד:** קמפיינר - ${campaignerName}` : ''}
+${campaignerId ? `- **מזהה קמפיינר:** ${campaignerId}` : ''}
 
 📋 **מבנה המערכת:**
 - **agencies** (סוכנויות) - חברות שמנהלות קמפיינים
@@ -19,33 +26,30 @@ const systemPrompt = `אתה עוזר AI של מערכת ניהול קמפיינ
 - **tasks** (משימות) - משימות שקשורות ללקוחות/סוכנויות
 - **campaigners** (קמפיינרים) - עובדים שמבצעים את העבודה
 - **leads** (לידים) - לקוחות פוטנציאליים
-- **sales_people** (אנשי מכירות) - אחראים על לידים ומכירות
-
-👥 **תפקידים במערכת:**
-- **Owner** - בעלים עם גישה מלאה לכל המערכת
-- **Team Manager** - מנהל צוות שמנהל סוכנויות ספציפיות
-- **Campaigner** - קמפיינר שעובד על לקוחות מסוימים
-- **Sales Person** - אחראי מכירות שמנהל לידים
-- **SEO** - מומחה קידום אתרים
 
 🔧 **פעולות שאתה יכול לבצע:**
-1. **יצירת משימה חדשה** - צריך: כותרת, סוכנות, קמפיינר, לקוח (אופציונלי)
-2. **עדכון סטטוס משימה** - שינוי סטטוס: open, in_progress, completed, cancelled
-3. **חיפוש ישויות** - למצוא סוכנויות, לקוחות או קמפיינרים לפי שם
-4. **הצגת משימות** - קבלת רשימת משימות לפי קריטריונים
-5. **מידע על לקוח** - קבלת פרטים מלאים על לקוח
+1. **הצגת המשימות שלי** - רשימת כל המשימות הפתוחות של ${userName}
+2. **יצירת משימה חדשה** - פתיחת משימה חדשה במערכת
+3. **עדכון סטטוס משימה** - שינוי סטטוס משימה קיימת
+4. **חיפוש ישויות** - מציאת סוכנויות, לקוחות או קמפיינרים
+5. **מידע על לקוח** - פרטים מלאים על לקוח ספציפי
+6. **סיכום יומי** - סיכום של כל המשימות והפעילות
 
-💬 **כללי תקשורת:**
-- דבר בעברית בצורה ידידותית ומקצועית
-- שאל שאלות מבהירות כשלא ברור (איזו סוכנות? איזה קמפיינר?)
+💬 **הנחיות תקשורת:**
+- דבר בעברית בצורה חברית, ישירה ומקצועית
+- התייחס למשתמש בשמו (${userName})
+${campaignerName ? `- כשאתה מדבר על משימות, זכור שאתה מדבר עם ${campaignerName} הקמפיינר` : ''}
+- היה פרו-אקטיבי - הצע דברים שיכולים לעזור למשתמש
+- אם המשתמש שואל "מה יש לי?" או "מה פתוח?" - הצג את המשימות שלו
+- סדר משימות לפי עדיפות וחשיבות
 - תמיד הסבר מה עשית אחרי ביצוע פעולה
-- אם יש מספר אפשרויות, הצג אותן למשתמש לבחירה
-- אם משהו לא ניתן לביצוע, הסבר למה ומה אפשר לעשות במקום
+- אם משהו לא ברור, שאל במקום לנחש
 
 ⚠️ **חשוב:**
-- תמיד בדוק שיש לך את כל הפרטים הנדרשים לפני ביצוע פעולה
-- אם משתמש מבקש משהו שדורש מידע נוסף, שאל אותו
-- הצג תוצאות בצורה ברורה ומסודרת`;
+- היה תמיד מועיל ומדויק
+- תעדף משימות דחופות ובעדיפות גבוהה
+- הצג מידע בצורה ברורה עם אייקונים ומבנה נקי`;
+}
 
 interface ToolCall {
   name: string;
@@ -127,14 +131,28 @@ async function executeTool(
       }
 
       case 'list_tasks': {
-        const { agency_id, client_id, status, limit = 10 } = toolCall.args;
+        const { agency_id, client_id, status, limit = 10, my_tasks = false } = toolCall.args;
 
         let query = supabase
           .from('tasks')
           .select('*, clients(name), agencies(name), campaigners(full_name)')
           .eq('tenant_id', tenantId)
+          .order('priority', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(limit);
+
+        if (my_tasks) {
+          // Get tasks for the current user's campaigner
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('campaigner_id')
+            .eq('id', userId)
+            .single();
+          
+          if (profileData?.campaigner_id) {
+            query = query.eq('campaigner_id', profileData.campaigner_id);
+          }
+        }
 
         if (agency_id) query = query.eq('agency_id', agency_id);
         if (client_id) query = query.eq('client_id', client_id);
@@ -311,6 +329,32 @@ serve(async (req) => {
       tenantId = firstTenant?.id;
     }
 
+    // Get user profile and campaigner info
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('full_name, email, campaigner_id')
+      .eq('id', user.id)
+      .single();
+
+    let campaignerName: string | null = null;
+    let campaignerId: string | null = null;
+
+    if (profileData?.campaigner_id) {
+      const { data: campaignerData } = await supabase
+        .from('campaigners')
+        .select('full_name, id')
+        .eq('id', profileData.campaigner_id)
+        .single();
+      
+      if (campaignerData) {
+        campaignerName = campaignerData.full_name;
+        campaignerId = campaignerData.id;
+      }
+    }
+
+    const userName = profileData?.full_name || user.email?.split('@')[0] || 'משתמש';
+    const userEmail = profileData?.email || user.email || '';
+
     const { message, conversation_id } = await req.json();
 
     // Load conversation history if exists
@@ -353,7 +397,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: 'gpt-4o',
         messages: [
-          { role: 'system', content: systemPrompt },
+          { role: 'system', content: buildSystemPrompt(userName, userEmail, campaignerName || undefined, campaignerId || undefined) },
           ...aiMessages,
         ],
         tools: [
@@ -400,10 +444,14 @@ serve(async (req) => {
             type: 'function',
             function: {
               name: 'list_tasks',
-              description: 'קבלת רשימת משימות לפי קריטריונים',
+              description: 'קבלת רשימת משימות. אם המשתמש שואל "מה יש לי?" או "המשימות שלי" - השתמש ב-my_tasks=true',
               parameters: {
                 type: 'object',
                 properties: {
+                  my_tasks: { 
+                    type: 'boolean', 
+                    description: 'האם להציג רק את המשימות של המשתמש הנוכחי (true) או כל המשימות (false). ברירת מחדל: false'
+                  },
                   agency_id: { type: 'string', description: 'סינון לפי סוכנות (UUID, אופציונלי)' },
                   client_id: { type: 'string', description: 'סינון לפי לקוח (UUID, אופציונלי)' },
                   status: { 
@@ -540,7 +588,7 @@ serve(async (req) => {
                           body: JSON.stringify({
                             model: 'gpt-4o',
                             messages: [
-                              { role: 'system', content: systemPrompt },
+                              { role: 'system', content: buildSystemPrompt(userName, userEmail, campaignerName || undefined, campaignerId || undefined) },
                               ...aiMessages,
                               { role: 'assistant', content: null, tool_calls: [{ id: 'call_1', type: 'function', function: { name: toolName, arguments: JSON.stringify(toolArgs) } }] },
                               { role: 'tool', tool_call_id: 'call_1', content: JSON.stringify(toolResult.result) },
