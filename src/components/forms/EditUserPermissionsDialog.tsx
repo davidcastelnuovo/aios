@@ -38,6 +38,7 @@ const MODULES: ModuleConfig[] = [
   { id: "finance", label: "כספים", description: "ניהול הכנסות והוצאות" },
   { id: "reports", label: "דוחות", description: "דוחות וניתוחים" },
   { id: "users", label: "ניהול משתמשים", description: "הוספה ועריכת משתמשים" },
+  { id: "accounting", label: "הנהלת חשבונות", description: "אינטגרציות הנהלת חשבונות" },
 ];
 
 const SALES_MODULES: ModuleConfig[] = [

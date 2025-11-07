@@ -23,7 +23,8 @@ export type ModulePermission =
   | "finance_view" // Special permission for viewing financial data
   | "automations" // Automations management (admin only)
   | "tenants" // Tenant management (admin only)
-  | "branding"; // System branding and customization
+  | "branding" // System branding and customization
+  | "accounting"; // Accounting integrations (admin only)
 
 export function useUserPermissions() {
   const { user } = useCurrentUser();

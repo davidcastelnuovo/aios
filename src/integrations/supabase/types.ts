@@ -1393,6 +1393,48 @@ export type Database = {
           },
         ]
       }
+      tenant_integrations: {
+        Row: {
+          api_key: string | null
+          auto_sync_enabled: boolean
+          company_id: string | null
+          created_at: string
+          id: string
+          integration_type: string
+          is_active: boolean
+          last_sync_at: string | null
+          settings: Json | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          api_key?: string | null
+          auto_sync_enabled?: boolean
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          integration_type?: string
+          is_active?: boolean
+          last_sync_at?: string | null
+          settings?: Json | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          api_key?: string | null
+          auto_sync_enabled?: boolean
+          company_id?: string | null
+          created_at?: string
+          id?: string
+          integration_type?: string
+          is_active?: boolean
+          last_sync_at?: string | null
+          settings?: Json | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tenant_settings: {
         Row: {
           created_at: string

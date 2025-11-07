@@ -67,6 +67,7 @@ const managementMenuItems = [
   { title: "אוטומציות", url: "/automations", icon: Zap, module: "automations" as const },
   { title: "ניהול ארגונים", url: "/tenants", icon: Building, module: "tenants" as const },
   { title: "התאמת מערכת", url: "/branding", icon: Palette, module: "branding" as const },
+  { title: "הנהלת חשבונות", url: "/accounting-integrations", icon: Building, module: "accounting" as const },
 ];
 
 const salesMenuItems = [
