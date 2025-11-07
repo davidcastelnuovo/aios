@@ -573,20 +573,32 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                               {update.attachments && Array.isArray(update.attachments) && update.attachments.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mt-2">
                                   {update.attachments.map((file: any, idx: number) => (
-                                    <a
-                                      key={idx}
-                                      href={getFileUrl(file.path)}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md hover:bg-muted/80 transition-colors text-sm"
-                                    >
-                                      {file.type?.startsWith('image/') ? (
-                                        <ImageIcon className="h-4 w-4" />
-                                      ) : (
+                                    file.type?.startsWith('image/') ? (
+                                      <a
+                                        key={idx}
+                                        href={getFileUrl(file.path)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="block rounded-md overflow-hidden border border-border hover:opacity-80 transition-opacity"
+                                      >
+                                        <img 
+                                          src={getFileUrl(file.path)} 
+                                          alt={file.name}
+                                          className="h-24 w-auto object-cover"
+                                        />
+                                      </a>
+                                    ) : (
+                                      <a
+                                        key={idx}
+                                        href={getFileUrl(file.path)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md hover:bg-muted/80 transition-colors text-sm"
+                                      >
                                         <File className="h-4 w-4" />
-                                      )}
-                                      <span className="truncate max-w-[150px]">{file.name}</span>
-                                    </a>
+                                        <span className="truncate max-w-[150px]">{file.name}</span>
+                                      </a>
+                                    )
                                   ))}
                                 </div>
                               )}
