@@ -18,23 +18,23 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 209 59% 10%;
 
-    /* Jade #33D3A5 - Primary accent color */
-    --primary: 162 61% 52%;
+    /* Turquoise Green - Primary accent color */
+    --primary: 167 70% 55%;
     --primary-foreground: 0 0% 100%;
     
-    /* Mouse #EFEFEF - Secondary background */
+    /* Light background */
     --secondary: 0 0% 94%;
     --secondary-foreground: 209 59% 10%;
 
     --muted: 0 0% 94%;
     --muted-foreground: 209 19% 40%;
 
-    /* Toxic Green #08F467 - Accent color */
-    --accent: 142 94% 49%;
+    /* Light turquoise - Accent color */
+    --accent: 175 65% 60%;
     --accent-foreground: 209 59% 10%;
 
-    /* Emerald Green #E3FAE0 - Success color */
-    --success: 113 71% 93%;
+    /* Success color */
+    --success: 167 70% 93%;
     --success-foreground: 209 59% 10%;
 
     --destructive: 0 84% 60%;
@@ -42,31 +42,31 @@ All colors MUST be HSL.
 
     --border: 0 0% 89%;
     --input: 0 0% 89%;
-    --ring: 162 61% 52%;
+    --ring: 167 70% 55%;
 
     --radius: 0.75rem;
     
-    /* Primary glow - lighter version of primary */
-    --primary-glow: 162 61% 62%;
+    /* Primary glow - lighter turquoise */
+    --primary-glow: 175 65% 70%;
     
-    /* Deep Blue to Jade gradient */
-    --gradient-primary: linear-gradient(135deg, hsl(209, 59%, 10%), hsl(162, 61%, 52%));
-    /* Jade to Toxic Green gradient */
-    --gradient-success: linear-gradient(135deg, hsl(162, 61%, 52%), hsl(142, 94%, 49%));
+    /* Turquoise Green gradient */
+    --gradient-primary: linear-gradient(135deg, hsl(167, 70%, 55%), hsl(195, 70%, 60%));
+    /* Success gradient */
+    --gradient-success: linear-gradient(135deg, hsl(167, 70%, 55%), hsl(175, 65%, 60%));
     /* Subtle gradient for backgrounds */
-    --gradient-subtle: linear-gradient(180deg, hsl(162, 61%, 97%), hsl(0, 0%, 100%));
+    --gradient-subtle: linear-gradient(180deg, hsl(167, 70%, 97%), hsl(0, 0%, 100%));
     --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
-    /* Deep Blue sidebar */
+    /* Turquoise sidebar */
     --sidebar-background: 209 59% 10%;
     --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 162 61% 52%;
+    --sidebar-primary: 167 70% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 209 59% 15%;
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 209 59% 15%;
-    --sidebar-ring: 162 61% 52%;
+    --sidebar-ring: 167 70% 55%;
   }
 
   .dark {
@@ -80,9 +80,9 @@ All colors MUST be HSL.
     --popover: 209 59% 13%;
     --popover-foreground: 0 0% 100%;
 
-    /* Jade #33D3A5 - Primary accent in dark mode */
-    --primary: 162 61% 52%;
-    --primary-foreground: 209 59% 10%;
+    /* Turquoise Green - Primary accent in dark mode */
+    --primary: 167 70% 55%;
+    --primary-foreground: 0 0% 100%;
     
     --secondary: 209 59% 15%;
     --secondary-foreground: 0 0% 100%;
@@ -90,12 +90,12 @@ All colors MUST be HSL.
     --muted: 209 59% 15%;
     --muted-foreground: 0 0% 70%;
 
-    /* Toxic Green #08F467 - Accent in dark mode */
-    --accent: 142 94% 49%;
-    --accent-foreground: 209 59% 10%;
+    /* Light turquoise - Accent in dark mode */
+    --accent: 175 65% 60%;
+    --accent-foreground: 0 0% 100%;
 
-    /* Emerald Green - Success in dark mode */
-    --success: 113 71% 93%;
+    /* Success in dark mode */
+    --success: 167 70% 93%;
     --success-foreground: 209 59% 10%;
 
     --destructive: 0 63% 31%;
@@ -103,24 +103,24 @@ All colors MUST be HSL.
 
     --border: 209 59% 18%;
     --input: 209 59% 18%;
-    --ring: 162 61% 52%;
+    --ring: 167 70% 55%;
 
-    /* Deep Blue to Jade gradient */
-    --gradient-primary: linear-gradient(135deg, hsl(209, 59%, 10%), hsl(162, 61%, 52%));
-    /* Jade to Toxic Green gradient */
-    --gradient-success: linear-gradient(135deg, hsl(162, 61%, 52%), hsl(142, 94%, 49%));
+    /* Turquoise Green gradient */
+    --gradient-primary: linear-gradient(135deg, hsl(167, 70%, 55%), hsl(195, 70%, 60%));
+    /* Success gradient */
+    --gradient-success: linear-gradient(135deg, hsl(167, 70%, 55%), hsl(175, 65%, 60%));
     --shadow-card: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
     --shadow-lg: 0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3);
     
-    /* Deep Blue sidebar in dark mode */
+    /* Turquoise sidebar in dark mode */
     --sidebar-background: 209 59% 8%;
     --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 162 61% 52%;
-    --sidebar-primary-foreground: 209 59% 10%;
+    --sidebar-primary: 167 70% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 209 59% 13%;
     --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 209 59% 15%;
-    --sidebar-ring: 162 61% 52%;
+    --sidebar-ring: 167 70% 55%;
   }
 }
 
