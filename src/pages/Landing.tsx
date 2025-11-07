@@ -766,7 +766,7 @@ const Landing = () => {
                 הכי פופולרי
               </div>
               <CardHeader>
-                <CardTitle className="text-2xl">מקצועי</CardTitle>
+                <CardTitle className="text-2xl">סוכנות</CardTitle>
                 <div className="text-4xl font-bold mt-4">₪299</div>
                 <p className="text-muted-foreground">לחודש</p>
               </CardHeader>
