@@ -33,6 +33,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import logoM from "@/assets/logo.png";
+import heroCards from "@/assets/hero-cards.png";
 import mobileLeads from "@/assets/mobile-leads.jpg";
 import mobilePipeline from "@/assets/mobile-pipeline.jpg";
 import mobileFinance from "@/assets/mobile-finance.jpg";
@@ -309,72 +310,63 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden py-24 md:py-40 bg-gradient-to-b from-background to-muted/20">
+      <section className="relative overflow-hidden py-16 md:py-24 bg-gradient-to-b from-background to-muted/20">
         <div className="absolute inset-0">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(168,85,247,0.1),transparent_50%)]" />
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_60%,rgba(59,130,246,0.1),transparent_50%)]" />
         </div>
         
         <div className="container mx-auto px-4 relative">
-          <div className="max-w-5xl mx-auto text-center space-y-10">
-            <div className="mb-8">
-              <span className="text-4xl md:text-5xl font-bold font-heebo">AfterLead</span>
-            </div>
-            
-            <div className="space-y-6">
-              <h1 className="text-5xl md:text-7xl font-bold leading-tight font-heebo">
-                <span className="block">פלטפורמת CRM לסוכנויות</span>
-                <span className="block gradient-primary bg-clip-text text-transparent">שרוצות לצמוח</span>
-              </h1>
-              
-              <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-                הנתונים שלך ראויים למשהו יותר טוב מספריידשיטים. AfterLead מאחדת את כל נתוני הלקוחות שלך במקום אחד, עם בינה מלאכותית שעוזרת להבין ולפעול מהר יותר. <br className="hidden md:block" />
-                ובניגוד לתקופת ניסיון, זה 100% חינם ללא תאריך תפוגה.
+          {/* Top Section - Title */}
+          <div className="text-center mb-12 md:mb-16">
+            <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight mb-4 md:mb-6">
+              הפלטפורמה של AfterLead
+            </h1>
+            <p className="text-lg md:text-xl text-muted-foreground max-w-4xl mx-auto">
+              נתונים וכלים מחוברים שמקלים על הכרת הלקוחות, הפעולה והחיבור של הכל בעסק שלך
+            </p>
+          </div>
+
+          {/* Main Content - Two Columns */}
+          <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+            {/* Left Side - Text Content */}
+            <div className="space-y-6 order-2 lg:order-1">
+              <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold leading-tight">
+                CRM שבאמת
+                <br />
+                <span className="gradient-primary bg-clip-text text-transparent">חכם</span>
+              </h2>
+              <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">
+                AfterLead CRM היא המקור היחיד של אמת שמחבר את כל נתוני העסק שלך. עם בינה מלאכותית מובנית שעוזרת לך לנהל לקוחות, לידים ומכירות בצורה החכמה ביותר.
               </p>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-4 justify-center pt-6">
-              <Button 
-                size="lg" 
-                className="text-lg px-10 py-6 shadow-lg hover:shadow-xl transition-all"
-                onClick={() => navigate("/signup")}
-              >
-                התחל בחינם עכשיו
-                <Rocket className="mr-2 h-5 w-5" />
-              </Button>
-              <Button 
-                size="lg" 
-                variant="outline"
-                className="text-lg px-10 py-6 border-2"
-                onClick={() => navigate("/auth")}
-              >
-                התחבר למערכת
-                <ArrowLeft className="mr-2 h-5 w-5" />
-              </Button>
-            </div>
-
-            {/* Growth Chart */}
-            <div className="flex items-end justify-center gap-3 h-32 pt-12">
-              <div className="w-16 bg-primary/40 rounded-t-xl" style={{height: '40%'}} />
-              <div className="w-16 bg-primary/60 rounded-t-xl" style={{height: '60%'}} />
-              <div className="w-16 bg-primary/80 rounded-t-xl" style={{height: '80%'}} />
-              <div className="w-16 bg-primary rounded-t-xl relative overflow-hidden" style={{height: '100%'}}>
-                <div className="absolute inset-0 bg-gradient-to-t from-primary to-accent animate-pulse" />
+              <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                <Button 
+                  size="lg" 
+                  className="text-lg px-8 py-6 shadow-lg hover:shadow-xl transition-all"
+                  onClick={() => navigate("/signup")}
+                >
+                  התחל בחינם עכשיו
+                  <Rocket className="mr-2 h-5 w-5" />
+                </Button>
+                <Button 
+                  size="lg" 
+                  variant="outline"
+                  className="text-lg px-8 py-6 border-2"
+                  onClick={() => navigate("/auth")}
+                >
+                  ראה את המערכת בפעולה
+                </Button>
               </div>
             </div>
 
-            <div className="flex items-center justify-center gap-8 pt-4 text-sm text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                <span>ללא כרטיס אשראי</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                <span>התקנה ב-5 דקות</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                <span>תמיכה בעברית</span>
+            {/* Right Side - Image */}
+            <div className="relative order-1 lg:order-2">
+              <div className="relative w-full aspect-video">
+                <img 
+                  src={heroCards} 
+                  alt="AfterLead Platform Cards" 
+                  className="w-full h-full object-contain drop-shadow-2xl"
+                />
               </div>
             </div>
           </div>
