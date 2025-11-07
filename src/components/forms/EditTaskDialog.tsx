@@ -613,21 +613,26 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                 )}
               />
               </TabsContent>
-
-               <div className="flex justify-start gap-2 mt-6 pt-4 border-t">
-                 <Button type="submit" disabled={mutation.isPending}>
-                   {mutation.isPending ? "מעדכן..." : "עדכן משימה"}
-                 </Button>
-                 <Button
-                   type="button"
-                   variant="outline"
-                   onClick={() => onOpenChange(false)}
-                 >
-                   ביטול
-                 </Button>
-               </div>
             </form>
           </Form>
+
+          {/* Buttons outside tabs but visible always */}
+          <div className="flex justify-start gap-2 mt-6 pt-4 border-t">
+            <Button 
+              type="button"
+              onClick={() => form.handleSubmit(onSubmit)()}
+              disabled={mutation.isPending}
+            >
+              {mutation.isPending ? "מעדכן..." : "עדכן משימה"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              ביטול
+            </Button>
+          </div>
         </Tabs>
       </DialogContent>
     </Dialog>
