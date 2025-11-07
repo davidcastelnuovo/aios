@@ -849,9 +849,7 @@ const Landing = () => {
                   מוכן להתחיל את המסע לצמיחה?
                 </h2>
                 <p className="text-xl md:text-2xl text-white/90 max-w-3xl mx-auto leading-relaxed">
-                  הצטרף לסוכנויות דיגיטל שכבר משתמשות ב-AfterLead 
-                  <br className="hidden md:block" />
-                  ותן ללקוחות שלך את השירות שהם מגיעים להם
+                  תן ללקוחות שלך את השירות שמגיע להם
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
