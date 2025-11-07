@@ -259,18 +259,57 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    // Get user's tenant
+    // Get user's tenant - with fallback for super_admin
     const { data: tenantData } = await supabase
       .from('tenant_users')
       .select('tenant_id')
       .eq('user_id', user.id)
       .single();
 
-    if (!tenantData) {
-      throw new Error('User has no tenant');
+    // Check if user is super_admin
+    const { data: superAdminCheck } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'super_admin')
+      .single();
+
+    let tenantId = tenantData?.tenant_id;
+
+    // If no tenant found and not super_admin, try to get first available tenant
+    if (!tenantId && !superAdminCheck) {
+      const { data: firstTenant } = await supabase
+        .from('tenants')
+        .select('id')
+        .limit(1)
+        .single();
+      
+      if (firstTenant) {
+        // Auto-assign user to the first tenant
+        await supabase
+          .from('tenant_users')
+          .insert({
+            user_id: user.id,
+            tenant_id: firstTenant.id,
+            role: 'member'
+          });
+        
+        tenantId = firstTenant.id;
+      } else {
+        throw new Error('אין לך גישה למערכת. אנא צור קשר עם מנהל המערכת.');
+      }
     }
 
-    const tenantId = tenantData.tenant_id;
+    // For super_admin without tenant, use first available tenant
+    if (!tenantId && superAdminCheck) {
+      const { data: firstTenant } = await supabase
+        .from('tenants')
+        .select('id')
+        .limit(1)
+        .single();
+      
+      tenantId = firstTenant?.id;
+    }
 
     const { message, conversation_id } = await req.json();
 
