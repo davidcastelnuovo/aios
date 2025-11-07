@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
-import { Bot, Send, Plus, Loader2, Wrench } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Bot, Send, Plus, Loader2, Wrench, Menu } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface Message {
   role: 'user' | 'assistant' | 'tool_call';
@@ -31,10 +33,12 @@ export default function AISupport() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState("");
+  const [sheetOpen, setSheetOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { userId } = useCurrentUser();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
 
   const { data: conversations = [], isLoading: conversationsLoading } = useQuery({
     queryKey: ['ai-conversations'],
@@ -69,6 +73,7 @@ export default function AISupport() {
     setCurrentConversationId(conversation.id);
     setMessages(conversation.messages || []);
     setStreamingMessage("");
+    setSheetOpen(false);
   };
 
   const startNewConversation = () => {
@@ -76,6 +81,7 @@ export default function AISupport() {
     setMessages([]);
     setStreamingMessage("");
     setInput("");
+    setSheetOpen(false);
   };
 
   const sendMessage = async () => {
@@ -198,109 +204,135 @@ export default function AISupport() {
     }
   };
 
+  // Sidebar content component for reuse
+  const SidebarContent = () => (
+    <>
+      <div className="p-4 border-b border-border">
+        <Button 
+          onClick={startNewConversation}
+          className="w-full"
+          variant="default"
+        >
+          <Plus className="ml-2 h-4 w-4" />
+          שיחה חדשה
+        </Button>
+      </div>
+
+      <ScrollArea className="flex-1">
+        {conversationsLoading ? (
+          <div className="p-4 text-center text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin mx-auto" />
+          </div>
+        ) : conversations.length === 0 ? (
+          <div className="p-4 text-center text-muted-foreground text-sm">
+            אין שיחות קודמות
+          </div>
+        ) : (
+          <div className="p-2 space-y-1">
+            {conversations.map((conv) => (
+              <button
+                key={conv.id}
+                onClick={() => loadConversation(conv)}
+                className={`w-full text-right p-3 rounded-md transition-colors ${
+                  currentConversationId === conv.id
+                    ? 'bg-primary/10 text-primary'
+                    : 'hover:bg-muted'
+                }`}
+              >
+                <div className="font-medium text-sm truncate">
+                  {conv.title || 'שיחה חדשה'}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {new Date(conv.created_at).toLocaleDateString('he-IL')}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </ScrollArea>
+    </>
+  );
+
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-background" dir="rtl">
-      {/* Conversations Sidebar */}
-      <div className="w-64 border-l border-border bg-card flex flex-col">
-        <div className="p-4 border-b border-border">
-          <Button 
-            onClick={startNewConversation}
-            className="w-full"
-            variant="default"
-          >
-            <Plus className="ml-2 h-4 w-4" />
-            שיחה חדשה
-          </Button>
+      {/* Desktop Sidebar */}
+      {!isMobile && (
+        <div className="w-64 border-l border-border bg-card flex flex-col">
+          <SidebarContent />
         </div>
-
-        <ScrollArea className="flex-1">
-          {conversationsLoading ? (
-            <div className="p-4 text-center text-muted-foreground">
-              <Loader2 className="h-6 w-6 animate-spin mx-auto" />
-            </div>
-          ) : conversations.length === 0 ? (
-            <div className="p-4 text-center text-muted-foreground text-sm">
-              אין שיחות קודמות
-            </div>
-          ) : (
-            <div className="p-2 space-y-1">
-              {conversations.map((conv) => (
-                <button
-                  key={conv.id}
-                  onClick={() => loadConversation(conv)}
-                  className={`w-full text-right p-3 rounded-md transition-colors ${
-                    currentConversationId === conv.id
-                      ? 'bg-primary/10 text-primary'
-                      : 'hover:bg-muted'
-                  }`}
-                >
-                  <div className="font-medium text-sm truncate">
-                    {conv.title || 'שיחה חדשה'}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {new Date(conv.created_at).toLocaleDateString('he-IL')}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
-      </div>
+      )}
 
       {/* Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
-        <div className="border-b border-border p-4 bg-card">
+        <div className="border-b border-border p-3 md:p-4 bg-card">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+            {isMobile && (
+              <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-10 w-10">
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-[280px] p-0">
+                  <SheetHeader className="p-4 border-b">
+                    <SheetTitle>שיחות</SheetTitle>
+                  </SheetHeader>
+                  <div className="flex flex-col h-[calc(100vh-80px)]">
+                    <SidebarContent />
+                  </div>
+                </SheetContent>
+              </Sheet>
+            )}
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
               <Bot className="h-6 w-6 text-primary" />
             </div>
-            <div>
-              <h1 className="text-lg font-semibold">עוזר AI תמיכה טכנית</h1>
-              <p className="text-sm text-muted-foreground">
-                אני כאן לעזור לך עם המערכת ולבצע פעולות
+            <div className="min-w-0 flex-1">
+              <h1 className="text-base md:text-lg font-semibold truncate">עוזר AI תמיכה טכנית</h1>
+              <p className="text-xs md:text-sm text-muted-foreground truncate">
+                אני כאן לעזור לך עם המערכת
               </p>
             </div>
           </div>
         </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 p-4">
+        <ScrollArea className="flex-1 p-2 md:p-4">
           {messages.length === 0 && !streamingMessage ? (
-            <div className="h-full flex items-center justify-center">
-              <Card className="p-8 max-w-md text-center">
-                <Bot className="h-12 w-12 mx-auto mb-4 text-primary" />
-                <h2 className="text-xl font-semibold mb-2">ברוכים הבאים!</h2>
-                <p className="text-muted-foreground mb-4">
+            <div className="h-full flex items-center justify-center px-4">
+              <Card className="p-4 md:p-8 max-w-md text-center">
+                <Bot className="h-10 w-10 md:h-12 md:w-12 mx-auto mb-3 md:mb-4 text-primary" />
+                <h2 className="text-lg md:text-xl font-semibold mb-2">ברוכים הבאים!</h2>
+                <p className="text-sm md:text-base text-muted-foreground mb-3 md:mb-4">
                   אני עוזר AI שיכול לעזור לך עם:
                 </p>
-                <ul className="text-right text-sm space-y-2 text-muted-foreground">
+                <ul className="text-right text-xs md:text-sm space-y-2 text-muted-foreground">
                   <li>✅ יצירת משימות חדשות</li>
                   <li>✅ עדכון סטטוס משימות</li>
                   <li>✅ חיפוש לקוחות וסוכנויות</li>
                   <li>✅ הצגת רשימות משימות</li>
                   <li>✅ קבלת מידע על לקוחות</li>
                 </ul>
-                <p className="text-sm text-muted-foreground mt-4">
+                <p className="text-xs md:text-sm text-muted-foreground mt-3 md:mt-4">
                   פשוט שאל אותי או בקש ממני לבצע פעולה!
                 </p>
               </Card>
             </div>
           ) : (
-            <div className="space-y-4 max-w-3xl mx-auto">
+            <div className="space-y-3 md:space-y-4 max-w-3xl mx-auto">
               {messages.map((msg, idx) => (
                 <div key={idx}>
                   {msg.role === 'user' ? (
                     <div className="flex justify-end">
-                      <Card className="p-3 max-w-[80%] bg-primary text-primary-foreground">
-                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      <Card className="p-2 md:p-3 max-w-[85%] md:max-w-[80%] bg-primary text-primary-foreground">
+                        <p className="whitespace-pre-wrap text-sm md:text-base">{msg.content}</p>
                       </Card>
                     </div>
                   ) : msg.role === 'tool_call' ? (
                     <div className="flex justify-start">
-                      <Card className="p-3 max-w-[80%] bg-muted">
-                        <div className="flex items-center gap-2 text-sm">
-                          <Wrench className="h-4 w-4 text-primary animate-pulse" />
+                      <Card className="p-2 md:p-3 max-w-[85%] md:max-w-[80%] bg-muted">
+                        <div className="flex items-center gap-2 text-xs md:text-sm">
+                          <Wrench className="h-3 w-3 md:h-4 md:w-4 text-primary animate-pulse" />
                           <span className="text-muted-foreground">
                             מבצע: <strong>{msg.tool}</strong>
                           </span>
@@ -309,8 +341,8 @@ export default function AISupport() {
                     </div>
                   ) : (
                     <div className="flex justify-start">
-                      <Card className="p-3 max-w-[80%] bg-card border">
-                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      <Card className="p-2 md:p-3 max-w-[85%] md:max-w-[80%] bg-card border">
+                        <p className="whitespace-pre-wrap text-sm md:text-base">{msg.content}</p>
                       </Card>
                     </div>
                   )}
@@ -319,8 +351,8 @@ export default function AISupport() {
 
               {streamingMessage && (
                 <div className="flex justify-start">
-                  <Card className="p-3 max-w-[80%] bg-card border">
-                    <p className="whitespace-pre-wrap">{streamingMessage}</p>
+                  <Card className="p-2 md:p-3 max-w-[85%] md:max-w-[80%] bg-card border">
+                    <p className="whitespace-pre-wrap text-sm md:text-base">{streamingMessage}</p>
                     <Loader2 className="h-3 w-3 animate-spin inline-block mr-1" />
                   </Card>
                 </div>
@@ -332,31 +364,31 @@ export default function AISupport() {
         </ScrollArea>
 
         {/* Input */}
-        <div className="border-t border-border p-4 bg-card">
+        <div className="border-t border-border p-2 md:p-4 bg-card">
           <div className="max-w-3xl mx-auto">
             <div className="flex gap-2">
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyPress}
-                placeholder="שאל משהו או בקש לבצע פעולה... (Enter לשליחה, Shift+Enter לשורה חדשה)"
-                className="min-h-[60px] max-h-[200px] resize-none"
+                placeholder={isMobile ? "שאל משהו..." : "שאל משהו או בקש לבצע פעולה... (Enter לשליחה, Shift+Enter לשורה חדשה)"}
+                className="min-h-[50px] md:min-h-[60px] max-h-[150px] md:max-h-[200px] resize-none text-sm md:text-base"
                 disabled={isStreaming}
               />
               <Button
                 onClick={sendMessage}
                 disabled={!input.trim() || isStreaming}
                 size="icon"
-                className="h-[60px] w-[60px]"
+                className="h-[50px] w-[50px] md:h-[60px] md:w-[60px] flex-shrink-0"
               >
                 {isStreaming ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin" />
                 ) : (
-                  <Send className="h-5 w-5" />
+                  <Send className="h-4 w-4 md:h-5 md:w-5" />
                 )}
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground mt-2 text-center">
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-1 md:mt-2 text-center px-2">
               הבוט יכול לעזור בניהול המערכת אבל עלול לעשות טעויות. תמיד בדוק מידע חשוב.
             </p>
           </div>
