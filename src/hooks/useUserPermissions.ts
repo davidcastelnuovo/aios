@@ -24,7 +24,8 @@ export type ModulePermission =
   | "automations" // Automations management (admin only)
   | "tenants" // Tenant management (admin only)
   | "branding" // System branding and customization
-  | "accounting"; // Accounting integrations (admin only)
+  | "accounting" // Accounting integrations (admin only)
+  | "ai_support"; // AI Support chatbot
 
 export function useUserPermissions() {
   const { user } = useCurrentUser();

@@ -23,6 +23,7 @@ import {
   PanelRightOpen,
   Package,
   Palette,
+  Bot,
 } from "lucide-react";
 import {
   Sidebar,
@@ -68,6 +69,7 @@ const managementMenuItems = [
   { title: "ניהול ארגונים", url: "/tenants", icon: Building, module: "tenants" as const },
   { title: "התאמת מערכת", url: "/branding", icon: Palette, module: "branding" as const },
   { title: "הנהלת חשבונות", url: "/accounting-integrations", icon: Building, module: "accounting" as const },
+  { title: "תמיכה טכנית AI", url: "/ai-support", icon: Bot, module: "ai_support" as const },
 ];
 
 const salesMenuItems = [
