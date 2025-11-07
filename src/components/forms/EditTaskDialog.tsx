@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Check, ChevronsUpDown, Send, FileText, MessageSquare, Settings, Pencil, Trash2, Upload, X, File, Image as ImageIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -65,6 +65,65 @@ const formSchema = z.object({
   status: z.enum(["open", "in_progress", "done"]),
   priority: z.number().min(1).max(10),
 });
+
+// Component to handle async signed URL loading
+function AttachmentPreview({ file }: { file: any }) {
+  const [signedUrl, setSignedUrl] = useState<string>('');
+
+  useEffect(() => {
+    const fetchSignedUrl = async () => {
+      const { data, error } = await supabase.storage
+        .from('task-attachments')
+        .createSignedUrl(file.path, 3600); // 1 hour expiry
+      
+      if (error) {
+        console.error('Error creating signed URL:', error);
+        return;
+      }
+      setSignedUrl(data.signedUrl);
+    };
+
+    fetchSignedUrl();
+  }, [file.path]);
+
+  if (!signedUrl) {
+    return (
+      <div className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md text-sm animate-pulse">
+        <File className="h-4 w-4" />
+        <span>טוען...</span>
+      </div>
+    );
+  }
+
+  if (file.type?.startsWith('image/')) {
+    return (
+      <a
+        href={signedUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block rounded-md overflow-hidden border border-border hover:opacity-80 transition-opacity"
+      >
+        <img 
+          src={signedUrl} 
+          alt={file.name}
+          className="h-24 w-auto object-cover"
+        />
+      </a>
+    );
+  }
+
+  return (
+    <a
+      href={signedUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md hover:bg-muted/80 transition-colors text-sm"
+    >
+      <File className="h-4 w-4" />
+      <span className="truncate max-w-[150px]">{file.name}</span>
+    </a>
+  );
+}
 
 interface EditTaskDialogProps {
   task: any;
@@ -335,11 +394,16 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const getFileUrl = (path: string) => {
-    const { data } = supabase.storage
+  const getFileUrl = async (path: string) => {
+    const { data, error } = await supabase.storage
       .from('task-attachments')
-      .getPublicUrl(path);
-    return data.publicUrl;
+      .createSignedUrl(path, 3600); // 1 hour expiry
+    
+    if (error) {
+      console.error('Error creating signed URL:', error);
+      return '';
+    }
+    return data.signedUrl;
   };
 
   const handleEditUpdate = (updateId: string, currentContent: string) => {
@@ -573,32 +637,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                               {update.attachments && Array.isArray(update.attachments) && update.attachments.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mt-2">
                                   {update.attachments.map((file: any, idx: number) => (
-                                    file.type?.startsWith('image/') ? (
-                                      <a
-                                        key={idx}
-                                        href={getFileUrl(file.path)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="block rounded-md overflow-hidden border border-border hover:opacity-80 transition-opacity"
-                                      >
-                                        <img 
-                                          src={getFileUrl(file.path)} 
-                                          alt={file.name}
-                                          className="h-24 w-auto object-cover"
-                                        />
-                                      </a>
-                                    ) : (
-                                      <a
-                                        key={idx}
-                                        href={getFileUrl(file.path)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md hover:bg-muted/80 transition-colors text-sm"
-                                      >
-                                        <File className="h-4 w-4" />
-                                        <span className="truncate max-w-[150px]">{file.name}</span>
-                                      </a>
-                                    )
+                                    <AttachmentPreview key={idx} file={file} />
                                   ))}
                                 </div>
                               )}
