@@ -33,7 +33,7 @@ import {
   type LucideIcon
 } from "lucide-react";
 import logoM from "@/assets/logo.png";
-import heroCards from "@/assets/hero-cards-transparent.png";
+import heroCards from "@/assets/hero-cards-new.png";
 import mobileLeads from "@/assets/mobile-leads.jpg";
 import mobilePipeline from "@/assets/mobile-pipeline.jpg";
 import mobileFinance from "@/assets/mobile-finance.jpg";
