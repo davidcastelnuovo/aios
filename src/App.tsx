@@ -42,8 +42,8 @@ const App = () => (
       <TooltipProvider delayDuration={0} skipDelayDuration={0}>
         <Toaster />
         <Sonner />
-        <ThemeProvider>
-          <TenantProvider>
+        <TenantProvider>
+          <ThemeProvider>
             <AgencyProvider>
               <Routes>
             <Route path="/landing" element={<Landing />} />
@@ -73,8 +73,8 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
             </Routes>
             </AgencyProvider>
-          </TenantProvider>
-        </ThemeProvider>
+          </ThemeProvider>
+        </TenantProvider>
       </TooltipProvider>
     </BrowserRouter>
   </QueryClientProvider>
