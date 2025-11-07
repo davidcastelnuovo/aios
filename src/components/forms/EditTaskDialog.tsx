@@ -67,7 +67,7 @@ const formSchema = z.object({
 });
 
 // Component to handle async signed URL loading
-function AttachmentPreview({ file }: { file: any }) {
+function AttachmentPreview({ file, onImageClick }: { file: any; onImageClick?: (url: string, name: string) => void }) {
   const [signedUrl, setSignedUrl] = useState<string>('');
 
   useEffect(() => {
@@ -97,18 +97,17 @@ function AttachmentPreview({ file }: { file: any }) {
 
   if (file.type?.startsWith('image/')) {
     return (
-      <a
-        href={signedUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="block rounded-md overflow-hidden border border-border hover:opacity-80 transition-opacity"
+      <button
+        type="button"
+        onClick={() => onImageClick?.(signedUrl, file.name)}
+        className="block rounded-md overflow-hidden border border-border hover:opacity-80 transition-opacity cursor-pointer"
       >
         <img 
           src={signedUrl} 
           alt={file.name}
           className="h-24 w-auto object-cover"
         />
-      </a>
+      </button>
     );
   }
 
@@ -140,6 +139,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
 
@@ -457,11 +457,12 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
-        <DialogHeader>
-          <DialogTitle>עריכת משימה</DialogTitle>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>עריכת משימה</DialogTitle>
+          </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
@@ -660,13 +661,17 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                                   {update.content}
                                 </p>
                               )}
-                              {update.attachments && Array.isArray(update.attachments) && update.attachments.length > 0 && (
-                                <div className="flex flex-wrap gap-2 mt-2">
-                                  {update.attachments.map((file: any, idx: number) => (
-                                    <AttachmentPreview key={idx} file={file} />
-                                  ))}
-                                </div>
-                              )}
+                               {update.attachments && Array.isArray(update.attachments) && update.attachments.length > 0 && (
+                                 <div className="flex flex-wrap gap-2 mt-2">
+                                   {update.attachments.map((file: any, idx: number) => (
+                                     <AttachmentPreview 
+                                       key={idx} 
+                                       file={file}
+                                       onImageClick={(url, name) => setLightboxImage({ url, name })}
+                                     />
+                                   ))}
+                                 </div>
+                               )}
                             </div>
                             {update.user_id === userId && (
                               <div className="flex gap-1">
@@ -904,5 +909,29 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         </Tabs>
       </DialogContent>
     </Dialog>
+
+    {/* Lightbox for images */}
+    <Dialog open={!!lightboxImage} onOpenChange={() => setLightboxImage(null)}>
+      <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 overflow-hidden">
+        <div className="relative w-full h-full flex items-center justify-center bg-black/90">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-2 right-2 z-10 text-white hover:bg-white/20"
+            onClick={() => setLightboxImage(null)}
+          >
+            <X className="h-6 w-6" />
+          </Button>
+          {lightboxImage && (
+            <img
+              src={lightboxImage.url}
+              alt={lightboxImage.name}
+              className="max-w-full max-h-[90vh] object-contain"
+            />
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
