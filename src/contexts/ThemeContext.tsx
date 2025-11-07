@@ -52,7 +52,7 @@ const palettes = {
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const { currentTenantId } = useTenant();
-  const [palette, setPaletteState] = useState<ColorPalette>('default');
+  const [palette, setPaletteState] = useState<ColorPalette>('green-gradient');
   const [logoUrl, setLogoUrlState] = useState<string | null>(null);
 
   // Load tenant branding settings
