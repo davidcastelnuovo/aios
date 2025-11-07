@@ -9,7 +9,7 @@ import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserRole } from "@/hooks/useUserRole";
 import { CalendarIframeSettings } from "@/components/CalendarIframeSettings";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DndContext, DragOverlay, closestCorners, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, useDroppable } from "@dnd-kit/core";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
@@ -482,11 +482,16 @@ export default function Tasks() {
       isDragging,
     } = useSortable({ id: task.id });
 
+    const [priorityValue, setPriorityValue] = useState<number>(task.priority);
+    useEffect(() => {
+      setPriorityValue(task.priority);
+    }, [task.priority]);
+
     const style = {
       transform: CSS.Transform.toString(transform),
       transition,
       opacity: isDragging ? 0.5 : 1,
-    };
+    } as React.CSSProperties;
 
     return (
       <div ref={setNodeRef} style={style}>
@@ -556,20 +561,21 @@ export default function Tasks() {
               onTouchStart={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">{getPriorityText(task.priority)}</span>
-                <span className="text-xs font-medium" style={{ color: getPriorityColor(task.priority) }}>
-                  {task.priority}/10
+                <span className="text-xs text-muted-foreground">{getPriorityText(priorityValue)}</span>
+                <span className="text-xs font-medium" style={{ color: getPriorityColor(priorityValue) }}>
+                  {priorityValue}/10
                 </span>
               </div>
               <div style={{ 
-                ['--slider-color' as any]: getPriorityColor(task.priority)
+                ['--slider-color' as any]: getPriorityColor(priorityValue)
               }}>
                 <Slider
-                  value={[task.priority]}
-                  onValueChange={(value) => {
+                  value={[priorityValue]}
+                  onValueChange={(value) => setPriorityValue(value[0])}
+                  onValueCommit={(value) => {
                     updateTaskPriorityMutation.mutate({ 
                       taskId: task.id, 
-                      priority: value[0] 
+                      priority: value[0]
                     });
                   }}
                   min={1}
@@ -577,7 +583,7 @@ export default function Tasks() {
                   step={1}
                   className="cursor-pointer [&_[role=slider]]:border-[var(--slider-color)] [&_.bg-primary]:bg-[var(--slider-color)]"
                   style={{
-                    ['--slider-color' as any]: getPriorityColor(task.priority)
+                    ['--slider-color' as any]: getPriorityColor(priorityValue)
                   }}
                 />
               </div>
