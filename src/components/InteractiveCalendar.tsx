@@ -162,7 +162,7 @@ export function InteractiveCalendar() {
 
   return (
     <div className="space-y-4">
-      <div style={{ height: 600 }} className="bg-background rounded-lg border p-4">
+      <div className="bg-background rounded-lg border p-2 md:p-4 overflow-hidden" style={{ height: 'calc(100vh - 200px)', minHeight: 500, maxHeight: 800 }}>
         <Calendar
           localizer={localizer}
           events={events}
@@ -170,6 +170,7 @@ export function InteractiveCalendar() {
           endAccessor="end"
           onSelectEvent={handleSelectEvent}
           views={['month', 'week', 'day']}
+          defaultView="week"
           rtl
           messages={{
             next: 'הבא',
