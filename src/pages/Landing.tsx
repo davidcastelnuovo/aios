@@ -320,10 +320,13 @@ const Landing = () => {
           {/* Top Section - Title */}
           <div className="text-center mb-12 md:mb-16">
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold leading-tight mb-4 md:mb-6">
-              הפלטפורמה של AfterLead
+              AfterLead
             </h1>
+            <p className="text-2xl md:text-3xl font-semibold text-primary mb-4">
+              יצירה • צמיחה • התרחבות
+            </p>
             <p className="text-lg md:text-xl text-muted-foreground max-w-4xl mx-auto">
-              נתונים וכלים מחוברים שמקלים על הכרת הלקוחות, הפעולה והחיבור של הכל בעסק שלך
+              מערכת שעוזרת לסוכניות דיגיטל לצמוח
             </p>
           </div>
 
@@ -332,12 +335,12 @@ const Landing = () => {
             {/* Left Side - Text Content */}
             <div className="space-y-6 order-2 lg:order-1">
               <h2 className="text-3xl md:text-5xl lg:text-6xl font-bold leading-tight">
-                CRM <span className="bg-primary text-primary-foreground px-3 py-1 rounded-lg">שבאמת</span>
+                ניהול לקוחות,
                 <br />
-                חכם
+                <span className="bg-primary text-primary-foreground px-3 py-1 rounded-lg">חכם ופשוט</span>
               </h2>
               <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">
-                AfterLead CRM היא המקור היחיד של אמת שמחבר את כל נתוני העסק שלך. עם בינה מלאכותית מובנית שעוזרת לך לנהל לקוחות, לידים ומכירות בצורה החכמה ביותר.
+                פלטפורמה מקיפה לניהול סוכנויות דיגיטל. נהל לקוחות, לידים, משימות וצוותים - הכל במקום אחד.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 pt-4">
                 <Button 
