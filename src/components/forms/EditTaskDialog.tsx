@@ -394,6 +394,32 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          const isValidSize = file.size <= 10 * 1024 * 1024; // 10MB
+          if (!isValidSize) {
+            toast.error(`הקובץ גדול מדי (מקסימום 10MB)`);
+            continue;
+          }
+          files.push(file);
+        }
+      }
+    }
+
+    if (files.length > 0) {
+      setUploadedFiles(prev => [...prev, ...files]);
+      toast.success(`${files.length} תמונות נוספו`);
+    }
+  };
+
   const getFileUrl = async (path: string) => {
     const { data, error } = await supabase.storage
       .from('task-attachments')
@@ -747,18 +773,19 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                        >
                          <Send className="h-4 w-4" />
                        </Button>
-                       <Textarea
-                         value={newUpdate}
-                         onChange={(e) => setNewUpdate(e.target.value)}
-                         placeholder="הוסף עדכון חדש..."
-                         rows={3}
-                         className="flex-1"
-                         onKeyDown={(e) => {
-                           if (e.key === "Enter" && e.ctrlKey) {
-                             handleAddUpdate();
-                           }
-                         }}
-                       />
+                        <Textarea
+                          value={newUpdate}
+                          onChange={(e) => setNewUpdate(e.target.value)}
+                          onPaste={handlePaste}
+                          placeholder="הוסף עדכון חדש..."
+                          rows={3}
+                          className="flex-1"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && e.ctrlKey) {
+                              handleAddUpdate();
+                            }
+                          }}
+                        />
                      </div>
                      <p className="text-xs text-muted-foreground text-right">
                        לחץ Ctrl+Enter לשליחה מהירה
