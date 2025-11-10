@@ -157,7 +157,6 @@ export default function Clients() {
       let query = supabase
         .from("clients")
         .select(selectStr)
-        .eq("tenant_id", tenantId) // ✅ Filter by current tenant
         .order("created_at", { ascending: false });
 
       // Scope by agency: if a specific agency is selected use it, otherwise include
