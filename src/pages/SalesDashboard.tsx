@@ -17,7 +17,7 @@ export default function SalesDashboard() {
       if (!tenantId) return null;
       let query = supabase
         .from("leads")
-        .select("status, estimated_deal_value, monthly_budget, three_month_budget")
+        .select("status, estimated_deal_value, products")
         .eq("tenant_id", tenantId);
 
       if (selectedAgency && selectedAgency !== "all") {
@@ -34,33 +34,72 @@ export default function SalesDashboard() {
         followUp: data.filter(l => l.status === "follow_up").length,
         proposal: data.filter(l => l.status === "proposal_sent").length,
         closed: data.filter(l => l.status === "closed").length,
-        totalValue: data.reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
+        totalValue: data.reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
         closedValue: data
           .filter(l => l.status === "closed")
-          .reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
+          .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
         newValue: data
           .filter(l => l.status === "new")
-          .reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
+          .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
         contactedValue: data
           .filter(l => l.status === "contacted")
-          .reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
+          .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
         followUpValue: data
           .filter(l => l.status === "follow_up")
-          .reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
+          .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
         proposalValue: data
           .filter(l => l.status === "proposal_sent")
-          .reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
-        totalMonthlyBudget: data.reduce((sum, l) => sum + (l.monthly_budget || 0), 0),
-        totalThreeMonthBudget: data.reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
-        closedMonthlyBudget: data
-          .filter(l => l.status === "closed")
-          .reduce((sum, l) => sum + (l.monthly_budget || 0), 0),
-        closedThreeMonthBudget: data
-          .filter(l => l.status === "closed")
-          .reduce((sum, l) => sum + (l.three_month_budget || 0), 0),
+          .reduce((sum, l) => sum + (l.estimated_deal_value || 0), 0),
       };
 
       return stats;
+    },
+    enabled: !!tenantId,
+  });
+
+  const { data: productsStats } = useQuery({
+    queryKey: ["products-stats", tenantId, selectedAgency],
+    queryFn: async () => {
+      if (!tenantId) return null;
+      let query = supabase
+        .from("leads")
+        .select("products, estimated_deal_value, status")
+        .eq("tenant_id", tenantId);
+
+      if (selectedAgency && selectedAgency !== "all") {
+        query = query.eq("agency_id", selectedAgency);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      // Group by products
+      const productMap = new Map<string, { count: number; totalValue: number; closedValue: number; closedCount: number }>();
+      
+      data.forEach((lead) => {
+        if (lead.products) {
+          const products = lead.products.split(',').map((p: string) => p.trim());
+          products.forEach((product: string) => {
+            if (!productMap.has(product)) {
+              productMap.set(product, { count: 0, totalValue: 0, closedValue: 0, closedCount: 0 });
+            }
+            const stats = productMap.get(product)!;
+            stats.count++;
+            stats.totalValue += lead.estimated_deal_value || 0;
+            if (lead.status === "closed") {
+              stats.closedValue += lead.estimated_deal_value || 0;
+              stats.closedCount++;
+            }
+          });
+        }
+      });
+
+      return Array.from(productMap.entries())
+        .map(([product, stats]) => ({
+          product,
+          ...stats,
+        }))
+        .sort((a, b) => b.totalValue - a.totalValue);
     },
     enabled: !!tenantId,
   });
@@ -217,15 +256,15 @@ export default function SalesDashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">שווי עסקאות</CardTitle>
+              <CardTitle className="text-sm font-medium">שווי שירות כולל</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                ₪{leadsStats?.closedValue?.toLocaleString() || 0}
+                ₪{leadsStats?.totalValue?.toLocaleString() || 0}
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                עסקאות שנסגרו
+                סכום כל ההצעות במשפך
               </p>
             </CardContent>
           </Card>
@@ -401,43 +440,61 @@ export default function SalesDashboard() {
           </CardContent>
         </Card>
 
-        {/* הצעות חודשיות */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>סה"כ הצעות חודשיות</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">
-                ₪{leadsStats?.totalMonthlyBudget?.toLocaleString() || 0}
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                כל ההצעות החודשיות במשפך
-              </p>
-            </CardContent>
-          </Card>
+        {/* סטטיסטיקות מוצרים */}
+        <Card>
+          <CardHeader>
+            <CardTitle>סטטיסטיקות לפי מוצרים</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {productsStats && productsStats.length > 0 ? (
+                productsStats.map((product) => (
+                  <div key={product.product} className="border-b pb-3 last:border-0">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <h3 className="font-semibold text-lg">{product.product}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {product.count} הצעות • {product.closedCount} נסגרו
+                        </p>
+                      </div>
+                      <div className="text-left">
+                        <div className="text-lg font-bold text-primary">
+                          ₪{product.totalValue.toLocaleString()}
+                        </div>
+                        <div className="text-sm text-green-600 font-medium">
+                          נסגר: ₪{product.closedValue.toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-2">
+                      <div 
+                        className="bg-primary h-2 rounded-full transition-all"
+                        style={{ width: `${(product.closedValue / product.totalValue) * 100}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      שיעור סגירה: {((product.closedCount / product.count) * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-muted-foreground text-center py-4">
+                  אין נתוני מוצרים זמינים
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
+        {/* סטטיסטיקות שווי שירות */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>הצעות חודשיות שנסגרו</CardTitle>
+              <CardTitle>סה"כ שווי שירות במשפך</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                ₪{leadsStats?.closedMonthlyBudget?.toLocaleString() || 0}
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                הצעות חודשיות שהפכו ללקוחות
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>סה"כ הצעות 3 חודשים</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-600">
-                ₪{leadsStats?.totalThreeMonthBudget?.toLocaleString() || 0}
+              <div className="text-3xl font-bold text-blue-600">
+                ₪{leadsStats?.totalValue?.toLocaleString() || 0}
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 כל ההצעות ל-3 חודשים במשפך
@@ -447,54 +504,15 @@ export default function SalesDashboard() {
 
           <Card>
             <CardHeader>
-              <CardTitle>הצעות 3 חודשים שנסגרו</CardTitle>
+              <CardTitle>שווי שירות שנסגר</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">
-                ₪{leadsStats?.closedThreeMonthBudget?.toLocaleString() || 0}
+              <div className="text-3xl font-bold text-green-600">
+                ₪{leadsStats?.closedValue?.toLocaleString() || 0}
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                הצעות 3 חודשים שהפכו ללקוחות
+                עסקאות שהושלמו בהצלחה
               </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* עסקאות שנסגרו - ממורכז */}
-        <div className="flex justify-center">
-          <Card className="w-full max-w-2xl">
-            <CardHeader>
-              <CardTitle className="text-center">עסקאות שנסגרו</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="text-center pb-4 border-b">
-                  <div className="text-4xl font-bold text-green-600">
-                    ₪{((leadsStats?.closedMonthlyBudget || 0) + (leadsStats?.closedThreeMonthBudget || 0)).toLocaleString()}
-                  </div>
-                  <p className="text-base font-medium text-muted-foreground mt-2">
-                    סה"כ עסקאות שנסגרו
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 divide-x divide-border pt-2">
-                  <div className="text-center pl-6">
-                    <div className="text-2xl font-bold text-green-600">
-                      ₪{leadsStats?.closedMonthlyBudget?.toLocaleString() || 0}
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      הצעות חודשיות שנסגרו
-                    </p>
-                  </div>
-                  <div className="text-center pr-6">
-                    <div className="text-2xl font-bold text-green-600">
-                      ₪{leadsStats?.closedThreeMonthBudget?.toLocaleString() || 0}
-                    </div>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      הצעות 3 חודשים שנסגרו
-                    </p>
-                  </div>
-                </div>
-              </div>
             </CardContent>
           </Card>
         </div>
