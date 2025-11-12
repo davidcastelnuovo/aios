@@ -446,7 +446,6 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-background z-50">
-                        <SelectItem value="">ללא סוכנות</SelectItem>
                         {agencies?.map((agency) => (
                           <SelectItem key={agency.id} value={agency.id}>
                             {agency.name}
