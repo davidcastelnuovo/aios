@@ -105,8 +105,8 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       conditions: automation.conditions ? JSON.stringify(automation.conditions, null, 2) : "",
       status_entity: automation.configuration?.entity || "lead",
       status_value: automation.configuration?.status || "",
-      trigger_status_value: automation.conditions?.new_status || "",
-      update_field_name: automation.configuration?.update_field || "",
+      trigger_status_value: automation.conditions?.new_status || "any",
+      update_field_name: automation.configuration?.update_field || "none",
       update_field_value: automation.configuration?.update_field_value || "today",
     },
   });
@@ -125,7 +125,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       }
       
       // Add trigger status condition if specified
-      if (values.trigger_status_value) {
+      if (values.trigger_status_value && values.trigger_status_value !== 'any') {
         conditions.new_status = values.trigger_status_value;
       }
 
@@ -138,12 +138,15 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
           body_template: values.body_template || "",
         };
       } else if (values.action_type === "update_status") {
-        configuration = {
+        let cfg: any = {
           entity: values.status_entity,
           status: values.status_value,
-          update_field: values.update_field_name,
-          update_field_value: values.update_field_value,
         };
+        if (values.update_field_name && values.update_field_name !== 'none') {
+          cfg.update_field = values.update_field_name;
+          cfg.update_field_value = values.update_field_value || 'today';
+        }
+        configuration = cfg;
       }
 
       const { error } = await supabase
@@ -255,7 +258,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-background z-[100]">
-                        <SelectItem value="">כל סטטוס</SelectItem>
+                        <SelectItem value="any">כל סטטוס</SelectItem>
                         {triggerType === "lead_status_changed" && LEAD_STATUS_OPTIONS.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}
@@ -441,7 +444,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
-                          <SelectItem value="">ללא</SelectItem>
+                          <SelectItem value="none">ללא</SelectItem>
                           {statusEntity === "lead" && LEAD_DATE_FIELDS.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}

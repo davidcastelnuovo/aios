@@ -113,8 +113,8 @@ export function AddAutomationForm() {
       conditions: "",
       status_entity: "lead",
       status_value: "",
-      trigger_status_value: "",
-      update_field_name: "",
+      trigger_status_value: "any",
+      update_field_name: "none",
       update_field_value: "today",
     },
   });
@@ -143,7 +143,7 @@ export function AddAutomationForm() {
       }
       
       // Add trigger status condition if specified
-      if (values.trigger_status_value) {
+      if (values.trigger_status_value && values.trigger_status_value !== 'any') {
         conditions.new_status = values.trigger_status_value;
       }
 
@@ -157,12 +157,15 @@ export function AddAutomationForm() {
           body_template: values.body_template || "",
         };
       } else if (values.action_type === "update_status") {
-        configuration = {
+        const cfg: any = {
           entity: values.status_entity,
           status: values.status_value,
-          update_field: values.update_field_name,
-          update_field_value: values.update_field_value,
         };
+        if (values.update_field_name && values.update_field_name !== 'none') {
+          cfg.update_field = values.update_field_name;
+          cfg.update_field_value = values.update_field_value || 'today';
+        }
+        configuration = cfg;
       }
 
       const { data, error } = await supabase
@@ -292,7 +295,7 @@ export function AddAutomationForm() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-background z-[100]">
-                        <SelectItem value="">כל סטטוס</SelectItem>
+                        <SelectItem value="any">כל סטטוס</SelectItem>
                         {triggerType === "lead_status_changed" && LEAD_STATUS_OPTIONS.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
                             {option.label}
@@ -477,7 +480,7 @@ export function AddAutomationForm() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
-                          <SelectItem value="">ללא</SelectItem>
+                          <SelectItem value="none">ללא</SelectItem>
                           {statusEntity === "lead" && LEAD_DATE_FIELDS.map((option) => (
                             <SelectItem key={option.value} value={option.value}>
                               {option.label}

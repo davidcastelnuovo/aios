@@ -207,7 +207,7 @@ async function executeStatusUpdate(supabase: any, config: any, data: any) {
   }
   
   // Update additional date field if specified
-  if (update_field && update_field_value === 'today') {
+  if (update_field && update_field !== 'none' && update_field_value === 'today') {
     const today = new Date().toISOString().split('T')[0] // Format: YYYY-MM-DD
     updateData[update_field] = today
     console.log(`Setting ${update_field} to ${today}`)
