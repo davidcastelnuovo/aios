@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Info } from "lucide-react";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם האוטומציה הוא שדה חובה"),
@@ -110,6 +111,7 @@ export function AddAutomationForm() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -132,16 +134,8 @@ export function AddAutomationForm() {
 
   const createAutomationMutation = useMutation({
     mutationFn: async (values: FormValues) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const { data: tenantUser } = await supabase
-        .from("tenant_users")
-        .select("tenant_id")
-        .eq("user_id", user.id)
-        .single();
-
-      if (!tenantUser) throw new Error("No tenant found");
+      // Ensure a tenant is selected
+      if (!tenantId) throw new Error("No tenant selected");
 
       // Parse conditions if provided
       let conditions: any = {};
@@ -188,7 +182,7 @@ export function AddAutomationForm() {
           action_type: values.action_type,
           configuration: configuration,
           conditions: conditions,
-          tenant_id: tenantUser.tenant_id,
+          tenant_id: tenantId,
           active: true,
         })
         .select()
