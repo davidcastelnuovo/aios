@@ -133,28 +133,45 @@ function checkConditions(conditions: any, data: any): boolean {
 // Execute webhook action
 async function executeWebhook(config: any, data: any) {
   console.log('Executing webhook:', config.url)
+  console.log('Webhook data:', data)
   
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(config.headers || {}),
   }
 
-  // Replace variables in body template
-  let body = config.body_template || JSON.stringify(data)
-  if (typeof body === 'string') {
-    // Replace {{variable}} with actual values
-    body = body.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
-      return data[key.trim()] || match
+  // Prepare body - flatten the data object to make fields mappable in Make.com
+  let bodyData: any
+  
+  if (config.body_template) {
+    // If there's a custom template, use it with variable replacement
+    let bodyString = config.body_template
+    if (typeof bodyString === 'string') {
+      // Replace {{variable}} with actual values
+      bodyString = bodyString.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+        return data[key.trim()] || match
+      })
+    }
+    bodyData = bodyString
+  } else {
+    // Default: Send data as flat object with individual fields
+    // This makes it easy to map fields in Make.com
+    bodyData = JSON.stringify({
+      text: "משימה חדשה הוקצתה!",
+      ...data,  // Spread all data fields as separate keys
     })
   }
+
+  console.log('Webhook body:', bodyData)
 
   const response = await fetch(config.url, {
     method: config.method || 'POST',
     headers: headers,
-    body: body,
+    body: bodyData,
   })
 
   const responseText = await response.text()
+  console.log('Webhook response:', { status: response.status, body: responseText })
   
   return {
     status: response.status,
