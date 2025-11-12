@@ -64,7 +64,14 @@ export default function SignUp() {
 
       toast.success("הארגון נוצר בהצלחה! מיד תועבר למערכת");
       
-      // Sign in the user
+      // If user is already logged in, skip re-login
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        navigate("/");
+        return;
+      }
+
+      // Sign in the user (for new accounts)
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
