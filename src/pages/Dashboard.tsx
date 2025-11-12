@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, Users, Megaphone, DollarSign, TrendingUp, TrendingDown, CheckSquare } from "lucide-react";
@@ -16,6 +16,94 @@ export default function Dashboard() {
   const { isOwner } = useUserRole();
   const [selectedClient, setSelectedClient] = useState<string>("all");
   const [selectedSupplier, setSelectedSupplier] = useState<string>("all");
+  const queryClient = useQueryClient();
+
+  // Realtime subscriptions for auto-updates
+  useEffect(() => {
+    if (!tenantId) return;
+
+    const channel = supabase
+      .channel('dashboard-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'clients',
+          filter: `tenant_id=eq.${tenantId}`
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["clients", tenantId] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'agencies',
+          filter: `tenant_id=eq.${tenantId}`
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["agencies", tenantId] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tasks',
+          filter: `tenant_id=eq.${tenantId}`
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'leads',
+          filter: `tenant_id=eq.${tenantId}`
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'finance',
+          filter: `tenant_id=eq.${tenantId}`
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'campaigners',
+          filter: `tenant_id=eq.${tenantId}`
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tenantId, queryClient]);
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies", tenantId],
