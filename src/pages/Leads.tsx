@@ -505,13 +505,13 @@ export default function Leads() {
     },
     onMutate: async ({ leadId, newStatus }) => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ["leads", selectedAgency] });
+      await queryClient.cancelQueries({ queryKey: ["leads", tenantId, selectedAgency] });
 
       // Snapshot the previous value
-      const previousLeads = queryClient.getQueryData(["leads", selectedAgency]);
+      const previousLeads = queryClient.getQueryData(["leads", tenantId, selectedAgency]);
 
       // Optimistically update to the new value
-      queryClient.setQueryData(["leads", selectedAgency], (old: any) => {
+      queryClient.setQueryData(["leads", tenantId, selectedAgency], (old: any) => {
         if (!old) return old;
         return old.map((lead: any) => 
           lead.id === leadId ? { ...lead, status: newStatus } : lead
@@ -524,7 +524,7 @@ export default function Leads() {
     onError: (error: any, variables, context) => {
       // Rollback to the previous value if error
       if (context?.previousLeads) {
-        queryClient.setQueryData(["leads", selectedAgency], context.previousLeads);
+        queryClient.setQueryData(["leads", tenantId, selectedAgency], context.previousLeads);
       }
       toast({
         title: "שגיאה בעדכון סטטוס",
@@ -539,7 +539,7 @@ export default function Leads() {
     },
     onSettled: () => {
       // Always refetch after error or success
-      queryClient.invalidateQueries({ queryKey: ["leads", selectedAgency] });
+      queryClient.invalidateQueries({ queryKey: ["leads", tenantId, selectedAgency] });
     },
   });
 
@@ -553,7 +553,7 @@ export default function Leads() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads", tenantId, selectedAgency] });
       toast({
         title: "סטטוס תגובה עודכן בהצלחה",
       });
