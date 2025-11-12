@@ -206,6 +206,35 @@ const updateMutation = useMutation({
         .single();
 
       if (error) throw error;
+      
+      // Trigger automations if status actually changed
+      if (data && lead.status !== data.status) {
+        try {
+          await supabase.functions.invoke('trigger-automation', {
+            body: {
+              trigger_type: 'lead_status_changed',
+              data: {
+                id: data.id,
+                status: data.status,
+                new_status: data.status,
+                old_status: lead.status,
+                contact_name: data.contact_name,
+                company_name: data.company_name,
+                phone: data.phone,
+                email: data.email,
+                agency_id: data.agency_id,
+                sales_person_id: data.sales_person_id,
+                tenant_id: data.tenant_id
+              },
+              tenant_id: data.tenant_id
+            }
+          });
+        } catch (automationError) {
+          console.error('Failed to trigger automation:', automationError);
+          // Don't fail the mutation if automation fails
+        }
+      }
+      
       return data;
     },
     onSuccess: () => {

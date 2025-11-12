@@ -54,6 +54,7 @@ const PIPELINE_STAGES = [
   { id: "follow_up", label: "בתהליך", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300", borderColor: "border-yellow-500" },
   { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300", borderColor: "border-orange-500" },
   { id: "closed", label: "נסגר", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300", borderColor: "border-green-500" },
+  { id: "transferred_to_onboarding", label: "הועבר לקליטה", color: "bg-teal-100 dark:bg-teal-900", bgClass: "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-100 border-teal-300", borderColor: "border-teal-500" },
 ];
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -491,6 +492,13 @@ export default function Leads() {
 
   const updateLeadStatus = useMutation({
     mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" }) => {
+      // Get lead data before update to know old status
+      const { data: leadBefore } = await supabase
+        .from("leads")
+        .select("*")
+        .eq("id", leadId)
+        .single();
+
       const { error } = await supabase
         .from("leads")
         .update({ status: newStatus })
@@ -501,6 +509,34 @@ export default function Leads() {
       // Trigger bubble animation when status changes to "closed"
       if (newStatus === "closed") {
         playBubbleAnimation();
+      }
+
+      // Trigger automations if status actually changed
+      if (leadBefore && leadBefore.status !== newStatus) {
+        try {
+          await supabase.functions.invoke('trigger-automation', {
+            body: {
+              trigger_type: 'lead_status_changed',
+              data: {
+                id: leadId,
+                status: newStatus,
+                new_status: newStatus,
+                old_status: leadBefore.status,
+                contact_name: leadBefore.contact_name,
+                company_name: leadBefore.company_name,
+                phone: leadBefore.phone,
+                email: leadBefore.email,
+                agency_id: leadBefore.agency_id,
+                sales_person_id: leadBefore.sales_person_id,
+                tenant_id: leadBefore.tenant_id
+              },
+              tenant_id: leadBefore.tenant_id
+            }
+          });
+        } catch (automationError) {
+          console.error('Failed to trigger automation:', automationError);
+          // Don't fail the mutation if automation fails
+        }
       }
     },
     onMutate: async ({ leadId, newStatus }) => {
