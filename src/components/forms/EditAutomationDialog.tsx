@@ -44,14 +44,31 @@ const formSchema = z.object({
     "client_status_changed",
     "onboarding_status_changed",
   ]),
-  action_type: z.enum(["webhook", "email", "notification"]),
+  action_type: z.enum(["webhook", "email", "notification", "update_status"]),
   webhook_url: z.string().url("כתובת URL לא תקינה").optional(),
   webhook_method: z.enum(["POST", "GET", "PUT"]).optional(),
   body_template: z.string().optional(),
   conditions: z.string().optional(),
+  status_entity: z.enum(["lead", "task"]).optional(),
+  status_value: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
+
+const LEAD_STATUS_OPTIONS = [
+  { value: "new", label: "ליד חדש" },
+  { value: "contacted", label: "נוצר קשר" },
+  { value: "follow_up", label: "בתהליך" },
+  { value: "proposal_sent", label: "נשלחה הצעה" },
+  { value: "closed", label: "נסגר" },
+  { value: "transferred_to_onboarding", label: "הועבר לקליטה" },
+];
+
+const TASK_STATUS_OPTIONS = [
+  { value: "open", label: "פתוח" },
+  { value: "in_progress", label: "בתהליך" },
+  { value: "done", label: "הושלם" },
+];
 
 interface EditAutomationDialogProps {
   automation: any;
@@ -73,6 +90,8 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       webhook_url: automation.configuration?.url || "",
       body_template: automation.configuration?.body_template || "",
       conditions: automation.conditions ? JSON.stringify(automation.conditions, null, 2) : "",
+      status_entity: automation.configuration?.entity || "lead",
+      status_value: automation.configuration?.status || "",
     },
   });
 
@@ -94,6 +113,11 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
           method: values.webhook_method || "POST",
           headers: { "Content-Type": "application/json" },
           body_template: values.body_template || "",
+        };
+      } else if (values.action_type === "update_status") {
+        configuration = {
+          entity: values.status_entity,
+          status: values.status_value,
         };
       }
 
@@ -126,6 +150,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
   };
 
   const actionType = form.watch("action_type");
+  const statusEntity = form.watch("status_entity");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -204,6 +229,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                     </FormControl>
                     <SelectContent className="bg-background">
                       <SelectItem value="webhook">Webhook (Make.com, Zapier וכו')</SelectItem>
+                      <SelectItem value="update_status">שינוי סטטוס</SelectItem>
                       <SelectItem value="email">אימייל (בקרוב)</SelectItem>
                       <SelectItem value="notification">התראה (בקרוב)</SelectItem>
                     </SelectContent>
@@ -275,6 +301,65 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                           השתמש ב-{`{{variable}}`} כדי להחליף ערכים דינמיים. 
                           לדוגמה: {`{{task_title}}`}, {`{{campaigner_name}}`}, {`{{client_name}}`}, {`{{priority}}`}
                         </span>
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
+
+            {actionType === "update_status" && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="status_entity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>סוג רשומה *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר סוג רשומה" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          <SelectItem value="lead">ליד</SelectItem>
+                          <SelectItem value="task">משימה</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="status_value"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>סטטוס חדש *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר סטטוס" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          {statusEntity === "lead" && LEAD_STATUS_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                          {statusEntity === "task" && TASK_STATUS_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-xs">
+                        הסטטוס יעודכן אוטומטית כשהאוטומציה תופעל
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

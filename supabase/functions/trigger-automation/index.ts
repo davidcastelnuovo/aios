@@ -63,6 +63,8 @@ Deno.serve(async (req) => {
             response = await executeEmail(automation.configuration, payload.data)
           } else if (automation.action_type === 'notification') {
             response = await executeNotification(automation.configuration, payload.data)
+          } else if (automation.action_type === 'update_status') {
+            response = await executeStatusUpdate(supabase, automation.configuration, payload.data)
           }
 
           const executionTime = Date.now() - startTime
@@ -172,4 +174,43 @@ async function executeEmail(config: any, data: any) {
 async function executeNotification(config: any, data: any) {
   console.log('Notification action not yet implemented')
   return { message: 'Notification action not implemented' }
+}
+
+// Execute status update action
+async function executeStatusUpdate(supabase: any, config: any, data: any) {
+  console.log('Executing status update:', config)
+  
+  const { entity, status } = config
+  const recordId = data.id
+  
+  if (!recordId) {
+    throw new Error('No record ID provided for status update')
+  }
+  
+  // Determine which table to update
+  const table = entity === 'lead' ? 'leads' : 'tasks'
+  
+  console.log(`Updating ${table} ${recordId} to status: ${status}`)
+  
+  const { data: updateResult, error } = await supabase
+    .from(table)
+    .update({ status: status })
+    .eq('id', recordId)
+    .select()
+    .single()
+  
+  if (error) {
+    console.error(`Error updating ${table} status:`, error)
+    throw error
+  }
+  
+  console.log(`Successfully updated ${table} status:`, updateResult)
+  
+  return {
+    success: true,
+    entity: entity,
+    recordId: recordId,
+    newStatus: status,
+    updated: updateResult
+  }
 }

@@ -41,6 +41,7 @@ const ACTION_LABELS: Record<string, string> = {
   webhook: "Webhook",
   email: "אימייל",
   notification: "התראה",
+  update_status: "שינוי סטטוס",
 };
 
 export default function Automations() {
@@ -252,6 +253,12 @@ export default function Automations() {
               {(automation.configuration as any)?.url && (
                 <p className="text-xs text-muted-foreground truncate">
                   URL: {(automation.configuration as any).url}
+                </p>
+              )}
+
+              {automation.action_type === "update_status" && (automation.configuration as any)?.entity && (
+                <p className="text-xs text-muted-foreground">
+                  עדכון סטטוס: {(automation.configuration as any).entity === "lead" ? "ליד" : "משימה"} → {(automation.configuration as any).status}
                 </p>
               )}
 
