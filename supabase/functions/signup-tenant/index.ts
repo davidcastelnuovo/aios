@@ -70,36 +70,29 @@ serve(async (req: Request) => {
       // If email already exists, allow continuing ONLY if the caller is authenticated as that user
       const isEmailExists = (userError as any)?.status === 422 || (userError as any)?.code === 'email_exists';
       if (isEmailExists) {
-        // Try to find existing user id via profiles
-        const { data: existingProfile } = await supabase
-          .from("profiles")
-          .select("id, email")
-          .eq("email", payload.email)
-          .maybeSingle();
-
-        if (!existingProfile?.id) {
-          console.error("Email exists but profile not found for:", payload.email);
-          return new Response(
-            JSON.stringify({ success: false, error: "האימייל כבר רשום במערכת. היכנס/י לחשבון ואז פתח/י ארגון חדש." }),
-            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        // Verify the request is authenticated as the same user (to avoid assigning orgs to others)
+        // Verify the request is authenticated
         const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
         const authHeader = req.headers.get("authorization") ?? "";
         const authClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-        const { data: authData } = await authClient.auth.getUser();
+        const { data: authData, error: authCheckError } = await authClient.auth.getUser();
 
-        if (!authData?.user || authData.user.id !== existingProfile.id) {
+        if (authCheckError || !authData?.user) {
           return new Response(
             JSON.stringify({ success: false, error: "האימייל כבר רשום. יש להתחבר תחילה עם המייל הזה ורק אז ליצור ארגון חדש." }),
             { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
 
-        userId = existingProfile.id;
-        console.log("↩️ Using existing user:", userId);
+        // Check if the authenticated user's email matches the request email
+        if (authData.user.email !== payload.email) {
+          return new Response(
+            JSON.stringify({ success: false, error: "האימייל כבר רשום. יש להתחבר תחילה עם המייל הזה ורק אז ליצור ארגון חדש." }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        userId = authData.user.id;
+        console.log("↩️ Using existing authenticated user:", userId);
       } else {
         console.error("Error creating user:", userError);
         return new Response(
