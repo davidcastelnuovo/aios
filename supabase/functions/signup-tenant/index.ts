@@ -32,6 +32,12 @@ serve(async (req: Request) => {
     
     const payload: SignupTenantRequest = await req.json();
     
+    // Normalize input (emails are case-insensitive)
+    payload.email = (payload.email || "").trim().toLowerCase();
+    payload.fullName = (payload.fullName || "").trim();
+    payload.phone = (payload.phone || "").trim();
+    payload.organizationName = (payload.organizationName || "").trim();
+    
     // Validate input
     if (!payload.email || !payload.password || !payload.fullName || !payload.organizationName) {
       return new Response(
@@ -72,8 +78,8 @@ serve(async (req: Request) => {
       }
     }
 
-    // If user is authenticated with the same email, use their account
-    if (authenticatedUser && authenticatedUser.email === payload.email) {
+    // If user is authenticated with the same email (case-insensitive), use their account
+    if (authenticatedUser && (authenticatedUser.email || "").toLowerCase() === (payload.email || "").toLowerCase()) {
       userId = authenticatedUser.id;
       console.log("↩️ Using existing authenticated user:", userId);
     } else {
@@ -91,7 +97,7 @@ serve(async (req: Request) => {
       if (userError || !userData?.user) {
         const isEmailExists = (userError as any)?.status === 422 || (userError as any)?.code === 'email_exists';
         if (isEmailExists) {
-          console.error("❌ Email exists but user not authenticated");
+          console.error("❌ Email exists but user not authenticated (or email mismatch)");
           return new Response(
             JSON.stringify({ 
               success: false, 
