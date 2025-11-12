@@ -56,54 +56,61 @@ serve(async (req: Request) => {
     let userId: string;
     let newUserCreated = false;
 
-    const { data: userData, error: userError }: any = await supabase.auth.admin.createUser({
-      email: payload.email,
-      password: payload.password,
-      email_confirm: true, // Auto-confirm email for smoother onboarding
-      user_metadata: {
-        full_name: payload.fullName,
-        phone: payload.phone,
-      },
-    });
-
-    if (userError || !userData?.user) {
-      // If email already exists, allow continuing ONLY if the caller is authenticated as that user
-      const isEmailExists = (userError as any)?.status === 422 || (userError as any)?.code === 'email_exists';
-      if (isEmailExists) {
-        // Verify the request is authenticated
-        const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-        const authHeader = req.headers.get("authorization") ?? "";
-        const authClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-        const { data: authData, error: authCheckError } = await authClient.auth.getUser();
-
-        if (authCheckError || !authData?.user) {
-          return new Response(
-            JSON.stringify({ success: false, error: "האימייל כבר רשום. יש להתחבר תחילה עם המייל הזה ורק אז ליצור ארגון חדש." }),
-            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        // Check if the authenticated user's email matches the request email
-        if (authData.user.email !== payload.email) {
-          return new Response(
-            JSON.stringify({ success: false, error: "האימייל כבר רשום. יש להתחבר תחילה עם המייל הזה ורק אז ליצור ארגון חדש." }),
-            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        userId = authData.user.id;
-        console.log("↩️ Using existing authenticated user:", userId);
-      } else {
-        console.error("Error creating user:", userError);
-        return new Response(
-          JSON.stringify({ success: false, error: (userError as any)?.message || "Failed to create user" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+    // First check if user is already authenticated
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const authHeader = req.headers.get("authorization") ?? "";
+    let authenticatedUser = null;
+    
+    if (authHeader && authHeader !== "" && authHeader !== "Bearer ") {
+      console.log("🔍 Checking for authenticated user...");
+      const authClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+      const { data: authData, error: authCheckError } = await authClient.auth.getUser();
+      
+      if (!authCheckError && authData?.user) {
+        authenticatedUser = authData.user;
+        console.log("✅ Found authenticated user:", authenticatedUser.id, authenticatedUser.email);
       }
+    }
+
+    // If user is authenticated with the same email, use their account
+    if (authenticatedUser && authenticatedUser.email === payload.email) {
+      userId = authenticatedUser.id;
+      console.log("↩️ Using existing authenticated user:", userId);
     } else {
-      userId = userData.user.id;
-      newUserCreated = true;
-      console.log("✅ User created:", userId);
+      // Try to create a new user
+      const { data: userData, error: userError }: any = await supabase.auth.admin.createUser({
+        email: payload.email,
+        password: payload.password,
+        email_confirm: true, // Auto-confirm email for smoother onboarding
+        user_metadata: {
+          full_name: payload.fullName,
+          phone: payload.phone,
+        },
+      });
+
+      if (userError || !userData?.user) {
+        const isEmailExists = (userError as any)?.status === 422 || (userError as any)?.code === 'email_exists';
+        if (isEmailExists) {
+          console.error("❌ Email exists but user not authenticated");
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: "האימייל כבר רשום במערכת. אנא התחבר תחילה דרך דף ההתחברות (/auth) ואז חזור לדף זה כדי ליצור ארגון חדש." 
+            }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else {
+          console.error("Error creating user:", userError);
+          return new Response(
+            JSON.stringify({ success: false, error: (userError as any)?.message || "Failed to create user" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      } else {
+        userId = userData.user.id;
+        newUserCreated = true;
+        console.log("✅ User created:", userId);
+      }
     }
 
     // Step 2: Update profile with full details
