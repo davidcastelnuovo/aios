@@ -78,16 +78,16 @@ serve(async (req: Request) => {
       }
     }
 
-    // If user is authenticated with the same email (case-insensitive), use their account
-    if (authenticatedUser && (authenticatedUser.email || "").toLowerCase() === (payload.email || "").toLowerCase()) {
+    // If a user is already authenticated, always use their account (ignore form email/password)
+    if (authenticatedUser) {
       userId = authenticatedUser.id;
       console.log("↩️ Using existing authenticated user:", userId);
     } else {
-      // Try to create a new user
+      // Try to create a new user for the provided email
       const { data: userData, error: userError }: any = await supabase.auth.admin.createUser({
         email: payload.email,
         password: payload.password,
-        email_confirm: true, // Auto-confirm email for smoother onboarding
+        email_confirm: true,
         user_metadata: {
           full_name: payload.fullName,
           phone: payload.phone,
@@ -97,11 +97,11 @@ serve(async (req: Request) => {
       if (userError || !userData?.user) {
         const isEmailExists = (userError as any)?.status === 422 || (userError as any)?.code === 'email_exists';
         if (isEmailExists) {
-          console.error("❌ Email exists but user not authenticated (or email mismatch)");
+          console.error("❌ Email exists and another session is logged in (or not logged in)");
           return new Response(
             JSON.stringify({ 
               success: false, 
-              error: "האימייל כבר רשום במערכת. אנא התחבר תחילה דרך דף ההתחברות (/auth) ואז חזור לדף זה כדי ליצור ארגון חדש." 
+              error: "האימייל כבר קיים. היכנס/י לחשבון ואז נסה/י שוב ליצור ארגון חדש." 
             }),
             { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
@@ -120,11 +120,12 @@ serve(async (req: Request) => {
     }
 
     // Step 2: Update profile with full details
+    const effectiveEmail = (authenticatedUser?.email || payload.email || "").toLowerCase();
     const { error: profileError } = await supabase
       .from("profiles")
       .update({
         full_name: payload.fullName,
-        email: payload.email,
+        email: effectiveEmail,
         status: "active",
       })
       .eq("id", userId);
