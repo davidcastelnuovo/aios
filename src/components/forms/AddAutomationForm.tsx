@@ -53,6 +53,9 @@ const formSchema = z.object({
   conditions: z.string().optional(), // JSON string
   status_entity: z.enum(["lead", "task"]).optional(),
   status_value: z.string().optional(),
+  trigger_status_value: z.string().optional(), // For status change triggers
+  update_field_name: z.string().optional(), // Field to update
+  update_field_value: z.string().optional(), // Value to set
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -82,6 +85,16 @@ const TASK_STATUS_OPTIONS = [
   { value: "done", label: "הושלם" },
 ];
 
+const LEAD_DATE_FIELDS = [
+  { value: "won_date", label: "תאריך נסגר" },
+  { value: "proposal_sent_date", label: "תאריך שליחת הצעה" },
+  { value: "itai_meeting_date", label: "תאריך פגישה עם איתי" },
+];
+
+const TASK_DATE_FIELDS = [
+  { value: "due_date", label: "תאריך יעד" },
+];
+
 export function AddAutomationForm() {
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
@@ -100,6 +113,9 @@ export function AddAutomationForm() {
       conditions: "",
       status_entity: "lead",
       status_value: "",
+      trigger_status_value: "",
+      update_field_name: "",
+      update_field_value: "today",
     },
   });
 
@@ -117,13 +133,18 @@ export function AddAutomationForm() {
       if (!tenantUser) throw new Error("No tenant found");
 
       // Parse conditions if provided
-      let conditions = {};
+      let conditions: any = {};
       if (values.conditions?.trim()) {
         try {
           conditions = JSON.parse(values.conditions);
         } catch (e) {
           throw new Error("תנאים חייבים להיות JSON תקין");
         }
+      }
+      
+      // Add trigger status condition if specified
+      if (values.trigger_status_value) {
+        conditions.new_status = values.trigger_status_value;
       }
 
       // Build configuration based on action type
@@ -139,6 +160,8 @@ export function AddAutomationForm() {
         configuration = {
           entity: values.status_entity,
           status: values.status_value,
+          update_field: values.update_field_name,
+          update_field_value: values.update_field_value,
         };
       }
 
@@ -183,6 +206,7 @@ export function AddAutomationForm() {
 
   const actionType = form.watch("action_type");
   const statusEntity = form.watch("status_entity");
+  const triggerType = form.watch("trigger_type");
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -253,6 +277,42 @@ export function AddAutomationForm() {
                 </FormItem>
               )}
             />
+
+            {(triggerType === "lead_status_changed" || triggerType === "task_status_changed") && (
+              <FormField
+                control={form.control}
+                name="trigger_status_value"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>לאיזה סטטוס השתנה? (אופציונלי)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="כל סטטוס (ללא סינון)" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background z-[100]">
+                        <SelectItem value="">כל סטטוס</SelectItem>
+                        {triggerType === "lead_status_changed" && LEAD_STATUS_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                        {triggerType === "task_status_changed" && TASK_STATUS_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription className="text-xs">
+                      האוטומציה תרוץ רק כשהסטטוס משתנה לערך זה
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
 
             <FormField
               control={form.control}
@@ -398,6 +458,40 @@ export function AddAutomationForm() {
                       </Select>
                       <FormDescription className="text-xs">
                         הסטטוס יעודכן אוטומטית כשהאוטומציה תופעל
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="update_field_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>עדכון שדה תאריך נוסף (אופציונלי)</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="אל תעדכן שדה נוסף" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          <SelectItem value="">ללא</SelectItem>
+                          {statusEntity === "lead" && LEAD_DATE_FIELDS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                          {statusEntity === "task" && TASK_DATE_FIELDS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-xs">
+                        שדה תאריך שיעודכן לתאריך היום כשהאוטומציה תופעל
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

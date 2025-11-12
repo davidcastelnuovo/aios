@@ -121,14 +121,20 @@ function checkConditions(conditions: any, data: any): boolean {
   try {
     // Simple condition checking - can be extended
     for (const [key, value] of Object.entries(conditions)) {
-      if (data[key] !== value) {
-        return false
+      // Special handling for new_status - check both status and new_status fields
+      if (key === 'new_status') {
+        const dataStatus = data.new_status || data.status;
+        if (dataStatus !== value) {
+          return false;
+        }
+      } else if (data[key] !== value) {
+        return false;
       }
     }
-    return true
+    return true;
   } catch (error) {
     console.error('Error checking conditions:', error)
-    return false
+    return false;
   }
 }
 
@@ -180,7 +186,7 @@ async function executeNotification(config: any, data: any) {
 async function executeStatusUpdate(supabase: any, config: any, data: any) {
   console.log('Executing status update:', config)
   
-  const { entity, status } = config
+  const { entity, status, update_field, update_field_value } = config
   const recordId = data.id
   
   if (!recordId) {
@@ -190,27 +196,44 @@ async function executeStatusUpdate(supabase: any, config: any, data: any) {
   // Determine which table to update
   const table = entity === 'lead' ? 'leads' : 'tasks'
   
-  console.log(`Updating ${table} ${recordId} to status: ${status}`)
+  console.log(`Updating ${table} ${recordId}`)
+  
+  // Build update object
+  const updateData: any = {}
+  
+  // Update status if provided
+  if (status) {
+    updateData.status = status
+  }
+  
+  // Update additional date field if specified
+  if (update_field && update_field_value === 'today') {
+    const today = new Date().toISOString().split('T')[0] // Format: YYYY-MM-DD
+    updateData[update_field] = today
+    console.log(`Setting ${update_field} to ${today}`)
+  }
+  
+  console.log('Update data:', updateData)
   
   const { data: updateResult, error } = await supabase
     .from(table)
-    .update({ status: status })
+    .update(updateData)
     .eq('id', recordId)
     .select()
     .single()
   
   if (error) {
-    console.error(`Error updating ${table} status:`, error)
+    console.error(`Error updating ${table}:`, error)
     throw error
   }
   
-  console.log(`Successfully updated ${table} status:`, updateResult)
+  console.log(`Successfully updated ${table}:`, updateResult)
   
   return {
     success: true,
     entity: entity,
     recordId: recordId,
-    newStatus: status,
-    updated: updateResult
+    updates: updateData,
+    result: updateResult
   }
 }
