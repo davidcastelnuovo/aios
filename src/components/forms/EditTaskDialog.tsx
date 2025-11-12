@@ -60,7 +60,7 @@ const formSchema = z.object({
   title: z.string().min(1, "שם המשימה הוא שדה חובה"),
   notes: z.string().optional(),
   campaigner_id: z.string().min(1, "יש לבחור קמפיינר"),
-  client_id: z.string().min(1, "יש לבחור לקוח"),
+  client_id: z.string().optional(),
   due_date: z.string().optional(),
   status: z.enum(["open", "in_progress", "done"]),
   priority: z.number().min(1).max(10),

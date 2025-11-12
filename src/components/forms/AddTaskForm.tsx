@@ -58,15 +58,13 @@ const formSchema = z.object({
   status: z.enum(["open", "in_progress", "done"]),
   priority: z.number().min(1).max(10),
 }).refine((data) => {
+  // Only require client for client tasks
   if (data.task_category === "client" && !data.client_id) {
-    return false;
-  }
-  if (data.task_category === "general" && !data.agency_id) {
     return false;
   }
   return true;
 }, {
-  message: "יש לבחור לקוח למשימת לקוח או סוכנות למשימה כללית",
+  message: "יש לבחור לקוח למשימת לקוח",
   path: ["client_id"],
 });
 
@@ -158,11 +156,8 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
         }
         finalAgencyId = selectedClient.agency_id;
       } else {
-        // For general tasks, use the selected agency
-        if (!values.agency_id) {
-          throw new Error("יש לבחור סוכנות למשימה כללית");
-        }
-        finalAgencyId = values.agency_id;
+        // For general tasks, agency is optional
+        finalAgencyId = values.agency_id || null;
       }
 
       // Get campaigner name
@@ -177,7 +172,18 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
         if (!selectedAgency?.tenant_id) throw new Error("הסוכנות לא משויכת לטנט");
         tenantId = selectedAgency.tenant_id;
       } else {
-        throw new Error("לא ניתן לקבוע tenant_id למשימה");
+        // For general tasks without agency, get tenant from current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("משתמש לא מחובר");
+        
+        const { data: tenantData, error: tenantError } = await supabase
+          .from("tenant_users")
+          .select("tenant_id")
+          .eq("user_id", user.id)
+          .single();
+        
+        if (tenantError || !tenantData) throw new Error("לא נמצא טנט למשתמש");
+        tenantId = tenantData.tenant_id;
       }
       
       const { error } = await supabase.from("tasks").insert([{
@@ -435,7 +441,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
                 name="agency_id"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>סוכנות</FormLabel>
+                    <FormLabel>סוכנות (אופציונלי)</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
                       value={field.value}
@@ -443,10 +449,11 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder="בחר סוכנות" />
+                          <SelectValue placeholder="בחר סוכנות (אופציונלי)" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-background z-50">
+                        <SelectItem value="">ללא סוכנות</SelectItem>
                         {agencies?.map((agency) => (
                           <SelectItem key={agency.id} value={agency.id}>
                             {agency.name}
