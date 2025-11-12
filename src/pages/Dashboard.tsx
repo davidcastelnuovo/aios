@@ -129,7 +129,7 @@ export default function Dashboard() {
         .from("clients")
         .select("id, name, agency_id")
         .eq("tenant_id", tenantId)
-        .eq("status", "active")
+        .in("status", ["active", "onboarding"])
         .order("name");
       if (error) throw error;
       return data;
@@ -160,7 +160,7 @@ export default function Dashboard() {
       let clientQuery = supabase.from("clients").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
       let campaignerQuery = supabase.from("campaigners").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
       let taskQuery = supabase.from("tasks").select("*").eq("tenant_id", tenantId).eq("status", "open");
-      let activeClientsQuery = supabase.from("clients").select("id, retainer, agency_id").eq("tenant_id", tenantId).eq("status", "active");
+      let activeClientsQuery = supabase.from("clients").select("id, retainer, agency_id").eq("tenant_id", tenantId).in("status", ["active", "onboarding"]);
       let leadsQuery = supabase.from("leads").select("estimated_deal_value, monthly_budget, three_month_budget, status").eq("tenant_id", tenantId);
       
       // אם בחרנו ספק, נמצא את הקמפיינר הקשור אליו
