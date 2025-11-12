@@ -55,6 +55,7 @@ export default function SalesDashboard() {
       return stats;
     },
     enabled: !!tenantId,
+    refetchInterval: 5000, // רענון כל 5 שניות
   });
 
   const { data: productsStats } = useQuery({
@@ -102,6 +103,7 @@ export default function SalesDashboard() {
         .sort((a, b) => b.totalValue - a.totalValue);
     },
     enabled: !!tenantId,
+    refetchInterval: 5000, // רענון כל 5 שניות
   });
 
   const { data: salesPeopleStats } = useQuery({
@@ -126,6 +128,7 @@ export default function SalesDashboard() {
       };
     },
     enabled: !!tenantId,
+    refetchInterval: 5000, // רענון כל 5 שניות
   });
 
   const { data: timelineData } = useQuery({
@@ -194,6 +197,7 @@ export default function SalesDashboard() {
       return last30Days;
     },
     enabled: !!tenantId,
+    refetchInterval: 5000, // רענון כל 5 שניות
   });
 
   if (leadsLoading) {
