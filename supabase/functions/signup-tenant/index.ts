@@ -52,8 +52,11 @@ serve(async (req: Request) => {
       organizationName: payload.organizationName,
     });
 
-    // Step 1: Create the user account
-    const { data: userData, error: userError } = await supabase.auth.admin.createUser({
+    // Step 1: Create or reuse the user account
+    let userId: string;
+    let newUserCreated = false;
+
+    const { data: userData, error: userError }: any = await supabase.auth.admin.createUser({
       email: payload.email,
       password: payload.password,
       email_confirm: true, // Auto-confirm email for smoother onboarding
@@ -63,16 +66,52 @@ serve(async (req: Request) => {
       },
     });
 
-    if (userError || !userData.user) {
-      console.error("Error creating user:", userError);
-      return new Response(
-        JSON.stringify({ success: false, error: userError?.message || "Failed to create user" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    if (userError || !userData?.user) {
+      // If email already exists, allow continuing ONLY if the caller is authenticated as that user
+      const isEmailExists = (userError as any)?.status === 422 || (userError as any)?.code === 'email_exists';
+      if (isEmailExists) {
+        // Try to find existing user id via profiles
+        const { data: existingProfile } = await supabase
+          .from("profiles")
+          .select("id, email")
+          .eq("email", payload.email)
+          .maybeSingle();
 
-    const userId = userData.user.id;
-    console.log("✅ User created:", userId);
+        if (!existingProfile?.id) {
+          console.error("Email exists but profile not found for:", payload.email);
+          return new Response(
+            JSON.stringify({ success: false, error: "האימייל כבר רשום במערכת. היכנס/י לחשבון ואז פתח/י ארגון חדש." }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Verify the request is authenticated as the same user (to avoid assigning orgs to others)
+        const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+        const authHeader = req.headers.get("authorization") ?? "";
+        const authClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+        const { data: authData } = await authClient.auth.getUser();
+
+        if (!authData?.user || authData.user.id !== existingProfile.id) {
+          return new Response(
+            JSON.stringify({ success: false, error: "האימייל כבר רשום. יש להתחבר תחילה עם המייל הזה ורק אז ליצור ארגון חדש." }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        userId = existingProfile.id;
+        console.log("↩️ Using existing user:", userId);
+      } else {
+        console.error("Error creating user:", userError);
+        return new Response(
+          JSON.stringify({ success: false, error: (userError as any)?.message || "Failed to create user" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } else {
+      userId = userData.user.id;
+      newUserCreated = true;
+      console.log("✅ User created:", userId);
+    }
 
     // Step 2: Update profile with full details
     const { error: profileError } = await supabase
@@ -106,8 +145,10 @@ serve(async (req: Request) => {
 
     if (tenantError || !newTenant) {
       console.error("Error creating tenant:", tenantError);
-      // Cleanup: delete the user we just created
-      await supabase.auth.admin.deleteUser(userId);
+      // Cleanup: delete the user we just created (not existing users)
+      if (newUserCreated) {
+        await supabase.auth.admin.deleteUser(userId);
+      }
       return new Response(
         JSON.stringify({ success: false, error: "Failed to create organization" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -129,7 +170,9 @@ serve(async (req: Request) => {
       console.error("Error adding user to tenant_users:", tenantUserError);
       // This is critical - cleanup everything
       await supabase.from("tenants").delete().eq("id", newTenant.id);
-      await supabase.auth.admin.deleteUser(userId);
+      if (newUserCreated) {
+        await supabase.auth.admin.deleteUser(userId);
+      }
       return new Response(
         JSON.stringify({ success: false, error: "Failed to assign user to organization" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
