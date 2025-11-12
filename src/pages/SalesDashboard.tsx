@@ -74,38 +74,74 @@ export default function SalesDashboard() {
       const { data, error } = await query;
       if (error) throw error;
 
-      // Group by products
-      const productMap = new Map<string, { count: number; totalValue: number; closedValue: number; closedCount: number }>();
-      
-      data.forEach((lead) => {
-        if (lead.products && lead.products.trim()) {
-          // Split by comma and clean up product names
-          const products = lead.products
-            .split(',')
-            .map((p: string) => p.trim())
-            .filter((p: string) => p.length > 0);
-          
-          // Divide value equally among products to avoid double counting
-          const valuePerProduct = (lead.estimated_deal_value || 0) / (products.length || 1);
-          
-          products.forEach((product: string) => {
-            if (!productMap.has(product)) {
-              productMap.set(product, { count: 0, totalValue: 0, closedValue: 0, closedCount: 0 });
-            }
-            const stats = productMap.get(product)!;
-            stats.count++;
-            stats.totalValue += valuePerProduct;
-            if (lead.status === "closed") {
-              stats.closedValue += valuePerProduct;
-              stats.closedCount++;
-            }
-          });
+      // Fetch valid products list to normalize and filter
+      const { data: productsList, error: prodError } = await supabase
+        .from("products")
+        .select("id, name, active");
+      if (prodError) throw prodError;
+
+      const idToName = new Map<string, string>();
+      const normNameToId = new Map<string, string>();
+      const normalize = (s: string) => s.normalize("NFKC").trim().toLowerCase();
+      (productsList || []).forEach((p: any) => {
+        if (p && p.id && p.name) {
+          idToName.set(p.id, p.name);
+          normNameToId.set(normalize(p.name), p.id);
         }
       });
 
+      // Group by product (keyed by product id)
+      const productMap = new Map<string, { count: number; totalValue: number; closedValue: number; closedCount: number }>();
+      
+      (data || []).forEach((lead: any) => {
+        if (!lead.products) return;
+        let tokens: string[] = [];
+
+        if (Array.isArray(lead.products)) {
+          tokens = lead.products as string[];
+        } else if (typeof lead.products === "string") {
+          const raw = lead.products.trim();
+          // JSON array string (from edit dialog)
+          if ((raw.startsWith("[") && raw.endsWith("]"))) {
+            try {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed)) tokens = parsed.map(String);
+            } catch {}
+          }
+          // Comma separated names
+          if (tokens.length === 0) {
+            if (raw.includes(",")) tokens = raw.split(",").map((p) => p.trim());
+            else if (raw) tokens = [raw];
+          }
+        }
+
+        // Map to valid product IDs only (ignore unknowns)
+        const validIds = Array.from(new Set(tokens.map((t) => {
+          const s = String(t).trim();
+          if (idToName.has(s)) return s; // already an id
+          const byName = normNameToId.get(normalize(s));
+          return byName || null;
+        }).filter(Boolean) as string[]));
+
+        const valuePerProduct = (lead.estimated_deal_value || 0) / (validIds.length || 1);
+
+        validIds.forEach((pid) => {
+          if (!productMap.has(pid)) {
+            productMap.set(pid, { count: 0, totalValue: 0, closedValue: 0, closedCount: 0 });
+          }
+          const stats = productMap.get(pid)!;
+          stats.count++;
+          stats.totalValue += valuePerProduct;
+          if (lead.status === "closed") {
+            stats.closedValue += valuePerProduct;
+            stats.closedCount++;
+          }
+        });
+      });
+
       return Array.from(productMap.entries())
-        .map(([product, stats]) => ({
-          product,
+        .map(([productId, stats]) => ({
+          product: idToName.get(productId) || "לא מוגדר",
           ...stats,
         }))
         .sort((a, b) => b.totalValue - a.totalValue);
