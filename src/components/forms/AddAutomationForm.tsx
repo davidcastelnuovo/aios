@@ -99,6 +99,7 @@ const TASK_STATUS_OPTIONS = [
 
 const LEAD_DATE_FIELDS = [
   { value: "won_date", label: "תאריך נסגר" },
+  { value: "sale_date", label: "תאריך מכירה" },
   { value: "proposal_sent_date", label: "תאריך שליחת הצעה" },
   { value: "itai_meeting_date", label: "תאריך פגישה עם איתי" },
 ];
