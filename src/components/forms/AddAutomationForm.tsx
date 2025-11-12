@@ -47,15 +47,26 @@ const formSchema = z.object({
     "onboarding_status_changed",
   ]),
   action_type: z.enum(["webhook", "email", "notification", "update_status"]),
-  webhook_url: z.string().url("כתובת URL לא תקינה").optional(),
+  webhook_url: z.string().optional(),
   webhook_method: z.enum(["POST", "GET", "PUT"]).optional(),
   body_template: z.string().optional(),
-  conditions: z.string().optional(), // JSON string
+  conditions: z.string().optional(),
   status_entity: z.enum(["lead", "task"]).optional(),
   status_value: z.string().optional(),
-  trigger_status_value: z.string().optional(), // For status change triggers
-  update_field_name: z.string().optional(), // Field to update
-  update_field_value: z.string().optional(), // Value to set
+  trigger_status_value: z.string().optional(),
+  update_field_name: z.string().optional(),
+  update_field_value: z.string().optional(),
+}).refine((data) => {
+  if (data.action_type === "webhook" && !data.webhook_url) {
+    return false;
+  }
+  if (data.action_type === "update_status" && !data.status_value) {
+    return false;
+  }
+  return true;
+}, {
+  message: "נא למלא את כל השדות הנדרשים",
+  path: ["action_type"],
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -204,6 +215,8 @@ export function AddAutomationForm() {
   });
 
   const onSubmit = (values: FormValues) => {
+    console.log('Form submitted with values:', values);
+    console.log('Form errors:', form.formState.errors);
     createAutomationMutation.mutate(values);
   };
 
@@ -534,7 +547,15 @@ export function AddAutomationForm() {
               >
                 ביטול
               </Button>
-              <Button type="submit" disabled={createAutomationMutation.isPending}>
+              <Button 
+                type="submit" 
+                disabled={createAutomationMutation.isPending}
+                onClick={() => {
+                  console.log('Button clicked');
+                  console.log('Form state:', form.formState);
+                  console.log('Form values:', form.getValues());
+                }}
+              >
                 {createAutomationMutation.isPending ? "יוצר..." : "צור אוטומציה"}
               </Button>
             </div>

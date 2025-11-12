@@ -45,7 +45,7 @@ const formSchema = z.object({
     "onboarding_status_changed",
   ]),
   action_type: z.enum(["webhook", "email", "notification", "update_status"]),
-  webhook_url: z.string().url("כתובת URL לא תקינה").optional(),
+  webhook_url: z.string().optional(),
   webhook_method: z.enum(["POST", "GET", "PUT"]).optional(),
   body_template: z.string().optional(),
   conditions: z.string().optional(),
@@ -54,6 +54,17 @@ const formSchema = z.object({
   trigger_status_value: z.string().optional(),
   update_field_name: z.string().optional(),
   update_field_value: z.string().optional(),
+}).refine((data) => {
+  if (data.action_type === "webhook" && !data.webhook_url) {
+    return false;
+  }
+  if (data.action_type === "update_status" && !data.status_value) {
+    return false;
+  }
+  return true;
+}, {
+  message: "נא למלא את כל השדות הנדרשים",
+  path: ["action_type"],
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -174,6 +185,8 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
   });
 
   const onSubmit = (values: FormValues) => {
+    console.log('Form submitted with values:', values);
+    console.log('Form errors:', form.formState.errors);
     updateAutomationMutation.mutate(values);
   };
 
