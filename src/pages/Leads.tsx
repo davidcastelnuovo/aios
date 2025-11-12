@@ -82,6 +82,7 @@ const RESPONSE_STATUS_OPTIONS = [
   { id: "no_answer_2", label: "אין מענה 2", color: "bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100 border-amber-400" },
   { id: "no_answer_3", label: "אין מענה 3", color: "bg-orange-200 text-orange-900 dark:bg-orange-800 dark:text-orange-100 border-orange-400" },
   { id: "no_answer_4", label: "אין מענה 4", color: "bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-100 border-red-400" },
+  { id: "in_progress", label: "בעבודה", color: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-100 border-cyan-300" },
   { id: "denies_contact", label: "מכחיש פניה", color: "bg-gray-200 text-gray-900 dark:bg-gray-700 dark:text-gray-100 border-gray-400" },
   { id: "not_relevant", label: "לא רלוונטי", color: "bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100 border-slate-400" },
 ];
@@ -543,7 +544,7 @@ export default function Leads() {
   });
 
   const updateLeadResponseStatus = useMutation({
-    mutationFn: async ({ leadId, responseStatus }: { leadId: string; responseStatus: "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant" | null }) => {
+    mutationFn: async ({ leadId, responseStatus }: { leadId: string; responseStatus: "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "in_progress" | "denies_contact" | "not_relevant" | null }) => {
       const { error } = await supabase
         .from("leads")
         .update({ response_status: responseStatus })
@@ -1203,7 +1204,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   });
 
   const updateLeadResponseStatus = useMutation({
-    mutationFn: async ({ leadId, responseStatus }: { leadId: string; responseStatus: "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant" | null }) => {
+    mutationFn: async ({ leadId, responseStatus }: { leadId: string; responseStatus: "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "in_progress" | "denies_contact" | "not_relevant" | null }) => {
       const { error } = await supabase
         .from("leads")
         .update({ response_status: responseStatus })

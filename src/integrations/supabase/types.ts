@@ -1907,6 +1907,7 @@ export type Database = {
         | "no_answer_4"
         | "denies_contact"
         | "not_relevant"
+        | "in_progress"
       lead_source:
         | "website"
         | "referral"
@@ -2096,6 +2097,7 @@ export const Constants = {
         "no_answer_4",
         "denies_contact",
         "not_relevant",
+        "in_progress",
       ],
       lead_source: [
         "website",
