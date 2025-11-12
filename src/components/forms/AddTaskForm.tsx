@@ -5,6 +5,7 @@ import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import {
   Form,
   FormControl,
@@ -80,6 +81,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
   const [taskCategory, setTaskCategory] = useState<"client" | "general">(clientId ? "client" : "general");
   const queryClient = useQueryClient();
+  const { tenantId: currentTenantId } = useCurrentTenant();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -172,18 +174,9 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
         if (!selectedAgency?.tenant_id) throw new Error("הסוכנות לא משויכת לטנט");
         tenantId = selectedAgency.tenant_id;
       } else {
-        // For general tasks without agency, get tenant from current user
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("משתמש לא מחובר");
-        
-        const { data: tenantData, error: tenantError } = await supabase
-          .from("tenant_users")
-          .select("tenant_id")
-          .eq("user_id", user.id)
-          .single();
-        
-        if (tenantError || !tenantData) throw new Error("לא נמצא טנט למשתמש");
-        tenantId = tenantData.tenant_id;
+        // For general tasks without agency, use current tenant
+        if (!currentTenantId) throw new Error("לא נמצא טנט פעיל");
+        tenantId = currentTenantId;
       }
       
       const { error } = await supabase.from("tasks").insert([{
