@@ -63,9 +63,11 @@ serve(async (req) => {
       });
 
       const refreshData = await refreshResponse.json();
+      console.log('Token refresh response:', refreshData);
       
       if (!refreshData.access_token) {
-        throw new Error('Failed to refresh access token');
+        console.error('Token refresh failed:', refreshData);
+        throw new Error(`Failed to refresh access token: ${refreshData.error || 'Unknown error'}`);
       }
 
       accessToken = refreshData.access_token;
