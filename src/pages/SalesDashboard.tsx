@@ -181,7 +181,7 @@ export default function SalesDashboard() {
       if (!tenantId) return [];
       let query = supabase
         .from("leads")
-        .select("created_at, status, updated_at, won_date, proposal_sent_date")
+        .select("created_at, status, won_date, proposal_sent_date")
         .eq("tenant_id", tenantId);
 
       if (selectedAgency && selectedAgency !== "all") {
