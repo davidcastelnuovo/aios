@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -46,11 +46,13 @@ const formSchema = z.object({
     "client_status_changed",
     "onboarding_status_changed",
   ]),
-  action_type: z.enum(["webhook", "email", "notification"]),
+  action_type: z.enum(["webhook", "email", "notification", "update_status"]),
   webhook_url: z.string().url("כתובת URL לא תקינה").optional(),
   webhook_method: z.enum(["POST", "GET", "PUT"]).optional(),
   body_template: z.string().optional(),
   conditions: z.string().optional(), // JSON string
+  status_entity: z.enum(["lead", "task"]).optional(),
+  status_value: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -63,6 +65,21 @@ const TRIGGER_OPTIONS = [
   { value: "client_created", label: "לקוח נוצר" },
   { value: "client_status_changed", label: "סטטוס לקוח השתנה" },
   { value: "onboarding_status_changed", label: "סטטוס קליטה השתנה" },
+];
+
+const LEAD_STATUS_OPTIONS = [
+  { value: "new", label: "ליד חדש" },
+  { value: "contacted", label: "נוצר קשר" },
+  { value: "follow_up", label: "בתהליך" },
+  { value: "proposal_sent", label: "נשלחה הצעה" },
+  { value: "closed", label: "נסגר" },
+  { value: "transferred_to_onboarding", label: "הועבר לקליטה" },
+];
+
+const TASK_STATUS_OPTIONS = [
+  { value: "open", label: "פתוח" },
+  { value: "in_progress", label: "בתהליך" },
+  { value: "done", label: "הושלם" },
 ];
 
 export function AddAutomationForm() {
@@ -81,6 +98,8 @@ export function AddAutomationForm() {
       webhook_url: "",
       body_template: "",
       conditions: "",
+      status_entity: "lead",
+      status_value: "",
     },
   });
 
@@ -115,6 +134,11 @@ export function AddAutomationForm() {
           method: values.webhook_method || "POST",
           headers: { "Content-Type": "application/json" },
           body_template: values.body_template || "",
+        };
+      } else if (values.action_type === "update_status") {
+        configuration = {
+          entity: values.status_entity,
+          status: values.status_value,
         };
       }
 
@@ -158,6 +182,7 @@ export function AddAutomationForm() {
   };
 
   const actionType = form.watch("action_type");
+  const statusEntity = form.watch("status_entity");
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -243,6 +268,7 @@ export function AddAutomationForm() {
                     </FormControl>
                     <SelectContent className="bg-background z-[100]">
                       <SelectItem value="webhook">Webhook</SelectItem>
+                      <SelectItem value="update_status">שינוי סטטוס</SelectItem>
                       <SelectItem value="email" disabled>אימייל (בקרוב)</SelectItem>
                       <SelectItem value="notification" disabled>התראה (בקרוב)</SelectItem>
                     </SelectContent>
@@ -313,6 +339,65 @@ export function AddAutomationForm() {
                       </FormControl>
                       <FormDescription className="text-xs">
                         השתמש ב-{`{{variable}}`} להחליף ערכים. אם ריק, כל הנתונים יישלחו.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
+
+            {actionType === "update_status" && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="status_entity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>סוג רשומה *</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר סוג רשומה" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          <SelectItem value="lead">ליד</SelectItem>
+                          <SelectItem value="task">משימה</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="status_value"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>סטטוס חדש *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר סטטוס" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          {statusEntity === "lead" && LEAD_STATUS_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                          {statusEntity === "task" && TASK_STATUS_OPTIONS.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-xs">
+                        הסטטוס יעודכן אוטומטית כשהאוטומציה תופעל
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
