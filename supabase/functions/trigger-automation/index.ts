@@ -140,27 +140,9 @@ async function executeWebhook(config: any, data: any) {
     ...(config.headers || {}),
   }
 
-  // Prepare body - flatten the data object to make fields mappable in Make.com
-  let bodyData: any
-  
-  if (config.body_template) {
-    // If there's a custom template, use it with variable replacement
-    let bodyString = config.body_template
-    if (typeof bodyString === 'string') {
-      // Replace {{variable}} with actual values
-      bodyString = bodyString.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
-        return data[key.trim()] || match
-      })
-    }
-    bodyData = bodyString
-  } else {
-    // Default: Send data as flat object with individual fields
-    // This makes it easy to map fields in Make.com
-    bodyData = JSON.stringify({
-      text: "משימה חדשה הוקצתה!",
-      ...data,  // Spread all data fields as separate keys
-    })
-  }
+  // Send data as flat JSON object with individual fields
+  // This makes it easy to map fields in Make.com
+  const bodyData = JSON.stringify(data)
 
   console.log('Webhook body:', bodyData)
 
