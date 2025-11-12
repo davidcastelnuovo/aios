@@ -201,7 +201,7 @@ async function executeStatusUpdate(supabase: any, config: any, data: any) {
   // Build update object
   const updateData: any = {}
   
-  // Update status if provided
+  // Update status only if provided (optional now)
   if (status) {
     updateData.status = status
   }
@@ -211,6 +211,12 @@ async function executeStatusUpdate(supabase: any, config: any, data: any) {
     const today = new Date().toISOString().split('T')[0] // Format: YYYY-MM-DD
     updateData[update_field] = today
     console.log(`Setting ${update_field} to ${today}`)
+  }
+  
+  // Ensure we have something to update
+  if (Object.keys(updateData).length === 0) {
+    console.log('No updates to perform')
+    return { success: true, message: 'No updates needed' }
   }
   
   console.log('Update data:', updateData)
