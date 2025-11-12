@@ -78,17 +78,25 @@ export default function SalesDashboard() {
       const productMap = new Map<string, { count: number; totalValue: number; closedValue: number; closedCount: number }>();
       
       data.forEach((lead) => {
-        if (lead.products) {
-          const products = lead.products.split(',').map((p: string) => p.trim());
+        if (lead.products && lead.products.trim()) {
+          // Split by comma and clean up product names
+          const products = lead.products
+            .split(',')
+            .map((p: string) => p.trim())
+            .filter((p: string) => p.length > 0);
+          
+          // Divide value equally among products to avoid double counting
+          const valuePerProduct = (lead.estimated_deal_value || 0) / (products.length || 1);
+          
           products.forEach((product: string) => {
             if (!productMap.has(product)) {
               productMap.set(product, { count: 0, totalValue: 0, closedValue: 0, closedCount: 0 });
             }
             const stats = productMap.get(product)!;
             stats.count++;
-            stats.totalValue += lead.estimated_deal_value || 0;
+            stats.totalValue += valuePerProduct;
             if (lead.status === "closed") {
-              stats.closedValue += lead.estimated_deal_value || 0;
+              stats.closedValue += valuePerProduct;
               stats.closedCount++;
             }
           });
