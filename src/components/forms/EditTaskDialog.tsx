@@ -200,34 +200,48 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
 
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
+      console.log('EditTask: Starting update mutation', { taskId: task.id, values });
+      
       // Get agency_id from the selected client
       const selectedClient = clients?.find(c => c.id === values.client_id);
+      console.log('EditTask: Selected client', { selectedClient, allClients: clients?.length });
+      
       if (!selectedClient?.agency_id) {
+        console.error('EditTask: No agency_id found for client', { clientId: values.client_id });
         throw new Error("הלקוח שנבחר לא משויך לסוכנות");
       }
 
-      const { error } = await supabase
+      const updateData = {
+        title: values.title,
+        notes: values.notes || null,
+        campaigner_id: values.campaigner_id,
+        client_id: values.client_id,
+        agency_id: selectedClient.agency_id,
+        due_date: values.due_date || null,
+        status: values.status,
+        priority: values.priority,
+        task_type: "other" as const,
+      };
+      
+      console.log('EditTask: Update data', updateData);
+
+      const { data, error } = await supabase
         .from("tasks")
-        .update({
-          title: values.title,
-          notes: values.notes || null,
-          campaigner_id: values.campaigner_id,
-          client_id: values.client_id,
-          agency_id: selectedClient.agency_id,
-          due_date: values.due_date || null,
-          status: values.status,
-          priority: values.priority,
-          task_type: "other",
-        })
-        .eq("id", task.id);
+        .update(updateData)
+        .eq("id", task.id)
+        .select();
+        
+      console.log('EditTask: Update result', { data, error });
       if (error) throw error;
     },
     onSuccess: () => {
+      console.log('EditTask: Update successful');
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.success("המשימה עודכנה בהצלחה");
       onOpenChange(false);
     },
     onError: (error: Error) => {
+      console.error('EditTask: Update failed', error);
       toast.error(`שגיאה בעדכון משימה: ${error.message}`);
     },
   });
