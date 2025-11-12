@@ -38,15 +38,30 @@ serve(async (req: Request) => {
     payload.phone = (payload.phone || "").trim();
     payload.organizationName = (payload.organizationName || "").trim();
     
-    // Validate input
-    if (!payload.email || !payload.password || !payload.fullName || !payload.organizationName) {
+    // Auth context for conditional validation
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+    const authHeader = req.headers.get("authorization") ?? "";
+    let authenticatedUser: any = null;
+
+    if (authHeader && authHeader !== "" && authHeader !== "Bearer ") {
+      console.log("🔍 Checking for authenticated user...");
+      const authClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
+      const { data: authData, error: authCheckError } = await authClient.auth.getUser();
+      if (!authCheckError && authData?.user) {
+        authenticatedUser = authData.user;
+        console.log("✅ Found authenticated user:", authenticatedUser.id, authenticatedUser.email);
+      }
+    }
+    
+    // Validate input (password required only if not authenticated)
+    if (!payload.email || !payload.fullName || !payload.organizationName || (!authenticatedUser && !payload.password)) {
       return new Response(
         JSON.stringify({ success: false, error: "Missing required fields" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    if (payload.password.length < 6) {
+    if (!authenticatedUser && payload.password && payload.password.length < 6) {
       return new Response(
         JSON.stringify({ success: false, error: "Password must be at least 6 characters" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -63,59 +78,57 @@ serve(async (req: Request) => {
     let newUserCreated = false;
 
     // First check if user is already authenticated
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-    const authHeader = req.headers.get("authorization") ?? "";
-    let authenticatedUser = null;
-    
-    if (authHeader && authHeader !== "" && authHeader !== "Bearer ") {
-      console.log("🔍 Checking for authenticated user...");
-      const authClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } } });
-      const { data: authData, error: authCheckError } = await authClient.auth.getUser();
-      
-      if (!authCheckError && authData?.user) {
-        authenticatedUser = authData.user;
-        console.log("✅ Found authenticated user:", authenticatedUser.id, authenticatedUser.email);
-      }
-    }
+    // auth context already checked above
 
     // If a user is already authenticated, always use their account (ignore form email/password)
     if (authenticatedUser) {
       userId = authenticatedUser.id;
       console.log("↩️ Using existing authenticated user:", userId);
     } else {
-      // Try to create a new user for the provided email
-      const { data: userData, error: userError }: any = await supabase.auth.admin.createUser({
+      // Try to reuse existing account by verifying provided credentials
+      const authClient = createClient(supabaseUrl, anonKey);
+      const { data: signInData, error: signInError } = await authClient.auth.signInWithPassword({
         email: payload.email,
         password: payload.password,
-        email_confirm: true,
-        user_metadata: {
-          full_name: payload.fullName,
-          phone: payload.phone,
-        },
       });
-
-      if (userError || !userData?.user) {
-        const isEmailExists = (userError as any)?.status === 422 || (userError as any)?.code === 'email_exists';
-        if (isEmailExists) {
-          console.error("❌ Email exists and another session is logged in (or not logged in)");
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: "האימייל כבר קיים. היכנס/י לחשבון ואז נסה/י שוב ליצור ארגון חדש." 
-            }),
-            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        } else {
-          console.error("Error creating user:", userError);
-          return new Response(
-            JSON.stringify({ success: false, error: (userError as any)?.message || "Failed to create user" }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+      if (!signInError && signInData?.user) {
+        userId = signInData.user.id;
+        console.log("↩️ Reusing existing account via credentials:", userId);
       } else {
-        userId = userData.user.id;
-        newUserCreated = true;
-        console.log("✅ User created:", userId);
+        // Otherwise, create a new user for the provided email
+        const { data: userData, error: userError }: any = await supabase.auth.admin.createUser({
+          email: payload.email,
+          password: payload.password,
+          email_confirm: true,
+          user_metadata: {
+            full_name: payload.fullName,
+            phone: payload.phone,
+          },
+        });
+
+        if (userError || !userData?.user) {
+          const isEmailExists = (userError as any)?.status === 422 || (userError as any)?.code === 'email_exists';
+          if (isEmailExists) {
+            console.error("❌ Email exists and provided credentials didn't match (and no session)");
+            return new Response(
+              JSON.stringify({ 
+                success: false, 
+                error: "האימייל כבר קיים. היכנס/י לחשבון או הזן/הזיני סיסמה תקינה ואז נסה/י שוב." 
+              }),
+              { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          } else {
+            console.error("Error creating user:", userError);
+            return new Response(
+              JSON.stringify({ success: false, error: (userError as any)?.message || "Failed to create user" }),
+              { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        } else {
+          userId = userData.user.id;
+          newUserCreated = true;
+          console.log("✅ User created:", userId);
+        }
       }
     }
 
