@@ -23,7 +23,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash2, Save } from "lucide-react";
+import { Plus, Trash2, Save, Edit } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -61,6 +61,8 @@ export default function FieldsManagement() {
   const queryClient = useQueryClient();
   const [selectedEntity, setSelectedEntity] = useState<'task' | 'client' | 'lead'>('task');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingField, setEditingField] = useState<CustomField | null>(null);
   const [newField, setNewField] = useState({
     field_key: '',
     field_label: '',
@@ -166,6 +168,30 @@ export default function FieldsManagement() {
       entity_type: selectedEntity,
       ...newField,
     });
+  };
+
+  const handleEditField = () => {
+    if (!editingField) return;
+
+    if (!editingField.field_label) {
+      toast.error('יש למלא את תווית השדה');
+      return;
+    }
+
+    updateMutation.mutate({
+      id: editingField.id,
+      field_label: editingField.field_label,
+      field_type: editingField.field_type,
+      is_required: editingField.is_required,
+      is_visible: editingField.is_visible,
+    });
+    setIsEditDialogOpen(false);
+    setEditingField(null);
+  };
+
+  const openEditDialog = (field: CustomField) => {
+    setEditingField({ ...field });
+    setIsEditDialogOpen(true);
   };
 
   const getEntityLabel = (entityType: string) => {
@@ -333,14 +359,23 @@ export default function FieldsManagement() {
                           />
                         </TableCell>
                         <TableCell>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => deleteMutation.mutate(field.id)}
-                            disabled={deleteMutation.isPending}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openEditDialog(field)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => deleteMutation.mutate(field.id)}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -351,6 +386,82 @@ export default function FieldsManagement() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>ערוך שדה</DialogTitle>
+          </DialogHeader>
+          {editingField && (
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit_field_key">מזהה שדה (לא ניתן לשינוי)</Label>
+                <Input
+                  id="edit_field_key"
+                  value={editingField.field_key}
+                  disabled
+                  className="bg-muted"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="edit_field_label">תווית שדה *</Label>
+                <Input
+                  id="edit_field_label"
+                  value={editingField.field_label}
+                  onChange={(e) => setEditingField({ ...editingField, field_label: e.target.value })}
+                  placeholder="שדה מותאם אישית"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="edit_field_type">סוג שדה</Label>
+                <Select
+                  value={editingField.field_type}
+                  onValueChange={(value) => setEditingField({ ...editingField, field_type: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FIELD_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="edit_is_required"
+                    checked={editingField.is_required}
+                    onCheckedChange={(checked) => setEditingField({ ...editingField, is_required: checked })}
+                  />
+                  <Label htmlFor="edit_is_required">חובה</Label>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="edit_is_visible"
+                    checked={editingField.is_visible}
+                    onCheckedChange={(checked) => setEditingField({ ...editingField, is_visible: checked })}
+                  />
+                  <Label htmlFor="edit_is_visible">נראה</Label>
+                </div>
+              </div>
+
+              <Button onClick={handleEditField} className="w-full" disabled={updateMutation.isPending}>
+                <Save className="h-4 w-4 ml-2" />
+                שמור שינויים
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
