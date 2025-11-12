@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Loader2, Trash2 } from "lucide-react";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 moment.locale('he');
 const localizer = momentLocalizer(moment);
@@ -33,8 +34,35 @@ export function InteractiveCalendar() {
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
 
+  // Reconnect Google Calendar flow (opens popup)
+  const handleReconnect = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
+        body: { action: 'init' },
+      });
+      if (error) throw error;
+
+      const authUrl = (data as any)?.authUrl;
+      if (!authUrl) throw new Error('לא נמצאה כתובת התחברות');
+
+      const popup = window.open(authUrl, 'calendar-auth', 'width=600,height=700');
+      // Listen for success from the callback
+      const handler = (event: MessageEvent) => {
+        if (event.data?.type === 'calendar_connected') {
+          toast.success('היומן התחבר בהצלחה');
+          popup?.close();
+          // Refetch events after reconnect
+          queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+          window.removeEventListener('message', handler);
+        }
+      };
+      window.addEventListener('message', handler);
+    } catch (e: any) {
+      toast.error(`שגיאה בהתחברות ליומן: ${e?.message || ''}`);
+    }
+  };
   // Fetch events
-  const { data: eventsData, isLoading } = useQuery({
+  const { data: eventsData, isLoading, error } = useQuery({
     queryKey: ['calendar-events', userId],
     queryFn: async () => {
       const now = new Date();
@@ -162,6 +190,15 @@ export function InteractiveCalendar() {
 
   return (
     <div className="space-y-4">
+      {(error as any)?.message && (((error as any).message || '').includes('invalid_grant') || ((error as any).message || '').includes('401')) && (
+        <Alert>
+          <AlertTitle>נדרש להתחבר מחדש ליומן</AlertTitle>
+          <AlertDescription className="flex items-center justify-between gap-2">
+            חיבור Google Calendar פג תוקף או בוטל. התחברו מחדש כדי להציג אירועים.
+            <Button size="sm" onClick={handleReconnect}>התחברות מחדש</Button>
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="bg-background rounded-lg border p-2 md:p-4 overflow-hidden" style={{ height: 'calc(100vh - 200px)', minHeight: 500, maxHeight: 800 }}>
         <Calendar
           localizer={localizer}

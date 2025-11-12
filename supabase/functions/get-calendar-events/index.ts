@@ -67,6 +67,29 @@ serve(async (req) => {
       
       if (!refreshData.access_token) {
         console.error('Token refresh failed:', refreshData);
+
+        // If Google says the refresh token is invalid or revoked, ask client to reconnect
+        if (refreshData.error === 'invalid_grant' || (refreshData.error_description && String(refreshData.error_description).toLowerCase().includes('invalid'))) {
+          try {
+            await supabaseClient
+              .from('calendar_tokens')
+              .delete()
+              .eq('user_id', user.id);
+          } catch (cleanupError) {
+            console.error('Failed to cleanup invalid calendar tokens', cleanupError);
+          }
+
+          return new Response(JSON.stringify({
+            success: false,
+            needsReconnect: true,
+            error: 'invalid_grant',
+            message: 'Google calendar connection expired or was revoked. Please reconnect your calendar.'
+          }), {
+            status: 401,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
         throw new Error(`Failed to refresh access token: ${refreshData.error || 'Unknown error'}`);
       }
 
