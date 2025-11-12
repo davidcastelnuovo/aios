@@ -119,7 +119,6 @@ const [eventEnd, setEventEnd] = useState("");
   const disconnectMutation = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.functions.invoke('google-calendar-auth', {
-        body: { action: 'disconnect' },
         method: 'DELETE',
       });
 
