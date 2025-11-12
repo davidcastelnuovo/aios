@@ -109,7 +109,7 @@ serve(async (req) => {
       });
     }
 
-    // For all other actions, read from body and require authentication
+    // For all other actions, require authentication
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -123,6 +123,19 @@ serve(async (req) => {
     }
     
     console.log('Authenticated user:', user.id, user.email);
+
+    // Handle disconnect separately (DELETE with no body)
+    if (req.method === 'DELETE') {
+      console.log('Disconnecting calendar for user:', user.id);
+      await supabaseClient
+        .from('calendar_tokens')
+        .delete()
+        .eq('user_id', user.id);
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const requestBody = await req.json();
     const action = requestBody.action;
@@ -168,18 +181,6 @@ serve(async (req) => {
         .single();
 
       return new Response(JSON.stringify({ connected: !!tokenData }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Disconnect
-    if (action === 'disconnect' && req.method === 'DELETE') {
-      await supabaseClient
-        .from('calendar_tokens')
-        .delete()
-        .eq('user_id', user.id);
-
-      return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
