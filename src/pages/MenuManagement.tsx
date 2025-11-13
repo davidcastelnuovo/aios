@@ -157,6 +157,7 @@ function SortableMenuItem({
 }
 
 interface MenuGroupProps {
+  id: string;
   title: string;
   items: MenuItem[];
   editingItems: Record<string, string>;
@@ -171,6 +172,7 @@ interface MenuGroupProps {
 }
 
 function MenuGroup({
+  id,
   title,
   items,
   children,
@@ -184,13 +186,38 @@ function MenuGroup({
   defaultOpen = false,
 }: MenuGroupProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.8 : 1,
+  };
 
   return (
-    <Card className="mb-4">
+    <Card ref={setNodeRef} style={style} className="mb-4">
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <CardHeader className="cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
           <CollapsibleTrigger className="flex items-center justify-between w-full">
-            <CardTitle className="text-lg">{title}</CardTitle>
+            <div className="flex items-center gap-3">
+              <div
+                {...attributes}
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <GripVertical className="h-5 w-5 text-muted-foreground" />
+              </div>
+              <CardTitle className="text-lg">{title}</CardTitle>
+            </div>
             <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
           </CollapsibleTrigger>
         </CardHeader>
@@ -381,83 +408,112 @@ export default function MenuManagement() {
   const salesParent = menuItems?.find(item => item.menu_key === 'sales');
   const salesItems = menuItems?.filter(item => item.parent_menu_key === 'sales') || [];
 
+  // Define group order
+  const [groupOrder, setGroupOrder] = useState(['main', 'management', 'sales']);
+
+  const handleGroupDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    setGroupOrder((items) => {
+      const oldIndex = items.indexOf(active.id as string);
+      const newIndex = items.indexOf(over.id as string);
+      return arrayMove(items, oldIndex, newIndex);
+    });
+  };
+
+  const groups = [
+    {
+      id: 'main',
+      title: 'תפריט ראשי',
+      items: mainItems,
+      children: undefined,
+    },
+    managementParent && {
+      id: 'management',
+      title: managementParent.custom_label || managementParent.original_label,
+      items: [managementParent],
+      children: managementItems,
+    },
+    salesParent && {
+      id: 'sales',
+      title: salesParent.custom_label || salesParent.original_label,
+      items: [salesParent],
+      children: salesItems,
+    },
+  ].filter(Boolean) as Array<{
+    id: string;
+    title: string;
+    items: MenuItem[];
+    children?: MenuItem[];
+  }>;
+
+  const orderedGroups = groupOrder
+    .map(id => groups.find(g => g.id === id))
+    .filter(Boolean) as typeof groups;
+
   return (
     <div className="space-y-6 p-6">
       <div>
         <h1 className="text-3xl font-bold">ניהול תפריטים</h1>
         <p className="text-muted-foreground mt-2">
-          גרור פריטים כדי לשנות את הסדר, ערוך שמות והגדרות. פריטים עם תת-תפריטים מוצגים בקבוצות מתקפלות.
+          גרור קבוצות כדי לשנות את סדרן, גרור פריטים כדי לשנות את הסדר בתוך כל קבוצה, ערוך שמות והגדרות.
         </p>
+      </div>
+
+      <div className="mb-4">
+        <Card>
+          <CardContent className="p-4">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="p-2 text-right w-24">גרירה</th>
+                  <th className="p-2 text-right">שם מקורי</th>
+                  <th className="p-2 text-right">שם מותאם</th>
+                  <th className="p-2 text-right">בדג'</th>
+                  <th className="p-2 text-right">נראה</th>
+                  <th className="p-2 text-right">פעולות</th>
+                </tr>
+              </thead>
+            </table>
+          </CardContent>
+        </Card>
       </div>
 
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
+        onDragEnd={handleGroupDragEnd}
       >
-        <div className="mb-4">
-          <Card>
-            <CardContent className="p-4">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="p-2 text-right w-24">גרירה</th>
-                    <th className="p-2 text-right">שם מקורי</th>
-                    <th className="p-2 text-right">שם מותאם</th>
-                    <th className="p-2 text-right">בדג'</th>
-                    <th className="p-2 text-right">נראה</th>
-                    <th className="p-2 text-right">פעולות</th>
-                  </tr>
-                </thead>
-              </table>
-            </CardContent>
-          </Card>
-        </div>
-
-        <MenuGroup
-          title="תפריט ראשי"
-          items={mainItems}
-          editingItems={editingItems}
-          updateMutation={updateMutation}
-          onLabelChange={handleLabelChange}
-          onSaveLabel={handleSaveLabel}
-          onResetLabel={handleResetLabel}
-          onToggleVisibility={handleToggleVisibility}
-          onBadgeChange={handleBadgeChange}
-          defaultOpen={true}
-        />
-
-        {managementParent && (
-          <MenuGroup
-            title={managementParent.custom_label || managementParent.original_label}
-            items={[managementParent]}
-            children={managementItems}
-            editingItems={editingItems}
-            updateMutation={updateMutation}
-            onLabelChange={handleLabelChange}
-            onSaveLabel={handleSaveLabel}
-            onResetLabel={handleResetLabel}
-            onToggleVisibility={handleToggleVisibility}
-            onBadgeChange={handleBadgeChange}
-            defaultOpen={true}
-          />
-        )}
-
-        {salesParent && (
-          <MenuGroup
-            title={salesParent.custom_label || salesParent.original_label}
-            items={[salesParent]}
-            children={salesItems}
-            editingItems={editingItems}
-            updateMutation={updateMutation}
-            onLabelChange={handleLabelChange}
-            onSaveLabel={handleSaveLabel}
-            onResetLabel={handleResetLabel}
-            onToggleVisibility={handleToggleVisibility}
-            onBadgeChange={handleBadgeChange}
-            defaultOpen={true}
-          />
-        )}
+        <SortableContext
+          items={groupOrder}
+          strategy={verticalListSortingStrategy}
+        >
+          {orderedGroups.map((group) => (
+            <DndContext
+              key={group.id}
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <MenuGroup
+                id={group.id}
+                title={group.title}
+                items={group.items}
+                children={group.children}
+                editingItems={editingItems}
+                updateMutation={updateMutation}
+                onLabelChange={handleLabelChange}
+                onSaveLabel={handleSaveLabel}
+                onResetLabel={handleResetLabel}
+                onToggleVisibility={handleToggleVisibility}
+                onBadgeChange={handleBadgeChange}
+                defaultOpen={true}
+              />
+            </DndContext>
+          ))}
+        </SortableContext>
       </DndContext>
     </div>
   );
