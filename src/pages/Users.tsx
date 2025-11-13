@@ -58,12 +58,12 @@ const roleLabels: Record<UserRole, string> = {
 };
 
 const roleBadgeColors: Record<UserRole, string> = {
-  owner: "bg-purple-500",
-  team_manager: "bg-green-500",
-  campaigner: "bg-orange-500",
-  sales_person: "bg-blue-500",
-  super_admin: "bg-red-500",
-  seo: "bg-teal-500",
+  owner: "bg-primary",
+  team_manager: "bg-secondary",
+  campaigner: "bg-accent",
+  sales_person: "bg-muted",
+  super_admin: "bg-destructive",
+  seo: "bg-muted",
 };
 
 export default function Users() {
@@ -371,22 +371,24 @@ export default function Users() {
   });
 
   // Check if current user is owner (from user_roles table)
-  const { data: isOwnerOfCurrentTenant } = useQuery({
-      queryKey: ["is-owner-of-tenant", tenantId, currentUserId],
+  const { data: canManageSuperAdminAccess } = useQuery({
+      queryKey: ["can-manage-super-admin-access", tenantId, currentUserId, isOwner],
       queryFn: async () => {
         if (!tenantId || !currentUserId) return false;
-        const { data, error } = await supabase
+        // Check membership in this tenant
+        const { data: membership, error } = await supabase
           .from("tenant_users")
           .select("role")
           .eq("user_id", currentUserId)
           .eq("tenant_id", tenantId)
-          .eq("role", "owner")
           .maybeSingle();
         if (error) {
-          console.error("Error checking owner role in tenant:", error);
+          console.error("Error checking tenant membership:", error);
           return false;
         }
-        return !!data;
+        if (!membership) return false;
+        // Owner of tenant OR global owner with membership
+        return membership.role === "owner" || isOwner;
       },
       enabled: !!tenantId && !!currentUserId,
     });
@@ -609,7 +611,7 @@ export default function Users() {
   }
 
   // Block super admin when owner disabled access for this tenant
-  if (isSuperAdmin && currentTenantDetails && currentTenantDetails.allow_super_admin_access === false && !isOwnerOfCurrentTenant) {
+  if (isSuperAdmin && currentTenantDetails && currentTenantDetails.allow_super_admin_access === false && !canManageSuperAdminAccess) {
     return (
       <div className="container mx-auto py-6">
         <Card className="p-6">
@@ -639,7 +641,7 @@ export default function Users() {
           </p>
           
           {/* Super Admin Access Control */}
-          {isOwnerOfCurrentTenant && (
+          {canManageSuperAdminAccess && (
             <Card className="mt-4 p-4 bg-muted/50">
               <div className="flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2 flex-1">
