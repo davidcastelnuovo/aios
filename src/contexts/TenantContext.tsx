@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
 interface TenantContextType {
@@ -12,6 +12,7 @@ interface TenantContextType {
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 export function TenantProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient();
   const [currentTenantId, setCurrentTenantId] = useState<string | null>(() => {
     try {
       return localStorage.getItem("selectedTenantId");
@@ -20,7 +21,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
   });
 
-  // Persist tenant selection
+  // Persist tenant selection and clear cache when tenant changes
   useEffect(() => {
     const updateActiveTenant = async () => {
       try {
@@ -40,6 +41,21 @@ export function TenantProvider({ children }: { children: ReactNode }) {
                 onConflict: "user_id"
               });
           }
+          
+          // CRITICAL: Clear all tenant-specific data from cache when switching tenants
+          console.log("🔄 Clearing cache for tenant switch:", currentTenantId);
+          queryClient.invalidateQueries({ queryKey: ["clients"] });
+          queryClient.invalidateQueries({ queryKey: ["agencies"] });
+          queryClient.invalidateQueries({ queryKey: ["leads"] });
+          queryClient.invalidateQueries({ queryKey: ["campaigners"] });
+          queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          queryClient.invalidateQueries({ queryKey: ["client-onboarding"] });
+          queryClient.invalidateQueries({ queryKey: ["finance"] });
+          queryClient.invalidateQueries({ queryKey: ["sales-people"] });
+          queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+          queryClient.invalidateQueries({ queryKey: ["products"] });
+          queryClient.invalidateQueries({ queryKey: ["automations"] });
+          queryClient.invalidateQueries({ queryKey: ["time-entries"] });
         } else {
           localStorage.removeItem("selectedTenantId");
         }
@@ -49,7 +65,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     };
     
     updateActiveTenant();
-  }, [currentTenantId]);
+  }, [currentTenantId, queryClient]);
 
   // Get current user's active tenant (priority) or first tenant
   const { data: userTenant, isLoading: isLoadingUserTenant } = useQuery({
