@@ -49,7 +49,7 @@ serve(async (req: Request) => {
     let tenants: any[] = [];
 
     if (isSuperAdmin) {
-      // Super admins can see tenants only if tenant allows it OR they are owners of that tenant
+      // Super admins see ALL tenants they are members of, plus those with allow_super_admin_access
       const [{ data: allTenants, error: allTenantsError }, { data: memberships, error: membershipsError }] = await Promise.all([
         supabase.from("tenants").select("id, name, slug, allow_super_admin_access").order("name"),
         supabase.from("tenant_users").select("tenant_id, role").eq("user_id", user.id),
@@ -64,9 +64,9 @@ serve(async (req: Request) => {
         throw new Error("Failed to fetch memberships");
       }
 
-      const ownerTenantIds = new Set((memberships || []).filter((m: any) => m.role === "owner").map((m: any) => m.tenant_id));
+      const memberTenantIds = new Set((memberships || []).map((m: any) => m.tenant_id));
       tenants = (allTenants || [])
-        .filter((t: any) => t.allow_super_admin_access === true || ownerTenantIds.has(t.id))
+        .filter((t: any) => t.allow_super_admin_access === true || memberTenantIds.has(t.id))
         .map((t: any) => ({ id: t.id, name: t.name, slug: t.slug }));
     } else {
       // Regular users see only their tenants
