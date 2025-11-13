@@ -152,6 +152,7 @@ export function ImportClientsCSV() {
         monthly_budget: number | null;
         website: string | null;
         notes: string | null;
+        tenant_id: string;
       }> = [];
 
       validRows.forEach((row) => {
@@ -185,6 +186,7 @@ export function ImportClientsCSV() {
             monthly_budget: row.monthly_budget ? parseFloat(row.monthly_budget) : null,
             website: row.website || null,
             notes: row.notes || null,
+            tenant_id: tenantData.tenant_id,
           });
         }
       });

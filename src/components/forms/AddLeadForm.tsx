@@ -17,6 +17,7 @@ import { Plus, CalendarIcon } from "lucide-react";
 import { useAgency } from "@/contexts/AgencyContext";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const formSchema = z.object({
   company_name: z.string().min(1, "שם העסק הוא שדה חובה"),
@@ -43,6 +44,7 @@ export function AddLeadForm() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
+  const { tenantId } = useCurrentTenant();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -105,6 +107,8 @@ export function AddLeadForm() {
 
   const createMutation = useMutation({
     mutationFn: async (values: FormValues) => {
+      if (!tenantId) throw new Error("לא נמצא tenant_id");
+      
       const submitData: any = {
         company_name: values.company_name,
         contact_name: values.contact_name || null,
@@ -123,6 +127,7 @@ export function AddLeadForm() {
         agency_id: values.agency_id || null,
         folder_link: values.folder_link || null,
         created_at: values.created_at || new Date(),
+        tenant_id: tenantId,
       };
 
       const { data, error } = await supabase

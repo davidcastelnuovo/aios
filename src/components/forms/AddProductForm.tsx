@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם המוצר הוא שדה חובה"),
@@ -32,22 +33,7 @@ interface AddProductFormProps {
 
 export default function AddProductForm({ onSuccess }: AddProductFormProps) {
   const queryClient = useQueryClient();
-
-  const { data: tenantId } = useQuery({
-    queryKey: ["user-tenant-id"],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return null;
-      
-      const { data } = await supabase
-        .from("tenant_users")
-        .select("tenant_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      
-      return data?.tenant_id || null;
-    },
-  });
+  const { tenantId } = useCurrentTenant();
 
   // Fetch owned agencies
   const { data: agencies } = useQuery({
@@ -78,6 +64,8 @@ export default function AddProductForm({ onSuccess }: AddProductFormProps) {
 
   const createMutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
+      if (!tenantId) throw new Error("לא נמצא tenant_id");
+      
       const { error } = await supabase.from("products").insert({
         name: values.name,
         description: values.description || null,

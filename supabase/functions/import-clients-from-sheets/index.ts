@@ -29,6 +29,40 @@ Deno.serve(async (req) => {
       throw new Error('Sheet ID is required')
     }
 
+    // Create Supabase client to get user's tenant_id
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      throw new Error('Missing authorization header')
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: { Authorization: authHeader },
+        },
+      }
+    )
+
+    // Get user and their tenant_id
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser()
+    if (userError || !user) {
+      throw new Error('User not authenticated')
+    }
+
+    const { data: tenantData, error: tenantError } = await supabaseClient
+      .from('tenant_users')
+      .select('tenant_id')
+      .eq('user_id', user.id)
+      .single()
+
+    if (tenantError || !tenantData?.tenant_id) {
+      throw new Error('User tenant not found')
+    }
+
+    const tenantId = tenantData.tenant_id
+
     const googleApiKey = Deno.env.get('GOOGLE_API_KEY')
     if (!googleApiKey) {
       throw new Error('Google API key not configured')
@@ -60,8 +94,8 @@ Deno.serve(async (req) => {
     const headers = rows[0].map((h: string) => h.toLowerCase().trim())
     const dataRows = rows.slice(1)
 
-    // Create Supabase client
-    const supabaseClient = createClient(
+    // Create service role client for inserting
+    const serviceClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     )
@@ -132,8 +166,8 @@ Deno.serve(async (req) => {
     console.log('Valid clients to import:', clients.length)
     console.log('Errors:', errors.length)
 
-    // Insert clients into database
-    const { data, error } = await supabaseClient
+    // Insert clients into database with tenant_id
+    const { data, error } = await serviceClient
       .from('clients')
       .insert(clients.map(c => ({
         name: c.name,
@@ -144,6 +178,7 @@ Deno.serve(async (req) => {
         monthly_budget: c.monthly_budget ? parseFloat(c.monthly_budget) : null,
         website: c.website || null,
         notes: c.notes || null,
+        tenant_id: tenantId,
       })))
       .select()
 

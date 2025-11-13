@@ -31,6 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const formSchema = z.object({
   full_name: z.string().min(1, "שם מלא הוא שדה חובה"),
@@ -47,6 +48,7 @@ type FormValues = z.infer<typeof formSchema>;
 export function AddCampaignerForm() {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -75,17 +77,7 @@ export function AddCampaignerForm() {
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
-      // Get current user's tenant_id
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("משתמש לא מחובר");
-      
-      const { data: tenantUser } = await supabase
-        .from("tenant_users")
-        .select("tenant_id")
-        .eq("user_id", user.id)
-        .single();
-      
-      if (!tenantUser?.tenant_id) throw new Error("לא נמצא tenant_id למשתמש");
+      if (!tenantId) throw new Error("לא נמצא tenant_id");
       
       // יצירת הקמפיינר
       const { data: campaigner, error: campaignerError } = await supabase
@@ -98,7 +90,7 @@ export function AddCampaignerForm() {
           folder_link: values.folder_link || null,
           notes: values.notes || null,
           active: true,
-          tenant_id: tenantUser.tenant_id,
+          tenant_id: tenantId,
         })
         .select()
         .single();

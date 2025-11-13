@@ -16,6 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const formSchema = z.object({
   title: z.string().min(1, "כותרת היא שדה חובה"),
@@ -37,6 +38,7 @@ export default function AddOnboardingForm({ clientId, agencyId }: AddOnboardingF
   const [open, setOpen] = useState(false);
   const [clientOpen, setClientOpen] = useState(false);
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -80,6 +82,8 @@ export default function AddOnboardingForm({ clientId, agencyId }: AddOnboardingF
 
   const createOnboardingMutation = useMutation({
     mutationFn: async (values: FormValues) => {
+      if (!tenantId) throw new Error("לא נמצא tenant_id");
+      
       const client = clients?.find((c) => c.id === values.client_id);
       if (!client) throw new Error("Client not found");
 
@@ -92,6 +96,7 @@ export default function AddOnboardingForm({ clientId, agencyId }: AddOnboardingF
           agency_id: client.agency_id,
           due_date: values.due_date || null,
           status: values.status,
+          tenant_id: tenantId,
         },
       ]);
 
