@@ -50,34 +50,41 @@ const App = () => (
           <ThemeProvider>
             <AgencyProvider>
               <Routes>
+            {/* Public routes */}
             <Route path="/landing" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/setup" element={<Setup />} />
-            <Route path="/" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
-            <Route path="/agencies" element={<ProtectedRoute requiredPermission="agencies"><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
-            <Route path="/clients" element={<ProtectedRoute requiredPermission="clients"><AppLayout><Clients /></AppLayout></ProtectedRoute>} />
-            <Route path="/campaigners" element={<ProtectedRoute requiredPermission="campaigners"><AppLayout><Campaigners /></AppLayout></ProtectedRoute>} />
-            <Route path="/suppliers" element={<ProtectedRoute requiredPermission="suppliers"><AppLayout><Suppliers /></AppLayout></ProtectedRoute>} />
-            <Route path="/finance" element={<ProtectedRoute requiredPermission="finance"><AppLayout><Finance /></AppLayout></ProtectedRoute>} />
-            <Route path="/tasks" element={<ProtectedRoute requiredPermission="tasks"><AppLayout><Tasks /></AppLayout></ProtectedRoute>} />
-            <Route path="/client-onboarding" element={<ProtectedRoute requiredPermission="client_onboarding"><AppLayout><ClientOnboarding /></AppLayout></ProtectedRoute>} />
-            <Route path="/time-tracking" element={<ProtectedRoute requiredPermission="time_tracking"><AppLayout><TimeTracking /></AppLayout></ProtectedRoute>} />
-            <Route path="/reports" element={<ProtectedRoute requiredPermission="reports"><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
-            <Route path="/my-profile" element={<ProtectedRoute><AppLayout><MyProfile /></AppLayout></ProtectedRoute>} />
-            <Route path="/users" element={<ProtectedRoute requiredPermission="users"><AppLayout><Users /></AppLayout></ProtectedRoute>} />
-            <Route path="/sales-dashboard" element={<ProtectedRoute requiredPermission="sales_dashboard"><AppLayout><SalesDashboard /></AppLayout></ProtectedRoute>} />
-            <Route path="/sales-people" element={<ProtectedRoute requiredPermission="sales_people"><AppLayout><SalesPeople /></AppLayout></ProtectedRoute>} />
-            <Route path="/leads" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Leads /></AppLayout></ProtectedRoute>} />
-            <Route path="/lead-integrations" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><LeadIntegrations /></AppLayout></ProtectedRoute>} />
-            <Route path="/tenants" element={<ProtectedRoute requiredPermission="tenants"><AppLayout><Tenants /></AppLayout></ProtectedRoute>} />
-            <Route path="/automations" element={<ProtectedRoute requiredPermission="automations"><AppLayout><Automations /></AppLayout></ProtectedRoute>} />
-            <Route path="/products" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Products /></AppLayout></ProtectedRoute>} />
-            <Route path="/branding" element={<ProtectedRoute requiredPermission="branding"><AppLayout><Branding /></AppLayout></ProtectedRoute>} />
-            <Route path="/accounting-integrations" element={<ProtectedRoute requiredPermission="accounting"><AppLayout><AccountingIntegrations /></AppLayout></ProtectedRoute>} />
-            <Route path="/ai-support" element={<ProtectedRoute requiredPermission="ai_support"><AppLayout><AISupport /></AppLayout></ProtectedRoute>} />
-            <Route path="/menu-management" element={<ProtectedRoute requiredPermission="menu_management"><AppLayout><MenuManagement /></AppLayout></ProtectedRoute>} />
-            <Route path="/fields-management" element={<ProtectedRoute requiredPermission="fields_management"><AppLayout><FieldsManagement /></AppLayout></ProtectedRoute>} />
+            
+            {/* Tenant-scoped routes */}
+            <Route path="/t/:tenantSlug" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/dashboard" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/agencies" element={<ProtectedRoute requiredPermission="agencies"><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/clients" element={<ProtectedRoute requiredPermission="clients"><AppLayout><Clients /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/campaigners" element={<ProtectedRoute requiredPermission="campaigners"><AppLayout><Campaigners /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/suppliers" element={<ProtectedRoute requiredPermission="suppliers"><AppLayout><Suppliers /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/finance" element={<ProtectedRoute requiredPermission="finance"><AppLayout><Finance /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/tasks" element={<ProtectedRoute requiredPermission="tasks"><AppLayout><Tasks /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/client-onboarding" element={<ProtectedRoute requiredPermission="client_onboarding"><AppLayout><ClientOnboarding /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/time-tracking" element={<ProtectedRoute requiredPermission="time_tracking"><AppLayout><TimeTracking /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/reports" element={<ProtectedRoute requiredPermission="reports"><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/my-profile" element={<ProtectedRoute><AppLayout><MyProfile /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/users" element={<ProtectedRoute requiredPermission="users"><AppLayout><Users /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/sales-dashboard" element={<ProtectedRoute requiredPermission="sales_dashboard"><AppLayout><SalesDashboard /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/sales-people" element={<ProtectedRoute requiredPermission="sales_people"><AppLayout><SalesPeople /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/leads" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Leads /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/lead-integrations" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><LeadIntegrations /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/tenants" element={<ProtectedRoute requiredPermission="tenants"><AppLayout><Tenants /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/automations" element={<ProtectedRoute requiredPermission="automations"><AppLayout><Automations /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/products" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Products /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/branding" element={<ProtectedRoute requiredPermission="branding"><AppLayout><Branding /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/accounting-integrations" element={<ProtectedRoute requiredPermission="accounting"><AppLayout><AccountingIntegrations /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/ai-support" element={<ProtectedRoute requiredPermission="ai_support"><AppLayout><AISupport /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/menu-management" element={<ProtectedRoute requiredPermission="menu_management"><AppLayout><MenuManagement /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/fields-management" element={<ProtectedRoute requiredPermission="fields_management"><AppLayout><FieldsManagement /></AppLayout></ProtectedRoute>} />
+            
+            {/* Legacy root path redirects to landing */}
+            <Route path="/" element={<Landing />} />
             <Route path="*" element={<NotFound />} />
             </Routes>
             </AgencyProvider>

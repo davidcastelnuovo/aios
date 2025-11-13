@@ -52,36 +52,36 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const menuItems = [
-  { title: "סוכנויות", url: "/agencies", icon: Building2, module: "agencies" as const },
-  { title: "לקוחות", url: "/clients", icon: Users, module: "clients" as const },
-  { title: "משימות", url: "/tasks", icon: CheckSquare, module: "tasks" as const },
-  { title: "לקוחות בקליטה", url: "/client-onboarding", icon: UserPlus, module: "client_onboarding" as const },
-  { title: "שעון נוכחות", url: "/time-tracking", icon: Clock, module: "time_tracking" as const },
-  { title: "צוות", url: "/campaigners", icon: Megaphone, module: "campaigners" as const },
-  { title: "ניהול משתמשים", url: "/users", icon: ShieldCheck, module: "users" as const },
-  { title: "אזור אישי", url: "/my-profile", icon: User, module: null },
+  { title: "סוכנויות", url: "agencies", icon: Building2, module: "agencies" as const },
+  { title: "לקוחות", url: "clients", icon: Users, module: "clients" as const },
+  { title: "משימות", url: "tasks", icon: CheckSquare, module: "tasks" as const },
+  { title: "לקוחות בקליטה", url: "client-onboarding", icon: UserPlus, module: "client_onboarding" as const },
+  { title: "שעון נוכחות", url: "time-tracking", icon: Clock, module: "time_tracking" as const },
+  { title: "צוות", url: "campaigners", icon: Megaphone, module: "campaigners" as const },
+  { title: "ניהול משתמשים", url: "users", icon: ShieldCheck, module: "users" as const },
+  { title: "אזור אישי", url: "my-profile", icon: User, module: null },
 ];
 
 const managementMenuItems = [
-  { title: "דשבורד", url: "/", icon: LayoutDashboard, module: "dashboard" as const },
-  { title: "כספים", url: "/finance", icon: DollarSign, module: "finance" as const },
-  { title: "דוחות", url: "/reports", icon: BarChart3, module: "reports" as const },
-  { title: "ספקים", url: "/suppliers", icon: Truck, module: "suppliers" as const },
-  { title: "אוטומציות", url: "/automations", icon: Zap, module: "automations" as const },
-  { title: "ניהול ארגונים", url: "/tenants", icon: Building, module: "tenants" as const },
-  { title: "התאמת מערכת", url: "/branding", icon: Palette, module: "branding" as const },
-  { title: "הנהלת חשבונות", url: "/accounting-integrations", icon: Building, module: "accounting" as const },
-  { title: "תמיכה טכנית AI", url: "/ai-support", icon: Bot, module: "ai_support" as const },
-  { title: "ניהול תפריטים", url: "/menu-management", icon: Menu, module: "menu_management" as const },
-  { title: "ניהול שדות", url: "/fields-management", icon: ListTree, module: "fields_management" as const },
+  { title: "דשבורד", url: "dashboard", icon: LayoutDashboard, module: "dashboard" as const },
+  { title: "כספים", url: "finance", icon: DollarSign, module: "finance" as const },
+  { title: "דוחות", url: "reports", icon: BarChart3, module: "reports" as const },
+  { title: "ספקים", url: "suppliers", icon: Truck, module: "suppliers" as const },
+  { title: "אוטומציות", url: "automations", icon: Zap, module: "automations" as const },
+  { title: "ניהול ארגונים", url: "tenants", icon: Building, module: "tenants" as const },
+  { title: "התאמת מערכת", url: "branding", icon: Palette, module: "branding" as const },
+  { title: "הנהלת חשבונות", url: "accounting-integrations", icon: Building, module: "accounting" as const },
+  { title: "תמיכה טכנית AI", url: "ai-support", icon: Bot, module: "ai_support" as const },
+  { title: "ניהול תפריטים", url: "menu-management", icon: Menu, module: "menu_management" as const },
+  { title: "ניהול שדות", url: "fields-management", icon: ListTree, module: "fields_management" as const },
 ];
 
 const salesMenuItems = [
-  { title: "דשבורד מכירות", url: "/sales-dashboard", icon: TrendingUp, module: "sales_dashboard" as const },
-  { title: "לידים", url: "/leads", icon: Target, module: "leads" as const },
-  { title: "מוצרים ושירותים", url: "/products", icon: Package, module: "leads" as const },
-  { title: "אנשי מכירות", url: "/sales-people", icon: UserCheck, module: "sales_people" as const },
-  { title: "אינטגרציות לידים", url: "/lead-integrations", icon: Settings, module: "lead_integrations" as const },
+  { title: "דשבורד מכירות", url: "sales-dashboard", icon: TrendingUp, module: "sales_dashboard" as const },
+  { title: "לידים", url: "leads", icon: Target, module: "leads" as const },
+  { title: "מוצרים ושירותים", url: "products", icon: Package, module: "leads" as const },
+  { title: "אנשי מכירות", url: "sales-people", icon: UserCheck, module: "sales_people" as const },
+  { title: "אינטגרציות לידים", url: "lead-integrations", icon: Settings, module: "lead_integrations" as const },
 ];
 
 export function AppSidebar() {

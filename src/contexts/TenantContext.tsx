@@ -1,9 +1,11 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
 interface TenantContextType {
   currentTenantId: string | null;
+  currentTenantSlug: string | null;
   setCurrentTenantId: (tenantId: string) => void;
   currentTenant: any;
   isLoading: boolean;
@@ -13,6 +15,8 @@ const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 export function TenantProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const { tenantSlug } = useParams();
+  const navigate = useNavigate();
   const [currentTenantId, setCurrentTenantId] = useState<string | null>(() => {
     try {
       return localStorage.getItem("selectedTenantId");
@@ -20,6 +24,35 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       return null;
     }
   });
+
+  // Get tenant by slug from URL
+  const { data: tenantFromSlug, isLoading: isLoadingSlug } = useQuery({
+    queryKey: ["tenant-by-slug", tenantSlug],
+    queryFn: async () => {
+      if (!tenantSlug) return null;
+      
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("id, name, slug")
+        .eq("slug", tenantSlug)
+        .maybeSingle();
+      
+      if (error) {
+        console.error("Error fetching tenant by slug:", error);
+        return null;
+      }
+      
+      return data;
+    },
+    enabled: !!tenantSlug,
+  });
+
+  // Update currentTenantId when URL slug changes
+  useEffect(() => {
+    if (tenantFromSlug?.id && tenantFromSlug.id !== currentTenantId) {
+      setCurrentTenantId(tenantFromSlug.id);
+    }
+  }, [tenantFromSlug, currentTenantId]);
 
   // Persist tenant selection and clear cache when tenant changes
   useEffect(() => {
@@ -77,7 +110,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       // Get all user's tenants
       const { data: userTenants, error: tenantsError } = await supabase
         .from("tenant_users")
-        .select("tenant_id, tenants(id, name, status)")
+        .select("tenant_id, tenants(id, name, slug, status)")
         .eq("user_id", user.id);
 
       if (tenantsError || !userTenants || userTenants.length === 0) {
@@ -106,6 +139,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       return userTenants[0] as any;
     },
     staleTime: 1000 * 60 * 5,
+    enabled: !tenantSlug, // Only fetch if not in tenant-scoped route
   });
 
   // Get current tenant details
@@ -130,14 +164,26 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     enabled: !!currentTenantId,
   });
 
-  // Set default tenant from user's tenant if not already set
+  // Set default tenant from user's tenant if not already set (for non-tenant routes)
   useEffect(() => {
-    if (!currentTenantId && userTenant?.tenant_id) {
+    if (!tenantSlug && !currentTenantId && userTenant?.tenant_id) {
       setCurrentTenantId(userTenant.tenant_id);
     }
-  }, [currentTenantId, userTenant]);
+  }, [tenantSlug, currentTenantId, userTenant]);
 
-  const isLoading = isLoadingUserTenant || isLoadingTenant;
+  // Redirect to tenant-scoped route if we have a tenant but no slug in URL
+  useEffect(() => {
+    const path = window.location.pathname;
+    const isPublicRoute = ['/auth', '/signup', '/landing', '/setup'].includes(path);
+    
+    if (!isPublicRoute && !tenantSlug && currentTenant?.slug) {
+      // Extract page from current path or default to dashboard
+      const page = path.slice(1) || 'dashboard';
+      navigate(`/t/${currentTenant.slug}/${page}`, { replace: true });
+    }
+  }, [currentTenant, tenantSlug, navigate]);
+
+  const isLoading = isLoadingUserTenant || isLoadingTenant || isLoadingSlug;
 
   // Wait for initial loading
   if (isLoading && !currentTenant && !userTenant) {
@@ -152,8 +198,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     <TenantContext.Provider 
       value={{ 
         currentTenantId, 
+        currentTenantSlug: currentTenant?.slug || tenantFromSlug?.slug || null,
         setCurrentTenantId, 
-        currentTenant: currentTenant || userTenant?.tenants,
+        currentTenant: currentTenant || tenantFromSlug || userTenant?.tenants,
         isLoading 
       }}
     >

@@ -35,11 +35,18 @@ export default function Setup() {
     setLoading(true);
 
     try {
+      // Generate slug from tenant name
+      const slug = formData.tenantName
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-');
+      
       // Create tenant first
       const { data: tenant, error: tenantError } = await supabase
         .from("tenants")
         .insert({
           name: formData.tenantName,
+          slug,
           contact_name: formData.contactName,
           contact_email: formData.contactEmail,
           status: "active",

@@ -1633,6 +1633,7 @@ export type Database = {
           notes: string | null
           parent_tenant_id: string | null
           settings: Json | null
+          slug: string
           status: Database["public"]["Enums"]["tenant_status"]
           subdomain: string | null
           trial_ends_at: string | null
@@ -1648,6 +1649,7 @@ export type Database = {
           notes?: string | null
           parent_tenant_id?: string | null
           settings?: Json | null
+          slug: string
           status?: Database["public"]["Enums"]["tenant_status"]
           subdomain?: string | null
           trial_ends_at?: string | null
@@ -1663,6 +1665,7 @@ export type Database = {
           notes?: string | null
           parent_tenant_id?: string | null
           settings?: Json | null
+          slug?: string
           status?: Database["public"]["Enums"]["tenant_status"]
           subdomain?: string | null
           trial_ends_at?: string | null
