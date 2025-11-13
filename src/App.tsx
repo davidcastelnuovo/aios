@@ -37,6 +37,7 @@ import AISupport from "./pages/AISupport";
 import MenuManagement from "./pages/MenuManagement";
 import FieldsManagement from "./pages/FieldsManagement";
 import NotFound from "./pages/NotFound";
+import { SuperAdminRoute } from "./components/SuperAdminRoute";
 
 const queryClient = new QueryClient();
 
@@ -51,7 +52,7 @@ const App = () => (
             <AgencyProvider>
               <Routes>
             {/* Public routes */}
-            <Route path="/landing" element={<Landing />} />
+            <Route path="/landing" element={<SuperAdminRoute><Landing /></SuperAdminRoute>} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/setup" element={<Setup />} />
@@ -83,8 +84,8 @@ const App = () => (
             <Route path="/t/:tenantSlug/menu-management" element={<ProtectedRoute requiredPermission="menu_management"><AppLayout><MenuManagement /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/fields-management" element={<ProtectedRoute requiredPermission="fields_management"><AppLayout><FieldsManagement /></AppLayout></ProtectedRoute>} />
             
-            {/* Legacy root path redirects to landing */}
-            <Route path="/" element={<Landing />} />
+            {/* Root path redirects to auth */}
+            <Route path="/" element={<Auth />} />
             
             {/* Catch-all for 404 - must be last */}
             <Route path="*" element={<NotFound />} />

@@ -17,7 +17,7 @@ const NotFound = () => {
     if (isReady) {
       return buildPath("dashboard");
     }
-    return "/landing";
+    return "/auth";
   };
 
   return (

@@ -53,8 +53,12 @@ useEffect(() => {
         if (tenantSlug) {
           navigate(buildTenantPath(tenantSlug, "dashboard"));
         } else {
-          // No tenant found, redirect to landing
-          navigate("/landing");
+          // No tenant found, stay on auth to show error
+          toast({
+            title: "שגיאה",
+            description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
+            variant: "destructive",
+          });
         }
         return;
       }
@@ -75,8 +79,12 @@ useEffect(() => {
       if (tenantSlug) {
         navigate(buildTenantPath(tenantSlug, "dashboard"));
       } else {
-        // No tenant found, redirect to landing
-        navigate("/landing");
+        // No tenant found, stay on auth to show error
+        toast({
+          title: "שגיאה",
+          description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
+          variant: "destructive",
+        });
       }
       return;
     }
@@ -129,8 +137,12 @@ useEffect(() => {
       if (tenantSlug) {
         navigate(`/t/${tenantSlug}/dashboard`);
       } else {
-        // No tenant found, redirect to landing
-        navigate("/landing");
+        // No tenant found, stay on auth to show error
+        toast({
+          title: "שגיאה",
+          description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
+          variant: "destructive",
+        });
       }
     }
   });
@@ -196,8 +208,12 @@ useEffect(() => {
       if (tenantSlug) {
         navigate(`/t/${tenantSlug}/dashboard`);
       } else {
-        // No tenant found, redirect to landing
-        navigate("/landing");
+        // No tenant found, stay on auth to show error
+        toast({
+          title: "שגיאה",
+          description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
+          variant: "destructive",
+        });
       }
     }
     setLoading(false);
@@ -270,8 +286,12 @@ useEffect(() => {
     if (tenantSlug) {
       navigate(buildTenantPath(tenantSlug, "dashboard"));
     } else {
-      // No tenant found, redirect to landing
-      navigate("/landing");
+      // No tenant found, stay on auth to show error
+      toast({
+        title: "שגיאה",
+        description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
+        variant: "destructive",
+      });
     }
     setLoading(false);
   };
@@ -329,8 +349,12 @@ useEffect(() => {
         if (tenantSlug) {
           navigate(buildTenantPath(tenantSlug, "dashboard"));
         } else {
-          // No tenant found, redirect to landing
-          navigate("/landing");
+          // No tenant found, stay on auth to show error
+          toast({
+            title: "שגיאה",
+            description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
+            variant: "destructive",
+          });
         }
       }
     } catch (error: any) {
@@ -468,8 +492,12 @@ useEffect(() => {
       if (tenantSlug) {
         navigate(buildTenantPath(tenantSlug, "dashboard"));
       } else {
-        // No tenant found, redirect to landing
-        navigate("/landing");
+        // No tenant found, stay on auth to show error
+        toast({
+          title: "שגיאה",
+          description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
+          variant: "destructive",
+        });
       }
     }
     setLoading(false);
