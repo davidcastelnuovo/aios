@@ -28,7 +28,44 @@ export default function Auth() {
   const [mfaCode, setMfaCode] = useState("");
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [searchParams] = useSearchParams();
+const [searchParams] = useSearchParams();
+
+// Resolve a tenant slug for a user robustly, with fallback and persistence
+async function resolveTenantSlug(userId: string): Promise<string | null> {
+  try {
+    // 1) Try active tenant mapping first
+    const { data: activeTenant } = await (supabase as any)
+      .from("user_active_tenant")
+      .select("tenant_id, tenants(slug, status)")
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    const activeSlug = (activeTenant as any)?.tenants?.slug;
+    if (activeSlug) return activeSlug as string;
+
+    // 2) Fall back to first available tenant from memberships
+    const { data: userTenants } = await (supabase as any)
+      .from("tenant_users")
+      .select("tenant_id, tenants(slug, status)")
+      .eq("user_id", userId)
+      .limit(10);
+
+    const candidate: any = (userTenants || []).find((t: any) => t?.tenants?.status === "active") || (userTenants || [])[0];
+    const candidateSlug = candidate?.tenants?.slug as string | undefined;
+    const candidateTenantId = candidate?.tenant_id as string | undefined;
+
+    if (candidateSlug && candidateTenantId) {
+      // Persist as active for next time
+      await (supabase as any)
+        .from("user_active_tenant")
+        .upsert({ user_id: userId, tenant_id: candidateTenantId, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+      return candidateSlug;
+    }
+  } catch (err) {
+    console.error("resolveTenantSlug error:", err);
+  }
+  return null;
+}
 
 useEffect(() => {
   const init = async () => {
@@ -42,18 +79,10 @@ useEffect(() => {
         console.error("exchangeCodeForSession error:", error);
         toast({ title: "שגיאה", description: error.message, variant: "destructive" });
       } else if (data?.session) {
-        // Get tenant slug to redirect
-        const { data: activeTenant } = await supabase
-          .from("user_active_tenant")
-          .select("tenant_id, tenants(slug)")
-          .eq("user_id", data.session.user.id)
-          .maybeSingle();
-        
-        const tenantSlug = (activeTenant as any)?.tenants?.slug;
-        if (tenantSlug) {
-          navigate(buildTenantPath(tenantSlug, "dashboard"));
+        const slug = await resolveTenantSlug(data.session.user.id);
+        if (slug) {
+          navigate(buildTenantPath(slug, "dashboard"));
         } else {
-          // No tenant found, stay on auth to show error
           toast({
             title: "שגיאה",
             description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
@@ -68,18 +97,10 @@ useEffect(() => {
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session?.user) {
-      // Get tenant slug to redirect
-      const { data: activeTenant } = await supabase
-        .from("user_active_tenant")
-        .select("tenant_id, tenants(slug)")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-      
-      const tenantSlug = (activeTenant as any)?.tenants?.slug;
-      if (tenantSlug) {
-        navigate(buildTenantPath(tenantSlug, "dashboard"));
+      const slug = await resolveTenantSlug(session.user.id);
+      if (slug) {
+        navigate(buildTenantPath(slug, "dashboard"));
       } else {
-        // No tenant found, stay on auth to show error
         toast({
           title: "שגיאה",
           description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
@@ -126,18 +147,10 @@ useEffect(() => {
         console.error("Exception processing invitation:", e);
       }
       
-      // Get tenant slug to redirect
-      const { data: activeTenant } = await supabase
-        .from("user_active_tenant")
-        .select("tenant_id, tenants(slug)")
-        .eq("user_id", session.user.id)
-        .maybeSingle();
-      
-      const tenantSlug = (activeTenant as any)?.tenants?.slug;
-      if (tenantSlug) {
-        navigate(`/t/${tenantSlug}/dashboard`);
+      const slug = await resolveTenantSlug(session.user.id);
+      if (slug) {
+        navigate(`/t/${slug}/dashboard`);
       } else {
-        // No tenant found, stay on auth to show error
         toast({
           title: "שגיאה",
           description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
@@ -195,20 +208,12 @@ useEffect(() => {
       description: "החשבון נוצר בהצלחה",
     });
     
-    // Get tenant slug to redirect
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const { data: activeTenant } = await supabase
-        .from("user_active_tenant")
-        .select("tenant_id, tenants(slug)")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      
-      const tenantSlug = (activeTenant as any)?.tenants?.slug;
-      if (tenantSlug) {
-        navigate(`/t/${tenantSlug}/dashboard`);
+      const slug = await resolveTenantSlug(user.id);
+      if (slug) {
+        navigate(`/t/${slug}/dashboard`);
       } else {
-        // No tenant found, stay on auth to show error
         toast({
           title: "שגיאה",
           description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
@@ -274,19 +279,10 @@ useEffect(() => {
       console.error("Exception processing invitation:", e);
     }
 
-    // No MFA required or already verified, redirect to profile
-    // Get tenant slug to redirect
-    const { data: activeTenant } = await supabase
-      .from("user_active_tenant")
-      .select("tenant_id, tenants(slug)")
-      .eq("user_id", data.user.id)
-      .maybeSingle();
-    
-    const tenantSlug = (activeTenant as any)?.tenants?.slug;
-    if (tenantSlug) {
-      navigate(buildTenantPath(tenantSlug, "dashboard"));
+    const slug = await resolveTenantSlug(data.user.id);
+    if (slug) {
+      navigate(buildTenantPath(slug, "dashboard"));
     } else {
-      // No tenant found, stay on auth to show error
       toast({
         title: "שגיאה",
         description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
@@ -336,20 +332,12 @@ useEffect(() => {
         description: "התחברת בהצלחה",
       });
 
-      // Get tenant slug to redirect
       const { data: session } = await supabase.auth.getSession();
       if (session?.session) {
-        const { data: activeTenant } = await supabase
-          .from("user_active_tenant")
-          .select("tenant_id, tenants(slug)")
-          .eq("user_id", session.session.user.id)
-          .maybeSingle();
-        
-        const tenantSlug = (activeTenant as any)?.tenants?.slug;
-        if (tenantSlug) {
-          navigate(buildTenantPath(tenantSlug, "dashboard"));
+        const slug = await resolveTenantSlug(session.session.user.id);
+        if (slug) {
+          navigate(buildTenantPath(slug, "dashboard"));
         } else {
-          // No tenant found, stay on auth to show error
           toast({
             title: "שגיאה",
             description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
@@ -479,20 +467,12 @@ useEffect(() => {
       description: "הסיסמה שלך עודכנה בהצלחה",
     });
     
-    // Get tenant slug to redirect
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
-      const { data: activeTenant } = await supabase
-        .from("user_active_tenant")
-        .select("tenant_id, tenants(slug)")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      
-      const tenantSlug = (activeTenant as any)?.tenants?.slug;
-      if (tenantSlug) {
-        navigate(buildTenantPath(tenantSlug, "dashboard"));
+      const slug = await resolveTenantSlug(user.id);
+      if (slug) {
+        navigate(buildTenantPath(slug, "dashboard"));
       } else {
-        // No tenant found, stay on auth to show error
         toast({
           title: "שגיאה",
           description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
