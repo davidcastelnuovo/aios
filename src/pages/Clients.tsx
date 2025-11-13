@@ -142,21 +142,27 @@ export default function Clients() {
     queryKey: ["clients", tenantId, campaignerId, isCampaigner, isTeamManager, isOwner, selectedAgency, (agencies?.length || 0)],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
-        const selectStr = `
-          *,
-          agencies (name),
-          client_team (
-            campaigner_id,
-            campaigners!inner (
-              id,
-              full_name
-            )
+      const selectStr = `
+        *,
+        agencies (name),
+        client_team (
+          campaigner_id,
+          campaigners!inner (
+            id,
+            full_name
           )
-        `;
+        )
+      `;
+
+      // If no accessible agencies and no specific selection, nothing should be visible
+      if ((!agencies || agencies.length === 0) && (!selectedAgency || selectedAgency === "all")) {
+        return [];
+      }
 
       let query = supabase
         .from("clients")
         .select(selectStr)
+        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
 
       // Scope by agency: if a specific agency is selected use it, otherwise include
@@ -193,14 +199,16 @@ export default function Clients() {
 
   // Fetch client-team mapping for campaigner filter (for managers/owners)
   const { data: clientTeam } = useQuery({
-    queryKey: ["client-team"],
+    queryKey: ["client-team", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [] as any[];
       const { data, error } = await supabase
         .from("client_team")
         .select("client_id, campaigner_id");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   // Get client IDs for the campaigner
