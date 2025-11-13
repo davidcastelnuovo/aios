@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Shield, UserPlus, Trash2, Settings, Lock, Mail, Building2 } from "lucide-react";
 import { useState } from "react";
@@ -359,7 +360,7 @@ export default function Users() {
       
       const { data, error } = await supabase
         .from("tenant_users")
-        .select("tenant_id, tenants(name)")
+        .select("tenant_id, tenants(name, allow_super_admin_access)")
         .eq("user_id", currentUserId)
         .maybeSingle();
       
@@ -367,6 +368,46 @@ export default function Users() {
       return data;
     },
     enabled: !!currentUserId && !isSuperAdmin,
+  });
+
+  // Check if current user is owner of the current tenant
+  const { data: isOwnerOfCurrentTenant } = useQuery({
+    queryKey: ["is-owner-of-tenant", tenantId, currentUserId],
+    queryFn: async () => {
+      if (!tenantId || !currentUserId) return false;
+      
+      const { data, error } = await supabase
+        .from("tenant_users")
+        .select("role")
+        .eq("user_id", currentUserId)
+        .eq("tenant_id", tenantId)
+        .eq("role", "owner")
+        .maybeSingle();
+      
+      if (error) throw error;
+      return !!data;
+    },
+    enabled: !!tenantId && !!currentUserId,
+  });
+
+  const updateSuperAdminAccessMutation = useMutation({
+    mutationFn: async ({ allowAccess }: { allowAccess: boolean }) => {
+      if (!tenantId) throw new Error("No tenant selected");
+      
+      const { error } = await supabase
+        .from("tenants")
+        .update({ allow_super_admin_access: allowAccess })
+        .eq("id", tenantId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["current-user-tenant"] });
+      toast.success("הגדרות גישת Super Admin עודכנו בהצלחה");
+    },
+    onError: (error) => {
+      toast.error("שגיאה בעדכון הגדרות גישה: " + error.message);
+    },
   });
 
   const inviteUserMutation = useMutation({
@@ -552,8 +593,8 @@ export default function Users() {
 
   return (
     <div className="container mx-auto py-4 md:py-6 px-4 md:px-6 space-y-4 md:space-y-6" dir="rtl">
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-        <div>
+      <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-4">
+        <div className="flex-1">
           <h1 className="text-2xl md:text-3xl font-bold">ניהול משתמשים בארגון</h1>
           <p className="text-xs md:text-sm text-muted-foreground mt-1">
             {isSuperAdmin 
@@ -562,8 +603,34 @@ export default function Users() {
                 ? `ארגון: ${currentUserTenant?.tenants?.name || "שלך"}`
                 : `כל המשתמשים שמוזמנים כאן ישתייכו לארגון "${currentUserTenant?.tenants?.name || "שלך"}" ולא יקבלו חשבון נפרד`}
           </p>
+          
+          {/* Super Admin Access Control */}
+          {isOwnerOfCurrentTenant && (
+            <Card className="mt-4 p-4 bg-muted/50">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 flex-1">
+                  <Shield className="h-5 w-5 text-muted-foreground" />
+                  <div className="flex-1">
+                    <Label htmlFor="super-admin-access" className="text-sm font-medium cursor-pointer">
+                      אפשר גישת Super Admin לארגון
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      קובע אם Super Admin יכול לצפות ולערוך נתונים בארגון שלך
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  id="super-admin-access"
+                  checked={currentUserTenant?.tenants?.allow_super_admin_access ?? true}
+                  onCheckedChange={(checked) => {
+                    updateSuperAdminAccessMutation.mutate({ allowAccess: checked });
+                  }}
+                />
+              </div>
+            </Card>
+          )}
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto md:flex-shrink-0">
           {isSuperAdmin && (
             <Dialog open={isTenantDialogOpen} onOpenChange={setIsTenantDialogOpen}>
               <DialogTrigger asChild>

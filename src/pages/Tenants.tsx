@@ -4,9 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Plus, Building2, Users, Settings, Link as LinkIcon, Shield } from "lucide-react";
+import { Plus, Building2, Users, Settings, Link as LinkIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
 import EditTenantAgenciesDialog from "@/components/forms/EditTenantAgenciesDialog";
@@ -61,52 +59,6 @@ export default function Tenants() {
       return countsWithDetails;
     },
     enabled: !!currentTenantId,
-  });
-
-  // Check which tenants the user owns
-  const { data: ownedTenants } = useQuery({
-    queryKey: ["owned-tenants"],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return [];
-
-      const { data, error } = await supabase
-        .from("tenant_users")
-        .select("tenant_id")
-        .eq("user_id", user.id)
-        .eq("role", "owner");
-
-      if (error) throw error;
-      return data.map((t) => t.tenant_id);
-    },
-  });
-
-  const queryClient = useQueryClient();
-
-  const updateSuperAdminAccessMutation = useMutation({
-    mutationFn: async ({ tenantId, allowAccess }: { tenantId: string; allowAccess: boolean }) => {
-      const { error } = await supabase
-        .from("tenants")
-        .update({ allow_super_admin_access: allowAccess })
-        .eq("id", tenantId);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tenants"] });
-      toast({
-        title: "ההגדרות עודכנו",
-        description: "הגדרות גישת Super Admin עודכנו בהצלחה",
-      });
-    },
-    onError: (error) => {
-      toast({
-        title: "שגיאה",
-        description: "לא ניתן לעדכן את הגדרות הגישה",
-        variant: "destructive",
-      });
-      console.error("Error updating super admin access:", error);
-    },
   });
 
   const currentName = (tenants || []).find((t: any) => t.id === currentTenantId)?.name || (currentTenant as any)?.name;
@@ -243,7 +195,6 @@ export default function Tenants() {
       <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
         {tenants?.map((tenant) => {
           const isCurrentTenant = currentTenantId === tenant.id;
-          const isOwner = ownedTenants?.includes(tenant.id);
           return (
           <Card
             key={tenant.id}
@@ -339,29 +290,6 @@ export default function Tenants() {
                   </div>
                 )}
               </div>
-              {isOwner && (
-                <div className="mt-3 pt-3 border-t">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 flex-1">
-                      <Shield className="h-4 w-4 text-muted-foreground" />
-                      <Label htmlFor={`super-admin-${tenant.id}`} className="text-xs cursor-pointer">
-                        אפשר גישת Super Admin
-                      </Label>
-                    </div>
-                    <Switch
-                      id={`super-admin-${tenant.id}`}
-                      checked={tenant.allow_super_admin_access ?? true}
-                      onCheckedChange={(checked) => {
-                        updateSuperAdminAccessMutation.mutate({
-                          tenantId: tenant.id,
-                          allowAccess: checked,
-                        });
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </div>
-                </div>
-              )}
               {canManageTenants && (
                 <div className="mt-3 pt-3 border-t space-y-2">
                   <Button
