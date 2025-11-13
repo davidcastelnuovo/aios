@@ -77,6 +77,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           
           // CRITICAL: Clear all tenant-specific data from cache when switching tenants
           console.log("🔄 Clearing cache for tenant switch:", currentTenantId);
+          queryClient.invalidateQueries({ queryKey: ["user-tenants"] });
           queryClient.invalidateQueries({ queryKey: ["clients"] });
           queryClient.invalidateQueries({ queryKey: ["agencies"] });
           queryClient.invalidateQueries({ queryKey: ["leads"] });

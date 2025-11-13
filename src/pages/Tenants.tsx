@@ -4,12 +4,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Building2, Users, Settings, Link as LinkIcon } from "lucide-react";
+import { Plus, Building2, Users, Settings, Link as LinkIcon, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
 import EditTenantAgenciesDialog from "@/components/forms/EditTenantAgenciesDialog";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTenant } from "@/contexts/TenantContext";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useUserTenants } from "@/hooks/useUserTenants";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Tenants() {
   const { toast } = useToast();
@@ -24,20 +27,8 @@ export default function Tenants() {
   const canManageTenants = isSuperAdmin || isOwner;
 
   const { currentTenantId, currentTenant } = useTenant();
-
-  const { data: tenants, isLoading } = useQuery({
-    queryKey: ["tenants"],
-    queryFn: async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const { data, error } = await supabase.functions.invoke("list-user-tenants", {
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`
-        }
-      });
-      if (error) throw error as any;
-      return (data as any)?.tenants || [];
-    },
-  });
+  const { userId } = useCurrentUser();
+  const { userTenants: tenants, isLoading, refetch } = useUserTenants(userId);
 
   // שליפת מספר הסוכנויות המשותפות לכל tenant + פרטי הסוכנויות
   const { data: agencyCounts } = useQuery({
@@ -209,10 +200,20 @@ export default function Tenants() {
     <div className="space-y-4 md:space-y-6 p-3 md:p-6">
       {/* Mobile Header */}
       <div className="block md:hidden space-y-3">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Building2 className="h-6 w-6" />
-          ניהול ארגונים
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Building2 className="h-6 w-6" />
+            ניהול ארגונים
+          </h1>
+          <Button
+            onClick={() => refetch()}
+            variant="ghost"
+            size="sm"
+            disabled={isLoading}
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
         {currentTenantId && (
           <p className="text-sm text-muted-foreground">
             ארגון נוכחי: <strong>{currentName}</strong>
@@ -223,22 +224,52 @@ export default function Tenants() {
 
       {/* Desktop Header */}
       <div className="hidden md:flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-2">
-            <Building2 className="h-8 w-8" />
-            ניהול ארגונים
-          </h1>
-          {currentTenantId && (
-            <p className="text-muted-foreground mt-2">
-              ארגון נוכחי: <strong>{currentName}</strong>
-            </p>
-          )}
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-3xl font-bold flex items-center gap-2">
+              <Building2 className="h-8 w-8" />
+              ניהול ארגונים
+            </h1>
+            {currentTenantId && (
+              <p className="text-muted-foreground mt-2">
+                ארגון נוכחי: <strong>{currentName}</strong>
+              </p>
+            )}
+          </div>
+          <Button
+            onClick={() => refetch()}
+            variant="ghost"
+            size="sm"
+            disabled={isLoading}
+          >
+            <RefreshCw className={`h-5 w-5 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
         </div>
         {canManageTenants && <AddTenantForm />}
       </div>
 
-      <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
-        {tenants?.map((tenant) => {
+      {isLoading ? (
+        <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-6 w-3/4 mb-2" />
+                <Skeleton className="h-4 w-1/2" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-20 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : tenants.length === 0 ? (
+        <div className="text-center text-muted-foreground py-12">
+          <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+          <p>לא נמצאו ארגונים</p>
+        </div>
+      ) : (
+        <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          {tenants.map((tenant) => {
           const isCurrentTenant = currentTenantId === tenant.id;
           return (
           <Card
@@ -374,17 +405,6 @@ export default function Tenants() {
         );
         })}
       </div>
-
-      {tenants?.length === 0 && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <p className="text-muted-foreground mb-4">
-              אין עדיין ארגונים במערכת
-            </p>
-            {canManageTenants && <AddTenantForm />}
-          </CardContent>
-        </Card>
       )}
 
       {/* Dialog for creating sub-tenant */}
