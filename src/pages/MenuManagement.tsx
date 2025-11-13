@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Save, RotateCcw, GripVertical } from "lucide-react";
+import { Save, RotateCcw, GripVertical, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   DndContext,
   closestCenter,
@@ -26,14 +27,6 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
 interface MenuItem {
   id: string;
@@ -45,6 +38,8 @@ interface MenuItem {
   icon: string | null;
   route: string;
   badge?: 'coming_soon' | 'premium' | null;
+  category?: string | null;
+  parent_menu_key?: string | null;
 }
 
 interface SortableMenuItemProps {
@@ -56,6 +51,7 @@ interface SortableMenuItemProps {
   onResetLabel: (item: MenuItem) => void;
   onToggleVisibility: (item: MenuItem) => void;
   onBadgeChange: (item: MenuItem, badge: string | null) => void;
+  isChild?: boolean;
 }
 
 function SortableMenuItem({
@@ -67,6 +63,7 @@ function SortableMenuItem({
   onResetLabel,
   onToggleVisibility,
   onBadgeChange,
+  isChild = false,
 }: SortableMenuItemProps) {
   const {
     attributes,
@@ -84,14 +81,15 @@ function SortableMenuItem({
   };
 
   return (
-    <tr ref={setNodeRef} style={style} className="group">
+    <tr ref={setNodeRef} style={style} className="group border-b hover:bg-muted/50">
       <td className="p-2">
         <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded"
+          className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded flex items-center gap-2"
         >
           <GripVertical className="h-5 w-5 text-muted-foreground" />
+          {isChild && <span className="text-muted-foreground mr-2">└─</span>}
         </div>
       </td>
       <td className="p-2 font-medium">{item.original_label}</td>
@@ -155,6 +153,102 @@ function SortableMenuItem({
         </div>
       </td>
     </tr>
+  );
+}
+
+interface MenuGroupProps {
+  title: string;
+  items: MenuItem[];
+  editingItems: Record<string, string>;
+  updateMutation: any;
+  onLabelChange: (id: string, value: string) => void;
+  onSaveLabel: (item: MenuItem) => void;
+  onResetLabel: (item: MenuItem) => void;
+  onToggleVisibility: (item: MenuItem) => void;
+  onBadgeChange: (item: MenuItem, badge: string | null) => void;
+  children?: MenuItem[];
+  defaultOpen?: boolean;
+}
+
+function MenuGroup({
+  title,
+  items,
+  children,
+  editingItems,
+  updateMutation,
+  onLabelChange,
+  onSaveLabel,
+  onResetLabel,
+  onToggleVisibility,
+  onBadgeChange,
+  defaultOpen = false,
+}: MenuGroupProps) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <Card className="mb-4">
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <CardHeader className="cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
+          <CollapsibleTrigger className="flex items-center justify-between w-full">
+            <CardTitle className="text-lg">{title}</CardTitle>
+            <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+          </CollapsibleTrigger>
+        </CardHeader>
+        <CollapsibleContent>
+          <CardContent className="p-0">
+            <SortableContext
+              items={items.map((item) => item.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <table className="w-full">
+                <tbody>
+                  {items.map((item) => (
+                    <SortableMenuItem
+                      key={item.id}
+                      item={item}
+                      editingItems={editingItems}
+                      updateMutation={updateMutation}
+                      onLabelChange={onLabelChange}
+                      onSaveLabel={onSaveLabel}
+                      onResetLabel={onResetLabel}
+                      onToggleVisibility={onToggleVisibility}
+                      onBadgeChange={onBadgeChange}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </SortableContext>
+            {children && children.length > 0 && (
+              <div className="mr-8 border-r-2 border-muted">
+                <SortableContext
+                  items={children.map((item) => item.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <table className="w-full">
+                    <tbody>
+                      {children.map((child) => (
+                        <SortableMenuItem
+                          key={child.id}
+                          item={child}
+                          editingItems={editingItems}
+                          updateMutation={updateMutation}
+                          onLabelChange={onLabelChange}
+                          onSaveLabel={onSaveLabel}
+                          onResetLabel={onResetLabel}
+                          onToggleVisibility={onToggleVisibility}
+                          onBadgeChange={onBadgeChange}
+                          isChild
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </SortableContext>
+              </div>
+            )}
+          </CardContent>
+        </CollapsibleContent>
+      </Collapsible>
+    </Card>
   );
 }
 
@@ -280,60 +374,91 @@ export default function MenuManagement() {
     );
   }
 
+  // Group menu items by category
+  const mainItems = menuItems?.filter(item => item.category === 'main' && !item.parent_menu_key) || [];
+  const managementParent = menuItems?.find(item => item.menu_key === 'management');
+  const managementItems = menuItems?.filter(item => item.parent_menu_key === 'management') || [];
+  const salesParent = menuItems?.find(item => item.menu_key === 'sales');
+  const salesItems = menuItems?.filter(item => item.parent_menu_key === 'sales') || [];
+
   return (
     <div className="space-y-6 p-6">
       <div>
         <h1 className="text-3xl font-bold">ניהול תפריטים</h1>
         <p className="text-muted-foreground mt-2">
-          גרור פריטים כדי לשנות את הסדר, ערוך שמות והגדרות
+          גרור פריטים כדי לשנות את הסדר, ערוך שמות והגדרות. פריטים עם תת-תפריטים מוצגים בקבוצות מתקפלות.
         </p>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>פריטי תפריט</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="p-2 text-right w-12"></th>
-                  <th className="p-2 text-right">שם מקורי</th>
-                  <th className="p-2 text-right">שם מותאם</th>
-                  <th className="p-2 text-right">בדג'</th>
-                  <th className="p-2 text-right">נראה</th>
-                  <th className="p-2 text-right">פעולות</th>
-                </tr>
-              </thead>
-              <SortableContext
-                items={menuItems?.map((item) => item.id) || []}
-                strategy={verticalListSortingStrategy}
-              >
-                <tbody>
-                  {menuItems?.map((item) => (
-                    <SortableMenuItem
-                      key={item.id}
-                      item={item}
-                      editingItems={editingItems}
-                      updateMutation={updateMutation}
-                      onLabelChange={handleLabelChange}
-                      onSaveLabel={handleSaveLabel}
-                      onResetLabel={handleResetLabel}
-                      onToggleVisibility={handleToggleVisibility}
-                      onBadgeChange={handleBadgeChange}
-                    />
-                  ))}
-                </tbody>
-              </SortableContext>
-            </table>
-          </DndContext>
-        </CardContent>
-      </Card>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="mb-4">
+          <Card>
+            <CardContent className="p-4">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="p-2 text-right w-24">גרירה</th>
+                    <th className="p-2 text-right">שם מקורי</th>
+                    <th className="p-2 text-right">שם מותאם</th>
+                    <th className="p-2 text-right">בדג'</th>
+                    <th className="p-2 text-right">נראה</th>
+                    <th className="p-2 text-right">פעולות</th>
+                  </tr>
+                </thead>
+              </table>
+            </CardContent>
+          </Card>
+        </div>
+
+        <MenuGroup
+          title="תפריט ראשי"
+          items={mainItems}
+          editingItems={editingItems}
+          updateMutation={updateMutation}
+          onLabelChange={handleLabelChange}
+          onSaveLabel={handleSaveLabel}
+          onResetLabel={handleResetLabel}
+          onToggleVisibility={handleToggleVisibility}
+          onBadgeChange={handleBadgeChange}
+          defaultOpen={true}
+        />
+
+        {managementParent && (
+          <MenuGroup
+            title={managementParent.custom_label || managementParent.original_label}
+            items={[managementParent]}
+            children={managementItems}
+            editingItems={editingItems}
+            updateMutation={updateMutation}
+            onLabelChange={handleLabelChange}
+            onSaveLabel={handleSaveLabel}
+            onResetLabel={handleResetLabel}
+            onToggleVisibility={handleToggleVisibility}
+            onBadgeChange={handleBadgeChange}
+            defaultOpen={true}
+          />
+        )}
+
+        {salesParent && (
+          <MenuGroup
+            title={salesParent.custom_label || salesParent.original_label}
+            items={[salesParent]}
+            children={salesItems}
+            editingItems={editingItems}
+            updateMutation={updateMutation}
+            onLabelChange={handleLabelChange}
+            onSaveLabel={handleSaveLabel}
+            onResetLabel={handleResetLabel}
+            onToggleVisibility={handleToggleVisibility}
+            onBadgeChange={handleBadgeChange}
+            defaultOpen={true}
+          />
+        )}
+      </DndContext>
     </div>
   );
 }
