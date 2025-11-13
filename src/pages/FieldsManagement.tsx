@@ -71,7 +71,7 @@ export default function FieldsManagement() {
     is_visible: true,
   });
 
-  const { data: fields, isLoading } = useQuery({
+  const { data: fields = [], isLoading } = useQuery({
     queryKey: ['custom-fields', tenantId, selectedEntity],
     queryFn: async () => {
       const { data, error } = await supabase
