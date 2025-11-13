@@ -11,7 +11,7 @@ export interface MenuItem {
   sort_order: number;
   icon: string | null;
   route: string;
-  badge: 'coming_soon' | 'premium' | null;
+  badge?: 'coming_soon' | 'premium' | null;
 }
 
 export function useMenuItems() {
