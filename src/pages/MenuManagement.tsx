@@ -309,33 +309,28 @@ export default function MenuManagement() {
     })
   );
 
-  // Load group order from tenant_settings
+  // Load group order using RPC (bypasses RLS via SECURITY DEFINER)
   const { data: groupOrderSetting } = useQuery({
     queryKey: ['menu-group-order', tenantId],
     queryFn: async () => {
       if (!tenantId) return null;
-      
-      const { data, error } = await supabase
-        .from('tenant_settings')
-        .select('setting_value')
-        .eq('tenant_id', tenantId)
-        .eq('setting_key', 'menu_group_order')
-        .maybeSingle();
-
+      const { data, error } = await supabase.rpc('get_effective_setting', {
+        _tenant_id: tenantId,
+        _setting_key: 'menu_group_order',
+      });
       if (error) {
         console.error('Error fetching group order:', error);
         return null;
       }
-      
-      return data;
+      return data; // jsonb value (e.g., ["main","management","sales"]) or null
     },
     enabled: !!tenantId,
   });
 
   // Update groupOrder state when data is loaded
   useEffect(() => {
-    if (groupOrderSetting?.setting_value) {
-      setGroupOrder(groupOrderSetting.setting_value as string[]);
+    if (Array.isArray(groupOrderSetting)) {
+      setGroupOrder(groupOrderSetting as string[]);
     }
   }, [groupOrderSetting]);
 
@@ -477,21 +472,23 @@ export default function MenuManagement() {
         .maybeSingle();
 
       if (existingSetting) {
-        await supabase
+        const { error: updateError } = await supabase
           .from('tenant_settings')
           .update({ 
             setting_value: newOrder,
             updated_at: new Date().toISOString()
           })
           .eq('id', existingSetting.id);
+        if (updateError) throw updateError;
       } else {
-        await supabase
+        const { error: insertError } = await supabase
           .from('tenant_settings')
           .insert({
             tenant_id: tenantId,
             setting_key: 'menu_group_order',
             setting_value: newOrder
           });
+        if (insertError) throw insertError;
       }
 
       queryClient.invalidateQueries({ queryKey: ['menu-group-order', tenantId] });
