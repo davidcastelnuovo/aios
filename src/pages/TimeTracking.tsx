@@ -90,6 +90,7 @@ export default function TimeTracking() {
           *,
           campaigners (full_name)
         `)
+        .eq("tenant_id", tenantId)
         .eq("campaigner_id", campaignerId)
         .is("end_time", null)
         .order("start_time", { ascending: false })
@@ -113,6 +114,7 @@ export default function TimeTracking() {
           *,
           campaigners (full_name)
         `)
+        .eq("tenant_id", tenantId)
         .order("start_time", { ascending: false });
 
       if (selectedCampaigner === "me" && profile?.campaigner_id) {

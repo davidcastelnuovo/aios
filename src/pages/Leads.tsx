@@ -444,6 +444,7 @@ export default function Leads() {
           agencies (name),
           sales_people (full_name)
         `)
+        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
 
       if (selectedAgency && selectedAgency !== "all") {
@@ -464,7 +465,8 @@ export default function Leads() {
       if (!tenantId) return [] as any[];
       const { data, error } = await supabase
         .from("products")
-        .select("id, name, price");
+        .select("id, name, price")
+        .eq("tenant_id", tenantId);
       if (error) throw error;
       return data;
     },
