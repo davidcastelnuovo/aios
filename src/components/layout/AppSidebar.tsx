@@ -211,30 +211,34 @@ export function AppSidebar() {
     return menuItemConfig?.custom_label || defaultLabel;
   };
 
-  // Load group order from tenant_settings
+  // Load group order using RPC (reads effective setting)
   const { data: groupOrderSetting } = useQuery({
     queryKey: ['menu-group-order', currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
-      
-      const { data, error } = await supabase
-        .from('tenant_settings')
-        .select('setting_value')
-        .eq('tenant_id', currentTenantId)
-        .eq('setting_key', 'menu_group_order')
-        .maybeSingle();
-
+      const { data, error } = await supabase.rpc('get_effective_setting', {
+        _tenant_id: currentTenantId,
+        _setting_key: 'menu_group_order',
+      });
       if (error) {
         console.error('Error fetching group order:', error);
         return null;
       }
-      
-      return data;
+      return data; // jsonb array or null
     },
     enabled: !!currentTenantId,
   });
 
-  const groupOrder = (groupOrderSetting?.setting_value as string[]) || ['main', 'management', 'sales'];
+  const groupOrder = (Array.isArray(groupOrderSetting) ? groupOrderSetting : ['main', 'management', 'sales']) as string[];
+
+  const byDbOrder = (a: { path: string }, b: { path: string }) => {
+    const aOrder = menuItemsMap.get(a.path)?.sort_order ?? 0;
+    const bOrder = menuItemsMap.get(b.path)?.sort_order ?? 0;
+    return aOrder - bOrder;
+  };
+  const orderedMain = [...visibleMenuItems].sort(byDbOrder);
+  const orderedManagement = [...visibleManagementItems].sort(byDbOrder);
+  const orderedSales = [...visibleSalesItems].sort(byDbOrder);
 
   return (
     <Sidebar side="right" collapsible="icon" className="transition-all duration-300 ease-in-out">
@@ -289,7 +293,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {groupOrder.map((groupId) => {
                 if (groupId === 'main') {
-                  return visibleMenuItems.map((item) => {
+                  return orderedMain.map((item) => {
                     const badge = getMenuItemBadge(item.path);
                     const label = getMenuItemLabel(item.path, item.title);
                     
@@ -327,7 +331,7 @@ export function AppSidebar() {
                   });
                 }
 
-                if (groupId === 'management' && visibleManagementItems.length > 0) {
+                if (groupId === 'management' && orderedManagement.length > 0) {
                   return (
                     <Collapsible key="management" className="group/collapsible">
                       <SidebarMenuItem>
