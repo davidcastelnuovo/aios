@@ -18,6 +18,7 @@ import { useAgency } from "@/contexts/AgencyContext";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 
 const formSchema = z.object({
   company_name: z.string().min(1, "שם העסק הוא שדה חובה"),
@@ -45,6 +46,7 @@ export function AddLeadForm() {
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
+  const { getFieldLabel } = useCustomFieldLabels('lead');
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -209,7 +211,7 @@ export function AddLeadForm() {
               name="agency_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-sm font-medium">סוכנות</FormLabel>
+                  <FormLabel className="text-sm font-medium">{getFieldLabel('agency_id', 'סוכנות')}</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger className="rounded-lg border-2 h-11">
@@ -234,7 +236,7 @@ export function AddLeadForm() {
               name="sales_person_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="text-sm font-medium">איש מכירות</FormLabel>
+                  <FormLabel className="text-sm font-medium">{getFieldLabel('sales_person_id', 'איש מכירות')}</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger className="rounded-lg border-2 h-11">

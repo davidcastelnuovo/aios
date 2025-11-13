@@ -22,6 +22,7 @@ import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300" },
@@ -83,6 +84,7 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
+  const { getFieldLabel } = useCustomFieldLabels('lead');
 
 const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -427,7 +429,7 @@ const updateMutation = useMutation({
                   name="agency_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-sm font-medium">סוכנות *</FormLabel>
+                      <FormLabel className="text-sm font-medium">{getFieldLabel('agency_id', 'סוכנות')} *</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
                           <SelectTrigger className="text-right rounded-lg border-2 h-11">

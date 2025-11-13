@@ -36,6 +36,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 
 // Faster bubble pop animation for task completion
 const playBubbleAnimation = () => {
@@ -118,6 +119,7 @@ export default function Tasks() {
   const { campaignerId, isCampaigner, isTeamManager, isOwner, isSeo } = useUserRole();
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { getFieldLabel } = useCustomFieldLabels('task');
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -827,13 +829,13 @@ export default function Tasks() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>סוכנות</TableHead>
-                  <TableHead>לקוח</TableHead>
-                  <TableHead>משימה</TableHead>
-                  <TableHead>קמפיינר</TableHead>
-                  <TableHead>עדיפות</TableHead>
-                  <TableHead>תאריך יעד</TableHead>
-                  <TableHead>סטטוס</TableHead>
+                  <TableHead>{getFieldLabel('agency_id', 'סוכנות')}</TableHead>
+                  <TableHead>{getFieldLabel('client_id', 'לקוח')}</TableHead>
+                  <TableHead>{getFieldLabel('title', 'משימה')}</TableHead>
+                  <TableHead>{getFieldLabel('campaigner_id', 'קמפיינר')}</TableHead>
+                  <TableHead>{getFieldLabel('priority', 'עדיפות')}</TableHead>
+                  <TableHead>{getFieldLabel('due_date', 'תאריך יעד')}</TableHead>
+                  <TableHead>{getFieldLabel('status', 'סטטוס')}</TableHead>
                   <TableHead>פעולות</TableHead>
                 </TableRow>
               </TableHeader>
