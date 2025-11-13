@@ -85,6 +85,8 @@ const App = () => (
             
             {/* Legacy root path redirects to landing */}
             <Route path="/" element={<Landing />} />
+            
+            {/* Catch-all for 404 - must be last */}
             <Route path="*" element={<NotFound />} />
             </Routes>
             </AgencyProvider>

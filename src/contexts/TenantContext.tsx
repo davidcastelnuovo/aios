@@ -177,13 +177,14 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     const isPublicRoute = ['/auth', '/signup', '/landing', '/setup'].includes(path);
     const isAlreadyTenantScoped = path.startsWith('/t/');
     
-    // Only redirect if not already in a tenant-scoped route
+    // Only redirect if not public, not already tenant-scoped, and we have a tenant slug
     if (!isPublicRoute && !isAlreadyTenantScoped && currentTenant?.slug) {
-      // Extract page from current path or default to dashboard
+      // Extract page from current path (remove leading slash) or default to dashboard
       const page = path.slice(1) || 'dashboard';
+      console.log("🔄 Redirecting to tenant-scoped route:", `/t/${currentTenant.slug}/${page}`);
       navigate(`/t/${currentTenant.slug}/${page}`, { replace: true });
     }
-  }, [currentTenant, tenantSlug, navigate]);
+  }, [currentTenant?.slug, navigate]);
 
   const isLoading = isLoadingUserTenant || isLoadingTenant || isLoadingSlug;
 

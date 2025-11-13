@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserPermissions, ModulePermission } from "@/hooks/useUserPermissions";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useTenantPath } from "@/hooks/useTenantPath";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -10,11 +11,13 @@ interface ProtectedRouteProps {
   redirectTo?: string;
 }
 
-export function ProtectedRoute({ children, requiredPermission, redirectTo = "/clients" }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, requiredPermission, redirectTo = "my-profile" }: ProtectedRouteProps) {
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
   const { hasPermission, isLoading: permissionsLoading } = useUserPermissions();
   const { roles, isLoading: rolesLoading } = useUserRole();
+  const { buildPath } = useTenantPath();
+  const { tenantSlug } = useParams();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -40,7 +43,7 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "/cl
     );
   }
 
-  // If not authenticated, redirect immediately without waiting for other queries
+  // If not authenticated, redirect to auth
   if (!authenticated) {
     return <Navigate to="/auth" replace />;
   }
@@ -56,7 +59,7 @@ export function ProtectedRoute({ children, requiredPermission, redirectTo = "/cl
 
 
   if (requiredPermission && !hasPermission(requiredPermission)) {
-    return <Navigate to={redirectTo} replace />;
+    return <Navigate to={buildPath(redirectTo)} replace />;
   }
 
   return <>{children}</>;

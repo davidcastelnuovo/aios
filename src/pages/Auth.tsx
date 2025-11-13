@@ -9,6 +9,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Building2 } from "lucide-react";
 
+// Helper function to build tenant path
+const buildTenantPath = (slug: string | null, path: string) => {
+  if (slug) {
+    return `/t/${slug}/${path}`;
+  }
+  return `/${path}`;
+};
+
 export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,7 +45,15 @@ useEffect(() => {
         console.error("exchangeCodeForSession error:", error);
         toast({ title: "שגיאה", description: error.message, variant: "destructive" });
       } else if (data?.session) {
-        navigate("/my-profile");
+        // Get tenant slug to redirect
+        const { data: activeTenant } = await supabase
+          .from("user_active_tenant")
+          .select("tenant_id, tenants(slug)")
+          .eq("user_id", data.session.user.id)
+          .maybeSingle();
+        
+        const tenantSlug = (activeTenant as any)?.tenants?.slug;
+        navigate(buildTenantPath(tenantSlug, "my-profile"));
         return;
       }
     }
@@ -46,7 +62,15 @@ useEffect(() => {
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session?.user) {
-      navigate("/my-profile");
+      // Get tenant slug to redirect
+      const { data: activeTenant } = await supabase
+        .from("user_active_tenant")
+        .select("tenant_id, tenants(slug)")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+      
+      const tenantSlug = (activeTenant as any)?.tenants?.slug;
+      navigate(buildTenantPath(tenantSlug, "my-profile"));
       return;
     }
 
@@ -98,7 +122,7 @@ useEffect(() => {
       if (tenantSlug) {
         navigate(`/t/${tenantSlug}/my-profile`);
       } else {
-        navigate("/my-profile");
+        navigate(buildTenantPath(null, "my-profile"));
       }
     }
   });
@@ -164,10 +188,10 @@ useEffect(() => {
       if (tenantSlug) {
         navigate(`/t/${tenantSlug}/my-profile`);
       } else {
-        navigate("/my-profile");
+        navigate(buildTenantPath(null, "my-profile"));
       }
     } else {
-      navigate("/my-profile");
+      navigate(buildTenantPath(null, "my-profile"));
     }
     setLoading(false);
   };
@@ -236,11 +260,7 @@ useEffect(() => {
       .maybeSingle();
     
     const tenantSlug = (activeTenant as any)?.tenants?.slug;
-    if (tenantSlug) {
-      navigate(`/t/${tenantSlug}/my-profile`);
-    } else {
-      navigate("/my-profile");
-    }
+    navigate(buildTenantPath(tenantSlug, "my-profile"));
     setLoading(false);
   };
 
@@ -294,13 +314,9 @@ useEffect(() => {
           .maybeSingle();
         
         const tenantSlug = (activeTenant as any)?.tenants?.slug;
-        if (tenantSlug) {
-          navigate(`/t/${tenantSlug}/my-profile`);
-        } else {
-          navigate("/my-profile");
-        }
+        navigate(buildTenantPath(tenantSlug, "my-profile"));
       } else {
-        navigate("/my-profile");
+        navigate(buildTenantPath(null, "my-profile"));
       }
     } catch (error: any) {
       toast({
@@ -434,13 +450,9 @@ useEffect(() => {
         .maybeSingle();
       
       const tenantSlug = (activeTenant as any)?.tenants?.slug;
-      if (tenantSlug) {
-        navigate(`/t/${tenantSlug}/my-profile`);
-      } else {
-        navigate("/my-profile");
-      }
+      navigate(buildTenantPath(tenantSlug, "my-profile"));
     } else {
-      navigate("/my-profile");
+      navigate(buildTenantPath(null, "my-profile"));
     }
     setLoading(false);
   };
