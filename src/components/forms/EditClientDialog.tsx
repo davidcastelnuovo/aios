@@ -35,6 +35,7 @@ import { Loader2, X } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח נדרש"),
   agency_id: z.string().min(1, "סוכנות נדרשת"),
@@ -58,35 +59,7 @@ interface EditClientDialogProps {
 export function EditClientDialog({ client, open, onOpenChange }: EditClientDialogProps) {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
-
-  // Fetch custom field labels for client entity
-  const { data: fieldLabels } = useQuery({
-    queryKey: ["custom-fields", tenantId, "client"],
-    queryFn: async () => {
-      if (!tenantId) return {};
-      
-      const { data, error } = await supabase
-        .from("custom_fields")
-        .select("field_key, field_label")
-        .eq("tenant_id", tenantId)
-        .eq("entity_type", "client");
-      
-      if (error) throw error;
-      
-      // Convert to map for easy lookup
-      const labelMap: Record<string, string> = {};
-      data?.forEach(field => {
-        labelMap[field.field_key] = field.field_label;
-      });
-      return labelMap;
-    },
-    enabled: !!tenantId,
-  });
-
-  // Helper function to get field label with fallback
-  const getFieldLabel = (fieldKey: string, fallback: string) => {
-    return fieldLabels?.[fieldKey] || fallback;
-  };
+  const { getFieldLabel } = useCustomFieldLabels('client');
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],

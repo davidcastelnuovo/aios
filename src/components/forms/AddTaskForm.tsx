@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 import {
   Form,
   FormControl,
@@ -82,6 +83,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
   const [taskCategory, setTaskCategory] = useState<"client" | "general">(clientId ? "client" : "general");
   const queryClient = useQueryClient();
   const { tenantId: currentTenantId } = useCurrentTenant();
+  const { getFieldLabel } = useCustomFieldLabels('task');
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),

@@ -14,6 +14,7 @@ import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 import {
   Select,
   SelectContent,
@@ -59,35 +60,7 @@ export default function Clients() {
   const [editingFolderLink, setEditingFolderLink] = useState<{ clientId: string; link: string } | null>(null);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
-
-  // Fetch custom field labels for client entity
-  const { data: fieldLabels } = useQuery({
-    queryKey: ["custom-fields", tenantId, "client"],
-    queryFn: async () => {
-      if (!tenantId) return {};
-      
-      const { data, error } = await supabase
-        .from("custom_fields")
-        .select("field_key, field_label")
-        .eq("tenant_id", tenantId)
-        .eq("entity_type", "client");
-      
-      if (error) throw error;
-      
-      // Convert to map for easy lookup
-      const labelMap: Record<string, string> = {};
-      data?.forEach(field => {
-        labelMap[field.field_key] = field.field_label;
-      });
-      return labelMap;
-    },
-    enabled: !!tenantId,
-  });
-
-  // Helper function to get field label with fallback
-  const getFieldLabel = (fieldKey: string, fallback: string) => {
-    return fieldLabels?.[fieldKey] || fallback;
-  };
+  const { getFieldLabel } = useCustomFieldLabels('client');
 
   // Fetch agencies (owned + shared) first for client scoping
   const { data: agencies } = useQuery({
