@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -293,6 +293,7 @@ export default function MenuManagement() {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const [editingItems, setEditingItems] = useState<Record<string, string>>({});
+  const [groupOrder, setGroupOrder] = useState<string[]>(['main', 'management', 'sales']);
 
   const groupSensors = useSensors(
     useSensor(PointerSensor),
@@ -307,6 +308,36 @@ export default function MenuManagement() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  // Load group order from tenant_settings
+  const { data: groupOrderSetting } = useQuery({
+    queryKey: ['menu-group-order', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return null;
+      
+      const { data, error } = await supabase
+        .from('tenant_settings')
+        .select('setting_value')
+        .eq('tenant_id', tenantId)
+        .eq('setting_key', 'menu_group_order')
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error fetching group order:', error);
+        return null;
+      }
+      
+      return data;
+    },
+    enabled: !!tenantId,
+  });
+
+  // Update groupOrder state when data is loaded
+  useEffect(() => {
+    if (groupOrderSetting?.setting_value) {
+      setGroupOrder(groupOrderSetting.setting_value as string[]);
+    }
+  }, [groupOrderSetting]);
 
   const { data: menuItems, isLoading } = useQuery({
     queryKey: ['menu-items', tenantId],
@@ -425,19 +456,52 @@ export default function MenuManagement() {
   const salesParent = menuItems?.find(item => item.menu_key === 'sales');
   const salesItems = menuItems?.filter(item => item.parent_menu_key === 'sales') || [];
 
-  // Define group order
-  const [groupOrder, setGroupOrder] = useState(['main', 'management', 'sales']);
-
-  const handleGroupDragEnd = (event: DragEndEvent) => {
+  const handleGroupDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (!over || active.id === over.id) return;
+    if (!over || active.id === over.id || !tenantId) return;
 
-    setGroupOrder((items) => {
-      const oldIndex = items.indexOf(active.id as string);
-      const newIndex = items.indexOf(over.id as string);
-      return arrayMove(items, oldIndex, newIndex);
-    });
+    const oldIndex = groupOrder.indexOf(active.id as string);
+    const newIndex = groupOrder.indexOf(over.id as string);
+    const newOrder = arrayMove(groupOrder, oldIndex, newIndex);
+    
+    setGroupOrder(newOrder);
+
+    // Save to database
+    try {
+      const { data: existingSetting } = await supabase
+        .from('tenant_settings')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('setting_key', 'menu_group_order')
+        .maybeSingle();
+
+      if (existingSetting) {
+        await supabase
+          .from('tenant_settings')
+          .update({ 
+            setting_value: newOrder,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingSetting.id);
+      } else {
+        await supabase
+          .from('tenant_settings')
+          .insert({
+            tenant_id: tenantId,
+            setting_key: 'menu_group_order',
+            setting_value: newOrder
+          });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['menu-group-order', tenantId] });
+      toast.success('סדר הקבוצות נשמר בהצלחה');
+    } catch (error) {
+      console.error('Error saving group order:', error);
+      toast.error('שגיאה בשמירת סדר הקבוצות');
+      // Revert on error
+      setGroupOrder(groupOrder);
+    }
   };
 
   const groups = [
