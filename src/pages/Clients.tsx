@@ -60,6 +60,35 @@ export default function Clients() {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
+  // Fetch custom field labels for client entity
+  const { data: fieldLabels } = useQuery({
+    queryKey: ["custom-fields", tenantId, "client"],
+    queryFn: async () => {
+      if (!tenantId) return {};
+      
+      const { data, error } = await supabase
+        .from("custom_fields")
+        .select("field_key, field_label")
+        .eq("tenant_id", tenantId)
+        .eq("entity_type", "client");
+      
+      if (error) throw error;
+      
+      // Convert to map for easy lookup
+      const labelMap: Record<string, string> = {};
+      data?.forEach(field => {
+        labelMap[field.field_key] = field.field_label;
+      });
+      return labelMap;
+    },
+    enabled: !!tenantId,
+  });
+
+  // Helper function to get field label with fallback
+  const getFieldLabel = (fieldKey: string, fallback: string) => {
+    return fieldLabels?.[fieldKey] || fallback;
+  };
+
   // Fetch agencies (owned + shared) first for client scoping
   const { data: agencies } = useQuery({
     queryKey: ["agencies", tenantId],
@@ -522,8 +551,8 @@ export default function Clients() {
                 return canViewFinance() && retainerValue ? (
                   <div className="flex items-center gap-2">
                     <Coins className="h-4 w-4 text-muted-foreground" />
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">ריטיינר:</span>
+                  <div className="text-sm">
+                      <span className="text-muted-foreground">{getFieldLabel('retainer', 'ריטיינר')}:</span>
                       <span className="font-medium mr-2">₪{Number(retainerValue).toLocaleString()}</span>
                       <span className="text-muted-foreground">לחודש</span>
                     </div>
@@ -693,16 +722,16 @@ export default function Clients() {
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50 border-b">
                 <TableHead className="text-right font-semibold h-12">פעולות</TableHead>
-                <TableHead className="text-right font-semibold">שם</TableHead>
-                <TableHead className="text-right font-semibold">סוכנות</TableHead>
-                <TableHead className="text-right font-semibold">סטטוס</TableHead>
-                <TableHead className="text-right font-semibold">ריטיינר</TableHead>
-                <TableHead className="text-right font-semibold">תקציב חודשי</TableHead>
-                <TableHead className="text-right font-semibold">טלפון</TableHead>
-                <TableHead className="text-right font-semibold">אימייל</TableHead>
-                <TableHead className="text-right font-semibold">אתר</TableHead>
-                <TableHead className="text-right font-semibold">תיקיה</TableHead>
-                <TableHead className="text-right font-semibold">קמפיינרים</TableHead>
+                <TableHead className="text-right font-semibold">{getFieldLabel('name', 'שם')}</TableHead>
+                <TableHead className="text-right font-semibold">{getFieldLabel('agency_id', 'סוכנות')}</TableHead>
+                <TableHead className="text-right font-semibold">{getFieldLabel('status', 'סטטוס')}</TableHead>
+                <TableHead className="text-right font-semibold">{getFieldLabel('retainer', 'ריטיינר')}</TableHead>
+                <TableHead className="text-right font-semibold">{getFieldLabel('monthly_budget', 'תקציב חודשי')}</TableHead>
+                <TableHead className="text-right font-semibold">{getFieldLabel('phone', 'טלפון')}</TableHead>
+                <TableHead className="text-right font-semibold">{getFieldLabel('email', 'אימייל')}</TableHead>
+                <TableHead className="text-right font-semibold">{getFieldLabel('website', 'אתר')}</TableHead>
+                <TableHead className="text-right font-semibold">{getFieldLabel('folder_link', 'תיקיה')}</TableHead>
+                <TableHead className="text-right font-semibold">{getFieldLabel('campaigners', 'קמפיינרים')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

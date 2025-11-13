@@ -59,6 +59,35 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
+  // Fetch custom field labels for client entity
+  const { data: fieldLabels } = useQuery({
+    queryKey: ["custom-fields", tenantId, "client"],
+    queryFn: async () => {
+      if (!tenantId) return {};
+      
+      const { data, error } = await supabase
+        .from("custom_fields")
+        .select("field_key, field_label")
+        .eq("tenant_id", tenantId)
+        .eq("entity_type", "client");
+      
+      if (error) throw error;
+      
+      // Convert to map for easy lookup
+      const labelMap: Record<string, string> = {};
+      data?.forEach(field => {
+        labelMap[field.field_key] = field.field_label;
+      });
+      return labelMap;
+    },
+    enabled: !!tenantId,
+  });
+
+  // Helper function to get field label with fallback
+  const getFieldLabel = (fieldKey: string, fallback: string) => {
+    return fieldLabels?.[fieldKey] || fallback;
+  };
+
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
     queryFn: async () => {
@@ -274,7 +303,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
               name="agency_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>סוכנות *</FormLabel>
+                  <FormLabel>{getFieldLabel('agency_id', 'סוכנות')} *</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -299,7 +328,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>שם הלקוח *</FormLabel>
+                  <FormLabel>{getFieldLabel('name', 'שם הלקוח')} *</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -314,7 +343,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                 name="phone"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>טלפון</FormLabel>
+                    <FormLabel>{getFieldLabel('phone', 'טלפון')}</FormLabel>
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
@@ -328,7 +357,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>אימייל</FormLabel>
+                    <FormLabel>{getFieldLabel('email', 'אימייל')}</FormLabel>
                     <FormControl>
                       <Input {...field} type="email" />
                     </FormControl>
@@ -359,7 +388,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                     name="retainer"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>ריטיינר (₪)</FormLabel>
+                        <FormLabel>{getFieldLabel('retainer', 'ריטיינר')} (₪)</FormLabel>
                         <FormControl>
                           <Input {...field} type="number" />
                         </FormControl>
@@ -373,7 +402,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                   name="monthly_budget"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>תקציב חודשי (₪)</FormLabel>
+                      <FormLabel>{getFieldLabel('monthly_budget', 'תקציב חודשי')} (₪)</FormLabel>
                       <FormControl>
                         <Input {...field} type="number" />
                       </FormControl>
@@ -389,7 +418,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
               name="website"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>אתר</FormLabel>
+                  <FormLabel>{getFieldLabel('website', 'אתר')}</FormLabel>
                   <FormControl>
                     <Input {...field} placeholder="https://example.com" />
                   </FormControl>
@@ -449,7 +478,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                   </FormControl>
                   <div className="space-y-1 leading-none">
                     <FormLabel className="cursor-pointer">
-                      לקוח SEO
+                      {getFieldLabel('is_seo_client', 'לקוח SEO')}
                     </FormLabel>
                   </div>
                 </FormItem>
