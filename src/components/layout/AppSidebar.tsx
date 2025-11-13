@@ -100,7 +100,12 @@ export function AppSidebar() {
     queryKey: ["user-tenants", userId],
     queryFn: async () => {
       if (!userId) return [] as any[];
-      const { data, error } = await supabase.functions.invoke("list-user-tenants", {});
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data, error } = await supabase.functions.invoke("list-user-tenants", {
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`
+        }
+      });
       if (error) throw error as any;
       return (data as any)?.tenants || [];
     },
