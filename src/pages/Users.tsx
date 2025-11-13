@@ -370,22 +370,43 @@ export default function Users() {
     enabled: !!currentUserId && !isSuperAdmin,
   });
 
-  // Check if current user is owner of the current tenant
+  // Check if current user is owner (from user_roles table)
   const { data: isOwnerOfCurrentTenant } = useQuery({
     queryKey: ["is-owner-of-tenant", tenantId, currentUserId],
     queryFn: async () => {
       if (!tenantId || !currentUserId) return false;
       
-      const { data, error } = await supabase
-        .from("tenant_users")
+      // Check in user_roles table
+      const { data: roleData, error: roleError } = await supabase
+        .from("user_roles")
         .select("role")
         .eq("user_id", currentUserId)
-        .eq("tenant_id", tenantId)
         .eq("role", "owner")
         .maybeSingle();
       
-      if (error) throw error;
-      return !!data;
+      if (roleError) {
+        console.error("Error checking owner role:", roleError);
+        return false;
+      }
+      
+      // If user is owner, verify they belong to this tenant
+      if (roleData) {
+        const { data: tenantData, error: tenantError } = await supabase
+          .from("tenant_users")
+          .select("tenant_id")
+          .eq("user_id", currentUserId)
+          .eq("tenant_id", tenantId)
+          .maybeSingle();
+        
+        if (tenantError) {
+          console.error("Error checking tenant membership:", tenantError);
+          return false;
+        }
+        
+        return !!tenantData;
+      }
+      
+      return false;
     },
     enabled: !!tenantId && !!currentUserId,
   });
