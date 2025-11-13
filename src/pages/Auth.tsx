@@ -53,7 +53,8 @@ useEffect(() => {
         if (tenantSlug) {
           navigate(buildTenantPath(tenantSlug, "dashboard"));
         } else {
-          console.error("No tenant slug found for user");
+          // No tenant found, redirect to landing
+          navigate("/landing");
         }
         return;
       }
@@ -74,7 +75,8 @@ useEffect(() => {
       if (tenantSlug) {
         navigate(buildTenantPath(tenantSlug, "dashboard"));
       } else {
-        console.error("No tenant slug found for user");
+        // No tenant found, redirect to landing
+        navigate("/landing");
       }
       return;
     }
@@ -127,7 +129,8 @@ useEffect(() => {
       if (tenantSlug) {
         navigate(`/t/${tenantSlug}/dashboard`);
       } else {
-        console.error("No tenant slug found for user");
+        // No tenant found, redirect to landing
+        navigate("/landing");
       }
     }
   });
@@ -193,7 +196,8 @@ useEffect(() => {
       if (tenantSlug) {
         navigate(`/t/${tenantSlug}/dashboard`);
       } else {
-        console.error("No tenant slug found after signup");
+        // No tenant found, redirect to landing
+        navigate("/landing");
       }
     }
     setLoading(false);
@@ -266,7 +270,8 @@ useEffect(() => {
     if (tenantSlug) {
       navigate(buildTenantPath(tenantSlug, "dashboard"));
     } else {
-      console.error("No tenant slug found after signin");
+      // No tenant found, redirect to landing
+      navigate("/landing");
     }
     setLoading(false);
   };
@@ -324,7 +329,8 @@ useEffect(() => {
         if (tenantSlug) {
           navigate(buildTenantPath(tenantSlug, "dashboard"));
         } else {
-          console.error("No tenant slug found after MFA");
+          // No tenant found, redirect to landing
+          navigate("/landing");
         }
       }
     } catch (error: any) {
@@ -462,7 +468,8 @@ useEffect(() => {
       if (tenantSlug) {
         navigate(buildTenantPath(tenantSlug, "dashboard"));
       } else {
-        console.error("No tenant slug found after password update");
+        // No tenant found, redirect to landing
+        navigate("/landing");
       }
     }
     setLoading(false);
