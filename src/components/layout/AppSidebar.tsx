@@ -44,7 +44,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useUserTenants } from "@/hooks/useUserTenants";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenant } from "@/contexts/TenantContext";
@@ -96,39 +96,8 @@ export function AppSidebar() {
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
 
-  const { data: userTenants = [] } = useQuery({
-    queryKey: ["user-tenants", userId],
-    queryFn: async () => {
-      if (!userId) return [] as any[];
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        console.warn("No valid session for list-user-tenants");
-        return [];
-      }
-      
-      const { data, error } = await supabase.functions.invoke("list-user-tenants", {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        }
-      });
-      
-      if (error) {
-        console.error("Error fetching user tenants:", error);
-        return [];
-      }
-      
-      return (data as any)?.tenants || [];
-    },
-    enabled: !!userId,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
-    retry: 1,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    refetchOnMount: false,
-    placeholderData: keepPreviousData,
-  });
+  const { userTenants } = useUserTenants(userId);
+
 
   const currentTenantName = (userTenants || []).find((t: any) => t.id === currentTenantId)?.name || currentTenant?.name;
   
