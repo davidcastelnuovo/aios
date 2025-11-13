@@ -46,9 +46,24 @@ serve(async (req: Request) => {
     
     const isSuperAdmin = rolesData?.some((r: any) => r.role === "super_admin");
 
+    // Special case: owners of MarketingCaptain can view all tenants
+    let isOwnerOfMarketingCaptain = false;
+    try {
+      const { data: ownedTenants } = await supabase
+        .from("tenant_users")
+        .select("tenants(slug)")
+        .eq("user_id", user.id)
+        .eq("role", "owner");
+      isOwnerOfMarketingCaptain = (ownedTenants || []).some((r: any) =>
+        (r as any)?.tenants?.slug?.toLowerCase() === "marketingcaptain"
+      );
+    } catch (e) {
+      console.warn("Ownership check failed:", e);
+    }
+
     let tenants: any[] = [];
 
-    if (isSuperAdmin) {
+    if (isSuperAdmin || isOwnerOfMarketingCaptain) {
       // Super admins see ALL tenants (no allow_super_admin_access gating)
       const { data: allTenants, error: allTenantsError } = await supabase
         .from("tenants")
