@@ -167,6 +167,8 @@ interface MenuGroupProps {
   onResetLabel: (item: MenuItem) => void;
   onToggleVisibility: (item: MenuItem) => void;
   onBadgeChange: (item: MenuItem, badge: string | null) => void;
+  onItemDragEnd: (event: DragEndEvent) => void;
+  itemSensors: any;
   children?: MenuItem[];
   defaultOpen?: boolean;
 }
@@ -183,6 +185,8 @@ function MenuGroup({
   onResetLabel,
   onToggleVisibility,
   onBadgeChange,
+  onItemDragEnd,
+  itemSensors,
   defaultOpen = false,
 }: MenuGroupProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -205,8 +209,8 @@ function MenuGroup({
   return (
     <Card ref={setNodeRef} style={style} className="mb-4">
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-        <CardHeader className="cursor-pointer" onClick={() => setIsOpen(!isOpen)}>
-          <CollapsibleTrigger className="flex items-center justify-between w-full">
+        <CardHeader>
+          <CollapsibleTrigger className="flex items-center justify-between w-full cursor-pointer">
             <div className="flex items-center gap-3">
               <div
                 {...attributes}
@@ -223,55 +227,61 @@ function MenuGroup({
         </CardHeader>
         <CollapsibleContent>
           <CardContent className="p-0">
-            <SortableContext
-              items={items.map((item) => item.id)}
-              strategy={verticalListSortingStrategy}
+            <DndContext
+              sensors={itemSensors}
+              collisionDetection={closestCenter}
+              onDragEnd={onItemDragEnd}
             >
-              <table className="w-full">
-                <tbody>
-                  {items.map((item) => (
-                    <SortableMenuItem
-                      key={item.id}
-                      item={item}
-                      editingItems={editingItems}
-                      updateMutation={updateMutation}
-                      onLabelChange={onLabelChange}
-                      onSaveLabel={onSaveLabel}
-                      onResetLabel={onResetLabel}
-                      onToggleVisibility={onToggleVisibility}
-                      onBadgeChange={onBadgeChange}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </SortableContext>
-            {children && children.length > 0 && (
-              <div className="mr-8 border-r-2 border-muted">
-                <SortableContext
-                  items={children.map((item) => item.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <table className="w-full">
-                    <tbody>
-                      {children.map((child) => (
-                        <SortableMenuItem
-                          key={child.id}
-                          item={child}
-                          editingItems={editingItems}
-                          updateMutation={updateMutation}
-                          onLabelChange={onLabelChange}
-                          onSaveLabel={onSaveLabel}
-                          onResetLabel={onResetLabel}
-                          onToggleVisibility={onToggleVisibility}
-                          onBadgeChange={onBadgeChange}
-                          isChild
-                        />
-                      ))}
-                    </tbody>
-                  </table>
-                </SortableContext>
-              </div>
-            )}
+              <SortableContext
+                items={items.map((item) => item.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <table className="w-full">
+                  <tbody>
+                    {items.map((item) => (
+                      <SortableMenuItem
+                        key={item.id}
+                        item={item}
+                        editingItems={editingItems}
+                        updateMutation={updateMutation}
+                        onLabelChange={onLabelChange}
+                        onSaveLabel={onSaveLabel}
+                        onResetLabel={onResetLabel}
+                        onToggleVisibility={onToggleVisibility}
+                        onBadgeChange={onBadgeChange}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </SortableContext>
+              {children && children.length > 0 && (
+                <div className="mr-8 border-r-2 border-muted">
+                  <SortableContext
+                    items={children.map((item) => item.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <table className="w-full">
+                      <tbody>
+                        {children.map((child) => (
+                          <SortableMenuItem
+                            key={child.id}
+                            item={child}
+                            editingItems={editingItems}
+                            updateMutation={updateMutation}
+                            onLabelChange={onLabelChange}
+                            onSaveLabel={onSaveLabel}
+                            onResetLabel={onResetLabel}
+                            onToggleVisibility={onToggleVisibility}
+                            onBadgeChange={onBadgeChange}
+                            isChild
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </SortableContext>
+                </div>
+              )}
+            </DndContext>
           </CardContent>
         </CollapsibleContent>
       </Collapsible>
@@ -284,7 +294,14 @@ export default function MenuManagement() {
   const queryClient = useQueryClient();
   const [editingItems, setEditingItems] = useState<Record<string, string>>({});
 
-  const sensors = useSensors(
+  const groupSensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const itemSensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
@@ -482,7 +499,7 @@ export default function MenuManagement() {
       </div>
 
       <DndContext
-        sensors={sensors}
+        sensors={groupSensors}
         collisionDetection={closestCenter}
         onDragEnd={handleGroupDragEnd}
       >
@@ -491,27 +508,23 @@ export default function MenuManagement() {
           strategy={verticalListSortingStrategy}
         >
           {orderedGroups.map((group) => (
-            <DndContext
+            <MenuGroup
               key={group.id}
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <MenuGroup
-                id={group.id}
-                title={group.title}
-                items={group.items}
-                children={group.children}
-                editingItems={editingItems}
-                updateMutation={updateMutation}
-                onLabelChange={handleLabelChange}
-                onSaveLabel={handleSaveLabel}
-                onResetLabel={handleResetLabel}
-                onToggleVisibility={handleToggleVisibility}
-                onBadgeChange={handleBadgeChange}
-                defaultOpen={true}
-              />
-            </DndContext>
+              id={group.id}
+              title={group.title}
+              items={group.items}
+              children={group.children}
+              editingItems={editingItems}
+              updateMutation={updateMutation}
+              onLabelChange={handleLabelChange}
+              onSaveLabel={handleSaveLabel}
+              onResetLabel={handleResetLabel}
+              onToggleVisibility={handleToggleVisibility}
+              onBadgeChange={handleBadgeChange}
+              onItemDragEnd={handleDragEnd}
+              itemSensors={itemSensors}
+              defaultOpen={true}
+            />
           ))}
         </SortableContext>
       </DndContext>
