@@ -372,44 +372,24 @@ export default function Users() {
 
   // Check if current user is owner (from user_roles table)
   const { data: isOwnerOfCurrentTenant } = useQuery({
-    queryKey: ["is-owner-of-tenant", tenantId, currentUserId],
-    queryFn: async () => {
-      if (!tenantId || !currentUserId) return false;
-      
-      // Check in user_roles table
-      const { data: roleData, error: roleError } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", currentUserId)
-        .eq("role", "owner")
-        .maybeSingle();
-      
-      if (roleError) {
-        console.error("Error checking owner role:", roleError);
-        return false;
-      }
-      
-      // If user is owner, verify they belong to this tenant
-      if (roleData) {
-        const { data: tenantData, error: tenantError } = await supabase
+      queryKey: ["is-owner-of-tenant", tenantId, currentUserId],
+      queryFn: async () => {
+        if (!tenantId || !currentUserId) return false;
+        const { data, error } = await supabase
           .from("tenant_users")
-          .select("tenant_id")
+          .select("role")
           .eq("user_id", currentUserId)
           .eq("tenant_id", tenantId)
+          .eq("role", "owner")
           .maybeSingle();
-        
-        if (tenantError) {
-          console.error("Error checking tenant membership:", tenantError);
+        if (error) {
+          console.error("Error checking owner role in tenant:", error);
           return false;
         }
-        
-        return !!tenantData;
-      }
-      
-      return false;
-    },
-    enabled: !!tenantId && !!currentUserId,
-  });
+        return !!data;
+      },
+      enabled: !!tenantId && !!currentUserId,
+    });
 
   // Load current tenant details for the switch state
   const { data: currentTenantDetails } = useQuery({
@@ -677,7 +657,8 @@ export default function Users() {
                   id="super-admin-access"
                   checked={currentTenantDetails?.allow_super_admin_access ?? true}
                   onCheckedChange={(checked) => {
-                    updateSuperAdminAccessMutation.mutate({ allowAccess: checked });
+                    console.log("Toggling allow_super_admin_access:", { tenantId, checked });
+                    updateSuperAdminAccessMutation.mutate({ allowAccess: !!checked });
                   }}
                 />
               </div>
