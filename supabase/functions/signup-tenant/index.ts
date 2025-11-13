@@ -49,7 +49,29 @@ serve(async (req: Request) => {
       const { data: authData, error: authCheckError } = await authClient.auth.getUser();
       if (!authCheckError && authData?.user) {
         authenticatedUser = authData.user;
-        console.log("✅ Found authenticated user:", authenticatedUser.id, authenticatedUser.email);
+        console.log("✅ Found authenticated user via getUser:", authenticatedUser.id, authenticatedUser.email);
+      } else {
+        console.warn("⚠️ getUser did not return a user. Falling back to JWT decode.", authCheckError?.message);
+        // Fallback: decode JWT directly to extract user id/email
+        const match = authHeader.match(/^Bearer\s+(.+)/i);
+        const token = match?.[1];
+        const decodeJwt = (t: string) => {
+          try {
+            const payload = t.split(".")[1];
+            const base64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+            const json = atob(base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, "="));
+            return JSON.parse(json);
+          } catch (_) {
+            return null;
+          }
+        };
+        const decoded = token ? decodeJwt(token) : null;
+        if (decoded?.sub) {
+          authenticatedUser = { id: decoded.sub, email: decoded.email ?? null };
+          console.log("✅ Extracted authenticated user from JWT:", authenticatedUser.id, authenticatedUser.email);
+        } else {
+          console.warn("❌ Could not extract user from Authorization header");
+        }
       }
     }
     
