@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Building2,
@@ -91,6 +91,7 @@ export function AppSidebar() {
   const { logoUrl } = useTheme();
   const { buildPath } = useTenantPath();
   const isCollapsed = state === "collapsed";
+  const navigate = useNavigate();
 
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
@@ -161,7 +162,7 @@ export function AppSidebar() {
       setCurrentTenantId(tenantId);
       
       // Navigate to new tenant dashboard
-      window.location.href = `/t/${targetTenant.slug}/dashboard`;
+      navigate(`/t/${targetTenant.slug}/dashboard`, { replace: true });
     } catch (e) {
       console.error("Error switching tenant:", e);
     }
