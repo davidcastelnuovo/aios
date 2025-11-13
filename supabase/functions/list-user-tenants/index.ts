@@ -51,7 +51,7 @@ serve(async (req: Request) => {
     if (isSuperAdmin) {
       // Super admins can see tenants only if tenant allows it OR they are owners of that tenant
       const [{ data: allTenants, error: allTenantsError }, { data: memberships, error: membershipsError }] = await Promise.all([
-        supabase.from("tenants").select("id, name, allow_super_admin_access").order("name"),
+        supabase.from("tenants").select("id, name, slug, allow_super_admin_access").order("name"),
         supabase.from("tenant_users").select("tenant_id, role").eq("user_id", user.id),
       ]);
 
@@ -67,12 +67,12 @@ serve(async (req: Request) => {
       const ownerTenantIds = new Set((memberships || []).filter((m: any) => m.role === "owner").map((m: any) => m.tenant_id));
       tenants = (allTenants || [])
         .filter((t: any) => t.allow_super_admin_access === true || ownerTenantIds.has(t.id))
-        .map((t: any) => ({ id: t.id, name: t.name }));
+        .map((t: any) => ({ id: t.id, name: t.name, slug: t.slug }));
     } else {
       // Regular users see only their tenants
       const { data, error } = await supabase
         .from("tenant_users")
-        .select("tenant_id, tenants(id, name)")
+        .select("tenant_id, tenants(id, name, slug)")
         .eq("user_id", user.id);
 
       if (error) {
@@ -83,6 +83,7 @@ serve(async (req: Request) => {
       tenants = (data || []).map((row: any) => ({
         id: row.tenants?.id,
         name: row.tenants?.name,
+        slug: row.tenants?.slug,
       })).filter((t: any) => t.id && t.name);
     }
 
