@@ -5,12 +5,27 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Eye, EyeOff, Save, RotateCcw, ChevronUp, ChevronDown } from "lucide-react";
+import { Save, RotateCcw, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   Table,
   TableBody,
@@ -32,10 +47,128 @@ interface MenuItem {
   badge?: 'coming_soon' | 'premium' | null;
 }
 
+interface SortableMenuItemProps {
+  item: MenuItem;
+  editingItems: Record<string, string>;
+  updateMutation: any;
+  onLabelChange: (id: string, value: string) => void;
+  onSaveLabel: (item: MenuItem) => void;
+  onResetLabel: (item: MenuItem) => void;
+  onToggleVisibility: (item: MenuItem) => void;
+  onBadgeChange: (item: MenuItem, badge: string | null) => void;
+}
+
+function SortableMenuItem({
+  item,
+  editingItems,
+  updateMutation,
+  onLabelChange,
+  onSaveLabel,
+  onResetLabel,
+  onToggleVisibility,
+  onBadgeChange,
+}: SortableMenuItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <tr ref={setNodeRef} style={style} className="group">
+      <td className="p-2">
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded"
+        >
+          <GripVertical className="h-5 w-5 text-muted-foreground" />
+        </div>
+      </td>
+      <td className="p-2 font-medium">{item.original_label}</td>
+      <td className="p-2">
+        <Input
+          value={
+            editingItems[item.id] !== undefined
+              ? editingItems[item.id]
+              : item.custom_label || item.original_label
+          }
+          onChange={(e) => onLabelChange(item.id, e.target.value)}
+          className="max-w-xs"
+          placeholder={item.original_label}
+        />
+      </td>
+      <td className="p-2">
+        <Select
+          value={item.badge || 'none'}
+          onValueChange={(value) => onBadgeChange(item, value === 'none' ? null : value)}
+          disabled={updateMutation.isPending}
+        >
+          <SelectTrigger className="w-32">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">ללא</SelectItem>
+            <SelectItem value="coming_soon">בקרוב</SelectItem>
+            <SelectItem value="premium">פרימיום</SelectItem>
+          </SelectContent>
+        </Select>
+      </td>
+      <td className="p-2">
+        <Switch
+          checked={item.is_visible}
+          onCheckedChange={() => onToggleVisibility(item)}
+        />
+      </td>
+      <td className="p-2">
+        <div className="flex items-center gap-2">
+          {editingItems[item.id] !== undefined && (
+            <Button
+              size="sm"
+              onClick={() => onSaveLabel(item)}
+              disabled={updateMutation.isPending}
+            >
+              <Save className="h-4 w-4 ml-1" />
+              שמור
+            </Button>
+          )}
+          {item.custom_label && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onResetLabel(item)}
+              disabled={updateMutation.isPending}
+            >
+              <RotateCcw className="h-4 w-4 ml-1" />
+              אפס
+            </Button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 export default function MenuManagement() {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const [editingItems, setEditingItems] = useState<Record<string, string>>({});
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const { data: menuItems, isLoading } = useQuery({
     queryKey: ['menu-items', tenantId],
@@ -118,31 +251,24 @@ export default function MenuManagement() {
     });
   };
 
-  const handleMoveUp = (item: MenuItem, index: number) => {
-    if (index === 0 || !menuItems) return;
-    
-    const previousItem = menuItems[index - 1];
-    updateMutation.mutate({
-      id: item.id,
-      sort_order: previousItem.sort_order,
-    });
-    updateMutation.mutate({
-      id: previousItem.id,
-      sort_order: item.sort_order,
-    });
-  };
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
 
-  const handleMoveDown = (item: MenuItem, index: number) => {
-    if (!menuItems || index === menuItems.length - 1) return;
-    
-    const nextItem = menuItems[index + 1];
-    updateMutation.mutate({
-      id: item.id,
-      sort_order: nextItem.sort_order,
-    });
-    updateMutation.mutate({
-      id: nextItem.id,
-      sort_order: item.sort_order,
+    if (!over || active.id === over.id || !menuItems) return;
+
+    const oldIndex = menuItems.findIndex((item) => item.id === active.id);
+    const newIndex = menuItems.findIndex((item) => item.id === over.id);
+
+    const newMenuItems = arrayMove(menuItems, oldIndex, newIndex);
+
+    // Update sort_order for all affected items
+    newMenuItems.forEach((item, index) => {
+      if (item.sort_order !== index + 1) {
+        updateMutation.mutate({
+          id: item.id,
+          sort_order: index + 1,
+        });
+      }
     });
   };
 
@@ -159,7 +285,7 @@ export default function MenuManagement() {
       <div>
         <h1 className="text-3xl font-bold">ניהול תפריטים</h1>
         <p className="text-muted-foreground mt-2">
-          התאם אישית את שמות פריטי התפריט והנראות שלהם
+          גרור פריטים כדי לשנות את הסדר, ערוך שמות והגדרות
         </p>
       </div>
 
@@ -168,110 +294,44 @@ export default function MenuManagement() {
           <CardTitle>פריטי תפריט</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-12">סדר</TableHead>
-                <TableHead>שם מקורי</TableHead>
-                <TableHead>שם מותאם</TableHead>
-                <TableHead>בדג'</TableHead>
-                <TableHead>נראה</TableHead>
-                <TableHead>פעולות</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {menuItems?.map((item, index) => (
-                <TableRow key={item.id}>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleMoveUp(item, index)}
-                        disabled={index === 0 || updateMutation.isPending}
-                        className="h-8 w-8"
-                      >
-                        <ChevronUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleMoveDown(item, index)}
-                        disabled={index === menuItems.length - 1 || updateMutation.isPending}
-                        className="h-8 w-8"
-                      >
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    {item.original_label}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={
-                          editingItems[item.id] !== undefined
-                            ? editingItems[item.id]
-                            : item.custom_label || item.original_label
-                        }
-                        onChange={(e) => handleLabelChange(item.id, e.target.value)}
-                        className="max-w-xs"
-                        placeholder={item.original_label}
-                      />
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={item.badge || 'none'}
-                      onValueChange={(value) => handleBadgeChange(item, value === 'none' ? null : value)}
-                      disabled={updateMutation.isPending}
-                    >
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">ללא</SelectItem>
-                        <SelectItem value="coming_soon">בקרוב</SelectItem>
-                        <SelectItem value="premium">פרימיום</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={item.is_visible}
-                      onCheckedChange={() => handleToggleVisibility(item)}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="p-2 text-right w-12"></th>
+                  <th className="p-2 text-right">שם מקורי</th>
+                  <th className="p-2 text-right">שם מותאם</th>
+                  <th className="p-2 text-right">בדג'</th>
+                  <th className="p-2 text-right">נראה</th>
+                  <th className="p-2 text-right">פעולות</th>
+                </tr>
+              </thead>
+              <SortableContext
+                items={menuItems?.map((item) => item.id) || []}
+                strategy={verticalListSortingStrategy}
+              >
+                <tbody>
+                  {menuItems?.map((item) => (
+                    <SortableMenuItem
+                      key={item.id}
+                      item={item}
+                      editingItems={editingItems}
+                      updateMutation={updateMutation}
+                      onLabelChange={handleLabelChange}
+                      onSaveLabel={handleSaveLabel}
+                      onResetLabel={handleResetLabel}
+                      onToggleVisibility={handleToggleVisibility}
+                      onBadgeChange={handleBadgeChange}
                     />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {editingItems[item.id] !== undefined && (
-                        <Button
-                          size="sm"
-                          onClick={() => handleSaveLabel(item)}
-                          disabled={updateMutation.isPending}
-                        >
-                          <Save className="h-4 w-4 ml-1" />
-                          שמור
-                        </Button>
-                      )}
-                      {item.custom_label && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleResetLabel(item)}
-                          disabled={updateMutation.isPending}
-                        >
-                          <RotateCcw className="h-4 w-4 ml-1" />
-                          אפס
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  ))}
+                </tbody>
+              </SortableContext>
+            </table>
+          </DndContext>
         </CardContent>
       </Card>
     </div>
