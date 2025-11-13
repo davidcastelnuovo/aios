@@ -291,7 +291,12 @@ const Landing = () => {
               <Button 
                 variant="ghost" 
                 size="sm"
-                onClick={() => navigate("/auth")}
+                onClick={async () => {
+                  // Sign out first to allow fresh login
+                  const { supabase } = await import("@/integrations/supabase/client");
+                  await supabase.auth.signOut();
+                  navigate("/auth");
+                }}
                 className="hidden md:flex"
               >
                 התחבר
@@ -355,7 +360,12 @@ const Landing = () => {
                   size="lg" 
                   variant="outline"
                   className="text-lg px-8 py-6 border-2"
-                  onClick={() => navigate("/auth")}
+                  onClick={async () => {
+                    // Sign out first to allow fresh login
+                    const { supabase } = await import("@/integrations/supabase/client");
+                    await supabase.auth.signOut();
+                    navigate("/auth");
+                  }}
                 >
                   ראה את המערכת בפעולה
                 </Button>
