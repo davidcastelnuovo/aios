@@ -54,6 +54,35 @@ export function AddClientForm() {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
 
+  // Fetch custom field labels for client entity
+  const { data: fieldLabels } = useQuery({
+    queryKey: ["custom-fields", tenantId, "client"],
+    queryFn: async () => {
+      if (!tenantId) return {};
+      
+      const { data, error } = await supabase
+        .from("custom_fields")
+        .select("field_key, field_label")
+        .eq("tenant_id", tenantId)
+        .eq("entity_type", "client");
+      
+      if (error) throw error;
+      
+      // Convert to map for easy lookup
+      const labelMap: Record<string, string> = {};
+      data?.forEach(field => {
+        labelMap[field.field_key] = field.field_label;
+      });
+      return labelMap;
+    },
+    enabled: !!tenantId,
+  });
+
+  // Helper function to get field label with fallback
+  const getFieldLabel = (fieldKey: string, fallback: string) => {
+    return fieldLabels?.[fieldKey] || fallback;
+  };
+
   const { data: agencies } = useQuery({
     queryKey: ["agencies", tenantId],
     queryFn: async () => {
@@ -139,7 +168,7 @@ export function AddClientForm() {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>שם הלקוח</FormLabel>
+                  <FormLabel>{getFieldLabel('name', 'שם הלקוח')}</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -153,7 +182,7 @@ export function AddClientForm() {
               name="agency_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>סוכנות</FormLabel>
+                  <FormLabel>{getFieldLabel('agency_id', 'סוכנות')}</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
@@ -178,7 +207,7 @@ export function AddClientForm() {
               name="phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>טלפון</FormLabel>
+                  <FormLabel>{getFieldLabel('phone', 'טלפון')}</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -192,7 +221,7 @@ export function AddClientForm() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>אימייל</FormLabel>
+                  <FormLabel>{getFieldLabel('email', 'אימייל')}</FormLabel>
                   <FormControl>
                     <Input type="email" {...field} />
                   </FormControl>
@@ -206,7 +235,7 @@ export function AddClientForm() {
               name="folder_link"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>קישור לתיקיה</FormLabel>
+                  <FormLabel>{getFieldLabel('folder_link', 'קישור לתיקיה')}</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -220,7 +249,7 @@ export function AddClientForm() {
               name="retainer"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>ריטיינר (₪)</FormLabel>
+                  <FormLabel>{getFieldLabel('retainer', 'ריטיינר')} (₪)</FormLabel>
                   <FormControl>
                     <Input type="number" {...field} />
                   </FormControl>
@@ -234,7 +263,7 @@ export function AddClientForm() {
               name="monthly_budget"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>תקציב חודשי (₪)</FormLabel>
+                  <FormLabel>{getFieldLabel('monthly_budget', 'תקציב חודשי')} (₪)</FormLabel>
                   <FormControl>
                     <Input type="number" {...field} />
                   </FormControl>
@@ -248,7 +277,7 @@ export function AddClientForm() {
               name="website"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>אתר</FormLabel>
+                  <FormLabel>{getFieldLabel('website', 'אתר')}</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
@@ -284,7 +313,7 @@ export function AddClientForm() {
                   </FormControl>
                   <div className="space-y-1 leading-none">
                     <FormLabel className="cursor-pointer">
-                      לקוח SEO
+                      {getFieldLabel('is_seo_client', 'לקוח SEO')}
                     </FormLabel>
                   </div>
                 </FormItem>
