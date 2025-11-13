@@ -612,7 +612,7 @@ export default function Users() {
     },
   });
 
-  if (!isOwner) {
+  if (!isOwner && !isSuperAdmin) {
     return (
       <div className="container mx-auto py-6">
         <Card className="p-6">
@@ -621,6 +621,23 @@ export default function Users() {
             <h2 className="text-xl font-semibold mb-2">אין הרשאה</h2>
             <p className="text-muted-foreground">
               רק בעלים ומנהלי סוכנות יכולים לגשת לדף זה
+            </p>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  // Block super admin when owner disabled access for this tenant
+  if (isSuperAdmin && currentTenantDetails && currentTenantDetails.allow_super_admin_access === false && !isOwnerOfCurrentTenant) {
+    return (
+      <div className="container mx-auto py-6">
+        <Card className="p-6">
+          <div className="text-center">
+            <Shield className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+            <h2 className="text-xl font-semibold mb-2">הגישה נחסמה</h2>
+            <p className="text-muted-foreground">
+              בעלים חסם גישת Super Admin לארגון זה. בחר ארגון אחר מהרשימה.
             </p>
           </div>
         </Card>

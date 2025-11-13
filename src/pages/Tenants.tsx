@@ -76,9 +76,27 @@ export default function Tenants() {
 
     console.log("Switching to tenant:", tenantId);
 
-    // Super admins can access any tenant
+    // Super admins can access tenant only if allowed or if they are owners of that tenant
     if (isSuperAdmin) {
-      // Ensure super admin appears in tenant dropdown by being a member
+      // Fetch allow flag and ownership
+      const [{ data: tenantRow }, { data: ownerRow }] = await Promise.all([
+        supabase.from("tenants").select("id, allow_super_admin_access").eq("id", tenantId).maybeSingle(),
+        supabase.from("tenant_users").select("role").eq("tenant_id", tenantId).eq("user_id", user.id).eq("role", "owner").maybeSingle(),
+      ]);
+
+      const allow = tenantRow?.allow_super_admin_access === true;
+      const isOwnerOfThis = !!ownerRow;
+
+      if (!allow && !isOwnerOfThis) {
+        toast({
+          title: "אין הרשאה",
+          description: "בעלים חסם גישת Super Admin לארגון זה",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Ensure super admin appears in tenant dropdown by being a member (only when allowed or owner)
       const { data: existingMembership } = await supabase
         .from("tenant_users")
         .select("id")
@@ -89,7 +107,7 @@ export default function Tenants() {
       if (!existingMembership) {
         await (supabase as any)
           .from("tenant_users")
-          .insert({ user_id: user.id, tenant_id: tenantId, role: "member" });
+          .insert({ user_id: user.id, tenant_id: tenantId, role: isOwnerOfThis ? "owner" : "member" });
       }
 
       // Update user_active_tenant in the database
