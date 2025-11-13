@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Building2 } from "lucide-react";
+import { resolveTenantSlug } from "@/hooks/useResolveTenant";
 
 // Helper function to build tenant path - requires slug
 const buildTenantPath = (slug: string, path: string) => {
@@ -30,42 +31,6 @@ export default function Auth() {
   const { toast } = useToast();
 const [searchParams] = useSearchParams();
 
-// Resolve a tenant slug for a user robustly, with fallback and persistence
-async function resolveTenantSlug(userId: string): Promise<string | null> {
-  try {
-    // 1) Try active tenant mapping first
-    const { data: activeTenant } = await (supabase as any)
-      .from("user_active_tenant")
-      .select("tenant_id, tenants(slug, status)")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    const activeSlug = (activeTenant as any)?.tenants?.slug;
-    if (activeSlug) return activeSlug as string;
-
-    // 2) Fall back to first available tenant from memberships
-    const { data: userTenants } = await (supabase as any)
-      .from("tenant_users")
-      .select("tenant_id, tenants(slug, status)")
-      .eq("user_id", userId)
-      .limit(10);
-
-    const candidate: any = (userTenants || []).find((t: any) => t?.tenants?.status === "active") || (userTenants || [])[0];
-    const candidateSlug = candidate?.tenants?.slug as string | undefined;
-    const candidateTenantId = candidate?.tenant_id as string | undefined;
-
-    if (candidateSlug && candidateTenantId) {
-      // Persist as active for next time
-      await (supabase as any)
-        .from("user_active_tenant")
-        .upsert({ user_id: userId, tenant_id: candidateTenantId, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
-      return candidateSlug;
-    }
-  } catch (err) {
-    console.error("resolveTenantSlug error:", err);
-  }
-  return null;
-}
 
 useEffect(() => {
   const init = async () => {
@@ -134,14 +99,7 @@ useEffect(() => {
         if (error) {
           console.error("Error processing invitation:", error);
         } else if (data?.error === "NO_INVITATION") {
-          toast({
-            title: "אין הזמנה",
-            description: data.message,
-            variant: "destructive",
-          });
-          // Sign out user without invitation
-          await supabase.auth.signOut();
-          return;
+          console.info("No invitation found, continuing regular login flow.");
         }
       } catch (e) {
         console.error("Exception processing invitation:", e);
@@ -189,14 +147,7 @@ useEffect(() => {
         if (invError) {
           console.error("Error processing invitation:", invError);
         } else if (invData?.error === "NO_INVITATION") {
-          toast({
-            title: "אין הזמנה",
-            description: invData.message,
-            variant: "destructive",
-          });
-          await supabase.auth.signOut();
-          setLoading(false);
-          return;
+          console.info("No invitation found after sign up; proceeding without invitation.");
         }
       }
     } catch (e) {
@@ -265,14 +216,7 @@ useEffect(() => {
         if (invError) {
           console.error("Error processing invitation:", invError);
         } else if (invData?.error === "NO_INVITATION") {
-          toast({
-            title: "אין הזמנה",
-            description: invData.message,
-            variant: "destructive",
-          });
-          await supabase.auth.signOut();
-          setLoading(false);
-          return;
+          console.info("No invitation found at sign in; continuing regular flow.");
         }
       }
     } catch (e) {
@@ -448,14 +392,7 @@ useEffect(() => {
         if (invError) {
           console.error("Error processing invitation:", invError);
         } else if (invData?.error === "NO_INVITATION") {
-          toast({
-            title: "אין הזמנה",
-            description: invData.message,
-            variant: "destructive",
-          });
-          await supabase.auth.signOut();
-          setLoading(false);
-          return;
+          console.info("No invitation found after password update; continuing.");
         }
       }
     } catch (e) {
