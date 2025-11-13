@@ -411,6 +411,22 @@ export default function Users() {
     enabled: !!tenantId && !!currentUserId,
   });
 
+  // Load current tenant details for the switch state
+  const { data: currentTenantDetails } = useQuery({
+    queryKey: ["tenant-details", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return null;
+      const { data, error } = await supabase
+        .from("tenants")
+        .select("id, name, allow_super_admin_access")
+        .eq("id", tenantId)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId,
+  });
+
   const updateSuperAdminAccessMutation = useMutation({
     mutationFn: async ({ allowAccess }: { allowAccess: boolean }) => {
       if (!tenantId) throw new Error("No tenant selected");
@@ -423,7 +439,7 @@ export default function Users() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["current-user-tenant"] });
+      queryClient.invalidateQueries({ queryKey: ["tenant-details", tenantId] });
       toast.success("הגדרות גישת Super Admin עודכנו בהצלחה");
     },
     onError: (error) => {
@@ -642,7 +658,7 @@ export default function Users() {
                 </div>
                 <Switch
                   id="super-admin-access"
-                  checked={currentUserTenant?.tenants?.allow_super_admin_access ?? true}
+                  checked={currentTenantDetails?.allow_super_admin_access ?? true}
                   onCheckedChange={(checked) => {
                     updateSuperAdminAccessMutation.mutate({ allowAccess: checked });
                   }}
