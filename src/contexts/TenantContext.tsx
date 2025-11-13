@@ -175,8 +175,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const path = window.location.pathname;
     const isPublicRoute = ['/auth', '/signup', '/landing', '/setup'].includes(path);
+    const isAlreadyTenantScoped = path.startsWith('/t/');
     
-    if (!isPublicRoute && !tenantSlug && currentTenant?.slug) {
+    // Only redirect if not already in a tenant-scoped route
+    if (!isPublicRoute && !isAlreadyTenantScoped && currentTenant?.slug) {
       // Extract page from current path or default to dashboard
       const page = path.slice(1) || 'dashboard';
       navigate(`/t/${currentTenant.slug}/${page}`, { replace: true });
