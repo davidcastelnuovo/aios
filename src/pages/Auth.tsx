@@ -87,7 +87,19 @@ useEffect(() => {
         console.error("Exception processing invitation:", e);
       }
       
-      navigate("/my-profile");
+      // Get tenant slug to redirect
+      const { data: activeTenant } = await supabase
+        .from("user_active_tenant")
+        .select("tenant_id, tenants(slug)")
+        .eq("user_id", session.user.id)
+        .maybeSingle();
+      
+      const tenantSlug = (activeTenant as any)?.tenants?.slug;
+      if (tenantSlug) {
+        navigate(`/t/${tenantSlug}/my-profile`);
+      } else {
+        navigate("/my-profile");
+      }
     }
   });
   return () => subscription.unsubscribe();
@@ -138,7 +150,25 @@ useEffect(() => {
       title: "ברוך הבא!",
       description: "החשבון נוצר בהצלחה",
     });
-    navigate("/my-profile");
+    
+    // Get tenant slug to redirect
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: activeTenant } = await supabase
+        .from("user_active_tenant")
+        .select("tenant_id, tenants(slug)")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      
+      const tenantSlug = (activeTenant as any)?.tenants?.slug;
+      if (tenantSlug) {
+        navigate(`/t/${tenantSlug}/my-profile`);
+      } else {
+        navigate("/my-profile");
+      }
+    } else {
+      navigate("/my-profile");
+    }
     setLoading(false);
   };
 
@@ -198,7 +228,19 @@ useEffect(() => {
     }
 
     // No MFA required or already verified, redirect to profile
-    navigate("/my-profile");
+    // Get tenant slug to redirect
+    const { data: activeTenant } = await supabase
+      .from("user_active_tenant")
+      .select("tenant_id, tenants(slug)")
+      .eq("user_id", data.user.id)
+      .maybeSingle();
+    
+    const tenantSlug = (activeTenant as any)?.tenants?.slug;
+    if (tenantSlug) {
+      navigate(`/t/${tenantSlug}/my-profile`);
+    } else {
+      navigate("/my-profile");
+    }
     setLoading(false);
   };
 
@@ -242,7 +284,24 @@ useEffect(() => {
         description: "התחברת בהצלחה",
       });
 
-      navigate("/my-profile");
+      // Get tenant slug to redirect
+      const { data: session } = await supabase.auth.getSession();
+      if (session?.session) {
+        const { data: activeTenant } = await supabase
+          .from("user_active_tenant")
+          .select("tenant_id, tenants(slug)")
+          .eq("user_id", session.session.user.id)
+          .maybeSingle();
+        
+        const tenantSlug = (activeTenant as any)?.tenants?.slug;
+        if (tenantSlug) {
+          navigate(`/t/${tenantSlug}/my-profile`);
+        } else {
+          navigate("/my-profile");
+        }
+      } else {
+        navigate("/my-profile");
+      }
     } catch (error: any) {
       toast({
         title: "שגיאה",
@@ -364,7 +423,25 @@ useEffect(() => {
       title: "הסיסמה עודכנה",
       description: "הסיסמה שלך עודכנה בהצלחה",
     });
-    navigate("/my-profile");
+    
+    // Get tenant slug to redirect
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: activeTenant } = await supabase
+        .from("user_active_tenant")
+        .select("tenant_id, tenants(slug)")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      
+      const tenantSlug = (activeTenant as any)?.tenants?.slug;
+      if (tenantSlug) {
+        navigate(`/t/${tenantSlug}/my-profile`);
+      } else {
+        navigate("/my-profile");
+      }
+    } else {
+      navigate("/my-profile");
+    }
     setLoading(false);
   };
 

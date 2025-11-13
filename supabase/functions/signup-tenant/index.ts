@@ -173,11 +173,39 @@ serve(async (req: Request) => {
       console.log("✅ Profile updated");
     }
 
-    // Step 3: Create the tenant/organization
+    // Step 3: Create the tenant/organization with slug
+    // Generate slug from organization name
+    const generateSlug = (name: string): string => {
+      return name
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+        .replace(/\s+/g, '-') // Replace spaces with hyphens
+        .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
+        .trim();
+    };
+    
+    const baseSlug = generateSlug(payload.organizationName);
+    let slug = baseSlug;
+    let counter = 1;
+    
+    // Ensure slug is unique
+    while (true) {
+      const { data: existing } = await supabase
+        .from("tenants")
+        .select("id")
+        .eq("slug", slug)
+        .maybeSingle();
+      
+      if (!existing) break;
+      slug = `${baseSlug}-${counter}`;
+      counter++;
+    }
+    
     const { data: newTenant, error: tenantError } = await supabase
       .from("tenants")
       .insert({
         name: payload.organizationName,
+        slug: slug,
         contact_name: payload.fullName,
         contact_email: payload.email,
         status: "active",

@@ -119,12 +119,26 @@ export default function Tenants() {
           updated_at: new Date().toISOString(),
         }, { onConflict: "user_id" });
 
+      // Get tenant slug for navigation
+      const { data: tenantData } = await supabase
+        .from("tenants")
+        .select("slug")
+        .eq("id", tenantId)
+        .single();
+      
+      const slug = tenantData?.slug;
+      
       localStorage.setItem("selectedTenantId", tenantId);
       toast({
         title: "עובר לארגון...",
         description: "המערכת עוברת לארגון החדש",
       });
-      window.location.href = "/";
+      
+      if (slug) {
+        window.location.href = `/t/${slug}/dashboard`;
+      } else {
+        window.location.href = "/";
+      }
       return;
     }
 
@@ -158,6 +172,10 @@ export default function Tenants() {
         onConflict: "user_id"
       });
 
+    // Get tenant slug for navigation
+    const clickedTenant = tenants?.find((t: any) => t.id === tenantId);
+    const slug = clickedTenant?.slug;
+    
     // Store selected tenant in localStorage for app to use
     localStorage.setItem("selectedTenantId", tenantId);
     
@@ -166,8 +184,12 @@ export default function Tenants() {
       description: "המערכת עוברת לארגון החדש",
     });
 
-    // Navigate to dashboard
-    window.location.href = "/";
+    // Navigate to dashboard with slug
+    if (slug) {
+      window.location.href = `/t/${slug}/dashboard`;
+    } else {
+      window.location.href = "/";
+    }
   };
 
   if (isLoading) {
