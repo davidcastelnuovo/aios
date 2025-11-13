@@ -124,6 +124,29 @@ serve(async (req: Request) => {
 
     console.log("✅ Tenant created:", newTenant.id);
 
+    // Step 1.5: Initialize default menu items and custom fields for the new tenant
+    const { error: menuItemsError } = await supabase.rpc("initialize_tenant_menu_items", {
+      _tenant_id: newTenant.id
+    });
+
+    if (menuItemsError) {
+      console.error("Error initializing menu items:", menuItemsError);
+      // Continue anyway - menu items can be added later
+    } else {
+      console.log("✅ Menu items initialized");
+    }
+
+    const { error: customFieldsError } = await supabase.rpc("initialize_default_custom_fields", {
+      _tenant_id: newTenant.id
+    });
+
+    if (customFieldsError) {
+      console.error("Error initializing custom fields:", customFieldsError);
+      // Continue anyway - custom fields can be added later
+    } else {
+      console.log("✅ Custom fields initialized");
+    }
+
     // Step 2: Add creating user to tenant_users so they can access the new tenant
     const { error: tenantUserError } = await supabase
       .from("tenant_users")
