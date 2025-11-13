@@ -111,7 +111,7 @@ export function useUserPermissions() {
       "fields_management",
     ];
 
-    // Owners always see Tenants, Menu Management, and Fields Management in the UI
+    // Owners always see these admin modules in the UI
     if ((module === "tenants" || module === "menu_management" || module === "fields_management") && isOwner) return true;
 
     if (restrictedModules.includes(module)) {
@@ -120,6 +120,9 @@ export function useUserPermissions() {
 
     // If user has no permissions defined at all, owners get full access baseline
     if (!hasAnyPermissions) return isOwner;
+
+    // Owners always get access to non-restricted modules, even if permission says false
+    if (isOwner && !restrictedModules.includes(module)) return true;
 
     return permissions?.[module] === true;
   };
