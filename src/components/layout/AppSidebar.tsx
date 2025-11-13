@@ -42,6 +42,7 @@ import {
   SidebarHeader,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useUserTenants } from "@/hooks/useUserTenants";
@@ -50,6 +51,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useTheme } from "@/contexts/ThemeContext";
+import { useMenuItems } from "@/hooks/useMenuItems";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const menuItems = [
@@ -90,6 +92,7 @@ export function AppSidebar() {
   const { hasPermission, isLoading } = useUserPermissions();
   const { logoUrl } = useTheme();
   const { buildPath } = useTenantPath();
+  const { menuItemsMap } = useMenuItems();
   const isCollapsed = state === "collapsed";
   const navigate = useNavigate();
 
@@ -166,8 +169,13 @@ export function AppSidebar() {
     }
   };
 
-  // Filter menu items based on permissions
+  // Filter menu items based on permissions and visibility
   const visibleMenuItems = menuItems.filter((item) => {
+    const menuItemConfig = menuItemsMap.get(item.path);
+    
+    // Hide if configured as not visible
+    if (menuItemConfig && !menuItemConfig.is_visible) return false;
+    
     // Items without module requirement are always visible (My Profile)
     if (!item.module) return true;
 
@@ -179,14 +187,28 @@ export function AppSidebar() {
   });
 
   const visibleManagementItems = managementMenuItems.filter((item) => {
+    const menuItemConfig = menuItemsMap.get(item.path);
+    if (menuItemConfig && !menuItemConfig.is_visible) return false;
     if (isLoading) return false;
     return hasPermission(item.module);
   });
 
   const visibleSalesItems = salesMenuItems.filter((item) => {
+    const menuItemConfig = menuItemsMap.get(item.path);
+    if (menuItemConfig && !menuItemConfig.is_visible) return false;
     if (isLoading) return false;
     return hasPermission(item.module);
   });
+
+  const getMenuItemBadge = (path: string) => {
+    const menuItemConfig = menuItemsMap.get(path);
+    return menuItemConfig?.badge || null;
+  };
+
+  const getMenuItemLabel = (path: string, defaultLabel: string) => {
+    const menuItemConfig = menuItemsMap.get(path);
+    return menuItemConfig?.custom_label || defaultLabel;
+  };
 
   return (
     <Sidebar side="right" collapsible="icon" className="transition-all duration-300 ease-in-out">
@@ -239,25 +261,42 @@ export function AppSidebar() {
           <SidebarGroupLabel>תפריט ראשי</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {visibleMenuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild tooltip={item.title}>
-                    <NavLink
-                      to={buildPath(item.path)}
-                      end
-                      onClick={handleLinkClick}
-                      className={({ isActive }) =>
-                        isActive
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                          : ""
-                      }
-                    >
-                      <item.icon className="h-4 w-4" />
-                      {!isCollapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
+              {visibleMenuItems.map((item) => {
+                const badge = getMenuItemBadge(item.path);
+                const label = getMenuItemLabel(item.path, item.title);
+                
+                return (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild tooltip={label}>
+                      <NavLink
+                        to={buildPath(item.path)}
+                        end
+                        onClick={handleLinkClick}
+                        className={({ isActive }) =>
+                          isActive
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                            : ""
+                        }
+                      >
+                        <item.icon className="h-4 w-4" />
+                        {!isCollapsed && (
+                          <div className="flex items-center justify-between w-full">
+                            <span>{label}</span>
+                            {badge && (
+                              <Badge 
+                                variant={badge === 'premium' ? 'default' : 'secondary'}
+                                className="text-[10px] px-1.5 py-0 h-5"
+                              >
+                                {badge === 'coming_soon' ? 'בקרוב' : 'פרימיום'}
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
 
               {/* ניהול - תפריט מתקפל */}
               {visibleManagementItems.length > 0 && (
@@ -274,25 +313,40 @@ export function AppSidebar() {
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <SidebarMenuSub>
-                        {visibleManagementItems.map((item) => (
-                          <SidebarMenuSubItem key={item.title}>
-                            <SidebarMenuSubButton asChild>
-                              <NavLink
-                                to={buildPath(item.path)}
-                                end
-                                onClick={handleLinkClick}
-                                className={({ isActive }) =>
-                                  isActive
-                                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                                    : ""
-                                }
-                              >
-                                <item.icon className="h-4 w-4" />
-                                <span>{item.title}</span>
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
+                        {visibleManagementItems.map((item) => {
+                          const badge = getMenuItemBadge(item.path);
+                          const label = getMenuItemLabel(item.path, item.title);
+                          
+                          return (
+                            <SidebarMenuSubItem key={item.title}>
+                              <SidebarMenuSubButton asChild>
+                                <NavLink
+                                  to={buildPath(item.path)}
+                                  end
+                                  onClick={handleLinkClick}
+                                  className={({ isActive }) =>
+                                    isActive
+                                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                      : ""
+                                  }
+                                >
+                                  <item.icon className="h-4 w-4" />
+                                  <div className="flex items-center justify-between w-full">
+                                    <span>{label}</span>
+                                    {badge && (
+                                      <Badge 
+                                        variant={badge === 'premium' ? 'default' : 'secondary'}
+                                        className="text-[10px] px-1.5 py-0 h-5"
+                                      >
+                                        {badge === 'coming_soon' ? 'בקרוב' : 'פרימיום'}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </NavLink>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          );
+                        })}
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </SidebarMenuItem>
@@ -314,24 +368,39 @@ export function AppSidebar() {
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <SidebarMenuSub>
-                        {visibleSalesItems.map((item) => (
-                          <SidebarMenuSubItem key={item.title}>
-                            <SidebarMenuSubButton asChild>
-                              <NavLink
-                                to={buildPath(item.path)}
-                                onClick={handleLinkClick}
-                                className={({ isActive }) =>
-                                  isActive
-                                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                                    : ""
-                                }
-                              >
-                                <item.icon className="h-4 w-4" />
-                                <span>{item.title}</span>
-                              </NavLink>
-                            </SidebarMenuSubButton>
-                          </SidebarMenuSubItem>
-                        ))}
+                        {visibleSalesItems.map((item) => {
+                          const badge = getMenuItemBadge(item.path);
+                          const label = getMenuItemLabel(item.path, item.title);
+                          
+                          return (
+                            <SidebarMenuSubItem key={item.title}>
+                              <SidebarMenuSubButton asChild>
+                                <NavLink
+                                  to={buildPath(item.path)}
+                                  onClick={handleLinkClick}
+                                  className={({ isActive }) =>
+                                    isActive
+                                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                      : ""
+                                  }
+                                >
+                                  <item.icon className="h-4 w-4" />
+                                  <div className="flex items-center justify-between w-full">
+                                    <span>{label}</span>
+                                    {badge && (
+                                      <Badge 
+                                        variant={badge === 'premium' ? 'default' : 'secondary'}
+                                        className="text-[10px] px-1.5 py-0 h-5"
+                                      >
+                                        {badge === 'coming_soon' ? 'בקרוב' : 'פרימיום'}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </NavLink>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          );
+                        })}
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </SidebarMenuItem>

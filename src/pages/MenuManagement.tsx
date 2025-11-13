@@ -7,8 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Eye, EyeOff, Save, RotateCcw } from "lucide-react";
+import { Eye, EyeOff, Save, RotateCcw, ChevronUp, ChevronDown } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -27,6 +29,7 @@ interface MenuItem {
   sort_order: number;
   icon: string | null;
   route: string;
+  badge: 'coming_soon' | 'premium' | null;
 }
 
 export default function MenuManagement() {
@@ -108,6 +111,41 @@ export default function MenuManagement() {
     });
   };
 
+  const handleBadgeChange = (item: MenuItem, badge: string | null) => {
+    updateMutation.mutate({
+      id: item.id,
+      badge: badge === 'none' ? null : badge as 'coming_soon' | 'premium',
+    });
+  };
+
+  const handleMoveUp = (item: MenuItem, index: number) => {
+    if (index === 0 || !menuItems) return;
+    
+    const previousItem = menuItems[index - 1];
+    updateMutation.mutate({
+      id: item.id,
+      sort_order: previousItem.sort_order,
+    });
+    updateMutation.mutate({
+      id: previousItem.id,
+      sort_order: item.sort_order,
+    });
+  };
+
+  const handleMoveDown = (item: MenuItem, index: number) => {
+    if (!menuItems || index === menuItems.length - 1) return;
+    
+    const nextItem = menuItems[index + 1];
+    updateMutation.mutate({
+      id: item.id,
+      sort_order: nextItem.sort_order,
+    });
+    updateMutation.mutate({
+      id: nextItem.id,
+      sort_order: item.sort_order,
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -133,15 +171,39 @@ export default function MenuManagement() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">סדר</TableHead>
                 <TableHead>שם מקורי</TableHead>
                 <TableHead>שם מותאם</TableHead>
+                <TableHead>בדג'</TableHead>
                 <TableHead>נראה</TableHead>
                 <TableHead>פעולות</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {menuItems?.map((item) => (
+              {menuItems?.map((item, index) => (
                 <TableRow key={item.id}>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleMoveUp(item, index)}
+                        disabled={index === 0 || updateMutation.isPending}
+                        className="h-8 w-8"
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => handleMoveDown(item, index)}
+                        disabled={index === menuItems.length - 1 || updateMutation.isPending}
+                        className="h-8 w-8"
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
                   <TableCell className="font-medium">
                     {item.original_label}
                   </TableCell>
@@ -158,6 +220,22 @@ export default function MenuManagement() {
                         placeholder={item.original_label}
                       />
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={item.badge || 'none'}
+                      onValueChange={(value) => handleBadgeChange(item, value === 'none' ? null : value)}
+                      disabled={updateMutation.isPending}
+                    >
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">ללא</SelectItem>
+                        <SelectItem value="coming_soon">בקרוב</SelectItem>
+                        <SelectItem value="premium">פרימיום</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell>
                     <Switch
