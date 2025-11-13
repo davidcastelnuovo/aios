@@ -9,12 +9,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Building2 } from "lucide-react";
 
-// Helper function to build tenant path
-const buildTenantPath = (slug: string | null, path: string) => {
-  if (slug) {
-    return `/t/${slug}/${path}`;
-  }
-  return `/${path}`;
+// Helper function to build tenant path - requires slug
+const buildTenantPath = (slug: string, path: string) => {
+  return `/t/${slug}/${path}`;
 };
 
 export default function Auth() {
@@ -53,7 +50,11 @@ useEffect(() => {
           .maybeSingle();
         
         const tenantSlug = (activeTenant as any)?.tenants?.slug;
-        navigate(buildTenantPath(tenantSlug, "my-profile"));
+        if (tenantSlug) {
+          navigate(buildTenantPath(tenantSlug, "dashboard"));
+        } else {
+          console.error("No tenant slug found for user");
+        }
         return;
       }
     }
@@ -70,7 +71,11 @@ useEffect(() => {
         .maybeSingle();
       
       const tenantSlug = (activeTenant as any)?.tenants?.slug;
-      navigate(buildTenantPath(tenantSlug, "my-profile"));
+      if (tenantSlug) {
+        navigate(buildTenantPath(tenantSlug, "dashboard"));
+      } else {
+        console.error("No tenant slug found for user");
+      }
       return;
     }
 
@@ -120,9 +125,9 @@ useEffect(() => {
       
       const tenantSlug = (activeTenant as any)?.tenants?.slug;
       if (tenantSlug) {
-        navigate(`/t/${tenantSlug}/my-profile`);
+        navigate(`/t/${tenantSlug}/dashboard`);
       } else {
-        navigate(buildTenantPath(null, "my-profile"));
+        console.error("No tenant slug found for user");
       }
     }
   });
@@ -186,12 +191,10 @@ useEffect(() => {
       
       const tenantSlug = (activeTenant as any)?.tenants?.slug;
       if (tenantSlug) {
-        navigate(`/t/${tenantSlug}/my-profile`);
+        navigate(`/t/${tenantSlug}/dashboard`);
       } else {
-        navigate(buildTenantPath(null, "my-profile"));
+        console.error("No tenant slug found after signup");
       }
-    } else {
-      navigate(buildTenantPath(null, "my-profile"));
     }
     setLoading(false);
   };
@@ -260,7 +263,11 @@ useEffect(() => {
       .maybeSingle();
     
     const tenantSlug = (activeTenant as any)?.tenants?.slug;
-    navigate(buildTenantPath(tenantSlug, "my-profile"));
+    if (tenantSlug) {
+      navigate(buildTenantPath(tenantSlug, "dashboard"));
+    } else {
+      console.error("No tenant slug found after signin");
+    }
     setLoading(false);
   };
 
@@ -314,9 +321,11 @@ useEffect(() => {
           .maybeSingle();
         
         const tenantSlug = (activeTenant as any)?.tenants?.slug;
-        navigate(buildTenantPath(tenantSlug, "my-profile"));
-      } else {
-        navigate(buildTenantPath(null, "my-profile"));
+        if (tenantSlug) {
+          navigate(buildTenantPath(tenantSlug, "dashboard"));
+        } else {
+          console.error("No tenant slug found after MFA");
+        }
       }
     } catch (error: any) {
       toast({
@@ -450,9 +459,11 @@ useEffect(() => {
         .maybeSingle();
       
       const tenantSlug = (activeTenant as any)?.tenants?.slug;
-      navigate(buildTenantPath(tenantSlug, "my-profile"));
-    } else {
-      navigate(buildTenantPath(null, "my-profile"));
+      if (tenantSlug) {
+        navigate(buildTenantPath(tenantSlug, "dashboard"));
+      } else {
+        console.error("No tenant slug found after password update");
+      }
     }
     setLoading(false);
   };
