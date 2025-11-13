@@ -1624,6 +1624,7 @@ export type Database = {
       }
       tenants: {
         Row: {
+          allow_super_admin_access: boolean
           contact_email: string | null
           contact_name: string | null
           created_at: string
@@ -1638,6 +1639,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          allow_super_admin_access?: boolean
           contact_email?: string | null
           contact_name?: string | null
           created_at?: string
@@ -1652,6 +1654,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          allow_super_admin_access?: boolean
           contact_email?: string | null
           contact_name?: string | null
           created_at?: string

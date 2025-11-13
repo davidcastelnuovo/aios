@@ -8,8 +8,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Building2, Loader2 } from "lucide-react";
+import { Building2, Loader2, ShieldCheck } from "lucide-react";
 import logo from "@/assets/logo.png";
 
 const signUpSchema = z.object({
@@ -29,6 +30,7 @@ type SignUpFormData = z.infer<typeof signUpSchema>;
 export default function SignUp() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [allowSuperAdminAccess, setAllowSuperAdminAccess] = useState(true);
 
   const {
     register,
@@ -50,6 +52,7 @@ export default function SignUp() {
           fullName: formData.fullName,
           phone: formData.phone,
           organizationName: formData.organizationName,
+          allow_super_admin_access: allowSuperAdminAccess,
         },
       });
 
@@ -198,6 +201,28 @@ export default function SignUp() {
               {errors.confirmPassword && (
                 <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
               )}
+            </div>
+
+            <div className="space-y-2 p-4 border rounded-lg bg-muted/50">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-start gap-2 flex-1">
+                  <ShieldCheck className="h-5 w-5 text-primary mt-0.5" />
+                  <div className="space-y-1">
+                    <Label htmlFor="allow_super_admin_access" className="text-sm font-semibold cursor-pointer">
+                      אפשר גישת Super Admin
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      האם לאפשר למנהל המערכת לצפות ולערוך נתונים בארגון שלך?
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  id="allow_super_admin_access"
+                  checked={allowSuperAdminAccess}
+                  onCheckedChange={setAllowSuperAdminAccess}
+                  disabled={isLoading}
+                />
+              </div>
             </div>
 
             <Button

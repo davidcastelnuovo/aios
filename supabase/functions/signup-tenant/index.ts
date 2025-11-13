@@ -12,6 +12,7 @@ interface SignupTenantRequest {
   fullName: string;
   phone: string;
   organizationName: string;
+  allow_super_admin_access?: boolean;
 }
 
 serve(async (req: Request) => {
@@ -181,6 +182,7 @@ serve(async (req: Request) => {
         contact_email: payload.email,
         status: "active",
         notes: `Created via self-signup on ${new Date().toISOString()}`,
+        allow_super_admin_access: payload.allow_super_admin_access !== false, // Default to true
       })
       .select()
       .single();

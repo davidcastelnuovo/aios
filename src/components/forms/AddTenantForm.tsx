@@ -32,8 +32,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, ShieldCheck } from "lucide-react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { Switch } from "@/components/ui/switch";
 
 interface AddTenantFormProps {
   onSuccess?: () => void;
@@ -60,6 +61,7 @@ export function AddTenantForm({
     contact_name: "",
     contact_email: "",
     notes: "",
+    allow_super_admin_access: true,
   });
 
   // Use controlled or internal state
@@ -98,6 +100,7 @@ export function AddTenantForm({
             contact_email: data.contact_email,
             notes: data.notes,
             parent_tenant_id: data.parent_tenant_id || null,
+            allow_super_admin_access: data.allow_super_admin_access,
           },
         }
       );
@@ -140,6 +143,7 @@ export function AddTenantForm({
         contact_name: "",
         contact_email: "",
         notes: "",
+        allow_super_admin_access: true,
       });
       setSelectedParentTenant("");
       setOpen(false);
@@ -252,6 +256,29 @@ export function AddTenantForm({
           placeholder="הערות נוספות..."
           rows={3}
         />
+      </div>
+
+      <div className="space-y-2 p-4 border rounded-lg bg-muted/50">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-start gap-2 flex-1">
+            <ShieldCheck className="h-5 w-5 text-primary mt-0.5" />
+            <div className="space-y-1">
+              <Label htmlFor="allow_super_admin_access" className="text-base font-semibold cursor-pointer">
+                אפשר גישת Super Admin
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                קבע האם Super Admin יוכל לצפות ולערוך נתונים בארגון זה. ברירת מחדל: מופעל
+              </p>
+            </div>
+          </div>
+          <Switch
+            id="allow_super_admin_access"
+            checked={formData.allow_super_admin_access}
+            onCheckedChange={(checked) => 
+              setFormData({ ...formData, allow_super_admin_access: checked })
+            }
+          />
+        </div>
       </div>
 
       <div className="flex gap-2 justify-end pt-2">

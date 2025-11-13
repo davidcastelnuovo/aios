@@ -12,6 +12,7 @@ interface CreateTenantRequest {
   contact_email: string;
   notes?: string;
   parent_tenant_id?: string;
+  allow_super_admin_access?: boolean;
 }
 
 serve(async (req: Request) => {
@@ -83,6 +84,7 @@ serve(async (req: Request) => {
         notes: payload.notes,
         parent_tenant_id: payload.parent_tenant_id || null,
         status: "active",
+        allow_super_admin_access: payload.allow_super_admin_access !== false, // Default to true
       })
       .select()
       .single();
@@ -108,6 +110,23 @@ serve(async (req: Request) => {
       // Continue anyway - the user can still be added later
     } else {
       console.log("✅ User added to tenant_users");
+    }
+
+    // Step 2.5: Add owner role to user_roles
+    const { error: roleError } = await supabase
+      .from("user_roles")
+      .insert({
+        user_id: user.id,
+        role: "owner",
+      });
+
+    if (roleError) {
+      // Check if role already exists (conflict)
+      if (roleError.code !== "23505") {
+        console.error("Error adding owner role:", roleError);
+      }
+    } else {
+      console.log("✅ Owner role added to user_roles");
     }
 
     // Step 3: Create invitation token for owner
