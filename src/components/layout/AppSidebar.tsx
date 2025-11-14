@@ -384,38 +384,54 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" side="right">
       <SidebarHeader className="border-b border-sidebar-border">
-        <div className="flex items-center justify-between px-2 py-2" dir="rtl">
-          <button
-            onClick={toggleSidebar}
-            className="flex-shrink-0 p-2 hover:bg-sidebar-accent rounded-md"
-          >
-            {isCollapsed ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
-          </button>
-          <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
-            {!isCollapsed && userTenants && userTenants.length > 1 && (
-              <Select value={currentTenantId || undefined} onValueChange={handleTenantChange}>
-                <SelectTrigger className="h-8 border-0 shadow-none focus:ring-0 min-w-0 bg-sidebar-background">
-                  <SelectValue placeholder="בחר ארגון" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover z-50">
-                  {userTenants.map((tenant) => (
-                    <SelectItem key={tenant.id} value={tenant.id}>
-                      {tenant.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            {!isCollapsed && userTenants && userTenants.length === 1 && (
-              <span className="text-sm font-semibold truncate">{userTenants[0].name}</span>
-            )}
+        {isCollapsed ? (
+          <div className="flex flex-col items-center gap-2 py-2">
             {logoUrl ? (
-              <img src={logoUrl} alt="Logo" className="h-8 w-8 object-contain flex-shrink-0" />
+              <img src={logoUrl} alt="Logo" className="h-8 w-8 object-contain" />
             ) : (
-              <Building2 className="h-8 w-8 flex-shrink-0" />
+              <Building2 className="h-8 w-8" />
             )}
+            <button
+              onClick={toggleSidebar}
+              className="p-2 hover:bg-sidebar-accent rounded-md transition-colors"
+            >
+              <PanelRightOpen className="h-4 w-4" />
+            </button>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center justify-between px-2 py-2" dir="rtl">
+            <button
+              onClick={toggleSidebar}
+              className="flex-shrink-0 p-2 hover:bg-sidebar-accent rounded-md transition-colors"
+            >
+              <PanelRightClose className="h-4 w-4" />
+            </button>
+            <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
+              {userTenants && userTenants.length > 1 && (
+                <Select value={currentTenantId || undefined} onValueChange={handleTenantChange}>
+                  <SelectTrigger className="h-8 border-0 shadow-none focus:ring-0 min-w-0 bg-sidebar-background">
+                    <SelectValue placeholder="בחר ארגון" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover z-50">
+                    {userTenants.map((tenant) => (
+                      <SelectItem key={tenant.id} value={tenant.id}>
+                        {tenant.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {userTenants && userTenants.length === 1 && (
+                <span className="text-sm font-semibold truncate">{userTenants[0].name}</span>
+              )}
+              {logoUrl ? (
+                <img src={logoUrl} alt="Logo" className="h-8 w-8 object-contain flex-shrink-0" />
+              ) : (
+                <Building2 className="h-8 w-8 flex-shrink-0" />
+              )}
+            </div>
+          </div>
+        )}
       </SidebarHeader>
 
       <SidebarContent>
