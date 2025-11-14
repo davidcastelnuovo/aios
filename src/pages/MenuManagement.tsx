@@ -155,6 +155,83 @@ function SortableMenuItem({
         </div>
       </td>
     </tr>
+
+    {/* Mobile view - Card inside a single table row */}
+    <tr className="md:hidden group border-b hover:bg-muted/50">
+      <td className="p-0" colSpan={6}>
+        <div className="p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded flex items-center gap-2"
+            >
+              <GripVertical className="h-5 w-5 text-muted-foreground" />
+              {isChild && <span className="text-muted-foreground mr-2">└─</span>}
+            </div>
+            <Switch
+              checked={item.is_visible}
+              onCheckedChange={() => onToggleVisibility(item)}
+            />
+          </div>
+
+          <div className="mt-2 text-sm font-medium">{item.original_label}</div>
+
+          <div className="mt-2">
+            <Input
+              value={
+                editingItems[item.id] !== undefined
+                  ? editingItems[item.id]
+                  : item.custom_label || item.original_label
+              }
+              onChange={(e) => onLabelChange(item.id, e.target.value)}
+              placeholder={item.original_label}
+            />
+          </div>
+
+          <div className="mt-3">
+            <Select
+              value={item.badge || 'none'}
+              onValueChange={(value) => onBadgeChange(item, value === 'none' ? null : value)}
+              disabled={updateMutation.isPending}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">ללא</SelectItem>
+                <SelectItem value="coming_soon">בקרוב</SelectItem>
+                <SelectItem value="premium">פרימיום</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="mt-3 flex items-center gap-2">
+            {editingItems[item.id] !== undefined && (
+              <Button
+                size="sm"
+                onClick={() => onSaveLabel(item)}
+                disabled={updateMutation.isPending}
+              >
+                <Save className="h-4 w-4 ml-1" />
+                שמור
+              </Button>
+            )}
+            {item.custom_label && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onResetLabel(item)}
+                disabled={updateMutation.isPending}
+              >
+                <RotateCcw className="h-4 w-4 ml-1" />
+                אפס
+              </Button>
+            )}
+          </div>
+        </div>
+      </td>
+    </tr>
     </>
   );
 }
