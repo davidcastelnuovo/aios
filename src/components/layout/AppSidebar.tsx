@@ -301,9 +301,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <TooltipProvider>
-                {groupOrder.map((groupId) => {
-                  if (groupId === 'main') {
-                    return orderedMain.map((item) => {
+                {orderedMain.map((item) => {
                       const badge = getMenuItemBadge(item.path);
                       const label = getMenuItemLabel(item.path, item.title);
                       const hasAccess = canAccessMenuItem(badge);
