@@ -151,7 +151,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
       const { data, error } = await supabase
         .from("tenants")
-        .select("*")
+        .select("id, name, slug, org_type, is_premium, allow_super_admin_access")
         .eq("id", currentTenantId)
         .maybeSingle();
       

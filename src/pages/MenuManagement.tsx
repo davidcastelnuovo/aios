@@ -53,6 +53,7 @@ interface SortableMenuItemProps {
   onToggleVisibility: (item: MenuItem) => void;
   onBadgeChange: (item: MenuItem, badge: string | null) => void;
   isChild?: boolean;
+  isRootOrg?: boolean;
 }
 
 function SortableMenuItem({
@@ -65,6 +66,7 @@ function SortableMenuItem({
   onToggleVisibility,
   onBadgeChange,
   isChild = false,
+  isRootOrg = false,
 }: SortableMenuItemProps) {
   const {
     attributes,
@@ -108,22 +110,24 @@ function SortableMenuItem({
             placeholder={item.original_label}
           />
         </td>
-        <td className="p-2">
-          <Select
-            value={item.badge || 'none'}
-            onValueChange={(value) => onBadgeChange(item, value === 'none' ? null : value)}
-            disabled={updateMutation.isPending}
-          >
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">ללא</SelectItem>
-              <SelectItem value="coming_soon">בקרוב</SelectItem>
-              <SelectItem value="premium">פרימיום</SelectItem>
-            </SelectContent>
-          </Select>
-        </td>
+        {isRootOrg && (
+          <td className="p-2">
+            <Select
+              value={item.badge || 'none'}
+              onValueChange={(value) => onBadgeChange(item, value === 'none' ? null : value)}
+              disabled={updateMutation.isPending}
+            >
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">ללא</SelectItem>
+                <SelectItem value="coming_soon">בקרוב</SelectItem>
+                <SelectItem value="premium">פרימיום</SelectItem>
+              </SelectContent>
+            </Select>
+          </td>
+        )}
       <td className="p-2">
         <Switch
           checked={item.is_visible}
@@ -252,6 +256,7 @@ interface MenuGroupProps {
   itemSensors: any;
   children?: MenuItem[];
   defaultOpen?: boolean;
+  isRootOrg?: boolean;
 }
 
 function MenuGroup({
@@ -269,6 +274,7 @@ function MenuGroup({
   onItemDragEnd,
   itemSensors,
   defaultOpen = false,
+  isRootOrg = false,
 }: MenuGroupProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   
@@ -330,6 +336,7 @@ function MenuGroup({
                         onResetLabel={onResetLabel}
                         onToggleVisibility={onToggleVisibility}
                         onBadgeChange={onBadgeChange}
+                        isRootOrg={isRootOrg}
                       />
                     ))}
                   </tbody>
@@ -355,6 +362,7 @@ function MenuGroup({
                             onToggleVisibility={onToggleVisibility}
                             onBadgeChange={onBadgeChange}
                             isChild
+                            isRootOrg={isRootOrg}
                           />
                         ))}
                       </tbody>
@@ -371,8 +379,9 @@ function MenuGroup({
 }
 
 export default function MenuManagement() {
-  const { tenantId } = useCurrentTenant();
+  const { tenantId, tenant } = useCurrentTenant();
   const queryClient = useQueryClient();
+  const isRootOrg = tenant?.org_type === 'root';
   const [editingItems, setEditingItems] = useState<Record<string, string>>({});
   const [groupOrder, setGroupOrder] = useState<string[]>(['main', 'management', 'sales']);
 
@@ -463,7 +472,7 @@ export default function MenuManagement() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['menu-items'] });
+      queryClient.invalidateQueries({ queryKey: ['menu-items', tenantId] });
       toast.success('פריט התפריט עודכן בהצלחה');
     },
     onError: (error: Error) => {
@@ -650,7 +659,7 @@ export default function MenuManagement() {
                   <th className="p-2 text-right w-24">גרירה</th>
                   <th className="p-2 text-right">שם מקורי</th>
                   <th className="p-2 text-right">שם מותאם</th>
-                  <th className="p-2 text-right">בדג'</th>
+                  {isRootOrg && <th className="p-2 text-right">בדג'</th>}
                   <th className="p-2 text-right">נראה</th>
                   <th className="p-2 text-right">פעולות</th>
                 </tr>
@@ -686,6 +695,7 @@ export default function MenuManagement() {
               onItemDragEnd={handleDragEnd}
               itemSensors={itemSensors}
               defaultOpen={true}
+              isRootOrg={isRootOrg}
             />
           ))}
         </SortableContext>

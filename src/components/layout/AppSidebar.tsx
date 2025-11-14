@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useUserTenants } from "@/hooks/useUserTenants";
 import { supabase } from "@/integrations/supabase/client";
@@ -93,7 +94,7 @@ export function AppSidebar() {
   const { hasPermission, isLoading } = useUserPermissions();
   const { logoUrl } = useTheme();
   const { buildPath } = useTenantPath();
-  const { menuItemsMap } = useMenuItems();
+  const { menuItems: dbMenuItems, menuItemsMap, isLoading: isLoadingMenuItems, orgType, isPremium } = useMenuItems();
   const isCollapsed = state === "collapsed";
   const navigate = useNavigate();
 
@@ -211,6 +212,14 @@ export function AppSidebar() {
     return menuItemConfig?.custom_label || defaultLabel;
   };
 
+  const canAccessMenuItem = (badge: 'coming_soon' | 'premium' | null | undefined): boolean => {
+    if (!badge) return true;
+    if (orgType === 'root') return true;
+    if (badge === 'premium' && isPremium) return true;
+    if (badge === 'coming_soon') return false;
+    return false;
+  };
+
   // Load group order using RPC (reads effective setting)
   const { data: groupOrderSetting } = useQuery({
     queryKey: ['menu-group-order', currentTenantId],
@@ -291,45 +300,82 @@ export function AppSidebar() {
           <SidebarGroupLabel>תפריט ראשי</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {groupOrder.map((groupId) => {
-                if (groupId === 'main') {
-                  return orderedMain.map((item) => {
-                    const badge = getMenuItemBadge(item.path);
-                    const label = getMenuItemLabel(item.path, item.title);
-                    
-                    return (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild tooltip={label}>
-                          <NavLink
-                            to={buildPath(item.path)}
-                            end
-                            onClick={handleLinkClick}
-                            className={({ isActive }) =>
-                              isActive
-                                ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                                : ""
-                            }
-                          >
-                            <item.icon className="h-4 w-4" />
-                            {!isCollapsed && (
-                              <div className="flex items-center justify-between w-full">
-                                <span>{label}</span>
-                                {badge && (
-                                  <Badge 
-                                    variant={badge === 'premium' ? 'default' : 'secondary'}
-                                    className="text-[10px] px-1.5 py-0 h-5"
+              <TooltipProvider>
+                {groupOrder.map((groupId) => {
+                  if (groupId === 'main') {
+                    return orderedMain.map((item) => {
+                      const badge = getMenuItemBadge(item.path);
+                      const label = getMenuItemLabel(item.path, item.title);
+                      const hasAccess = canAccessMenuItem(badge);
+                      
+                      if (!hasAccess) {
+                        return (
+                          <SidebarMenuItem key={item.title}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className="w-full">
+                                  <SidebarMenuButton 
+                                    disabled 
+                                    className="opacity-50 cursor-not-allowed"
                                   >
-                                    {badge === 'coming_soon' ? 'בקרוב' : 'פרימיום'}
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  });
-                }
+                                    <item.icon className="h-4 w-4" />
+                                    {!isCollapsed && (
+                                      <div className="flex items-center justify-between w-full">
+                                        <span>{label}</span>
+                                        {badge && (
+                                          <Badge 
+                                            variant={badge === 'premium' ? 'default' : 'secondary'}
+                                            className="text-[10px] px-1.5 py-0 h-5"
+                                          >
+                                            {badge === 'coming_soon' ? 'בקרוב' : 'פרימיום'}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    )}
+                                  </SidebarMenuButton>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="left">
+                                {badge === 'premium' ? 'דרוש שדרוג לגרסת פרימיום' : 'תכונה בפיתוח - תהיה זמינה בקרוב'}
+                              </TooltipContent>
+                            </Tooltip>
+                          </SidebarMenuItem>
+                        );
+                      }
+                      
+                      return (
+                        <SidebarMenuItem key={item.title}>
+                          <SidebarMenuButton asChild tooltip={label}>
+                            <NavLink
+                              to={buildPath(item.path)}
+                              end
+                              onClick={handleLinkClick}
+                              className={({ isActive }) =>
+                                isActive
+                                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                                  : ""
+                              }
+                            >
+                              <item.icon className="h-4 w-4" />
+                              {!isCollapsed && (
+                                <div className="flex items-center justify-between w-full">
+                                  <span>{label}</span>
+                                  {badge && (
+                                    <Badge 
+                                      variant={badge === 'premium' ? 'default' : 'secondary'}
+                                      className="text-[10px] px-1.5 py-0 h-5"
+                                    >
+                                      {badge === 'coming_soon' ? 'בקרוב' : 'פרימיום'}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+                            </NavLink>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    });
+                  }
 
                 if (groupId === 'management' && orderedManagement.length > 0) {
                   return (
@@ -349,6 +395,35 @@ export function AppSidebar() {
                             {visibleManagementItems.map((item) => {
                               const badge = getMenuItemBadge(item.path);
                               const label = getMenuItemLabel(item.path, item.title);
+                              const hasAccess = canAccessMenuItem(badge);
+                              
+                              if (!hasAccess) {
+                                return (
+                                  <SidebarMenuSubItem key={item.title}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="flex items-center gap-2 px-3 py-2 text-sm opacity-50 cursor-not-allowed w-full">
+                                          <item.icon className="h-4 w-4" />
+                                          <div className="flex items-center justify-between w-full">
+                                            <span>{label}</span>
+                                            {badge && (
+                                              <Badge 
+                                                variant={badge === 'premium' ? 'default' : 'secondary'}
+                                                className="text-[10px] px-1.5 py-0 h-5"
+                                              >
+                                                {badge === 'coming_soon' ? 'בקרוב' : 'פרימיום'}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="left">
+                                        {badge === 'premium' ? 'דרוש שדרוג לגרסת פרימיום' : 'תכונה בפיתוח - תהיה זמינה בקרוב'}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </SidebarMenuSubItem>
+                                );
+                              }
                               
                               return (
                                 <SidebarMenuSubItem key={item.title}>
@@ -405,6 +480,35 @@ export function AppSidebar() {
                             {visibleSalesItems.map((item) => {
                               const badge = getMenuItemBadge(item.path);
                               const label = getMenuItemLabel(item.path, item.title);
+                              const hasAccess = canAccessMenuItem(badge);
+                              
+                              if (!hasAccess) {
+                                return (
+                                  <SidebarMenuSubItem key={item.title}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="flex items-center gap-2 px-3 py-2 text-sm opacity-50 cursor-not-allowed w-full">
+                                          <item.icon className="h-4 w-4" />
+                                          <div className="flex items-center justify-between w-full">
+                                            <span>{label}</span>
+                                            {badge && (
+                                              <Badge 
+                                                variant={badge === 'premium' ? 'default' : 'secondary'}
+                                                className="text-[10px] px-1.5 py-0 h-5"
+                                              >
+                                                {badge === 'coming_soon' ? 'בקרוב' : 'פרימיום'}
+                                              </Badge>
+                                            )}
+                                          </div>
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="left">
+                                        {badge === 'premium' ? 'דרוש שדרוג לגרסת פרימיום' : 'תכונה בפיתוח - תהיה זמינה בקרוב'}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </SidebarMenuSubItem>
+                                );
+                              }
                               
                               return (
                                 <SidebarMenuSubItem key={item.title}>
@@ -444,6 +548,7 @@ export function AppSidebar() {
 
                 return null;
               })}
+              </TooltipProvider>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

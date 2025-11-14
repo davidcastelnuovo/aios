@@ -15,7 +15,7 @@ export interface MenuItem {
 }
 
 export function useMenuItems() {
-  const { tenantId } = useCurrentTenant();
+  const { tenantId, tenant } = useCurrentTenant();
 
   const { data: menuItems, isLoading } = useQuery({
     queryKey: ['menu-items', tenantId],
@@ -48,5 +48,7 @@ export function useMenuItems() {
     menuItems: menuItems || [],
     menuItemsMap,
     isLoading,
+    orgType: tenant?.org_type,
+    isPremium: tenant?.is_premium,
   };
 }
