@@ -7,11 +7,13 @@ import { AddAgencyForm } from "@/components/forms/AddAgencyForm";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTerminology } from "@/hooks/useTerminology";
 
 export default function Agencies() {
   const { userId, isOwner } = useUserRole();
   const { userAgencyIds } = useUserAgencies();
   const { tenantId } = useCurrentTenant();
+  const { t } = useTerminology();
   
   const { data: agencies, isLoading } = useQuery({
     queryKey: ["agencies-list", tenantId, userId, userAgencyIds],
@@ -107,7 +109,7 @@ export default function Agencies() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold">סוכנויות</h2>
+          <h2 className="text-3xl font-bold">{t('agency', true)}</h2>
         </div>
         <AddAgencyForm />
       </div>
@@ -174,8 +176,8 @@ export default function Agencies() {
         <Card className="shadow-card">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Building2 className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-1">אין סוכנויות</h3>
-            <p className="text-sm text-muted-foreground">התחל בהוספת סוכנות ראשונה</p>
+            <h3 className="text-lg font-semibold mb-1">אין {t('agency', true)}</h3>
+            <p className="text-sm text-muted-foreground">התחל בהוספת {t('agency')} ראשונה</p>
           </CardContent>
         </Card>
       )}
