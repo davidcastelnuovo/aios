@@ -43,13 +43,13 @@ export default function TerminologyManagement() {
     queryKey: ['terminology', tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('tenant_terminology')
+        .from('tenant_terminology' as any)
         .select('*')
         .eq('tenant_id', tenantId)
         .order('term_key');
 
       if (error) throw error;
-      return data as TerminologyItem[];
+      return ((data || []) as unknown) as TerminologyItem[];
     },
     enabled: !!tenantId,
   });
@@ -57,7 +57,7 @@ export default function TerminologyManagement() {
   const updateMutation = useMutation({
     mutationFn: async ({ id, singular, plural }: { id: string; singular: string; plural: string }) => {
       const { error } = await supabase
-        .from('tenant_terminology')
+        .from('tenant_terminology' as any)
         .update({ singular, plural })
         .eq('id', id);
 
@@ -79,7 +79,7 @@ export default function TerminologyManagement() {
       if (!term) return;
 
       const { error } = await supabase
-        .from('tenant_terminology')
+        .from('tenant_terminology' as any)
         .update({ 
           singular: term.original_singular, 
           plural: term.original_plural 

@@ -236,7 +236,8 @@ export default function Users() {
         .select("sales_person_id, agency_id");
 
       return profiles.map((profile: any) => {
-        const userRole = userRoles.find((r) => r.user_id === profile.id);
+        const userRoleRecords = userRoles.filter((r) => r.user_id === profile.id);
+        const roles = userRoleRecords.map(r => r.role as UserRole);
         
         // Get agencies for this user
         const userAgencyIds: string[] = [];
@@ -255,7 +256,8 @@ export default function Users() {
 
         return {
           ...profile,
-          role: userRole?.role as UserRole | undefined,
+          roles, // Array of roles
+          role: roles[0], // Primary role for compatibility
           campaigner_name: profile.campaigners?.full_name,
           sales_person_name: profile.sales_people?.full_name,
           agency_ids: [...new Set(userAgencyIds)], // Remove duplicates
