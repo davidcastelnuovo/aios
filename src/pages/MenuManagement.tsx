@@ -155,6 +155,7 @@ function SortableMenuItem({
         </div>
       </td>
     </tr>
+    </>
   );
 }
 
