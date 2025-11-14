@@ -1,9 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentTenant } from "./useCurrentTenant";
 
 export type UserRole = "owner" | "team_manager" | "campaigner" | "sales_person" | "super_admin" | "seo";
 
 export function useUserRole() {
+  const { tenantId } = useCurrentTenant();
+  
   const { data: session } = useQuery({
     queryKey: ["session"],
     queryFn: async () => {
@@ -15,19 +18,20 @@ export function useUserRole() {
   });
 
   const { data: roles, isLoading } = useQuery({
-    queryKey: ["user-roles", session?.user?.id],
+    queryKey: ["user-roles", session?.user?.id, tenantId],
     queryFn: async () => {
       if (!session?.user?.id) return [];
       
       const { data, error } = await supabase
         .from("user_roles")
-        .select("role")
-        .eq("user_id", session.user.id);
+        .select("role, tenant_id")
+        .eq("user_id", session.user.id)
+        .or(`tenant_id.eq.${tenantId},tenant_id.is.null`); // Get roles for current tenant + global roles
 
       if (error) throw error;
       return data.map((r) => r.role as UserRole);
     },
-    enabled: !!session?.user?.id,
+    enabled: !!session?.user?.id && !!tenantId,
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
     refetchOnWindowFocus: false,
   });

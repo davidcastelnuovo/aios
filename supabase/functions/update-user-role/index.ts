@@ -10,6 +10,7 @@ const corsHeaders = {
 interface UpdateRoleRequest {
   userId: string;
   role: string;
+  tenantId: string;
 }
 
 serve(async (req: Request) => {
@@ -41,21 +42,27 @@ serve(async (req: Request) => {
       throw new Error("Unauthorized");
     }
 
-    // Check if the user is an owner
+    // Check if the user is an owner or super_admin
     const { data: roles, error: rolesError } = await supabaseAdmin
       .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("role", "owner");
+      .select("role, tenant_id")
+      .eq("user_id", user.id);
 
-    if (rolesError || !roles || roles.length === 0) {
-      throw new Error("Only owners can update user roles");
+    if (rolesError) {
+      throw new Error("Error checking user roles");
     }
 
-    const { userId, role }: UpdateRoleRequest = await req.json();
+    const isSuperAdmin = roles?.some(r => r.role === "super_admin" && r.tenant_id === null);
+    const isOwnerInAnyTenant = roles?.some(r => r.role === "owner");
 
-    if (!userId || !role) {
-      throw new Error("User ID and role are required");
+    if (!isSuperAdmin && !isOwnerInAnyTenant) {
+      throw new Error("Only owners or super admins can update user roles");
+    }
+
+    const { userId, role, tenantId }: UpdateRoleRequest = await req.json();
+
+    if (!userId || !role || !tenantId) {
+      throw new Error("User ID, role, and tenant ID are required");
     }
 
     // Validate role
@@ -64,23 +71,24 @@ serve(async (req: Request) => {
       throw new Error("Invalid role");
     }
 
-    console.log(`Updating user ${userId} to role: ${role}`);
+    console.log(`Updating user ${userId} to role: ${role} in tenant: ${tenantId}`);
 
-    // Delete all existing roles for this user
+    // Delete existing roles for this user IN THIS TENANT (don't touch super_admin or other tenants)
     const { error: deleteError } = await supabaseAdmin
       .from("user_roles")
       .delete()
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("tenant_id", tenantId); // Only delete roles for this specific tenant
 
     if (deleteError) {
       console.error("Error deleting roles:", deleteError);
       throw deleteError;
     }
 
-    // Insert new role
+    // Insert new role with tenant_id
     const { error: insertError } = await supabaseAdmin
       .from("user_roles")
-      .insert({ user_id: userId, role });
+      .insert({ user_id: userId, role, tenant_id: tenantId });
 
     if (insertError) {
       console.error("Error inserting role:", insertError);
@@ -105,7 +113,7 @@ serve(async (req: Request) => {
         error: error.message,
       }),
       {
-        status: error.message === "Unauthorized" || error.message === "Only owners can update user roles" ? 403 : 500,
+        status: error.message === "Unauthorized" || error.message === "Only owners or super admins can update user roles" ? 403 : 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
