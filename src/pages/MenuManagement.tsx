@@ -81,46 +81,48 @@ function SortableMenuItem({
   };
 
   return (
-    <tr ref={setNodeRef} style={style} className="group border-b hover:bg-muted/50">
-      <td className="p-2">
-        <div
-          {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded flex items-center gap-2"
-        >
-          <GripVertical className="h-5 w-5 text-muted-foreground" />
-          {isChild && <span className="text-muted-foreground mr-2">└─</span>}
-        </div>
-      </td>
-      <td className="p-2 font-medium">{item.original_label}</td>
-      <td className="p-2">
-        <Input
-          value={
-            editingItems[item.id] !== undefined
-              ? editingItems[item.id]
-              : item.custom_label || item.original_label
-          }
-          onChange={(e) => onLabelChange(item.id, e.target.value)}
-          className="max-w-xs"
-          placeholder={item.original_label}
-        />
-      </td>
-      <td className="p-2">
-        <Select
-          value={item.badge || 'none'}
-          onValueChange={(value) => onBadgeChange(item, value === 'none' ? null : value)}
-          disabled={updateMutation.isPending}
-        >
-          <SelectTrigger className="w-32">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">ללא</SelectItem>
-            <SelectItem value="coming_soon">בקרוב</SelectItem>
-            <SelectItem value="premium">פרימיום</SelectItem>
-          </SelectContent>
-        </Select>
-      </td>
+    <>
+      {/* Desktop view - Table row */}
+      <tr ref={setNodeRef} style={style} className="hidden md:table-row group border-b hover:bg-muted/50">
+        <td className="p-2">
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded flex items-center gap-2"
+          >
+            <GripVertical className="h-5 w-5 text-muted-foreground" />
+            {isChild && <span className="text-muted-foreground mr-2">└─</span>}
+          </div>
+        </td>
+        <td className="p-2 font-medium">{item.original_label}</td>
+        <td className="p-2">
+          <Input
+            value={
+              editingItems[item.id] !== undefined
+                ? editingItems[item.id]
+                : item.custom_label || item.original_label
+            }
+            onChange={(e) => onLabelChange(item.id, e.target.value)}
+            className="max-w-xs"
+            placeholder={item.original_label}
+          />
+        </td>
+        <td className="p-2">
+          <Select
+            value={item.badge || 'none'}
+            onValueChange={(value) => onBadgeChange(item, value === 'none' ? null : value)}
+            disabled={updateMutation.isPending}
+          >
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">ללא</SelectItem>
+              <SelectItem value="coming_soon">בקרוב</SelectItem>
+              <SelectItem value="premium">פרימיום</SelectItem>
+            </SelectContent>
+          </Select>
+        </td>
       <td className="p-2">
         <Switch
           checked={item.is_visible}
