@@ -283,8 +283,9 @@ export default function Tenants() {
       ) : (
         <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           {tenants.map((tenant) => {
-          const isCurrentTenant = currentTenantId === tenant.id;
-          return (
+            const isCurrentTenant = currentTenantId === tenant.id;
+            const orgType = (tenant as any).org_type ?? ((tenant as any).parent ? 'sub_organization' : 'organization');
+            return (
           <Card
             key={tenant.id}
             className={`hover:shadow-lg transition-all cursor-pointer active:scale-95 ${
@@ -301,13 +302,11 @@ export default function Tenants() {
                       <span className="truncate">{tenant.name}</span>
                     </CardTitle>
                     <Badge 
-                      variant={(tenant as any).org_type === 'root' ? 'default' : 
-                              (tenant as any).org_type === 'organization' ? 'secondary' : 
-                              'outline'}
+                      variant={orgType === 'root' ? 'default' : orgType === 'organization' ? 'secondary' : 'outline'}
                       className="text-xs"
                     >
-                      {(tenant as any).org_type === 'root' ? 'ארגון שורש' :
-                       (tenant as any).org_type === 'organization' ? 'ארגון' :
+                      {orgType === 'root' ? 'ארגון שורש' :
+                       orgType === 'organization' ? 'ארגון' :
                        'תת-ארגון'}
                     </Badge>
                   </div>
