@@ -94,9 +94,23 @@ export function AppSidebar() {
   const navigate = useNavigate();
 
   const { userId } = useCurrentUser();
-  const { userTenants, isLoading: isLoadingTenants } = useUserTenants();
   const { currentTenantId, setCurrentTenantId } = useTenant();
   const tenantPath = useTenantPath();
+  
+  const { data: userTenants, isLoading: isLoadingTenants } = useQuery({
+    queryKey: ["user-tenants", userId],
+    queryFn: async () => {
+      if (!userId) return [];
+      const { data, error } = await supabase
+        .from("tenant_users")
+        .select("tenant_id, tenants(id, name)")
+        .eq("user_id", userId);
+      
+      if (error) throw error;
+      return data?.map(tu => tu.tenants).filter(Boolean) as Array<{id: string, name: string}>;
+    },
+    enabled: !!userId,
+  });
 
   const handleTenantChange = async (newTenantId: string) => {
     if (!userId) return;
