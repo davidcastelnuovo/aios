@@ -180,9 +180,11 @@ export function AddTenantForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // Use parentTenantId prop if provided, otherwise use selectedParentTenant (if not empty)
+    const finalParentId = parentTenantId || (selectedParentTenant && selectedParentTenant !== "" ? selectedParentTenant : undefined);
     addTenantMutation.mutate({
       ...formData,
-      parent_tenant_id: selectedParentTenant || undefined,
+      parent_tenant_id: finalParentId,
     });
   };
 
