@@ -317,16 +317,15 @@ export default function Tenants() {
           <p>לא נמצאו ארגונים</p>
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden bg-card">
+        <div className="border rounded-lg overflow-hidden bg-card" dir="rtl">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[50px]"></TableHead>
-                <TableHead>שם הארגון</TableHead>
-                <TableHead>סוג</TableHead>
-                <TableHead>סטטוס</TableHead>
-                <TableHead>איש קשר</TableHead>
-                <TableHead className="text-left">פעולות</TableHead>
+                <TableHead className="text-right">שם הארגון</TableHead>
+                <TableHead className="text-right w-[200px]">סוג</TableHead>
+                <TableHead className="text-right w-[120px]">סטטוס</TableHead>
+                <TableHead className="text-right w-[200px]">איש קשר</TableHead>
+                <TableHead className="text-right w-[180px]">פעולות</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -339,26 +338,24 @@ export default function Tenants() {
                 return (
                   <Collapsible key={org.id} open={isExpanded} onOpenChange={() => hasSubs && toggleOrgExpansion(org.id)}>
                     <TableRow 
-                      className={`${isCurrentOrg ? 'bg-primary/5 border-r-4 border-r-primary' : ''} hover:bg-muted/50 cursor-pointer`}
+                      className={`${isCurrentOrg ? 'bg-primary/5 border-l-4 border-l-primary' : ''} hover:bg-muted/50 cursor-pointer`}
                       onClick={() => handleTenantClick(org.id)}
                     >
-                      <TableCell>
-                        {hasSubs && (
-                          <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              {isExpanded ? (
-                                <ChevronDown className="h-4 w-4" />
-                              ) : (
-                                <ChevronLeft className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </CollapsibleTrigger>
-                        )}
-                      </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <div className="flex items-center gap-2">
+                          {hasSubs && (
+                            <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                {isExpanded ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronLeft className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </CollapsibleTrigger>
+                          )}
                           <Building2 className={`h-4 w-4 flex-shrink-0 ${isCurrentOrg ? 'text-primary' : ''}`} />
-                          <div>
+                          <div className="flex-1">
                             <div className="font-medium">{org.name}</div>
                             {org.subdomain && (
                               <div className="text-xs text-muted-foreground">
@@ -368,27 +365,29 @@ export default function Tenants() {
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant={orgType === 'root' ? 'default' : 'secondary'}
-                          className="text-xs"
-                        >
-                          {orgType === 'root' ? 'ארגון שורש' : 'ארגון'}
-                        </Badge>
-                        {hasSubs && (
-                          <Badge variant="outline" className="text-xs mr-1">
-                            {subOrganizations[org.id].length} תתי-ארגון
+                      <TableCell className="text-right">
+                        <div className="flex items-center gap-1 justify-start">
+                          <Badge 
+                            variant={orgType === 'root' ? 'default' : 'secondary'}
+                            className="text-xs"
+                          >
+                            {orgType === 'root' ? 'ארגון שורש' : 'ארגון'}
                           </Badge>
-                        )}
+                          {hasSubs && (
+                            <Badge variant="outline" className="text-xs">
+                              {subOrganizations[org.id].length} תת-ארגון
+                            </Badge>
+                          )}
+                        </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         {org.status && org.status !== "active" ? (
                           <Badge variant="secondary" className="text-xs">לא פעיל</Badge>
                         ) : (
                           <Badge variant="outline" className="text-xs text-green-600 border-green-600">פעיל</Badge>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         {org.contact_name && (
                           <div className="text-sm">
                             <div>{org.contact_name}</div>
@@ -398,7 +397,7 @@ export default function Tenants() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <div className="flex items-center gap-1">
                           {canManageTenants && orgType !== 'sub_organization' && (
                             <Button
@@ -477,14 +476,13 @@ export default function Tenants() {
                             return (
                               <TableRow
                                 key={sub.id}
-                                className={`${isCurrentSub ? 'bg-primary/5 border-r-4 border-r-primary' : ''} hover:bg-muted/50 cursor-pointer bg-muted/20`}
+                                className={`${isCurrentSub ? 'bg-primary/5 border-l-4 border-l-primary' : ''} hover:bg-muted/50 cursor-pointer bg-muted/20`}
                                 onClick={() => handleTenantClick(sub.id)}
                               >
-                                <TableCell></TableCell>
-                                <TableCell>
-                                  <div className="flex items-center gap-2 pr-6">
+                                <TableCell className="text-right">
+                                  <div className="flex items-center gap-2 pr-12">
                                     <Building2 className={`h-4 w-4 flex-shrink-0 ${isCurrentSub ? 'text-primary' : 'text-muted-foreground'}`} />
-                                    <div>
+                                    <div className="flex-1">
                                       <div className="font-medium text-sm">{sub.name}</div>
                                       {sub.subdomain && (
                                         <div className="text-xs text-muted-foreground">
@@ -494,17 +492,17 @@ export default function Tenants() {
                                     </div>
                                   </div>
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="text-right">
                                   <Badge variant="outline" className="text-xs">תת-ארגון</Badge>
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="text-right">
                                   {sub.status && sub.status !== "active" ? (
                                     <Badge variant="secondary" className="text-xs">לא פעיל</Badge>
                                   ) : (
                                     <Badge variant="outline" className="text-xs text-green-600 border-green-600">פעיל</Badge>
                                   )}
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="text-right">
                                   {sub.contact_name && (
                                     <div className="text-sm">
                                       <div>{sub.contact_name}</div>
@@ -514,7 +512,7 @@ export default function Tenants() {
                                     </div>
                                   )}
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="text-right">
                                   <div className="flex items-center gap-1">
                                     {canManageTenants && sub.id !== currentTenantId && (
                                       <Button
