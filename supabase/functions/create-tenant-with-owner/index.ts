@@ -102,6 +102,42 @@ serve(async (req: Request) => {
       counter++;
     }
     
+    // Determine org_type based on hierarchy rules
+    let orgType: 'root' | 'organization' | 'sub_organization' = 'organization';
+    
+    if (payload.parent_tenant_id) {
+      // Get parent tenant org_type
+      const { data: parentTenant, error: parentError } = await supabase
+        .from("tenants")
+        .select("org_type")
+        .eq("id", payload.parent_tenant_id)
+        .single();
+      
+      if (parentError) {
+        throw new Error("Parent tenant not found");
+      }
+      
+      // Validate hierarchy rules
+      if (parentTenant.org_type === 'sub_organization') {
+        throw new Error('תת-ארגון לא יכול ליצור ארגונים נוספים');
+      }
+      
+      // Determine child org_type based on parent
+      if (parentTenant.org_type === 'root') {
+        orgType = 'organization';
+      } else if (parentTenant.org_type === 'organization') {
+        orgType = 'sub_organization';
+      }
+    } else {
+      // No parent - check if super_admin to create root
+      const isSuperAdmin = userRoles?.some(r => r.role === 'super_admin');
+      if (isSuperAdmin) {
+        orgType = 'root';
+      }
+    }
+    
+    console.log(`Creating tenant with org_type: ${orgType}`);
+    
     const { data: newTenant, error: tenantError } = await supabase
       .from("tenants")
       .insert({
@@ -113,6 +149,7 @@ serve(async (req: Request) => {
         parent_tenant_id: payload.parent_tenant_id || null,
         status: "active",
         allow_super_admin_access: payload.allow_super_admin_access !== false, // Default to true
+        org_type: orgType,
       })
       .select()
       .single();
@@ -163,12 +200,13 @@ serve(async (req: Request) => {
       console.log("✅ User added to tenant_users");
     }
 
-    // Step 2.5: Add owner role to user_roles
+    // Step 2.5: Add owner role to user_roles (tenant-specific)
     const { error: roleError } = await supabase
       .from("user_roles")
       .insert({
         user_id: user.id,
         role: "owner",
+        tenant_id: newTenant.id,
       });
 
     if (roleError) {

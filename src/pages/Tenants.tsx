@@ -4,10 +4,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Building2, Users, Settings, Link as LinkIcon, RefreshCw } from "lucide-react";
+import { Plus, Building2, Users, Settings, Link as LinkIcon, RefreshCw, Trash2, ArrowRightLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
 import EditTenantAgenciesDialog from "@/components/forms/EditTenantAgenciesDialog";
+import { DeleteTenantDialog } from "@/components/forms/DeleteTenantDialog";
+import { ConvertTenantTypeDialog } from "@/components/forms/ConvertTenantTypeDialog";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -22,6 +24,17 @@ export default function Tenants() {
   const [selectedTenantForAgencies, setSelectedTenantForAgencies] = useState<{
     id: string;
     name: string;
+  } | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [convertDialogOpen, setConvertDialogOpen] = useState(false);
+  const [selectedTenantForDelete, setSelectedTenantForDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [selectedTenantForConvert, setSelectedTenantForConvert] = useState<{
+    id: string;
+    name: string;
+    org_type: string;
   } | null>(null);
   const { isSuperAdmin, isOwner } = useUserRole();
   const canManageTenants = isSuperAdmin || isOwner;
@@ -282,10 +295,22 @@ export default function Tenants() {
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="space-y-1 flex-1 min-w-0">
-                  <CardTitle className="flex items-center gap-2 text-base md:text-lg">
-                    <Building2 className={`h-4 w-4 md:h-5 md:w-5 flex-shrink-0 ${isCurrentTenant ? 'text-primary' : ''}`} />
-                    <span className="truncate">{tenant.name}</span>
-                  </CardTitle>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                      <Building2 className={`h-4 w-4 md:h-5 md:w-5 flex-shrink-0 ${isCurrentTenant ? 'text-primary' : ''}`} />
+                      <span className="truncate">{tenant.name}</span>
+                    </CardTitle>
+                    <Badge 
+                      variant={(tenant as any).org_type === 'root' ? 'default' : 
+                              (tenant as any).org_type === 'organization' ? 'secondary' : 
+                              'outline'}
+                      className="text-xs"
+                    >
+                      {(tenant as any).org_type === 'root' ? 'ארגון שורש' :
+                       (tenant as any).org_type === 'organization' ? 'ארגון' :
+                       'תת-ארגון'}
+                    </Badge>
+                  </div>
                   {(tenant as any).parent && (
                     <CardDescription className="text-xs flex items-center gap-1">
                       <span>תת-ארגון של:</span>
@@ -368,18 +393,20 @@ export default function Tenants() {
               </div>
               {canManageTenants && (
                 <div className="mt-3 pt-3 border-t space-y-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="w-full"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSubTenantParentId(tenant.id);
-                    }}
-                  >
-                    <Plus className="h-3 w-3 ml-1" />
-                    צור תת-ארגון
-                  </Button>
+                  {(tenant as any).org_type !== 'sub_organization' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSubTenantParentId(tenant.id);
+                      }}
+                    >
+                      <Plus className="h-3 w-3 ml-1" />
+                      {(tenant as any).org_type === 'root' ? 'צור ארגון' : 'צור תת-ארגון'}
+                    </Button>
+                  )}
                   {tenant.id !== currentTenantId && (
                     <Button
                       size="sm"
@@ -397,6 +424,43 @@ export default function Tenants() {
                       <LinkIcon className="h-3 w-3 ml-1" />
                       ניהול גישות לסוכנויות
                     </Button>
+                  )}
+                  {isSuperAdmin && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTenantForConvert({
+                            id: tenant.id,
+                            name: tenant.name,
+                            org_type: (tenant as any).org_type,
+                          });
+                          setConvertDialogOpen(true);
+                        }}
+                      >
+                        <ArrowRightLeft className="h-3 w-3 ml-1" />
+                        שנה סוג ארגון
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="w-full"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedTenantForDelete({
+                            id: tenant.id,
+                            name: tenant.name,
+                          });
+                          setDeleteDialogOpen(true);
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3 ml-1" />
+                        מחק ארגון
+                      </Button>
+                    </>
                   )}
                 </div>
               )}
@@ -428,6 +492,21 @@ export default function Tenants() {
           tenant={selectedTenantForAgencies}
         />
       )}
+
+      {/* Dialog for deleting tenant */}
+      <DeleteTenantDialog
+        tenant={selectedTenantForDelete}
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+      />
+
+      {/* Dialog for converting tenant type */}
+      <ConvertTenantTypeDialog
+        tenant={selectedTenantForConvert}
+        availableParents={tenants.filter((t: any) => t.org_type !== 'sub_organization')}
+        open={convertDialogOpen}
+        onOpenChange={setConvertDialogOpen}
+      />
     </div>
   );
 }
