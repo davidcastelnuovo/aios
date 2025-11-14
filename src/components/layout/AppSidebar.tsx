@@ -311,56 +311,52 @@ export function AppSidebar() {
     // Regular menu item without children
     return (
       <SidebarMenuItem key={item.menu_key}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <SidebarMenuButton
-              asChild={!isDisabled}
-              disabled={isDisabled}
-              className={isDisabled ? "opacity-50 cursor-not-allowed" : ""}
-            >
-              {isDisabled ? (
-                <div className="flex items-center gap-2 w-full">
-                  <Icon className="h-4 w-4" />
-                  {!isCollapsed && <span className="flex-1">{label}</span>}
-                  {!isCollapsed && badge === 'premium' && (
-                    <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                      Premium
-                    </Badge>
-                  )}
-                  {!isCollapsed && badge === 'coming_soon' && (
-                    <Badge variant="outline" className="text-[10px] px-1 py-0">
-                      בקרוב
-                    </Badge>
-                  )}
-                </div>
-              ) : (
-                <NavLink
-                  to={buildPath(item.route)}
-                  onClick={handleLinkClick}
-                  className={({ isActive }) =>
-                    isActive
-                      ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  }
-                >
-                  <Icon className="h-4 w-4" />
-                  {!isCollapsed && <span className="flex-1">{label}</span>}
-                  {!isCollapsed && badge === 'premium' && (
-                    <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                      Premium
-                    </Badge>
-                  )}
-                  {!isCollapsed && badge === 'coming_soon' && (
-                    <Badge variant="outline" className="text-[10px] px-1 py-0">
-                      בקרוב
-                    </Badge>
-                  )}
-                </NavLink>
+        <SidebarMenuButton
+          asChild={!isDisabled}
+          disabled={isDisabled}
+          className={isDisabled ? "opacity-50 cursor-not-allowed" : ""}
+          tooltip={isCollapsed ? label : undefined}
+        >
+          {isDisabled ? (
+            <div className="flex items-center gap-2 w-full">
+              <Icon className="h-4 w-4" />
+              {!isCollapsed && <span className="flex-1">{label}</span>}
+              {!isCollapsed && badge === 'premium' && (
+                <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                  Premium
+                </Badge>
               )}
-            </SidebarMenuButton>
-          </TooltipTrigger>
-          {isCollapsed && <TooltipContent side="left">{label}</TooltipContent>}
-        </Tooltip>
+              {!isCollapsed && badge === 'coming_soon' && (
+                <Badge variant="outline" className="text-[10px] px-1 py-0">
+                  בקרוב
+                </Badge>
+              )}
+            </div>
+          ) : (
+            <NavLink
+              to={buildPath(item.route)}
+              onClick={handleLinkClick}
+              className={({ isActive }) =>
+                isActive
+                  ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              }
+            >
+              <Icon className="h-4 w-4" />
+              {!isCollapsed && <span className="flex-1">{label}</span>}
+              {!isCollapsed && badge === 'premium' && (
+                <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                  Premium
+                </Badge>
+              )}
+              {!isCollapsed && badge === 'coming_soon' && (
+                <Badge variant="outline" className="text-[10px] px-1 py-0">
+                  בקרוב
+                </Badge>
+              )}
+            </NavLink>
+          )}
+        </SidebarMenuButton>
       </SidebarMenuItem>
     );
   };
@@ -410,9 +406,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              <TooltipProvider>
-                {parentItems.map(item => renderMenuItem(item))}
-              </TooltipProvider>
+              {parentItems.map(item => renderMenuItem(item))}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
