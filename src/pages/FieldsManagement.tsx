@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Plus, Trash2, Save, Edit } from "lucide-react";
+import TerminologyManagement from "@/components/TerminologyManagement";
 import {
   Table,
   TableBody,
@@ -305,14 +306,21 @@ export default function FieldsManagement() {
         </Dialog>
       </div>
 
-      <Tabs value={selectedEntity} onValueChange={(value) => setSelectedEntity(value as any)}>
+      <Tabs defaultValue="fields" className="w-full">
         <TabsList>
-          <TabsTrigger value="task">משימות</TabsTrigger>
-          <TabsTrigger value="client">לקוחות</TabsTrigger>
-          <TabsTrigger value="lead">לידים</TabsTrigger>
+          <TabsTrigger value="fields">שדות מותאמים</TabsTrigger>
+          <TabsTrigger value="terminology">שמות מודולים</TabsTrigger>
         </TabsList>
 
-        <TabsContent value={selectedEntity} className="mt-6">
+        <TabsContent value="fields" className="mt-6">
+          <Tabs value={selectedEntity} onValueChange={(value) => setSelectedEntity(value as any)}>
+            <TabsList>
+              <TabsTrigger value="task">משימות</TabsTrigger>
+              <TabsTrigger value="client">לקוחות</TabsTrigger>
+              <TabsTrigger value="lead">לידים</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value={selectedEntity} className="mt-6">
           <Card>
             <CardHeader>
               <CardTitle>שדות {getEntityLabel(selectedEntity)}</CardTitle>
@@ -384,6 +392,12 @@ export default function FieldsManagement() {
               )}
             </CardContent>
           </Card>
+            </TabsContent>
+          </Tabs>
+        </TabsContent>
+
+        <TabsContent value="terminology" className="mt-6">
+          <TerminologyManagement />
         </TabsContent>
       </Tabs>
 

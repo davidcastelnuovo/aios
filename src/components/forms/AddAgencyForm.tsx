@@ -32,6 +32,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Plus } from "lucide-react";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTerminology } from "@/hooks/useTerminology";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם הסוכנות הוא שדה חובה"),
@@ -49,6 +50,7 @@ export function AddAgencyForm() {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { t } = useTerminology();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -79,13 +81,13 @@ export function AddAgencyForm() {
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("הסוכנות נוספה בהצלחה");
+      toast.success(`${t('agency')} נוספה בהצלחה`);
       queryClient.invalidateQueries({ queryKey: ["agencies"] });
       form.reset();
       setOpen(false);
     },
     onError: (error) => {
-      toast.error("שגיאה בהוספת סוכנות: " + error.message);
+      toast.error(`שגיאה בהוספת ${t('agency')}: ` + error.message);
     },
   });
 
@@ -98,12 +100,12 @@ export function AddAgencyForm() {
       <DialogTrigger asChild>
         <Button>
           <Plus className="ml-2 h-4 w-4" />
-          הוסף סוכנות
+          הוסף {t('agency')}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>הוסף סוכנות חדשה</DialogTitle>
+          <DialogTitle>הוסף {t('agency')} חדשה</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
@@ -112,7 +114,7 @@ export function AddAgencyForm() {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>שם הסוכנות</FormLabel>
+                  <FormLabel>שם ה{t('agency')}</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>
