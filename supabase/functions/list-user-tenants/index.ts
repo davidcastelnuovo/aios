@@ -67,7 +67,7 @@ serve(async (req: Request) => {
       // Super admins see ALL tenants (no allow_super_admin_access gating)
       const { data: allTenants, error: allTenantsError } = await supabase
         .from("tenants")
-        .select("id, name, slug")
+        .select("id, name, slug, org_type, parent_tenant_id, subdomain, contact_name, contact_email, status, notes, trial_ends_at")
         .order("name");
 
       if (allTenantsError) {
@@ -75,12 +75,12 @@ serve(async (req: Request) => {
         throw new Error("Failed to fetch tenants");
       }
 
-      tenants = (allTenants || []).map((t: any) => ({ id: t.id, name: t.name, slug: t.slug }));
+      tenants = allTenants || [];
     } else {
       // Regular users see only their tenants
       const { data, error } = await supabase
         .from("tenant_users")
-        .select("tenant_id, tenants(id, name, slug)")
+        .select("tenant_id, tenants(id, name, slug, org_type, parent_tenant_id, subdomain, contact_name, contact_email, status, notes, trial_ends_at)")
         .eq("user_id", user.id);
 
       if (error) {
@@ -88,11 +88,7 @@ serve(async (req: Request) => {
         throw new Error("Failed to fetch user tenants");
       }
 
-      tenants = (data || []).map((row: any) => ({
-        id: row.tenants?.id,
-        name: row.tenants?.name,
-        slug: row.tenants?.slug,
-      })).filter((t: any) => t.id && t.name);
+      tenants = (data || []).map((row: any) => row.tenants).filter((t: any) => t && t.id && t.name);
     }
 
     return new Response(JSON.stringify({ tenants }), {
