@@ -392,9 +392,9 @@ export function AppSidebar() {
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <SidebarMenuSub>
-                            {visibleManagementItems.map((item) => {
-                              const badge = getMenuItemBadge(item.path);
-                              const label = getMenuItemLabel(item.path, item.title);
+                             {orderedManagement.map((item) => {
+                               const badge = getMenuItemBadge(item.path);
+                               const label = getMenuItemLabel(item.path, item.title);
                               const hasAccess = canAccessMenuItem(badge);
                               
                               if (!hasAccess) {
@@ -477,9 +477,9 @@ export function AppSidebar() {
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <SidebarMenuSub>
-                            {visibleSalesItems.map((item) => {
-                              const badge = getMenuItemBadge(item.path);
-                              const label = getMenuItemLabel(item.path, item.title);
+                             {orderedSales.map((item) => {
+                               const badge = getMenuItemBadge(item.path);
+                               const label = getMenuItemLabel(item.path, item.title);
                               const hasAccess = canAccessMenuItem(badge);
                               
                               if (!hasAccess) {
