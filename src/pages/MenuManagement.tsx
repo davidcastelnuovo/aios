@@ -198,9 +198,11 @@ function MenuGroup({
   const [isOpen, setIsOpen] = useState(true);
 
   const categoryLabels: Record<string, string> = {
-    main: 'תפריט ראשי',
+    dashboard: 'לוח בקרה',
     management: 'ניהול',
     sales: 'מכירות',
+    reports: 'דוחות',
+    settings: 'הגדרות',
   };
 
   const sensors = useSensors(
@@ -503,25 +505,17 @@ export default function MenuManagement() {
 
   if (!menuItems) return null;
 
-  // Group menu items
-  const mainItems = menuItems.filter(item => !item.category && !item.parent_menu_key);
-  const managementItems = menuItems.filter(item => item.category === 'management' && !item.parent_menu_key);
-  const salesItems = menuItems.filter(item => item.category === 'sales' && !item.parent_menu_key);
-
-  const mainChildren = menuItems.filter(item => !item.category && item.parent_menu_key);
-  const managementChildren = menuItems.filter(item => item.category === 'management' && item.parent_menu_key);
-  const salesChildren = menuItems.filter(item => item.category === 'sales' && item.parent_menu_key);
-
-  const groups = groupOrder.map(category => {
-    if (category === 'main') {
-      return { category, items: mainItems, children: mainChildren };
-    } else if (category === 'management') {
-      return { category, items: managementItems, children: managementChildren };
-    } else if (category === 'sales') {
-      return { category, items: salesItems, children: salesChildren };
-    }
-    return null;
-  }).filter(Boolean);
+  // Group menu items by parent - new hierarchical structure
+  const parentItems = menuItems.filter(item => !item.parent_menu_key);
+  
+  const groups = parentItems.map(parent => {
+    const children = menuItems.filter(item => item.parent_menu_key === parent.menu_key);
+    return {
+      category: parent.menu_key,
+      items: [parent],
+      children: children
+    };
+  });
 
   return (
     <div className="p-8 space-y-6" dir="rtl">
