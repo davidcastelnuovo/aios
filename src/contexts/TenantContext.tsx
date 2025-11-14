@@ -153,16 +153,23 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         .from("tenants")
         .select("*")
         .eq("id", currentTenantId)
-        .single();
+        .maybeSingle();
       
       if (error) {
         console.error("Error fetching current tenant:", error);
         return null;
       }
       
+      if (!data) {
+        console.warn("No tenant found for ID:", currentTenantId);
+        return null;
+      }
+      
       return data;
     },
     enabled: !!currentTenantId,
+    retry: 2,
+    retryDelay: 500,
   });
 
   // Set default tenant from user's tenant if not already set (for non-tenant routes)

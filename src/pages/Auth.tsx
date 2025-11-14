@@ -86,8 +86,11 @@ useEffect(() => {
 
 // Ensure we auto-redirect when a session becomes available (e.g., after Google OAuth)
 useEffect(() => {
-  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-    if (session?.user) {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    // Only handle SIGNED_IN events to avoid duplicate navigations
+    if (event === 'SIGNED_IN' && session?.user) {
+      console.log("🔐 User signed in, resolving tenant...");
+      
       // Try to process invitation if exists
       try {
         const { data, error } = await supabase.functions.invoke("process-user-invitation", {
@@ -105,13 +108,15 @@ useEffect(() => {
         console.error("Exception processing invitation:", e);
       }
       
-      const slug = await resolveTenantSlug(session.user.id);
+      // Resolve tenant with retries
+      const slug = await resolveTenantSlug(session.user.id, 5);
       if (slug) {
-        navigate(`/t/${slug}/dashboard`);
+        console.log("✅ Navigating to tenant dashboard:", slug);
+        navigate(`/t/${slug}/dashboard`, { replace: true });
       } else {
         toast({
           title: "שגיאה",
-          description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
+          description: "לא נמצא ארגון עבור המשתמש. נא לפנות לתמיכה.",
           variant: "destructive",
         });
       }
@@ -159,20 +164,8 @@ useEffect(() => {
       description: "החשבון נוצר בהצלחה",
     });
     
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const slug = await resolveTenantSlug(user.id);
-      if (slug) {
-        navigate(`/t/${slug}/dashboard`);
-      } else {
-        toast({
-          title: "שגיאה",
-          description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
-          variant: "destructive",
-        });
-      }
-    }
-    setLoading(false);
+    // Session established - onAuthStateChange will handle navigation
+    // Keep loading state to prevent UI flash during navigation
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -223,17 +216,8 @@ useEffect(() => {
       console.error("Exception processing invitation:", e);
     }
 
-    const slug = await resolveTenantSlug(data.user.id);
-    if (slug) {
-      navigate(buildTenantPath(slug, "dashboard"));
-    } else {
-      toast({
-        title: "שגיאה",
-        description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
-        variant: "destructive",
-      });
-    }
-    setLoading(false);
+    // Session established - onAuthStateChange will handle navigation
+    // Keep loading state to prevent UI flash during navigation
   };
 
   const handleMFAVerify = async (e: React.FormEvent) => {
