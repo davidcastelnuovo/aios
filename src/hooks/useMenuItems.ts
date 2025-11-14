@@ -12,6 +12,7 @@ export interface MenuItem {
   icon: string | null;
   route: string;
   badge?: 'coming_soon' | 'premium' | null;
+  parent_menu_key?: string | null;
 }
 
 export function useMenuItems() {

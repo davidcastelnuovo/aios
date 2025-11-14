@@ -33,7 +33,6 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -53,41 +52,37 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useTheme } from "@/contexts/ThemeContext";
-import { useMenuItems } from "@/hooks/useMenuItems";
+import { useMenuItems, MenuItem } from "@/hooks/useMenuItems";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const menuItems = [
-  { title: "סוכנויות", path: "agencies", icon: Building2, module: "agencies" as const },
-  { title: "לקוחות", path: "clients", icon: Users, module: "clients" as const },
-  { title: "משימות", path: "tasks", icon: CheckSquare, module: "tasks" as const },
-  { title: "לקוחות בקליטה", path: "client-onboarding", icon: UserPlus, module: "client_onboarding" as const },
-  { title: "שעון נוכחות", path: "time-tracking", icon: Clock, module: "time_tracking" as const },
-  { title: "צוות", path: "campaigners", icon: Megaphone, module: "campaigners" as const },
-  { title: "ניהול משתמשים", path: "users", icon: ShieldCheck, module: "users" as const },
-  { title: "אזור אישי", path: "my-profile", icon: User, module: null },
-];
-
-const managementMenuItems = [
-  { title: "דשבורד", path: "dashboard", icon: LayoutDashboard, module: "dashboard" as const },
-  { title: "כספים", path: "finance", icon: DollarSign, module: "finance" as const },
-  { title: "דוחות", path: "reports", icon: BarChart3, module: "reports" as const },
-  { title: "ספקים", path: "suppliers", icon: Truck, module: "suppliers" as const },
-  { title: "אוטומציות", path: "automations", icon: Zap, module: "automations" as const },
-  { title: "ניהול ארגונים", path: "tenants", icon: Building, module: "tenants" as const },
-  { title: "התאמת מערכת", path: "branding", icon: Palette, module: "branding" as const },
-  { title: "הנהלת חשבונות", path: "accounting-integrations", icon: Building, module: "accounting" as const },
-  { title: "תמיכה טכנית AI", path: "ai-support", icon: Bot, module: "ai_support" as const },
-  { title: "ניהול תפריטים", path: "menu-management", icon: Menu, module: "menu_management" as const },
-  { title: "ניהול שדות", path: "fields-management", icon: ListTree, module: "fields_management" as const },
-];
-
-const salesMenuItems = [
-  { title: "דשבורד מכירות", path: "sales-dashboard", icon: TrendingUp, module: "sales_dashboard" as const },
-  { title: "לידים", path: "leads", icon: Target, module: "leads" as const },
-  { title: "מוצרים ושירותים", path: "products", icon: Package, module: "leads" as const },
-  { title: "אנשי מכירות", path: "sales-people", icon: UserCheck, module: "sales_people" as const },
-  { title: "אינטגרציות לידים", path: "lead-integrations", icon: Settings, module: "lead_integrations" as const },
-];
+const iconMap: Record<string, any> = {
+  LayoutDashboard,
+  Users,
+  Building2,
+  CheckSquare,
+  FileText: Target,
+  UserPlus,
+  Calendar: Clock,
+  Package,
+  Settings,
+  Briefcase: Building,
+  TrendingUp,
+  DollarSign,
+  BarChart3,
+  Clock,
+  Megaphone,
+  Target,
+  ShieldCheck,
+  User,
+  UserCheck,
+  Truck,
+  Zap,
+  Building,
+  Palette,
+  Bot,
+  Menu,
+  ListTree,
+};
 
 export function AppSidebar() {
   const { state, setOpenMobile, isMobile, toggleSidebar } = useSidebar();
@@ -99,465 +94,328 @@ export function AppSidebar() {
   const navigate = useNavigate();
 
   const { userId } = useCurrentUser();
-  const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
+  const { userTenants, isLoading: isLoadingTenants } = useUserTenants();
+  const { currentTenantId, setCurrentTenantId } = useTenant();
+  const tenantPath = useTenantPath();
 
-  const { userTenants } = useUserTenants(userId);
+  const handleTenantChange = async (newTenantId: string) => {
+    if (!userId) return;
 
-
-  const currentTenantName = (userTenants || []).find((t: any) => t.id === currentTenantId)?.name || currentTenant?.name;
-  
-  console.log("Current tenant dropdown:", {
-    totalTenants: userTenants?.length,
-    currentTenantId,
-    currentTenantName,
-    tenants: userTenants?.map((t: any) => ({ id: t.id, name: t.name }))
-  });
-
-  const handleTenantChange = async (tenantId: string) => {
     try {
-      // Get target tenant
-      const targetTenant = userTenants?.find((t: any) => t.id === tenantId);
-      if (!targetTenant?.slug) {
-        console.error("No slug found for tenant", tenantId);
-        return;
-      }
-
-      // Check if user is super admin
-      const { data: roles } = await supabase
-        .from("user_roles")
+      const { data: tenantUser } = await supabase
+        .from("tenant_users")
         .select("role")
+        .eq("tenant_id", newTenantId)
         .eq("user_id", userId)
-        .eq("role", "super_admin");
-      
-      const isSuperAdmin = roles && roles.length > 0;
-      
-      // If super admin, ensure they're a member of the tenant
-      if (isSuperAdmin) {
-        const { data: existingMembership } = await supabase
-          .from("tenant_users")
+        .single();
+
+      if (tenantUser) {
+        const { data: existingRole } = await supabase
+          .from("user_roles")
           .select("id")
           .eq("user_id", userId)
-          .eq("tenant_id", tenantId)
-          .maybeSingle();
-        
-        if (!existingMembership) {
-          await supabase
-            .from("tenant_users")
-            .insert({ user_id: userId, tenant_id: tenantId, role: "member" });
+          .eq("tenant_id", newTenantId)
+          .single();
+
+        if (!existingRole) {
+          await supabase.from("user_roles").insert([{
+            user_id: userId,
+            role: tenantUser.role as any,
+            tenant_id: newTenantId,
+          }]);
         }
       }
-      
-      // Update active tenant
-      await supabase
-        .from("user_active_tenant")
-        .upsert({
-          user_id: userId,
-          tenant_id: tenantId,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "user_id" });
-      
-      setCurrentTenantId(tenantId);
-      
-      // Navigate to new tenant dashboard
-      navigate(`/t/${targetTenant.slug}/dashboard`, { replace: true });
-    } catch (e) {
-      console.error("Error switching tenant:", e);
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ active_tenant_id: newTenantId } as any)
+        .eq("id", userId);
+
+      if (error) throw error;
+
+      setCurrentTenantId(newTenantId);
+
+      const { data: newTenant } = await supabase
+        .from("tenants")
+        .select("slug")
+        .eq("id", newTenantId)
+        .single();
+
+      if (newTenant?.slug) {
+        navigate(`/t/${newTenant.slug}/dashboard`);
+      }
+    } catch (error) {
+      console.error("Error changing tenant:", error);
     }
   };
 
   const handleLinkClick = () => {
-    if (isMobile) {
+    if (isMobile && setOpenMobile) {
       setOpenMobile(false);
     }
   };
 
-  // Filter menu items based on permissions and visibility
-  const visibleMenuItems = menuItems.filter((item) => {
-    const menuItemConfig = menuItemsMap.get(item.path);
-    
-    // Hide if configured as not visible
-    if (menuItemConfig && !menuItemConfig.is_visible) return false;
-    
-    // Items without module requirement are always visible (My Profile)
-    if (!item.module) return true;
-
-    // While permissions are loading, hide restricted items to avoid leaks
-    if (isLoading) return false;
-
-    // All other items require permission check
-    return hasPermission(item.module);
-  });
-
-  const visibleManagementItems = managementMenuItems.filter((item) => {
-    const menuItemConfig = menuItemsMap.get(item.path);
-    if (menuItemConfig && !menuItemConfig.is_visible) return false;
-    if (isLoading) return false;
-    return hasPermission(item.module);
-  });
-
-  const visibleSalesItems = salesMenuItems.filter((item) => {
-    const menuItemConfig = menuItemsMap.get(item.path);
-    if (menuItemConfig && !menuItemConfig.is_visible) return false;
-    if (isLoading) return false;
-    return hasPermission(item.module);
-  });
-
-  const getMenuItemBadge = (path: string) => {
-    const menuItemConfig = menuItemsMap.get(path);
-    return menuItemConfig?.badge || null;
-  };
-
-  const getMenuItemLabel = (path: string, defaultLabel: string) => {
-    const menuItemConfig = menuItemsMap.get(path);
-    return menuItemConfig?.custom_label || defaultLabel;
-  };
-
-  const canAccessMenuItem = (badge: 'coming_soon' | 'premium' | null | undefined): boolean => {
-    if (!badge) return true;
-    if (orgType === 'root') return true;
-    if (badge === 'premium' && isPremium) return true;
-    if (badge === 'coming_soon') return false;
-    return false;
-  };
-
-  // Load group order using RPC (reads effective setting)
-  const { data: groupOrderSetting } = useQuery({
-    queryKey: ['menu-group-order', currentTenantId],
-    queryFn: async () => {
-      if (!currentTenantId) return null;
-      const { data, error } = await supabase.rpc('get_effective_setting', {
-        _tenant_id: currentTenantId,
-        _setting_key: 'menu_group_order',
-      });
-      if (error) {
-        console.error('Error fetching group order:', error);
-        return null;
+  // Get menu items ordered by sort_order
+  const allMenuItems = [...dbMenuItems].sort((a, b) => a.sort_order - b.sort_order);
+  
+  // Separate parent items from child items
+  const parentItems = allMenuItems.filter(item => !item.parent_menu_key && item.is_visible);
+  const childItemsMap = new Map<string, MenuItem[]>();
+  
+  allMenuItems.forEach(item => {
+    if (item.parent_menu_key && item.is_visible) {
+      if (!childItemsMap.has(item.parent_menu_key)) {
+        childItemsMap.set(item.parent_menu_key, []);
       }
-      return data; // jsonb array or null
-    },
-    enabled: !!currentTenantId,
+      childItemsMap.get(item.parent_menu_key)?.push(item);
+    }
   });
 
-  const groupOrder = (Array.isArray(groupOrderSetting) ? groupOrderSetting : ['main', 'management', 'sales']) as string[];
-
-  const byDbOrder = (a: { path: string }, b: { path: string }) => {
-    const aOrder = menuItemsMap.get(a.path)?.sort_order ?? 0;
-    const bOrder = menuItemsMap.get(b.path)?.sort_order ?? 0;
-    return aOrder - bOrder;
+  const getMenuItemLabel = (item: MenuItem) => {
+    return item.custom_label || item.original_label;
   };
-  const orderedMain = [...visibleMenuItems].sort(byDbOrder);
-  const orderedManagement = [...visibleManagementItems].sort(byDbOrder);
-  const orderedSales = [...visibleSalesItems].sort(byDbOrder);
+
+  const getMenuItemBadge = (item: MenuItem) => {
+    if (item.badge === 'premium' && !isPremium) return 'premium';
+    if (item.badge === 'coming_soon') return 'coming_soon';
+    return null;
+  };
+
+  const canAccessMenuItem = (item: MenuItem) => {
+    const modulePermissions: Record<string, string> = {
+      'users': 'users',
+      'agencies': 'agencies',
+      'leads': 'leads',
+      'clients': 'clients',
+      'tasks': 'tasks',
+      'client-onboarding': 'client_onboarding',
+      'products': 'products',
+      'settings': 'settings',
+      'finance': 'finance',
+      'sales-dashboard': 'sales',
+      'reports': 'reports',
+      'time-tracking': 'time_tracking',
+      'campaigners': 'campaigners',
+      'sales-people': 'sales_people',
+      'dashboard': 'dashboard',
+      'suppliers': 'suppliers',
+      'automations': 'automations',
+      'tenants': 'tenants',
+      'branding': 'branding',
+      'accounting-integrations': 'accounting',
+      'ai-support': 'ai_support',
+      'menu-management': 'menu_management',
+      'fields-management': 'fields_management',
+      'lead-integrations': 'lead_integrations',
+    };
+
+    const permission = modulePermissions[item.menu_key];
+    if (!permission) return true;
+    return hasPermission(permission as any);
+  };
+
+  const getIcon = (iconName: string | null) => {
+    if (!iconName) return LayoutDashboard;
+    return iconMap[iconName] || LayoutDashboard;
+  };
+
+  const renderMenuItem = (item: MenuItem) => {
+    const Icon = getIcon(item.icon);
+    const label = getMenuItemLabel(item);
+    const badge = getMenuItemBadge(item);
+    const canAccess = canAccessMenuItem(item);
+    const isDisabled = badge === 'premium' || badge === 'coming_soon' || !canAccess;
+    const children = childItemsMap.get(item.menu_key) || [];
+    const hasChildren = children.length > 0;
+
+    if (hasChildren) {
+      // Parent item with children - render as collapsible
+      return (
+        <Collapsible key={item.menu_key} defaultOpen className="group/collapsible">
+          <SidebarMenuItem>
+            <CollapsibleTrigger asChild>
+              <SidebarMenuButton tooltip={label}>
+                <Icon className="h-4 w-4" />
+                {!isCollapsed && <span>{label}</span>}
+                {!isCollapsed && (
+                  <ChevronDown className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                )}
+              </SidebarMenuButton>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <SidebarMenuSub>
+                {children.map(child => {
+                  const ChildIcon = getIcon(child.icon);
+                  const childLabel = getMenuItemLabel(child);
+                  const childBadge = getMenuItemBadge(child);
+                  const childCanAccess = canAccessMenuItem(child);
+                  const childIsDisabled = childBadge === 'premium' || childBadge === 'coming_soon' || !childCanAccess;
+
+                  if (childIsDisabled) {
+                    return (
+                      <SidebarMenuSubItem key={child.menu_key}>
+                        <div className="flex items-center gap-2 w-full px-3 py-2 opacity-50 cursor-not-allowed">
+                          <ChildIcon className="h-4 w-4" />
+                          <span className="flex-1">{childLabel}</span>
+                          {childBadge === 'premium' && (
+                            <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                              Premium
+                            </Badge>
+                          )}
+                          {childBadge === 'coming_soon' && (
+                            <Badge variant="outline" className="text-[10px] px-1 py-0">
+                              בקרוב
+                            </Badge>
+                          )}
+                        </div>
+                      </SidebarMenuSubItem>
+                    );
+                  }
+
+                  return (
+                    <SidebarMenuSubItem key={child.menu_key}>
+                      <SidebarMenuSubButton asChild>
+                        <NavLink
+                          to={buildPath(child.route)}
+                          onClick={handleLinkClick}
+                          className={({ isActive }) =>
+                            isActive
+                              ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
+                              : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                          }
+                        >
+                          <ChildIcon className="h-4 w-4" />
+                          <span className="flex-1">{childLabel}</span>
+                          {childBadge === 'premium' && (
+                            <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                              Premium
+                            </Badge>
+                          )}
+                          {childBadge === 'coming_soon' && (
+                            <Badge variant="outline" className="text-[10px] px-1 py-0">
+                              בקרוב
+                            </Badge>
+                          )}
+                        </NavLink>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  );
+                })}
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </SidebarMenuItem>
+        </Collapsible>
+      );
+    }
+
+    // Regular menu item without children
+    return (
+      <SidebarMenuItem key={item.menu_key}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <SidebarMenuButton
+              asChild={!isDisabled}
+              disabled={isDisabled}
+              className={isDisabled ? "opacity-50 cursor-not-allowed" : ""}
+            >
+              {isDisabled ? (
+                <div className="flex items-center gap-2 w-full">
+                  <Icon className="h-4 w-4" />
+                  {!isCollapsed && <span className="flex-1">{label}</span>}
+                  {!isCollapsed && badge === 'premium' && (
+                    <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                      Premium
+                    </Badge>
+                  )}
+                  {!isCollapsed && badge === 'coming_soon' && (
+                    <Badge variant="outline" className="text-[10px] px-1 py-0">
+                      בקרוב
+                    </Badge>
+                  )}
+                </div>
+              ) : (
+                <NavLink
+                  to={buildPath(item.route)}
+                  onClick={handleLinkClick}
+                  className={({ isActive }) =>
+                    isActive
+                      ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  }
+                >
+                  <Icon className="h-4 w-4" />
+                  {!isCollapsed && <span className="flex-1">{label}</span>}
+                  {!isCollapsed && badge === 'premium' && (
+                    <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                      Premium
+                    </Badge>
+                  )}
+                  {!isCollapsed && badge === 'coming_soon' && (
+                    <Badge variant="outline" className="text-[10px] px-1 py-0">
+                      בקרוב
+                    </Badge>
+                  )}
+                </NavLink>
+              )}
+            </SidebarMenuButton>
+          </TooltipTrigger>
+          {isCollapsed && <TooltipContent side="left">{label}</TooltipContent>}
+        </Tooltip>
+      </SidebarMenuItem>
+    );
+  };
+
+  if (isLoadingMenuItems || isLoading || isLoadingTenants) {
+    return null;
+  }
 
   return (
-    <Sidebar side="right" collapsible="icon" className="transition-all duration-300 ease-in-out">
-      <SidebarHeader className="border-b p-2">
-        <div className="flex items-center justify-between">
-          {!isCollapsed && (
-            <div className="flex items-center gap-2 px-2">
-                {logoUrl ? (
-                  <img src={logoUrl} alt="Logo" className="h-8 w-auto object-contain" />
-                ) : (
-                  <Building2 className="h-4 w-4 text-sidebar-foreground" />
-                )}
-                {userTenants && userTenants.length > 1 ? (
-                  <Select value={currentTenantId || ""} onValueChange={handleTenantChange}>
-                    <SelectTrigger className="h-8 w-[180px] bg-sidebar text-sidebar-foreground border-sidebar-border hover:bg-sidebar-accent">
-                      <SelectValue placeholder="בחר ארגון" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-sidebar border-sidebar-border z-[1000]">
-                      {userTenants.map((t: any) => (
-                        <SelectItem 
-                          key={t.id} 
-                          value={t.id}
-                          className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus:bg-sidebar-accent focus:text-sidebar-accent-foreground cursor-pointer"
-                        >
-                          {t.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <span className="text-xs text-sidebar-foreground">{currentTenantName || "—"}</span>
-                )}
-            </div>
-          )}
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="border-b border-sidebar-border">
+        <div className="flex items-center justify-between px-2 py-2">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="h-8 w-8 object-contain flex-shrink-0" />
+            ) : (
+              <Building2 className="h-8 w-8 flex-shrink-0" />
+            )}
+            {!isCollapsed && userTenants && userTenants.length > 1 && (
+              <Select value={currentTenantId || undefined} onValueChange={handleTenantChange}>
+                <SelectTrigger className="h-8 border-0 shadow-none focus:ring-0 min-w-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {userTenants.map((tenant) => (
+                    <SelectItem key={tenant.id} value={tenant.id}>
+                      {tenant.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {!isCollapsed && userTenants && userTenants.length === 1 && (
+              <span className="text-sm font-semibold truncate">{userTenants[0].name}</span>
+            )}
+          </div>
           <button
             onClick={toggleSidebar}
-            className="p-2 hover:bg-accent rounded-md transition-colors"
-            aria-label={isCollapsed ? "פתח סרגל צד" : "סגור סרגל צד"}
+            className="flex-shrink-0 p-2 hover:bg-sidebar-accent rounded-md"
           >
-            {isCollapsed ? (
-              <PanelRightOpen className="h-4 w-4" />
-            ) : (
-              <PanelRightClose className="h-4 w-4" />
-            )}
+            {isCollapsed ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
           </button>
         </div>
       </SidebarHeader>
+
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>תפריט ראשי</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               <TooltipProvider>
-                {orderedMain.map((item) => {
-                      const badge = getMenuItemBadge(item.path);
-                      const label = getMenuItemLabel(item.path, item.title);
-                      const hasAccess = canAccessMenuItem(badge);
-                      
-                      if (!hasAccess) {
-                        return (
-                          <SidebarMenuItem key={item.title}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="w-full">
-                                  <SidebarMenuButton 
-                                    disabled 
-                                    className="opacity-50 cursor-not-allowed"
-                                  >
-                                    <item.icon className="h-4 w-4" />
-                                    {!isCollapsed && (
-                                      <div className="flex items-center justify-between w-full">
-                                        <span>{label}</span>
-                                        {badge && (
-                                          <Badge 
-                                            variant={badge === 'premium' ? 'default' : 'secondary'}
-                                            className="text-[10px] px-1.5 py-0 h-5"
-                                          >
-                                            {badge === 'coming_soon' ? 'בקרוב' : 'פרימיום'}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    )}
-                                  </SidebarMenuButton>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="left">
-                                {badge === 'premium' ? 'דרוש שדרוג לגרסת פרימיום' : 'תכונה בפיתוח - תהיה זמינה בקרוב'}
-                              </TooltipContent>
-                            </Tooltip>
-                          </SidebarMenuItem>
-                        );
-                      }
-                      
-                      return (
-                        <SidebarMenuItem key={item.title}>
-                          <SidebarMenuButton asChild tooltip={label}>
-                            <NavLink
-                              to={buildPath(item.path)}
-                              end
-                              onClick={handleLinkClick}
-                              className={({ isActive }) =>
-                                isActive
-                                  ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                                  : ""
-                              }
-                            >
-                              <item.icon className="h-4 w-4" />
-                              {!isCollapsed && (
-                                <div className="flex items-center justify-between w-full">
-                                  <span>{label}</span>
-                                  {badge && (
-                                    <Badge 
-                                      variant={badge === 'premium' ? 'default' : 'secondary'}
-                                      className="text-[10px] px-1.5 py-0 h-5"
-                                    >
-                                      {badge === 'coming_soon' ? 'בקרוב' : 'פרימיום'}
-                                    </Badge>
-                                  )}
-                                </div>
-                              )}
-                            </NavLink>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      );
-                    })}
+                {parentItems.map(item => renderMenuItem(item))}
               </TooltipProvider>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        {orderedManagement.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <TooltipProvider>
-                  <Collapsible key="management" className="group/collapsible">
-                      <SidebarMenuItem>
-                        <CollapsibleTrigger asChild>
-                          <SidebarMenuButton tooltip="ניהול">
-                            <Settings className="h-4 w-4" />
-                            {!isCollapsed && <span>ניהול</span>}
-                            {!isCollapsed && (
-                              <ChevronDown className="mr-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
-                            )}
-                          </SidebarMenuButton>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                          <SidebarMenuSub>
-                             {orderedManagement.map((item) => {
-                               const badge = getMenuItemBadge(item.path);
-                               const label = getMenuItemLabel(item.path, item.title);
-                              const hasAccess = canAccessMenuItem(badge);
-                              
-                              if (!hasAccess) {
-                                return (
-                                  <SidebarMenuSubItem key={item.title}>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <span className="flex items-center gap-2 px-3 py-2 text-sm opacity-50 cursor-not-allowed w-full">
-                                          <item.icon className="h-4 w-4" />
-                                          <div className="flex items-center justify-between w-full">
-                                            <span>{label}</span>
-                                            {badge && (
-                                              <Badge 
-                                                variant={badge === 'premium' ? 'default' : 'secondary'}
-                                                className="text-[10px] px-1.5 py-0 h-5"
-                                              >
-                                                {badge === 'coming_soon' ? 'בקרוב' : 'פרימיום'}
-                                              </Badge>
-                                            )}
-                                          </div>
-                                        </span>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="left">
-                                        {badge === 'premium' ? 'דרוש שדרוג לגרסת פרימיום' : 'תכונה בפיתוח - תהיה זמינה בקרוב'}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </SidebarMenuSubItem>
-                                );
-                              }
-                              
-                              return (
-                                <SidebarMenuSubItem key={item.title}>
-                                  <SidebarMenuSubButton asChild>
-                                    <NavLink
-                                      to={buildPath(item.path)}
-                                      end
-                                      onClick={handleLinkClick}
-                                      className={({ isActive }) =>
-                                        isActive
-                                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                                          : ""
-                                      }
-                                    >
-                                      <item.icon className="h-4 w-4" />
-                                      <div className="flex items-center justify-between w-full">
-                                        <span>{label}</span>
-                                        {badge && (
-                                          <Badge 
-                                            variant={badge === 'premium' ? 'default' : 'secondary'}
-                                            className="text-[10px] px-1.5 py-0 h-5"
-                                          >
-                                            {badge === 'coming_soon' ? 'בקרוב' : 'פרימיום'}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </NavLink>
-                                  </SidebarMenuSubButton>
-                                </SidebarMenuSubItem>
-                              );
-                            })}
-                          </SidebarMenuSub>
-                        </CollapsibleContent>
-                      </SidebarMenuItem>
-                    </Collapsible>
-                  </TooltipProvider>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
-
-          {orderedSales.length > 0 && (
-            <SidebarGroup>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <TooltipProvider>
-                    <Collapsible key="sales" className="group/collapsible">
-                      <SidebarMenuItem>
-                        <CollapsibleTrigger asChild>
-                          <SidebarMenuButton tooltip="ניהול מכירות">
-                            <TrendingUp className="h-4 w-4" />
-                            {!isCollapsed && <span>ניהול מכירות</span>}
-                            {!isCollapsed && (
-                              <ChevronDown className="mr-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
-                            )}
-                          </SidebarMenuButton>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                          <SidebarMenuSub>
-                             {orderedSales.map((item) => {
-                               const badge = getMenuItemBadge(item.path);
-                               const label = getMenuItemLabel(item.path, item.title);
-                              const hasAccess = canAccessMenuItem(badge);
-                              
-                              if (!hasAccess) {
-                                return (
-                                  <SidebarMenuSubItem key={item.title}>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <span className="flex items-center gap-2 px-3 py-2 text-sm opacity-50 cursor-not-allowed w-full">
-                                          <item.icon className="h-4 w-4" />
-                                          <div className="flex items-center justify-between w-full">
-                                            <span>{label}</span>
-                                            {badge && (
-                                              <Badge 
-                                                variant={badge === 'premium' ? 'default' : 'secondary'}
-                                                className="text-[10px] px-1.5 py-0 h-5"
-                                              >
-                                                {badge === 'coming_soon' ? 'בקרוב' : 'פרימיום'}
-                                              </Badge>
-                                            )}
-                                          </div>
-                                        </span>
-                                      </TooltipTrigger>
-                                      <TooltipContent side="left">
-                                        {badge === 'premium' ? 'דרוש שדרוג לגרסת פרימיום' : 'תכונה בפיתוח - תהיה זמינה בקרוב'}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </SidebarMenuSubItem>
-                                );
-                              }
-                              
-                              return (
-                                <SidebarMenuSubItem key={item.title}>
-                                  <SidebarMenuSubButton asChild>
-                                    <NavLink
-                                      to={buildPath(item.path)}
-                                      onClick={handleLinkClick}
-                                      className={({ isActive }) =>
-                                        isActive
-                                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                                          : ""
-                                      }
-                                    >
-                                      <item.icon className="h-4 w-4" />
-                                      <div className="flex items-center justify-between w-full">
-                                        <span>{label}</span>
-                                        {badge && (
-                                          <Badge 
-                                            variant={badge === 'premium' ? 'default' : 'secondary'}
-                                            className="text-[10px] px-1.5 py-0 h-5"
-                                          >
-                                            {badge === 'coming_soon' ? 'בקרוב' : 'פרימיום'}
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </NavLink>
-                                  </SidebarMenuSubButton>
-                                </SidebarMenuSubItem>
-                              );
-                            })}
-                          </SidebarMenuSub>
-                        </CollapsibleContent>
-                      </SidebarMenuItem>
-                    </Collapsible>
-                  </TooltipProvider>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
       </SidebarContent>
     </Sidebar>
   );

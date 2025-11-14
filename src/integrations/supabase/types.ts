@@ -1060,6 +1060,8 @@ export type Database = {
       }
       menu_items: {
         Row: {
+          badge: string | null
+          category: string | null
           created_at: string
           custom_label: string | null
           icon: string | null
@@ -1067,12 +1069,15 @@ export type Database = {
           is_visible: boolean
           menu_key: string
           original_label: string
+          parent_menu_key: string | null
           route: string
           sort_order: number
           tenant_id: string
           updated_at: string
         }
         Insert: {
+          badge?: string | null
+          category?: string | null
           created_at?: string
           custom_label?: string | null
           icon?: string | null
@@ -1080,12 +1085,15 @@ export type Database = {
           is_visible?: boolean
           menu_key: string
           original_label: string
+          parent_menu_key?: string | null
           route: string
           sort_order?: number
           tenant_id: string
           updated_at?: string
         }
         Update: {
+          badge?: string | null
+          category?: string | null
           created_at?: string
           custom_label?: string | null
           icon?: string | null
@@ -1093,6 +1101,7 @@ export type Database = {
           is_visible?: boolean
           menu_key?: string
           original_label?: string
+          parent_menu_key?: string | null
           route?: string
           sort_order?: number
           tenant_id?: string
@@ -1590,6 +1599,50 @@ export type Database = {
           },
         ]
       }
+      tenant_terminology: {
+        Row: {
+          created_at: string
+          id: string
+          original_plural: string
+          original_singular: string
+          plural: string
+          singular: string
+          tenant_id: string
+          term_key: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          original_plural: string
+          original_singular: string
+          plural: string
+          singular: string
+          tenant_id: string
+          term_key: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          original_plural?: string
+          original_singular?: string
+          plural?: string
+          singular?: string
+          tenant_id?: string
+          term_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_terminology_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_users: {
         Row: {
           created_at: string
@@ -1629,8 +1682,10 @@ export type Database = {
           contact_name: string | null
           created_at: string
           id: string
+          is_premium: boolean | null
           name: string
           notes: string | null
+          org_type: Database["public"]["Enums"]["org_type"]
           parent_tenant_id: string | null
           settings: Json | null
           slug: string
@@ -1645,8 +1700,10 @@ export type Database = {
           contact_name?: string | null
           created_at?: string
           id?: string
+          is_premium?: boolean | null
           name: string
           notes?: string | null
+          org_type?: Database["public"]["Enums"]["org_type"]
           parent_tenant_id?: string | null
           settings?: Json | null
           slug: string
@@ -1661,8 +1718,10 @@ export type Database = {
           contact_name?: string | null
           created_at?: string
           id?: string
+          is_premium?: boolean | null
           name?: string
           notes?: string | null
+          org_type?: Database["public"]["Enums"]["org_type"]
           parent_tenant_id?: string | null
           settings?: Json | null
           slug?: string
@@ -1811,21 +1870,32 @@ export type Database = {
           created_at: string
           id: string
           role: Database["public"]["Enums"]["app_role"]
+          tenant_id: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
           role: Database["public"]["Enums"]["app_role"]
+          tenant_id?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
           role?: Database["public"]["Enums"]["app_role"]
+          tenant_id?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -1835,6 +1905,14 @@ export type Database = {
       assign_role_by_email: {
         Args: { _email: string; _role: Database["public"]["Enums"]["app_role"] }
         Returns: string
+      }
+      can_manage_user_permissions: {
+        Args: { target_user_id: string }
+        Returns: boolean
+      }
+      copy_custom_fields_to_tenant: {
+        Args: { _source_tenant_id: string; _target_tenant_id: string }
+        Returns: undefined
       }
       get_client_tenant_id: { Args: { _client_id: string }; Returns: string }
       get_effective_setting: {
@@ -1857,6 +1935,11 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      initialize_all_tenants_menu_items: { Args: never; Returns: undefined }
+      initialize_default_custom_fields: {
+        Args: { _tenant_id: string }
+        Returns: undefined
       }
       initialize_tenant_menu_items: {
         Args: { _tenant_id: string }
@@ -1935,6 +2018,7 @@ export type Database = {
         | "receiving_access"
         | "setup_and_content"
         | "campaign_live"
+      org_type: "root" | "organization" | "sub_organization"
       payment_method: "cash" | "card" | "wire" | "check"
       priority_level: "high" | "medium" | "low"
       supplier_type:
@@ -2129,6 +2213,7 @@ export const Constants = {
         "setup_and_content",
         "campaign_live",
       ],
+      org_type: ["root", "organization", "sub_organization"],
       payment_method: ["cash", "card", "wire", "check"],
       priority_level: ["high", "medium", "low"],
       supplier_type: [
