@@ -372,12 +372,18 @@ export function AppSidebar() {
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                       );
-                    });
-                  }
+                    })}
+              </TooltipProvider>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
 
-                if (groupId === 'management' && orderedManagement.length > 0) {
-                  return (
-                    <Collapsible key="management" className="group/collapsible">
+        {orderedManagement.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <TooltipProvider>
+                  <Collapsible key="management" className="group/collapsible">
                       <SidebarMenuItem>
                         <CollapsibleTrigger asChild>
                           <SidebarMenuButton tooltip="ניהול">
@@ -457,11 +463,17 @@ export function AppSidebar() {
                         </CollapsibleContent>
                       </SidebarMenuItem>
                     </Collapsible>
-                  );
-                }
+                  </TooltipProvider>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
 
-                if (groupId === 'sales' && visibleSalesItems.length > 0) {
-                  return (
+          {orderedSales.length > 0 && (
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <TooltipProvider>
                     <Collapsible key="sales" className="group/collapsible">
                       <SidebarMenuItem>
                         <CollapsibleTrigger asChild>
@@ -541,15 +553,11 @@ export function AppSidebar() {
                         </CollapsibleContent>
                       </SidebarMenuItem>
                     </Collapsible>
-                  );
-                }
-
-                return null;
-              })}
-              </TooltipProvider>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                  </TooltipProvider>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
       </SidebarContent>
     </Sidebar>
   );
