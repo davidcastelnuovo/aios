@@ -320,6 +320,13 @@ export default function Tenants() {
         <div className="border rounded-lg overflow-hidden bg-card" dir="rtl">
           <div className="overflow-x-auto">
             <Table className="table-fixed w-full">
+              <colgroup>
+                <col style={{ width: '350px' }} />
+                <col style={{ width: '200px' }} />
+                <col style={{ width: '120px' }} />
+                <col style={{ width: '220px' }} />
+                <col style={{ width: '180px' }} />
+              </colgroup>
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-right w-[350px]">שם הארגון</TableHead>
@@ -387,7 +394,7 @@ export default function Tenants() {
                           <Badge variant="outline" className="text-xs text-green-600 border-green-600">פעיל</Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-right w-[200px]">{org.contact_name && (
+                      <TableCell className="text-right w-[220px]">{org.contact_name && (
                           <div className="text-sm">
                             <div>{org.contact_name}</div>
                             {org.contact_email && (
