@@ -248,9 +248,9 @@ export function AppSidebar() {
         <Collapsible key={item.menu_key} defaultOpen className="group/collapsible">
           <SidebarMenuItem>
             <CollapsibleTrigger asChild>
-              <SidebarMenuButton tooltip={label}>
+              <SidebarMenuButton tooltip={label} dir="rtl">
+                {!isCollapsed && <span className="flex-1 text-right">{label}</span>}
                 <Icon className="h-4 w-4" />
-                {!isCollapsed && <span>{label}</span>}
                 {!isCollapsed && (
                   <ChevronDown className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
                 )}
@@ -297,9 +297,10 @@ export function AppSidebar() {
                               ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
                               : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                           }
+                          dir="rtl"
                         >
+                          <span className="flex-1 text-right">{childLabel}</span>
                           <ChildIcon className="h-4 w-4" />
-                          <span className="flex-1">{childLabel}</span>
                           {childBadge === 'premium' && (
                             <Badge variant="secondary" className="text-[10px] px-1 py-0">
                               Premium
@@ -331,10 +332,10 @@ export function AppSidebar() {
           className={isDisabled ? "opacity-50 cursor-not-allowed" : ""}
           tooltip={isCollapsed ? label : undefined}
         >
-          {isDisabled ? (
-            <div className="flex items-center gap-2 w-full">
-              <Icon className="h-4 w-4" />
-              {!isCollapsed && <span className="flex-1">{label}</span>}
+              {isDisabled ? (
+                <div className="flex items-center gap-2 w-full" dir="rtl">
+                  {!isCollapsed && <span className="flex-1 text-right">{label}</span>}
+                  <Icon className="h-4 w-4" />
               {!isCollapsed && badge === 'premium' && (
                 <Badge variant="secondary" className="text-[10px] px-1 py-0">
                   Premium
@@ -347,17 +348,18 @@ export function AppSidebar() {
               )}
             </div>
           ) : (
-            <NavLink
-              to={buildPath(item.route)}
-              onClick={handleLinkClick}
-              className={({ isActive }) =>
-                isActive
-                  ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              }
-            >
-              <Icon className="h-4 w-4" />
-              {!isCollapsed && <span className="flex-1">{label}</span>}
+                <NavLink
+                  to={buildPath(item.route)}
+                  onClick={handleLinkClick}
+                  className={({ isActive }) =>
+                    isActive
+                      ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  }
+                  dir="rtl"
+                >
+                  {!isCollapsed && <span className="flex-1 text-right">{label}</span>}
+                  <Icon className="h-4 w-4" />
               {!isCollapsed && badge === 'premium' && (
                 <Badge variant="secondary" className="text-[10px] px-1 py-0">
                   Premium
