@@ -24,12 +24,12 @@ export function useUserRole() {
       
       const { data, error } = await supabase
         .from("user_roles")
-        .select("role, tenant_id")
+        .select("role")
         .eq("user_id", session.user.id)
-        .or(`tenant_id.eq.${tenantId},tenant_id.is.null`); // Get roles for current tenant + global roles
+        .or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
 
       if (error) throw error;
-      return data.map((r) => r.role as UserRole);
+      return (data || []).map((r) => r.role as UserRole);
     },
     enabled: !!session?.user?.id && !!tenantId,
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes

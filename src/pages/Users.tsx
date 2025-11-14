@@ -221,7 +221,8 @@ export default function Users() {
 
       const { data: userRoles, error: rolesError } = await supabase
         .from("user_roles")
-        .select("user_id, role, tenant_id");
+        .select("user_id, role")
+        .or(`tenant_id.eq.${tenantId},tenant_id.is.null`);
 
       if (rolesError) throw rolesError;
 
@@ -236,10 +237,7 @@ export default function Users() {
         .select("sales_person_id, agency_id");
 
       return profiles.map((profile: any) => {
-        const userRoleRecords = userRoles.filter((r) => 
-          r.user_id === profile.id && 
-          (r.tenant_id === tenantId || r.tenant_id === null) // Only roles for current tenant or global
-        );
+        const userRoleRecords = (userRoles || []).filter((r) => r.user_id === profile.id);
         const roles = userRoleRecords.map(r => r.role as UserRole);
         
         // Get agencies for this user
