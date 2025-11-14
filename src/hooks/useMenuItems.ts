@@ -44,11 +44,26 @@ export function useMenuItems() {
     menuItemsMap.set(item.menu_key, item);
   });
 
+  // Get org_type and is_premium directly from DB (types not updated yet)
+  const { data: tenantData } = useQuery({
+    queryKey: ['tenant-premium-status', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return null;
+      const { data } = await supabase
+        .from('tenants')
+        .select('org_type, is_premium')
+        .eq('id', tenantId)
+        .single();
+      return data as any;
+    },
+    enabled: !!tenantId,
+  });
+
   return {
     menuItems: menuItems || [],
     menuItemsMap,
     isLoading,
-    orgType: tenant?.org_type,
-    isPremium: tenant?.is_premium,
+    orgType: tenantData?.org_type,
+    isPremium: tenantData?.is_premium,
   };
 }
