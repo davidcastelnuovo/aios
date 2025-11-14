@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface EditUserPermissionsDialogProps {
   open: boolean;
@@ -60,6 +61,36 @@ export function EditUserPermissionsDialog({
 }: EditUserPermissionsDialogProps) {
   const queryClient = useQueryClient();
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
+  const { tenantId } = useCurrentTenant();
+
+  // Check if user is owner in current tenant
+  const { data: isOwnerInTenant } = useQuery({
+    queryKey: ["user-is-owner", userId, tenantId],
+    queryFn: async () => {
+      if (!userId || !tenantId) return false;
+      
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "owner");
+
+      if (error) throw error;
+      
+      // Check if user is owner AND is part of current tenant
+      if (!data || data.length === 0) return false;
+      
+      const { data: tenantUser } = await supabase
+        .from("tenant_users")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      
+      return !!tenantUser;
+    },
+    enabled: open && !!userId && !!tenantId,
+  });
 
   // Fetch current user's permissions
   const { data: currentPermissions } = useQuery({
@@ -74,17 +105,24 @@ export function EditUserPermissionsDialog({
 
       const permissionsMap: Record<string, boolean> = {};
       
-      // Set all modules to true by default
-      [...MODULES, ...SPECIAL_PERMISSIONS].forEach(module => {
-        permissionsMap[module.id] = true;
-      });
-      
-      // Set sales modules to false by default
-      SALES_MODULES.forEach(module => {
-        permissionsMap[module.id] = false;
-      });
+      // If user is owner in current tenant, set all permissions to true by default
+      if (isOwnerInTenant) {
+        [...MODULES, ...SALES_MODULES, ...SPECIAL_PERMISSIONS].forEach(module => {
+          permissionsMap[module.id] = true;
+        });
+      } else {
+        // Set all modules to true by default
+        [...MODULES, ...SPECIAL_PERMISSIONS].forEach(module => {
+          permissionsMap[module.id] = true;
+        });
+        
+        // Set sales modules to false by default
+        SALES_MODULES.forEach(module => {
+          permissionsMap[module.id] = false;
+        });
+      }
 
-      // Override with actual values from database
+      // Override with actual values from database (only for current tenant)
       data?.forEach((perm) => {
         permissionsMap[perm.module] = perm.can_access;
       });
@@ -98,7 +136,7 @@ export function EditUserPermissionsDialog({
     if (currentPermissions) {
       setPermissions(currentPermissions);
     }
-  }, [currentPermissions]);
+  }, [currentPermissions, isOwnerInTenant]);
 
   const updatePermissionsMutation = useMutation({
     mutationFn: async (perms: Record<string, boolean>) => {
