@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Save, RotateCcw, GripVertical, ChevronDown } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -84,167 +85,91 @@ function SortableMenuItem({
   };
 
   return (
-    <>
-      {/* Desktop view - Table row */}
-      <tr ref={setNodeRef} style={style} className="hidden md:table-row group border-b hover:bg-muted/50">
-        <td className="p-2">
-          <div
-            {...attributes}
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded flex items-center gap-2"
-          >
-            <GripVertical className="h-5 w-5 text-muted-foreground" />
-            {isChild && <span className="text-muted-foreground mr-2">└─</span>}
-          </div>
-        </td>
-        <td className="p-2 font-medium">{item.original_label}</td>
-        <td className="p-2">
-          <Input
-            value={
-              editingItems[item.id] !== undefined
-                ? editingItems[item.id]
-                : item.custom_label || item.original_label
-            }
-            onChange={(e) => onLabelChange(item.id, e.target.value)}
-            className="max-w-xs"
-            placeholder={item.original_label}
-          />
-        </td>
-        {isRootOrg && (
-          <td className="p-2">
-            <Select
-              value={item.badge || 'none'}
-              onValueChange={(value) => onBadgeChange(item, value === 'none' ? null : value)}
-              disabled={updateMutation.isPending}
-            >
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">ללא</SelectItem>
-                <SelectItem value="coming_soon">בקרוב</SelectItem>
-                <SelectItem value="premium">פרימיום</SelectItem>
-              </SelectContent>
-            </Select>
-          </td>
-        )}
-      <td className="p-2">
-        <Switch
-          checked={item.is_visible}
-          onCheckedChange={() => onToggleVisibility(item)}
+    <TableRow ref={setNodeRef} style={style} className="group">
+      <TableCell className="w-12">
+        <div
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded flex items-center gap-2"
+        >
+          <GripVertical className="h-5 w-5 text-muted-foreground" />
+          {isChild && <span className="text-muted-foreground">└─</span>}
+        </div>
+      </TableCell>
+      <TableCell className="font-medium">{item.original_label}</TableCell>
+      <TableCell>
+        <Input
+          value={
+            editingItems[item.id] !== undefined
+              ? editingItems[item.id]
+              : item.custom_label || item.original_label
+          }
+          onChange={(e) => onLabelChange(item.id, e.target.value)}
+          className="max-w-xs"
+          placeholder={item.original_label}
         />
-      </td>
-      <td className="p-2">
+      </TableCell>
+      {isRootOrg && (
+        <TableCell>
+          <Select
+            value={item.badge || 'none'}
+            onValueChange={(value) => onBadgeChange(item, value === 'none' ? null : value)}
+            disabled={updateMutation.isPending}
+          >
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">ללא</SelectItem>
+              <SelectItem value="coming_soon">בקרוב</SelectItem>
+              <SelectItem value="premium">פרימיום</SelectItem>
+            </SelectContent>
+          </Select>
+        </TableCell>
+      )}
+      <TableCell>
         <div className="flex items-center gap-2">
-          {editingItems[item.id] !== undefined && (
-            <Button
-              size="sm"
-              onClick={() => onSaveLabel(item)}
-              disabled={updateMutation.isPending}
-            >
-              <Save className="h-4 w-4 ml-1" />
-              שמור
-            </Button>
-          )}
-          {item.custom_label && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onResetLabel(item)}
-              disabled={updateMutation.isPending}
-            >
-              <RotateCcw className="h-4 w-4 ml-1" />
-              אפס
-            </Button>
-          )}
+          <Switch
+            checked={item.is_visible}
+            onCheckedChange={() => onToggleVisibility(item)}
+            disabled={updateMutation.isPending}
+          />
+          <span className="text-sm text-muted-foreground">
+            {item.is_visible ? 'מוצג' : 'מוסתר'}
+          </span>
         </div>
-      </td>
-    </tr>
-
-    {/* Mobile view - Card inside a single table row */}
-    <tr className="md:hidden group border-b hover:bg-muted/50">
-      <td className="p-0" colSpan={6}>
-        <div className="p-3">
-          <div className="flex items-center justify-between gap-2">
-            <div
-              {...attributes}
-              {...listeners}
-              className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded flex items-center gap-2"
-            >
-              <GripVertical className="h-5 w-5 text-muted-foreground" />
-              {isChild && <span className="text-muted-foreground mr-2">└─</span>}
-            </div>
-            <Switch
-              checked={item.is_visible}
-              onCheckedChange={() => onToggleVisibility(item)}
-            />
-          </div>
-
-          <div className="mt-2 text-sm font-medium">{item.original_label}</div>
-
-          <div className="mt-2">
-            <Input
-              value={
-                editingItems[item.id] !== undefined
-                  ? editingItems[item.id]
-                  : item.custom_label || item.original_label
-              }
-              onChange={(e) => onLabelChange(item.id, e.target.value)}
-              placeholder={item.original_label}
-            />
-          </div>
-
-          <div className="mt-3">
-            <Select
-              value={item.badge || 'none'}
-              onValueChange={(value) => onBadgeChange(item, value === 'none' ? null : value)}
-              disabled={updateMutation.isPending}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">ללא</SelectItem>
-                <SelectItem value="coming_soon">בקרוב</SelectItem>
-                <SelectItem value="premium">פרימיום</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="mt-3 flex items-center gap-2">
-            {editingItems[item.id] !== undefined && (
-              <Button
-                size="sm"
-                onClick={() => onSaveLabel(item)}
-                disabled={updateMutation.isPending}
-              >
-                <Save className="h-4 w-4 ml-1" />
-                שמור
-              </Button>
-            )}
-            {item.custom_label && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onResetLabel(item)}
-                disabled={updateMutation.isPending}
-              >
-                <RotateCcw className="h-4 w-4 ml-1" />
-                אפס
-              </Button>
-            )}
-          </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onSaveLabel(item)}
+            disabled={
+              editingItems[item.id] === undefined || 
+              updateMutation.isPending
+            }
+          >
+            <Save className="h-4 w-4" />
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onResetLabel(item)}
+            disabled={!item.custom_label || updateMutation.isPending}
+          >
+            <RotateCcw className="h-4 w-4" />
+          </Button>
         </div>
-      </td>
-    </tr>
-    </>
+      </TableCell>
+    </TableRow>
   );
 }
 
 interface MenuGroupProps {
-  id: string;
-  title: string;
+  category: string;
   items: MenuItem[];
+  children: MenuItem[];
   editingItems: Record<string, string>;
   updateMutation: any;
   onLabelChange: (id: string, value: string) => void;
@@ -252,16 +177,12 @@ interface MenuGroupProps {
   onResetLabel: (item: MenuItem) => void;
   onToggleVisibility: (item: MenuItem) => void;
   onBadgeChange: (item: MenuItem, badge: string | null) => void;
-  onItemDragEnd: (event: DragEndEvent) => void;
-  itemSensors: any;
-  children?: MenuItem[];
-  defaultOpen?: boolean;
+  onDragEnd: (items: MenuItem[], event: DragEndEvent) => void;
   isRootOrg?: boolean;
 }
 
 function MenuGroup({
-  id,
-  title,
+  category,
   items,
   children,
   editingItems,
@@ -271,119 +192,142 @@ function MenuGroup({
   onResetLabel,
   onToggleVisibility,
   onBadgeChange,
-  onItemDragEnd,
-  itemSensors,
-  defaultOpen = false,
+  onDragEnd,
   isRootOrg = false,
 }: MenuGroupProps) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-  
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
+  const [isOpen, setIsOpen] = useState(true);
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.8 : 1,
+  const categoryLabels: Record<string, string> = {
+    main: 'תפריט ראשי',
+    management: 'ניהול',
+    sales: 'מכירות',
+  };
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 200,
+        tolerance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Combine items and children for this group
+  const allGroupItems = [...items, ...children];
+
+  const handleGroupDragEnd = (event: DragEndEvent) => {
+    onDragEnd(allGroupItems, event);
   };
 
   return (
-    <Card ref={setNodeRef} style={style} className="mb-4">
-      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-        <CardHeader>
-          <CollapsibleTrigger className="flex items-center justify-between w-full cursor-pointer">
-            <div className="flex items-center gap-3">
-              <div
-                {...attributes}
-                {...listeners}
-                className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <GripVertical className="h-5 w-5 text-muted-foreground" />
-              </div>
-              <CardTitle className="text-lg">{title}</CardTitle>
-            </div>
-            <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-          </CollapsibleTrigger>
-        </CardHeader>
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="mb-6">
+      <Card>
+        <CollapsibleTrigger asChild>
+          <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+            <CardTitle className="flex items-center gap-2">
+              <ChevronDown className={`h-5 w-5 transition-transform ${isOpen ? 'rotate-0' : '-rotate-90'}`} />
+              {categoryLabels[category] || category}
+              <span className="text-sm text-muted-foreground font-normal">
+                ({allGroupItems.length})
+              </span>
+            </CardTitle>
+          </CardHeader>
+        </CollapsibleTrigger>
         <CollapsibleContent>
-          <CardContent className="p-0">
+          <CardContent>
             <DndContext
-              sensors={itemSensors}
+              sensors={sensors}
               collisionDetection={closestCenter}
-              onDragEnd={onItemDragEnd}
+              onDragEnd={handleGroupDragEnd}
             >
               <SortableContext
-                items={items.map((item) => item.id)}
+                items={allGroupItems.map(item => item.id)}
                 strategy={verticalListSortingStrategy}
               >
-                <table className="w-full">
-                  <tbody>
-                    {items.map((item) => (
-                      <SortableMenuItem
-                        key={item.id}
-                        item={item}
-                        editingItems={editingItems}
-                        updateMutation={updateMutation}
-                        onLabelChange={onLabelChange}
-                        onSaveLabel={onSaveLabel}
-                        onResetLabel={onResetLabel}
-                        onToggleVisibility={onToggleVisibility}
-                        onBadgeChange={onBadgeChange}
-                        isRootOrg={isRootOrg}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </SortableContext>
-              {children && children.length > 0 && (
-                <div className="mr-8 border-r-2 border-muted">
-                  <SortableContext
-                    items={children.map((item) => item.id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <table className="w-full">
-                      <tbody>
-                        {children.map((child) => (
-                          <SortableMenuItem
-                            key={child.id}
-                            item={child}
-                            editingItems={editingItems}
-                            updateMutation={updateMutation}
-                            onLabelChange={onLabelChange}
-                            onSaveLabel={onSaveLabel}
-                            onResetLabel={onResetLabel}
-                            onToggleVisibility={onToggleVisibility}
-                            onBadgeChange={onBadgeChange}
-                            isChild
-                            isRootOrg={isRootOrg}
-                          />
-                        ))}
-                      </tbody>
-                    </table>
-                  </SortableContext>
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">סדר</TableHead>
+                        <TableHead>שם מקורי</TableHead>
+                        <TableHead>שם מותאם</TableHead>
+                        {isRootOrg && <TableHead>תג</TableHead>}
+                        <TableHead>תצוגה</TableHead>
+                        <TableHead>פעולות</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {items.map((item) => (
+                        <SortableMenuItem
+                          key={item.id}
+                          item={item}
+                          editingItems={editingItems}
+                          updateMutation={updateMutation}
+                          onLabelChange={onLabelChange}
+                          onSaveLabel={onSaveLabel}
+                          onResetLabel={onResetLabel}
+                          onToggleVisibility={onToggleVisibility}
+                          onBadgeChange={onBadgeChange}
+                          isRootOrg={isRootOrg}
+                        />
+                      ))}
+                      {children.map((child) => (
+                        <SortableMenuItem
+                          key={child.id}
+                          item={child}
+                          editingItems={editingItems}
+                          updateMutation={updateMutation}
+                          onLabelChange={onLabelChange}
+                          onSaveLabel={onSaveLabel}
+                          onResetLabel={onResetLabel}
+                          onToggleVisibility={onToggleVisibility}
+                          onBadgeChange={onBadgeChange}
+                          isChild
+                          isRootOrg={isRootOrg}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
-              )}
+              </SortableContext>
             </DndContext>
           </CardContent>
         </CollapsibleContent>
-      </Collapsible>
-    </Card>
+      </Card>
+    </Collapsible>
   );
 }
 
 export default function MenuManagement() {
-  const { tenantId, tenant } = useCurrentTenant();
+  const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
-  const isRootOrg = tenant?.org_type === 'root';
   const [editingItems, setEditingItems] = useState<Record<string, string>>({});
   const [groupOrder, setGroupOrder] = useState<string[]>(['main', 'management', 'sales']);
+
+  // Get org_type directly from DB (types not updated yet)
+  const { data: tenantData } = useQuery({
+    queryKey: ['tenant-org-type', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return null;
+      const { data } = await supabase
+        .from('tenants')
+        .select('org_type, is_premium')
+        .eq('id', tenantId)
+        .single();
+      return data as any;
+    },
+    enabled: !!tenantId,
+  });
+
+  const isRootOrg = tenantData?.org_type === 'root_organization';
 
   const groupSensors = useSensors(
     useSensor(PointerSensor, {
@@ -402,24 +346,7 @@ export default function MenuManagement() {
     })
   );
 
-  const itemSensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: {
-        delay: 200,
-        tolerance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  // Load group order using RPC (bypasses RLS via SECURITY DEFINER)
+  // Load group order
   const { data: groupOrderSetting } = useQuery({
     queryKey: ['menu-group-order', tenantId],
     queryFn: async () => {
@@ -432,12 +359,11 @@ export default function MenuManagement() {
         console.error('Error fetching group order:', error);
         return null;
       }
-      return data; // jsonb value (e.g., ["main","management","sales"]) or null
+      return data;
     },
     enabled: !!tenantId,
   });
 
-  // Update groupOrder state when data is loaded
   useEffect(() => {
     if (Array.isArray(groupOrderSetting)) {
       setGroupOrder(groupOrderSetting as string[]);
@@ -525,178 +451,113 @@ export default function MenuManagement() {
     });
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleGroupDragEnd = (groupItems: MenuItem[], event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (!over || active.id === over.id || !menuItems) return;
+    if (!over || active.id === over.id) return;
 
-    const oldIndex = menuItems.findIndex((item) => item.id === active.id);
-    const newIndex = menuItems.findIndex((item) => item.id === over.id);
+    const oldIndex = groupItems.findIndex(item => item.id === active.id);
+    const newIndex = groupItems.findIndex(item => item.id === over.id);
 
-    const newMenuItems = arrayMove(menuItems, oldIndex, newIndex);
+    if (oldIndex === -1 || newIndex === -1) return;
 
-    // Update sort_order for all affected items
-    newMenuItems.forEach((item, index) => {
-      if (item.sort_order !== index + 1) {
-        updateMutation.mutate({
-          id: item.id,
-          sort_order: index + 1,
-        });
-      }
+    const reordered = arrayMove(groupItems, oldIndex, newIndex);
+
+    // Update sort_order for all items in this group
+    const updates = reordered.map((item, index) => ({
+      id: item.id,
+      sort_order: index,
+    }));
+
+    // Update all items in parallel
+    Promise.all(
+      updates.map(update =>
+        supabase
+          .from('menu_items')
+          .update({ sort_order: update.sort_order })
+          .eq('id', update.id)
+      )
+    ).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['menu-items', tenantId] });
+      toast.success('סדר הפריטים עודכן');
+    }).catch((error) => {
+      toast.error('שגיאה בעדכון הסדר: ' + error.message);
     });
+  };
+
+  // Group ordering disabled until RPC function is created
+  const handleGroupOrderDragEnd = (event: DragEndEvent) => {
+    // Disabled for now
   };
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p>טוען...</p>
+      <div className="p-8">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-muted rounded w-1/4"></div>
+          <div className="h-64 bg-muted rounded"></div>
+        </div>
       </div>
     );
   }
 
-  // Group menu items by category
-  const mainItems = menuItems?.filter(item => item.category === 'main' && !item.parent_menu_key) || [];
-  const managementParent = menuItems?.find(item => item.menu_key === 'management');
-  const managementItems = menuItems?.filter(item => item.parent_menu_key === 'management') || [];
-  const salesParent = menuItems?.find(item => item.menu_key === 'sales');
-  const salesItems = menuItems?.filter(item => item.parent_menu_key === 'sales') || [];
+  if (!menuItems) return null;
 
-  const handleGroupDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
+  // Group menu items
+  const mainItems = menuItems.filter(item => !item.category && !item.parent_menu_key);
+  const managementItems = menuItems.filter(item => item.category === 'management' && !item.parent_menu_key);
+  const salesItems = menuItems.filter(item => item.category === 'sales' && !item.parent_menu_key);
 
-    if (!over || active.id === over.id || !tenantId) return;
+  const mainChildren = menuItems.filter(item => !item.category && item.parent_menu_key);
+  const managementChildren = menuItems.filter(item => item.category === 'management' && item.parent_menu_key);
+  const salesChildren = menuItems.filter(item => item.category === 'sales' && item.parent_menu_key);
 
-    const oldIndex = groupOrder.indexOf(active.id as string);
-    const newIndex = groupOrder.indexOf(over.id as string);
-    const newOrder = arrayMove(groupOrder, oldIndex, newIndex);
-    
-    setGroupOrder(newOrder);
-
-    // Save to database
-    try {
-      const { data: existingSetting } = await supabase
-        .from('tenant_settings')
-        .select('id')
-        .eq('tenant_id', tenantId)
-        .eq('setting_key', 'menu_group_order')
-        .maybeSingle();
-
-      if (existingSetting) {
-        const { error: updateError } = await supabase
-          .from('tenant_settings')
-          .update({ 
-            setting_value: newOrder,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', existingSetting.id);
-        if (updateError) throw updateError;
-      } else {
-        const { error: insertError } = await supabase
-          .from('tenant_settings')
-          .insert({
-            tenant_id: tenantId,
-            setting_key: 'menu_group_order',
-            setting_value: newOrder
-          });
-        if (insertError) throw insertError;
-      }
-
-      queryClient.invalidateQueries({ queryKey: ['menu-group-order', tenantId] });
-      toast.success('סדר הקבוצות נשמר בהצלחה');
-    } catch (error) {
-      console.error('Error saving group order:', error);
-      toast.error('שגיאה בשמירת סדר הקבוצות');
-      // Revert on error
-      setGroupOrder(groupOrder);
+  const groups = groupOrder.map(category => {
+    if (category === 'main') {
+      return { category, items: mainItems, children: mainChildren };
+    } else if (category === 'management') {
+      return { category, items: managementItems, children: managementChildren };
+    } else if (category === 'sales') {
+      return { category, items: salesItems, children: salesChildren };
     }
-  };
-
-  const groups = [
-    {
-      id: 'main',
-      title: 'תפריט ראשי',
-      items: mainItems,
-      children: undefined,
-    },
-    managementParent && {
-      id: 'management',
-      title: managementParent.custom_label || managementParent.original_label,
-      items: [managementParent],
-      children: managementItems,
-    },
-    salesParent && {
-      id: 'sales',
-      title: salesParent.custom_label || salesParent.original_label,
-      items: [salesParent],
-      children: salesItems,
-    },
-  ].filter(Boolean) as Array<{
-    id: string;
-    title: string;
-    items: MenuItem[];
-    children?: MenuItem[];
-  }>;
-
-  const orderedGroups = groupOrder
-    .map(id => groups.find(g => g.id === id))
-    .filter(Boolean) as typeof groups;
+    return null;
+  }).filter(Boolean);
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="p-8 space-y-6" dir="rtl">
       <div>
-        <h1 className="text-3xl font-bold">ניהול תפריטים</h1>
-        <p className="text-muted-foreground mt-2">
-          גרור קבוצות כדי לשנות את סדרן, גרור פריטים כדי לשנות את הסדר בתוך כל קבוצה, ערוך שמות והגדרות.
+        <h1 className="text-3xl font-bold mb-2">ניהול תפריט</h1>
+        <p className="text-muted-foreground">
+          התאם אישית את תפריט הניווט - ערוך שמות, שנה סדר וקבע נראות
         </p>
-      </div>
-
-      <div className="mb-4">
-        <Card>
-          <CardContent className="p-4">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="p-2 text-right w-24">גרירה</th>
-                  <th className="p-2 text-right">שם מקורי</th>
-                  <th className="p-2 text-right">שם מותאם</th>
-                  {isRootOrg && <th className="p-2 text-right">בדג'</th>}
-                  <th className="p-2 text-right">נראה</th>
-                  <th className="p-2 text-right">פעולות</th>
-                </tr>
-              </thead>
-            </table>
-          </CardContent>
-        </Card>
       </div>
 
       <DndContext
         sensors={groupSensors}
         collisionDetection={closestCenter}
-        onDragEnd={handleGroupDragEnd}
+        onDragEnd={handleGroupOrderDragEnd}
       >
         <SortableContext
           items={groupOrder}
           strategy={verticalListSortingStrategy}
         >
-          {orderedGroups.map((group) => (
-            <MenuGroup
-              key={group.id}
-              id={group.id}
-              title={group.title}
-              items={group.items}
-              children={group.children}
-              editingItems={editingItems}
-              updateMutation={updateMutation}
-              onLabelChange={handleLabelChange}
-              onSaveLabel={handleSaveLabel}
-              onResetLabel={handleResetLabel}
-              onToggleVisibility={handleToggleVisibility}
-              onBadgeChange={handleBadgeChange}
-              onItemDragEnd={handleDragEnd}
-              itemSensors={itemSensors}
-              defaultOpen={true}
-              isRootOrg={isRootOrg}
-            />
+          {groups.map((group) => group && (
+            <div key={group.category}>
+              <MenuGroup
+                category={group.category}
+                items={group.items}
+                children={group.children}
+                editingItems={editingItems}
+                updateMutation={updateMutation}
+                onLabelChange={handleLabelChange}
+                onSaveLabel={handleSaveLabel}
+                onResetLabel={handleResetLabel}
+                onToggleVisibility={handleToggleVisibility}
+                onBadgeChange={handleBadgeChange}
+                onDragEnd={handleGroupDragEnd}
+                isRootOrg={isRootOrg}
+              />
+            </div>
           ))}
         </SortableContext>
       </DndContext>
