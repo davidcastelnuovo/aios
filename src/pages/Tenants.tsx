@@ -317,27 +317,20 @@ export default function Tenants() {
           <p>לא נמצאו ארגונים</p>
         </div>
       ) : (
-        <div className="border rounded-lg overflow-hidden bg-card" dir="rtl">
+        <Card>
           <div className="overflow-x-auto">
-            <Table className="table-fixed w-full">
-              <colgroup>
-                <col style={{ width: '350px' }} />
-                <col style={{ width: '200px' }} />
-                <col style={{ width: '120px' }} />
-                <col style={{ width: '220px' }} />
-                <col style={{ width: '180px' }} />
-              </colgroup>
+            <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-right w-[350px]">שם הארגון</TableHead>
-                  <TableHead className="text-right w-[200px]">סוג</TableHead>
-                  <TableHead className="text-right w-[120px]">סטטוס</TableHead>
-                  <TableHead className="text-right w-[220px]">איש קשר</TableHead>
-                  <TableHead className="text-right w-[180px]">פעולות</TableHead>
+                  <TableHead className="text-right">שם הארגון</TableHead>
+                  <TableHead className="text-right">סוג</TableHead>
+                  <TableHead className="text-right">סטטוס</TableHead>
+                  <TableHead className="text-right">איש קשר</TableHead>
+                  <TableHead className="text-right">פעולות</TableHead>
                 </TableRow>
               </TableHeader>
-            <TableBody>
-              {organizations.map((org: any) => {
+              <TableBody>
+                {organizations.map((org: any) => {
                 const isCurrentOrg = currentTenantId === org.id;
                 const orgType = org.org_type || (org.parent_tenant_id ? 'sub_organization' : 'organization');
                 const hasSubs = subOrganizations[org.id]?.length > 0;
@@ -349,7 +342,7 @@ export default function Tenants() {
                       className={`${isCurrentOrg ? 'bg-primary/5 border-l-4 border-l-primary' : ''} hover:bg-muted/50 cursor-pointer`}
                       onClick={() => handleTenantClick(org.id)}
                     >
-                      <TableCell className="text-right w-[350px]">
+                      <TableCell className="text-right">
                         <div className="flex items-center gap-2">
                           {hasSubs && (
                             <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -363,18 +356,18 @@ export default function Tenants() {
                             </CollapsibleTrigger>
                           )}
                           <Building2 className={`h-4 w-4 flex-shrink-0 ${isCurrentOrg ? 'text-primary' : ''}`} />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium truncate">{org.name}</div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-medium">{org.name}</span>
                             {org.subdomain && (
-                              <div className="text-xs text-muted-foreground truncate">
+                              <span className="text-xs text-muted-foreground">
                                 {org.subdomain}.lovableproject.com
-                              </div>
+                              </span>
                             )}
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell className="text-right w-[200px]">
-                        <div className="flex items-center gap-1">
+                      <TableCell className="text-right">
+                        <div className="flex items-center gap-1 flex-wrap">
                           <Badge 
                             variant={orgType === 'root' ? 'default' : 'secondary'}
                             className="text-xs"
@@ -388,13 +381,15 @@ export default function Tenants() {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-right w-[120px]">{org.status && org.status !== "active" ? (
+                      <TableCell className="text-right">
+                        {org.status && org.status !== "active" ? (
                           <Badge variant="secondary" className="text-xs">לא פעיל</Badge>
                         ) : (
                           <Badge variant="outline" className="text-xs text-green-600 border-green-600">פעיל</Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-right w-[220px]">{org.contact_name && (
+                      <TableCell className="text-right">
+                        {org.contact_name && (
                           <div className="text-sm">
                             <div>{org.contact_name}</div>
                             {org.contact_email && (
@@ -403,8 +398,8 @@ export default function Tenants() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="text-right w-[180px]">
-                        <div className="flex items-center gap-1">
+                      <TableCell className="text-right">
+                        <div className="flex items-center gap-1 flex-wrap">
                           {canManageTenants && orgType !== 'sub_organization' && (
                             <Button
                               size="sm"
@@ -414,6 +409,7 @@ export default function Tenants() {
                                 e.stopPropagation();
                                 setSubTenantParentId(org.id);
                               }}
+                              title="הוסף תת-ארגון"
                             >
                               <Plus className="h-3 w-3" />
                             </Button>
@@ -431,6 +427,7 @@ export default function Tenants() {
                                 });
                                 setAgenciesDialogOpen(true);
                               }}
+                              title="שיתוף סוכנויות"
                             >
                               <LinkIcon className="h-3 w-3" />
                             </Button>
@@ -450,6 +447,7 @@ export default function Tenants() {
                                   });
                                   setConvertDialogOpen(true);
                                 }}
+                                title="המר סוג ארגון"
                               >
                                 <ArrowRightLeft className="h-3 w-3" />
                               </Button>
@@ -465,6 +463,7 @@ export default function Tenants() {
                                   });
                                   setDeleteDialogOpen(true);
                                 }}
+                                title="מחק ארגון"
                               >
                                 <Trash2 className="h-3 w-3" />
                               </Button>
@@ -485,41 +484,41 @@ export default function Tenants() {
                                 className={`${isCurrentSub ? 'bg-primary/5 border-l-4 border-l-primary' : ''} hover:bg-muted/50 cursor-pointer bg-muted/20`}
                                 onClick={() => handleTenantClick(sub.id)}
                               >
-                                <TableCell className="text-right w-[350px]">
+                                <TableCell className="text-right">
                                   <div className="flex items-center gap-2 pr-12">
                                     <Building2 className={`h-4 w-4 flex-shrink-0 ${isCurrentSub ? 'text-primary' : 'text-muted-foreground'}`} />
-                                    <div className="flex-1 min-w-0">
-                                      <div className="font-medium text-sm truncate">{sub.name}</div>
+                                    <div className="flex flex-col min-w-0">
+                                      <span className="font-medium text-sm">{sub.name}</span>
                                       {sub.subdomain && (
-                                        <div className="text-xs text-muted-foreground truncate">
+                                        <span className="text-xs text-muted-foreground">
                                           {sub.subdomain}.lovableproject.com
-                                        </div>
+                                        </span>
                                       )}
                                     </div>
                                   </div>
                                 </TableCell>
-                                <TableCell className="text-right w-[200px]">
+                                <TableCell className="text-right">
                                   <Badge variant="outline" className="text-xs">תת-ארגון</Badge>
                                 </TableCell>
-                                <TableCell className="text-right w-[120px]">
+                                <TableCell className="text-right">
                                   {sub.status && sub.status !== "active" ? (
                                     <Badge variant="secondary" className="text-xs">לא פעיל</Badge>
                                   ) : (
                                     <Badge variant="outline" className="text-xs text-green-600 border-green-600">פעיל</Badge>
                                   )}
                                 </TableCell>
-                                <TableCell className="text-right w-[220px]">
+                                <TableCell className="text-right">
                                   {sub.contact_name && (
                                     <div className="text-sm">
-                                      <div className="truncate">{sub.contact_name}</div>
+                                      <div>{sub.contact_name}</div>
                                       {sub.contact_email && (
-                                        <div className="text-xs text-muted-foreground truncate">{sub.contact_email}</div>
+                                        <div className="text-xs text-muted-foreground">{sub.contact_email}</div>
                                       )}
                                     </div>
                                   )}
                                 </TableCell>
-                                <TableCell className="text-right w-[180px]">
-                                  <div className="flex items-center gap-1">
+                                <TableCell className="text-right">
+                                  <div className="flex items-center gap-1 flex-wrap">
                                     {canManageTenants && sub.id !== currentTenantId && (
                                       <Button
                                         size="sm"
@@ -533,6 +532,7 @@ export default function Tenants() {
                                           });
                                           setAgenciesDialogOpen(true);
                                         }}
+                                        title="שיתוף סוכנויות"
                                       >
                                         <LinkIcon className="h-3 w-3" />
                                       </Button>
@@ -552,6 +552,7 @@ export default function Tenants() {
                                             });
                                             setConvertDialogOpen(true);
                                           }}
+                                          title="המר סוג ארגון"
                                         >
                                           <ArrowRightLeft className="h-3 w-3" />
                                         </Button>
@@ -567,6 +568,7 @@ export default function Tenants() {
                                             });
                                             setDeleteDialogOpen(true);
                                           }}
+                                          title="מחק ארגון"
                                         >
                                           <Trash2 className="h-3 w-3" />
                                         </Button>
@@ -586,7 +588,7 @@ export default function Tenants() {
             </TableBody>
           </Table>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Dialog for creating sub-tenant */}
