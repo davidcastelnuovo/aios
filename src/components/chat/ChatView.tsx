@@ -324,25 +324,29 @@ export default function ChatView({ clientId }: ChatViewProps) {
             </div>
             
             {/* Template Variables Form */}
-            {selectedTemplateData && Array.isArray(selectedTemplateData.template_variables) && selectedTemplateData.template_variables.length > 0 && (
+            {selectedTemplateData && (
               <div className="space-y-2 pt-2 border-t">
-                <Label className="text-xs text-muted-foreground">משתנים:</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(selectedTemplateData.template_variables as string[]).map((varName: string) => (
-                    <div key={varName}>
-                      <Label className="text-xs">{varName}</Label>
-                      <Input
-                        className="h-8"
-                        value={templateVariables[varName] || ""}
-                        onChange={(e) => setTemplateVariables({
-                          ...templateVariables,
-                          [varName]: e.target.value
-                        })}
-                        placeholder={`הזן ${varName}`}
-                      />
+                {Array.isArray(selectedTemplateData.template_variables) && selectedTemplateData.template_variables.length > 0 && (
+                  <>
+                    <Label className="text-xs text-muted-foreground">משתנים:</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(selectedTemplateData.template_variables as string[]).map((varName: string) => (
+                        <div key={varName}>
+                          <Label className="text-xs">{varName}</Label>
+                          <Input
+                            className="h-8"
+                            value={templateVariables[varName] || ""}
+                            onChange={(e) => setTemplateVariables({
+                              ...templateVariables,
+                              [varName]: e.target.value
+                            })}
+                            placeholder={`הזן ${varName}`}
+                          />
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
                 <Button 
                   size="sm" 
                   className="w-full"
