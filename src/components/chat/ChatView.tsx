@@ -293,12 +293,12 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
         <div className="p-3 border-b bg-muted/30">
           <Label className="text-xs">טמפלייט</Label>
           <div className="flex gap-2 mt-1">
-            <Select value={selectedTemplate || ''} onValueChange={(value) => { setSelectedTemplate(value || null); setTemplateVariables({}); }}>
+            <Select value={selectedTemplate || 'none'} onValueChange={(value) => { setSelectedTemplate(value === 'none' ? null : value); setTemplateVariables({}); }}>
               <SelectTrigger className="h-8 text-sm flex-1">
                 <SelectValue placeholder="בחר טמפלייט (אופציונלי)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">ללא טמפלייט</SelectItem>
+                <SelectItem value="none">ללא טמפלייט</SelectItem>
                 {templates.map((template) => (
                   <SelectItem key={template.id} value={template.id}>{template.display_name}</SelectItem>
                 ))}
