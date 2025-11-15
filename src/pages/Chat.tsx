@@ -27,7 +27,25 @@ export default function Chat() {
     queryFn: async () => {
       if (!tenantId) return [];
 
-      // Build query based on user's accessible agencies
+      // Get all accessible agency IDs (owned + shared)
+      const { data: ownedAgencies } = await supabase
+        .from('agencies')
+        .select('id')
+        .eq('tenant_id', tenantId);
+
+      const { data: sharedAgencies } = await supabase
+        .from('agency_tenant_access')
+        .select('agency_id')
+        .eq('accessing_tenant_id', tenantId);
+
+      const allAgencyIds = [
+        ...(ownedAgencies || []).map(a => a.id),
+        ...(sharedAgencies || []).map(a => a.agency_id)
+      ];
+
+      if (allAgencyIds.length === 0) return [];
+
+      // Build query for clients with ManyChat
       let query = supabase
         .from('clients')
         .select(`
@@ -40,19 +58,8 @@ export default function Chat() {
           manychat_subscriber_id
         `)
         .not('manychat_subscriber_id', 'is', null)
+        .in('agency_id', allAgencyIds)
         .order('name');
-
-      // Filter by accessible agencies
-      if (userAgencyIds === null) {
-        // Owner - show all agencies in tenant
-        query = query.eq('tenant_id', tenantId);
-      } else if (userAgencyIds && userAgencyIds.length > 0) {
-        // Specific agencies
-        query = query.in('agency_id', userAgencyIds);
-      } else {
-        // No access
-        return [];
-      }
 
       if (searchTerm) {
         query = query.ilike('name', `%${searchTerm}%`);
