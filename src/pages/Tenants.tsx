@@ -52,11 +52,7 @@ export default function Tenants() {
     const subs: Record<string, any[]> = {};
 
     (tenants || []).forEach((tenant: any) => {
-      if (tenant.org_type === "root") {
-        return;
-      }
-
-      if (tenant.org_type === "organization") {
+      if (tenant.org_type === "organization" || tenant.org_type === "root") {
         orgs.push(tenant);
       } else if (tenant.org_type === "sub_organization" && tenant.parent_tenant_id) {
         if (!subs[tenant.parent_tenant_id]) {
