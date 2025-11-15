@@ -22,7 +22,6 @@ serve(async (req) => {
       }
     );
 
-    // Verify user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -33,11 +32,11 @@ serve(async (req) => {
 
     const url = new URL(req.url);
     const pathParts = url.pathname.split('/').filter(Boolean);
-    const tableId = pathParts[pathParts.length - 1];
+    const lastPart = pathParts[pathParts.length - 1];
+    const tableId = lastPart !== 'crm-tables' ? lastPart : null;
 
     switch (req.method) {
       case 'GET': {
-        // List all tables for current tenant
         const { data: tables, error } = await supabase
           .from('crm_tables')
           .select('*')
@@ -45,7 +44,9 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        return new Response(JSON.stringify({ tables }), {
+        console.log(`✅ Fetched ${tables?.length || 0} tables`);
+
+        return new Response(JSON.stringify({ tables: tables || [] }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -61,7 +62,6 @@ serve(async (req) => {
           });
         }
 
-        // Get user's tenant_id
         const { data: tenantUser } = await supabase
           .from('tenant_users')
           .select('tenant_id')
@@ -98,7 +98,7 @@ serve(async (req) => {
       }
 
       case 'PATCH': {
-        if (!tableId || tableId === 'crm-tables') {
+        if (!tableId) {
           return new Response(JSON.stringify({ error: 'Table ID required' }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -131,7 +131,7 @@ serve(async (req) => {
       }
 
       case 'DELETE': {
-        if (!tableId || tableId === 'crm-tables') {
+        if (!tableId) {
           return new Response(JSON.stringify({ error: 'Table ID required' }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
