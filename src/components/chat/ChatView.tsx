@@ -4,7 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Building2, Phone, Mail, AlertCircle, Edit, Send } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Building2, Phone, Mail, AlertCircle, Edit, Send, MessageSquare } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import ChatMessageList from "./ChatMessageList";
 import ChatInput from "./ChatInput";
@@ -18,6 +20,8 @@ export default function ChatView({ clientId }: ChatViewProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState(false);
   const [subscriberId, setSubscriberId] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
 
   // Fetch client details
   const { data: client } = useQuery({
@@ -31,6 +35,7 @@ export default function ChatView({ clientId }: ChatViewProps) {
           phone,
           email,
           agency_id,
+          tenant_id,
           manychat_subscriber_id,
           agencies (name)
         `)
@@ -40,6 +45,24 @@ export default function ChatView({ clientId }: ChatViewProps) {
       if (error) throw error;
       return data;
     },
+  });
+
+  // Fetch templates
+  const { data: templates } = useQuery({
+    queryKey: ['manychat-templates', client?.tenant_id],
+    queryFn: async () => {
+      if (!client?.tenant_id) return [];
+      const { data, error } = await supabase
+        .from('manychat_templates')
+        .select('*')
+        .eq('tenant_id', client.tenant_id)
+        .eq('is_active', true)
+        .order('display_name');
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!client?.tenant_id,
   });
 
   // Mark messages as read mutation
@@ -104,12 +127,13 @@ export default function ChatView({ clientId }: ChatViewProps) {
 
   // Send message mutation
   const sendMessageMutation = useMutation({
-    mutationFn: async (message: string) => {
+    mutationFn: async ({ message, templateId, templateVariables }: { 
+      message?: string; 
+      templateId?: string; 
+      templateVariables?: Record<string, string> 
+    }) => {
       const { data, error } = await supabase.functions.invoke('send-chat-message', {
-        body: {
-          clientId,
-          message,
-        },
+        body: { clientId, message, templateId, templateVariables },
       });
 
       if (error) throw error;
@@ -119,6 +143,8 @@ export default function ChatView({ clientId }: ChatViewProps) {
       queryClient.invalidateQueries({ queryKey: ['chat-messages', clientId] });
       queryClient.invalidateQueries({ queryKey: ['chat-clients'] });
       queryClient.invalidateQueries({ queryKey: ['client', clientId] });
+      setSelectedTemplate(null);
+      setTemplateVariables({});
       toast.success('הודעה נשלחה בהצלחה');
     },
     onError: (error: any) => {
@@ -127,8 +153,30 @@ export default function ChatView({ clientId }: ChatViewProps) {
     },
   });
 
+  const handleSendMessage = (message: string) => {
+    if (selectedTemplate) {
+      sendMessageMutation.mutate({ message, templateId: selectedTemplate, templateVariables });
+    } else {
+      sendMessageMutation.mutate({ message });
+    }
+  };
+
+  const handleSendWithTemplate = () => {
+    if (!selectedTemplate) {
+      toast.error('נא לבחור טמפלייט');
+      return;
+    }
+    sendMessageMutation.mutate({ templateId: selectedTemplate, templateVariables });
+  };
+
+  const selectedTemplateData = templates?.find(t => t.id === selectedTemplate);
+
   const handleSendTestMessage = () => {
-    sendMessageMutation.mutate("שלום! זוהי הודעת בדיקה מהמערכת.");
+    if (selectedTemplate) {
+      handleSendWithTemplate();
+    } else {
+      sendMessageMutation.mutate({ message: "שלום! זוהי הודעת בדיקה מהמערכת." });
+    }
   };
 
   if (!client) {
@@ -239,8 +287,73 @@ export default function ChatView({ clientId }: ChatViewProps) {
 
       {/* Input */}
       <div className="border-t">
+        {/* Template Selection */}
+        {templates && templates.length > 0 && (
+          <div className="p-4 border-b bg-muted/30">
+            <div className="flex items-center gap-2 mb-2">
+              <MessageSquare className="h-4 w-4 text-muted-foreground" />
+              <Label className="text-sm font-medium">שליחה עם טמפלייט WhatsApp</Label>
+            </div>
+            <div className="flex gap-2">
+              <Select value={selectedTemplate || ""} onValueChange={setSelectedTemplate}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="בחר טמפלייט (אופציונלי)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((template: any) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.display_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedTemplate && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    setSelectedTemplate(null);
+                    setTemplateVariables({});
+                  }}
+                >
+                  נקה
+                </Button>
+              )}
+            </div>
+            
+            {selectedTemplateData && Array.isArray(selectedTemplateData.template_variables) && selectedTemplateData.template_variables.length > 0 && (
+              <div className="mt-3 space-y-2">
+                <Label className="text-xs text-muted-foreground">משתנים לטמפלייט:</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(selectedTemplateData.template_variables as string[]).map((varName: string) => (
+                    <div key={varName}>
+                      <Label className="text-xs">{varName}</Label>
+                      <Input
+                        value={templateVariables[varName] || ""}
+                        onChange={(e) => setTemplateVariables({
+                          ...templateVariables,
+                          [varName]: e.target.value
+                        })}
+                        placeholder={`הזן ${varName}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <Button 
+                  size="sm" 
+                  className="w-full mt-2"
+                  onClick={handleSendWithTemplate}
+                  disabled={sendMessageMutation.isPending}
+                >
+                  שלח עם טמפלייט
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+        
         <ChatInput
-          onSend={(message) => sendMessageMutation.mutate(message)}
+          onSend={handleSendMessage}
           isLoading={sendMessageMutation.isPending}
         />
       </div>

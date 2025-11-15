@@ -40,6 +40,7 @@ import DynamicTables from "./pages/DynamicTables";
 import DynamicTableView from "./pages/DynamicTableView";
 import Chat from "./pages/Chat";
 import ManyChatSettings from "./pages/ManyChatSettings";
+import ManyChatTemplates from "./pages/ManyChatTemplates";
 import NotFound from "./pages/NotFound";
 import { SuperAdminRoute } from "./components/SuperAdminRoute";
 
@@ -92,6 +93,7 @@ const App = () => (
             <Route path="/t/:tenantSlug/chat" element={<ProtectedRoute requiredPermission="chat"><AppLayout><Chat /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/chat/:clientId" element={<ProtectedRoute requiredPermission="chat"><AppLayout><Chat /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/manychat-settings" element={<ProtectedRoute requiredPermission="settings"><AppLayout><ManyChatSettings /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/manychat-templates" element={<ProtectedRoute requiredPermission="settings"><AppLayout><ManyChatTemplates /></AppLayout></ProtectedRoute>} />
             
             {/* Root path redirects to auth */}
             <Route path="/" element={<Auth />} />
