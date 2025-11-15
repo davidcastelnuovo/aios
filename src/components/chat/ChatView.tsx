@@ -6,12 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, Phone, Mail, AlertCircle, Edit, Send, MessageSquare, ArrowLeft } from "lucide-react";
+import { Building2, Phone, Mail, AlertCircle, Edit, Tag, ArrowLeft } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import ChatMessageList from "./ChatMessageList";
 import ChatInput from "./ChatInput";
 import { toast } from "sonner";
+
+interface Message {
+  id: string;
+  direction: 'inbound' | 'outbound';
+  message_text: string;
+  created_at: string;
+}
 
 interface ChatViewProps {
   contactId: string;
@@ -23,8 +30,7 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState(false);
   const [subscriberId, setSubscriberId] = useState("");
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
-  const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   // Fetch contact details (client or lead)
   const { data: contact } = useQuery({
@@ -50,20 +56,22 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
     },
   });
 
-  // Fetch templates
-  const { data: templates, isLoading: templatesLoading } = useQuery({
-    queryKey: ['manychat-templates', contact?.tenant_id],
+  // Fetch ManyChat tags
+  const { data: tags, isLoading: tagsLoading } = useQuery({
+    queryKey: ['manychat-tags', contact?.tenant_id],
     queryFn: async () => {
       if (!contact?.tenant_id) return [];
-      const { data, error } = await supabase
-        .from('manychat_templates')
-        .select('*')
-        .eq('tenant_id', contact.tenant_id)
-        .eq('is_active', true)
-        .order('display_name');
       
-      if (error) throw error;
-      return data;
+      const { data, error } = await supabase.functions.invoke('get-manychat-tags', {
+        body: { tenantId: contact.tenant_id }
+      });
+      
+      if (error) {
+        console.error('Error fetching tags:', error);
+        return [];
+      }
+      
+      return data?.tags || [];
     },
     enabled: !!contact?.tenant_id,
   });
@@ -107,147 +115,162 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-messages', contactId, contactType] });
       queryClient.invalidateQueries({ queryKey: ['chat-contacts'] });
     },
   });
 
-  // Fetch messages with smart refetch
-  const { data: messages, isLoading } = useQuery({
-    queryKey: ['chat-messages', contactId, contactType],
+  // Fetch messages with auto-refresh
+  const { data: rawMessages = [], isLoading: messagesLoading } = useQuery({
+    queryKey: ['chat-messages', contactId],
     queryFn: async () => {
-      console.time(`⏱️ Chat messages for ${contactId}`);
-      const payload = contactType === 'client' 
-        ? { clientId: contactId }
-        : { leadId: contactId };
+      const filter = contactType === 'client' 
+        ? { client_id: contactId }
+        : { lead_id: contactId };
       
-      const { data, error } = await supabase.functions.invoke('get-chat-history', {
-        body: payload,
-      });
-
-      console.timeEnd(`⏱️ Chat messages for ${contactId}`);
-
+      const { data, error } = await supabase
+        .from('chat_messages')
+        .select('*')
+        .match(filter)
+        .order('created_at', { ascending: true });
+      
       if (error) throw error;
+      
+      // Mark as read after fetching
       markAsReadMutation.mutate();
-      return data.messages || [];
+      
+      return data;
     },
-    refetchInterval: 5000,
-    staleTime: 2000,
+    refetchInterval: 5000, // Refresh every 5 seconds
   });
 
-  // Update ManyChat ID mutation
+  const messages: Message[] = rawMessages.map(msg => ({
+    id: msg.id,
+    direction: msg.direction as 'inbound' | 'outbound',
+    message_text: msg.message_text,
+    created_at: msg.created_at,
+  }));
+
+  // Update ManyChat ID
   const updateIdMutation = useMutation({
-    mutationFn: async (newSubscriberId: string) => {
+    mutationFn: async (newId: string) => {
       const table = contactType === 'client' ? 'clients' : 'leads';
       const { error } = await supabase
         .from(table)
-        .update({ manychat_subscriber_id: newSubscriberId })
+        .update({ manychat_subscriber_id: newId })
         .eq('id', contactId);
       
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['contact', contactId, contactType] });
-      toast.success('ManyChat ID עודכן בהצלחה');
       setEditingId(false);
+      toast.success('ה-Subscriber ID עודכן בהצלחה');
     },
-    onError: () => {
-      toast.error('שגיאה בעדכון ManyChat ID');
+    onError: (error: any) => {
+      console.error('Update error:', error);
+      toast.error('שגיאה בעדכון ה-ID');
     },
   });
 
-  // Send message mutation
-  const sendMessageMutation = useMutation({
-    mutationFn: async ({ message, templateId, templateVariables }: { 
-      message?: string;
-      templateId?: string;
-      templateVariables?: Record<string, string>;
-    }) => {
-      const payload: any = { message, templateId, templateVariables };
-      
-      if (contactType === 'client') {
-        payload.clientId = contactId;
-      } else {
-        payload.leadId = contactId;
+  // Add tag mutation
+  const addTagMutation = useMutation({
+    mutationFn: async ({ tagId }: { tagId: string }) => {
+      if (!contact?.manychat_subscriber_id) {
+        throw new Error('אין Subscriber ID למנוי');
       }
-      
-      const { data, error } = await supabase.functions.invoke('send-chat-message', {
-        body: payload,
+
+      const { data, error } = await supabase.functions.invoke('add-manychat-tag', {
+        body: {
+          subscriberId: contact.manychat_subscriber_id,
+          tagId,
+          tenantId: contact.tenant_id,
+        },
       });
 
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-messages', contactId, contactType] });
-      toast.success('ההודעה נשלחה בהצלחה');
-      setSelectedTemplate(null);
-      setTemplateVariables({});
+      toast.success('ה-Tag נוסף בהצלחה והטריגר הופעל');
+      setSelectedTag(null);
     },
     onError: (error: any) => {
-      toast.error(error.message || 'שגיאה בשליחת ההודעה');
+      console.error('Add tag error:', error);
+      toast.error('שגיאה בהוספת ה-Tag');
     },
   });
 
-  const handleSendMessage = (message: string) => {
-    if (selectedTemplate) {
-      sendMessageMutation.mutate({ message, templateId: selectedTemplate, templateVariables });
-    } else {
-      sendMessageMutation.mutate({ message });
+  const [isSending, setIsSending] = useState(false);
+
+  const handleSendMessage = async (message: string) => {
+    setIsSending(true);
+    try {
+      // Send plain text message
+      const { error } = await supabase
+        .from('chat_messages')
+        .insert({
+          client_id: contactType === 'client' ? contactId : '',
+          lead_id: contactType === 'lead' ? contactId : null,
+          tenant_id: contact?.tenant_id || '',
+          message_text: message,
+          direction: 'outbound',
+          channel: 'internal',
+        });
+
+      if (error) {
+        console.error('Send error:', error);
+        toast.error('שגיאה בשליחת ההודעה');
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['chat-messages', contactId] });
+      toast.success('ההודעה נשלחה');
+    } finally {
+      setIsSending(false);
     }
   };
 
-  const handleSendWithTemplate = () => {
-    if (!selectedTemplate) {
-      toast.error('נא לבחור טמפלייט');
+  const handleAddTag = async () => {
+    if (!selectedTag) {
+      toast.error('נא לבחור Tag');
       return;
     }
-    sendMessageMutation.mutate({ templateId: selectedTemplate, templateVariables });
+    await addTagMutation.mutateAsync({ tagId: selectedTag });
   };
-
-  const selectedTemplateData = templates?.find(t => t.id === selectedTemplate);
 
   if (!contact) {
     return (
-      <Card className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-20" />
-          <p className="text-muted-foreground">טוען פרטי איש קשר...</p>
-        </div>
-      </Card>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center text-muted-foreground">טוען...</div>
+      </div>
     );
   }
 
   return (
-    <Card className="h-full flex flex-col">
+    <div className="flex-1 flex flex-col h-full">
       {/* Header */}
-      <div className="p-4 border-b bg-muted/50">
-        <div className="flex items-center gap-3 mb-3">
+      <div className="p-4 border-b bg-card">
+        <div className="flex items-center gap-3">
           {onBack && (
-            <Button
-              variant="outline"
-              onClick={onBack}
-              className="lg:hidden gap-2"
-            >
-              <ArrowLeft className="h-5 w-5" />
-              <span>חזרה לרשימה</span>
+            <Button variant="ghost" size="sm" onClick={onBack}>
+              <ArrowLeft className="h-4 w-4" />
             </Button>
           )}
           <div className="flex-1">
-            <h2 className="font-semibold text-lg flex items-center gap-2">
-              {contact.name}
-              {contactType === 'lead' && (
-                <Badge variant="outline" className="text-xs">ליד</Badge>
-              )}
-            </h2>
-            <p className="text-sm text-muted-foreground flex items-center gap-2">
-              <Building2 className="h-3 w-3" />
-              {contact.agencies?.name}
-            </p>
+            <div className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-muted-foreground" />
+              <h2 className="text-lg font-semibold">{contact.name}</h2>
+            </div>
+            {contact.agencies && (
+              <Badge variant="secondary" className="text-xs mt-1">
+                {contact.agencies.name}
+              </Badge>
+            )}
           </div>
         </div>
 
-        <div className="flex items-center gap-4 text-sm">
+        {/* Contact Info */}
+        <div className="mt-3 space-y-1 text-sm text-muted-foreground">
           {contact.phone && (
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4 text-muted-foreground" />
@@ -319,54 +342,44 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
         </div>
       </div>
 
-      {/* Template Selection */}
-      {templates && templates.length > 0 && (
+      {/* Tag Selection */}
+      {tags && tags.length > 0 && contact.manychat_subscriber_id && (
         <div className="p-3 border-b bg-muted/30">
-          <Label className="text-xs">טמפלייט</Label>
+          <Label className="text-xs">שליחת טריגר דרך Tag</Label>
           <div className="flex gap-2 mt-1">
-            <Select value={selectedTemplate || 'none'} onValueChange={(value) => { setSelectedTemplate(value === 'none' ? null : value); setTemplateVariables({}); }}>
+            <Select value={selectedTag || 'none'} onValueChange={(value) => setSelectedTag(value === 'none' ? null : value)}>
               <SelectTrigger className="h-8 text-sm flex-1">
-                <SelectValue placeholder="בחר טמפלייט (אופציונלי)" />
+                <SelectValue placeholder="בחר Tag לשליחת טריגר" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">ללא טמפלייט</SelectItem>
-                {templates.map((template) => (
-                  <SelectItem key={template.id} value={template.id}>{template.display_name}</SelectItem>
+                <SelectItem value="none">בחר Tag</SelectItem>
+                {tags.map((tag: any) => (
+                  <SelectItem key={tag.id} value={tag.id.toString()}>{tag.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {selectedTemplate && (
-              <Button size="sm" variant="outline" onClick={handleSendWithTemplate} disabled={sendMessageMutation.isPending}>
-                <Send className="h-3 w-3 ml-1" />
-                שלח
+            {selectedTag && (
+              <Button size="sm" variant="default" onClick={handleAddTag} disabled={addTagMutation.isPending}>
+                <Tag className="h-3 w-3 ml-1" />
+                הוסף Tag
               </Button>
             )}
           </div>
-
-          {/* Template Variables */}
-          {selectedTemplateData?.template_variables && Array.isArray(selectedTemplateData.template_variables) && selectedTemplateData.template_variables.length > 0 && (
-            <div className="mt-2 space-y-2">
-              <Label className="text-xs">משתנים</Label>
-              {selectedTemplateData.template_variables.map((variable: string) => (
-                <div key={variable} className="flex items-center gap-2">
-                  <Label className="text-xs min-w-[80px]">{variable}:</Label>
-                  <Input value={templateVariables[variable] || ''} onChange={(e) => setTemplateVariables(prev => ({ ...prev, [variable]: e.target.value }))} placeholder={`ערך עבור ${variable}`} className="h-7 text-sm" />
-                </div>
-              ))}
-            </div>
-          )}
+          <p className="text-xs text-muted-foreground mt-1">
+            הוספת Tag תפעיל אוטומציה ב-ManyChat אם הגדרת Flow עם הטריגר המתאים
+          </p>
         </div>
       )}
 
       {/* Messages */}
       <div className="flex-1 overflow-hidden">
-        <ChatMessageList messages={messages || []} isLoading={isLoading} />
+        <ChatMessageList messages={messages} isLoading={messagesLoading} />
       </div>
 
       {/* Input */}
-      <div className="p-3 border-t">
-        <ChatInput onSend={handleSendMessage} isLoading={!contact.manychat_subscriber_id || sendMessageMutation.isPending} />
+      <div className="border-t bg-card">
+        <ChatInput onSend={handleSendMessage} isLoading={isSending} />
       </div>
-    </Card>
+    </div>
   );
 }
