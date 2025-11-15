@@ -69,8 +69,8 @@ export default function Chat() {
     queryFn: async () => {
       console.log('🔍 Fetching contacts - tenantId:', tenantId, 'userAgencyIds:', userAgencyIds);
       
-      if (!tenantId || !userAgencyIds || userAgencyIds.length === 0) {
-        console.warn('⚠️ Contacts query skipped - missing data');
+      if (!tenantId) {
+        console.warn('⚠️ Contacts query skipped - missing tenantId');
         return [];
       }
 
@@ -118,7 +118,7 @@ export default function Chat() {
 
       return data || [];
     },
-    enabled: !!tenantId && !!userAgencyIds,
+    enabled: !!tenantId,
     staleTime: 30000, // 30 seconds
     refetchInterval: (query) => {
       // Only refetch if user is active and there are contacts
