@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,13 +6,15 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MessageCircle, Search, Settings } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { MessageCircle, Search, Settings, Loader2 } from "lucide-react";
 import ChatView from "@/components/chat/ChatView";
 
 interface Contact {
@@ -21,10 +23,11 @@ interface Contact {
   phone: string | null;
   email: string | null;
   agency_id: string;
-  agencies: { name: string } | null;
+  agency_name: string | null;
   manychat_subscriber_id: string | null;
-  unreadCount: number;
-  type: 'client' | 'lead';
+  unread_count: number;
+  contact_type: 'client' | 'lead';
+  last_message_at: string | null;
 }
 
 export default function Chat() {
@@ -34,10 +37,14 @@ export default function Chat() {
   const { userAgencyIds, isLoading: agenciesLoading } = useUserAgencies();
   const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearch = useDebouncedValue(searchTerm, 300);
   const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads">("all");
   const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' } | null>(
     clientId ? { id: clientId, type: 'client' } : null
   );
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(0);
+  const CONTACTS_PER_PAGE = 50;
 
   // Count unsynced clients
   const { data: unsyncedCount } = useQuery({
@@ -56,11 +63,13 @@ export default function Chat() {
     enabled: !!tenantId,
   });
 
-  // Fetch contacts (clients + leads) with unread message counts
-  const { data: contacts, isLoading } = useQuery({
-    queryKey: ['chat-contacts', tenantId, userAgencyIds, searchTerm],
+  // Fetch contacts using optimized database function
+  const { data: contacts, isLoading, isFetching } = useQuery({
+    queryKey: ['chat-contacts', tenantId, userAgencyIds, debouncedSearch, page],
     queryFn: async () => {
-      if (!tenantId) return [];
+      if (!tenantId || !userAgencyIds || userAgencyIds.length === 0) return [];
+
+      console.time('⏱️ Chat contacts query');
 
       // Get all accessible agency IDs (owned + shared)
       const { data: ownedAgencies } = await supabase
@@ -78,133 +87,60 @@ export default function Chat() {
         ...(sharedAgencies || []).map(a => a.agency_id)
       ];
 
-      if (allAgencyIds.length === 0) return [];
-
-      // Fetch CLIENTS
-      let clientQuery = supabase
-        .from('clients')
-        .select(`
-          id,
-          name,
-          phone,
-          email,
-          agency_id,
-          agencies (name),
-          manychat_subscriber_id
-        `)
-        .in('agency_id', allAgencyIds)
-        .order('name');
-
-      if (searchTerm) {
-        clientQuery = clientQuery.ilike('name', `%${searchTerm}%`);
+      if (allAgencyIds.length === 0) {
+        console.timeEnd('⏱️ Chat contacts query');
+        return [];
       }
 
-    const { data: clients, error: clientsError } = await clientQuery;
-    if (clientsError) {
-      console.error('❌ Clients error:', clientsError);
-      throw clientsError;
-    }
+      // Call optimized database function
+      const { data, error } = await supabase.rpc('get_chat_contacts', {
+        p_tenant_id: tenantId,
+        p_agency_ids: allAgencyIds,
+        p_search_term: debouncedSearch || null,
+        p_limit: CONTACTS_PER_PAGE,
+        p_offset: page * CONTACTS_PER_PAGE
+      });
 
-    // Fetch LEADS
-    let leadQuery = supabase
-      .from('leads')
-      .select(`
-        id,
-        company_name,
-        phone,
-        email,
-        agency_id,
-        agencies (name),
-        manychat_subscriber_id
-      `)
-      .in('agency_id', allAgencyIds)
-      .order('company_name');
+      console.timeEnd('⏱️ Chat contacts query');
 
-    if (searchTerm) {
-      leadQuery = leadQuery.ilike('company_name', `%${searchTerm}%`);
-    }
-
-    const { data: leads, error: leadsError } = await leadQuery;
-    if (leadsError) {
-      console.error('❌ Leads error:', leadsError);
-      throw leadsError;
-    }
-
-    // Build ID lists for batch counting
-    const clientIds = (clients || []).map(c => c.id);
-    const leadIds = (leads || []).map(l => l.id);
-
-    // Fetch unread counts in 2 batched queries (clients + leads)
-    const [clientUnreadRes, leadUnreadRes] = await Promise.all([
-      clientIds.length > 0
-        ? supabase
-            .from('chat_messages')
-            .select('client_id')
-            .eq('direction', 'inbound')
-            .is('read_at', null)
-            .in('client_id', clientIds)
-        : Promise.resolve({ data: [] as any[] }),
-      leadIds.length > 0
-        ? supabase
-            .from('chat_messages')
-            .select('lead_id')
-            .eq('direction', 'inbound')
-            .is('read_at', null)
-            .in('lead_id', leadIds)
-        : Promise.resolve({ data: [] as any[] })
-    ]);
-
-    const clientUnreadMap = new Map<string, number>();
-    (clientUnreadRes.data || []).forEach((row: any) => {
-      if (row.client_id) {
-        clientUnreadMap.set(row.client_id, (clientUnreadMap.get(row.client_id) || 0) + 1);
+      if (error) {
+        console.error('❌ Contacts error:', error);
+        throw error;
       }
-    });
 
-    const leadUnreadMap = new Map<string, number>();
-    (leadUnreadRes.data || []).forEach((row: any) => {
-      if (row.lead_id) {
-        leadUnreadMap.set(row.lead_id, (leadUnreadMap.get(row.lead_id) || 0) + 1);
-      }
-    });
+      // Update hasMore flag
+      setHasMore((data || []).length === CONTACTS_PER_PAGE);
 
-    // Combine to unified contacts list
-    const allContacts: Contact[] = [
-      ...(clients || []).map((client: any) => ({
-        ...client,
-        type: 'client' as const,
-        unreadCount: clientUnreadMap.get(client.id) ?? 0,
-      })),
-      ...(leads || []).map((lead: any) => ({
-        id: lead.id,
-        name: lead.company_name,
-        phone: lead.phone,
-        email: lead.email,
-        agency_id: lead.agency_id,
-        agencies: lead.agencies,
-        manychat_subscriber_id: lead.manychat_subscriber_id,
-        type: 'lead' as const,
-        unreadCount: leadUnreadMap.get(lead.id) ?? 0,
-      }))
-    ];
-
-    // Sort by unread first, then by name
-    return allContacts.sort((a, b) => {
-      if (a.unreadCount !== b.unreadCount) {
-        return b.unreadCount - a.unreadCount;
-      }
-      return a.name.localeCompare(b.name, 'he');
-    });
+      return data || [];
     },
-    enabled: !!tenantId && !agenciesLoading,
+    enabled: !!tenantId && !!userAgencyIds,
+    staleTime: 30000, // 30 seconds
+    refetchInterval: (query) => {
+      // Only refetch if user is active and there are contacts
+      return query.state.data && query.state.data.length > 0 ? 30000 : false;
+    },
   });
 
-  // Filter contacts based on selected filter
-  const filteredContacts = contacts?.filter(contact => {
-    if (contactFilter === "clients") return contact.type === "client";
-    if (contactFilter === "leads") return contact.type === "lead";
-    return true;
-  });
+  // Filter contacts by type with memoization
+  const filteredContacts = useMemo(() => {
+    return (contacts || []).filter(contact => {
+      if (contactFilter === "all") return true;
+      if (contactFilter === "clients") return contact.contact_type === "client";
+      if (contactFilter === "leads") return contact.contact_type === "lead";
+      return true;
+    });
+  }, [contacts, contactFilter]);
+
+  const handleLoadMore = () => {
+    if (hasMore && !isFetching) {
+      setPage(prev => prev + 1);
+    }
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setPage(0); // Reset pagination on search
+  };
 
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-4 overflow-hidden">
@@ -266,8 +202,8 @@ export default function Chat() {
             <div className="p-2">
               {filteredContacts?.map((contact) => (
                 <button
-                  key={`${contact.type}-${contact.id}`}
-                  onClick={() => setSelectedContact({ id: contact.id, type: contact.type })}
+                  key={contact.id}
+                  onClick={() => setSelectedContact({ id: contact.id, type: contact.contact_type as 'client' | 'lead' })}
                   className={`w-full text-right p-3 rounded-lg mb-1 transition-colors ${
                     selectedContact?.id === contact.id
                       ? 'bg-primary text-primary-foreground'
@@ -275,9 +211,9 @@ export default function Chat() {
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    {contact.unreadCount > 0 && (
+                    {contact.unread_count > 0 && (
                       <Badge variant="destructive" className="shrink-0">
-                        {contact.unreadCount}
+                        {contact.unread_count}
                       </Badge>
                     )}
                     <div className="flex-1 min-w-0 text-right">
@@ -290,14 +226,14 @@ export default function Chat() {
                             לא מסונכרן
                           </Badge>
                         )}
-                        {contact.type === 'lead' && (
+                        {contact.contact_type === 'lead' && (
                           <Badge variant="outline" className="text-xs shrink-0">
                             ליד
                           </Badge>
                         )}
                       </div>
                       <div className="text-sm opacity-70 truncate">
-                        {contact.agencies?.name}
+                        {contact.agency_name}
                       </div>
                     </div>
                   </div>

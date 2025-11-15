@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, Phone, Mail, AlertCircle, Edit, Send, MessageSquare, ArrowRight } from "lucide-react";
+import { Building2, Phone, Mail, AlertCircle, Edit, Send, MessageSquare, ArrowLeft } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import ChatMessageList from "./ChatMessageList";
@@ -68,7 +68,7 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
     enabled: !!contact?.tenant_id,
   });
 
-  // Mark messages as read mutation
+  // Mark messages as read mutation with optimistic update
   const markAsReadMutation = useMutation({
     mutationFn: async () => {
       const filter = contactType === 'client' 
@@ -84,16 +84,39 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
       
       if (error) throw error;
     },
-    onSuccess: () => {
+    onMutate: async () => {
+      // Optimistic update - immediately update UI
+      await queryClient.cancelQueries({ queryKey: ['chat-contacts'] });
+      const previousContacts = queryClient.getQueryData(['chat-contacts']);
+      
+      queryClient.setQueryData(['chat-contacts'], (old: any) => {
+        if (!old) return old;
+        return old.map((contact: any) => 
+          contact.id === contactId && contact.contact_type === contactType
+            ? { ...contact, unread_count: 0 }
+            : contact
+        );
+      });
+      
+      return { previousContacts };
+    },
+    onError: (_err, _vars, context) => {
+      // Rollback on error
+      if (context?.previousContacts) {
+        queryClient.setQueryData(['chat-contacts'], context.previousContacts);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['chat-messages', contactId, contactType] });
       queryClient.invalidateQueries({ queryKey: ['chat-contacts'] });
     },
   });
 
-  // Fetch messages
+  // Fetch messages with smart refetch
   const { data: messages, isLoading } = useQuery({
     queryKey: ['chat-messages', contactId, contactType],
     queryFn: async () => {
+      console.time(`⏱️ Chat messages for ${contactId}`);
       const payload = contactType === 'client' 
         ? { clientId: contactId }
         : { leadId: contactId };
@@ -102,11 +125,14 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
         body: payload,
       });
 
+      console.timeEnd(`⏱️ Chat messages for ${contactId}`);
+
       if (error) throw error;
       markAsReadMutation.mutate();
       return data.messages || [];
     },
     refetchInterval: 5000,
+    staleTime: 2000,
   });
 
   // Update ManyChat ID mutation
@@ -198,8 +224,13 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
       <div className="p-4 border-b bg-muted/50">
         <div className="flex items-center gap-3 mb-3">
           {onBack && (
-            <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
-              <ArrowRight className="h-5 w-5" />
+            <Button
+              variant="outline"
+              onClick={onBack}
+              className="lg:hidden gap-2"
+            >
+              <ArrowLeft className="h-5 w-5" />
+              <span>חזרה לרשימה</span>
             </Button>
           )}
           <div className="flex-1">
