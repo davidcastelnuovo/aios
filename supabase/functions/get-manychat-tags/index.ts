@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
 
     // Fetch tags from ManyChat API
     console.log('Fetching tags from ManyChat API');
-    const manychatResponse = await fetch('https://api.manychat.com/fb/subscriber/getTags', {
+    const manychatResponse = await fetch('https://api.manychat.com/fb/page/getTags', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${integration.api_key}`,
