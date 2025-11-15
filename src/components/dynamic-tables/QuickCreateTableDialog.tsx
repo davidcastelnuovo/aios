@@ -52,8 +52,10 @@ export function QuickCreateTableDialog({ open, onOpenChange }: QuickCreateTableD
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       toast.success('הטבלה נוצרה בהצלחה');
       handleClose();
-      // Navigate to the new table
-      navigate(buildPath(`table/${data.slug}`));
+      // Navigate to the new table (data is the table object directly)
+      if (data && data.slug) {
+        navigate(buildPath(`table/${data.slug}`));
+      }
     },
     onError: (error) => {
       toast.error('שגיאה ביצירת הטבלה: ' + error.message);
