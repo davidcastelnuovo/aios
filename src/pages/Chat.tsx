@@ -95,69 +95,87 @@ export default function Chat() {
         clientQuery = clientQuery.ilike('name', `%${searchTerm}%`);
       }
 
-      const { data: clients, error: clientsError } = await clientQuery;
-      if (clientsError) throw clientsError;
+    const { data: clients, error: clientsError } = await clientQuery;
+    if (clientsError) {
+      console.error('❌ Clients error:', clientsError);
+      throw clientsError;
+    }
 
-      // Fetch LEADS
-      let leadQuery = supabase
-        .from('leads')
-        .select(`
-          id,
-          company_name,
-          phone,
-          email,
-          agency_id,
-          agencies (name),
-          manychat_subscriber_id
-        `)
-        .in('agency_id', allAgencyIds)
-        .order('company_name');
+    // Fetch LEADS
+    let leadQuery = supabase
+      .from('leads')
+      .select(`
+        id,
+        company_name,
+        phone,
+        email,
+        agency_id,
+        agencies (name),
+        manychat_subscriber_id
+      `)
+      .in('agency_id', allAgencyIds)
+      .order('company_name');
 
-      if (searchTerm) {
-        leadQuery = leadQuery.ilike('company_name', `%${searchTerm}%`);
-      }
+    if (searchTerm) {
+      leadQuery = leadQuery.ilike('company_name', `%${searchTerm}%`);
+    }
 
-      const { data: leads, error: leadsError } = await leadQuery;
-      if (leadsError) throw leadsError;
+    const { data: leads, error: leadsError } = await leadQuery;
+    if (leadsError) {
+      console.error('❌ Leads error:', leadsError);
+      throw leadsError;
+    }
 
-      // Combine and add unread counts
-      const allContacts: Contact[] = [];
+    console.log('✅ Fetched:', { clients: clients?.length || 0, leads: leads?.length || 0 });
 
-      for (const client of clients || []) {
-        const { count } = await supabase
-          .from('chat_messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('client_id', client.id)
-          .eq('direction', 'inbound')
-          .is('read_at', null);
+    // Get all unread counts in parallel
+    const allContacts: Contact[] = [];
 
-        allContacts.push({
-          ...client,
-          type: 'client',
-          unreadCount: count || 0,
-        });
-      }
+    // Process clients
+    const clientPromises = (clients || []).map(async (client) => {
+      const { count } = await supabase
+        .from('chat_messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('client_id', client.id)
+        .eq('direction', 'inbound')
+        .is('read_at', null);
 
-      for (const lead of leads || []) {
-        const { count } = await supabase
-          .from('chat_messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('lead_id', lead.id)
-          .eq('direction', 'inbound')
-          .is('read_at', null);
+      return {
+        ...client,
+        type: 'client' as const,
+        unreadCount: count || 0,
+      };
+    });
 
-        allContacts.push({
-          id: lead.id,
-          name: lead.company_name,
-          phone: lead.phone,
-          email: lead.email,
-          agency_id: lead.agency_id,
-          agencies: lead.agencies,
-          manychat_subscriber_id: lead.manychat_subscriber_id,
-          type: 'lead',
-          unreadCount: count || 0,
-        });
-      }
+    // Process leads
+    const leadPromises = (leads || []).map(async (lead) => {
+      const { count } = await supabase
+        .from('chat_messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('lead_id', lead.id)
+        .eq('direction', 'inbound')
+        .is('read_at', null);
+
+      return {
+        id: lead.id,
+        name: lead.company_name,
+        phone: lead.phone,
+        email: lead.email,
+        agency_id: lead.agency_id,
+        agencies: lead.agencies,
+        manychat_subscriber_id: lead.manychat_subscriber_id,
+        type: 'lead' as const,
+        unreadCount: count || 0,
+      };
+    });
+
+    // Wait for all counts
+    const [clientContacts, leadContacts] = await Promise.all([
+      Promise.all(clientPromises),
+      Promise.all(leadPromises)
+    ]);
+
+    allContacts.push(...clientContacts, ...leadContacts);
 
       // Sort by unread first, then by name
       return allContacts.sort((a, b) => {
