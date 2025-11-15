@@ -204,28 +204,51 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
   const [isSending, setIsSending] = useState(false);
 
   const handleSendMessage = async (message: string) => {
+    if (!contact) return;
+    
     setIsSending(true);
     try {
-      // Send plain text message
-      const { error } = await supabase
-        .from('chat_messages')
-        .insert({
-          client_id: contactType === 'client' ? contactId : null,
-          lead_id: contactType === 'lead' ? contactId : null,
-          tenant_id: contact?.tenant_id || '',
-          message_text: message,
-          direction: 'outbound',
-          channel: 'internal',
+      // If contact has ManyChat subscriber ID, send via ManyChat
+      if (contact.manychat_subscriber_id) {
+        const { data, error } = await supabase.functions.invoke('send-chat-message', {
+          body: {
+            clientId: contactType === 'client' ? contactId : undefined,
+            leadId: contactType === 'lead' ? contactId : undefined,
+            message,
+          },
         });
 
-      if (error) {
-        console.error('Send error:', error);
-        toast.error('שגיאה בשליחת ההודעה');
-        return;
+        if (error) {
+          console.error('ManyChat send error:', error);
+          toast.error('שגיאה בשליחת ההודעה דרך WhatsApp');
+          return;
+        }
+
+        console.log('Message sent via ManyChat:', data);
+        toast.success('ההודעה נשלחה דרך WhatsApp');
+      } else {
+        // If no ManyChat subscriber ID, save as internal message
+        const { error } = await supabase
+          .from('chat_messages')
+          .insert({
+            client_id: contactType === 'client' ? contactId : null,
+            lead_id: contactType === 'lead' ? contactId : null,
+            tenant_id: contact.tenant_id || '',
+            message_text: message,
+            direction: 'outbound',
+            channel: 'internal',
+          });
+
+        if (error) {
+          console.error('Internal message error:', error);
+          toast.error('שגיאה בשמירת ההודעה');
+          return;
+        }
+
+        toast.success('ההודעה נשמרה');
       }
 
       queryClient.invalidateQueries({ queryKey: ['chat-messages', contactId] });
-      toast.success('ההודעה נשלחה');
     } finally {
       setIsSending(false);
     }
