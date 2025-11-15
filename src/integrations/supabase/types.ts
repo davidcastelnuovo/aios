@@ -1280,59 +1280,6 @@ export type Database = {
           },
         ]
       }
-      manychat_templates: {
-        Row: {
-          automation_trigger_name: string | null
-          created_at: string | null
-          description: string | null
-          display_name: string
-          id: string
-          is_active: boolean | null
-          template_language: string
-          template_name: string
-          template_namespace: string
-          template_variables: Json | null
-          tenant_id: string
-          updated_at: string | null
-        }
-        Insert: {
-          automation_trigger_name?: string | null
-          created_at?: string | null
-          description?: string | null
-          display_name: string
-          id?: string
-          is_active?: boolean | null
-          template_language?: string
-          template_name: string
-          template_namespace: string
-          template_variables?: Json | null
-          tenant_id: string
-          updated_at?: string | null
-        }
-        Update: {
-          automation_trigger_name?: string | null
-          created_at?: string | null
-          description?: string | null
-          display_name?: string
-          id?: string
-          is_active?: boolean | null
-          template_language?: string
-          template_name?: string
-          template_namespace?: string
-          template_variables?: Json | null
-          tenant_id?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "manychat_templates_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       menu_items: {
         Row: {
           badge: string | null
