@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import {
@@ -27,6 +27,20 @@ export function SyncManyChatDialog() {
   const [open, setOpen] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const { tenantId } = useCurrentTenant();
+
+  // Count clients without ManyChat ID
+  const { data: unsyncedCount } = useQuery({
+    queryKey: ['unsynced-clients', tenantId],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId)
+        .is('manychat_subscriber_id', null);
+      return count || 0;
+    },
+    enabled: !!tenantId,
+  });
 
   const syncMutation = useMutation({
     mutationFn: async () => {
@@ -69,6 +83,20 @@ export function SyncManyChatDialog() {
         </DialogHeader>
 
         <div className="space-y-4">
+          {unsyncedCount !== undefined && unsyncedCount > 0 && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="font-semibold mb-1">
+                  {unsyncedCount} לקוחות ללא חיבור ManyChat
+                </div>
+                <div className="text-sm">
+                  לקוחות אלה לא מסונכרנים עם ManyChat. הסנכרון ינסה למצוא אותם לפי מספר טלפון.
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-sm">
