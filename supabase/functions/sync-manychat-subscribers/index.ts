@@ -222,7 +222,8 @@ Deno.serve(async (req) => {
     for (const message of messages || []) {
       try {
         const providerData = message.raw_provider_data as any;
-        const subscriberId = providerData?.subscriber_id || providerData?.subscriberId;
+        // Extract subscriber ID from ManyChat structure
+        const subscriberId = providerData?.subscriber?.id || providerData?.subscriber_id || providerData?.subscriberId;
         let phone = providerData?.phone || providerData?.contact?.phone || providerData?.subscriber?.phone;
 
         // If phone is a template placeholder, try to use subscriber.id as phone
