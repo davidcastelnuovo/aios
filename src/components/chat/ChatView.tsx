@@ -203,13 +203,33 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
 
   const [isSending, setIsSending] = useState(false);
 
+  // Fetch active chat provider
+  const { data: activeProvider } = useQuery({
+    queryKey: ['active-chat-provider', contact?.tenant_id],
+    queryFn: async () => {
+      if (!contact?.tenant_id) return null;
+      
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('integration_type, api_key, settings')
+        .eq('tenant_id', contact.tenant_id)
+        .eq('is_active', true)
+        .in('integration_type', ['manychat', 'green_api'])
+        .maybeSingle();
+      
+      return data;
+    },
+    enabled: !!contact?.tenant_id,
+  });
+
   const handleSendMessage = async (message: string) => {
     if (!contact) return;
     
     setIsSending(true);
     try {
-      // If contact has ManyChat subscriber ID, send via ManyChat
-      if (contact.manychat_subscriber_id) {
+      // Check which provider is active
+      if (activeProvider?.integration_type === 'manychat' && contact.manychat_subscriber_id) {
+        // Send via ManyChat
         const { data, error } = await supabase.functions.invoke('send-chat-message', {
           body: {
             clientId: contactType === 'client' ? contactId : undefined,
@@ -226,8 +246,27 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
 
         console.log('Message sent via ManyChat:', data);
         toast.success('ההודעה נשלחה דרך WhatsApp');
+      } else if (activeProvider?.integration_type === 'green_api' && contact.phone) {
+        // Send via Green API
+        const { data, error } = await supabase.functions.invoke('send-green-api-message', {
+          body: {
+            clientId: contactType === 'client' ? contactId : undefined,
+            leadId: contactType === 'lead' ? contactId : undefined,
+            message,
+            phoneNumber: contact.phone,
+          },
+        });
+
+        if (error) {
+          console.error('Green API send error:', error);
+          toast.error('שגיאה בשליחת ההודעה דרך WhatsApp');
+          return;
+        }
+
+        console.log('Message sent via Green API:', data);
+        toast.success('ההודעה נשלחה דרך WhatsApp');
       } else {
-        // If no ManyChat subscriber ID, save as internal message
+        // No active provider or missing contact info - save as internal message
         const { error } = await supabase
           .from('chat_messages')
           .insert({

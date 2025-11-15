@@ -47,3 +47,9 @@ verify_jwt = true
 
 [functions.manychat-webhook]
 verify_jwt = false
+
+[functions.send-green-api-message]
+verify_jwt = true
+
+[functions.green-api-webhook]
+verify_jwt = false
