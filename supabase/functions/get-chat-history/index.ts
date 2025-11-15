@@ -28,10 +28,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const url = new URL(req.url);
-    const clientId = url.searchParams.get('clientId');
-    const limit = parseInt(url.searchParams.get('limit') || '100');
-    const before = url.searchParams.get('before');
+    // Parse request body
+    const { clientId, limit = 100, before } = await req.json();
 
     if (!clientId) {
       return new Response(
