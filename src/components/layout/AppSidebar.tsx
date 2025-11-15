@@ -59,7 +59,7 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useMenuItems, MenuItem } from "@/hooks/useMenuItems";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { QuickCreateTableDialog } from "@/components/dynamic-tables/QuickCreateTableDialog";
+import { SimpleTableDialog } from "@/components/dynamic-tables/SimpleTableDialog";
 
 const iconMap: Record<string, any> = {
   LayoutDashboard,
@@ -563,7 +563,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       {/* Quick Create Table Dialog */}
-      <QuickCreateTableDialog 
+      <SimpleTableDialog 
         open={isQuickCreateOpen}
         onOpenChange={setIsQuickCreateOpen}
       />
