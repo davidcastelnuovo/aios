@@ -11,12 +11,33 @@ Deno.serve(async (req) => {
   }
 
   try {
+    console.log('📥 Webhook received - Method:', req.method);
+    console.log('📋 Headers:', JSON.stringify(Object.fromEntries(req.headers.entries())));
+    
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const payload = await req.json();
-    console.log('ManyChat webhook received:', JSON.stringify(payload, null, 2));
+    // Get raw body text first
+    const bodyText = await req.text();
+    console.log('📄 Raw body:', bodyText);
+    
+    // Try to parse as JSON
+    let payload;
+    try {
+      payload = JSON.parse(bodyText);
+      console.log('✅ Parsed payload:', JSON.stringify(payload, null, 2));
+    } catch (parseError) {
+      console.error('❌ JSON parse error:', parseError);
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid JSON', 
+          received: bodyText.substring(0, 100),
+          parseError: parseError instanceof Error ? parseError.message : 'Unknown error'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const { subscriber, message, channel } = payload;
 
