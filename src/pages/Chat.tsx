@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
+import { useAgency } from "@/contexts/AgencyContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { Card } from "@/components/ui/card";
@@ -36,11 +37,11 @@ export default function Chat() {
   const { tenantId } = useCurrentTenant();
   const { buildPath } = useTenantPath();
   const { userAgencyIds, isLoading: agenciesLoading } = useUserAgencies();
+  const { selectedAgency } = useAgency();
   const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
   const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads">("all");
-  const [selectedAgencyId, setSelectedAgencyId] = useState<string>("all");
   const [syncStatusFilter, setSyncStatusFilter] = useState<"all" | "synced" | "unsynced">("all");
   const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' } | null>(
     clientId ? { id: clientId, type: 'client' } : null
@@ -68,9 +69,9 @@ export default function Chat() {
 
   // Fetch contacts using optimized database function
   const { data: contacts, isLoading, isFetching } = useQuery({
-    queryKey: ['chat-contacts', tenantId, userAgencyIds, debouncedSearch, page],
+    queryKey: ['chat-contacts', tenantId, userAgencyIds, debouncedSearch, page, selectedAgency],
     queryFn: async () => {
-      console.log('🔍 Fetching contacts - tenantId:', tenantId, 'userAgencyIds:', userAgencyIds);
+      console.log('🔍 Fetching contacts - tenantId:', tenantId, 'userAgencyIds:', userAgencyIds, 'selectedAgency:', selectedAgency);
       
       if (!tenantId) {
         console.warn('⚠️ Contacts query skipped - missing tenantId');
@@ -100,10 +101,16 @@ export default function Chat() {
         return [];
       }
 
+      // Filter agencies based on global selection
+      let filteredAgencyIds = allAgencyIds;
+      if (selectedAgency !== "all") {
+        filteredAgencyIds = allAgencyIds.filter(id => id === selectedAgency);
+      }
+
       // Call optimized database function
       const { data, error } = await supabase.rpc('get_chat_contacts', {
         p_tenant_id: tenantId,
-        p_agency_ids: allAgencyIds,
+        p_agency_ids: filteredAgencyIds,
         p_search_term: debouncedSearch || null,
         p_limit: CONTACTS_PER_PAGE,
         p_offset: page * CONTACTS_PER_PAGE
@@ -129,27 +136,12 @@ export default function Chat() {
     },
   });
 
-  // Get unique agencies from contacts
-  const agencies = useMemo(() => {
-    if (!contacts) return [];
-    const uniqueAgencies = new Map<string, string>();
-    contacts.forEach(contact => {
-      if (contact.agency_id && contact.agency_name) {
-        uniqueAgencies.set(contact.agency_id, contact.agency_name);
-      }
-    });
-    return Array.from(uniqueAgencies.entries()).map(([id, name]) => ({ id, name }));
-  }, [contacts]);
-
-  // Filter contacts by type with memoization
+  // Filter contacts by type and sync status with memoization
   const filteredContacts = useMemo(() => {
     return (contacts || []).filter(contact => {
       // Filter by contact type
       if (contactFilter === "clients" && contact.contact_type !== "client") return false;
       if (contactFilter === "leads" && contact.contact_type !== "lead") return false;
-      
-      // Filter by agency
-      if (selectedAgencyId !== "all" && contact.agency_id !== selectedAgencyId) return false;
       
       // Filter by sync status
       if (syncStatusFilter === "synced" && !contact.manychat_subscriber_id) return false;
@@ -157,7 +149,7 @@ export default function Chat() {
       
       return true;
     });
-  }, [contacts, contactFilter, selectedAgencyId, syncStatusFilter]);
+  }, [contacts, contactFilter, syncStatusFilter]);
 
   const handleLoadMore = () => {
     if (hasMore && !isFetching) {
@@ -205,32 +197,16 @@ export default function Chat() {
             />
           </div>
           
-          <div className="grid grid-cols-2 gap-2">
-            <Select value={selectedAgencyId} onValueChange={setSelectedAgencyId}>
-              <SelectTrigger className="text-right" dir="rtl">
-                <SelectValue placeholder="כל הסוכנויות" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">כל הסוכנויות</SelectItem>
-                {agencies.map(agency => (
-                  <SelectItem key={agency.id} value={agency.id}>
-                    {agency.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={syncStatusFilter} onValueChange={(value) => setSyncStatusFilter(value as any)}>
-              <SelectTrigger className="text-right" dir="rtl">
-                <SelectValue placeholder="סטטוס סנכרון" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">הכל</SelectItem>
-                <SelectItem value="synced">מסונכרנים</SelectItem>
-                <SelectItem value="unsynced">לא מסונכרנים</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <Select value={syncStatusFilter} onValueChange={(value) => setSyncStatusFilter(value as any)}>
+            <SelectTrigger className="text-right" dir="rtl">
+              <SelectValue placeholder="סטטוס סנכרון" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">הכל</SelectItem>
+              <SelectItem value="synced">מסונכרנים</SelectItem>
+              <SelectItem value="unsynced">לא מסונכרנים</SelectItem>
+            </SelectContent>
+          </Select>
           
           <Tabs value={contactFilter} onValueChange={(v) => setContactFilter(v as typeof contactFilter)} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
