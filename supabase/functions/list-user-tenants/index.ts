@@ -46,6 +46,15 @@ serve(async (req: Request) => {
     
     const isSuperAdmin = rolesData?.some((r: any) => r.role === "super_admin");
 
+    // Get user's active tenant to determine what they should see
+    const { data: activeTenant } = await supabase
+      .from("user_active_tenant")
+      .select("tenant_id, tenants(slug, org_type, parent_tenant_id)")
+      .eq("user_id", user.id)
+      .single();
+
+    const activeSlug = (activeTenant?.tenants as any)?.slug;
+
     // Special case: owners of MarketingCaptain can view all tenants
     let isOwnerOfMarketingCaptain = false;
     try {
@@ -63,8 +72,21 @@ serve(async (req: Request) => {
 
     let tenants: any[] = [];
 
-    if (isSuperAdmin || isOwnerOfMarketingCaptain) {
-      // Super admins see ALL tenants (no allow_super_admin_access gating)
+    if (isSuperAdmin) {
+      // Super admins see ALL tenants
+      const { data: allTenants, error: allTenantsError } = await supabase
+        .from("tenants")
+        .select("id, name, slug, org_type, parent_tenant_id, subdomain, contact_name, contact_email, status, notes, trial_ends_at")
+        .order("name");
+
+      if (allTenantsError) {
+        console.error("Error fetching tenants:", allTenantsError);
+        throw new Error("Failed to fetch tenants");
+      }
+
+      tenants = allTenants || [];
+    } else if (isOwnerOfMarketingCaptain && activeSlug === 'marketingcaptain') {
+      // Only show all tenants when actively using MarketingCaptain
       const { data: allTenants, error: allTenantsError } = await supabase
         .from("tenants")
         .select("id, name, slug, org_type, parent_tenant_id, subdomain, contact_name, contact_email, status, notes, trial_ends_at")
@@ -88,7 +110,17 @@ serve(async (req: Request) => {
         throw new Error("Failed to fetch user tenants");
       }
 
-      tenants = (data || []).map((row: any) => row.tenants).filter((t: any) => t && t.id && t.name);
+      let userTenants = (data || []).map((row: any) => row.tenants).filter((t: any) => t && t.id && t.name);
+
+      // If active tenant is set, filter to show only that org + its sub-orgs
+      if (activeTenant?.tenant_id) {
+        const activeTenantId = activeTenant.tenant_id;
+        tenants = userTenants.filter((t: any) => 
+          t.id === activeTenantId || t.parent_tenant_id === activeTenantId
+        );
+      } else {
+        tenants = userTenants;
+      }
     }
 
     return new Response(JSON.stringify({ tenants }), {
