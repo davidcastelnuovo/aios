@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,15 +17,17 @@ export default function Chat() {
   const { clientId } = useParams();
   const { tenantId } = useCurrentTenant();
   const { buildPath } = useTenantPath();
+  const { userAgencyIds, isLoading: agenciesLoading } = useUserAgencies();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(clientId || null);
 
-  // Fetch clients with unread message counts
+  // Fetch clients with unread message counts from accessible agencies
   const { data: clients, isLoading } = useQuery({
-    queryKey: ['chat-clients', tenantId, searchTerm],
+    queryKey: ['chat-clients', tenantId, userAgencyIds, searchTerm],
     queryFn: async () => {
       if (!tenantId) return [];
 
+      // Build query based on user's accessible agencies
       let query = supabase
         .from('clients')
         .select(`
@@ -36,9 +39,20 @@ export default function Chat() {
           agencies (name),
           manychat_subscriber_id
         `)
-        .eq('tenant_id', tenantId)
         .not('manychat_subscriber_id', 'is', null)
         .order('name');
+
+      // Filter by accessible agencies
+      if (userAgencyIds === null) {
+        // Owner - show all agencies in tenant
+        query = query.eq('tenant_id', tenantId);
+      } else if (userAgencyIds && userAgencyIds.length > 0) {
+        // Specific agencies
+        query = query.in('agency_id', userAgencyIds);
+      } else {
+        // No access
+        return [];
+      }
 
       if (searchTerm) {
         query = query.ilike('name', `%${searchTerm}%`);
@@ -66,7 +80,7 @@ export default function Chat() {
 
       return clientsWithCounts;
     },
-    enabled: !!tenantId,
+    enabled: !!tenantId && !agenciesLoading,
   });
 
   return (
