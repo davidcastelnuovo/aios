@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, Phone, Mail, AlertCircle, Edit, Send, MessageSquare } from "lucide-react";
+import { Building2, Phone, Mail, AlertCircle, Edit, Send, MessageSquare, ArrowRight } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import ChatMessageList from "./ChatMessageList";
@@ -16,9 +16,10 @@ import { toast } from "sonner";
 interface ChatViewProps {
   contactId: string;
   contactType: 'client' | 'lead';
+  onBack?: () => void;
 }
 
-export default function ChatView({ contactId, contactType }: ChatViewProps) {
+export default function ChatView({ contactId, contactType, onBack }: ChatViewProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState(false);
   const [subscriberId, setSubscriberId] = useState("");
@@ -195,8 +196,13 @@ export default function ChatView({ contactId, contactType }: ChatViewProps) {
     <Card className="h-full flex flex-col">
       {/* Header */}
       <div className="p-4 border-b bg-muted/50">
-        <div className="flex items-center justify-between mb-3">
-          <div>
+        <div className="flex items-center gap-3 mb-3">
+          {onBack && (
+            <Button variant="ghost" size="icon" onClick={onBack} className="shrink-0">
+              <ArrowRight className="h-5 w-5" />
+            </Button>
+          )}
+          <div className="flex-1">
             <h2 className="font-semibold text-lg flex items-center gap-2">
               {contact.name}
               {contactType === 'lead' && (
