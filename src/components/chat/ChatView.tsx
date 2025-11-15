@@ -288,7 +288,7 @@ export default function ChatView({ clientId }: ChatViewProps) {
       {/* Input */}
       <div className="border-t">
         {/* Template Selection - Compact Dropdown above input */}
-        {templates && templates.length > 0 && (
+        {templates && templates.length > 0 ? (
           <div className="px-4 pt-3 pb-2 space-y-2">
             <div className="flex gap-2 items-center">
               <Select value={selectedTemplate || ""} onValueChange={setSelectedTemplate}>
@@ -350,6 +350,16 @@ export default function ChatView({ clientId }: ChatViewProps) {
               </div>
             )}
           </div>
+        ) : (
+          <Alert className="mx-4 mt-3 mb-2">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              לא הוגדרו טמפלייטים. 
+              <a href="/t/promo/manychat-templates" className="font-medium underline mr-1">
+                הוסף טמפלייטים כאן
+              </a>
+            </AlertDescription>
+          </Alert>
         )}
         
         <ChatInput
