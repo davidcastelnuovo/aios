@@ -44,6 +44,7 @@ export default function DynamicTables() {
       if (!session) throw new Error('Not authenticated');
 
       const response = await supabase.functions.invoke('crm-tables', {
+        method: 'GET',
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
