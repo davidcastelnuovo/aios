@@ -256,30 +256,30 @@ export default function Chat() {
                       : 'hover:bg-accent'
                   }`}
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium truncate">{contact.name}</span>
-                        {contact.type === 'lead' && (
-                          <Badge variant="outline" className="text-xs shrink-0">
-                            ליד
-                          </Badge>
-                        )}
+                  <div className="flex items-center justify-between gap-2">
+                    {contact.unreadCount > 0 && (
+                      <Badge variant="destructive" className="shrink-0">
+                        {contact.unreadCount}
+                      </Badge>
+                    )}
+                    <div className="flex-1 min-w-0 text-right">
+                      <div className="flex items-center justify-end gap-2 mb-1">
                         {!contact.manychat_subscriber_id && (
                           <Badge variant="secondary" className="text-xs shrink-0">
                             לא מסונכרן
                           </Badge>
                         )}
+                        {contact.type === 'lead' && (
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            ליד
+                          </Badge>
+                        )}
+                        <span className="font-medium truncate">{contact.name}</span>
                       </div>
                       <div className="text-sm opacity-70 truncate">
                         {contact.agencies?.name}
                       </div>
                     </div>
-                    {contact.unreadCount > 0 && (
-                      <Badge variant="destructive" className="mr-2 shrink-0">
-                        {contact.unreadCount}
-                      </Badge>
-                    )}
                   </div>
                 </button>
               ))}
