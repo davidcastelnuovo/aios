@@ -67,7 +67,12 @@ export default function Chat() {
   const { data: contacts, isLoading, isFetching } = useQuery({
     queryKey: ['chat-contacts', tenantId, userAgencyIds, debouncedSearch, page],
     queryFn: async () => {
-      if (!tenantId || !userAgencyIds || userAgencyIds.length === 0) return [];
+      console.log('🔍 Fetching contacts - tenantId:', tenantId, 'userAgencyIds:', userAgencyIds);
+      
+      if (!tenantId || !userAgencyIds || userAgencyIds.length === 0) {
+        console.warn('⚠️ Contacts query skipped - missing data');
+        return [];
+      }
 
       console.time('⏱️ Chat contacts query');
 
