@@ -101,13 +101,14 @@ Deno.serve(async (req) => {
       data: {
         version: 'v2',
         content: {
+          type: channel, // Explicitly set platform (e.g., 'whatsapp')
           messages: [{
             type: 'text',
             text: message,
           }],
         },
       },
-      tag: 'ACCOUNT_UPDATE', // Required for messages outside 24h window
+      message_tag: 'ACCOUNT_UPDATE', // Use correct field name for FB 24h tag
     };
 
     console.log('📨 ManyChat request payload:', JSON.stringify(manychatPayload, null, 2));
