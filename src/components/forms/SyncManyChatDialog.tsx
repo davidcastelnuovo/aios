@@ -31,16 +31,28 @@ export function SyncManyChatDialog() {
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const { tenantId } = useCurrentTenant();
 
-  // Count clients without ManyChat ID
+  // Count clients and leads without ManyChat ID
   const { data: unsyncedCount } = useQuery({
-    queryKey: ['unsynced-clients', tenantId],
+    queryKey: ['unsynced-counts', tenantId],
     queryFn: async () => {
-      const { count } = await supabase
-        .from('clients')
-        .select('*', { count: 'exact', head: true })
-        .eq('tenant_id', tenantId)
-        .is('manychat_subscriber_id', null);
-      return count || 0;
+      const [clientsResult, leadsResult] = await Promise.all([
+        supabase
+          .from('clients')
+          .select('*', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .is('manychat_subscriber_id', null),
+        supabase
+          .from('leads')
+          .select('*', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .is('manychat_subscriber_id', null)
+      ]);
+      
+      return {
+        clients: clientsResult.count || 0,
+        leads: leadsResult.count || 0,
+        total: (clientsResult.count || 0) + (leadsResult.count || 0)
+      };
     },
     enabled: !!tenantId,
   });
@@ -74,27 +86,29 @@ export function SyncManyChatDialog() {
       <DialogTrigger asChild>
         <Button variant="outline">
           <RefreshCw className="h-4 w-4 ml-2" />
-          סנכרן לקוחות מ-ManyChat
+          ייבוא מנויים מ-ManyChat
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>סנכרון לקוחות מ-ManyChat</DialogTitle>
+          <DialogTitle>ייבוא מנויים מ-ManyChat API</DialogTitle>
           <DialogDescription>
-            הסנכרון יבדוק התאמות לפי מספר טלפון בלבד. לא ייווצרו לקוחות חדשים.
+            הפונקציה תמשוך את כל המנויים מ-ManyChat ותתאים אותם ללקוחות ולידים קיימים לפי מספר טלפון.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {unsyncedCount !== undefined && unsyncedCount > 0 && (
+          {unsyncedCount && unsyncedCount.total > 0 && (
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 <div className="font-semibold mb-1">
-                  {unsyncedCount} לקוחות ללא חיבור ManyChat
+                  {unsyncedCount.total} רשומות ללא חיבור ManyChat
                 </div>
-                <div className="text-sm">
-                  לקוחות אלה לא מסונכרנים עם ManyChat. הסנכרון ינסה למצוא אותם לפי מספר טלפון.
+                <div className="text-sm space-y-1">
+                  <div>• {unsyncedCount.clients} לקוחות</div>
+                  <div>• {unsyncedCount.leads} לידים</div>
+                  <div className="mt-2">הייבוא ינסה למצוא אותם לפי מספר טלפון.</div>
                 </div>
               </AlertDescription>
             </Alert>
@@ -103,11 +117,12 @@ export function SyncManyChatDialog() {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-sm">
-              המערכת תחפש התאמות קיימות:
-              <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>תחילה בלקוחות הפעילים</li>
-                <li>לאחר מכן בלידים</li>
-                <li>לא יתווספו לקוחות חדשים</li>
+              <div className="font-semibold mb-2">תהליך הייבוא:</div>
+              <ul className="list-disc list-inside space-y-1">
+                <li>משיכת כל המנויים מ-ManyChat API</li>
+                <li>התאמה ללקוחות ולידים לפי מספר טלפון</li>
+                <li>עדכון subscriber_id בלבד - ללא כפילויות</li>
+                <li>רק רשומות בסוכנויות שיש לך גישה אליהן</li>
               </ul>
             </AlertDescription>
           </Alert>
@@ -185,12 +200,12 @@ export function SyncManyChatDialog() {
               {syncMutation.isPending ? (
                 <>
                   <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
-                  מסנכרן...
+                  מייבא מנויים...
                 </>
               ) : (
                 <>
                   <RefreshCw className="h-4 w-4 ml-2" />
-                  התחל סנכרון
+                  התחל ייבוא
                 </>
               )}
             </Button>
