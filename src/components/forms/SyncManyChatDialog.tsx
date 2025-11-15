@@ -17,13 +17,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface SyncResult {
   success: boolean;
-  total_subscribers: number;
-  total_clients: number;
-  total_leads: number;
-  clients_matched: number;
-  leads_matched: number;
-  clients_unmatched: number;
-  leads_unmatched: number;
+  total: number;
+  matched_clients: number;
+  matched_leads: number;
+  unmatched: number;
 }
 
 export function SyncManyChatDialog() {
@@ -31,35 +28,25 @@ export function SyncManyChatDialog() {
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
   const { tenantId } = useCurrentTenant();
 
-  // Count clients and leads without ManyChat ID
-  const { data: unsyncedCount } = useQuery({
-    queryKey: ['unsynced-counts', tenantId],
+  // Count unique ManyChat contacts in chat messages
+  const { data: manychatContactsCount } = useQuery({
+    queryKey: ['manychat-contacts', tenantId],
     queryFn: async () => {
-      const [clientsResult, leadsResult] = await Promise.all([
-        supabase
-          .from('clients')
-          .select('*', { count: 'exact', head: true })
-          .eq('tenant_id', tenantId)
-          .is('manychat_subscriber_id', null),
-        supabase
-          .from('leads')
-          .select('*', { count: 'exact', head: true })
-          .eq('tenant_id', tenantId)
-          .is('manychat_subscriber_id', null)
-      ]);
+      const { count, error } = await supabase
+        .from('chat_messages')
+        .select('client_id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId)
+        .not('raw_provider_data', 'is', null);
       
-      return {
-        clients: clientsResult.count || 0,
-        leads: leadsResult.count || 0,
-        total: (clientsResult.count || 0) + (leadsResult.count || 0)
-      };
+      if (error) throw error;
+      return count || 0;
     },
     enabled: !!tenantId,
   });
 
   const syncMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('import-manychat-subscribers', {
+      const { data, error } = await supabase.functions.invoke('sync-manychat-subscribers', {
         body: { tenantId }
       });
       
@@ -86,29 +73,27 @@ export function SyncManyChatDialog() {
       <DialogTrigger asChild>
         <Button variant="outline">
           <RefreshCw className="h-4 w-4 ml-2" />
-          ייבוא מנויים מ-ManyChat
+          סנכרן מ-ManyChat
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>ייבוא מנויים מ-ManyChat API</DialogTitle>
+          <DialogTitle>סנכרון עם ManyChat</DialogTitle>
           <DialogDescription>
-            הפונקציה תמשוך את כל המנויים מ-ManyChat ותתאים אותם ללקוחות ולידים קיימים לפי מספר טלפון.
+            מתאים לקוחות ולידים עם מנויי ManyChat לפי הודעות שנשלחו.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {unsyncedCount && unsyncedCount.total > 0 && (
+          {manychatContactsCount !== undefined && manychatContactsCount > 0 && (
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 <div className="font-semibold mb-1">
-                  {unsyncedCount.total} רשומות ללא חיבור ManyChat
+                  {manychatContactsCount} הודעות ManyChat במערכת
                 </div>
-                <div className="text-sm space-y-1">
-                  <div>• {unsyncedCount.clients} לקוחות</div>
-                  <div>• {unsyncedCount.leads} לידים</div>
-                  <div className="mt-2">הייבוא ינסה למצוא אותם לפי מספר טלפון.</div>
+                <div className="text-sm">
+                  הסנכרון יתאים לקוחות/לידים למנויי ManyChat שכבר שלחו הודעות.
                 </div>
               </AlertDescription>
             </Alert>
@@ -117,78 +102,31 @@ export function SyncManyChatDialog() {
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="text-sm">
-              <div className="font-semibold mb-2">תהליך הייבוא:</div>
+              <div className="font-semibold mb-2">איך זה עובד:</div>
               <ul className="list-disc list-inside space-y-1">
-                <li>משיכת כל המנויים מ-ManyChat API</li>
-                <li>התאמה ללקוחות ולידים לפי מספר טלפון</li>
-                <li>עדכון subscriber_id בלבד - ללא כפילויות</li>
-                <li>רק רשומות בסוכנויות שיש לך גישה אליהן</li>
+                <li>בודק הודעות ManyChat שנשמרו במערכת</li>
+                <li>מתאים ללקוחות/לידים לפי מספר טלפון</li>
+                <li>עדכון subscriber_id - ללא כפילויות</li>
+                <li className="text-amber-600">רק מי ששלח הודעה דרך ManyChat יסונכרן</li>
               </ul>
             </AlertDescription>
           </Alert>
 
           {syncResult && (
-            <div className="space-y-3 p-4 rounded-lg bg-muted">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                <span className="font-semibold">הסנכרון הושלם</span>
-              </div>
-              
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">מנויים ב-ManyChat:</span>
-                  <span className="font-semibold">{syncResult.total_subscribers}</span>
+            <Alert>
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="space-y-2">
+                <div className="font-semibold">הסנכרון הושלם בהצלחה</div>
+                <div className="text-sm space-y-1">
+                  <div>• סה"כ הודעות: {syncResult.total}</div>
+                  <div className="text-green-600">✓ לקוחות: {syncResult.matched_clients}</div>
+                  <div className="text-green-600">✓ לידים: {syncResult.matched_leads}</div>
+                  {syncResult.unmatched > 0 && (
+                    <div className="text-amber-600">ללא התאמה: {syncResult.unmatched}</div>
+                  )}
                 </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">סה"כ לקוחות במערכת:</span>
-                  <span className="font-semibold">{syncResult.total_clients}</span>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">סה"כ לידים במערכת:</span>
-                  <span className="font-semibold">{syncResult.total_leads}</span>
-                </div>
-                
-                <div className="h-px bg-border my-2" />
-                
-                <div className="flex items-center justify-between text-green-600">
-                  <span className="flex items-center gap-1">
-                    <Users className="h-4 w-4" />
-                    לקוחות שסונכרנו:
-                  </span>
-                  <span className="font-semibold">{syncResult.clients_matched}</span>
-                </div>
-                
-                <div className="flex items-center justify-between text-green-600">
-                  <span className="flex items-center gap-1">
-                    <UserPlus className="h-4 w-4" />
-                    לידים שסונכרנו:
-                  </span>
-                  <span className="font-semibold">{syncResult.leads_matched}</span>
-                </div>
-                
-                {(syncResult.clients_unmatched > 0 || syncResult.leads_unmatched > 0) && (
-                  <>
-                    <div className="h-px bg-border my-2" />
-                    
-                    {syncResult.clients_unmatched > 0 && (
-                      <div className="flex items-center justify-between text-amber-600">
-                        <span>לקוחות ללא התאמה:</span>
-                        <span className="font-semibold">{syncResult.clients_unmatched}</span>
-                      </div>
-                    )}
-                    
-                    {syncResult.leads_unmatched > 0 && (
-                      <div className="flex items-center justify-between text-amber-600">
-                        <span>לידים ללא התאמה:</span>
-                        <span className="font-semibold">{syncResult.leads_unmatched}</span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
+              </AlertDescription>
+            </Alert>
           )}
 
           <div className="flex gap-2">
@@ -200,12 +138,12 @@ export function SyncManyChatDialog() {
               {syncMutation.isPending ? (
                 <>
                   <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
-                  מייבא מנויים...
+                  מסנכרן...
                 </>
               ) : (
                 <>
                   <RefreshCw className="h-4 w-4 ml-2" />
-                  התחל ייבוא
+                  התחל סנכרון
                 </>
               )}
             </Button>
