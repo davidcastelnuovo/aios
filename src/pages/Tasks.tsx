@@ -823,109 +823,347 @@ export default function Tasks() {
           </DroppableColumn>
         </div>
         ) : (
-          /* Table View */
-          <Card className="shadow-card">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{getFieldLabel('agency_id', 'סוכנות')}</TableHead>
-                  <TableHead>{getFieldLabel('client_id', 'לקוח')}</TableHead>
-                  <TableHead>{getFieldLabel('title', 'משימה')}</TableHead>
-                  <TableHead>{getFieldLabel('campaigner_id', 'קמפיינר')}</TableHead>
-                  <TableHead>{getFieldLabel('priority', 'עדיפות')}</TableHead>
-                  <TableHead>{getFieldLabel('due_date', 'תאריך יעד')}</TableHead>
-                  <TableHead>{getFieldLabel('status', 'סטטוס')}</TableHead>
-                  <TableHead>פעולות</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedTasks?.map((task) => (
-                  <TableRow 
-                    key={task.id}
-                    className="cursor-pointer hover:bg-accent/50"
-                    onClick={() => setEditingTask(task)}
-                  >
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{task.agencies?.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{task.clients?.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="font-medium">{task.title}</span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Megaphone className="h-4 w-4 text-muted-foreground" />
-                        <span>{task.campaigners?.full_name}</span>
-                      </div>
-                    </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium" style={{ color: getPriorityColor(task.priority) }}>
-                            {task.priority}/10
-                          </span>
-                        </div>
-                      </TableCell>
-                    <TableCell>
-                      {task.due_date ? (
-                        <div className={`flex items-center gap-2 ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive font-medium' : ''}`}>
-                          {isOverdue(task.due_date) && task.status !== 'done' && <AlertCircle className="h-4 w-4" />}
-                          <CalendarIcon className="h-4 w-4" />
-                          <span>{new Date(task.due_date).toLocaleDateString("he-IL")}</span>
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Select
-                        value={task.status}
-                        onValueChange={(value: "open" | "in_progress" | "done") => 
-                          updateTaskStatusMutation.mutate({ taskId: task.id, status: value })
-                        }
+          /* Table View - Split by Status */
+          <div className="space-y-6">
+            {/* Open Tasks Table */}
+            <Card className="shadow-card">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-1 rounded-full bg-primary"></div>
+                  <CardTitle className="text-lg font-semibold">פתוח ({tasksByStatus.open.length})</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{getFieldLabel('agency_id', 'סוכנות')}</TableHead>
+                      <TableHead>{getFieldLabel('client_id', 'לקוח')}</TableHead>
+                      <TableHead>{getFieldLabel('title', 'משימה')}</TableHead>
+                      <TableHead>{getFieldLabel('campaigner_id', 'קמפיינר')}</TableHead>
+                      <TableHead>{getFieldLabel('priority', 'עדיפות')}</TableHead>
+                      <TableHead>{getFieldLabel('due_date', 'תאריך יעד')}</TableHead>
+                      <TableHead>{getFieldLabel('status', 'סטטוס')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[...tasksByStatus.open].sort((a, b) => b.priority - a.priority).map((task) => (
+                      <TableRow 
+                        key={task.id}
+                        className="cursor-pointer hover:bg-accent/50"
+                        onClick={() => setEditingTask(task)}
                       >
-                        <SelectTrigger className="h-8 w-[130px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="open">
-                            <div className="flex items-center gap-2">
-                              <div className="h-2 w-2 rounded-full bg-blue-500"></div>
-                              פתוח
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">{task.agencies?.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">{task.clients?.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-medium">{task.title}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Megaphone className="h-4 w-4 text-muted-foreground" />
+                            <span>{task.campaigners?.full_name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium" style={{ color: getPriorityColor(task.priority) }}>
+                              {task.priority}/10
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {task.due_date ? (
+                            <div className={`flex items-center gap-2 ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive font-medium' : ''}`}>
+                              {isOverdue(task.due_date) && task.status !== 'done' && <AlertCircle className="h-4 w-4" />}
+                              <CalendarIcon className="h-4 w-4" />
+                              <span>{new Date(task.due_date).toLocaleDateString("he-IL")}</span>
                             </div>
-                          </SelectItem>
-                          <SelectItem value="in_progress">
-                            <div className="flex items-center gap-2">
-                              <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
-                              בעבודה
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Select
+                            value={task.status}
+                            onValueChange={(value: "open" | "in_progress" | "done") => 
+                              updateTaskStatusMutation.mutate({ taskId: task.id, status: value })
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-[130px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="open">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                                  פתוח
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="in_progress">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+                                  בעבודה
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="done">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                                  הושלם
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {tasksByStatus.open.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                          אין משימות פתוחות
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* In Progress Tasks Table */}
+            <Card className="shadow-card">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-1 rounded-full bg-yellow-500"></div>
+                  <CardTitle className="text-lg font-semibold">בעבודה ({tasksByStatus.in_progress.length})</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{getFieldLabel('agency_id', 'סוכנות')}</TableHead>
+                      <TableHead>{getFieldLabel('client_id', 'לקוח')}</TableHead>
+                      <TableHead>{getFieldLabel('title', 'משימה')}</TableHead>
+                      <TableHead>{getFieldLabel('campaigner_id', 'קמפיינר')}</TableHead>
+                      <TableHead>{getFieldLabel('priority', 'עדיפות')}</TableHead>
+                      <TableHead>{getFieldLabel('due_date', 'תאריך יעד')}</TableHead>
+                      <TableHead>{getFieldLabel('status', 'סטטוס')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[...tasksByStatus.in_progress].sort((a, b) => b.priority - a.priority).map((task) => (
+                      <TableRow 
+                        key={task.id}
+                        className="cursor-pointer hover:bg-accent/50"
+                        onClick={() => setEditingTask(task)}
+                      >
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">{task.agencies?.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">{task.clients?.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-medium">{task.title}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Megaphone className="h-4 w-4 text-muted-foreground" />
+                            <span>{task.campaigners?.full_name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium" style={{ color: getPriorityColor(task.priority) }}>
+                              {task.priority}/10
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {task.due_date ? (
+                            <div className={`flex items-center gap-2 ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive font-medium' : ''}`}>
+                              {isOverdue(task.due_date) && task.status !== 'done' && <AlertCircle className="h-4 w-4" />}
+                              <CalendarIcon className="h-4 w-4" />
+                              <span>{new Date(task.due_date).toLocaleDateString("he-IL")}</span>
                             </div>
-                          </SelectItem>
-                          <SelectItem value="done">
-                            <div className="flex items-center gap-2">
-                              <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                              הושלם
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Select
+                            value={task.status}
+                            onValueChange={(value: "open" | "in_progress" | "done") => 
+                              updateTaskStatusMutation.mutate({ taskId: task.id, status: value })
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-[130px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="open">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                                  פתוח
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="in_progress">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+                                  בעבודה
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="done">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                                  הושלם
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {tasksByStatus.in_progress.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                          אין משימות בעבודה
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
+            {/* Done Tasks Table */}
+            <Card className="shadow-card">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-1 rounded-full bg-success"></div>
+                  <CardTitle className="text-lg font-semibold">הושלם ({tasksByStatus.done.length})</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{getFieldLabel('agency_id', 'סוכנות')}</TableHead>
+                      <TableHead>{getFieldLabel('client_id', 'לקוח')}</TableHead>
+                      <TableHead>{getFieldLabel('title', 'משימה')}</TableHead>
+                      <TableHead>{getFieldLabel('campaigner_id', 'קמפיינר')}</TableHead>
+                      <TableHead>{getFieldLabel('priority', 'עדיפות')}</TableHead>
+                      <TableHead>{getFieldLabel('due_date', 'תאריך יעד')}</TableHead>
+                      <TableHead>{getFieldLabel('status', 'סטטוס')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {[...tasksByStatus.done].sort((a, b) => b.priority - a.priority).map((task) => (
+                      <TableRow 
+                        key={task.id}
+                        className="cursor-pointer hover:bg-accent/50"
+                        onClick={() => setEditingTask(task)}
+                      >
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">{task.agencies?.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4 text-muted-foreground" />
+                            <span className="font-medium">{task.clients?.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-medium">{task.title}</span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Megaphone className="h-4 w-4 text-muted-foreground" />
+                            <span>{task.campaigners?.full_name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium" style={{ color: getPriorityColor(task.priority) }}>
+                              {task.priority}/10
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {task.due_date ? (
+                            <div className={`flex items-center gap-2 ${isOverdue(task.due_date) && task.status !== 'done' ? 'text-destructive font-medium' : ''}`}>
+                              {isOverdue(task.due_date) && task.status !== 'done' && <AlertCircle className="h-4 w-4" />}
+                              <CalendarIcon className="h-4 w-4" />
+                              <span>{new Date(task.due_date).toLocaleDateString("he-IL")}</span>
                             </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={getStatusColor(task.status)}>
-                        {getStatusText(task.status)}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Select
+                            value={task.status}
+                            onValueChange={(value: "open" | "in_progress" | "done") => 
+                              updateTaskStatusMutation.mutate({ taskId: task.id, status: value })
+                            }
+                          >
+                            <SelectTrigger className="h-8 w-[130px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="open">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2 w-2 rounded-full bg-blue-500"></div>
+                                  פתוח
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="in_progress">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2 w-2 rounded-full bg-yellow-500"></div>
+                                  בעבודה
+                                </div>
+                              </SelectItem>
+                              <SelectItem value="done">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                                  הושלם
+                                </div>
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {tasksByStatus.done.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                          אין משימות שהושלמו
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {editingTask && (
