@@ -147,11 +147,46 @@ Deno.serve(async (req) => {
 
     console.log('🔄 Starting sync for tenant:', tenantId, 'User:', user.id);
 
-    // Fetch all clients without manychat_subscriber_id from this tenant and accessible agencies
+    // First, get all accessible agency IDs (owned + shared)
+    const { data: ownedAgencies, error: ownedAgenciesError } = await supabase
+      .from('agencies')
+      .select('id')
+      .eq('tenant_id', tenantId);
+
+    if (ownedAgenciesError) {
+      console.error('❌ Error fetching owned agencies:', ownedAgenciesError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch agencies' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { data: sharedAgencies, error: sharedAgenciesError } = await supabase
+      .from('agency_tenant_access')
+      .select('agency_id')
+      .eq('accessing_tenant_id', tenantId);
+
+    if (sharedAgenciesError) {
+      console.error('❌ Error fetching shared agencies:', sharedAgenciesError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch shared agencies' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Combine owned and shared agency IDs
+    const allAgencyIds = [
+      ...(ownedAgencies || []).map(a => a.id),
+      ...(sharedAgencies || []).map(a => a.agency_id)
+    ];
+
+    console.log(`🏢 Found ${allAgencyIds.length} accessible agencies (${ownedAgencies?.length || 0} owned, ${sharedAgencies?.length || 0} shared)`);
+
+    // Fetch all clients from accessible agencies
     const { data: clients, error: clientsError } = await supabase
       .from('clients')
       .select('id, phone, manychat_subscriber_id, tenant_id, agency_id, name')
-      .or(`tenant_id.eq.${tenantId},agency_id.in.(select agency_id from agency_tenant_access where accessing_tenant_id='${tenantId}')`);
+      .in('agency_id', allAgencyIds.length > 0 ? allAgencyIds : ['00000000-0000-0000-0000-000000000000']); // Use dummy UUID if no agencies
 
     if (clientsError) {
       console.error('❌ Error fetching clients:', clientsError);
