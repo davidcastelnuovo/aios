@@ -27,6 +27,7 @@ import {
   Bot,
   Menu,
   ListTree,
+  Table,
 } from "lucide-react";
 import {
   Sidebar,
@@ -82,6 +83,10 @@ const iconMap: Record<string, any> = {
   Bot,
   Menu,
   ListTree,
+  Table,
+  FolderKanban: Table,
+  Database: Table,
+  Layers: Table,
 };
 
 export function AppSidebar() {
@@ -110,6 +115,32 @@ export function AppSidebar() {
       return data?.map(tu => tu.tenants).filter(Boolean) as Array<{id: string, name: string}>;
     },
     enabled: !!userId,
+  });
+
+  // Fetch dynamic CRM tables
+  const { data: crmTables, isLoading: isLoadingCrmTables } = useQuery({
+    queryKey: ['crm-tables', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return [];
+
+      const response = await supabase.functions.invoke('crm-tables', {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (response.error) {
+        console.error('Error fetching CRM tables:', response.error);
+        return [];
+      }
+      
+      return response.data || [];
+    },
+    enabled: !!currentTenantId,
   });
 
   const handleTenantChange = async (newTenantId: string) => {
@@ -450,6 +481,68 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Dynamic CRM Tables Section */}
+        {crmTables && crmTables.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <div className="flex items-center gap-2 w-full font-semibold" dir="rtl">
+                      <span className="flex-1 text-right">ניהול טבלאות דינמיות</span>
+                      <Table className="h-4 w-4" />
+                    </div>
+                  </SidebarMenuButton>
+                  <SidebarMenuSub>
+                    {/* Management Page */}
+                    <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild>
+                        <NavLink
+                          to={buildPath('dynamic-tables')}
+                          onClick={handleLinkClick}
+                          className={({ isActive }) =>
+                            isActive
+                              ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
+                              : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                          }
+                          dir="rtl"
+                        >
+                          {!isCollapsed && <span className="flex-1 text-right">ניהול טבלאות</span>}
+                          <Settings className="h-4 w-4" />
+                        </NavLink>
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+
+                    {/* Individual Tables */}
+                    {crmTables.map((table: any) => {
+                      const Icon = iconMap[table.icon] || Table;
+                      return (
+                        <SidebarMenuSubItem key={table.id}>
+                          <SidebarMenuSubButton asChild>
+                            <NavLink
+                              to={buildPath(`table/${table.slug}`)}
+                              onClick={handleLinkClick}
+                              className={({ isActive }) =>
+                                isActive
+                                  ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
+                                  : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                              }
+                              dir="rtl"
+                            >
+                              {!isCollapsed && <span className="flex-1 text-right">{table.name}</span>}
+                              <Icon className="h-4 w-4" />
+                            </NavLink>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      );
+                    })}
+                  </SidebarMenuSub>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
     </Sidebar>
   );
