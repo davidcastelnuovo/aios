@@ -27,7 +27,10 @@ export type ModulePermission =
   | "accounting" // Accounting integrations (admin only)
   | "ai_support" // AI Support chatbot
   | "menu_management" // Menu customization (owner only)
-  | "fields_management"; // Custom fields management (owner only)
+  | "fields_management" // Custom fields management (owner only)
+  | "dynamic_tables" // Dynamic tables (owner only)
+  | "chat" // Chat with clients via ManyChat
+  | "settings"; // System settings
 
 export function useUserPermissions() {
   const { user } = useCurrentUser();
