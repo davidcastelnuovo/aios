@@ -141,9 +141,17 @@ export function AppSidebar() {
       }
 
       const { error } = await supabase
-        .from("profiles")
-        .update({ active_tenant_id: newTenantId } as any)
-        .eq("id", userId);
+        .from("user_active_tenant")
+        .upsert(
+          {
+            user_id: userId,
+            tenant_id: newTenantId,
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: "user_id",
+          }
+        );
 
       if (error) throw error;
 
@@ -156,7 +164,7 @@ export function AppSidebar() {
         .single();
 
       if (newTenant?.slug) {
-        navigate(`/t/${newTenant.slug}/dashboard`);
+        window.location.href = `/t/${newTenant.slug}/dashboard`;
       }
     } catch (error) {
       console.error("Error changing tenant:", error);
