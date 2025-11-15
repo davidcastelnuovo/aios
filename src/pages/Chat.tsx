@@ -21,6 +21,23 @@ export default function Chat() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(clientId || null);
 
+  // Count unsynced clients
+  const { data: unsyncedCount } = useQuery({
+    queryKey: ['unsynced-clients-count', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return 0;
+      
+      const { count } = await supabase
+        .from('clients')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId)
+        .is('manychat_subscriber_id', null);
+      
+      return count || 0;
+    },
+    enabled: !!tenantId,
+  });
+
   // Fetch clients with unread message counts from accessible agencies
   const { data: clients, isLoading } = useQuery({
     queryKey: ['chat-clients', tenantId, userAgencyIds, searchTerm],
@@ -45,7 +62,7 @@ export default function Chat() {
 
       if (allAgencyIds.length === 0) return [];
 
-      // Build query for clients with ManyChat
+      // Build query for all clients (with and without ManyChat)
       let query = supabase
         .from('clients')
         .select(`
@@ -57,7 +74,6 @@ export default function Chat() {
           agencies (name),
           manychat_subscriber_id
         `)
-        .not('manychat_subscriber_id', 'is', null)
         .in('agency_id', allAgencyIds)
         .order('name');
 
@@ -96,7 +112,14 @@ export default function Chat() {
       <Card className="w-80 flex flex-col">
         <div className="p-4 border-b space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold">לקוחות</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold">לקוחות</h3>
+              {unsyncedCount !== undefined && unsyncedCount > 0 && (
+                <Badge variant="secondary" className="text-xs">
+                  {unsyncedCount} לא מסונכרן
+                </Badge>
+              )}
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -143,10 +166,17 @@ export default function Chat() {
                       ? 'bg-primary text-primary-foreground'
                       : 'hover:bg-accent'
                   }`}
-                >
+                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{client.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium truncate">{client.name}</span>
+                        {!client.manychat_subscriber_id && (
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            לא מסונכרן
+                          </Badge>
+                        )}
+                      </div>
                       <div className="text-sm opacity-70 truncate">
                         {client.agencies?.name}
                       </div>
