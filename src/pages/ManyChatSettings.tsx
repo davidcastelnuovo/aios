@@ -1,19 +1,23 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTenantPath } from "@/hooks/useTenantPath";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Save, Key, CheckCircle2, XCircle } from "lucide-react";
+import { Save, Key, CheckCircle2, XCircle, MessageSquare, FileText } from "lucide-react";
 import { SyncManyChatDialog } from "@/components/forms/SyncManyChatDialog";
 
 export default function ManyChatSettings() {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { buildPath } = useTenantPath();
   const [apiKey, setApiKey] = useState("");
   const [isActive, setIsActive] = useState(false);
 
@@ -179,6 +183,26 @@ export default function ManyChatSettings() {
               <SyncManyChatDialog />
             </div>
           )}
+
+          {/* Navigation Buttons */}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => navigate(buildPath('chat'))}
+              className="flex-1"
+            >
+              <MessageSquare className="h-4 w-4 ml-2" />
+              חזרה לצ'אט
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate(buildPath('manychat-templates'))}
+              className="flex-1"
+            >
+              <FileText className="h-4 w-4 ml-2" />
+              ניהול טמפלייטים
+            </Button>
+          </div>
 
           {/* Save Button */}
           <Button
