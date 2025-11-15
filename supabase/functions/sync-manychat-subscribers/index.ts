@@ -45,12 +45,9 @@ Deno.serve(async (req) => {
     // Create service role client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get tenant_id
-    const { data: tenantUser, error: tenantError } = await supabase
-      .from('tenant_users')
-      .select('tenant_id')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    // Get tenant_id using the database function that handles multi-tenant users
+    const { data: tenantId, error: tenantError } = await supabase
+      .rpc('get_user_tenant_id', { _user_id: user.id });
 
     if (tenantError) {
       console.error('Tenant lookup error:', tenantError, 'User ID:', user.id);
@@ -60,15 +57,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (!tenantUser) {
+    if (!tenantId) {
       console.error('No tenant found for user:', user.id);
       return new Response(
         JSON.stringify({ error: 'Tenant not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    const tenantId = tenantUser.tenant_id;
 
     console.log('Starting sync for tenant:', tenantId);
 
