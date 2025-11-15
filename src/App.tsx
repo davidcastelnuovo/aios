@@ -36,6 +36,7 @@ import AccountingIntegrations from "./pages/AccountingIntegrations";
 import AISupport from "./pages/AISupport";
 import MenuManagement from "./pages/MenuManagement";
 import FieldsManagement from "./pages/FieldsManagement";
+import DynamicTables from "./pages/DynamicTables";
 import NotFound from "./pages/NotFound";
 import { SuperAdminRoute } from "./components/SuperAdminRoute";
 
@@ -83,6 +84,7 @@ const App = () => (
             <Route path="/t/:tenantSlug/ai-support" element={<ProtectedRoute requiredPermission="ai_support"><AppLayout><AISupport /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/menu-management" element={<ProtectedRoute requiredPermission="menu_management"><AppLayout><MenuManagement /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/fields-management" element={<ProtectedRoute requiredPermission="fields_management"><AppLayout><FieldsManagement /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/dynamic-tables" element={<ProtectedRoute requiredPermission="branding"><AppLayout><DynamicTables /></AppLayout></ProtectedRoute>} />
             
             {/* Root path redirects to auth */}
             <Route path="/" element={<Auth />} />
