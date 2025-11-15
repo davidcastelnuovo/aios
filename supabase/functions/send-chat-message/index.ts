@@ -22,11 +22,18 @@ Deno.serve(async (req) => {
     // Verify authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      console.error('❌ Authentication failed:', authError);
+      console.log('📋 Authorization header:', req.headers.get('Authorization') ? 'Present' : 'Missing');
+      return new Response(JSON.stringify({ 
+        error: 'Unauthorized',
+        details: authError?.message 
+      }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    
+    console.log('✅ User authenticated:', user.id);
 
     const { clientId, leadId, message, channel = 'whatsapp', templateId, templateVariables } = await req.json();
 

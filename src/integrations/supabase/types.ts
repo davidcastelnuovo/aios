@@ -2166,6 +2166,7 @@ export type Database = {
           p_tenant_id: string
         }
         Returns: {
+          active_chat_provider: Database["public"]["Enums"]["chat_provider"]
           agency_id: string
           agency_name: string
           contact_type: string

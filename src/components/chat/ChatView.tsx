@@ -146,6 +146,13 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
     if (!contact) return;
 
     try {
+      // Check session first
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("נא להתחבר מחדש למערכת");
+        return;
+      }
+
       // Check if provider is configured
       if (!activeProvider) {
         toast.error("לא מוגדר ספק צ'אט פעיל");
