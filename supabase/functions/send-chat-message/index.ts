@@ -107,6 +107,7 @@ Deno.serve(async (req) => {
           }],
         },
       },
+      tag: 'ACCOUNT_UPDATE', // Required for messages outside 24h window
     };
 
     console.log('📨 ManyChat request payload:', JSON.stringify(manychatPayload, null, 2));
