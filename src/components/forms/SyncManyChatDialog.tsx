@@ -17,10 +17,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface SyncResult {
   success: boolean;
-  total: number;
-  clientsMatched: number;
-  leadsMatched: number;
-  notMatched: number;
+  total_subscribers: number;
+  total_clients: number;
+  total_leads: number;
+  clients_matched: number;
+  leads_matched: number;
+  clients_unmatched: number;
+  leads_unmatched: number;
 }
 
 export function SyncManyChatDialog() {
@@ -44,7 +47,7 @@ export function SyncManyChatDialog() {
 
   const syncMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('sync-manychat-subscribers', {
+      const { data, error } = await supabase.functions.invoke('import-manychat-subscribers', {
         body: { tenantId }
       });
       
@@ -113,35 +116,62 @@ export function SyncManyChatDialog() {
             <div className="space-y-3 p-4 rounded-lg bg-muted">
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-600" />
-                <span className="font-semibold">תוצאות סנכרון</span>
+                <span className="font-semibold">הסנכרון הושלם</span>
               </div>
               
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">סך הכל subscribers:</span>
-                  <span className="font-medium">{syncResult.total}</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">מנויים ב-ManyChat:</span>
+                  <span className="font-semibold">{syncResult.total_subscribers}</span>
                 </div>
                 
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    <Users className="h-3 w-3" />
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">סה"כ לקוחות במערכת:</span>
+                  <span className="font-semibold">{syncResult.total_clients}</span>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">סה"כ לידים במערכת:</span>
+                  <span className="font-semibold">{syncResult.total_leads}</span>
+                </div>
+                
+                <div className="h-px bg-border my-2" />
+                
+                <div className="flex items-center justify-between text-green-600">
+                  <span className="flex items-center gap-1">
+                    <Users className="h-4 w-4" />
                     לקוחות שסונכרנו:
                   </span>
-                  <span className="font-medium text-green-600">{syncResult.clientsMatched}</span>
+                  <span className="font-semibold">{syncResult.clients_matched}</span>
                 </div>
                 
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground flex items-center gap-1">
-                    <UserPlus className="h-3 w-3" />
-                    לידים שנמצאו:
+                <div className="flex items-center justify-between text-green-600">
+                  <span className="flex items-center gap-1">
+                    <UserPlus className="h-4 w-4" />
+                    לידים שסונכרנו:
                   </span>
-                  <span className="font-medium text-blue-600">{syncResult.leadsMatched}</span>
+                  <span className="font-semibold">{syncResult.leads_matched}</span>
                 </div>
                 
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">ללא התאמה:</span>
-                  <span className="font-medium text-muted-foreground">{syncResult.notMatched}</span>
-                </div>
+                {(syncResult.clients_unmatched > 0 || syncResult.leads_unmatched > 0) && (
+                  <>
+                    <div className="h-px bg-border my-2" />
+                    
+                    {syncResult.clients_unmatched > 0 && (
+                      <div className="flex items-center justify-between text-amber-600">
+                        <span>לקוחות ללא התאמה:</span>
+                        <span className="font-semibold">{syncResult.clients_unmatched}</span>
+                      </div>
+                    )}
+                    
+                    {syncResult.leads_unmatched > 0 && (
+                      <div className="flex items-center justify-between text-amber-600">
+                        <span>לידים ללא התאמה:</span>
+                        <span className="font-semibold">{syncResult.leads_unmatched}</span>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           )}
