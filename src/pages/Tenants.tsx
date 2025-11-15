@@ -166,7 +166,13 @@ export default function Tenants() {
   const renderOrgActions = (org: any) => {
     return (
       <>
-        {canManageTenants && (
+        {/* רק לארגון שורש (root) - כפתור "הוסף ארגון" */}
+        {canManageTenants && org.org_type === "root" && (
+          <AddTenantForm asDialog={true} />
+        )}
+        
+        {/* לארגון רגיל (organization) - כפתור "צור תת-ארגון" */}
+        {canManageTenants && org.org_type === "organization" && (
           <Button
             variant="ghost"
             size="sm"
@@ -174,11 +180,14 @@ export default function Tenants() {
               e.stopPropagation();
               setSubTenantParentId(org.id);
             }}
-            title="הוסף תת-ארגון"
+            title="צור תת-ארגון"
           >
             <Plus className="h-4 w-4" />
           </Button>
         )}
+        
+        {/* תת-ארגון (sub_organization) - אין כפתור יצירה */}
+        
         {canManageTenants && (
           <Button
             variant="ghost"
@@ -320,7 +329,6 @@ export default function Tenants() {
           <Button onClick={() => refetch()} variant="ghost" size="sm" disabled={isLoading}>
             <RefreshCw className={`h-5 w-5 ${isLoading ? "animate-spin" : ""}`} />
           </Button>
-          {canManageTenants && <AddTenantForm />}
         </div>
       </div>
 
@@ -353,7 +361,7 @@ export default function Tenants() {
                         key={org.id}
                         className={
                           currentTenantId === org.id
-                            ? "bg-primary/5 border-r-4 border-r-primary"
+                            ? "bg-green-50 dark:bg-green-950/20 border-r-4 border-r-green-500"
                             : "hover:bg-muted/50 cursor-pointer"
                         }
                         onClick={() => handleTenantClick(org.id)}
@@ -418,7 +426,7 @@ export default function Tenants() {
                             key={sub.id}
                             className={
                               currentTenantId === sub.id
-                                ? "bg-primary/5 border-r-4 border-r-primary bg-muted/20"
+                                ? "bg-green-50 dark:bg-green-950/20 border-r-4 border-r-green-500 bg-muted/20"
                                 : "bg-muted/20 hover:bg-muted/50 cursor-pointer"
                             }
                             onClick={() => handleTenantClick(sub.id)}
