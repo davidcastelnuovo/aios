@@ -67,7 +67,17 @@ serve(async (req) => {
       }
 
       case 'POST': {
-        const body = await req.json();
+        let body;
+        try {
+          const text = await req.text();
+          body = text ? JSON.parse(text) : {};
+        } catch (e) {
+          return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
         const { table_id, name, key, type, position = 0, is_required = false, is_visible = true, config = {} } = body;
 
         if (!table_id || !name || !key || !type) {
@@ -129,7 +139,17 @@ serve(async (req) => {
           });
         }
 
-        const body = await req.json();
+        let body;
+        try {
+          const text = await req.text();
+          body = text ? JSON.parse(text) : {};
+        } catch (e) {
+          return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
         const { name, position, is_required, is_visible, config } = body;
 
         const updateData: any = { updated_at: new Date().toISOString() };
