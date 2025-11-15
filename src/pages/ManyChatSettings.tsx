@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Save, Key, CheckCircle2, XCircle, MessageSquare, FileText } from "lucide-react";
+import { Save, Key, CheckCircle2, XCircle, MessageSquare } from "lucide-react";
 import { SyncManyChatDialog } from "@/components/forms/SyncManyChatDialog";
 
 export default function ManyChatSettings() {
@@ -184,25 +184,15 @@ export default function ManyChatSettings() {
             </div>
           )}
 
-          {/* Navigation Buttons */}
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={() => navigate(buildPath('chat'))}
-              className="flex-1"
-            >
-              <MessageSquare className="h-4 w-4 ml-2" />
-              חזרה לצ'אט
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => navigate(buildPath('manychat-templates'))}
-              className="flex-1"
-            >
-              <FileText className="h-4 w-4 ml-2" />
-              ניהול טמפלייטים
-            </Button>
-          </div>
+          {/* Navigation Button */}
+          <Button
+            variant="outline"
+            onClick={() => navigate(buildPath('chat'))}
+            className="w-full"
+          >
+            <MessageSquare className="h-4 w-4 ml-2" />
+            חזרה לצ'אט
+          </Button>
 
           {/* Save Button */}
           <Button
