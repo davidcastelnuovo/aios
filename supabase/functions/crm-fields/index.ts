@@ -37,7 +37,8 @@ serve(async (req) => {
 
     const url = new URL(req.url);
     const pathParts = url.pathname.split('/').filter(Boolean);
-    const fieldId = pathParts[pathParts.length - 1];
+    const lastPart = pathParts[pathParts.length - 1];
+    const fieldId = lastPart !== 'crm-fields' ? lastPart : null;
 
     switch (req.method) {
       case 'GET': {
@@ -58,7 +59,9 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        return new Response(JSON.stringify({ fields }), {
+        console.log(`✅ Fetched ${fields?.length || 0} fields for table ${tableId}`);
+
+        return new Response(JSON.stringify({ fields: fields || [] }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -81,7 +84,6 @@ serve(async (req) => {
           });
         }
 
-        // Verify table exists and user has access
         const { data: table, error: tableError } = await supabase
           .from('crm_tables')
           .select('id')
@@ -120,7 +122,7 @@ serve(async (req) => {
       }
 
       case 'PATCH': {
-        if (!fieldId || fieldId === 'crm-fields') {
+        if (!fieldId) {
           return new Response(JSON.stringify({ error: 'Field ID required' }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -154,7 +156,7 @@ serve(async (req) => {
       }
 
       case 'DELETE': {
-        if (!fieldId || fieldId === 'crm-fields') {
+        if (!fieldId) {
           return new Response(JSON.stringify({ error: 'Field ID required' }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
