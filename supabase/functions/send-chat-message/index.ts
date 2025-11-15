@@ -76,6 +76,8 @@ Deno.serve(async (req) => {
       );
     }
 
+    console.log('📤 Sending message to subscriber:', client.manychat_subscriber_id);
+
     // Get ManyChat API Key from tenant_integrations
     const { data: integration, error: integrationError } = await supabase
       .from('tenant_integrations')
@@ -94,32 +96,44 @@ Deno.serve(async (req) => {
     }
 
     // Send message via ManyChat API
+    const manychatPayload = {
+      subscriber_id: client.manychat_subscriber_id,
+      data: {
+        version: 'v2',
+        content: {
+          messages: [{
+            type: 'text',
+            text: message,
+          }],
+        },
+      },
+    };
+
+    console.log('📨 ManyChat request payload:', JSON.stringify(manychatPayload, null, 2));
+
     const manychatResponse = await fetch('https://api.manychat.com/fb/sending/sendContent', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${integration.api_key}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        subscriber_id: client.manychat_subscriber_id,
-        data: {
-          version: 'v2',
-          content: {
-            messages: [{
-              type: 'text',
-              text: message,
-            }],
-          },
-        },
-      }),
+      body: JSON.stringify(manychatPayload),
     });
 
     const manychatData = await manychatResponse.json();
+    console.log('📥 ManyChat response:', JSON.stringify(manychatData, null, 2));
 
     if (!manychatResponse.ok) {
-      console.error('ManyChat API error:', manychatData);
+      console.error('❌ ManyChat API error:', manychatData);
+      console.error('Subscriber ID used:', client.manychat_subscriber_id);
+      console.error('Client info:', { id: client.id, name: client.name });
       return new Response(
-        JSON.stringify({ error: 'Failed to send message via ManyChat', details: manychatData }),
+        JSON.stringify({ 
+          error: 'Failed to send message via ManyChat', 
+          details: manychatData,
+          subscriberId: client.manychat_subscriber_id,
+          hint: 'The subscriber ID may be incorrect. Check if you need to use a different ID format or if the subscriber exists in ManyChat.'
+        }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
