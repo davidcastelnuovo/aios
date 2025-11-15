@@ -14,6 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MessageCircle, Search, Settings, Loader2 } from "lucide-react";
 import ChatView from "@/components/chat/ChatView";
 
@@ -39,6 +40,8 @@ export default function Chat() {
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
   const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads">("all");
+  const [selectedAgencyId, setSelectedAgencyId] = useState<string>("all");
+  const [syncStatusFilter, setSyncStatusFilter] = useState<"all" | "synced" | "unsynced">("all");
   const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' } | null>(
     clientId ? { id: clientId, type: 'client' } : null
   );
@@ -126,15 +129,35 @@ export default function Chat() {
     },
   });
 
+  // Get unique agencies from contacts
+  const agencies = useMemo(() => {
+    if (!contacts) return [];
+    const uniqueAgencies = new Map<string, string>();
+    contacts.forEach(contact => {
+      if (contact.agency_id && contact.agency_name) {
+        uniqueAgencies.set(contact.agency_id, contact.agency_name);
+      }
+    });
+    return Array.from(uniqueAgencies.entries()).map(([id, name]) => ({ id, name }));
+  }, [contacts]);
+
   // Filter contacts by type with memoization
   const filteredContacts = useMemo(() => {
     return (contacts || []).filter(contact => {
-      if (contactFilter === "all") return true;
-      if (contactFilter === "clients") return contact.contact_type === "client";
-      if (contactFilter === "leads") return contact.contact_type === "lead";
+      // Filter by contact type
+      if (contactFilter === "clients" && contact.contact_type !== "client") return false;
+      if (contactFilter === "leads" && contact.contact_type !== "lead") return false;
+      
+      // Filter by agency
+      if (selectedAgencyId !== "all" && contact.agency_id !== selectedAgencyId) return false;
+      
+      // Filter by sync status
+      if (syncStatusFilter === "synced" && !contact.manychat_subscriber_id) return false;
+      if (syncStatusFilter === "unsynced" && contact.manychat_subscriber_id) return false;
+      
       return true;
     });
-  }, [contacts, contactFilter]);
+  }, [contacts, contactFilter, selectedAgencyId, syncStatusFilter]);
 
   const handleLoadMore = () => {
     if (hasMore && !isFetching) {
@@ -181,6 +204,34 @@ export default function Chat() {
               className="pl-9"
             />
           </div>
+          
+          <div className="grid grid-cols-2 gap-2">
+            <Select value={selectedAgencyId} onValueChange={setSelectedAgencyId}>
+              <SelectTrigger className="text-right" dir="rtl">
+                <SelectValue placeholder="כל הסוכנויות" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">כל הסוכנויות</SelectItem>
+                {agencies.map(agency => (
+                  <SelectItem key={agency.id} value={agency.id}>
+                    {agency.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={syncStatusFilter} onValueChange={(value) => setSyncStatusFilter(value as any)}>
+              <SelectTrigger className="text-right" dir="rtl">
+                <SelectValue placeholder="סטטוס סנכרון" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">הכל</SelectItem>
+                <SelectItem value="synced">מסונכרנים</SelectItem>
+                <SelectItem value="unsynced">לא מסונכרנים</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          
           <Tabs value={contactFilter} onValueChange={(v) => setContactFilter(v as typeof contactFilter)} className="w-full">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="all">הכל</TabsTrigger>
