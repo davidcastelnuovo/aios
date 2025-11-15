@@ -361,13 +361,14 @@ export type Database = {
       }
       chat_messages: {
         Row: {
-          channel: string | null
+          channel: string
           client_id: string | null
           created_at: string | null
           direction: string
           id: string
           lead_id: string | null
           message_text: string
+          provider: Database["public"]["Enums"]["chat_provider"]
           raw_provider_data: Json | null
           read_at: string | null
           sent_by_user_id: string | null
@@ -375,13 +376,14 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
-          channel?: string | null
+          channel?: string
           client_id?: string | null
           created_at?: string | null
           direction: string
           id?: string
           lead_id?: string | null
           message_text: string
+          provider?: Database["public"]["Enums"]["chat_provider"]
           raw_provider_data?: Json | null
           read_at?: string | null
           sent_by_user_id?: string | null
@@ -389,13 +391,14 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
-          channel?: string | null
+          channel?: string
           client_id?: string | null
           created_at?: string | null
           direction?: string
           id?: string
           lead_id?: string | null
           message_text?: string
+          provider?: Database["public"]["Enums"]["chat_provider"]
           raw_provider_data?: Json | null
           read_at?: string | null
           sent_by_user_id?: string | null
@@ -640,6 +643,9 @@ export type Database = {
       }
       clients: {
         Row: {
+          active_chat_provider:
+            | Database["public"]["Enums"]["chat_provider"]
+            | null
           agency_id: string
           created_at: string
           email: string | null
@@ -660,6 +666,9 @@ export type Database = {
           website: string | null
         }
         Insert: {
+          active_chat_provider?:
+            | Database["public"]["Enums"]["chat_provider"]
+            | null
           agency_id: string
           created_at?: string
           email?: string | null
@@ -680,6 +689,9 @@ export type Database = {
           website?: string | null
         }
         Update: {
+          active_chat_provider?:
+            | Database["public"]["Enums"]["chat_provider"]
+            | null
           agency_id?: string
           created_at?: string
           email?: string | null
@@ -1155,6 +1167,9 @@ export type Database = {
       }
       leads: {
         Row: {
+          active_chat_provider:
+            | Database["public"]["Enums"]["chat_provider"]
+            | null
           agency_id: string | null
           campaign_name: string | null
           closing_date: string | null
@@ -1189,6 +1204,9 @@ export type Database = {
           won_date: string | null
         }
         Insert: {
+          active_chat_provider?:
+            | Database["public"]["Enums"]["chat_provider"]
+            | null
           agency_id?: string | null
           campaign_name?: string | null
           closing_date?: string | null
@@ -1223,6 +1241,9 @@ export type Database = {
           won_date?: string | null
         }
         Update: {
+          active_chat_provider?:
+            | Database["public"]["Enums"]["chat_provider"]
+            | null
           agency_id?: string | null
           campaign_name?: string | null
           closing_date?: string | null
@@ -2234,6 +2255,7 @@ export type Database = {
         | "client_created"
         | "client_status_changed"
         | "onboarding_status_changed"
+      chat_provider: "manychat" | "green_api" | "internal"
       client_status: "active" | "paused" | "ended" | "onboarding"
       finance_type: "income" | "expense"
       lead_response_status:
@@ -2425,6 +2447,7 @@ export const Constants = {
         "client_status_changed",
         "onboarding_status_changed",
       ],
+      chat_provider: ["manychat", "green_api", "internal"],
       client_status: ["active", "paused", "ended", "onboarding"],
       finance_type: ["income", "expense"],
       lead_response_status: [
