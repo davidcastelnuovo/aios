@@ -1269,6 +1269,7 @@ export type Database = {
       }
       manychat_templates: {
         Row: {
+          automation_trigger_name: string | null
           created_at: string | null
           description: string | null
           display_name: string
@@ -1282,6 +1283,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          automation_trigger_name?: string | null
           created_at?: string | null
           description?: string | null
           display_name: string
@@ -1295,6 +1297,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          automation_trigger_name?: string | null
           created_at?: string | null
           description?: string | null
           display_name?: string
