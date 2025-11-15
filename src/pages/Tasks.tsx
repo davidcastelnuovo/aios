@@ -142,7 +142,6 @@ export default function Tasks() {
           campaigners (full_name, role),
           task_updates (id)
         `)
-        .eq("tenant_id", tenantId)
         .order("due_date", { ascending: true });
 
       const { data, error } = await query;
