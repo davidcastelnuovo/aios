@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MessageCircle, Search, Settings } from "lucide-react";
 import ChatView from "@/components/chat/ChatView";
 
@@ -31,6 +32,7 @@ export default function Chat() {
   const { buildPath } = useTenantPath();
   const { userAgencyIds, isLoading: agenciesLoading } = useUserAgencies();
   const [searchTerm, setSearchTerm] = useState("");
+  const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads">("all");
   const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' } | null>(
     clientId ? { id: clientId, type: 'client' } : null
   );
@@ -195,6 +197,13 @@ export default function Chat() {
     enabled: !!tenantId && !agenciesLoading,
   });
 
+  // Filter contacts based on selected filter
+  const filteredContacts = contacts?.filter(contact => {
+    if (contactFilter === "clients") return contact.type === "client";
+    if (contactFilter === "leads") return contact.type === "lead";
+    return true;
+  });
+
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-4">
       {/* Clients List */}
@@ -229,11 +238,18 @@ export default function Chat() {
               className="pl-9"
             />
           </div>
+          <Tabs value={contactFilter} onValueChange={(v) => setContactFilter(v as typeof contactFilter)} className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="all">הכל</TabsTrigger>
+              <TabsTrigger value="clients">לקוחות</TabsTrigger>
+              <TabsTrigger value="leads">לידים</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
         <ScrollArea className="flex-1">
           {isLoading ? (
             <div className="p-4 text-center text-muted-foreground">טוען...</div>
-          ) : contacts?.length === 0 ? (
+          ) : filteredContacts?.length === 0 ? (
             <div className="p-4 text-center">
               <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-20" />
               <p className="text-muted-foreground mb-3">לא נמצאו אנשי קשר</p>
@@ -246,7 +262,7 @@ export default function Chat() {
             </div>
           ) : (
             <div className="p-2">
-              {contacts?.map((contact) => (
+              {filteredContacts?.map((contact) => (
                 <button
                   key={`${contact.type}-${contact.id}`}
                   onClick={() => setSelectedContact({ id: contact.id, type: contact.type })}
