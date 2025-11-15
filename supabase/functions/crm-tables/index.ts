@@ -46,7 +46,7 @@ serve(async (req) => {
 
         console.log(`✅ Fetched ${tables?.length || 0} tables`);
 
-        return new Response(JSON.stringify({ tables: tables || [] }), {
+        return new Response(JSON.stringify(tables || []), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
@@ -62,14 +62,15 @@ serve(async (req) => {
           });
         }
 
-        const { data: tenantUser } = await supabase
-          .from('tenant_users')
-          .select('tenant_id')
-          .eq('user_id', user.id)
-          .single();
+        // Use RPC function to get tenant_id (handles user_active_tenant fallback)
+        const { data: tenantId, error: tenantError } = await supabase
+          .rpc('get_user_tenant_id', { _user_id: user.id });
 
-        if (!tenantUser) {
-          return new Response(JSON.stringify({ error: 'User tenant not found' }), {
+        if (tenantError || !tenantId) {
+          console.error('Tenant lookup error:', tenantError);
+          return new Response(JSON.stringify({ 
+            error: 'User tenant not found. Please ensure you are assigned to a tenant.' 
+          }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -78,7 +79,7 @@ serve(async (req) => {
         const { data: table, error } = await supabase
           .from('crm_tables')
           .insert({
-            tenant_id: tenantUser.tenant_id,
+            tenant_id: tenantId,
             name,
             slug,
             description,
@@ -92,7 +93,7 @@ serve(async (req) => {
 
         console.log(`✅ Created table: ${name} (${table.id})`);
 
-        return new Response(JSON.stringify({ table }), {
+        return new Response(JSON.stringify(table), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
