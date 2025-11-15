@@ -1,18 +1,21 @@
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTenantPath } from "@/hooks/useTenantPath";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, Search } from "lucide-react";
+import { MessageCircle, Search, Settings } from "lucide-react";
 import ChatView from "@/components/chat/ChatView";
 
 export default function Chat() {
   const { clientId } = useParams();
   const { tenantId } = useCurrentTenant();
+  const { buildPath } = useTenantPath();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(clientId || null);
 
@@ -70,7 +73,20 @@ export default function Chat() {
     <div className="flex h-[calc(100vh-8rem)] gap-4">
       {/* Clients List */}
       <Card className="w-80 flex flex-col">
-        <div className="p-4 border-b">
+        <div className="p-4 border-b space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold">לקוחות</h3>
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+            >
+              <Link to={buildPath("/manychat-settings")}>
+                <Settings className="h-4 w-4 ml-2" />
+                הגדרות ManyChat
+              </Link>
+            </Button>
+          </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
@@ -85,9 +101,15 @@ export default function Chat() {
           {isLoading ? (
             <div className="p-4 text-center text-muted-foreground">טוען...</div>
           ) : clients?.length === 0 ? (
-            <div className="p-4 text-center text-muted-foreground">
-              <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-20" />
-              <p>לא נמצאו לקוחות עם ManyChat</p>
+            <div className="p-4 text-center">
+              <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-20" />
+              <p className="text-muted-foreground mb-3">לא נמצאו לקוחות עם ManyChat</p>
+              <Button variant="outline" size="sm" asChild>
+                <Link to={buildPath("/manychat-settings")}>
+                  <Settings className="h-4 w-4 ml-2" />
+                  חבר ManyChat
+                </Link>
+              </Button>
             </div>
           ) : (
             <div className="p-2">
