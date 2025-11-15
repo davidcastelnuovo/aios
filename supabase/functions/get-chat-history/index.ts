@@ -76,13 +76,7 @@ Deno.serve(async (req) => {
     // Build query
     let query = supabase
       .from('chat_messages')
-      .select(`
-        *,
-        profiles:sent_by_user_id (
-          full_name,
-          email
-        )
-      `)
+      .select('*')
       .eq('client_id', clientId)
       .eq('tenant_id', clientData.tenant_id)
       .order('created_at', { ascending: true })
