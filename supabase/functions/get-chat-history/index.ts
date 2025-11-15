@@ -22,35 +22,56 @@ Deno.serve(async (req) => {
     // Verify authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
+      console.error('Auth error:', authError);
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
+    console.log('User authenticated:', user.id);
+
     // Parse request body
-    const { clientId, limit = 100, before } = await req.json();
+    let requestBody;
+    try {
+      requestBody = await req.json();
+      console.log('Request body:', requestBody);
+    } catch (parseError) {
+      console.error('Failed to parse request body:', parseError);
+      return new Response(
+        JSON.stringify({ error: 'Invalid request body' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { clientId, limit = 100, before } = requestBody;
 
     if (!clientId) {
+      console.error('Missing clientId in request');
       return new Response(
         JSON.stringify({ error: 'clientId is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Get tenant_id
-    const { data: tenantData, error: tenantError } = await supabase
-      .from('tenant_users')
+    console.log('Fetching messages for client:', clientId);
+
+    // Get client to determine tenant_id
+    const { data: clientData, error: clientError } = await supabase
+      .from('clients')
       .select('tenant_id')
-      .eq('user_id', user.id)
+      .eq('id', clientId)
       .single();
 
-    if (tenantError || !tenantData) {
-      return new Response(JSON.stringify({ error: 'Tenant not found' }), {
+    if (clientError || !clientData) {
+      console.error('Client not found:', clientError);
+      return new Response(JSON.stringify({ error: 'Client not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    console.log('Client tenant_id:', clientData.tenant_id);
 
     // Build query
     let query = supabase
@@ -63,6 +84,7 @@ Deno.serve(async (req) => {
         )
       `)
       .eq('client_id', clientId)
+      .eq('tenant_id', clientData.tenant_id)
       .order('created_at', { ascending: true })
       .limit(limit);
 
@@ -75,13 +97,15 @@ Deno.serve(async (req) => {
     if (messagesError) {
       console.error('Messages fetch error:', messagesError);
       return new Response(
-        JSON.stringify({ error: 'Failed to fetch messages' }),
+        JSON.stringify({ error: 'Failed to fetch messages', details: messagesError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    console.log(`Found ${messages?.length || 0} messages`);
+
     return new Response(
-      JSON.stringify({ messages }),
+      JSON.stringify({ messages: messages || [] }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
