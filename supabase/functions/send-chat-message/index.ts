@@ -28,31 +28,57 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { clientId, message, channel = 'whatsapp', templateId, templateVariables } = await req.json();
+    const { clientId, leadId, message, channel = 'whatsapp', templateId, templateVariables } = await req.json();
 
-    if (!clientId || (!message && !templateId)) {
+    if ((!clientId && !leadId) || (!message && !templateId)) {
       return new Response(
-        JSON.stringify({ error: 'clientId and either message or templateId are required' }),
+        JSON.stringify({ error: 'clientId or leadId, and either message or templateId are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Get client first (includes tenant_id)
-    const { data: client, error: clientError } = await supabase
-      .from('clients')
-      .select('id, name, manychat_subscriber_id, tenant_id, agency_id')
-      .eq('id', clientId)
-      .single();
+    // Get contact first (includes tenant_id)
+    let contact: any;
+    let contactTable: string;
+    let contactId: string;
 
-    if (clientError || !client) {
-      console.error('Client fetch error:', clientError);
-      return new Response(JSON.stringify({ error: 'Client not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    if (clientId) {
+      const { data: client, error: clientError } = await supabase
+        .from('clients')
+        .select('id, name, manychat_subscriber_id, tenant_id, agency_id')
+        .eq('id', clientId)
+        .single();
+
+      if (clientError || !client) {
+        console.error('Client fetch error:', clientError);
+        return new Response(JSON.stringify({ error: 'Client not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      contact = client;
+      contactTable = 'clients';
+      contactId = clientId;
+    } else {
+      const { data: lead, error: leadError } = await supabase
+        .from('leads')
+        .select('id, company_name as name, manychat_subscriber_id, tenant_id, agency_id')
+        .eq('id', leadId)
+        .single();
+
+      if (leadError || !lead) {
+        console.error('Lead fetch error:', leadError);
+        return new Response(JSON.stringify({ error: 'Lead not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      contact = lead;
+      contactTable = 'leads';
+      contactId = leadId;
     }
 
-    const tenantId = client.tenant_id;
+    const tenantId = contact.tenant_id;
 
     // Verify user has access to this tenant
     const { data: tenantAccess, error: tenantAccessError } = await supabase
@@ -69,14 +95,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!client.manychat_subscriber_id) {
+    if (!contact.manychat_subscriber_id) {
       return new Response(
-        JSON.stringify({ error: 'Client does not have ManyChat subscriber ID configured' }),
+        JSON.stringify({ error: 'Contact does not have ManyChat subscriber ID configured' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('📤 Sending message to subscriber:', client.manychat_subscriber_id);
+    console.log('📤 Sending message to subscriber:', contact.manychat_subscriber_id);
     
     // Get template if templateId provided
     let template = null;
@@ -133,7 +159,7 @@ Deno.serve(async (req) => {
       manychatUrl = 'https://api.manychat.com/fb/sending/sendContent';
       manychatPayload = {
         version: 1,
-        subscriber_id: client.manychat_subscriber_id,
+        subscriber_id: contact.manychat_subscriber_id,
         trigger_name: template.automation_trigger_name,
         context: templateVariables || {}
       };
@@ -141,7 +167,7 @@ Deno.serve(async (req) => {
       // Send regular message
       manychatUrl = 'https://api.manychat.com/fb/sending/sendContent';
       manychatPayload = {
-        subscriber_id: client.manychat_subscriber_id,
+        subscriber_id: contact.manychat_subscriber_id,
         data: {
           version: 'v2',
           content: {
@@ -173,13 +199,13 @@ Deno.serve(async (req) => {
 
     if (!manychatResponse.ok) {
       console.error('❌ ManyChat API error:', manychatData);
-      console.error('Subscriber ID used:', client.manychat_subscriber_id);
-      console.error('Client info:', { id: client.id, name: client.name });
+      console.error('Subscriber ID used:', contact.manychat_subscriber_id);
+      console.error('Contact info:', { id: contact.id, name: contact.name });
       return new Response(
         JSON.stringify({ 
           error: 'Failed to send message via ManyChat', 
           details: manychatData,
-          subscriberId: client.manychat_subscriber_id,
+          subscriberId: contact.manychat_subscriber_id,
           hint: 'The subscriber ID may be incorrect. Check if you need to use a different ID format or if the subscriber exists in ManyChat.'
         }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -187,11 +213,8 @@ Deno.serve(async (req) => {
     }
 
     // Save message to database
-    const { error: saveError } = await supabase
-      .from('chat_messages')
-      .insert({
-        client_id: clientId,
-        tenant_id: tenantId,
+    const insertData: any = {
+      tenant_id: tenantId,
         direction: 'outbound',
         message_text: template 
           ? `[Template: ${template.display_name}] ${JSON.stringify(templateVariables || {})}`
