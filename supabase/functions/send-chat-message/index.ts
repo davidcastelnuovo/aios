@@ -37,23 +37,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get tenant_id
-    const { data: tenantData, error: tenantError } = await supabase
-      .from('tenant_users')
-      .select('tenant_id')
-      .eq('user_id', user.id)
-      .single();
-
-    if (tenantError || !tenantData) {
-      return new Response(JSON.stringify({ error: 'Tenant not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const tenantId = tenantData.tenant_id;
-
-    // Get client and check permissions
+    // Get client first (includes tenant_id)
     const { data: client, error: clientError } = await supabase
       .from('clients')
       .select('id, name, manychat_subscriber_id, tenant_id, agency_id')
@@ -68,8 +52,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Check if user has access to this client
-    if (client.tenant_id !== tenantId) {
+    const tenantId = client.tenant_id;
+
+    // Verify user has access to this tenant
+    const { data: tenantAccess, error: tenantAccessError } = await supabase
+      .from('tenant_users')
+      .select('tenant_id')
+      .eq('user_id', user.id)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (tenantAccessError || !tenantAccess) {
       return new Response(JSON.stringify({ error: 'Access denied' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
