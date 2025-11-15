@@ -359,6 +359,63 @@ export type Database = {
           },
         ]
       }
+      chat_messages: {
+        Row: {
+          channel: string | null
+          client_id: string
+          created_at: string | null
+          direction: string
+          id: string
+          message_text: string
+          raw_provider_data: Json | null
+          read_at: string | null
+          sent_by_user_id: string | null
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          channel?: string | null
+          client_id: string
+          created_at?: string | null
+          direction: string
+          id?: string
+          message_text: string
+          raw_provider_data?: Json | null
+          read_at?: string | null
+          sent_by_user_id?: string | null
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          channel?: string | null
+          client_id?: string
+          created_at?: string | null
+          direction?: string
+          id?: string
+          message_text?: string
+          raw_provider_data?: Json | null
+          read_at?: string | null
+          sent_by_user_id?: string | null
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_onboarding: {
         Row: {
           agency_id: string
@@ -580,6 +637,7 @@ export type Database = {
           id: string
           industry: string | null
           is_seo_client: boolean | null
+          manychat_subscriber_id: string | null
           monthly_budget: number | null
           name: string
           notes: string | null
@@ -599,6 +657,7 @@ export type Database = {
           id?: string
           industry?: string | null
           is_seo_client?: boolean | null
+          manychat_subscriber_id?: string | null
           monthly_budget?: number | null
           name: string
           notes?: string | null
@@ -618,6 +677,7 @@ export type Database = {
           id?: string
           industry?: string | null
           is_seo_client?: boolean | null
+          manychat_subscriber_id?: string | null
           monthly_budget?: number | null
           name?: string
           notes?: string | null

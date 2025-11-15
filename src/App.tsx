@@ -38,6 +38,8 @@ import MenuManagement from "./pages/MenuManagement";
 import FieldsManagement from "./pages/FieldsManagement";
 import DynamicTables from "./pages/DynamicTables";
 import DynamicTableView from "./pages/DynamicTableView";
+import Chat from "./pages/Chat";
+import ManyChatSettings from "./pages/ManyChatSettings";
 import NotFound from "./pages/NotFound";
 import { SuperAdminRoute } from "./components/SuperAdminRoute";
 
