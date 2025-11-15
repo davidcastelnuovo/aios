@@ -5,11 +5,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Normalize phone number to digits only
+// Normalize phone number - remove ALL non-digit characters
 function normalizePhone(phone: string): string {
+  if (!phone) return '';
+  
+  // Remove all non-digit characters including +, -, spaces, parentheses, etc.
   const digits = phone.replace(/\D/g, '');
   
-  // Convert 972 prefix to 0
+  // Convert +972 or 972 prefix to 0
   if (digits.startsWith('972')) {
     return '0' + digits.slice(3);
   }
@@ -17,17 +20,34 @@ function normalizePhone(phone: string): string {
   return digits;
 }
 
-// Get all phone variations for matching
+// Get comprehensive phone variations for matching
 function getPhoneVariations(phone: string): string[] {
+  if (!phone) return [];
+  
   const normalized = normalizePhone(phone);
-  const variations = [normalized];
+  const variations = new Set<string>();
+  
+  // Add normalized version
+  variations.add(normalized);
+  
+  // Add original (cleaned)
+  variations.add(phone.replace(/\s/g, ''));
   
   // Add 972 version if starts with 0
   if (normalized.startsWith('0')) {
-    variations.push('972' + normalized.slice(1));
+    variations.add('972' + normalized.slice(1));
+    variations.add('+972' + normalized.slice(1));
   }
   
-  return variations;
+  // Add with common formatting
+  if (normalized.startsWith('0') && normalized.length >= 10) {
+    const areaCode = normalized.slice(0, 3);
+    const rest = normalized.slice(3);
+    variations.add(`${areaCode}-${rest}`);
+    variations.add(`${areaCode} ${rest}`);
+  }
+  
+  return Array.from(variations);
 }
 
 Deno.serve(async (req) => {
@@ -67,7 +87,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('User authenticated:', user.id);
+    console.log('✅ User authenticated:', user.id);
 
     // Create service role client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -85,7 +105,7 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       if (membershipError) {
-        console.error('Membership check error:', membershipError);
+        console.error('❌ Membership check error:', membershipError);
         return new Response(
           JSON.stringify({ error: 'Failed to verify tenant access' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -93,7 +113,7 @@ Deno.serve(async (req) => {
       }
 
       if (!membership) {
-        console.error('User not member of requested tenant:', user.id, requestedTenantId);
+        console.error('❌ User not member of requested tenant:', user.id, requestedTenantId);
         return new Response(
           JSON.stringify({ error: 'Access denied to requested tenant' }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -107,7 +127,7 @@ Deno.serve(async (req) => {
         .rpc('get_user_tenant_id', { _user_id: user.id });
 
       if (tenantError) {
-        console.error('Tenant lookup error:', tenantError);
+        console.error('❌ Tenant lookup error:', tenantError);
         return new Response(
           JSON.stringify({ error: 'Failed to resolve tenant' }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -115,7 +135,7 @@ Deno.serve(async (req) => {
       }
 
       if (!resolvedTenantId) {
-        console.error('No tenant found for user:', user.id);
+        console.error('❌ Tenant not found for user:', user.id);
         return new Response(
           JSON.stringify({ error: 'Tenant not found' }),
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -125,116 +145,139 @@ Deno.serve(async (req) => {
       tenantId = resolvedTenantId;
     }
 
-    console.log('Starting sync for tenant:', tenantId, 'User:', user.id);
+    console.log('🔄 Starting sync for tenant:', tenantId, 'User:', user.id);
 
-    // Fetch all chat messages with raw_provider_data for this tenant
+    // Fetch all clients without manychat_subscriber_id from this tenant and accessible agencies
+    const { data: clients, error: clientsError } = await supabase
+      .from('clients')
+      .select('id, phone, manychat_subscriber_id, tenant_id, agency_id, name')
+      .or(`tenant_id.eq.${tenantId},agency_id.in.(select agency_id from agency_tenant_access where accessing_tenant_id='${tenantId}')`);
+
+    if (clientsError) {
+      console.error('❌ Error fetching clients:', clientsError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch clients' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`📋 Found ${clients?.length || 0} total clients`);
+    const clientsNeedingSync = clients?.filter(c => !c.manychat_subscriber_id) || [];
+    console.log(`🔍 ${clientsNeedingSync.length} clients need ManyChat sync`);
+
+    // Fetch all chat messages with subscriber data
     const { data: messages, error: messagesError } = await supabase
       .from('chat_messages')
-      .select('id, client_id, raw_provider_data')
-      .eq('tenant_id', tenantId)
+      .select('id, client_id, raw_provider_data, tenant_id')
       .not('raw_provider_data', 'is', null);
 
     if (messagesError) {
-      console.error('Error fetching messages:', messagesError);
+      console.error('❌ Error fetching messages:', messagesError);
       return new Response(
         JSON.stringify({ error: 'Failed to fetch messages' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Found messages:', messages?.length || 0);
+    console.log(`💬 Found ${messages?.length || 0} chat messages with subscriber data`);
 
-    // Track unique subscribers and processed subscriber IDs
-    const subscribersMap = new Map<string, { phone: string; clientId: string }>();
-    const processedSubscriberIds = new Set<string>();
-
-    // Extract subscriber info from messages
+    // Build subscriber map from messages
+    const subscribersMap = new Map<string, { phone: string; subscriberId: string }>();
+    
     for (const message of messages || []) {
       try {
         const providerData = message.raw_provider_data as any;
         const subscriberId = providerData?.subscriber_id || providerData?.subscriberId;
-        const phone = providerData?.phone || providerData?.contact?.phone;
+        const phone = providerData?.phone || providerData?.contact?.phone || providerData?.subscriber?.phone;
 
-        if (subscriberId && phone && !processedSubscriberIds.has(subscriberId)) {
-          subscribersMap.set(subscriberId, {
-            phone: normalizePhone(phone),
-            clientId: message.client_id
-          });
+        if (subscriberId && phone) {
+          const normalizedPhone = normalizePhone(phone);
+          if (normalizedPhone && !subscribersMap.has(normalizedPhone)) {
+            subscribersMap.set(normalizedPhone, { phone, subscriberId });
+            console.log(`👤 Subscriber: ${subscriberId}, Phone: ${phone} → ${normalizedPhone}`);
+          }
         }
       } catch (error) {
-        console.error('Error parsing provider data for message:', message.id, error);
+        console.error('⚠️ Error parsing provider data for message:', message.id, error);
       }
     }
 
-    console.log('Unique subscribers found:', subscribersMap.size);
+    console.log(`📊 Unique ManyChat subscribers: ${subscribersMap.size}`);
 
     let clientsMatched = 0;
     let leadsMatched = 0;
     let notMatched = 0;
+    let alreadySynced = 0;
 
-    // Process each subscriber
-    for (const [subscriberId, info] of subscribersMap) {
-      const phoneVariations = getPhoneVariations(info.phone);
-      
-      // Try to match with clients first
-      const { data: clients, error: clientsError } = await supabase
-        .from('clients')
-        .select('id, phone, manychat_subscriber_id')
-        .eq('tenant_id', tenantId)
-        .or(phoneVariations.map(p => `phone.eq.${p}`).join(','));
-
-      if (clientsError) {
-        console.error('Error querying clients:', clientsError);
+    // Match clients with subscribers
+    for (const client of clientsNeedingSync) {
+      if (!client.phone) {
+        console.log(`⏭️ Client ${client.name} (${client.id}) has no phone`);
         continue;
       }
 
-      let matched = false;
+      const normalizedClientPhone = normalizePhone(client.phone);
+      const phoneVariations = getPhoneVariations(client.phone);
+      
+      console.log(`🔎 Checking client: ${client.name}, Phone: ${client.phone} → ${normalizedClientPhone}`);
+      console.log(`   Variations: ${phoneVariations.join(', ')}`);
 
-      // Update clients that don't already have a subscriber_id
-      for (const client of clients || []) {
-        if (!client.manychat_subscriber_id) {
+      let matched = false;
+      
+      // Check each phone variation against subscribers
+      for (const variation of phoneVariations) {
+        const normalizedVariation = normalizePhone(variation);
+        if (subscribersMap.has(normalizedVariation)) {
+          const subscriber = subscribersMap.get(normalizedVariation)!;
+          
+          console.log(`   ✅ MATCH! Subscriber: ${subscriber.subscriberId}`);
+          
+          // Update client with subscriber ID
           const { error: updateError } = await supabase
             .from('clients')
-            .update({ manychat_subscriber_id: subscriberId })
+            .update({ manychat_subscriber_id: subscriber.subscriberId })
             .eq('id', client.id);
 
           if (updateError) {
-            console.error('Error updating client:', client.id, updateError);
+            console.error(`   ❌ Failed to update client ${client.id}:`, updateError);
           } else {
-            console.log('Updated client:', client.id, 'with subscriber:', subscriberId);
+            console.log(`   ✅ Updated client ${client.name} with subscriber ${subscriber.subscriberId}`);
             clientsMatched++;
             matched = true;
-            processedSubscriberIds.add(subscriberId);
+            break;
           }
-        } else if (client.manychat_subscriber_id === subscriberId) {
-          // Already has this subscriber ID
-          matched = true;
-          processedSubscriberIds.add(subscriberId);
         }
       }
 
-      // If no client match, check leads for reporting only
       if (!matched) {
-        const { data: leads, error: leadsError } = await supabase
+        console.log(`   ❌ No match found for ${client.name}`);
+        
+        // Check if this client exists as a lead
+        const { data: leads } = await supabase
           .from('leads')
           .select('id, phone')
-          .eq('tenant_id', tenantId)
-          .or(phoneVariations.map(p => `phone.eq.${p}`).join(','))
+          .or(phoneVariations.map(v => `phone.eq.${v}`).join(','))
           .limit(1);
 
-        if (!leadsError && leads && leads.length > 0) {
-          console.log('Found lead match for subscriber:', subscriberId);
+        if (leads && leads.length > 0) {
+          console.log(`   ℹ️ Found matching lead: ${leads[0].id}`);
           leadsMatched++;
-          matched = true;
+        } else {
+          notMatched++;
         }
-      }
-
-      if (!matched) {
-        notMatched++;
       }
     }
 
-    console.log('Sync completed - Clients:', clientsMatched, 'Leads:', leadsMatched, 'Not matched:', notMatched);
+    // Count clients that were already synced
+    alreadySynced = (clients?.filter(c => c.manychat_subscriber_id).length || 0);
+
+    console.log('');
+    console.log('📊 Sync Summary:');
+    console.log(`   ✅ Newly matched clients: ${clientsMatched}`);
+    console.log(`   ✅ Already synced: ${alreadySynced}`);
+    console.log(`   ℹ️ Found as leads: ${leadsMatched}`);
+    console.log(`   ❌ Not matched: ${notMatched}`);
+    console.log(`   📱 Total ManyChat subscribers: ${subscribersMap.size}`);
 
     return new Response(
       JSON.stringify({
@@ -242,13 +285,14 @@ Deno.serve(async (req) => {
         total: subscribersMap.size,
         clientsMatched,
         leadsMatched,
-        notMatched
+        notMatched,
+        alreadySynced
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Unexpected error:', error);
+    console.error('💥 Unexpected error:', error);
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
