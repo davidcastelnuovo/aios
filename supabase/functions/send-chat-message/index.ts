@@ -33,7 +33,8 @@ Deno.serve(async (req) => {
     });
 
     // Verify authentication
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user) {
       console.error('❌ Authentication failed:', authError);
       console.log('📋 Authorization header:', req.headers.get('Authorization') ? 'Present' : 'Missing');
