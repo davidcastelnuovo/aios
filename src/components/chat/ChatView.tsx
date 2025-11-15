@@ -48,10 +48,11 @@ export default function ChatView({ clientId }: ChatViewProps) {
   });
 
   // Fetch templates
-  const { data: templates } = useQuery({
+  const { data: templates, isLoading: templatesLoading } = useQuery({
     queryKey: ['manychat-templates', client?.tenant_id],
     queryFn: async () => {
       if (!client?.tenant_id) return [];
+      console.log('🔍 Fetching templates for tenant:', client.tenant_id);
       const { data, error } = await supabase
         .from('manychat_templates')
         .select('*')
@@ -59,7 +60,11 @@ export default function ChatView({ clientId }: ChatViewProps) {
         .eq('is_active', true)
         .order('display_name');
       
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Template fetch error:', error);
+        throw error;
+      }
+      console.log('✅ Templates loaded:', data?.length || 0, data);
       return data;
     },
     enabled: !!client?.tenant_id,
