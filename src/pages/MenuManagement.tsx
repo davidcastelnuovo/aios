@@ -55,6 +55,9 @@ interface SortableMenuItemProps {
   onBadgeChange: (item: MenuItem, badge: string | null) => void;
   isChild?: boolean;
   isRootOrg?: boolean;
+  hasChildren?: boolean;
+  isExpanded?: boolean;
+  onToggleExpand?: () => void;
 }
 
 function SortableMenuItem({
@@ -68,6 +71,9 @@ function SortableMenuItem({
   onBadgeChange,
   isChild = false,
   isRootOrg = false,
+  hasChildren = false,
+  isExpanded = false,
+  onToggleExpand,
 }: SortableMenuItemProps) {
   const {
     attributes,
@@ -85,18 +91,38 @@ function SortableMenuItem({
   };
 
   return (
-    <TableRow ref={setNodeRef} style={style} className="group">
+    <TableRow 
+      ref={setNodeRef} 
+      style={style} 
+      className={`group ${isChild ? 'bg-muted/20' : ''}`}
+    >
       <TableCell className="w-12">
-        <div
-          {...attributes}
-          {...listeners}
-          className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded flex items-center gap-2"
-        >
-          <GripVertical className="h-5 w-5 text-muted-foreground" />
-          {isChild && <span className="text-muted-foreground">└─</span>}
+        <div className="flex items-center gap-1">
+          {hasChildren && !isChild && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggleExpand}
+              className="h-6 w-6 p-0"
+            >
+              <ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-0' : '-rotate-90'}`} />
+            </Button>
+          )}
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-2 hover:bg-muted rounded flex items-center gap-1"
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
         </div>
       </TableCell>
-      <TableCell className="font-medium">{item.original_label}</TableCell>
+      <TableCell className="font-medium">
+        <div className={`flex items-center gap-2 ${isChild ? 'pr-8' : ''}`}>
+          {isChild && <span className="text-muted-foreground text-xs">└─</span>}
+          <span>{item.original_label}</span>
+        </div>
+      </TableCell>
       <TableCell>
         <Input
           value={
@@ -313,6 +339,7 @@ export default function MenuManagement() {
   const queryClient = useQueryClient();
   const [editingItems, setEditingItems] = useState<Record<string, string>>({});
   const [groupOrder, setGroupOrder] = useState<string[]>(['main', 'management', 'sales']);
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
 
   // Get org_type directly from DB (types not updated yet)
   const { data: tenantData } = useQuery({
@@ -386,6 +413,23 @@ export default function MenuManagement() {
     },
     enabled: !!tenantId,
   });
+
+  // Initially expand all parents when menu items load
+  useEffect(() => {
+    if (!menuItems) return;
+    
+    const childrenMap = new Map<string, MenuItem[]>();
+    menuItems.forEach(item => {
+      if (item.parent_menu_key) {
+        const children = childrenMap.get(item.parent_menu_key) || [];
+        children.push(item);
+        childrenMap.set(item.parent_menu_key, children);
+      }
+    });
+    
+    const allParentKeys = Array.from(childrenMap.keys());
+    setExpandedParents(new Set(allParentKeys));
+  }, [menuItems]);
 
   const updateMutation = useMutation({
     mutationFn: async (item: Partial<MenuItem> & { id: string }) => {
@@ -508,17 +552,43 @@ export default function MenuManagement() {
   // Sort items by sort_order and create hierarchical display
   const sortedItems = [...menuItems].sort((a, b) => a.sort_order - b.sort_order);
   
-  // Create a flat list with visual hierarchy indicators
-  const displayItems: (MenuItem & { isChild?: boolean })[] = [];
-  const parentKeys = new Set(menuItems.filter(m => !m.parent_menu_key).map(m => m.menu_key));
+  // Build parent-child relationships
+  const parentItems = sortedItems.filter(item => !item.parent_menu_key);
+  const childrenMap = new Map<string, MenuItem[]>();
   
   sortedItems.forEach(item => {
-    if (!item.parent_menu_key) {
-      // This is a parent item
-      displayItems.push({ ...item, isChild: false });
-    } else {
-      // This is a child item
-      displayItems.push({ ...item, isChild: true });
+    if (item.parent_menu_key) {
+      const children = childrenMap.get(item.parent_menu_key) || [];
+      children.push(item);
+      childrenMap.set(item.parent_menu_key, children);
+    }
+  });
+  
+  const toggleParentExpanded = (menuKey: string) => {
+    setExpandedParents(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(menuKey)) {
+        newSet.delete(menuKey);
+      } else {
+        newSet.add(menuKey);
+      }
+      return newSet;
+    });
+  };
+  
+  // Create a flat list with visual hierarchy indicators
+  // Parents followed immediately by their children (if expanded)
+  const displayItems: (MenuItem & { isChild?: boolean; parentKey?: string })[] = [];
+  
+  parentItems.forEach(parent => {
+    const hasChildren = childrenMap.has(parent.menu_key);
+    displayItems.push({ ...parent, isChild: false });
+    
+    if (hasChildren && expandedParents.has(parent.menu_key)) {
+      const children = childrenMap.get(parent.menu_key) || [];
+      children.forEach(child => {
+        displayItems.push({ ...child, isChild: true, parentKey: parent.menu_key });
+      });
     }
   });
 
@@ -561,13 +631,14 @@ export default function MenuManagement() {
       <div>
         <h1 className="text-3xl font-bold mb-2">ניהול תפריט</h1>
         <p className="text-muted-foreground">
-          התאם אישית את תפריט הניווט - ערוך שמות, שנה סדר וקבע נראות
+          התאם אישית את תפריט הניווט - ערוך שמות, שנה סדר וקבע נראות.
+          פריטי תפריט עם ילדים מסומנים עם חץ שניתן ללחוץ עליו לפתיחה/סגירה.
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>פריטי תפריט</CardTitle>
+          <CardTitle>פריטי תפריט (לפי סדר התצוגה בתפריט)</CardTitle>
         </CardHeader>
         <CardContent>
           <DndContext
@@ -592,21 +663,29 @@ export default function MenuManagement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {displayItems.map((item) => (
-                      <SortableMenuItem
-                        key={item.id}
-                        item={item}
-                        editingItems={editingItems}
-                        updateMutation={updateMutation}
-                        onLabelChange={handleLabelChange}
-                        onSaveLabel={handleSaveLabel}
-                        onResetLabel={handleResetLabel}
-                        onToggleVisibility={handleToggleVisibility}
-                        onBadgeChange={handleBadgeChange}
-                        isChild={item.isChild}
-                        isRootOrg={isRootOrg}
-                      />
-                    ))}
+                    {displayItems.map((item) => {
+                      const hasChildren = !item.isChild && childrenMap.has(item.menu_key);
+                      const isExpanded = expandedParents.has(item.menu_key);
+                      
+                      return (
+                        <SortableMenuItem
+                          key={item.id}
+                          item={item}
+                          editingItems={editingItems}
+                          updateMutation={updateMutation}
+                          onLabelChange={handleLabelChange}
+                          onSaveLabel={handleSaveLabel}
+                          onResetLabel={handleResetLabel}
+                          onToggleVisibility={handleToggleVisibility}
+                          onBadgeChange={handleBadgeChange}
+                          isChild={item.isChild}
+                          isRootOrg={isRootOrg}
+                          hasChildren={hasChildren}
+                          isExpanded={isExpanded}
+                          onToggleExpand={() => toggleParentExpanded(item.menu_key)}
+                        />
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>
