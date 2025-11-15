@@ -5,6 +5,37 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Phone normalization helper
+function normalizePhone(phone: string): string {
+  if (!phone) return '';
+  return phone.replace(/[\s\-\(\)\+]/g, '');
+}
+
+// Generate phone variations for matching
+function getPhoneVariations(phone: string): string[] {
+  const normalized = normalizePhone(phone);
+  const variations = new Set<string>();
+  
+  variations.add(normalized);
+  
+  // If starts with 972, add 0 prefix version
+  if (normalized.startsWith('972')) {
+    variations.add('0' + normalized.slice(3));
+  }
+  
+  // If starts with 0, add 972 version
+  if (normalized.startsWith('0')) {
+    variations.add('972' + normalized.slice(1));
+  }
+  
+  // Add +972 versions
+  if (normalized.startsWith('972')) {
+    variations.add('+' + normalized);
+  }
+  
+  return Array.from(variations);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -49,17 +80,99 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Find client by manychat_subscriber_id
-    const { data: client, error: clientError } = await supabase
-      .from('clients')
-      .select('id, tenant_id, name')
-      .eq('manychat_subscriber_id', subscriber.id)
-      .single();
+    let client = null;
 
-    if (clientError || !client) {
-      console.error('Client not found for subscriber:', subscriber.id, clientError);
+    // Try to find client by manychat_subscriber_id first
+    console.log('🔍 Looking for client with subscriber_id:', subscriber.id);
+    const { data: existingClient } = await supabase
+      .from('clients')
+      .select('id, tenant_id, name, phone')
+      .eq('manychat_subscriber_id', subscriber.id)
+      .maybeSingle();
+
+    if (existingClient) {
+      console.log('✅ Found existing client by subscriber_id:', existingClient.name);
+      client = existingClient;
+    } else {
+      // Not found by subscriber_id, try to find by phone
+      console.log('🔍 Client not found by subscriber_id, trying phone matching...');
+      
+      const phone = subscriber.phone || 
+                    subscriber.whatsapp_phone || 
+                    payload.phone;
+      
+      if (phone) {
+        const phoneVariations = getPhoneVariations(phone);
+        console.log('📱 Generated phone variations:', phoneVariations);
+        
+        // Build OR query for all phone variations
+        const phoneQuery = phoneVariations.map(p => `phone.eq.${p}`).join(',');
+        
+        // Try to find client by phone (without existing manychat_subscriber_id)
+        const { data: clientByPhone } = await supabase
+          .from('clients')
+          .select('id, tenant_id, name, phone')
+          .or(phoneQuery)
+          .is('manychat_subscriber_id', null)
+          .limit(1)
+          .maybeSingle();
+        
+        if (clientByPhone) {
+          console.log('✅ Found client by phone:', clientByPhone.name, '- Updating subscriber_id');
+          
+          // Update the manychat_subscriber_id
+          const { error: updateError } = await supabase
+            .from('clients')
+            .update({ manychat_subscriber_id: subscriber.id })
+            .eq('id', clientByPhone.id);
+          
+          if (updateError) {
+            console.error('❌ Error updating client subscriber_id:', updateError);
+          } else {
+            console.log('✅ Successfully updated client with subscriber_id');
+          }
+          
+          client = clientByPhone;
+        } else {
+          // Try to find lead by phone
+          console.log('🔍 Client not found, trying leads...');
+          const { data: leadByPhone } = await supabase
+            .from('leads')
+            .select('id, tenant_id, company_name, phone')
+            .or(phoneQuery)
+            .is('manychat_subscriber_id', null)
+            .limit(1)
+            .maybeSingle();
+          
+          if (leadByPhone) {
+            console.log('✅ Found lead by phone:', leadByPhone.company_name, '- Updating subscriber_id');
+            
+            // Update the manychat_subscriber_id
+            const { error: updateError } = await supabase
+              .from('leads')
+              .update({ manychat_subscriber_id: subscriber.id })
+              .eq('id', leadByPhone.id);
+            
+            if (updateError) {
+              console.error('❌ Error updating lead subscriber_id:', updateError);
+            } else {
+              console.log('✅ Successfully updated lead with subscriber_id');
+            }
+          }
+        }
+      } else {
+        console.warn('⚠️ No phone number found in payload');
+      }
+    }
+
+    if (!client) {
+      console.error('❌ No client or lead found for subscriber:', subscriber.id);
       return new Response(
-        JSON.stringify({ error: 'Client not found for this subscriber', received: true }),
+        JSON.stringify({ 
+          error: 'Contact not found', 
+          received: true,
+          note: 'Make sure the contact exists with a matching phone number'
+        }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
