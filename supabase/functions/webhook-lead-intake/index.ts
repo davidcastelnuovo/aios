@@ -17,6 +17,7 @@ interface LeadPayload {
   products?: string
   industry?: string
   agency_id?: string
+  manychat_subscriber_id?: string
 }
 
 Deno.serve(async (req) => {
@@ -132,6 +133,7 @@ Deno.serve(async (req) => {
         industry: payload.industry || null,
         agency_id: agencyId,
         tenant_id: tenantId,
+        manychat_subscriber_id: payload.manychat_subscriber_id || null,
         status: 'new'
       })
       .select()
