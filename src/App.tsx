@@ -89,6 +89,9 @@ const App = () => (
             <Route path="/t/:tenantSlug/fields-management" element={<ProtectedRoute requiredPermission="fields_management"><AppLayout><FieldsManagement /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/dynamic-tables" element={<ProtectedRoute requiredPermission="branding"><AppLayout><DynamicTables /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/table/:tableSlug" element={<ProtectedRoute><AppLayout><DynamicTableView /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/chat" element={<ProtectedRoute requiredPermission="chat"><AppLayout><Chat /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/chat/:clientId" element={<ProtectedRoute requiredPermission="chat"><AppLayout><Chat /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/manychat-settings" element={<ProtectedRoute requiredPermission="settings"><AppLayout><ManyChatSettings /></AppLayout></ProtectedRoute>} />
             
             {/* Root path redirects to auth */}
             <Route path="/" element={<Auth />} />
