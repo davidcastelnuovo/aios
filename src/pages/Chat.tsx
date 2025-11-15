@@ -205,9 +205,9 @@ export default function Chat() {
   });
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4">
+    <div className="flex h-[calc(100vh-8rem)] gap-4 overflow-hidden">
       {/* Clients List */}
-      <Card className="w-80 flex flex-col">
+      <Card className="w-80 flex-shrink-0 flex flex-col overflow-hidden">
         <div className="p-4 border-b space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
