@@ -62,7 +62,7 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
                     : 'bg-muted'
                 }`}
               >
-                <div className="whitespace-pre-wrap break-words">
+                <div className="whitespace-pre-wrap break-words" dir="rtl">
                   {message.message_text}
                 </div>
                 <div
