@@ -1,5 +1,8 @@
 project_id = "jnzguisakdtcollxmgzd"
 
+[functions.auto-sync-new-lead]
+verify_jwt = false
+
 [functions.create-invitation-link]
 verify_jwt = true
 
