@@ -19,7 +19,6 @@ export default function ManyChatSettings() {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const [apiKey, setApiKey] = useState("");
-  const [isActive, setIsActive] = useState(false);
 
   // Fetch existing integration
   const { data: integration, isLoading } = useQuery({
@@ -38,7 +37,6 @@ export default function ManyChatSettings() {
 
       if (data) {
         setApiKey(data.api_key || '');
-        setIsActive(data.is_active);
       }
 
       return data;
@@ -55,7 +53,6 @@ export default function ManyChatSettings() {
         tenant_id: tenantId,
         integration_type: 'manychat',
         api_key: apiKey,
-        is_active: isActive,
         auto_sync_enabled: false,
       };
 
@@ -130,21 +127,6 @@ export default function ManyChatSettings() {
             <p className="text-sm text-muted-foreground">
               ניתן למצוא את ה-API Key ב-ManyChat → Settings → API
             </p>
-          </div>
-
-          {/* Active Toggle */}
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label>הפעל אינטגרציה</Label>
-              <p className="text-sm text-muted-foreground">
-                אפשר או נטרל את החיבור ל-ManyChat
-              </p>
-            </div>
-            <Switch
-              checked={isActive}
-              onCheckedChange={setIsActive}
-              disabled={isLoading || !apiKey}
-            />
           </div>
 
           {/* Webhook URL */}

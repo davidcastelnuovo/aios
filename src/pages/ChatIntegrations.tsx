@@ -4,14 +4,17 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { MessageCircle, Webhook, Settings, CheckCircle2, XCircle } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export default function ChatIntegrations() {
   const { tenantId } = useCurrentTenant();
   const { buildPath } = useTenantPath();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // Fetch integration status
   const { data: integrations } = useQuery({
@@ -27,6 +30,48 @@ export default function ChatIntegrations() {
       return data || [];
     },
     enabled: !!tenantId,
+  });
+
+  // Toggle provider mutation
+  const toggleProviderMutation = useMutation({
+    mutationFn: async ({ providerId, isActive }: { providerId: string; isActive: boolean }) => {
+      if (!tenantId) throw new Error('No tenant');
+
+      if (isActive) {
+        // First, deactivate all other providers
+        await supabase
+          .from('tenant_integrations')
+          .update({ is_active: false })
+          .eq('tenant_id', tenantId)
+          .neq('integration_type', providerId);
+
+        // Then activate the selected provider
+        const { error } = await supabase
+          .from('tenant_integrations')
+          .update({ is_active: true })
+          .eq('tenant_id', tenantId)
+          .eq('integration_type', providerId);
+
+        if (error) throw error;
+      } else {
+        // Deactivate the provider
+        const { error } = await supabase
+          .from('tenant_integrations')
+          .update({ is_active: false })
+          .eq('tenant_id', tenantId)
+          .eq('integration_type', providerId);
+
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chat-integrations', tenantId] });
+      toast.success('סטטוס אינטגרציה עודכן');
+    },
+    onError: (error: any) => {
+      console.error('Toggle error:', error);
+      toast.error('שגיאה בעדכון סטטוס האינטגרציה');
+    },
   });
 
   const manychatIntegration = integrations?.find(i => i.integration_type === 'manychat');
@@ -45,7 +90,9 @@ export default function ChatIntegrations() {
         'תמיכה בטאגים ואוטומציות',
         'שליחת הודעות ותבניות',
       ],
+      integration: manychatIntegration,
       status: manychatIntegration?.is_active ? 'active' : 'inactive',
+      hasApiKey: !!manychatIntegration?.api_key,
       settingsPath: '/manychat-settings',
     },
     {
@@ -60,7 +107,9 @@ export default function ChatIntegrations() {
         'קבלת הודעות בזמן אמת',
         'תמיכה בקבוצות ורשימות שידור',
       ],
+      integration: greenApiIntegration,
       status: greenApiIntegration?.is_active ? 'active' : 'inactive',
+      hasApiKey: !!greenApiIntegration?.api_key,
       settingsPath: '/green-api-settings',
       badge: 'חדש',
     },
@@ -71,7 +120,7 @@ export default function ChatIntegrations() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">אינטגרציות צ'אט</h1>
         <p className="text-muted-foreground">
-          בחר את ספקי הצ'אט שברצונך לחבר למערכת. ניתן לחבר מספר ספקים במקביל.
+          בחר את ספק הצ'אט שברצונך להפעיל. ניתן להפעיל רק ספק אחד בכל פעם.
         </p>
       </div>
 
@@ -106,7 +155,7 @@ export default function ChatIntegrations() {
                     ) : (
                       <Badge variant="secondary" className="bg-gray-500/10">
                         <XCircle className="h-3 w-3 ml-1" />
-                        לא מחובר
+                        לא פעיל
                       </Badge>
                     )}
                   </div>
@@ -132,13 +181,32 @@ export default function ChatIntegrations() {
                     </ul>
                   </div>
 
+                  {/* Activation Toggle */}
+                  {provider.hasApiKey && (
+                    <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/50">
+                      <div className="flex flex-col gap-1">
+                        <span className="font-medium text-sm">הפעלת ספק</span>
+                        <span className="text-xs text-muted-foreground">
+                          {isActive ? 'הספק פעיל כעת' : 'הפעל ספק זה לשליחת הודעות'}
+                        </span>
+                      </div>
+                      <Switch
+                        checked={isActive}
+                        onCheckedChange={(checked) => 
+                          toggleProviderMutation.mutate({ providerId: provider.id, isActive: checked })
+                        }
+                        disabled={toggleProviderMutation.isPending}
+                      />
+                    </div>
+                  )}
+
                   <Button
                     onClick={() => navigate(buildPath(provider.settingsPath))}
                     className="w-full"
-                    variant={isActive ? "outline" : "default"}
+                    variant={provider.hasApiKey ? "outline" : "default"}
                   >
                     <Settings className="h-4 w-4 ml-2" />
-                    {isActive ? 'ניהול הגדרות' : 'הגדר עכשיו'}
+                    {provider.hasApiKey ? 'ניהול הגדרות' : 'הגדר עכשיו'}
                   </Button>
                 </div>
               </CardContent>

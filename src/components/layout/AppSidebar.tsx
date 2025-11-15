@@ -31,6 +31,7 @@ import {
   Table,
   Plus,
   Table2,
+  MessageSquare,
 } from "lucide-react";
 import {
   Sidebar,
@@ -90,6 +91,7 @@ const iconMap: Record<string, any> = {
   ListTree,
   Table,
   Table2,
+  MessageSquare,
   FolderKanban: Table,
   Database: Table,
   Layers: Table,

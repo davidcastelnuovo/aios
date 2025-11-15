@@ -56,7 +56,6 @@ export default function GreenAPISettings() {
       const integrationData = {
         tenant_id: tenantId,
         integration_type: 'green_api',
-        is_active: true,
         api_key: apiToken,
         settings: {
           instance_id: instanceId,
