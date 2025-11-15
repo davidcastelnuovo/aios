@@ -29,3 +29,12 @@ verify_jwt = false
 
 [functions.add-calendar-event]
 verify_jwt = true
+
+[functions.crm-tables]
+verify_jwt = true
+
+[functions.crm-fields]
+verify_jwt = true
+
+[functions.crm-records]
+verify_jwt = true
