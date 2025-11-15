@@ -2189,6 +2189,27 @@ export type Database = {
         Args: { _source_tenant_id: string; _target_tenant_id: string }
         Returns: undefined
       }
+      get_chat_contacts: {
+        Args: {
+          p_agency_ids: string[]
+          p_limit?: number
+          p_offset?: number
+          p_search_term?: string
+          p_tenant_id: string
+        }
+        Returns: {
+          agency_id: string
+          agency_name: string
+          contact_type: string
+          email: string
+          id: string
+          last_message_at: string
+          manychat_subscriber_id: string
+          name: string
+          phone: string
+          unread_count: number
+        }[]
+      }
       get_client_tenant_id: { Args: { _client_id: string }; Returns: string }
       get_effective_setting: {
         Args: { _setting_key: string; _tenant_id: string }
