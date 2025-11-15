@@ -13,13 +13,27 @@ import { Badge } from "@/components/ui/badge";
 import { MessageCircle, Search, Settings } from "lucide-react";
 import ChatView from "@/components/chat/ChatView";
 
+interface Contact {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  agency_id: string;
+  agencies: { name: string } | null;
+  manychat_subscriber_id: string | null;
+  unreadCount: number;
+  type: 'client' | 'lead';
+}
+
 export default function Chat() {
   const { clientId } = useParams();
   const { tenantId } = useCurrentTenant();
   const { buildPath } = useTenantPath();
   const { userAgencyIds, isLoading: agenciesLoading } = useUserAgencies();
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(clientId || null);
+  const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' } | null>(
+    clientId ? { id: clientId, type: 'client' } : null
+  );
 
   // Count unsynced clients
   const { data: unsyncedCount } = useQuery({
@@ -38,9 +52,9 @@ export default function Chat() {
     enabled: !!tenantId,
   });
 
-  // Fetch clients with unread message counts from accessible agencies
-  const { data: clients, isLoading } = useQuery({
-    queryKey: ['chat-clients', tenantId, userAgencyIds, searchTerm],
+  // Fetch contacts (clients + leads) with unread message counts
+  const { data: contacts, isLoading } = useQuery({
+    queryKey: ['chat-contacts', tenantId, userAgencyIds, searchTerm],
     queryFn: async () => {
       if (!tenantId) return [];
 
@@ -62,8 +76,8 @@ export default function Chat() {
 
       if (allAgencyIds.length === 0) return [];
 
-      // Build query for all clients (with and without ManyChat)
-      let query = supabase
+      // Fetch CLIENTS
+      let clientQuery = supabase
         .from('clients')
         .select(`
           id,
@@ -78,30 +92,80 @@ export default function Chat() {
         .order('name');
 
       if (searchTerm) {
-        query = query.ilike('name', `%${searchTerm}%`);
+        clientQuery = clientQuery.ilike('name', `%${searchTerm}%`);
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
+      const { data: clients, error: clientsError } = await clientQuery;
+      if (clientsError) throw clientsError;
 
-      // Get unread counts for each client
-      const clientsWithCounts = await Promise.all(
-        (data || []).map(async (client) => {
-          const { count } = await supabase
-            .from('chat_messages')
-            .select('*', { count: 'exact', head: true })
-            .eq('client_id', client.id)
-            .eq('direction', 'inbound')
-            .is('read_at', null);
+      // Fetch LEADS
+      let leadQuery = supabase
+        .from('leads')
+        .select(`
+          id,
+          company_name,
+          phone,
+          email,
+          agency_id,
+          agencies (name),
+          manychat_subscriber_id
+        `)
+        .in('agency_id', allAgencyIds)
+        .order('company_name');
 
-          return {
-            ...client,
-            unreadCount: count || 0,
-          };
-        })
-      );
+      if (searchTerm) {
+        leadQuery = leadQuery.ilike('company_name', `%${searchTerm}%`);
+      }
 
-      return clientsWithCounts;
+      const { data: leads, error: leadsError } = await leadQuery;
+      if (leadsError) throw leadsError;
+
+      // Combine and add unread counts
+      const allContacts: Contact[] = [];
+
+      for (const client of clients || []) {
+        const { count } = await supabase
+          .from('chat_messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('client_id', client.id)
+          .eq('direction', 'inbound')
+          .is('read_at', null);
+
+        allContacts.push({
+          ...client,
+          type: 'client',
+          unreadCount: count || 0,
+        });
+      }
+
+      for (const lead of leads || []) {
+        const { count } = await supabase
+          .from('chat_messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('lead_id', lead.id)
+          .eq('direction', 'inbound')
+          .is('read_at', null);
+
+        allContacts.push({
+          id: lead.id,
+          name: lead.company_name,
+          phone: lead.phone,
+          email: lead.email,
+          agency_id: lead.agency_id,
+          agencies: lead.agencies,
+          manychat_subscriber_id: lead.manychat_subscriber_id,
+          type: 'lead',
+          unreadCount: count || 0,
+        });
+      }
+
+      // Sort by unread first, then by name
+      return allContacts.sort((a, b) => {
+        if (a.unreadCount !== b.unreadCount) {
+          return b.unreadCount - a.unreadCount;
+        }
+        return a.name.localeCompare(b.name, 'he');
+      });
     },
     enabled: !!tenantId && !agenciesLoading,
   });
@@ -113,10 +177,10 @@ export default function Chat() {
         <div className="p-4 border-b space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <h3 className="font-semibold">לקוחות</h3>
+              <h3 className="font-semibold">אנשי קשר</h3>
               {unsyncedCount !== undefined && unsyncedCount > 0 && (
                 <Badge variant="secondary" className="text-xs">
-                  {unsyncedCount} לא מסונכרן
+                  {unsyncedCount} לא מסונכרנים
                 </Badge>
               )}
             </div>
@@ -144,10 +208,10 @@ export default function Chat() {
         <ScrollArea className="flex-1">
           {isLoading ? (
             <div className="p-4 text-center text-muted-foreground">טוען...</div>
-          ) : clients?.length === 0 ? (
+          ) : contacts?.length === 0 ? (
             <div className="p-4 text-center">
               <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-20" />
-              <p className="text-muted-foreground mb-3">לא נמצאו לקוחות עם ManyChat</p>
+              <p className="text-muted-foreground mb-3">לא נמצאו אנשי קשר</p>
               <Button variant="outline" size="sm" asChild>
                 <Link to={buildPath("/manychat-settings")}>
                   <Settings className="h-4 w-4 ml-2" />
@@ -157,33 +221,38 @@ export default function Chat() {
             </div>
           ) : (
             <div className="p-2">
-              {clients?.map((client) => (
+              {contacts?.map((contact) => (
                 <button
-                  key={client.id}
-                  onClick={() => setSelectedClientId(client.id)}
+                  key={`${contact.type}-${contact.id}`}
+                  onClick={() => setSelectedContact({ id: contact.id, type: contact.type })}
                   className={`w-full text-right p-3 rounded-lg mb-1 transition-colors ${
-                    selectedClientId === client.id
+                    selectedContact?.id === contact.id
                       ? 'bg-primary text-primary-foreground'
                       : 'hover:bg-accent'
                   }`}
-                 >
+                >
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium truncate">{client.name}</span>
-                        {!client.manychat_subscriber_id && (
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-medium truncate">{contact.name}</span>
+                        {contact.type === 'lead' && (
                           <Badge variant="outline" className="text-xs shrink-0">
+                            ליד
+                          </Badge>
+                        )}
+                        {!contact.manychat_subscriber_id && (
+                          <Badge variant="secondary" className="text-xs shrink-0">
                             לא מסונכרן
                           </Badge>
                         )}
                       </div>
                       <div className="text-sm opacity-70 truncate">
-                        {client.agencies?.name}
+                        {contact.agencies?.name}
                       </div>
                     </div>
-                    {client.unreadCount > 0 && (
-                      <Badge variant="destructive" className="mr-2">
-                        {client.unreadCount}
+                    {contact.unreadCount > 0 && (
+                      <Badge variant="destructive" className="mr-2 shrink-0">
+                        {contact.unreadCount}
                       </Badge>
                     )}
                   </div>
@@ -196,13 +265,13 @@ export default function Chat() {
 
       {/* Chat View */}
       <div className="flex-1">
-        {selectedClientId ? (
-          <ChatView clientId={selectedClientId} />
+        {selectedContact ? (
+          <ChatView contactId={selectedContact.id} contactType={selectedContact.type} />
         ) : (
           <Card className="h-full flex items-center justify-center">
             <div className="text-center text-muted-foreground">
               <MessageCircle className="h-16 w-16 mx-auto mb-4 opacity-20" />
-              <p>בחר לקוח כדי להתחיל שיחה</p>
+              <p>בחר איש קשר כדי להתחיל שיחה</p>
             </div>
           </Card>
         )}

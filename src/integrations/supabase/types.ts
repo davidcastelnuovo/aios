@@ -366,6 +366,7 @@ export type Database = {
           created_at: string | null
           direction: string
           id: string
+          lead_id: string | null
           message_text: string
           raw_provider_data: Json | null
           read_at: string | null
@@ -379,6 +380,7 @@ export type Database = {
           created_at?: string | null
           direction: string
           id?: string
+          lead_id?: string | null
           message_text: string
           raw_provider_data?: Json | null
           read_at?: string | null
@@ -392,6 +394,7 @@ export type Database = {
           created_at?: string | null
           direction?: string
           id?: string
+          lead_id?: string | null
           message_text?: string
           raw_provider_data?: Json | null
           read_at?: string | null
@@ -405,6 +408,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
           {
@@ -1159,6 +1169,7 @@ export type Database = {
           industry: string | null
           itai_meeting_date: string | null
           lost_reason: string | null
+          manychat_subscriber_id: string | null
           monthly_budget: number | null
           notes: string | null
           phone: string | null
@@ -1192,6 +1203,7 @@ export type Database = {
           industry?: string | null
           itai_meeting_date?: string | null
           lost_reason?: string | null
+          manychat_subscriber_id?: string | null
           monthly_budget?: number | null
           notes?: string | null
           phone?: string | null
@@ -1225,6 +1237,7 @@ export type Database = {
           industry?: string | null
           itai_meeting_date?: string | null
           lost_reason?: string | null
+          manychat_subscriber_id?: string | null
           monthly_budget?: number | null
           notes?: string | null
           phone?: string | null

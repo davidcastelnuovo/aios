@@ -8,122 +8,121 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Building2, Phone, Mail, AlertCircle, Edit, Send, MessageSquare } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import ChatMessageList from "./ChatMessageList";
 import ChatInput from "./ChatInput";
 import { toast } from "sonner";
 
 interface ChatViewProps {
-  clientId: string;
+  contactId: string;
+  contactType: 'client' | 'lead';
 }
 
-export default function ChatView({ clientId }: ChatViewProps) {
+export default function ChatView({ contactId, contactType }: ChatViewProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState(false);
   const [subscriberId, setSubscriberId] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [templateVariables, setTemplateVariables] = useState<Record<string, string>>({});
 
-  // Fetch client details
-  const { data: client } = useQuery({
-    queryKey: ['client', clientId],
+  // Fetch contact details (client or lead)
+  const { data: contact } = useQuery({
+    queryKey: ['contact', contactId, contactType],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('clients')
-        .select(`
-          id,
-          name,
-          phone,
-          email,
-          agency_id,
-          tenant_id,
-          manychat_subscriber_id,
-          agencies (name)
-        `)
-        .eq('id', clientId)
-        .single();
-
-      if (error) throw error;
-      return data;
+      if (contactType === 'client') {
+        const { data, error } = await supabase
+          .from('clients')
+          .select('id, name, phone, email, agency_id, tenant_id, manychat_subscriber_id, agencies (name)')
+          .eq('id', contactId)
+          .single();
+        if (error) throw error;
+        return data;
+      } else {
+        const { data, error } = await supabase
+          .from('leads')
+          .select('id, company_name, phone, email, agency_id, tenant_id, manychat_subscriber_id, agencies (name)')
+          .eq('id', contactId)
+          .single();
+        if (error) throw error;
+        return { ...data, name: data.company_name };
+      }
     },
   });
 
   // Fetch templates
   const { data: templates, isLoading: templatesLoading } = useQuery({
-    queryKey: ['manychat-templates', client?.tenant_id],
+    queryKey: ['manychat-templates', contact?.tenant_id],
     queryFn: async () => {
-      if (!client?.tenant_id) return [];
-      console.log('🔍 Fetching templates for tenant:', client.tenant_id);
+      if (!contact?.tenant_id) return [];
       const { data, error } = await supabase
         .from('manychat_templates')
         .select('*')
-        .eq('tenant_id', client.tenant_id)
+        .eq('tenant_id', contact.tenant_id)
         .eq('is_active', true)
         .order('display_name');
       
-      if (error) {
-        console.error('❌ Template fetch error:', error);
-        throw error;
-      }
-      console.log('✅ Templates loaded:', data?.length || 0, data);
+      if (error) throw error;
       return data;
     },
-    enabled: !!client?.tenant_id,
+    enabled: !!contact?.tenant_id,
   });
 
   // Mark messages as read mutation
   const markAsReadMutation = useMutation({
     mutationFn: async () => {
+      const filter = contactType === 'client' 
+        ? { client_id: contactId }
+        : { lead_id: contactId };
+      
       const { error } = await supabase
         .from('chat_messages')
         .update({ read_at: new Date().toISOString() })
-        .eq('client_id', clientId)
+        .match(filter)
         .eq('direction', 'inbound')
         .is('read_at', null);
       
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-messages', clientId] });
-      queryClient.invalidateQueries({ queryKey: ['chat-clients'] });
-      queryClient.invalidateQueries({ queryKey: ['unsynced-clients-count'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-messages', contactId, contactType] });
+      queryClient.invalidateQueries({ queryKey: ['chat-contacts'] });
     },
   });
 
   // Fetch messages
   const { data: messages, isLoading } = useQuery({
-    queryKey: ['chat-messages', clientId],
+    queryKey: ['chat-messages', contactId, contactType],
     queryFn: async () => {
+      const payload = contactType === 'client' 
+        ? { clientId: contactId }
+        : { leadId: contactId };
+      
       const { data, error } = await supabase.functions.invoke('get-chat-history', {
-        body: { clientId },
+        body: payload,
       });
 
       if (error) throw error;
-      
-      // Mark messages as read after fetching
       markAsReadMutation.mutate();
-      
       return data.messages || [];
     },
-    refetchInterval: 5000, // Poll every 5 seconds for new messages
+    refetchInterval: 5000,
   });
 
   // Update ManyChat ID mutation
   const updateIdMutation = useMutation({
     mutationFn: async (newSubscriberId: string) => {
+      const table = contactType === 'client' ? 'clients' : 'leads';
       const { error } = await supabase
-        .from('clients')
+        .from(table)
         .update({ manychat_subscriber_id: newSubscriberId })
-        .eq('id', clientId);
+        .eq('id', contactId);
       
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['client', clientId] });
-      queryClient.invalidateQueries({ queryKey: ['chat-clients'] });
-      queryClient.invalidateQueries({ queryKey: ['unsynced-clients'] });
-      setEditingId(false);
-      setSubscriberId("");
+      queryClient.invalidateQueries({ queryKey: ['contact', contactId, contactType] });
       toast.success('ManyChat ID עודכן בהצלחה');
+      setEditingId(false);
     },
     onError: () => {
       toast.error('שגיאה בעדכון ManyChat ID');
@@ -133,27 +132,32 @@ export default function ChatView({ clientId }: ChatViewProps) {
   // Send message mutation
   const sendMessageMutation = useMutation({
     mutationFn: async ({ message, templateId, templateVariables }: { 
-      message?: string; 
-      templateId?: string; 
-      templateVariables?: Record<string, string> 
+      message?: string;
+      templateId?: string;
+      templateVariables?: Record<string, string>;
     }) => {
+      const payload: any = { message, templateId, templateVariables };
+      
+      if (contactType === 'client') {
+        payload.clientId = contactId;
+      } else {
+        payload.leadId = contactId;
+      }
+      
       const { data, error } = await supabase.functions.invoke('send-chat-message', {
-        body: { clientId, message, templateId, templateVariables },
+        body: payload,
       });
 
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-messages', clientId] });
-      queryClient.invalidateQueries({ queryKey: ['chat-clients'] });
-      queryClient.invalidateQueries({ queryKey: ['client', clientId] });
+      queryClient.invalidateQueries({ queryKey: ['chat-messages', contactId, contactType] });
+      toast.success('ההודעה נשלחה בהצלחה');
       setSelectedTemplate(null);
       setTemplateVariables({});
-      toast.success('הודעה נשלחה בהצלחה');
     },
     onError: (error: any) => {
-      console.error('Send message error:', error);
       toast.error(error.message || 'שגיאה בשליחת ההודעה');
     },
   });
@@ -176,18 +180,13 @@ export default function ChatView({ clientId }: ChatViewProps) {
 
   const selectedTemplateData = templates?.find(t => t.id === selectedTemplate);
 
-  const handleSendTestMessage = () => {
-    if (selectedTemplate) {
-      handleSendWithTemplate();
-    } else {
-      sendMessageMutation.mutate({ message: "שלום! זוהי הודעת בדיקה מהמערכת." });
-    }
-  };
-
-  if (!client) {
+  if (!contact) {
     return (
       <Card className="h-full flex items-center justify-center">
-        <div className="text-muted-foreground">טוען...</div>
+        <div className="text-center">
+          <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-20" />
+          <p className="text-muted-foreground">טוען פרטי איש קשר...</p>
+        </div>
       </Card>
     );
   }
@@ -195,95 +194,132 @@ export default function ChatView({ clientId }: ChatViewProps) {
   return (
     <Card className="h-full flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b space-y-3">
-        <div className="flex items-center justify-between">
+      <div className="p-4 border-b bg-muted/50">
+        <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-xl font-bold">{client.name}</h2>
-            <div className="flex gap-4 mt-1 text-sm text-muted-foreground">
-              {client.agencies && (
-                <div className="flex items-center gap-1">
-                  <Building2 className="h-3 w-3" />
-                  {client.agencies.name}
-                </div>
+            <h2 className="font-semibold text-lg flex items-center gap-2">
+              {contact.name}
+              {contactType === 'lead' && (
+                <Badge variant="outline" className="text-xs">ליד</Badge>
               )}
-              {client.phone && (
-                <div className="flex items-center gap-1">
-                  <Phone className="h-3 w-3" />
-                  {client.phone}
-                </div>
-              )}
-              {client.email && (
-                <div className="flex items-center gap-1">
-                  <Mail className="h-3 w-3" />
-                  {client.email}
-                </div>
-              )}
-            </div>
+            </h2>
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
+              <Building2 className="h-3 w-3" />
+              {contact.agencies?.name}
+            </p>
           </div>
         </div>
 
-        {/* ManyChat Status & Actions */}
-        {!client.manychat_subscriber_id && (
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="flex items-center justify-between gap-4">
-              <div className="text-sm">
-                <div className="font-semibold">לקוח לא מסונכרן עם ManyChat</div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  שלח הודעת בדיקה או הזן את ה-ManyChat ID ידנית
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleSendTestMessage}
-                  disabled={sendMessageMutation.isPending}
-                >
-                  <Send className="h-3 w-3 ml-1" />
-                  הודעת בדיקה
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setEditingId(true)}
-                >
-                  <Edit className="h-3 w-3 ml-1" />
-                  הזן ID
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
-        )}
+        <div className="flex items-center gap-4 text-sm">
+          {contact.phone && (
+            <div className="flex items-center gap-2">
+              <Phone className="h-4 w-4 text-muted-foreground" />
+              <span>{contact.phone}</span>
+            </div>
+          )}
+          {contact.email && (
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              <span>{contact.email}</span>
+            </div>
+          )}
+        </div>
 
-        {editingId && (
-          <div className="flex gap-2">
-            <Input
-              placeholder="ManyChat Subscriber ID"
-              value={subscriberId}
-              onChange={(e) => setSubscriberId(e.target.value)}
-              className="flex-1"
-            />
-            <Button
-              size="sm"
-              onClick={() => updateIdMutation.mutate(subscriberId)}
-              disabled={!subscriberId || updateIdMutation.isPending}
-            >
-              שמור
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setEditingId(false);
-                setSubscriberId("");
-              }}
-            >
-              ביטול
-            </Button>
-          </div>
-        )}
+        {/* ManyChat Sync Status */}
+        <div className="mt-3">
+          {contact.manychat_subscriber_id ? (
+            <div className="flex items-center gap-2">
+              {editingId ? (
+                <div className="flex items-center gap-2 flex-1">
+                  <Input
+                    value={subscriberId}
+                    onChange={(e) => setSubscriberId(e.target.value)}
+                    placeholder="Subscriber ID"
+                    className="h-8 text-sm"
+                  />
+                  <Button size="sm" onClick={() => updateIdMutation.mutate(subscriberId)} disabled={updateIdMutation.isPending}>
+                    שמור
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditingId(false)}>
+                    ביטול
+                  </Button>
+                </div>
+              ) : (
+                <Alert className="flex-1">
+                  <AlertDescription className="flex items-center justify-between">
+                    <span className="text-xs">מסונכרן ל-ManyChat: {contact.manychat_subscriber_id}</span>
+                    <Button size="sm" variant="ghost" onClick={() => { setSubscriberId(contact.manychat_subscriber_id || ''); setEditingId(true); }}>
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          ) : (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex items-center justify-between">
+                <span className="text-sm">איש קשר זה לא מסונכרן ל-ManyChat</span>
+                {!editingId && (
+                  <Button size="sm" variant="outline" onClick={() => setEditingId(true)}>
+                    הוסף Subscriber ID
+                  </Button>
+                )}
+              </AlertDescription>
+            </Alert>
+          )}
+          {editingId && !contact.manychat_subscriber_id && (
+            <div className="flex items-center gap-2 mt-2">
+              <Input value={subscriberId} onChange={(e) => setSubscriberId(e.target.value)} placeholder="Subscriber ID" className="h-8 text-sm" />
+              <Button size="sm" onClick={() => updateIdMutation.mutate(subscriberId)} disabled={updateIdMutation.isPending}>
+                שמור
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditingId(false)}>
+                ביטול
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Template Selection */}
+      {templates && templates.length > 0 && (
+        <div className="p-3 border-b bg-muted/30">
+          <Label className="text-xs">טמפלייט</Label>
+          <div className="flex gap-2 mt-1">
+            <Select value={selectedTemplate || ''} onValueChange={(value) => { setSelectedTemplate(value || null); setTemplateVariables({}); }}>
+              <SelectTrigger className="h-8 text-sm flex-1">
+                <SelectValue placeholder="בחר טמפלייט (אופציונלי)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">ללא טמפלייט</SelectItem>
+                {templates.map((template) => (
+                  <SelectItem key={template.id} value={template.id}>{template.display_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedTemplate && (
+              <Button size="sm" variant="outline" onClick={handleSendWithTemplate} disabled={sendMessageMutation.isPending}>
+                <Send className="h-3 w-3 ml-1" />
+                שלח
+              </Button>
+            )}
+          </div>
+
+          {/* Template Variables */}
+          {selectedTemplateData?.template_variables && Array.isArray(selectedTemplateData.template_variables) && selectedTemplateData.template_variables.length > 0 && (
+            <div className="mt-2 space-y-2">
+              <Label className="text-xs">משתנים</Label>
+              {selectedTemplateData.template_variables.map((variable: string) => (
+                <div key={variable} className="flex items-center gap-2">
+                  <Label className="text-xs min-w-[80px]">{variable}:</Label>
+                  <Input value={templateVariables[variable] || ''} onChange={(e) => setTemplateVariables(prev => ({ ...prev, [variable]: e.target.value }))} placeholder={`ערך עבור ${variable}`} className="h-7 text-sm" />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-hidden">
@@ -291,99 +327,8 @@ export default function ChatView({ clientId }: ChatViewProps) {
       </div>
 
       {/* Input */}
-      <div className="border-t">
-        {/* Template Selection - Compact Dropdown above input */}
-        {templates && templates.length > 0 ? (
-          <div className="px-4 pt-3 pb-2 space-y-2">
-            <div className="flex gap-2 items-center">
-              <Select value={selectedTemplate || ""} onValueChange={setSelectedTemplate}>
-                <SelectTrigger className="flex-1 h-9">
-                  <SelectValue placeholder="בחר טמפלייט WhatsApp (אופציונלי)" />
-                </SelectTrigger>
-                <SelectContent className="z-50 bg-background">
-                  {templates.map((template: any) => (
-                    <SelectItem key={template.id} value={template.id}>
-                      {template.display_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedTemplate && (
-                <Button 
-                  variant="ghost" 
-                  size="sm"
-                  onClick={() => {
-                    setSelectedTemplate(null);
-                    setTemplateVariables({});
-                  }}
-                  className="h-9 px-2"
-                >
-                  ✕
-                </Button>
-              )}
-            </div>
-            
-            {/* Template Variables Form */}
-            {selectedTemplateData && (
-              <div className="space-y-2 pt-2 border-t">
-                {Array.isArray(selectedTemplateData.template_variables) && selectedTemplateData.template_variables.length > 0 && (
-                  <>
-                    <Label className="text-xs text-muted-foreground">משתנים:</Label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(selectedTemplateData.template_variables as string[]).map((varName: string) => (
-                        <div key={varName}>
-                          <Label className="text-xs">{varName}</Label>
-                          <Input
-                            className="h-8"
-                            value={templateVariables[varName] || ""}
-                            onChange={(e) => setTemplateVariables({
-                              ...templateVariables,
-                              [varName]: e.target.value
-                            })}
-                            placeholder={`הזן ${varName}`}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                )}
-                <Button 
-                  size="sm" 
-                  className="w-full"
-                  onClick={handleSendWithTemplate}
-                  disabled={sendMessageMutation.isPending}
-                >
-                  <MessageSquare className="h-3 w-3 ml-1" />
-                  שלח עם טמפלייט
-                </Button>
-              </div>
-            )}
-          </div>
-        ) : templatesLoading ? (
-          <div className="px-4 py-2 text-xs text-muted-foreground text-center">
-            טוען טמפלייטים...
-          </div>
-        ) : (
-          <Alert className="mx-4 mt-3 mb-2 py-2">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="text-xs flex items-center justify-between">
-              <span>לא הוגדרו טמפלייטים במערכת</span>
-              <Button 
-                size="sm" 
-                variant="outline"
-                className="h-7 text-xs"
-                onClick={() => window.location.href = '/t/promo/manychat-templates'}
-              >
-                הוסף טמפלייט
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        <ChatInput
-          onSend={handleSendMessage}
-          isLoading={sendMessageMutation.isPending}
-        />
+      <div className="p-3 border-t">
+        <ChatInput onSendMessage={handleSendMessage} disabled={!contact.manychat_subscriber_id || sendMessageMutation.isPending} />
       </div>
     </Card>
   );

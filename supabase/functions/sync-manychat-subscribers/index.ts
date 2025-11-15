@@ -240,7 +240,6 @@ Deno.serve(async (req) => {
     console.log(`📊 Unique ManyChat subscribers: ${subscribersMap.size}`);
 
     let clientsMatched = 0;
-    let leadsMatched = 0;
     let notMatched = 0;
     let alreadySynced = 0;
 
@@ -296,7 +295,6 @@ Deno.serve(async (req) => {
 
         if (leads && leads.length > 0) {
           console.log(`   ℹ️ Found matching lead: ${leads[0].id}`);
-          leadsMatched++;
         } else {
           notMatched++;
         }
@@ -306,25 +304,76 @@ Deno.serve(async (req) => {
     // Count clients that were already synced
     alreadySynced = (clients?.filter(c => c.manychat_subscriber_id).length || 0);
 
-    console.log('');
-    console.log('📊 Sync Summary:');
-    console.log(`   ✅ Newly matched clients: ${clientsMatched}`);
-    console.log(`   ✅ Already synced: ${alreadySynced}`);
-    console.log(`   ℹ️ Found as leads: ${leadsMatched}`);
-    console.log(`   ❌ Not matched: ${notMatched}`);
-    console.log(`   📱 Total ManyChat subscribers: ${subscribersMap.size}`);
+    // ===== SYNC LEADS =====
+    console.log('\n🔄 Starting LEADS synchronization...');
+    let leadsMatched = 0;
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        total: subscribersMap.size,
-        clientsMatched,
-        leadsMatched,
-        notMatched,
-        alreadySynced
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    const { data: leadsNeedingSync, error: leadsError } = await supabase
+      .from('leads')
+      .select('id, company_name, phone, tenant_id')
+      .eq('tenant_id', tenantId)
+      .is('manychat_subscriber_id', null);
+
+    if (leadsError) {
+      console.error('❌ Error fetching leads:', leadsError);
+    } else {
+      console.log(`🔍 ${leadsNeedingSync?.length || 0} leads need ManyChat sync`);
+      
+      for (const lead of leadsNeedingSync || []) {
+        if (!lead.phone) continue;
+        
+        const normalizedLeadPhone = normalizePhone(lead.phone);
+        const phoneVariations = getPhoneVariations(lead.phone);
+        
+        console.log(`🔎 Checking lead: ${lead.company_name}, Phone: ${lead.phone}`);
+        
+        let matched = false;
+        for (const variation of phoneVariations) {
+          const normalizedVariation = normalizePhone(variation);
+          if (subscribersMap.has(normalizedVariation)) {
+            const subscriber = subscribersMap.get(normalizedVariation)!;
+            
+            const { error: updateError } = await supabase
+              .from('leads')
+              .update({ manychat_subscriber_id: subscriber.subscriberId })
+              .eq('id', lead.id);
+            
+            if (updateError) {
+              console.error(`❌ Failed to update lead ${lead.id}:`, updateError);
+            } else {
+              console.log(`✅ Updated lead ${lead.company_name} with subscriber ${subscriber.subscriberId}`);
+              leadsMatched++;
+              matched = true;
+            }
+            break;
+          }
+        }
+        
+        if (!matched) {
+          console.log(`   ❌ No match found for lead ${lead.company_name}`);
+        }
+      }
+    }
+
+    console.log('\n=== Final Statistics ===');
+    console.log(`Total clients checked: ${clientsNeedingSync?.length || 0}`);
+    console.log(`✅ Clients matched: ${clientsMatched}`);
+    console.log(`Total leads checked: ${leadsNeedingSync?.length || 0}`);
+    console.log(`✅ Leads matched: ${leadsMatched}`);
+    console.log(`❌ Not matched: ${notMatched}`);
+    console.log(`⏭️ Already synced: ${alreadySynced}`);
+
+    return new Response(JSON.stringify({ 
+      success: true,
+      clientsMatched,
+      leadsMatched,
+      notMatched,
+      alreadySynced,
+      totalClientsChecked: clientsNeedingSync?.length || 0,
+      totalLeadsChecked: leadsNeedingSync?.length || 0
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    });
 
   } catch (error) {
     console.error('💥 Unexpected error:', error);

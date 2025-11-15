@@ -44,43 +44,68 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { clientId, limit = 100, before } = requestBody;
+    const { clientId, leadId, limit = 100, before } = requestBody;
 
-    if (!clientId) {
-      console.error('Missing clientId in request');
+    if (!clientId && !leadId) {
+      console.error('Missing clientId or leadId in request');
       return new Response(
-        JSON.stringify({ error: 'clientId is required' }),
+        JSON.stringify({ error: 'clientId or leadId is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Fetching messages for client:', clientId);
+    console.log('Fetching messages for:', clientId ? `client: ${clientId}` : `lead: ${leadId}`);
 
-    // Get client to determine tenant_id
-    const { data: clientData, error: clientError } = await supabase
-      .from('clients')
-      .select('tenant_id')
-      .eq('id', clientId)
-      .single();
+    // Get contact to determine tenant_id
+    let tenantId: string;
+    
+    if (clientId) {
+      const { data: clientData, error: clientError } = await supabase
+        .from('clients')
+        .select('tenant_id')
+        .eq('id', clientId)
+        .single();
 
-    if (clientError || !clientData) {
-      console.error('Client not found:', clientError);
-      return new Response(JSON.stringify({ error: 'Client not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      if (clientError || !clientData) {
+        console.error('Client not found:', clientError);
+        return new Response(JSON.stringify({ error: 'Client not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      tenantId = clientData.tenant_id;
+    } else {
+      const { data: leadData, error: leadError } = await supabase
+        .from('leads')
+        .select('tenant_id')
+        .eq('id', leadId)
+        .single();
+
+      if (leadError || !leadData) {
+        console.error('Lead not found:', leadError);
+        return new Response(JSON.stringify({ error: 'Lead not found' }), {
+          status: 404,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      tenantId = leadData.tenant_id;
     }
 
-    console.log('Client tenant_id:', clientData.tenant_id);
+    console.log('Contact tenant_id:', tenantId);
 
     // Build query
     let query = supabase
       .from('chat_messages')
       .select('*')
-      .eq('client_id', clientId)
-      .eq('tenant_id', clientData.tenant_id)
+      .eq('tenant_id', tenantId)
       .order('created_at', { ascending: true })
       .limit(limit);
+
+    if (clientId) {
+      query = query.eq('client_id', clientId);
+    } else {
+      query = query.eq('lead_id', leadId);
+    }
 
     if (before) {
       query = query.lt('created_at', before);
