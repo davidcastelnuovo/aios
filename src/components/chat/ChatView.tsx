@@ -287,19 +287,15 @@ export default function ChatView({ clientId }: ChatViewProps) {
 
       {/* Input */}
       <div className="border-t">
-        {/* Template Selection */}
+        {/* Template Selection - Compact Dropdown above input */}
         {templates && templates.length > 0 && (
-          <div className="p-4 border-b bg-muted/30">
-            <div className="flex items-center gap-2 mb-2">
-              <MessageSquare className="h-4 w-4 text-muted-foreground" />
-              <Label className="text-sm font-medium">שליחה עם טמפלייט WhatsApp</Label>
-            </div>
-            <div className="flex gap-2">
+          <div className="px-4 pt-3 pb-2 space-y-2">
+            <div className="flex gap-2 items-center">
               <Select value={selectedTemplate || ""} onValueChange={setSelectedTemplate}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="בחר טמפלייט (אופציונלי)" />
+                <SelectTrigger className="flex-1 h-9">
+                  <SelectValue placeholder="בחר טמפלייט WhatsApp (אופציונלי)" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-50 bg-background">
                   {templates.map((template: any) => (
                     <SelectItem key={template.id} value={template.id}>
                       {template.display_name}
@@ -309,26 +305,29 @@ export default function ChatView({ clientId }: ChatViewProps) {
               </Select>
               {selectedTemplate && (
                 <Button 
-                  variant="outline" 
+                  variant="ghost" 
                   size="sm"
                   onClick={() => {
                     setSelectedTemplate(null);
                     setTemplateVariables({});
                   }}
+                  className="h-9 px-2"
                 >
-                  נקה
+                  ✕
                 </Button>
               )}
             </div>
             
+            {/* Template Variables Form */}
             {selectedTemplateData && Array.isArray(selectedTemplateData.template_variables) && selectedTemplateData.template_variables.length > 0 && (
-              <div className="mt-3 space-y-2">
-                <Label className="text-xs text-muted-foreground">משתנים לטמפלייט:</Label>
+              <div className="space-y-2 pt-2 border-t">
+                <Label className="text-xs text-muted-foreground">משתנים:</Label>
                 <div className="grid grid-cols-2 gap-2">
                   {(selectedTemplateData.template_variables as string[]).map((varName: string) => (
                     <div key={varName}>
                       <Label className="text-xs">{varName}</Label>
                       <Input
+                        className="h-8"
                         value={templateVariables[varName] || ""}
                         onChange={(e) => setTemplateVariables({
                           ...templateVariables,
@@ -341,10 +340,11 @@ export default function ChatView({ clientId }: ChatViewProps) {
                 </div>
                 <Button 
                   size="sm" 
-                  className="w-full mt-2"
+                  className="w-full"
                   onClick={handleSendWithTemplate}
                   disabled={sendMessageMutation.isPending}
                 >
+                  <MessageSquare className="h-3 w-3 ml-1" />
                   שלח עם טמפלייט
                 </Button>
               </div>
