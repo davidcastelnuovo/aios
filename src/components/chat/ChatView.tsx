@@ -210,7 +210,7 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
       const { error } = await supabase
         .from('chat_messages')
         .insert({
-          client_id: contactType === 'client' ? contactId : '',
+          client_id: contactType === 'client' ? contactId : null,
           lead_id: contactType === 'lead' ? contactId : null,
           tenant_id: contact?.tenant_id || '',
           message_text: message,

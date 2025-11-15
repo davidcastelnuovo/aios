@@ -362,7 +362,7 @@ export type Database = {
       chat_messages: {
         Row: {
           channel: string | null
-          client_id: string
+          client_id: string | null
           created_at: string | null
           direction: string
           id: string
@@ -376,7 +376,7 @@ export type Database = {
         }
         Insert: {
           channel?: string | null
-          client_id: string
+          client_id?: string | null
           created_at?: string | null
           direction: string
           id?: string
@@ -390,7 +390,7 @@ export type Database = {
         }
         Update: {
           channel?: string | null
-          client_id?: string
+          client_id?: string | null
           created_at?: string | null
           direction?: string
           id?: string
