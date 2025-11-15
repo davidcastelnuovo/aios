@@ -224,9 +224,9 @@ export default function Chat() {
               <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-20" />
               <p className="text-muted-foreground mb-3">לא נמצאו אנשי קשר</p>
               <Button variant="outline" size="sm" asChild>
-                <Link to={buildPath("/manychat-settings")}>
+                <Link to={buildPath("/chat-integrations")}>
                   <Settings className="h-4 w-4 ml-2" />
-                  חבר ManyChat
+                  הגדרות אינטגרציות
                 </Link>
               </Button>
             </div>
