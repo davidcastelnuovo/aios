@@ -126,37 +126,52 @@ export default function Chat() {
       throw leadsError;
     }
 
-    console.log('✅ Fetched:', { clients: clients?.length || 0, leads: leads?.length || 0 });
+    // Build ID lists for batch counting
+    const clientIds = (clients || []).map(c => c.id);
+    const leadIds = (leads || []).map(l => l.id);
 
-    // Get all unread counts in parallel
-    const allContacts: Contact[] = [];
+    // Fetch unread counts in 2 batched queries (clients + leads)
+    const [clientUnreadRes, leadUnreadRes] = await Promise.all([
+      clientIds.length > 0
+        ? supabase
+            .from('chat_messages')
+            .select('client_id')
+            .eq('direction', 'inbound')
+            .is('read_at', null)
+            .in('client_id', clientIds)
+        : Promise.resolve({ data: [] as any[] }),
+      leadIds.length > 0
+        ? supabase
+            .from('chat_messages')
+            .select('lead_id')
+            .eq('direction', 'inbound')
+            .is('read_at', null)
+            .in('lead_id', leadIds)
+        : Promise.resolve({ data: [] as any[] })
+    ]);
 
-    // Process clients
-    const clientPromises = (clients || []).map(async (client) => {
-      const { count } = await supabase
-        .from('chat_messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('client_id', client.id)
-        .eq('direction', 'inbound')
-        .is('read_at', null);
-
-      return {
-        ...client,
-        type: 'client' as const,
-        unreadCount: count || 0,
-      };
+    const clientUnreadMap = new Map<string, number>();
+    (clientUnreadRes.data || []).forEach((row: any) => {
+      if (row.client_id) {
+        clientUnreadMap.set(row.client_id, (clientUnreadMap.get(row.client_id) || 0) + 1);
+      }
     });
 
-    // Process leads
-    const leadPromises = (leads || []).map(async (lead) => {
-      const { count } = await supabase
-        .from('chat_messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('lead_id', lead.id)
-        .eq('direction', 'inbound')
-        .is('read_at', null);
+    const leadUnreadMap = new Map<string, number>();
+    (leadUnreadRes.data || []).forEach((row: any) => {
+      if (row.lead_id) {
+        leadUnreadMap.set(row.lead_id, (leadUnreadMap.get(row.lead_id) || 0) + 1);
+      }
+    });
 
-      return {
+    // Combine to unified contacts list
+    const allContacts: Contact[] = [
+      ...(clients || []).map((client: any) => ({
+        ...client,
+        type: 'client' as const,
+        unreadCount: clientUnreadMap.get(client.id) ?? 0,
+      })),
+      ...(leads || []).map((lead: any) => ({
         id: lead.id,
         name: lead.company_name,
         phone: lead.phone,
@@ -165,25 +180,17 @@ export default function Chat() {
         agencies: lead.agencies,
         manychat_subscriber_id: lead.manychat_subscriber_id,
         type: 'lead' as const,
-        unreadCount: count || 0,
-      };
+        unreadCount: leadUnreadMap.get(lead.id) ?? 0,
+      }))
+    ];
+
+    // Sort by unread first, then by name
+    return allContacts.sort((a, b) => {
+      if (a.unreadCount !== b.unreadCount) {
+        return b.unreadCount - a.unreadCount;
+      }
+      return a.name.localeCompare(b.name, 'he');
     });
-
-    // Wait for all counts
-    const [clientContacts, leadContacts] = await Promise.all([
-      Promise.all(clientPromises),
-      Promise.all(leadPromises)
-    ]);
-
-    allContacts.push(...clientContacts, ...leadContacts);
-
-      // Sort by unread first, then by name
-      return allContacts.sort((a, b) => {
-        if (a.unreadCount !== b.unreadCount) {
-          return b.unreadCount - a.unreadCount;
-        }
-        return a.name.localeCompare(b.name, 'he');
-      });
     },
     enabled: !!tenantId && !agenciesLoading,
   });
