@@ -78,7 +78,15 @@ serve(async (req) => {
           });
         }
         
-        const { table_id, name, key, type, position = 0, is_required = false, is_visible = true, config = {} } = body;
+        // Support body JSON and fallback to query params for table_id
+        const table_id = (body && body.table_id) ?? url.searchParams.get('table_id');
+        const name = body?.name;
+        const key = body?.key;
+        const type = body?.type;
+        const position = body?.position ?? 0;
+        const is_required = body?.is_required ?? false;
+        const is_visible = body?.is_visible ?? true;
+        const config = body?.config ?? {};
 
         if (!table_id || !name || !key || !type) {
           return new Response(JSON.stringify({ error: 'table_id, name, key, and type are required' }), {
@@ -122,7 +130,17 @@ serve(async (req) => {
           .select()
           .single();
 
-        if (error) throw error;
+        if (error) {
+          // Handle duplicate key gracefully
+          // @ts-ignore - edge runtime error shape
+          if (error.code === '23505') {
+            return new Response(JSON.stringify({ error: 'Field key already exists for this table' }), {
+              status: 409,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+          throw error;
+        }
 
         console.log(`✅ Created field: ${name} (${key}) for table ${table_id}`);
 
@@ -205,8 +223,9 @@ serve(async (req) => {
     }
   } catch (error) {
     console.error('Error in crm-fields function:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    const err: any = error as any;
+    const errorMessage = (err && err.message) ? err.message : String(error) || 'Unknown error';
+    return new Response(JSON.stringify({ error: errorMessage, details: err }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
