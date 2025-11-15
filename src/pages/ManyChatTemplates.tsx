@@ -23,6 +23,7 @@ interface Template {
   description: string | null;
   template_variables: any[];
   is_active: boolean;
+  automation_trigger_name: string | null;
 }
 
 export default function ManyChatTemplates() {
@@ -38,6 +39,7 @@ export default function ManyChatTemplates() {
     display_name: "",
     description: "",
     template_variables: "[]",
+    automation_trigger_name: "",
   });
 
   // Fetch templates
@@ -149,6 +151,7 @@ export default function ManyChatTemplates() {
       display_name: "",
       description: "",
       template_variables: "[]",
+      automation_trigger_name: "",
     });
   };
 
@@ -161,6 +164,7 @@ export default function ManyChatTemplates() {
       display_name: template.display_name,
       description: template.description || "",
       template_variables: JSON.stringify(template.template_variables || []),
+      automation_trigger_name: template.automation_trigger_name || "",
     });
   };
 
@@ -250,6 +254,19 @@ export default function ManyChatTemplates() {
               </div>
               
               <div>
+                <Label>שם טריגר אוטומציה (Trigger Name) *</Label>
+                <Input
+                  value={formData.automation_trigger_name}
+                  onChange={(e) => setFormData({ ...formData, automation_trigger_name: e.target.value })}
+                  placeholder="send_template_greeting"
+                  required
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  יש ליצור Automation ב-ManyChat שתשלח את הטמפלייט, ולהזין כאן את שם ה-Trigger
+                </p>
+              </div>
+              
+              <div>
                 <Label>משתנים (JSON Array)</Label>
                 <Textarea
                   value={formData.template_variables}
@@ -278,8 +295,19 @@ export default function ManyChatTemplates() {
       <Alert className="mb-6">
         <AlertCircle className="h-4 w-4" />
         <AlertDescription>
-          <strong>חשוב:</strong> טמפלייטים נוצרים ומאושרים דרך ManyChat Dashboard בלבד. 
-          כאן תוכל להוסיף את הפרטים של טמפלייטים שכבר אושרו על ידי WhatsApp.
+          <div className="space-y-2">
+            <p><strong>חשוב:</strong> טמפלייטים נוצרים ומאושרים דרך ManyChat Dashboard בלבד.</p>
+            <p className="text-sm">
+              <strong>צעדים לשימוש בטמפלייט:</strong>
+            </p>
+            <ol className="text-sm list-decimal mr-4 space-y-1">
+              <li>צור והמתן לאישור של טמפלייט WhatsApp ב-ManyChat Dashboard</li>
+              <li>צור Automation ב-ManyChat שתשלח את הטמפלייט</li>
+              <li>הגדר Trigger Name לאוטומציה (בהגדרות Advanced)</li>
+              <li>הוסף את פרטי הטמפלייט כאן, כולל את ה-Trigger Name</li>
+              <li>עכשיו תוכל לשלוח את הטמפלייט ישירות מהצ'אט</li>
+            </ol>
+          </div>
         </AlertDescription>
       </Alert>
 
@@ -321,7 +349,7 @@ export default function ManyChatTemplates() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                   <div>
                     <span className="text-muted-foreground">Template Name:</span>
                     <p className="font-mono">{template.template_name}</p>
@@ -333,6 +361,10 @@ export default function ManyChatTemplates() {
                   <div>
                     <span className="text-muted-foreground">שפה:</span>
                     <p>{template.template_language}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Trigger Name:</span>
+                    <p className="font-mono">{template.automation_trigger_name || '-'}</p>
                   </div>
                   <div>
                     <span className="text-muted-foreground">משתנים:</span>

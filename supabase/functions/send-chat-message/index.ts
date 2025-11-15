@@ -96,6 +96,14 @@ Deno.serve(async (req) => {
           { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+      
+      if (!templateData.automation_trigger_name) {
+        return new Response(
+          JSON.stringify({ error: 'Template does not have automation trigger name configured' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
       template = templateData;
     }
 
@@ -118,26 +126,20 @@ Deno.serve(async (req) => {
 
     // Send message via ManyChat API
     let manychatPayload: any;
+    let manychatUrl: string;
     
     if (template) {
-      // Send using WhatsApp template
+      // Trigger automation with template
+      manychatUrl = 'https://api.manychat.com/fb/sending/sendContent';
       manychatPayload = {
+        version: 1,
         subscriber_id: client.manychat_subscriber_id,
-        data: {
-          version: 'v2',
-          content: {
-            type: channel,
-            template: {
-              name: template.template_name,
-              namespace: template.template_namespace,
-              language: template.template_language,
-              variables: templateVariables || {},
-            },
-          },
-        },
+        trigger_name: template.automation_trigger_name,
+        context: templateVariables || {}
       };
     } else {
       // Send regular message
+      manychatUrl = 'https://api.manychat.com/fb/sending/sendContent';
       manychatPayload = {
         subscriber_id: client.manychat_subscriber_id,
         data: {
@@ -154,9 +156,10 @@ Deno.serve(async (req) => {
       };
     }
 
+    console.log('📨 ManyChat request URL:', manychatUrl);
     console.log('📨 ManyChat request payload:', JSON.stringify(manychatPayload, null, 2));
 
-    const manychatResponse = await fetch('https://api.manychat.com/fb/sending/sendContent', {
+    const manychatResponse = await fetch(manychatUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${integration.api_key}`,
