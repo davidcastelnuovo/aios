@@ -505,17 +505,56 @@ export default function MenuManagement() {
 
   if (!menuItems) return null;
 
-  // Group menu items by parent - new hierarchical structure
-  const parentItems = menuItems.filter(item => !item.parent_menu_key);
+  // Sort items by sort_order and create hierarchical display
+  const sortedItems = [...menuItems].sort((a, b) => a.sort_order - b.sort_order);
   
-  const groups = parentItems.map(parent => {
-    const children = menuItems.filter(item => item.parent_menu_key === parent.menu_key);
-    return {
-      category: parent.menu_key,
-      items: [parent],
-      children: children
-    };
+  // Create a flat list with visual hierarchy indicators
+  const displayItems: (MenuItem & { isChild?: boolean })[] = [];
+  const parentKeys = new Set(menuItems.filter(m => !m.parent_menu_key).map(m => m.menu_key));
+  
+  sortedItems.forEach(item => {
+    if (!item.parent_menu_key) {
+      // This is a parent item
+      displayItems.push({ ...item, isChild: false });
+    } else {
+      // This is a child item
+      displayItems.push({ ...item, isChild: true });
+    }
   });
+
+  const handleAllItemsDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = displayItems.findIndex(item => item.id === active.id);
+    const newIndex = displayItems.findIndex(item => item.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(displayItems, oldIndex, newIndex);
+
+    // Update sort_order for all items
+    const updates = reordered.map((item, index) => ({
+      id: item.id,
+      sort_order: index,
+    }));
+
+    // Update all items in parallel
+    Promise.all(
+      updates.map(update =>
+        supabase
+          .from('menu_items')
+          .update({ sort_order: update.sort_order })
+          .eq('id', update.id)
+      )
+    ).then(() => {
+      queryClient.invalidateQueries({ queryKey: ['menu-items', tenantId] });
+      toast.success('סדר הפריטים עודכן');
+    }).catch((error) => {
+      toast.error('שגיאה בעדכון הסדר: ' + error.message);
+    });
+  };
 
   return (
     <div className="p-8 space-y-6" dir="rtl">
@@ -526,35 +565,55 @@ export default function MenuManagement() {
         </p>
       </div>
 
-      <DndContext
-        sensors={groupSensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleGroupOrderDragEnd}
-      >
-        <SortableContext
-          items={groupOrder}
-          strategy={verticalListSortingStrategy}
-        >
-          {groups.map((group) => group && (
-            <div key={group.category}>
-              <MenuGroup
-                category={group.category}
-                items={group.items}
-                children={group.children}
-                editingItems={editingItems}
-                updateMutation={updateMutation}
-                onLabelChange={handleLabelChange}
-                onSaveLabel={handleSaveLabel}
-                onResetLabel={handleResetLabel}
-                onToggleVisibility={handleToggleVisibility}
-                onBadgeChange={handleBadgeChange}
-                onDragEnd={handleGroupDragEnd}
-                isRootOrg={isRootOrg}
-              />
-            </div>
-          ))}
-        </SortableContext>
-      </DndContext>
+      <Card>
+        <CardHeader>
+          <CardTitle>פריטי תפריט</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DndContext
+            sensors={groupSensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleAllItemsDragEnd}
+          >
+            <SortableContext
+              items={displayItems.map(item => item.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">סדר</TableHead>
+                      <TableHead>שם מקורי</TableHead>
+                      <TableHead>שם מותאם</TableHead>
+                      {isRootOrg && <TableHead>תג</TableHead>}
+                      <TableHead>תצוגה</TableHead>
+                      <TableHead>פעולות</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {displayItems.map((item) => (
+                      <SortableMenuItem
+                        key={item.id}
+                        item={item}
+                        editingItems={editingItems}
+                        updateMutation={updateMutation}
+                        onLabelChange={handleLabelChange}
+                        onSaveLabel={handleSaveLabel}
+                        onResetLabel={handleResetLabel}
+                        onToggleVisibility={handleToggleVisibility}
+                        onBadgeChange={handleBadgeChange}
+                        isChild={item.isChild}
+                        isRootOrg={isRootOrg}
+                      />
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </SortableContext>
+          </DndContext>
+        </CardContent>
+      </Card>
     </div>
   );
 }
