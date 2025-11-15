@@ -13,9 +13,9 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-    // Verify authentication
+    // Create client for authentication with user's token
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
@@ -24,24 +24,44 @@ Deno.serve(async (req) => {
       );
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: { Authorization: authHeader }
+      }
+    });
+
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
     
     if (authError || !user) {
+      console.error('Auth error:', authError);
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    console.log('User authenticated:', user.id);
+
+    // Create service role client for database operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     // Get tenant_id
-    const { data: tenantUser } = await supabase
+    const { data: tenantUser, error: tenantError } = await supabase
       .from('tenant_users')
       .select('tenant_id')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
+
+    if (tenantError) {
+      console.error('Tenant lookup error:', tenantError, 'User ID:', user.id);
+      return new Response(
+        JSON.stringify({ error: 'Database error', details: tenantError.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     if (!tenantUser) {
+      console.error('No tenant found for user:', user.id);
       return new Response(
         JSON.stringify({ error: 'Tenant not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
