@@ -279,7 +279,10 @@ export default function Chat() {
                       </Badge>
                     )}
                     <div className="flex-1 min-w-0 text-right">
-                      <div className="flex items-center justify-end gap-2 mb-1">
+                      <div className="font-medium truncate mb-1">
+                        {contact.name}
+                      </div>
+                      <div className="flex items-center justify-end gap-1.5 mb-1 flex-wrap">
                         {!contact.manychat_subscriber_id && (
                           <Badge variant="secondary" className="text-xs shrink-0">
                             לא מסונכרן
@@ -290,7 +293,6 @@ export default function Chat() {
                             ליד
                           </Badge>
                         )}
-                        <span className="font-medium truncate">{contact.name}</span>
                       </div>
                       <div className="text-sm opacity-70 truncate">
                         {contact.agencies?.name}
