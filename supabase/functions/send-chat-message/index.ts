@@ -220,6 +220,7 @@ Deno.serve(async (req) => {
         ? `[Template: ${template.display_name}] ${JSON.stringify(templateVariables || {})}`
         : message,
       channel,
+      provider: 'manychat',
       sent_by_user_id: user.id,
       raw_provider_data: manychatData,
     };

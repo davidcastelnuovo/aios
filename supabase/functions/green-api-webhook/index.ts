@@ -108,6 +108,7 @@ Deno.serve(async (req) => {
         message_text: messageText,
         direction: 'inbound',
         channel: 'whatsapp',
+        provider: 'green_api',
         raw_provider_data: webhookData,
       });
 

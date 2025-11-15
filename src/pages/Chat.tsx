@@ -27,6 +27,7 @@ interface Contact {
   agency_id: string;
   agency_name: string | null;
   manychat_subscriber_id: string | null;
+  active_chat_provider: string | null;
   unread_count: number;
   contact_type: 'client' | 'lead';
   last_message_at: string | null;
@@ -253,9 +254,14 @@ export default function Chat() {
                         {contact.name}
                       </div>
                       <div className="flex items-center justify-end gap-1.5 mb-1 flex-wrap">
-                        {!contact.manychat_subscriber_id && (
+                        {contact.active_chat_provider === 'manychat' && !contact.manychat_subscriber_id && (
                           <Badge variant="secondary" className="text-xs shrink-0">
                             לא מסונכרן
+                          </Badge>
+                        )}
+                        {contact.active_chat_provider === 'green_api' && !contact.phone && (
+                          <Badge variant="secondary" className="text-xs shrink-0">
+                            חסר טלפון
                           </Badge>
                         )}
                         {contact.contact_type === 'lead' && (

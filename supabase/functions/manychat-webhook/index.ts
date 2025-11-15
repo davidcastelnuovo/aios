@@ -200,6 +200,7 @@ Deno.serve(async (req) => {
         direction: isOutbound ? 'outbound' : 'inbound',
         message_text: messageText,
         channel: channel || 'whatsapp',
+        provider: 'manychat',
         raw_provider_data: payload,
       });
 
