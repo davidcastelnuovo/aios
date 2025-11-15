@@ -42,6 +42,25 @@ export default function ChatView({ clientId }: ChatViewProps) {
     },
   });
 
+  // Mark messages as read mutation
+  const markAsReadMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from('chat_messages')
+        .update({ read_at: new Date().toISOString() })
+        .eq('client_id', clientId)
+        .eq('direction', 'inbound')
+        .is('read_at', null);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['chat-messages', clientId] });
+      queryClient.invalidateQueries({ queryKey: ['chat-clients'] });
+      queryClient.invalidateQueries({ queryKey: ['unsynced-clients-count'] });
+    },
+  });
+
   // Fetch messages
   const { data: messages, isLoading } = useQuery({
     queryKey: ['chat-messages', clientId],
@@ -51,6 +70,10 @@ export default function ChatView({ clientId }: ChatViewProps) {
       });
 
       if (error) throw error;
+      
+      // Mark messages as read after fetching
+      markAsReadMutation.mutate();
+      
       return data.messages || [];
     },
     refetchInterval: 5000, // Poll every 5 seconds for new messages
