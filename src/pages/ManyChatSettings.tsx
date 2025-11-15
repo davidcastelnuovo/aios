@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { Save, Key, CheckCircle2, XCircle } from "lucide-react";
+import { SyncManyChatDialog } from "@/components/forms/SyncManyChatDialog";
 
 export default function ManyChatSettings() {
   const { tenantId } = useCurrentTenant();
@@ -171,6 +172,13 @@ export default function ManyChatSettings() {
               </ol>
             </CardContent>
           </Card>
+
+          {/* Sync Button */}
+          {integration?.is_active && (
+            <div className="mt-4">
+              <SyncManyChatDialog />
+            </div>
+          )}
 
           {/* Save Button */}
           <Button
