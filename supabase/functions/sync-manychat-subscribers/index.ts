@@ -5,6 +5,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Normalize phone number to digits only
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  
+  // Convert 972 prefix to 0
+  if (digits.startsWith('972')) {
+    return '0' + digits.slice(3);
+  }
+  
+  return digits;
+}
+
+// Get all phone variations for matching
+function getPhoneVariations(phone: string): string[] {
+  const normalized = normalizePhone(phone);
+  const variations = [normalized];
+  
+  // Add 972 version if starts with 0
+  if (normalized.startsWith('0')) {
+    variations.push('972' + normalized.slice(1));
+  }
+  
+  return variations;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -12,28 +37,30 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    // Create client for authentication with user's token
+    // Get auth token from request
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'Missing authorization' }),
+        JSON.stringify({ error: 'Missing authorization header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: {
-        headers: { Authorization: authHeader }
-      }
+    // Parse request body for tenantId
+    const { tenantId: requestedTenantId } = await req.json().catch(() => ({}));
+
+    // Create auth client to verify user
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
     });
 
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
-    
-    if (authError || !user) {
-      console.error('Auth error:', authError);
+    const { data: { user }, error: userError } = await authClient.auth.getUser();
+
+    if (userError || !user) {
+      console.error('Auth error:', userError);
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -45,160 +72,185 @@ Deno.serve(async (req) => {
     // Create service role client for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get tenant_id using the database function that handles multi-tenant users
-    const { data: tenantId, error: tenantError } = await supabase
-      .rpc('get_user_tenant_id', { _user_id: user.id });
+    // Validate tenant access
+    let tenantId: string;
+    
+    if (requestedTenantId) {
+      // Verify user belongs to requested tenant
+      const { data: membership, error: membershipError } = await supabase
+        .from('tenant_users')
+        .select('tenant_id')
+        .eq('user_id', user.id)
+        .eq('tenant_id', requestedTenantId)
+        .maybeSingle();
 
-    if (tenantError) {
-      console.error('Tenant lookup error:', tenantError, 'User ID:', user.id);
-      return new Response(
-        JSON.stringify({ error: 'Database error', details: tenantError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      if (membershipError) {
+        console.error('Membership check error:', membershipError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to verify tenant access' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!membership) {
+        console.error('User not member of requested tenant:', user.id, requestedTenantId);
+        return new Response(
+          JSON.stringify({ error: 'Access denied to requested tenant' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      tenantId = requestedTenantId;
+    } else {
+      // Fallback: get tenant using database function
+      const { data: resolvedTenantId, error: tenantError } = await supabase
+        .rpc('get_user_tenant_id', { _user_id: user.id });
+
+      if (tenantError) {
+        console.error('Tenant lookup error:', tenantError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to resolve tenant' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!resolvedTenantId) {
+        console.error('No tenant found for user:', user.id);
+        return new Response(
+          JSON.stringify({ error: 'Tenant not found' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      tenantId = resolvedTenantId;
     }
 
-    if (!tenantId) {
-      console.error('No tenant found for user:', user.id);
-      return new Response(
-        JSON.stringify({ error: 'Tenant not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    console.log('Starting sync for tenant:', tenantId, 'User:', user.id);
 
-    console.log('Starting sync for tenant:', tenantId);
-
-    let clientsMatched = 0;
-    let leadsMatched = 0;
-    let processedSubscribers = new Set<string>();
-
-    // Get all chat messages with raw_provider_data for this tenant
+    // Fetch all chat messages with raw_provider_data for this tenant
     const { data: messages, error: messagesError } = await supabase
       .from('chat_messages')
-      .select('raw_provider_data')
+      .select('id, client_id, raw_provider_data')
       .eq('tenant_id', tenantId)
       .not('raw_provider_data', 'is', null);
 
     if (messagesError) {
       console.error('Error fetching messages:', messagesError);
-      throw messagesError;
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch messages' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    console.log(`Found ${messages?.length || 0} messages to process`);
+    console.log('Found messages:', messages?.length || 0);
 
-    // Process each message to extract subscriber info
+    // Track unique subscribers and processed subscriber IDs
+    const subscribersMap = new Map<string, { phone: string; clientId: string }>();
+    const processedSubscriberIds = new Set<string>();
+
+    // Extract subscriber info from messages
     for (const message of messages || []) {
       try {
         const providerData = message.raw_provider_data as any;
-        const subscriber = providerData?.subscriber;
-        
-        if (!subscriber || !subscriber.id) continue;
+        const subscriberId = providerData?.subscriber_id || providerData?.subscriberId;
+        const phone = providerData?.phone || providerData?.contact?.phone;
 
-        // Skip if already processed this subscriber
-        if (processedSubscribers.has(subscriber.id)) continue;
-        processedSubscribers.add(subscriber.id);
-
-        // Extract phone from subscriber data
-        let phone = subscriber.phone;
-        
-        // Try to find phone in various possible locations in the data
-        if (!phone && subscriber.phone_number) {
-          phone = subscriber.phone_number;
+        if (subscriberId && phone && !processedSubscriberIds.has(subscriberId)) {
+          subscribersMap.set(subscriberId, {
+            phone: normalizePhone(phone),
+            clientId: message.client_id
+          });
         }
-        if (!phone && subscriber.whatsapp_phone_number) {
-          phone = subscriber.whatsapp_phone_number;
-        }
-
-        if (!phone) {
-          console.log(`No phone found for subscriber ${subscriber.id}`);
-          continue;
-        }
-
-        // Normalize phone number (remove spaces, dashes, etc.)
-        const normalizedPhone = phone.replace(/[\s\-\(\)+]/g, '');
-        console.log(`Processing subscriber ${subscriber.id} with phone ${normalizedPhone}`);
-
-        // First, try to match with existing clients by phone
-        const { data: matchingClients } = await supabase
-          .from('clients')
-          .select('id, phone')
-          .eq('tenant_id', tenantId)
-          .not('phone', 'is', null);
-
-        let clientMatched = false;
-        for (const client of matchingClients || []) {
-          const clientNormalizedPhone = client.phone?.replace(/[\s\-\(\)+]/g, '') || '';
-          if (clientNormalizedPhone && (normalizedPhone.includes(clientNormalizedPhone) || clientNormalizedPhone.includes(normalizedPhone))) {
-            // Update client with ManyChat subscriber ID if not already set
-            const { data: existingClient } = await supabase
-              .from('clients')
-              .select('manychat_subscriber_id')
-              .eq('id', client.id)
-              .single();
-
-            if (!existingClient?.manychat_subscriber_id) {
-              const { error: updateError } = await supabase
-                .from('clients')
-                .update({ manychat_subscriber_id: subscriber.id })
-                .eq('id', client.id);
-
-              if (!updateError) {
-                clientsMatched++;
-                clientMatched = true;
-                console.log(`✓ Matched client ${client.id} with subscriber ${subscriber.id}`);
-                break;
-              }
-            } else {
-              console.log(`Client ${client.id} already has subscriber ID`);
-              clientMatched = true;
-              break;
-            }
-          }
-        }
-
-        // If no client match, try to match with leads
-        if (!clientMatched) {
-          const { data: matchingLeads } = await supabase
-            .from('leads')
-            .select('id, phone')
-            .eq('tenant_id', tenantId)
-            .not('phone', 'is', null);
-
-          for (const lead of matchingLeads || []) {
-            const leadNormalizedPhone = lead.phone?.replace(/[\s\-\(\)+]/g, '') || '';
-            if (leadNormalizedPhone && (normalizedPhone.includes(leadNormalizedPhone) || leadNormalizedPhone.includes(normalizedPhone))) {
-              leadsMatched++;
-              console.log(`✓ Found matching lead ${lead.id} for subscriber ${subscriber.id} (not updating lead)`);
-              break;
-            }
-          }
-        }
-
       } catch (error) {
-        console.error('Error processing message:', error);
+        console.error('Error parsing provider data for message:', message.id, error);
       }
     }
 
-    const totalSubscribers = processedSubscribers.size;
-    const notMatched = totalSubscribers - clientsMatched - leadsMatched;
+    console.log('Unique subscribers found:', subscribersMap.size);
 
-    console.log(`Sync completed: ${totalSubscribers} unique subscribers, ${clientsMatched} clients matched, ${leadsMatched} leads matched, ${notMatched} not matched`);
+    let clientsMatched = 0;
+    let leadsMatched = 0;
+    let notMatched = 0;
+
+    // Process each subscriber
+    for (const [subscriberId, info] of subscribersMap) {
+      const phoneVariations = getPhoneVariations(info.phone);
+      
+      // Try to match with clients first
+      const { data: clients, error: clientsError } = await supabase
+        .from('clients')
+        .select('id, phone, manychat_subscriber_id')
+        .eq('tenant_id', tenantId)
+        .or(phoneVariations.map(p => `phone.eq.${p}`).join(','));
+
+      if (clientsError) {
+        console.error('Error querying clients:', clientsError);
+        continue;
+      }
+
+      let matched = false;
+
+      // Update clients that don't already have a subscriber_id
+      for (const client of clients || []) {
+        if (!client.manychat_subscriber_id) {
+          const { error: updateError } = await supabase
+            .from('clients')
+            .update({ manychat_subscriber_id: subscriberId })
+            .eq('id', client.id);
+
+          if (updateError) {
+            console.error('Error updating client:', client.id, updateError);
+          } else {
+            console.log('Updated client:', client.id, 'with subscriber:', subscriberId);
+            clientsMatched++;
+            matched = true;
+            processedSubscriberIds.add(subscriberId);
+          }
+        } else if (client.manychat_subscriber_id === subscriberId) {
+          // Already has this subscriber ID
+          matched = true;
+          processedSubscriberIds.add(subscriberId);
+        }
+      }
+
+      // If no client match, check leads for reporting only
+      if (!matched) {
+        const { data: leads, error: leadsError } = await supabase
+          .from('leads')
+          .select('id, phone')
+          .eq('tenant_id', tenantId)
+          .or(phoneVariations.map(p => `phone.eq.${p}`).join(','))
+          .limit(1);
+
+        if (!leadsError && leads && leads.length > 0) {
+          console.log('Found lead match for subscriber:', subscriberId);
+          leadsMatched++;
+          matched = true;
+        }
+      }
+
+      if (!matched) {
+        notMatched++;
+      }
+    }
+
+    console.log('Sync completed - Clients:', clientsMatched, 'Leads:', leadsMatched, 'Not matched:', notMatched);
 
     return new Response(
       JSON.stringify({
         success: true,
-        total: totalSubscribers,
+        total: subscribersMap.size,
         clientsMatched,
         leadsMatched,
-        notMatched,
+        notMatched
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('Sync error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Unexpected error:', error);
     return new Response(
-      JSON.stringify({ error: 'Sync failed', details: errorMessage }),
+      JSON.stringify({ error: 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
