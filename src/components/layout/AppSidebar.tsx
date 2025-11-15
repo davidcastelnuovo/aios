@@ -1,3 +1,4 @@
+import React, { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -28,12 +29,15 @@ import {
   Menu,
   ListTree,
   Table,
+  Plus,
+  Table2,
 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -55,6 +59,7 @@ import { useTenantPath } from "@/hooks/useTenantPath";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useMenuItems, MenuItem } from "@/hooks/useMenuItems";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { QuickCreateTableDialog } from "@/components/dynamic-tables/QuickCreateTableDialog";
 
 const iconMap: Record<string, any> = {
   LayoutDashboard,
@@ -84,6 +89,7 @@ const iconMap: Record<string, any> = {
   Menu,
   ListTree,
   Table,
+  Table2,
   FolderKanban: Table,
   Database: Table,
   Layers: Table,
@@ -97,6 +103,7 @@ export function AppSidebar() {
   const { menuItems: dbMenuItems, menuItemsMap, isLoading: isLoadingMenuItems, orgType, isPremium } = useMenuItems();
   const isCollapsed = state === "collapsed";
   const navigate = useNavigate();
+  const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
 
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId } = useTenant();
@@ -484,66 +491,82 @@ export function AppSidebar() {
 
         {/* Dynamic CRM Tables Section */}
         {crmTables && crmTables.length > 0 && (
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <div className="flex items-center gap-2 w-full font-semibold" dir="rtl">
-                      <span className="flex-1 text-right">ניהול טבלאות דינמיות</span>
-                      <Table className="h-4 w-4" />
-                    </div>
-                  </SidebarMenuButton>
-                  <SidebarMenuSub>
-                    {/* Management Page */}
-                    <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild>
+          <Collapsible defaultOpen className="group/collapsible">
+            <SidebarGroup>
+              <SidebarGroupLabel asChild>
+                <div className="flex items-center justify-between">
+                  <CollapsibleTrigger className="flex items-center gap-2 flex-1 hover:bg-accent rounded-md px-2 py-1">
+                    <Table2 className="h-4 w-4" />
+                    {!isCollapsed && <span>ניהול טבלאות</span>}
+                    <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180 mr-auto" />
+                  </CollapsibleTrigger>
+                  {!isCollapsed && (
+                    <button
+                      onClick={() => setIsQuickCreateOpen(true)}
+                      className="h-6 w-6 flex items-center justify-center rounded hover:bg-accent transition-colors"
+                      title="טבלה חדשה"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              </SidebarGroupLabel>
+              <CollapsibleContent>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {/* Management Link */}
+                    <SidebarMenuItem>
+                      <SidebarMenuButton asChild>
                         <NavLink
                           to={buildPath('dynamic-tables')}
                           onClick={handleLinkClick}
                           className={({ isActive }) =>
                             isActive
-                              ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
-                              : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                              ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                              : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                           }
-                          dir="rtl"
                         >
-                          {!isCollapsed && <span className="flex-1 text-right">ניהול טבלאות</span>}
                           <Settings className="h-4 w-4" />
+                          {!isCollapsed && <span>ניהול טבלאות</span>}
                         </NavLink>
-                      </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
 
                     {/* Individual Tables */}
                     {crmTables.map((table: any) => {
                       const Icon = iconMap[table.icon] || Table;
                       return (
-                        <SidebarMenuSubItem key={table.id}>
-                          <SidebarMenuSubButton asChild>
+                        <SidebarMenuItem key={table.id}>
+                          <SidebarMenuButton asChild>
                             <NavLink
                               to={buildPath(`table/${table.slug}`)}
                               onClick={handleLinkClick}
                               className={({ isActive }) =>
                                 isActive
-                                  ? "flex items-center gap-2 w-full bg-sidebar-accent text-sidebar-accent-foreground"
-                                  : "flex items-center gap-2 w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                                  : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                               }
-                              dir="rtl"
                             >
-                              {!isCollapsed && <span className="flex-1 text-right">{table.name}</span>}
                               <Icon className="h-4 w-4" />
+                              {!isCollapsed && <span>{table.name}</span>}
                             </NavLink>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
                       );
                     })}
-                  </SidebarMenuSub>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </SidebarGroup>
+          </Collapsible>
         )}
       </SidebarContent>
+
+      {/* Quick Create Table Dialog */}
+      <QuickCreateTableDialog 
+        open={isQuickCreateOpen}
+        onOpenChange={setIsQuickCreateOpen}
+      />
     </Sidebar>
   );
 }

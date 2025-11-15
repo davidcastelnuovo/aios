@@ -71,12 +71,11 @@ export default function DynamicTableView() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
-      const response = await supabase.functions.invoke("crm-fields", {
+      const response = await supabase.functions.invoke(`crm-fields?table_id=${table.id}`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: { table_id: table.id },
       });
 
       if (response.error) throw response.error;
