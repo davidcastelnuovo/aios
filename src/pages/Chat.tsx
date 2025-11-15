@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ export default function Chat() {
   const { tenantId } = useCurrentTenant();
   const { buildPath } = useTenantPath();
   const { userAgencyIds, isLoading: agenciesLoading } = useUserAgencies();
+  const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState("");
   const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads">("all");
   const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' } | null>(
@@ -206,8 +208,8 @@ export default function Chat() {
 
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-4 overflow-hidden">
-      {/* Clients List */}
-      <Card className="w-80 flex-shrink-0 flex flex-col overflow-hidden">
+      {/* Clients List - Hidden on mobile when contact selected */}
+      <Card className={`${isMobile ? (selectedContact ? 'hidden' : 'w-full') : 'w-80'} flex-shrink-0 flex flex-col overflow-hidden`}>
         <div className="p-4 border-b space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -306,10 +308,14 @@ export default function Chat() {
         </ScrollArea>
       </Card>
 
-      {/* Chat View */}
-      <div className="flex-1">
+      {/* Chat View - Full width on mobile when contact selected */}
+      <div className={`${isMobile ? (selectedContact ? 'w-full' : 'hidden') : 'flex-1'}`}>
         {selectedContact ? (
-          <ChatView contactId={selectedContact.id} contactType={selectedContact.type} />
+          <ChatView 
+            contactId={selectedContact.id} 
+            contactType={selectedContact.type}
+            onBack={isMobile ? () => setSelectedContact(null) : undefined}
+          />
         ) : (
           <Card className="h-full flex items-center justify-center">
             <div className="text-center text-muted-foreground">
