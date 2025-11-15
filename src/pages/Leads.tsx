@@ -444,7 +444,6 @@ export default function Leads() {
           agencies (name),
           sales_people (full_name)
         `)
-        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
 
       if (selectedAgency && selectedAgency !== "all") {
