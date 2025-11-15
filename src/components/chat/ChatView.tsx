@@ -328,7 +328,7 @@ export default function ChatView({ contactId, contactType }: ChatViewProps) {
 
       {/* Input */}
       <div className="p-3 border-t">
-        <ChatInput onSendMessage={handleSendMessage} disabled={!contact.manychat_subscriber_id || sendMessageMutation.isPending} />
+        <ChatInput onSend={handleSendMessage} isLoading={!contact.manychat_subscriber_id || sendMessageMutation.isPending} />
       </div>
     </Card>
   );
