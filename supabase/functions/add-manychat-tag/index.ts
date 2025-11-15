@@ -94,6 +94,67 @@ Deno.serve(async (req) => {
     const result = await manychatResponse.json();
     console.log('Successfully added tag:', result);
 
+    // Start background task to sync conversation after delay
+    // This allows time for ManyChat automation to trigger and send messages
+    const syncTask = async () => {
+      try {
+        // Wait 8 seconds for ManyChat automation to execute
+        await new Promise(resolve => setTimeout(resolve, 8000));
+        
+        console.log('Starting conversation sync after tag addition');
+        
+        // Find the contact (client or lead) with this subscriber ID
+        const { data: client } = await supabase
+          .from('clients')
+          .select('id')
+          .eq('manychat_subscriber_id', subscriberId)
+          .eq('tenant_id', tenantId)
+          .maybeSingle();
+
+        const { data: lead } = await supabase
+          .from('leads')
+          .select('id')
+          .eq('manychat_subscriber_id', subscriberId)
+          .eq('tenant_id', tenantId)
+          .maybeSingle();
+
+        if (!client && !lead) {
+          console.log('No client or lead found with this subscriber ID');
+          return;
+        }
+
+        // Call sync function
+        const syncResponse = await fetch(
+          `${Deno.env.get('SUPABASE_URL')}/functions/v1/sync-manychat-conversation`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': req.headers.get('Authorization')!,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              subscriberId,
+              tenantId,
+              clientId: client?.id,
+              leadId: lead?.id,
+            }),
+          }
+        );
+
+        if (syncResponse.ok) {
+          const syncResult = await syncResponse.json();
+          console.log('Conversation sync completed:', syncResult);
+        } else {
+          console.error('Conversation sync failed:', await syncResponse.text());
+        }
+      } catch (error) {
+        console.error('Error in background sync task:', error);
+      }
+    };
+
+    // Start background task without blocking the response
+    syncTask().catch(err => console.error('Background sync error:', err));
+
     return new Response(
       JSON.stringify({ success: true, data: result }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
