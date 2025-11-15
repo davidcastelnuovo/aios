@@ -646,6 +646,155 @@ export type Database = {
           },
         ]
       }
+      crm_fields: {
+        Row: {
+          config: Json
+          created_at: string
+          id: string
+          is_required: boolean
+          is_visible: boolean
+          key: string
+          name: string
+          position: number
+          table_id: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          id?: string
+          is_required?: boolean
+          is_visible?: boolean
+          key: string
+          name: string
+          position?: number
+          table_id: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          id?: string
+          is_required?: boolean
+          is_visible?: boolean
+          key?: string
+          name?: string
+          position?: number
+          table_id?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_fields_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "crm_tables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_records: {
+        Row: {
+          agency_id: string | null
+          created_at: string
+          created_by: string | null
+          data: Json
+          id: string
+          table_id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          agency_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data?: Json
+          id?: string
+          table_id: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          agency_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data?: Json
+          id?: string
+          table_id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_records_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_records_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "crm_tables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_records_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_tables: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          slug: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          slug: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_tables_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_fields: {
         Row: {
           created_at: string
@@ -1965,6 +2114,10 @@ export type Database = {
       }
       user_owns_agency: {
         Args: { _agency_id: string; _user_id: string }
+        Returns: boolean
+      }
+      validate_crm_record: {
+        Args: { p_data: Json; p_table_id: string }
         Returns: boolean
       }
     }
