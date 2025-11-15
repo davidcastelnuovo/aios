@@ -70,7 +70,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { subscriber, message, channel } = payload;
+    const { subscriber, message, channel, event_type, type } = payload;
+
+    // Determine if this is an inbound or outbound message
+    const eventType = event_type || type || 'message_received';
+    const isOutbound = ['message_sent', 'agent_reply', 'bot_reply', 'template_sent', 'automation_sent'].includes(eventType);
+    
+    console.log('📨 Event type:', eventType, '| Direction:', isOutbound ? 'outbound' : 'inbound');
 
     if (!subscriber || !subscriber.id) {
       console.error('Invalid payload: missing subscriber.id');
@@ -185,13 +191,13 @@ Deno.serve(async (req) => {
       messageText = `[${message.type} message received]`;
     }
 
-    // Save inbound message
+    // Save message with correct direction
     const { error: saveError } = await supabase
       .from('chat_messages')
       .insert({
         client_id: client.id,
         tenant_id: client.tenant_id,
-        direction: 'inbound',
+        direction: isOutbound ? 'outbound' : 'inbound',
         message_text: messageText,
         channel: channel || 'whatsapp',
         raw_provider_data: payload,
@@ -205,10 +211,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Message saved for client ${client.name} (${client.id})`);
+    console.log(`${isOutbound ? 'Outbound' : 'Inbound'} message saved for client ${client.name} (${client.id})`);
 
     return new Response(
-      JSON.stringify({ received: true }),
+      JSON.stringify({ received: true, direction: isOutbound ? 'outbound' : 'inbound' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
