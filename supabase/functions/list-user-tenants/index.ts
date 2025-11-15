@@ -38,6 +38,16 @@ serve(async (req: Request) => {
       });
     }
 
+    // Read scope_tenant_id from request body
+    let scopeTenantId: string | null = null;
+    try {
+      const body = await req.json();
+      scopeTenantId = body?.scope_tenant_id || null;
+      console.log("📍 Received scope_tenant_id:", scopeTenantId);
+    } catch (e) {
+      console.log("⚠️ No body or invalid JSON, proceeding without scope");
+    }
+
     // Check if user is super admin
     const { data: rolesData } = await supabase
       .from("user_roles")
@@ -46,14 +56,60 @@ serve(async (req: Request) => {
     
     const isSuperAdmin = rolesData?.some((r: any) => r.role === "super_admin");
 
-    // Get user's active tenant to determine what they should see
-    const { data: activeTenant } = await supabase
-      .from("user_active_tenant")
-      .select("tenant_id, tenants(slug, org_type, parent_tenant_id)")
-      .eq("user_id", user.id)
-      .single();
+    // Validate scope_tenant_id: check if user is a member of that tenant
+    let effectiveTenantId: string | null = null;
+    if (scopeTenantId) {
+      const { data: memberCheck } = await supabase
+        .from("tenant_users")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .eq("tenant_id", scopeTenantId)
+        .maybeSingle();
+      
+      if (memberCheck) {
+        effectiveTenantId = scopeTenantId;
+        console.log("✅ User is member of scope tenant, using:", effectiveTenantId);
+      } else {
+        console.log("⚠️ User is NOT member of scope tenant, ignoring");
+      }
+    }
 
-    const activeSlug = (activeTenant?.tenants as any)?.slug;
+    // If no valid scope, fall back to user_active_tenant or first tenant
+    if (!effectiveTenantId) {
+      const { data: activeTenant } = await supabase
+        .from("user_active_tenant")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      
+      effectiveTenantId = activeTenant?.tenant_id || null;
+      
+      if (!effectiveTenantId) {
+        const { data: firstTenant } = await supabase
+          .from("tenant_users")
+          .select("tenant_id")
+          .eq("user_id", user.id)
+          .limit(1)
+          .maybeSingle();
+        
+        effectiveTenantId = firstTenant?.tenant_id || null;
+      }
+      
+      console.log("📌 Using fallback tenant:", effectiveTenantId);
+    }
+
+    // Get effective tenant details
+    let effectiveTenantSlug: string | null = null;
+    if (effectiveTenantId) {
+      const { data: tenantDetails } = await supabase
+        .from("tenants")
+        .select("slug")
+        .eq("id", effectiveTenantId)
+        .single();
+      
+      effectiveTenantSlug = tenantDetails?.slug || null;
+      console.log("🏢 Effective tenant slug:", effectiveTenantSlug);
+    }
 
     // Special case: owners of MarketingCaptain can view all tenants
     let isOwnerOfMarketingCaptain = false;
@@ -74,6 +130,7 @@ serve(async (req: Request) => {
 
     if (isSuperAdmin) {
       // Super admins see ALL tenants
+      console.log("👑 Super admin: showing all tenants");
       const { data: allTenants, error: allTenantsError } = await supabase
         .from("tenants")
         .select("id, name, slug, org_type, parent_tenant_id, subdomain, contact_name, contact_email, status, notes, trial_ends_at")
@@ -85,8 +142,9 @@ serve(async (req: Request) => {
       }
 
       tenants = allTenants || [];
-    } else if (isOwnerOfMarketingCaptain && activeSlug === 'marketingcaptain') {
+    } else if (isOwnerOfMarketingCaptain && effectiveTenantSlug === 'marketingcaptain') {
       // Only show all tenants when actively using MarketingCaptain
+      console.log("🎯 MC Owner in MC context: showing all tenants");
       const { data: allTenants, error: allTenantsError } = await supabase
         .from("tenants")
         .select("id, name, slug, org_type, parent_tenant_id, subdomain, contact_name, contact_email, status, notes, trial_ends_at")
@@ -112,16 +170,20 @@ serve(async (req: Request) => {
 
       let userTenants = (data || []).map((row: any) => row.tenants).filter((t: any) => t && t.id && t.name);
 
-      // If active tenant is set, filter to show only that org + its sub-orgs
-      if (activeTenant?.tenant_id) {
-        const activeTenantId = activeTenant.tenant_id;
+      // Filter based on effective tenant
+      if (effectiveTenantId) {
+        console.log("🔍 Filtering tenants: showing effective tenant + its children");
         tenants = userTenants.filter((t: any) => 
-          t.id === activeTenantId || t.parent_tenant_id === activeTenantId
+          t.id === effectiveTenantId || t.parent_tenant_id === effectiveTenantId
         );
+        console.log(`📊 Filtered to ${tenants.length} tenants`);
       } else {
+        console.log("📋 No effective tenant, showing all user's tenants");
         tenants = userTenants;
       }
     }
+
+    console.log(`✅ Returning ${tenants.length} tenants for user ${user.id}`);
 
     return new Response(JSON.stringify({ tenants }), {
       status: 200,

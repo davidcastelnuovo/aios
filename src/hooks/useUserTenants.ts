@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenant } from "@/contexts/TenantContext";
 
 /**
  * Stable fetch of user tenants via backend function, only after auth token is ready.
  * Filters out invalid entries and keeps previous data to avoid flicker.
+ * Now includes currentTenantId to scope the results based on URL context.
  */
 export function useUserTenants(userId?: string | null) {
   const [token, setToken] = useState<string | null>(null);
+  const { currentTenantId } = useTenant();
 
   useEffect(() => {
     let mounted = true;
@@ -30,12 +33,17 @@ export function useUserTenants(userId?: string | null) {
   }, []);
 
   const query = useQuery({
-    queryKey: ["user-tenants", userId, token],
+    queryKey: ["user-tenants", userId, token, currentTenantId],
     enabled: !!userId && !!token,
     queryFn: async () => {
+      console.log("🔄 Fetching user tenants with scope:", currentTenantId);
+      
       const { data, error } = await supabase.functions.invoke("list-user-tenants", {
         headers: {
           Authorization: `Bearer ${token}`,
+        },
+        body: {
+          scope_tenant_id: currentTenantId,
         },
       });
 
@@ -45,6 +53,7 @@ export function useUserTenants(userId?: string | null) {
       }
 
       const tenants = (data as any)?.tenants ?? [];
+      console.log(`✅ Received ${tenants.length} tenants from backend`);
       // sanitize
       return (tenants as any[]).filter((t) => t && t.id && t.name);
     },
