@@ -28,11 +28,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { clientId, message, channel = 'whatsapp' } = await req.json();
+    const { clientId, message, channel = 'whatsapp', templateId, templateVariables } = await req.json();
 
-    if (!clientId || !message) {
+    if (!clientId || (!message && !templateId)) {
       return new Response(
-        JSON.stringify({ error: 'clientId and message are required' }),
+        JSON.stringify({ error: 'clientId and either message or templateId are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -77,6 +77,27 @@ Deno.serve(async (req) => {
     }
 
     console.log('📤 Sending message to subscriber:', client.manychat_subscriber_id);
+    
+    // Get template if templateId provided
+    let template = null;
+    if (templateId) {
+      const { data: templateData, error: templateError } = await supabase
+        .from('manychat_templates')
+        .select('*')
+        .eq('id', templateId)
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .single();
+      
+      if (templateError || !templateData) {
+        console.error('Template fetch error:', templateError);
+        return new Response(
+          JSON.stringify({ error: 'Template not found or inactive' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      template = templateData;
+    }
 
     // Get ManyChat API Key from tenant_integrations
     const { data: integration, error: integrationError } = await supabase
@@ -96,20 +117,42 @@ Deno.serve(async (req) => {
     }
 
     // Send message via ManyChat API
-    const manychatPayload = {
-      subscriber_id: client.manychat_subscriber_id,
-      data: {
-        version: 'v2',
-        content: {
-          type: channel, // Explicitly set platform (e.g., 'whatsapp')
-          messages: [{
-            type: 'text',
-            text: message,
-          }],
+    let manychatPayload: any;
+    
+    if (template) {
+      // Send using WhatsApp template
+      manychatPayload = {
+        subscriber_id: client.manychat_subscriber_id,
+        data: {
+          version: 'v2',
+          content: {
+            type: channel,
+            template: {
+              name: template.template_name,
+              namespace: template.template_namespace,
+              language: template.template_language,
+              variables: templateVariables || {},
+            },
+          },
         },
-      },
-      message_tag: 'ACCOUNT_UPDATE', // Use correct field name for FB 24h tag
-    };
+      };
+    } else {
+      // Send regular message
+      manychatPayload = {
+        subscriber_id: client.manychat_subscriber_id,
+        data: {
+          version: 'v2',
+          content: {
+            type: channel,
+            messages: [{
+              type: 'text',
+              text: message,
+            }],
+          },
+        },
+        message_tag: 'ACCOUNT_UPDATE',
+      };
+    }
 
     console.log('📨 ManyChat request payload:', JSON.stringify(manychatPayload, null, 2));
 
@@ -147,7 +190,9 @@ Deno.serve(async (req) => {
         client_id: clientId,
         tenant_id: tenantId,
         direction: 'outbound',
-        message_text: message,
+        message_text: template 
+          ? `[Template: ${template.display_name}] ${JSON.stringify(templateVariables || {})}`
+          : message,
         channel,
         sent_by_user_id: user.id,
         raw_provider_data: manychatData,
