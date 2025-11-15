@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Table2 } from "lucide-react";
+import { Plus, Table2, FileSpreadsheet } from "lucide-react";
 import { SimpleTableDialog } from "@/components/dynamic-tables/SimpleTableDialog";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
@@ -41,9 +41,9 @@ export default function DynamicTables() {
     <div className="container mx-auto py-8 px-4">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">טבלאות דינמיות</h1>
+          <h1 className="text-3xl font-bold">ניהול טבלאות</h1>
           <p className="text-muted-foreground mt-1">
-            צור וניהל טבלאות מותאמות אישית לנתונים שלך
+            צור וערוך טבלאות נתונים עם webhook integration
           </p>
         </div>
         <Button onClick={() => setShowCreateDialog(true)}>
@@ -85,7 +85,7 @@ export default function DynamicTables() {
             >
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Table2 className="h-5 w-5" />
+                  <FileSpreadsheet className="h-5 w-5" />
                   {table.name}
                 </CardTitle>
                 {table.description && (
