@@ -215,14 +215,24 @@ Deno.serve(async (req) => {
     // Save message to database
     const insertData: any = {
       tenant_id: tenantId,
-        direction: 'outbound',
-        message_text: template 
-          ? `[Template: ${template.display_name}] ${JSON.stringify(templateVariables || {})}`
-          : message,
-        channel,
-        sent_by_user_id: user.id,
-        raw_provider_data: manychatData,
-      });
+      direction: 'outbound',
+      message_text: template 
+        ? `[Template: ${template.display_name}] ${JSON.stringify(templateVariables || {})}`
+        : message,
+      channel,
+      sent_by_user_id: user.id,
+      raw_provider_data: manychatData,
+    };
+
+    if (clientId) {
+      insertData.client_id = clientId;
+    } else if (leadId) {
+      insertData.lead_id = leadId;
+    }
+
+    const { error: saveError } = await supabase
+      .from('chat_messages')
+      .insert(insertData);
 
     if (saveError) {
       console.error('Save message error:', saveError);
