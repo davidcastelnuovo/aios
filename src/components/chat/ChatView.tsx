@@ -355,14 +355,23 @@ export default function ChatView({ clientId }: ChatViewProps) {
               </div>
             )}
           </div>
+        ) : templatesLoading ? (
+          <div className="px-4 py-2 text-xs text-muted-foreground text-center">
+            טוען טמפלייטים...
+          </div>
         ) : (
-          <Alert className="mx-4 mt-3 mb-2">
+          <Alert className="mx-4 mt-3 mb-2 py-2">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="text-xs">
-              לא הוגדרו טמפלייטים. 
-              <a href="/t/promo/manychat-templates" className="font-medium underline mr-1">
-                הוסף טמפלייטים כאן
-              </a>
+            <AlertDescription className="text-xs flex items-center justify-between">
+              <span>לא הוגדרו טמפלייטים במערכת</span>
+              <Button 
+                size="sm" 
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => window.location.href = '/t/promo/manychat-templates'}
+              >
+                הוסף טמפלייט
+              </Button>
             </AlertDescription>
           </Alert>
         )}
