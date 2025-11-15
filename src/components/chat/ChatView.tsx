@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Building2, Phone, Mail, AlertCircle, Edit, Tag, ArrowLeft } from "lucide-react";
+import { Building2, Phone, Mail, AlertCircle, Edit, Tag, ArrowLeft, Check, X, Send } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import ChatMessageList from "./ChatMessageList";
 import ChatInput from "./ChatInput";
 import { toast } from "sonner";
@@ -285,91 +286,91 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
           )}
         </div>
 
-        {/* ManyChat Sync Status */}
-        <div className="mt-3">
+        {/* ManyChat Sync Status - Compact */}
+        <div className="mt-2 flex items-center gap-2">
           {contact.manychat_subscriber_id ? (
-            <div className="flex items-center gap-2">
+            <>
               {editingId ? (
-                <div className="flex items-center gap-2 flex-1">
+                <>
                   <Input
                     value={subscriberId}
                     onChange={(e) => setSubscriberId(e.target.value)}
                     placeholder="Subscriber ID"
-                    className="h-8 text-sm"
+                    className="h-7 text-xs flex-1"
                   />
-                  <Button size="sm" onClick={() => updateIdMutation.mutate(subscriberId)} disabled={updateIdMutation.isPending}>
-                    שמור
+                  <Button size="sm" onClick={() => updateIdMutation.mutate(subscriberId)} disabled={updateIdMutation.isPending} className="h-7 px-2">
+                    <Check className="h-3 w-3" />
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setEditingId(false)}>
-                    ביטול
+                  <Button size="sm" variant="ghost" onClick={() => setEditingId(false)} className="h-7 px-2">
+                    <X className="h-3 w-3" />
                   </Button>
-                </div>
+                </>
               ) : (
-                <Alert className="flex-1">
-                  <AlertDescription className="flex items-center justify-between">
-                    <span className="text-xs">מסונכרן ל-ManyChat: {contact.manychat_subscriber_id}</span>
-                    <Button size="sm" variant="ghost" onClick={() => { setSubscriberId(contact.manychat_subscriber_id || ''); setEditingId(true); }}>
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-          ) : (
-            <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="flex items-center justify-between">
-                <span className="text-sm">איש קשר זה לא מסונכרן ל-ManyChat</span>
-                {!editingId && (
-                  <Button size="sm" variant="outline" onClick={() => setEditingId(true)}>
-                    הוסף Subscriber ID
+                <>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-7 px-2">
+                          <Check className="h-3 w-3 text-green-600" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-xs">מסונכרן: {contact.manychat_subscriber_id}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setSubscriberId(contact.manychat_subscriber_id || ''); setEditingId(true); }}>
+                    <Edit className="h-3 w-3" />
                   </Button>
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
-          {editingId && !contact.manychat_subscriber_id && (
-            <div className="flex items-center gap-2 mt-2">
-              <Input value={subscriberId} onChange={(e) => setSubscriberId(e.target.value)} placeholder="Subscriber ID" className="h-8 text-sm" />
-              <Button size="sm" onClick={() => updateIdMutation.mutate(subscriberId)} disabled={updateIdMutation.isPending}>
-                שמור
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => setEditingId(false)}>
-                ביטול
-              </Button>
-            </div>
+                  
+                  {/* Tags Selection - Compact */}
+                  {tags && tags.length > 0 && (
+                    <>
+                      <Select value={selectedTag || ''} onValueChange={setSelectedTag}>
+                        <SelectTrigger className="h-7 text-xs bg-background flex-1">
+                          <Tag className="h-3 w-3 ml-1" />
+                          <SelectValue placeholder="טאג" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover border shadow-lg z-50">
+                          {tags.map((tag: any) => (
+                            <SelectItem key={tag.id} value={tag.id.toString()} className="cursor-pointer hover:bg-accent text-xs">
+                              {tag.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedTag && (
+                        <Button size="sm" onClick={handleAddTag} disabled={addTagMutation.isPending} className="h-7 px-2">
+                          <Send className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </>
+          ) : (
+            <>
+              <AlertCircle className="h-3 w-3 text-amber-500" />
+              {!editingId ? (
+                <Button size="sm" variant="outline" onClick={() => setEditingId(true)} className="h-7 text-xs px-2">
+                  הוסף ID
+                </Button>
+              ) : (
+                <>
+                  <Input value={subscriberId} onChange={(e) => setSubscriberId(e.target.value)} placeholder="Subscriber ID" className="h-7 text-xs flex-1" />
+                  <Button size="sm" onClick={() => updateIdMutation.mutate(subscriberId)} disabled={updateIdMutation.isPending} className="h-7 px-2">
+                    <Check className="h-3 w-3" />
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditingId(false)} className="h-7 px-2">
+                    <X className="h-3 w-3" />
+                  </Button>
+                </>
+              )}
+            </>
           )}
         </div>
       </div>
-
-      {/* Tag Selection */}
-      {tags && tags.length > 0 && contact.manychat_subscriber_id && (
-        <div className="p-3 border-b bg-muted/30">
-          <Label className="text-xs">שליחת טריגר דרך Tag</Label>
-          <div className="flex gap-2 mt-1">
-            <Select value={selectedTag || 'none'} onValueChange={(value) => setSelectedTag(value === 'none' ? null : value)}>
-              <SelectTrigger className="h-8 text-sm flex-1">
-                <SelectValue placeholder="בחר Tag לשליחת טריגר" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">בחר Tag</SelectItem>
-                {tags.map((tag: any) => (
-                  <SelectItem key={tag.id} value={tag.id.toString()}>{tag.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedTag && (
-              <Button size="sm" variant="default" onClick={handleAddTag} disabled={addTagMutation.isPending}>
-                <Tag className="h-3 w-3 ml-1" />
-                הוסף Tag
-              </Button>
-            )}
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            הוספת Tag תפעיל אוטומציה ב-ManyChat אם הגדרת Flow עם הטריגר המתאים
-          </p>
-        </div>
-      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-hidden">
