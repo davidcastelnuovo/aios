@@ -223,9 +223,19 @@ Deno.serve(async (req) => {
       try {
         const providerData = message.raw_provider_data as any;
         const subscriberId = providerData?.subscriber_id || providerData?.subscriberId;
-        const phone = providerData?.phone || providerData?.contact?.phone || providerData?.subscriber?.phone;
+        let phone = providerData?.phone || providerData?.contact?.phone || providerData?.subscriber?.phone;
 
-        if (subscriberId && phone) {
+        // If phone is a template placeholder, try to use subscriber.id as phone
+        if (!phone || phone.startsWith('{{') || phone === '') {
+          const possiblePhone = providerData?.subscriber?.id;
+          // Check if ID looks like a phone number (starts with 972 or 05)
+          if (possiblePhone && (possiblePhone.startsWith('972') || possiblePhone.startsWith('05'))) {
+            phone = possiblePhone;
+            console.log(`📱 Using subscriber.id as phone: ${possiblePhone}`);
+          }
+        }
+
+        if (subscriberId && phone && !phone.startsWith('{{')) {
           const normalizedPhone = normalizePhone(phone);
           if (normalizedPhone && !subscribersMap.has(normalizedPhone)) {
             subscribersMap.set(normalizedPhone, { phone, subscriberId });
