@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Plus, Building2, Users, Settings, Link as LinkIcon, RefreshCw, Trash2, ArrowRightLeft, ChevronDown, ChevronLeft } from "lucide-react";
+import { Plus, Building2, Building, Users, Settings, Link as LinkIcon, RefreshCw, Trash2, ArrowRightLeft, ChevronDown, ChevronLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
 import EditTenantAgenciesDialog from "@/components/forms/EditTenantAgenciesDialog";
@@ -88,12 +88,19 @@ export default function Tenants() {
           subs[tenant.parent_tenant_id] = [];
         }
         subs[tenant.parent_tenant_id].push(tenant);
-      } else {
+      } else if (orgType === 'organization') {
         orgs.push(tenant);
       }
     });
     
-    return { organizations: orgs, subOrganizations: subs };
+    // Sort organizations to put MarketingCaptain first, then alphabetically
+    const sorted = orgs.sort((a, b) => {
+      if (a.name === 'MarketingCaptain') return -1;
+      if (b.name === 'MarketingCaptain') return 1;
+      return a.name.localeCompare(b.name, 'he');
+    });
+    
+    return { organizations: sorted, subOrganizations: subs };
   };
 
   const { organizations, subOrganizations } = organizeTenants();
