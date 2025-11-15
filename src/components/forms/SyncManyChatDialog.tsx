@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import {
   Dialog,
   DialogContent,
@@ -25,10 +26,13 @@ interface SyncResult {
 export function SyncManyChatDialog() {
   const [open, setOpen] = useState(false);
   const [syncResult, setSyncResult] = useState<SyncResult | null>(null);
+  const { tenantId } = useCurrentTenant();
 
   const syncMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('sync-manychat-subscribers');
+      const { data, error } = await supabase.functions.invoke('sync-manychat-subscribers', {
+        body: { tenantId }
+      });
       
       if (error) throw error;
       return data as SyncResult;
