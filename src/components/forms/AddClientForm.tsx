@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -86,6 +86,13 @@ export function AddClientForm() {
       is_seo_client: false,
     },
   });
+
+  // Auto-select agency if there's only one
+  useEffect(() => {
+    if (agencies && agencies.length === 1 && !form.getValues("agency_id")) {
+      form.setValue("agency_id", agencies[0].id);
+    }
+  }, [agencies, form]);
 
   const mutation = useMutation({
     mutationFn: async (values: FormValues) => {
