@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { Loader2 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import CustomAudioPlayer from "./CustomAudioPlayer";
 
 interface Message {
   id: string;
@@ -115,18 +116,10 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
     
     if (messageType === 'audioMessage') {
       return (
-        <div className="relative w-full mb-2">
-          <audio
-            src={fileData.downloadUrl}
-            controls
-            controlsList="nodownload noplaybackrate noremoteplayback"
-            className="w-full"
-            onContextMenu={(e) => e.preventDefault()}
-            style={{
-              direction: 'ltr',
-            }}
-          />
-        </div>
+        <CustomAudioPlayer 
+          src={fileData.downloadUrl} 
+          className="mb-2"
+        />
       );
     }
     
