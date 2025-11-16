@@ -275,7 +275,7 @@ export default function Chat() {
   return (
     <div className="flex h-[calc(100dvh-8rem)] md:h-[calc(100vh-8rem)] gap-4 overflow-hidden">
       {/* Clients List - Hidden on mobile when contact selected */}
-      {(!isMobile || !selectedContact) && (
+      {(isMobile ? !selectedContact : true) && (
         	<Card className={`${isMobile ? 'w-full' : 'w-80'} flex-shrink-0 flex flex-col overflow-hidden h-full`}>
         	  <div className="p-4 border-b space-y-3">
         	    <div className="flex items-center justify-between">
