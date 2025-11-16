@@ -31,7 +31,7 @@ interface ChatMessageListProps {
   messages: Message[];
   isLoading: boolean;
   contactId?: string;
-  contactType?: 'client' | 'lead' | 'group';
+  contactType?: 'client' | 'lead' | 'group' | 'unknown';
   agencyId?: string;
 }
 
