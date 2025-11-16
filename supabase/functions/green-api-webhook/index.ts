@@ -89,26 +89,46 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (!contact) {
-      console.log('⚠️ No matching contact found for phone:', phoneNumber);
-      return new Response(JSON.stringify({ received: true, warning: 'No contact found' }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    // Use first active tenant if no contact found
+    if (!contact && activeIntegrations.length > 0) {
+      tenantId = activeIntegrations[0].tenant_id;
+      console.log('⚠️ No matching contact found for phone:', phoneNumber, '- saving as unknown contact in tenant:', tenantId);
+    } else if (contact) {
+      console.log('✅ Found contact:', { contactType, id: contact.id, tenantId });
     }
 
-    console.log('✅ Found contact:', { contactType, id: contact.id, tenantId });
+    // Check if phone is blocked
+    if (tenantId) {
+      const { data: blockedMessage } = await supabaseClient
+        .from('chat_messages')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('sender_phone', phoneNumber)
+        .eq('is_blocked', true)
+        .limit(1)
+        .maybeSingle();
 
-    // Save message to database
+      if (blockedMessage) {
+        console.log('🚫 Message from blocked number:', phoneNumber);
+        return new Response(JSON.stringify({ received: true, blocked: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    // Save message to database (with or without contact)
     const { error: insertError } = await supabaseClient
       .from('chat_messages')
       .insert({
-        client_id: contactType === 'client' ? contact.id : null,
-        lead_id: contactType === 'lead' ? contact.id : null,
+        client_id: contact && contactType === 'client' ? contact.id : null,
+        lead_id: contact && contactType === 'lead' ? contact.id : null,
         tenant_id: tenantId,
         message_text: messageText,
         direction: 'inbound',
         channel: 'whatsapp',
         provider: 'green_api',
+        sender_phone: phoneNumber,
+        sender_name: senderData.senderName || null,
         raw_provider_data: webhookData,
       });
 
@@ -121,8 +141,8 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ 
       success: true,
-      contactType,
-      contactId: contact.id,
+      contactType: contact ? contactType : 'unknown',
+      contactId: contact?.id || null,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

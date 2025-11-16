@@ -361,46 +361,61 @@ export type Database = {
       }
       chat_messages: {
         Row: {
+          blocked_at: string | null
+          blocked_by_user_id: string | null
           channel: string
           client_id: string | null
           created_at: string | null
           direction: string
           id: string
+          is_blocked: boolean
           lead_id: string | null
           message_text: string
           provider: Database["public"]["Enums"]["chat_provider"]
           raw_provider_data: Json | null
           read_at: string | null
+          sender_name: string | null
+          sender_phone: string | null
           sent_by_user_id: string | null
           tenant_id: string
           updated_at: string | null
         }
         Insert: {
+          blocked_at?: string | null
+          blocked_by_user_id?: string | null
           channel?: string
           client_id?: string | null
           created_at?: string | null
           direction: string
           id?: string
+          is_blocked?: boolean
           lead_id?: string | null
           message_text: string
           provider?: Database["public"]["Enums"]["chat_provider"]
           raw_provider_data?: Json | null
           read_at?: string | null
+          sender_name?: string | null
+          sender_phone?: string | null
           sent_by_user_id?: string | null
           tenant_id: string
           updated_at?: string | null
         }
         Update: {
+          blocked_at?: string | null
+          blocked_by_user_id?: string | null
           channel?: string
           client_id?: string | null
           created_at?: string | null
           direction?: string
           id?: string
+          is_blocked?: boolean
           lead_id?: string | null
           message_text?: string
           provider?: Database["public"]["Enums"]["chat_provider"]
           raw_provider_data?: Json | null
           read_at?: string | null
+          sender_name?: string | null
+          sender_phone?: string | null
           sent_by_user_id?: string | null
           tenant_id?: string
           updated_at?: string | null

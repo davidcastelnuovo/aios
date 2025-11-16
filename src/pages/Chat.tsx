@@ -24,13 +24,15 @@ interface Contact {
   name: string;
   phone: string | null;
   email: string | null;
-  agency_id: string;
+  agency_id: string | null;
   agency_name: string | null;
   manychat_subscriber_id: string | null;
   active_chat_provider: string | null;
   unread_count: number;
-  contact_type: 'client' | 'lead';
+  contact_type: 'client' | 'lead' | 'unknown';
   last_message_at: string | null;
+  sender_phone?: string;
+  is_blocked?: boolean;
 }
 
 export default function Chat() {
@@ -42,9 +44,9 @@ export default function Chat() {
   const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
-  const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads">("all");
+  const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "unknown">("all");
   const [syncStatusFilter, setSyncStatusFilter] = useState<"all" | "synced" | "unsynced">("all");
-  const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' } | null>(
+  const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'unknown'; senderPhone?: string } | null>(
     clientId ? { id: clientId, type: 'client' } : null
   );
   const [hasMore, setHasMore] = useState(true);
@@ -108,7 +110,7 @@ export default function Chat() {
         filteredAgencyIds = allAgencyIds.filter(id => id === selectedAgency);
       }
 
-      // Call optimized database function
+      // Call optimized database function for known contacts
       const { data, error } = await supabase.rpc('get_chat_contacts', {
         p_tenant_id: tenantId,
         p_agency_ids: filteredAgencyIds,
@@ -135,6 +137,71 @@ export default function Chat() {
       // Only refetch if user is active and there are contacts
       return query.state.data && query.state.data.length > 0 ? 30000 : false;
     },
+  });
+
+  // Fetch unknown contacts
+  const { data: unknownContacts = [] } = useQuery({
+    queryKey: ['unknown-contacts', tenantId, debouncedSearch],
+    queryFn: async () => {
+      if (!tenantId) return [];
+
+      const query = supabase
+        .from('chat_messages')
+        .select('sender_phone, sender_name, created_at, is_blocked')
+        .eq('tenant_id', tenantId)
+        .is('client_id', null)
+        .is('lead_id', null)
+        .order('created_at', { ascending: false });
+
+      if (debouncedSearch) {
+        query.or(`sender_phone.ilike.%${debouncedSearch}%,sender_name.ilike.%${debouncedSearch}%`);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      // Group by sender_phone and count unread
+      const grouped = data?.reduce((acc: any[], msg: any) => {
+        const existing = acc.find(c => c.sender_phone === msg.sender_phone);
+        if (existing) {
+          existing.last_message_at = msg.created_at;
+        } else {
+          acc.push({
+            id: msg.sender_phone,
+            name: msg.sender_name || msg.sender_phone,
+            phone: msg.sender_phone,
+            sender_phone: msg.sender_phone,
+            email: null,
+            agency_id: null,
+            agency_name: null,
+            manychat_subscriber_id: null,
+            active_chat_provider: null,
+            unread_count: 0,
+            contact_type: 'unknown' as const,
+            last_message_at: msg.created_at,
+            is_blocked: msg.is_blocked,
+          });
+        }
+        return acc;
+      }, []) || [];
+
+      // Count unread for each
+      for (const contact of grouped) {
+        const { count } = await supabase
+          .from('chat_messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('tenant_id', tenantId)
+          .eq('sender_phone', contact.sender_phone)
+          .eq('direction', 'inbound')
+          .is('read_at', null);
+        contact.unread_count = count || 0;
+      }
+
+      return grouped;
+    },
+    enabled: !!tenantId,
+    staleTime: 30000,
   });
 
   // Filter contacts by type and sync status with memoization
@@ -210,10 +277,16 @@ export default function Chat() {
           </Select>
           
           <Tabs value={contactFilter} onValueChange={(v) => setContactFilter(v as typeof contactFilter)} className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="all">הכל</TabsTrigger>
               <TabsTrigger value="clients">לקוחות</TabsTrigger>
               <TabsTrigger value="leads">לידים</TabsTrigger>
+              <TabsTrigger value="unknown">
+                לא מוגדר
+                {unknownContacts && unknownContacts.length > 0 && (
+                  <Badge variant="secondary" className="mr-1 text-xs">{unknownContacts.length}</Badge>
+                )}
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -236,12 +309,16 @@ export default function Chat() {
               {filteredContacts?.map((contact) => (
                 <button
                   key={contact.id}
-                  onClick={() => setSelectedContact({ id: contact.id, type: contact.contact_type as 'client' | 'lead' })}
+                  onClick={() => setSelectedContact({ 
+                    id: contact.id, 
+                    type: contact.contact_type as 'client' | 'lead' | 'unknown',
+                    senderPhone: (contact as any).sender_phone 
+                  })}
                   className={`w-full text-right p-3 rounded-lg mb-1 transition-colors ${
                     selectedContact?.id === contact.id
                       ? 'bg-primary text-primary-foreground'
                       : 'hover:bg-accent'
-                  }`}
+                  } ${(contact as any).is_blocked ? 'opacity-50' : ''}`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     {contact.unread_count > 0 && (
@@ -250,8 +327,14 @@ export default function Chat() {
                       </Badge>
                     )}
                     <div className="flex-1 min-w-0 text-right">
-                      <div className="font-medium truncate mb-1">
+                      <div className="font-medium truncate mb-1 flex items-center gap-2 justify-end">
                         {contact.name}
+                        {contact.contact_type === 'unknown' && (
+                          <Badge variant="outline" className="text-xs">לא מוגדר</Badge>
+                        )}
+                        {(contact as any).is_blocked && (
+                          <Badge variant="destructive" className="text-xs">חסום</Badge>
+                        )}
                       </div>
                       <div className="flex items-center justify-end gap-1.5 mb-1 flex-wrap">
                         {contact.active_chat_provider === 'manychat' && !contact.manychat_subscriber_id && (

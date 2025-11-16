@@ -10,6 +10,7 @@ import { ChatProviderIndicator } from "./ChatProviderIndicator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { ConvertContactDialog } from "./ConvertContactDialog";
 
 interface Message {
   id: string;
@@ -20,18 +21,32 @@ interface Message {
 
 interface ChatViewProps {
   contactId: string;
-  contactType: "client" | "lead";
+  contactType: "client" | "lead" | "unknown";
+  senderPhone?: string;
   onBack?: () => void;
 }
 
-export default function ChatView({ contactId, contactType, onBack }: ChatViewProps) {
+export default function ChatView({ contactId, contactType, senderPhone, onBack }: ChatViewProps) {
   const queryClient = useQueryClient();
 
   // Fetch contact details
   const { data: contact, isLoading: isLoadingContact } = useQuery({
-    queryKey: ["contact", contactId, contactType],
+    queryKey: ["contact", contactId, contactType, senderPhone],
     queryFn: async () => {
-      const table = contactType === "client" ? "clients" : "leads";
+      if (contactType === "unknown") {
+        // For unknown contacts, return mock data
+        return {
+          id: contactId,
+          name: senderPhone || contactId,
+          phone: senderPhone,
+          email: null,
+          agency_id: null,
+          tenant_id: null,
+          manychat_subscriber_id: null,
+          active_chat_provider: null,
+        };
+      }
+      
       if (contactType === "client") {
         const { data, error } = await supabase
           .from("clients")
@@ -74,16 +89,25 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
   // Mark messages as read mutation
   const markAsReadMutation = useMutation({
     mutationFn: async () => {
-      const filter = contactType === "client" ? { client_id: contactId } : { lead_id: contactId };
-
-      const { error } = await supabase
-        .from("chat_messages")
-        .update({ read_at: new Date().toISOString() })
-        .match(filter)
-        .eq("direction", "inbound")
-        .is("read_at", null);
-
-      if (error) throw error;
+      if (contactType === "unknown") {
+        // For unknown contacts, mark by sender_phone
+        const { error } = await supabase
+          .from("chat_messages")
+          .update({ read_at: new Date().toISOString() })
+          .eq("sender_phone", senderPhone || contactId)
+          .eq("direction", "inbound")
+          .is("read_at", null);
+        if (error) throw error;
+      } else {
+        const filter = contactType === "client" ? { client_id: contactId } : { lead_id: contactId };
+        const { error } = await supabase
+          .from("chat_messages")
+          .update({ read_at: new Date().toISOString() })
+          .match(filter)
+          .eq("direction", "inbound")
+          .is("read_at", null);
+        if (error) throw error;
+      }
     },
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: ["chat-contacts"] });
@@ -225,9 +249,9 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
               <ChatProviderIndicator provider={contact.active_chat_provider} size="md" />
             </div>
             <div className="text-sm text-muted-foreground space-y-1">
-              {contact.agencies?.name && (
+              {(contact as any).agencies?.name && (
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">{contact.agencies.name}</Badge>
+                  <Badge variant="outline">{(contact as any).agencies.name}</Badge>
                 </div>
               )}
               {contact.phone && <div>טלפון: {contact.phone}</div>}
@@ -236,8 +260,27 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
           </div>
         </div>
 
+        {contactType === 'unknown' && (
+          <Alert className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>אדם זה לא מוגדר במערכת</span>
+              <div className="flex gap-2">
+                <ConvertContactDialog
+                  open={false}
+                  onOpenChange={() => {}}
+                  senderPhone={senderPhone || contactId}
+                  senderName={contact?.name}
+                  type="client"
+                  onSuccess={() => {}}
+                />
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Provider Controls */}
-        {!activeProvider && (
+        {!activeProvider && contactType !== 'unknown' && (
           <Alert className="mb-4">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
@@ -246,16 +289,16 @@ export default function ChatView({ contactId, contactType, onBack }: ChatViewPro
           </Alert>
         )}
 
-        {activeProvider === 'manychat' && (
+        {activeProvider === 'manychat' && contactType !== 'unknown' && (
           <ManyChatControls
             contactId={contactId}
-            contactType={contactType}
+            contactType={contactType as 'client' | 'lead'}
             subscriberId={contact.manychat_subscriber_id}
             tenantId={contact.tenant_id}
           />
         )}
 
-        {activeProvider === 'green_api' && (
+        {activeProvider === 'green_api' && contactType !== 'unknown' && (
           <GreenAPIControls phone={contact.phone} />
         )}
       </div>
