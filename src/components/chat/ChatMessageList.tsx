@@ -3,6 +3,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { Loader2 } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface Message {
   id: string;
@@ -21,6 +22,7 @@ interface ChatMessageListProps {
 
 export default function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -46,7 +48,7 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
   }
 
   return (
-    <ScrollArea className="h-full p-4" ref={scrollRef}>
+    <ScrollArea className={`h-full ${isMobile ? 'p-2' : 'p-4'}`} ref={scrollRef}>
       <div className="space-y-4">
         {messages.map((message) => {
           const isOutbound = message.direction === 'outbound';
@@ -56,7 +58,7 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
               className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                className={`${isMobile ? 'max-w-[85%]' : 'max-w-[70%]'} rounded-lg ${isMobile ? 'px-3 py-1.5' : 'px-4 py-2'} ${
                   isOutbound
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-muted'
