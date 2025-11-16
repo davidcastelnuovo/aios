@@ -265,13 +265,6 @@ export default function Chat() {
       }
     }
 
-    // Apply agency filter if selected
-    if (selectedAgency) {
-      const beforeFilter = allContacts.length;
-      allContacts = allContacts.filter(contact => contact.agency_id === selectedAgency);
-      console.log(`🏢 Agency filter: ${beforeFilter} → ${allContacts.length}`);
-    }
-
     console.log('✅ Final filtered contacts:', allContacts.length);
     return allContacts;
   }, [contacts, unknownContacts, debouncedSearch, contactFilter, showTodayOnly, selectedAgency, todayParts]);
