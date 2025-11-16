@@ -13,8 +13,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { MessageCircle, Search, Settings, Pencil } from "lucide-react";
 import ChatView from "@/components/chat/ChatView";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
@@ -57,6 +59,7 @@ export default function Chat() {
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
   const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups" | "unknown">("all");
+  const [showTodayOnly, setShowTodayOnly] = useState(false);
   const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown'; senderPhone?: string } | null>(
     clientId ? { id: clientId, type: 'client' } : null
   );
@@ -192,6 +195,13 @@ export default function Chat() {
     enabled: !!tenantId && !debouncedSearch,
   });
 
+  // Calculate start of today for filtering
+  const startOfToday = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+  }, []);
+
   // Filter contacts
   const filteredContacts = useMemo(() => {
     let allContacts = contacts || [];
@@ -224,13 +234,20 @@ export default function Chat() {
       allContacts = allContacts.filter(contact => contact.contact_type === contactFilter);
     }
 
+    // Apply today filter
+    if (showTodayOnly) {
+      allContacts = allContacts.filter(contact => 
+        contact.last_message_at && new Date(contact.last_message_at) >= startOfToday
+      );
+    }
+
     // Apply agency filter if selected
     if (selectedAgency) {
       allContacts = allContacts.filter(contact => contact.agency_id === selectedAgency);
     }
 
     return allContacts;
-  }, [contacts, unknownContacts, debouncedSearch, contactFilter, selectedAgency]);
+  }, [contacts, unknownContacts, debouncedSearch, contactFilter, showTodayOnly, selectedAgency, startOfToday]);
 
   const clientsCount = filteredContacts.filter(c => c.contact_type === 'client').length;
   const leadsCount = filteredContacts.filter(c => c.contact_type === 'lead').length;
@@ -303,27 +320,31 @@ export default function Chat() {
             />
           </div>
 
-          <Tabs value={contactFilter} onValueChange={(value: any) => setContactFilter(value)}>
-            <div className="space-y-2">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="all">
-                הכל ({filteredContacts.length})
-              </TabsTrigger>
-              <TabsTrigger value="clients">
-                לקוחות ({clientsCount})
-              </TabsTrigger>
-              <TabsTrigger value="leads">
-                לידים ({leadsCount})
-              </TabsTrigger>
-              <TabsTrigger value="groups">
-                קבוצות ({groupsCount})
-              </TabsTrigger>
-              <TabsTrigger value="unknown">
-                לא משויכים ({unknownCount})
-              </TabsTrigger>
-            </TabsList>
+          <div className="space-y-3">
+            <Select value={contactFilter} onValueChange={(value: any) => setContactFilter(value)}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="all">הכל ({filteredContacts.length})</SelectItem>
+                <SelectItem value="clients">לקוחות ({clientsCount})</SelectItem>
+                <SelectItem value="leads">לידים ({leadsCount})</SelectItem>
+                <SelectItem value="groups">קבוצות ({groupsCount})</SelectItem>
+                <SelectItem value="unknown">לא משויכים ({unknownCount})</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div className="flex items-center gap-2 px-2">
+              <Switch
+                id="today-filter"
+                checked={showTodayOnly}
+                onCheckedChange={setShowTodayOnly}
+              />
+              <Label htmlFor="today-filter" className="text-sm cursor-pointer">
+                הצג רק שיחות מהיום
+              </Label>
             </div>
-          </Tabs>
+          </div>
 
           {/* Header info */}
           <div className="text-muted-foreground text-sm px-2">
