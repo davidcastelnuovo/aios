@@ -195,11 +195,13 @@ export default function Chat() {
     enabled: !!tenantId && !debouncedSearch,
   });
 
-  // Calculate start of today for filtering
-  const startOfToday = useMemo(() => {
+  // Calculate today's date string for filtering (YYYY-MM-DD format)
+  const todayDateString = useMemo(() => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return today;
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }, []);
 
   // Filter contacts
@@ -234,10 +236,10 @@ export default function Chat() {
       allContacts = allContacts.filter(contact => contact.contact_type === contactFilter);
     }
 
-    // Apply today filter
+    // Apply today filter (compare only date part)
     if (showTodayOnly) {
       allContacts = allContacts.filter(contact => 
-        contact.last_message_at && new Date(contact.last_message_at) >= startOfToday
+        contact.last_message_at && contact.last_message_at.startsWith(todayDateString)
       );
     }
 
@@ -247,7 +249,7 @@ export default function Chat() {
     }
 
     return allContacts;
-  }, [contacts, unknownContacts, debouncedSearch, contactFilter, showTodayOnly, selectedAgency, startOfToday]);
+  }, [contacts, unknownContacts, debouncedSearch, contactFilter, showTodayOnly, selectedAgency, todayDateString]);
 
   const clientsCount = filteredContacts.filter(c => c.contact_type === 'client').length;
   const leadsCount = filteredContacts.filter(c => c.contact_type === 'lead').length;
