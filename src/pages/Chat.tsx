@@ -211,8 +211,16 @@ export default function Chat() {
       ...(contacts || []),
       ...(unknownContacts || [])
     ];
+
+    // Build a set of known phone numbers (clients/leads) to avoid showing them as unknown too
+    const knownPhones = new Set((contacts || []).map(c => c.phone).filter(Boolean));
     
     return allContacts.filter(contact => {
+      // Hide unknown contact if its phone already belongs to a known contact
+      if (contact.contact_type === 'unknown' && contact.phone && knownPhones.has(contact.phone)) {
+        return false;
+      }
+
       // Filter by contact type
       if (contactFilter === "clients" && contact.contact_type !== "client") return false;
       if (contactFilter === "leads" && contact.contact_type !== "lead") return false;
@@ -227,6 +235,12 @@ export default function Chat() {
       return true;
     });
   }, [contacts, unknownContacts, contactFilter, syncStatusFilter]);
+
+  // Count unknown items after excluding phones that belong to known contacts
+  const unknownCount = useMemo(() => {
+    const knownPhones = new Set((contacts || []).map(c => c.phone).filter(Boolean));
+    return (unknownContacts || []).filter((u: any) => u.phone && !knownPhones.has(u.phone)).length;
+  }, [contacts, unknownContacts]);
 
   const handleLoadMore = () => {
     if (hasMore && !isFetching) {
@@ -292,8 +306,8 @@ export default function Chat() {
               <TabsTrigger value="leads">לידים</TabsTrigger>
               <TabsTrigger value="unknown">
                 לא מוגדר
-                {unknownContacts && unknownContacts.length > 0 && (
-                  <Badge variant="secondary" className="mr-1 text-xs">{unknownContacts.length}</Badge>
+                {unknownCount > 0 && (
+                  <Badge variant="secondary" className="mr-1 text-xs">{unknownCount}</Badge>
                 )}
               </TabsTrigger>
             </TabsList>
