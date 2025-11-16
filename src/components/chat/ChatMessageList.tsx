@@ -115,13 +115,18 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
     
     if (messageType === 'audioMessage') {
       return (
-        <audio
-          src={fileData.downloadUrl}
-          controls
-          controlsList="nodownload noplaybackrate noremoteplayback"
-          className="w-full mb-2"
-          onContextMenu={(e) => e.preventDefault()}
-        />
+        <div className="relative w-full mb-2">
+          <audio
+            src={fileData.downloadUrl}
+            controls
+            controlsList="nodownload noplaybackrate noremoteplayback"
+            className="w-full"
+            onContextMenu={(e) => e.preventDefault()}
+            style={{
+              direction: 'ltr',
+            }}
+          />
+        </div>
       );
     }
     
