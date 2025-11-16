@@ -70,17 +70,24 @@ export default function Chat() {
     queryKey: ['active-chats', tenantId, userAgencyIds, selectedAgency],
     queryFn: async () => {
       if (!tenantId) {
+        console.log('❌ No tenantId - skipping fetch');
         return [];
       }
+
+      console.log('🚀 Fetching active chats for tenant:', tenantId);
+      console.log('👥 User agencies:', userAgencyIds);
+      console.log('🏢 Selected agency:', selectedAgency);
 
       const { data, error } = await supabase.rpc('get_chat_contacts');
 
       if (error) {
-        console.error('Error fetching active chats:', error);
+        console.error('❌ Error fetching active chats:', error);
         throw error;
       }
 
-      return (data || []).map((contact: any) => ({
+      console.log('📥 Received contacts from RPC:', data?.length || 0);
+      
+      const mapped = (data || []).map((contact: any) => ({
         id: contact.contact_id,
         name: contact.name,
         contact_name: contact.contact_name,
@@ -97,6 +104,9 @@ export default function Chat() {
         is_blocked: contact.is_blocked || false,
         has_messages: true,
       }));
+
+      console.log('✅ Mapped contacts:', mapped.length);
+      return mapped;
     },
     enabled: !!tenantId && !agenciesLoading && !debouncedSearch,
     refetchInterval: 30000,
@@ -210,6 +220,7 @@ export default function Chat() {
   // Filter contacts
   const filteredContacts = useMemo(() => {
     let allContacts = contacts || [];
+    console.log('🔍 Starting filter - contacts from DB:', contacts?.length || 0);
 
     // Add unknown contacts in active chats mode
     if (!debouncedSearch && unknownContacts && unknownContacts.length > 0) {
@@ -232,23 +243,36 @@ export default function Chat() {
         has_messages: true,
       }));
       allContacts = [...allContacts, ...normalizedUnknown];
+      console.log('📞 After adding unknown contacts:', allContacts.length);
     }
 
     // Apply contact type filter
     if (contactFilter !== "all") {
+      const beforeFilter = allContacts.length;
       allContacts = allContacts.filter(contact => contact.contact_type === contactFilter);
+      console.log(`🏷️ Contact type filter (${contactFilter}): ${beforeFilter} → ${allContacts.length}`);
     }
 
     // Apply today filter (local timezone)
     if (showTodayOnly) {
+      const beforeFilter = allContacts.length;
       allContacts = allContacts.filter(contact => isTodayLocal(contact.last_message_at));
+      console.log(`📅 Today filter: ${beforeFilter} → ${allContacts.length}`);
+      if (allContacts.length === 0 && beforeFilter > 0) {
+        console.log('⚠️ Today filter removed all contacts! Sample dates:', 
+          contacts?.slice(0, 3).map(c => ({ date: c.last_message_at, name: c.name }))
+        );
+      }
     }
 
     // Apply agency filter if selected
     if (selectedAgency) {
+      const beforeFilter = allContacts.length;
       allContacts = allContacts.filter(contact => contact.agency_id === selectedAgency);
+      console.log(`🏢 Agency filter: ${beforeFilter} → ${allContacts.length}`);
     }
 
+    console.log('✅ Final filtered contacts:', allContacts.length);
     return allContacts;
   }, [contacts, unknownContacts, debouncedSearch, contactFilter, showTodayOnly, selectedAgency, todayParts]);
 
