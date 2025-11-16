@@ -46,20 +46,31 @@ Deno.serve(async (req) => {
       );
     }
 
+    if (!['client', 'lead', 'group'].includes(contactType)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid contact type. Must be client, lead, or group' }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     console.log('🔄 Converting unknown contact:', { senderPhone, contactId, contactType, tenantId });
 
     // Update all messages from this sender_phone to the new contact
-    const updateData: any = {
-      [contactType === 'client' ? 'client_id' : 'lead_id']: contactId,
-    };
+    const updateData: any = contactType === 'group'
+      ? { group_id: contactId }
+      : { [contactType === 'client' ? 'client_id' : 'lead_id']: contactId };
 
     const { data, error } = await supabaseClient
       .from('chat_messages')
       .update(updateData)
       .eq('sender_phone', senderPhone)
-      .eq('tenant_id', tenantId)
+      .eq('tenant_id', tenantId!)
       .is('client_id', null)
       .is('lead_id', null)
+      .is('group_id', null)
       .select();
 
     if (error) {

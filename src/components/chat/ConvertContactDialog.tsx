@@ -44,16 +44,23 @@ const leadSchema = z.object({
   notes: z.string().optional(),
 });
 
+const groupSchema = z.object({
+  group_name: z.string().min(1, "שם הקבוצה הוא שדה חובה"),
+  agency_id: z.string().optional(),
+  description: z.string().optional(),
+});
+
 type ClientFormValues = z.infer<typeof clientSchema>;
 type LeadFormValues = z.infer<typeof leadSchema>;
+type GroupFormValues = z.infer<typeof groupSchema>;
 
 interface ConvertContactDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   senderPhone: string;
   senderName?: string | null;
-  type: "client" | "lead";
-  onSuccess: (id: string, type: "client" | "lead") => void;
+  type: "client" | "lead" | "group";
+  onSuccess: (id: string, type: "client" | "lead" | "group") => void;
 }
 
 export function ConvertContactDialog({
@@ -69,13 +76,17 @@ export function ConvertContactDialog({
   const { terms } = useTerminology();
   const [isConverting, setIsConverting] = useState(false);
 
-  const form = useForm<ClientFormValues | LeadFormValues>({
-    resolver: zodResolver(type === "client" ? clientSchema : leadSchema),
+  const form = useForm<ClientFormValues | LeadFormValues | GroupFormValues>({
+    resolver: zodResolver(
+      type === "client" ? clientSchema : type === "lead" ? leadSchema : groupSchema
+    ),
     defaultValues: {
       phone: senderPhone,
       ...(type === "client"
         ? { name: senderName || "" }
-        : { company_name: senderName || "", contact_name: "" }),
+        : type === "lead"
+        ? { company_name: senderName || "", contact_name: "" }
+        : { group_name: senderName || "" }),
     },
   });
 
@@ -116,8 +127,24 @@ export function ConvertContactDialog({
   });
 
   const createMutation = useMutation({
-    mutationFn: async (values: ClientFormValues | LeadFormValues) => {
-      if (type === "client") {
+    mutationFn: async (values: ClientFormValues | LeadFormValues | GroupFormValues) => {
+      if (type === "group") {
+        const groupData = values as GroupFormValues;
+        const { data, error } = await supabase
+          .from("whatsapp_groups")
+          .insert({
+            tenant_id: tenantId,
+            group_chat_id: senderPhone, // Use sender_phone as temporary group_chat_id
+            group_name: groupData.group_name,
+            description: groupData.description,
+            agency_id: groupData.agency_id || null,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return { data, type: "group" as const };
+      } else if (type === "client") {
         const clientData = values as ClientFormValues;
         const { data, error } = await supabase
           .from("clients")
@@ -236,12 +263,48 @@ export function ConvertContactDialog({
             {type === "client" ? `המר ל${terms?.client?.singular || "לקוח"}` : `המר ל${terms?.lead?.singular || "ליד"}`}
           </DialogTitle>
           <DialogDescription>
-            מלא את הפרטים כדי להמיר את איש הקשר ל{type === "client" ? terms?.client?.singular || "לקוח" : terms?.lead?.singular || "ליד"}
+            מלא את הפרטים כדי להמיר את איש הקשר ל{type === "client" ? terms?.client?.singular || "לקוח" : type === "lead" ? terms?.lead?.singular || "ליד" : "קבוצה"}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          {type === "client" ? (
+          {type === "group" ? (
+            <>
+              <div>
+                <Label htmlFor="group_name">שם הקבוצה *</Label>
+                <Input id="group_name" {...form.register("group_name")} />
+                {(form.formState.errors as any).group_name && (
+                  <p className="text-sm text-destructive mt-1">
+                    {(form.formState.errors as any).group_name.message}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="agency_id">סוכנות</Label>
+                <Select
+                  value={form.watch("agency_id") || ""}
+                  onValueChange={(value) => form.setValue("agency_id", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחר סוכנות (אופציונלי)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {agencies.map((agency) => (
+                      <SelectItem key={agency.id} value={agency.id}>
+                        {agency.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="description">תיאור</Label>
+                <Textarea id="description" {...form.register("description")} />
+              </div>
+            </>
+          ) : type === "client" ? (
             <>
               <div>
                 <Label htmlFor="name">שם *</Label>
@@ -315,20 +378,24 @@ export function ConvertContactDialog({
             </>
           )}
 
-          <div>
-            <Label htmlFor="phone">טלפון</Label>
-            <Input id="phone" {...form.register("phone")} />
-          </div>
+          {type !== "group" && (
+            <>
+              <div>
+                <Label htmlFor="phone">טלפון</Label>
+                <Input id="phone" {...form.register("phone")} />
+              </div>
 
-          <div>
-            <Label htmlFor="email">אימייל</Label>
-            <Input id="email" type="email" {...form.register("email")} />
-          </div>
+              <div>
+                <Label htmlFor="email">אימייל</Label>
+                <Input id="email" type="email" {...form.register("email")} />
+              </div>
 
-          <div>
-            <Label htmlFor="notes">הערות</Label>
-            <Textarea id="notes" {...form.register("notes")} />
-          </div>
+              <div>
+                <Label htmlFor="notes">הערות</Label>
+                <Textarea id="notes" {...form.register("notes")} />
+              </div>
+            </>
+          )}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

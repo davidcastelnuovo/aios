@@ -37,7 +37,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
   const { tenant: currentTenant } = useCurrentTenant();
   const isMobile = useIsMobile();
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
-  const [convertType, setConvertType] = useState<"client" | "lead">("client");
+  const [convertType, setConvertType] = useState<"client" | "lead" | "group">("client");
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
   // Fetch contact details
@@ -341,10 +341,10 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
                   <Alert>
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
-                      איש קשר זה לא מוגדר במערכת. המר אותו ללקוח או ליד כדי לנהל אותו בצורה מסודרת.
+                      איש קשר זה לא מוגדר במערכת. המר אותו ללקוח, ליד או קבוצה כדי לנהל אותו בצורה מסודרת.
                     </AlertDescription>
                   </Alert>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     <Button
                       onClick={() => {
                         setConvertType("client");
@@ -359,10 +359,20 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
                         setConvertType("lead");
                         setConvertDialogOpen(true);
                       }}
-                      variant="outline"
                       size="sm"
+                      variant="outline"
                     >
                       המר לליד
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setConvertType("group");
+                        setConvertDialogOpen(true);
+                      }}
+                      size="sm"
+                      variant="outline"
+                    >
+                      המר לקבוצה
                     </Button>
                     <Button
                       variant="destructive"

@@ -367,6 +367,7 @@ export type Database = {
           client_id: string | null
           created_at: string | null
           direction: string
+          group_id: string | null
           id: string
           is_blocked: boolean
           lead_id: string | null
@@ -387,6 +388,7 @@ export type Database = {
           client_id?: string | null
           created_at?: string | null
           direction: string
+          group_id?: string | null
           id?: string
           is_blocked?: boolean
           lead_id?: string | null
@@ -407,6 +409,7 @@ export type Database = {
           client_id?: string | null
           created_at?: string | null
           direction?: string
+          group_id?: string | null
           id?: string
           is_blocked?: boolean
           lead_id?: string | null
@@ -426,6 +429,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_groups"
             referencedColumns: ["id"]
           },
           {
@@ -2148,6 +2158,54 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "user_roles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_groups: {
+        Row: {
+          agency_id: string | null
+          created_at: string
+          description: string | null
+          group_chat_id: string
+          group_name: string
+          id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          agency_id?: string | null
+          created_at?: string
+          description?: string | null
+          group_chat_id: string
+          group_name: string
+          id?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          agency_id?: string | null
+          created_at?: string
+          description?: string | null
+          group_chat_id?: string
+          group_name?: string
+          id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_groups_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_groups_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
