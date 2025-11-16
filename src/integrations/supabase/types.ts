@@ -2290,6 +2290,25 @@ export type Database = {
       }
       is_seo_staff: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      search_contacts_for_chat: {
+        Args: { p_search_term: string }
+        Returns: {
+          active_chat_provider: Database["public"]["Enums"]["chat_provider"]
+          agency_id: string
+          agency_name: string
+          contact_id: string
+          contact_name: string
+          contact_type: string
+          email: string
+          has_messages: boolean
+          is_blocked: boolean
+          last_message_at: string
+          manychat_subscriber_id: string
+          name: string
+          phone: string
+          unread_count: number
+        }[]
+      }
       user_can_view_campaigner: {
         Args: { _campaigner_id: string; _user_id: string }
         Returns: boolean
