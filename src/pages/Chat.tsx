@@ -34,6 +34,17 @@ interface Contact {
   sender_phone?: string;
   is_blocked?: boolean;
 }
+// Normalize phone for comparison: strip non-digits and standardize to local part
+const normalizePhone = (phone?: string | null) => {
+  if (!phone) return '';
+  const digits = (phone.match(/\d+/g) || []).join('');
+  // Remove international prefixes and common country codes (e.g., 972)
+  let p = digits.replace(/^00/, '');
+  if (p.startsWith('972')) p = p.slice(3);
+  if (p.startsWith('0')) p = p.slice(1);
+  // Keep last 9 digits (Israeli local numbers)
+  return p.slice(-9);
+};
 
 export default function Chat() {
   const { clientId } = useParams();
@@ -213,11 +224,15 @@ export default function Chat() {
     ];
 
     // Build a set of known phone numbers (clients/leads) to avoid showing them as unknown too
-    const knownPhones = new Set((contacts || []).map(c => c.phone).filter(Boolean));
+    const knownPhones = new Set(
+      (contacts || [])
+        .map(c => normalizePhone(c.phone))
+        .filter(Boolean)
+    );
     
     return allContacts.filter(contact => {
-      // Hide unknown contact if its phone already belongs to a known contact
-      if (contact.contact_type === 'unknown' && contact.phone && knownPhones.has(contact.phone)) {
+      // Hide unknown contact if its phone already belongs to a known contact (compare normalized)
+      if (contact.contact_type === 'unknown' && knownPhones.has(normalizePhone(contact.phone))) {
         return false;
       }
 
@@ -238,8 +253,12 @@ export default function Chat() {
 
   // Count unknown items after excluding phones that belong to known contacts
   const unknownCount = useMemo(() => {
-    const knownPhones = new Set((contacts || []).map(c => c.phone).filter(Boolean));
-    return (unknownContacts || []).filter((u: any) => u.phone && !knownPhones.has(u.phone)).length;
+    const knownPhones = new Set(
+      (contacts || [])
+        .map(c => normalizePhone(c.phone))
+        .filter(Boolean)
+    );
+    return (unknownContacts || []).filter((u: any) => !knownPhones.has(normalizePhone(u.phone))).length;
   }, [contacts, unknownContacts]);
 
   const handleLoadMore = () => {
