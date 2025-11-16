@@ -15,8 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageCircle, Search, Settings, Loader2, Pencil } from "lucide-react";
+import { MessageCircle, Search, Settings, Pencil } from "lucide-react";
 import ChatView from "@/components/chat/ChatView";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
@@ -38,15 +37,13 @@ interface Contact {
   is_blocked?: boolean;
   has_messages?: boolean;
 }
-// Normalize phone for comparison: strip non-digits and standardize to local part
+
 const normalizePhone = (phone?: string | null) => {
   if (!phone) return '';
   const digits = (phone.match(/\d+/g) || []).join('');
-  // Remove international prefixes and common country codes (e.g., 972)
   let p = digits.replace(/^00/, '');
   if (p.startsWith('972')) p = p.slice(3);
   if (p.startsWith('0')) p = p.slice(1);
-  // Keep last 9 digits (Israeli local numbers)
   return p.slice(-9);
 };
 
@@ -65,371 +62,407 @@ export default function Chat() {
   );
   const [editingContact, setEditingContact] = useState<{ id: string; type: 'client' | 'lead'; data: any } | null>(null);
 
-  // Count unsynced clients
-  const { data: unsyncedCount } = useQuery({
-    queryKey: ['unsynced-clients-count', tenantId],
-    queryFn: async () => {
-      if (!tenantId) return 0;
-      
-      const { count } = await supabase
-        .from('clients')
-        .select('*', { count: 'exact', head: true })
-        .eq('tenant_id', tenantId)
-        .is('manychat_subscriber_id', null);
-      
-      return count || 0;
-    },
-    enabled: !!tenantId,
-  });
-
   // Fetch active chats (default mode - no search)
   const { data: activeChats, isLoading: activeChatsLoading } = useQuery({
     queryKey: ['active-chats', tenantId, userAgencyIds, selectedAgency],
     queryFn: async () => {
       if (!tenantId) {
-        console.warn('⚠️ Contacts query skipped - missing tenantId');
         return [];
       }
 
-      console.time('⏱️ Chat contacts query');
-
-      // Call the RPC function without parameters
-      const { data, error } = await supabase
-        .rpc('get_chat_contacts');
-
-      console.timeEnd('⏱️ Chat contacts query');
+      const { data, error } = await supabase.rpc('get_chat_contacts');
 
       if (error) {
-        console.error('❌ Contacts error:', error);
+        console.error('Error fetching active chats:', error);
         throw error;
       }
 
-      // Update hasMore flag
-      setHasMore(false); // No pagination for now
-
-      return (data || []).map((row: any) => ({
-        id: row.contact_id || `unknown-${row.phone}`,
-        name: row.name,
-        contact_name: row.contact_name,
-        phone: row.phone,
-        email: row.email,
-        agency_id: row.agency_id,
-        agency_name: row.agency_name,
-        manychat_subscriber_id: row.manychat_subscriber_id,
-        active_chat_provider: row.active_chat_provider,
-        unread_count: row.unread_count || 0,
-        contact_type: row.contact_type,
-        last_message_at: row.last_message_at,
-        is_blocked: row.is_blocked || false,
-        sender_phone: row.phone,
+      return (data || []).map((contact: any) => ({
+        id: contact.contact_id,
+        name: contact.name,
+        contact_name: contact.contact_name,
+        phone: contact.phone,
+        email: contact.email,
+        agency_id: contact.agency_id,
+        agency_name: contact.agency_name,
+        manychat_subscriber_id: contact.manychat_subscriber_id,
+        active_chat_provider: contact.active_chat_provider,
+        contact_type: contact.contact_type,
+        unread_count: contact.unread_count || 0,
+        last_message_at: contact.last_message_at,
+        sender_phone: contact.sender_phone,
+        is_blocked: contact.is_blocked || false,
+        has_messages: true,
       }));
     },
-    enabled: !!tenantId,
-    staleTime: 30000, // 30 seconds
-    refetchInterval: (query) => {
-      // Only refetch if user is active and there are contacts
-      return query.state.data && query.state.data.length > 0 ? 30000 : false;
-    },
+    enabled: !!tenantId && !agenciesLoading && !debouncedSearch,
+    refetchInterval: 30000,
   });
 
-  // Fetch unknown contacts
+  // Search contacts (search mode - includes contacts without messages)
+  const { data: searchResults, isLoading: searchLoading } = useQuery({
+    queryKey: ['search-contacts', tenantId, debouncedSearch],
+    queryFn: async () => {
+      if (!tenantId || !debouncedSearch) {
+        return [];
+      }
+
+      const { data, error } = await supabase.rpc('search_contacts_for_chat', {
+        p_search_term: debouncedSearch,
+      });
+
+      if (error) {
+        console.error('Error searching contacts:', error);
+        throw error;
+      }
+
+      return (data || []).map((contact: any) => ({
+        id: contact.contact_id,
+        name: contact.name,
+        contact_name: contact.contact_name,
+        phone: contact.phone,
+        email: contact.email,
+        agency_id: contact.agency_id,
+        agency_name: contact.agency_name,
+        manychat_subscriber_id: contact.manychat_subscriber_id,
+        active_chat_provider: contact.active_chat_provider,
+        contact_type: contact.contact_type,
+        unread_count: contact.unread_count || 0,
+        last_message_at: contact.last_message_at,
+        sender_phone: contact.phone,
+        is_blocked: contact.is_blocked || false,
+        has_messages: contact.has_messages || false,
+      }));
+    },
+    enabled: !!tenantId && !!debouncedSearch,
+  });
+
+  // Use appropriate data source
+  const contacts = debouncedSearch ? searchResults : activeChats;
+  const isLoading = debouncedSearch ? searchLoading : activeChatsLoading;
+
+  // Fetch unknown contacts separately for active chats mode only
   const { data: unknownContacts = [] } = useQuery({
-    queryKey: ['unknown-contacts', tenantId, debouncedSearch],
+    queryKey: ['unknown-contacts', tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
 
-      const query = supabase
+      const { data, error } = await supabase
         .from('chat_messages')
-        .select('sender_phone, sender_name, created_at, is_blocked')
+        .select('sender_phone, provider, created_at, direction, read_at, is_blocked')
         .eq('tenant_id', tenantId)
         .is('client_id', null)
         .is('lead_id', null)
-        .order('created_at', { ascending: false });
+        .is('group_id', null)
+        .not('sender_phone', 'is', null);
 
-      if (debouncedSearch) {
-        query.or(`sender_phone.ilike.%${debouncedSearch}%,sender_name.ilike.%${debouncedSearch}%`);
+      if (error) {
+        console.error('Error fetching unknown contacts:', error);
+        return [];
       }
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      // Group by sender_phone and count unread
-      const grouped = data?.reduce((acc: any[], msg: any) => {
-        const existing = acc.find(c => c.sender_phone === msg.sender_phone);
-        if (existing) {
-          existing.last_message_at = msg.created_at;
-        } else {
-          acc.push({
-            id: msg.sender_phone,
-            name: msg.sender_name || msg.sender_phone,
-            phone: msg.sender_phone,
+      const grouped = new Map<string, any>();
+      data.forEach(msg => {
+        const key = normalizePhone(msg.sender_phone);
+        if (!key) return;
+        
+        if (!grouped.has(key)) {
+          grouped.set(key, {
             sender_phone: msg.sender_phone,
-            email: null,
-            agency_id: null,
-            agency_name: null,
-            manychat_subscriber_id: null,
-            active_chat_provider: null,
-            unread_count: 0,
-            contact_type: 'unknown' as const,
+            active_chat_provider: msg.provider,
             last_message_at: msg.created_at,
+            unread_count: 0,
             is_blocked: msg.is_blocked,
           });
+        } else {
+          const existing = grouped.get(key);
+          if (new Date(msg.created_at) > new Date(existing.last_message_at)) {
+            existing.last_message_at = msg.created_at;
+          }
         }
-        return acc;
-      }, []) || [];
+        
+        if (msg.direction === 'incoming' && !msg.read_at) {
+          grouped.get(key).unread_count++;
+        }
+      });
 
-      // Count unread for each
-      for (const contact of grouped) {
-        const { count } = await supabase
-          .from('chat_messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('tenant_id', tenantId)
-          .eq('sender_phone', contact.sender_phone)
-          .eq('direction', 'inbound')
-          .is('read_at', null);
-        contact.unread_count = count || 0;
-      }
-
-      return grouped;
+      const unknownContactsData = Array.from(grouped.values());
+      return unknownContactsData;
     },
-    enabled: !!tenantId,
-    staleTime: 30000,
+    enabled: !!tenantId && !debouncedSearch,
   });
 
-  // Filter contacts by type and sync status with memoization
+  // Filter contacts
   const filteredContacts = useMemo(() => {
-    // Merge known contacts with unknown contacts
-    const allContacts = [
-      ...(contacts || []),
-      ...(unknownContacts || [])
-    ];
+    let allContacts = contacts || [];
 
-    // Build a set of known phone numbers (clients/leads) to avoid showing them as unknown too
-    const knownPhones = new Set(
-      (contacts || [])
-        .map(c => normalizePhone(c.phone))
-        .filter(Boolean)
-    );
-    
-    return allContacts.filter(contact => {
-      // Hide unknown contact if its phone already belongs to a known contact (compare normalized)
-      if (contact.contact_type === 'unknown' && knownPhones.has(normalizePhone(contact.phone))) {
-        return false;
-      }
+    // Add unknown contacts in active chats mode
+    if (!debouncedSearch && unknownContacts && unknownContacts.length > 0) {
+      const normalizedUnknown = unknownContacts.map(uc => ({
+        ...uc,
+        id: `unknown-${uc.sender_phone}`,
+        name: uc.sender_phone || 'Unknown',
+        contact_name: null,
+        phone: uc.sender_phone,
+        email: null,
+        agency_id: null,
+        agency_name: null,
+        manychat_subscriber_id: null,
+        active_chat_provider: uc.active_chat_provider,
+        contact_type: 'unknown' as const,
+        unread_count: uc.unread_count || 0,
+        last_message_at: uc.last_message_at,
+        sender_phone: uc.sender_phone,
+        is_blocked: uc.is_blocked || false,
+        has_messages: true,
+      }));
+      allContacts = [...allContacts, ...normalizedUnknown];
+    }
 
-      // Filter by contact type
-      if (contactFilter === "clients" && contact.contact_type !== "client") return false;
-      if (contactFilter === "leads" && contact.contact_type !== "lead") return false;
-      if (contactFilter === "groups" && contact.contact_type !== "group") return false;
-      if (contactFilter === "unknown" && contact.contact_type !== "unknown") return false;
+    // Apply contact type filter
+    if (contactFilter !== "all") {
+      allContacts = allContacts.filter(contact => contact.contact_type === contactFilter);
+    }
+
+    // Apply agency filter if selected
+    if (selectedAgency) {
+      allContacts = allContacts.filter(contact => contact.agency_id === selectedAgency);
+    }
+
+    return allContacts;
+  }, [contacts, unknownContacts, debouncedSearch, contactFilter, selectedAgency]);
+
+  const clientsCount = filteredContacts.filter(c => c.contact_type === 'client').length;
+  const leadsCount = filteredContacts.filter(c => c.contact_type === 'lead').length;
+  const groupsCount = filteredContacts.filter(c => c.contact_type === 'group').length;
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+
+  const handleEditContact = async (contact: Contact) => {
+    if (contact.contact_type === 'client') {
+      const { data } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('id', contact.id)
+        .single();
       
-      // Filter by sync status (only for clients/leads, not unknown)
-      if (contact.contact_type !== 'unknown') {
-        if (syncStatusFilter === "synced" && !contact.manychat_subscriber_id) return false;
-        if (syncStatusFilter === "unsynced" && contact.manychat_subscriber_id) return false;
+      if (data) {
+        setEditingContact({ id: contact.id, type: 'client', data });
       }
+    } else if (contact.contact_type === 'lead') {
+      const { data } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('id', contact.id)
+        .single();
       
-      return true;
-    });
-  }, [contacts, unknownContacts, contactFilter, syncStatusFilter]);
-
-  // Count groups
-  const groupsCount = useMemo(() => {
-    return (contacts || []).filter(c => c.contact_type === 'group').length;
-  }, [contacts]);
-
-  // Count unknown items after excluding phones that belong to known contacts
-  const unknownCount = useMemo(() => {
-    const knownPhones = new Set(
-      (contacts || [])
-        .map(c => normalizePhone(c.phone))
-        .filter(Boolean)
-    );
-    return (unknownContacts || []).filter((u: any) => !knownPhones.has(normalizePhone(u.phone))).length;
-  }, [contacts, unknownContacts]);
-
-  const handleLoadMore = () => {
-    if (hasMore && !isFetching) {
-      setPage(prev => prev + 1);
+      if (data) {
+        setEditingContact({ id: contact.id, type: 'lead', data });
+      }
     }
   };
 
-  const handleSearchChange = (value: string) => {
-    setSearchTerm(value);
-    setPage(0); // Reset pagination on search
-  };
+  if (agenciesLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+          <p className="mt-2 text-sm text-muted-foreground">טוען סוכנויות...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex h-[calc(100dvh-8rem)] md:h-[calc(100vh-8rem)] gap-4 overflow-hidden">
-      {/* Clients List - Hidden on mobile when contact selected */}
-      {(isMobile ? !selectedContact : true) && (
-        	<Card className={`${isMobile ? 'w-full' : 'w-80'} flex-shrink-0 flex flex-col overflow-hidden h-full`}>
-        	  <div className="p-4 border-b space-y-3">
-        	    <div className="flex items-center justify-between">
-        	      <div className="flex items-center gap-2">
-        	        <h3 className="font-semibold">אנשי קשר</h3>
-        	        {unsyncedCount !== undefined && unsyncedCount > 0 && (
-        	          <Badge variant="secondary" className="text-xs">
-        	            {unsyncedCount} לא מסונכרנים
-        	          </Badge>
-        	        )}
-        	      </div>
-        	      <Button
-        	        variant="outline"
-        	        size="sm"
-        	        asChild
-        	      >
-        	        <Link to={buildPath("/manychat-settings")}>
-        	          <Settings className="h-4 w-4 ml-2" />
-        	          הגדרות ManyChat
-        	        </Link>
-        	      </Button>
-        	    </div>
-        	    <div className="relative">
-        	      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-        	      <Input
-        	        placeholder="חפש לקוח..."
-        	        value={searchTerm}
-        	        onChange={(e) => setSearchTerm(e.target.value)}
-        	        className="pl-9"
-        	      />
-        	    </div>
-        	    
-        	    <Select value={syncStatusFilter} onValueChange={(value) => setSyncStatusFilter(value as any)}>
-        	      <SelectTrigger className="text-right" dir="rtl">
-        	        <SelectValue placeholder="סטטוס סנכרון" />
-        	      </SelectTrigger>
-        	      <SelectContent>
-        	        <SelectItem value="all">הכל</SelectItem>
-        	        <SelectItem value="synced">מסונכרנים</SelectItem>
-        	        <SelectItem value="unsynced">לא מסונכרנים</SelectItem>
-        	      </SelectContent>
-        	    </Select>
-        	    
-        	    <Tabs value={contactFilter} onValueChange={(v) => setContactFilter(v as typeof contactFilter)} className="w-full">
-        	      <TabsList className="grid w-full grid-cols-5">
-        	        <TabsTrigger value="all">הכל</TabsTrigger>
-        	        <TabsTrigger value="clients">לקוחות</TabsTrigger>
-        	        <TabsTrigger value="leads">לידים</TabsTrigger>
-        	        <TabsTrigger value="groups">
-        	          קבוצות
-        	          {groupsCount > 0 && (
-        	            <Badge variant="secondary" className="mr-1 text-xs">{groupsCount}</Badge>
-        	          )}
-        	        </TabsTrigger>
-        	        <TabsTrigger value="unknown">
-        	          לא מוגדר
-        	          {unknownCount > 0 && (
-        	            <Badge variant="secondary" className="mr-1 text-xs">{unknownCount}</Badge>
-        	          )}
-        	        </TabsTrigger>
-        	      </TabsList>
-        	    </Tabs>
-        	  </div>
-        	  <ScrollArea className="flex-1">
-        	    {isLoading ? (
-        	      <div className="p-4 text-center text-muted-foreground">טוען...</div>
-        	    ) : filteredContacts?.length === 0 ? (
-        	      <div className="p-4 text-center">
-        	        <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-20" />
-        	        <p className="text-muted-foreground mb-3">לא נמצאו אנשי קשר</p>
-        	        <Button variant="outline" size="sm" asChild>
-        	          <Link to={buildPath("/chat-integrations")}>
-        	            <Settings className="h-4 w-4 ml-2" />
-        	            הגדרות אינטגרציות
-        	          </Link>
-        	        </Button>
-        	      </div>
-        	    ) : (
-        	      <div className="p-2">
-        	        {filteredContacts?.map((contact) => (
-        	          <button
-        	            key={contact.id}
-                          onClick={() => setSelectedContact({ 
-                            id: contact.id, 
-                            type: contact.contact_type as 'client' | 'lead' | 'group' | 'unknown',
-                            senderPhone: (contact as any).sender_phone 
-                          })}
-        	            className={`w-full text-right p-3 rounded-lg mb-1 transition-colors ${
-        	              selectedContact?.id === contact.id
-        	                ? 'bg-primary text-primary-foreground'
-        	                : 'hover:bg-accent'
-        	            } ${(contact as any).is_blocked ? 'opacity-50' : ''}`}
-        	          >
-        	            <div className="flex items-center justify-between gap-2">
-        	              {contact.unread_count > 0 && (
-        	                <Badge variant="destructive" className="shrink-0">
-        	                  {contact.unread_count}
-        	                </Badge>
-        	              )}
-        	              <div className="flex-1 min-w-0 text-right">
-                        <div className="font-medium truncate mb-1 flex items-center gap-2 justify-end">
-                          {contact.name}
-                          {contact.contact_type === 'group' && (
-                            <Badge variant="outline" className="text-xs">קבוצה</Badge>
-                          )}
-                          {contact.contact_type === 'unknown' && (
-                            <Badge variant="outline" className="text-xs">לא מוגדר</Badge>
-                          )}
-                          {(contact as any).is_blocked && (
-                            <Badge variant="destructive" className="text-xs">חסום</Badge>
+    <div className="flex h-[calc(100vh-4rem)] gap-4" dir="rtl">
+      {/* Contact List - Hide on mobile when chat is selected */}
+      <Card className={`${isMobile && selectedContact ? 'hidden' : 'flex'} flex-col w-full md:w-96 overflow-hidden`}>
+        <div className="p-4 border-b space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5" />
+              <h2 className="text-lg font-semibold">צ'אט</h2>
+            </div>
+            <Link to={buildPath('/chat-integrations')}>
+              <Button variant="ghost" size="icon">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="חיפוש איש קשר..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+              className="pr-10"
+            />
+          </div>
+
+          <Tabs value={contactFilter} onValueChange={(value: any) => setContactFilter(value)}>
+            <div className="space-y-2">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="all">
+                  הכל ({filteredContacts.length})
+                </TabsTrigger>
+                <TabsTrigger value="clients">
+                  לקוחות ({clientsCount})
+                </TabsTrigger>
+                <TabsTrigger value="leads">
+                  לידים ({leadsCount})
+                </TabsTrigger>
+                <TabsTrigger value="groups">
+                  קבוצות ({groupsCount})
+                </TabsTrigger>
+              </TabsList>
+            </div>
+          </Tabs>
+
+          {/* Header info */}
+          <div className="text-muted-foreground text-sm px-2">
+            {debouncedSearch ? (
+              <span>תוצאות חיפוש עבור "{debouncedSearch}"</span>
+            ) : (
+              <span>שיחות פעילות</span>
+            )}
+          </div>
+        </div>
+
+        <ScrollArea className="flex-1">
+          <div className="p-2 space-y-1">
+            {isLoading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="p-3 rounded-lg">
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ))
+            ) : filteredContacts.length === 0 ? (
+              <div className="text-center p-8 text-muted-foreground">
+                {debouncedSearch ? 'לא נמצאו תוצאות' : 'אין שיחות פעילות'}
+              </div>
+            ) : (
+              filteredContacts.map((contact) => {
+                const isSelected = selectedContact?.id === contact.id;
+                return (
+                  <Button
+                    key={contact.id}
+                    variant={isSelected ? "secondary" : "ghost"}
+                    className="w-full justify-start text-right h-auto p-3"
+                    onClick={() => {
+                      let type: 'client' | 'lead' | 'group' | 'unknown' = 'client';
+                      if (contact.contact_type === 'lead') type = 'lead';
+                      else if (contact.contact_type === 'group') type = 'group';
+                      else if (contact.contact_type === 'unknown') type = 'unknown';
+                      
+                      setSelectedContact({
+                        id: contact.id,
+                        type,
+                        senderPhone: contact.sender_phone
+                      });
+                    }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium truncate block">
+                            {contact.contact_name || contact.name}
+                          </span>
+                          {contact.contact_name && (
+                            <span className="text-sm opacity-70 truncate block">
+                              {contact.name}
+                            </span>
                           )}
                         </div>
-        	                <div className="flex items-center justify-end gap-1.5 mb-1 flex-wrap">
-        	                  {contact.active_chat_provider === 'manychat' && !contact.manychat_subscriber_id && (
-        	                    <Badge variant="secondary" className="text-xs shrink-0">
-        	                      לא מסונכרן
-        	                    </Badge>
-        	                  )}
-        	                  {contact.active_chat_provider === 'green_api' && !contact.phone && (
-        	                    <Badge variant="secondary" className="text-xs shrink-0">
-        	                      חסר טלפון
-        	                    </Badge>
-        	                  )}
-        	                  {contact.contact_type === 'lead' && (
-        	                    <Badge variant="outline" className="text-xs shrink-0">
-        	                      ליד
-        	                    </Badge>
-        	                  )}
-        	                </div>
-        	                <div className="text-sm opacity-70 truncate">
-        	                  {contact.agency_name}
-        	                </div>
-        	              </div>
-        	            </div>
-        	          </button>
-        	        ))}
-        	      </div>
-        	    )}
-        	  </ScrollArea>
-        	</Card>
-      )}
+                        {contact.unread_count > 0 && (
+                          <Badge variant="destructive" className="h-5 min-w-5 flex items-center justify-center px-1 shrink-0">
+                            {contact.unread_count}
+                          </Badge>
+                        )}
+                        {contact.is_blocked && (
+                          <Badge variant="secondary" className="text-xs shrink-0">
+                            חסום
+                          </Badge>
+                        )}
+                        {contact.contact_type === 'unknown' && (
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            לא מזוהה
+                          </Badge>
+                        )}
+                        {!contact.has_messages && (
+                          <Badge variant="outline" className="text-xs shrink-0">
+                            שיחה חדשה
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        {contact.agency_name && (
+                          <span className="text-sm text-muted-foreground truncate">
+                            {contact.agency_name}
+                          </span>
+                        )}
+                        {!contact.phone && contact.contact_type !== 'group' && contact.contact_type !== 'unknown' && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-xs shrink-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditContact(contact);
+                            }}
+                          >
+                            <Pencil className="h-3 w-3 ml-1" />
+                            עדכן פרטים
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </Button>
+                );
+              })
+            )}
+          </div>
+        </ScrollArea>
+      </Card>
 
-      {/* Chat View - Full width on mobile when contact selected */}
-      <div className={`${isMobile ? (selectedContact ? 'w-full flex flex-col' : 'hidden') : 'flex-1'} h-full`}>
+      {/* Chat View */}
+      <Card className="flex-1 overflow-hidden flex flex-col">
         {selectedContact ? (
-          <ChatView 
-            contactId={selectedContact.id} 
+          <ChatView
+            contactId={selectedContact.id}
             contactType={selectedContact.type}
+            senderPhone={selectedContact.senderPhone}
             onBack={isMobile ? () => setSelectedContact(null) : undefined}
           />
         ) : (
-          <Card className="h-full flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <MessageCircle className="h-16 w-16 mx-auto mb-4 opacity-20" />
-              <p>בחר איש קשר כדי להתחיל שיחה</p>
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            <div className="text-center">
+              <MessageCircle className="h-16 w-16 mx-auto mb-4 opacity-50" />
+              <p className="text-lg">בחר שיחה כדי להתחיל</p>
             </div>
-          </Card>
+          </div>
         )}
-      </div>
-      
-      {editingClient && (
+      </Card>
+
+      {/* Edit Contact Dialogs */}
+      {editingContact?.type === 'client' && (
         <EditClientDialog
-          client={editingClient}
-          open={!!editingClient}
+          client={editingContact.data}
+          open={true}
           onOpenChange={(open) => {
-            if (!open) setEditingClient(null);
+            if (!open) setEditingContact(null);
+          }}
+        />
+      )}
+      
+      {editingContact?.type === 'lead' && (
+        <EditLeadDialog
+          lead={editingContact.data}
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setEditingContact(null);
           }}
         />
       )}
