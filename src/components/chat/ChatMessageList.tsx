@@ -60,9 +60,10 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
     
     if (messageType === 'imageMessage') {
       return (
-        <img 
-          src={fileData.downloadUrl} 
-          alt="תמונה"
+        <img
+          src={fileData.downloadUrl}
+          alt="תמונה מצורפת"
+          loading="lazy"
           className="max-w-full rounded-md mb-2"
         />
       );
@@ -70,20 +71,25 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
     
     if (messageType === 'videoMessage') {
       return (
-        <video 
-          src={fileData.downloadUrl} 
+        <video
+          src={fileData.downloadUrl}
           controls
+          playsInline
+          controlsList="nodownload noplaybackrate noremoteplayback"
           className="max-w-full rounded-md mb-2"
+          onContextMenu={(e) => e.preventDefault()}
         />
       );
     }
     
     if (messageType === 'audioMessage') {
       return (
-        <audio 
-          src={fileData.downloadUrl} 
+        <audio
+          src={fileData.downloadUrl}
           controls
+          controlsList="nodownload noplaybackrate noremoteplayback"
           className="w-full mb-2"
+          onContextMenu={(e) => e.preventDefault()}
         />
       );
     }
@@ -105,7 +111,7 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
   };
 
   return (
-    <ScrollArea className={`h-full ${isMobile ? 'p-2' : 'p-4'}`} ref={scrollRef}>
+    <ScrollArea className={`h-full overflow-visible ${isMobile ? 'p-2' : 'p-4'}`} ref={scrollRef}>
       <div className="space-y-4">
         {messages.map((message) => {
           const isOutbound = message.direction === 'outbound';
@@ -121,7 +127,7 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
                   isOutbound
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-muted'
-                }`}
+                } relative`}
               >
                 {mediaContent}
                 {message.message_text && (
