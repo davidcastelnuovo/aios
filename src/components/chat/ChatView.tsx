@@ -14,6 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { ConvertContactDialog } from "./ConvertContactDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 interface Message {
   id: string;
@@ -35,6 +37,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
   const isMobile = useIsMobile();
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [convertType, setConvertType] = useState<"client" | "lead">("client");
+  const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
   // Fetch contact details
   const { data: contact, isLoading: isLoadingContact } = useQuery({
@@ -291,92 +294,112 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
   return (
     <div className="flex flex-col h-full bg-card">
       <div className={`${isMobile ? 'p-2' : 'p-4'} border-b`}>
-        <div className={`flex items-center gap-3 ${isMobile ? 'mb-2' : 'mb-4'}`}>
+        {/* שורה ראשונה - תמיד גלויה */}
+        <div className="flex items-center gap-3">
           {onBack && (
             <Button variant="ghost" size="icon" onClick={onBack}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
           )}
           <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2">
               <h2 className="font-semibold text-lg">{contact.name}</h2>
               <ChatProviderIndicator provider={contact.active_chat_provider} size="md" />
             </div>
-            <div className="text-sm text-muted-foreground space-y-1">
-              {(contact as any).agencies?.name && (
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{(contact as any).agencies.name}</Badge>
-                </div>
-              )}
-              {contact.phone && <div>טלפון: {contact.phone}</div>}
-              {contact.email && <div>אימייל: {contact.email}</div>}
-            </div>
           </div>
+          {isMobile && (
+            <Button 
+              variant="ghost" 
+              size="sm"
+              onClick={() => setIsHeaderExpanded(!isHeaderExpanded)}
+            >
+              {isHeaderExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+          )}
         </div>
+        
+        {/* פרטים נוספים - מתקפל במובייל, תמיד פתוח בדסקטופ */}
+        <Collapsible open={isMobile ? isHeaderExpanded : true}>
+          <CollapsibleContent>
+            <div className={`space-y-2 ${isMobile ? 'mt-2' : 'mt-4'}`}>
+              {/* פרטי קשר */}
+              <div className="text-sm text-muted-foreground space-y-1">
+                {(contact as any).agencies?.name && (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{(contact as any).agencies.name}</Badge>
+                  </div>
+                )}
+                {contact.phone && <div>טלפון: {contact.phone}</div>}
+                {contact.email && <div>אימייל: {contact.email}</div>}
+              </div>
 
-        {contactType === 'unknown' && (
-          <>
-            <Alert className={isMobile ? 'mb-2' : 'mb-4'}>
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                איש קשר זה לא מוגדר במערכת. המר אותו ללקוח או ליד כדי לנהל אותו בצורה מסודרת.
-              </AlertDescription>
-            </Alert>
-            <div className={`flex gap-2 ${isMobile ? 'mb-2' : 'mb-4'}`}>
-              <Button
-                onClick={() => {
-                  setConvertType("client");
-                  setConvertDialogOpen(true);
-                }}
-                size="sm"
-              >
-                המר ללקוח
-              </Button>
-              <Button
-                onClick={() => {
-                  setConvertType("lead");
-                  setConvertDialogOpen(true);
-                }}
-                variant="outline"
-                size="sm"
-              >
-                המר לליד
-              </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => blockMutation.mutate()}
-                disabled={blockMutation.isPending}
-              >
-                <Ban className="h-4 w-4 ml-2" />
-                חסום
-              </Button>
+              {/* Alerts וכפתורים למשתמשים unknown */}
+              {contactType === 'unknown' && (
+                <>
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      איש קשר זה לא מוגדר במערכת. המר אותו ללקוח או ליד כדי לנהל אותו בצורה מסודרת.
+                    </AlertDescription>
+                  </Alert>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => {
+                        setConvertType("client");
+                        setConvertDialogOpen(true);
+                      }}
+                      size="sm"
+                    >
+                      המר ללקוח
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setConvertType("lead");
+                        setConvertDialogOpen(true);
+                      }}
+                      variant="outline"
+                      size="sm"
+                    >
+                      המר לליד
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => blockMutation.mutate()}
+                      disabled={blockMutation.isPending}
+                    >
+                      <Ban className="h-4 w-4 ml-2" />
+                      חסום
+                    </Button>
+                  </div>
+                </>
+              )}
+
+              {/* Provider Controls */}
+              {!activeProvider && contactType !== 'unknown' && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    לא מוגדר ספק צ'אט פעיל. אנא הגדר באינטגרציות צ'אט.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {activeProvider === 'manychat' && contactType !== 'unknown' && (
+                <ManyChatControls
+                  contactId={contactId}
+                  contactType={contactType as 'client' | 'lead'}
+                  subscriberId={contact.manychat_subscriber_id}
+                  tenantId={contact.tenant_id}
+                />
+              )}
+
+              {activeProvider === 'green_api' && contactType !== 'unknown' && (
+                <GreenAPIControls phone={contact.phone} />
+              )}
             </div>
-          </>
-        )}
-
-        {/* Provider Controls */}
-        {!activeProvider && contactType !== 'unknown' && (
-          <Alert className={isMobile ? 'mb-2' : 'mb-4'}>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              לא מוגדר ספק צ'אט פעיל. אנא הגדר באינטגרציות צ'אט.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {activeProvider === 'manychat' && contactType !== 'unknown' && (
-          <ManyChatControls
-            contactId={contactId}
-            contactType={contactType as 'client' | 'lead'}
-            subscriberId={contact.manychat_subscriber_id}
-            tenantId={contact.tenant_id}
-          />
-        )}
-
-        {activeProvider === 'green_api' && contactType !== 'unknown' && (
-          <GreenAPIControls phone={contact.phone} />
-        )}
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
       <div className="flex-1 overflow-hidden">

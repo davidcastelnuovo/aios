@@ -33,15 +33,15 @@ export default function ChatInput({ onSend, isLoading }: ChatInputProps) {
         onChange={(e) => setMessage(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="הקלד הודעה... (Enter לשליחה)"
-        className="resize-none"
-        rows={2}
+        className="resize-none flex-1"
+        rows={isMobile ? 1 : 2}
         disabled={isLoading}
       />
       <Button
         onClick={handleSend}
         disabled={!message.trim() || isLoading}
         size="icon"
-        className="shrink-0"
+        className="shrink-0 h-10 w-10"
       >
         <Send className="h-4 w-4" />
       </Button>
