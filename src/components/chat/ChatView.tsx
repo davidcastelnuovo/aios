@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { ConvertContactDialog } from "./ConvertContactDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface Message {
   id: string;
@@ -31,6 +32,7 @@ interface ChatViewProps {
 export default function ChatView({ contactId, contactType, senderPhone, onBack }: ChatViewProps) {
   const queryClient = useQueryClient();
   const { tenant: currentTenant } = useCurrentTenant();
+  const isMobile = useIsMobile();
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [convertType, setConvertType] = useState<"client" | "lead">("client");
 
@@ -288,8 +290,8 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
 
   return (
     <div className="flex flex-col h-full bg-card">
-      <div className="p-4 border-b">
-        <div className="flex items-center gap-3 mb-4">
+      <div className={`${isMobile ? 'p-2' : 'p-4'} border-b`}>
+        <div className={`flex items-center gap-3 ${isMobile ? 'mb-2' : 'mb-4'}`}>
           {onBack && (
             <Button variant="ghost" size="icon" onClick={onBack}>
               <ArrowLeft className="h-5 w-5" />
@@ -314,13 +316,13 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
 
         {contactType === 'unknown' && (
           <>
-            <Alert className="mb-4">
+            <Alert className={isMobile ? 'mb-2' : 'mb-4'}>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 איש קשר זה לא מוגדר במערכת. המר אותו ללקוח או ליד כדי לנהל אותו בצורה מסודרת.
               </AlertDescription>
             </Alert>
-            <div className="flex gap-2 mb-4">
+            <div className={`flex gap-2 ${isMobile ? 'mb-2' : 'mb-4'}`}>
               <Button
                 onClick={() => {
                   setConvertType("client");
@@ -355,7 +357,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
 
         {/* Provider Controls */}
         {!activeProvider && contactType !== 'unknown' && (
-          <Alert className="mb-4">
+          <Alert className={isMobile ? 'mb-2' : 'mb-4'}>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               לא מוגדר ספק צ'אט פעיל. אנא הגדר באינטגרציות צ'אט.
@@ -381,7 +383,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
         <ChatMessageList messages={messages} isLoading={isLoadingMessages} />
       </div>
 
-      <div className="border-t p-4">
+      <div className="border-t">
         <ChatInput onSend={handleSendMessage} isLoading={false} />
       </div>
 
