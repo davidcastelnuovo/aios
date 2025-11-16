@@ -104,9 +104,30 @@ Deno.serve(async (req) => {
     const instanceId = integration.settings.instance_id;
     const apiToken = integration.api_key;
 
-    // Format phone number (remove special characters, ensure it has country code)
-    const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
-    const chatId = cleanPhone.includes('@') ? cleanPhone : `${cleanPhone}@c.us`;
+    // Normalize phone to international format suitable for WhatsApp (chatId)
+    const originalPhone = String(phoneNumber || '');
+    let digits = originalPhone.replace(/[^0-9]/g, '');
+
+    // Handle leading 00 (international prefix)
+    if (digits.startsWith('00')) {
+      digits = digits.slice(2);
+    }
+
+    // Determine country code from integration settings or fallback to IL (972)
+    const configuredCc = (integration.settings?.country_code || integration.settings?.default_country_code || '').toString();
+    const defaultCountryCode = configuredCc && /^(\d{1,3})$/.test(configuredCc) ? configuredCc : '972';
+
+    let e164Digits = digits;
+    // If already starts with country code, keep; else if starts with 0, strip 0 and prefix CC; else prefix CC
+    if (e164Digits.startsWith(defaultCountryCode)) {
+      // ok
+    } else if (e164Digits.startsWith('0')) {
+      e164Digits = defaultCountryCode + e164Digits.slice(1);
+    } else {
+      e164Digits = defaultCountryCode + e164Digits;
+    }
+
+    const chatId = `${e164Digits}@c.us`;
 
     console.log('📤 Sending message via Green API:', { instanceId, chatId, message });
 
