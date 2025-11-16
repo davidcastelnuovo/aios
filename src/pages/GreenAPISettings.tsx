@@ -57,6 +57,8 @@ export default function GreenAPISettings() {
         tenant_id: tenantId,
         integration_type: 'green_api',
         api_key: apiToken,
+        instance_id: instanceId,
+        api_token_last_4: apiToken.slice(-4),
         settings: {
           instance_id: instanceId,
         },

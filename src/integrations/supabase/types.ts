@@ -1796,10 +1796,12 @@ export type Database = {
       tenant_integrations: {
         Row: {
           api_key: string | null
+          api_token_last_4: string | null
           auto_sync_enabled: boolean
           company_id: string | null
           created_at: string
           id: string
+          instance_id: string | null
           integration_type: string
           is_active: boolean
           last_sync_at: string | null
@@ -1809,10 +1811,12 @@ export type Database = {
         }
         Insert: {
           api_key?: string | null
+          api_token_last_4?: string | null
           auto_sync_enabled?: boolean
           company_id?: string | null
           created_at?: string
           id?: string
+          instance_id?: string | null
           integration_type?: string
           is_active?: boolean
           last_sync_at?: string | null
@@ -1822,10 +1826,12 @@ export type Database = {
         }
         Update: {
           api_key?: string | null
+          api_token_last_4?: string | null
           auto_sync_enabled?: boolean
           company_id?: string | null
           created_at?: string
           id?: string
+          instance_id?: string | null
           integration_type?: string
           is_active?: boolean
           last_sync_at?: string | null

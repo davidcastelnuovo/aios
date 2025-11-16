@@ -19,6 +19,46 @@ Deno.serve(async (req) => {
     const webhookData = await req.json();
     console.log('📨 Received Green API webhook:', JSON.stringify(webhookData, null, 2));
 
+    // Extract instance ID from webhook to identify the tenant
+    const instanceId = webhookData.instanceData?.idInstance;
+    if (!instanceId) {
+      console.error('❌ No instance ID in webhook data');
+      return new Response(JSON.stringify({ error: 'Missing instance ID' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400
+      });
+    }
+
+    console.log('🔑 Instance ID:', instanceId);
+
+    // Find the specific tenant for this instance
+    const { data: integration, error: integrationError } = await supabaseClient
+      .from('tenant_integrations')
+      .select('tenant_id, settings')
+      .eq('integration_type', 'green_api')
+      .eq('is_active', true)
+      .eq('instance_id', instanceId)
+      .maybeSingle();
+
+    if (integrationError) {
+      console.error('❌ Error fetching integration:', integrationError);
+      return new Response(JSON.stringify({ error: 'Integration lookup failed' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500
+      });
+    }
+
+    if (!integration) {
+      console.error('❌ No active integration found for instance:', instanceId);
+      return new Response(JSON.stringify({ error: 'No active integration for this instance' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 404
+      });
+    }
+
+    const tenantId = integration.tenant_id;
+    console.log('✅ Identified tenant:', tenantId);
+
     // Green API sends different types of webhooks
     // We're interested in incoming AND outgoing messages
     const isIncoming = webhookData.typeWebhook === 'incomingMessageReceived';
@@ -68,22 +108,6 @@ Deno.serve(async (req) => {
       const groupName = senderData.chatName || `קבוצה ${phoneNumber.slice(-4)}`;
       
       console.log('👥 Group message detected:', groupName);
-      
-      // Find active Green API integrations
-      const { data: activeIntegrations } = await supabaseClient
-        .from('tenant_integrations')
-        .select('tenant_id')
-        .eq('integration_type', 'green_api')
-        .eq('is_active', true);
-
-      if (!activeIntegrations || activeIntegrations.length === 0) {
-        console.log('⚠️ No active Green API integrations found');
-        return new Response(JSON.stringify({ received: true }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      const tenantId = activeIntegrations[0].tenant_id;
 
       // Check if group exists, if not create it
       const { data: existingGroup } = await supabaseClient
@@ -147,91 +171,70 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Find client or lead by phone number for individual contacts
-    // We need to get all tenants that have Green API active and search in them
-    const { data: activeIntegrations } = await supabaseClient
-      .from('tenant_integrations')
-      .select('tenant_id')
-      .eq('integration_type', 'green_api')
-      .eq('is_active', true);
+    // For individual messages, search for client or lead in THIS tenant only
+    console.log('👤 Individual message, searching for contact in tenant:', tenantId);
+    
+    let clientId: string | null = null;
+    let leadId: string | null = null;
+    
+    // Search for client with matching phone in THIS tenant only
+    // IMPORTANT: Only search for clients with Green API as active provider
+    const { data: client } = await supabaseClient
+      .from('clients')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('active_chat_provider', 'green_api')
+      .ilike('phone', `%${phoneNumber}%`)
+      .maybeSingle();
 
-    if (!activeIntegrations || activeIntegrations.length === 0) {
-      console.log('⚠️ No active Green API integrations found');
-      return new Response(JSON.stringify({ received: true }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Search for client or lead with this phone number
-    let contact = null;
-    let contactType = null;
-    let tenantId = null;
-
-    for (const integration of activeIntegrations) {
-      // Try to find client
-      const { data: client } = await supabaseClient
-        .from('clients')
-        .select('id, tenant_id')
-        .eq('tenant_id', integration.tenant_id)
-        .ilike('phone', `%${phoneNumber}%`)
-        .maybeSingle();
-
-      if (client) {
-        contact = client;
-        contactType = 'client';
-        tenantId = client.tenant_id;
-        break;
-      }
-
-      // Try to find lead
+    if (client) {
+      clientId = client.id;
+      console.log(`✅ Found client ${clientId} in tenant ${tenantId}`);
+    } else {
+      // Search for lead with matching phone in THIS tenant only
+      // IMPORTANT: Only search for leads with Green API as active provider
       const { data: lead } = await supabaseClient
         .from('leads')
-        .select('id, tenant_id')
-        .eq('tenant_id', integration.tenant_id)
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('active_chat_provider', 'green_api')
         .ilike('phone', `%${phoneNumber}%`)
         .maybeSingle();
 
       if (lead) {
-        contact = lead;
-        contactType = 'lead';
-        tenantId = lead.tenant_id;
-        break;
+        leadId = lead.id;
+        console.log(`✅ Found lead ${leadId} in tenant ${tenantId}`);
+      } else {
+        console.log(`⚠️ No contact found with Green API provider in tenant ${tenantId}`);
       }
     }
 
-    // Use first active tenant if no contact found
-    if (!contact && activeIntegrations.length > 0) {
-      tenantId = activeIntegrations[0].tenant_id;
-      console.log('⚠️ No matching contact found for phone:', phoneNumber, '- saving as unknown contact in tenant:', tenantId);
-    } else if (contact) {
-      console.log('✅ Found contact:', { contactType, id: contact.id, tenantId });
-    }
-
-    // Check if phone is blocked
-    if (tenantId) {
-      const { data: blockedMessage } = await supabaseClient
+    // Check if contact is blocked
+    let isBlocked = false;
+    if (clientId || leadId) {
+      const { data: lastMessage } = await supabaseClient
         .from('chat_messages')
-        .select('id')
+        .select('is_blocked')
         .eq('tenant_id', tenantId)
-        .eq('sender_phone', phoneNumber)
-        .eq('is_blocked', true)
+        .or(`client_id.eq.${clientId || 'null'},lead_id.eq.${leadId || 'null'}`)
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
-      if (blockedMessage) {
-        console.log('🚫 Message from blocked number:', phoneNumber);
-        return new Response(JSON.stringify({ received: true, blocked: true }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+      if (lastMessage?.is_blocked) {
+        isBlocked = true;
+        console.log('🚫 Contact is blocked');
       }
     }
 
-    // Save message to database (with or without contact)
+    console.log(`💾 Saving message (blocked: ${isBlocked})...`);
+
+    // Save the message to THIS tenant only
     const { error: insertError } = await supabaseClient
       .from('chat_messages')
       .insert({
-        client_id: contact && contactType === 'client' ? contact.id : null,
-        lead_id: contact && contactType === 'lead' ? contact.id : null,
+        client_id: clientId,
+        lead_id: leadId,
         tenant_id: tenantId,
         message_text: messageText,
         direction: isOutgoing ? 'outbound' : 'inbound',
@@ -239,6 +242,7 @@ Deno.serve(async (req) => {
         provider: 'green_api',
         sender_phone: phoneNumber,
         sender_name: senderData.senderName || null,
+        is_blocked: isBlocked,
         raw_provider_data: webhookData,
       });
 
@@ -251,8 +255,9 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ 
       success: true,
-      contactType: contact ? contactType : 'unknown',
-      contactId: contact?.id || null,
+      contactType: clientId ? 'client' : (leadId ? 'lead' : 'unknown'),
+      contactId: clientId || leadId || null,
+      tenantId: tenantId,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
