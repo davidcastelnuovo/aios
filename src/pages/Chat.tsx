@@ -31,7 +31,7 @@ interface Contact {
   manychat_subscriber_id: string | null;
   active_chat_provider: string | null;
   unread_count: number;
-  contact_type: 'client' | 'lead' | 'unknown';
+  contact_type: 'client' | 'lead' | 'group' | 'unknown';
   last_message_at: string | null;
   sender_phone?: string;
   is_blocked?: boolean;
@@ -57,9 +57,9 @@ export default function Chat() {
   const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
-  const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "unknown">("all");
+  const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups" | "unknown">("all");
   const [syncStatusFilter, setSyncStatusFilter] = useState<"all" | "synced" | "unsynced">("all");
-  const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'unknown'; senderPhone?: string } | null>(
+  const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown'; senderPhone?: string } | null>(
     clientId ? { id: clientId, type: 'client' } : null
   );
   const [hasMore, setHasMore] = useState(true);
@@ -225,6 +225,7 @@ export default function Chat() {
       // Filter by contact type
       if (contactFilter === "clients" && contact.contact_type !== "client") return false;
       if (contactFilter === "leads" && contact.contact_type !== "lead") return false;
+      if (contactFilter === "groups" && contact.contact_type !== "group") return false;
       if (contactFilter === "unknown" && contact.contact_type !== "unknown") return false;
       
       // Filter by sync status (only for clients/leads, not unknown)
@@ -236,6 +237,11 @@ export default function Chat() {
       return true;
     });
   }, [contacts, unknownContacts, contactFilter, syncStatusFilter]);
+
+  // Count groups
+  const groupsCount = useMemo(() => {
+    return (contacts || []).filter(c => c.contact_type === 'group').length;
+  }, [contacts]);
 
   // Count unknown items after excluding phones that belong to known contacts
   const unknownCount = useMemo(() => {
@@ -306,10 +312,16 @@ export default function Chat() {
         	    </Select>
         	    
         	    <Tabs value={contactFilter} onValueChange={(v) => setContactFilter(v as typeof contactFilter)} className="w-full">
-        	      <TabsList className="grid w-full grid-cols-4">
+        	      <TabsList className="grid w-full grid-cols-5">
         	        <TabsTrigger value="all">הכל</TabsTrigger>
         	        <TabsTrigger value="clients">לקוחות</TabsTrigger>
         	        <TabsTrigger value="leads">לידים</TabsTrigger>
+        	        <TabsTrigger value="groups">
+        	          קבוצות
+        	          {groupsCount > 0 && (
+        	            <Badge variant="secondary" className="mr-1 text-xs">{groupsCount}</Badge>
+        	          )}
+        	        </TabsTrigger>
         	        <TabsTrigger value="unknown">
         	          לא מוגדר
         	          {unknownCount > 0 && (
@@ -338,11 +350,11 @@ export default function Chat() {
         	        {filteredContacts?.map((contact) => (
         	          <button
         	            key={contact.id}
-        	            onClick={() => setSelectedContact({ 
-        	              id: contact.id, 
-        	              type: contact.contact_type as 'client' | 'lead' | 'unknown',
-        	              senderPhone: (contact as any).sender_phone 
-        	            })}
+                          onClick={() => setSelectedContact({ 
+                            id: contact.id, 
+                            type: contact.contact_type as 'client' | 'lead' | 'group' | 'unknown',
+                            senderPhone: (contact as any).sender_phone 
+                          })}
         	            className={`w-full text-right p-3 rounded-lg mb-1 transition-colors ${
         	              selectedContact?.id === contact.id
         	                ? 'bg-primary text-primary-foreground'
@@ -356,15 +368,18 @@ export default function Chat() {
         	                </Badge>
         	              )}
         	              <div className="flex-1 min-w-0 text-right">
-        	                <div className="font-medium truncate mb-1 flex items-center gap-2 justify-end">
-        	                  {contact.name}
-        	                  {contact.contact_type === 'unknown' && (
-        	                    <Badge variant="outline" className="text-xs">לא מוגדר</Badge>
-        	                  )}
-        	                  {(contact as any).is_blocked && (
-        	                    <Badge variant="destructive" className="text-xs">חסום</Badge>
-        	                  )}
-        	                </div>
+                        <div className="font-medium truncate mb-1 flex items-center gap-2 justify-end">
+                          {contact.name}
+                          {contact.contact_type === 'group' && (
+                            <Badge variant="outline" className="text-xs">קבוצה</Badge>
+                          )}
+                          {contact.contact_type === 'unknown' && (
+                            <Badge variant="outline" className="text-xs">לא מוגדר</Badge>
+                          )}
+                          {(contact as any).is_blocked && (
+                            <Badge variant="destructive" className="text-xs">חסום</Badge>
+                          )}
+                        </div>
         	                <div className="flex items-center justify-end gap-1.5 mb-1 flex-wrap">
         	                  {contact.active_chat_provider === 'manychat' && !contact.manychat_subscriber_id && (
         	                    <Badge variant="secondary" className="text-xs shrink-0">

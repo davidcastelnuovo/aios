@@ -50,17 +50,19 @@ Deno.serve(async (req) => {
     
     console.log('✅ User authenticated:', user.id);
 
-    const { clientId, leadId, message, phoneNumber } = await req.json();
+    const { clientId, leadId, groupId, message, phoneNumber } = await req.json();
     
-    if (!message || !phoneNumber) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+    if (!message) {
+      return new Response(JSON.stringify({ error: 'Missing message' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
     // Get tenant_id
-    let tenantId: string;
+    let tenantId: string | undefined;
+    let groupChatId: string | undefined;
+    
     if (clientId) {
       const { data: client } = await supabaseClient
         .from('clients')
@@ -68,13 +70,21 @@ Deno.serve(async (req) => {
         .eq('id', clientId)
         .single();
       tenantId = client?.tenant_id;
-    } else {
+    } else if (leadId) {
       const { data: lead } = await supabaseClient
         .from('leads')
         .select('tenant_id')
         .eq('id', leadId)
         .single();
       tenantId = lead?.tenant_id;
+    } else if (groupId) {
+      const { data: group } = await supabaseClient
+        .from('whatsapp_groups')
+        .select('tenant_id, group_chat_id')
+        .eq('id', groupId)
+        .single();
+      tenantId = group?.tenant_id;
+      groupChatId = group?.group_chat_id;
     }
 
     if (!tenantId) {
@@ -105,29 +115,35 @@ Deno.serve(async (req) => {
     const apiToken = integration.api_key;
 
     // Normalize phone to international format suitable for WhatsApp (chatId)
-    const originalPhone = String(phoneNumber || '');
-    let digits = originalPhone.replace(/[^0-9]/g, '');
-
-    // Handle leading 00 (international prefix)
-    if (digits.startsWith('00')) {
-      digits = digits.slice(2);
-    }
-
-    // Determine country code from integration settings or fallback to IL (972)
-    const configuredCc = (integration.settings?.country_code || integration.settings?.default_country_code || '').toString();
-    const defaultCountryCode = configuredCc && /^(\d{1,3})$/.test(configuredCc) ? configuredCc : '972';
-
-    let e164Digits = digits;
-    // If already starts with country code, keep; else if starts with 0, strip 0 and prefix CC; else prefix CC
-    if (e164Digits.startsWith(defaultCountryCode)) {
-      // ok
-    } else if (e164Digits.startsWith('0')) {
-      e164Digits = defaultCountryCode + e164Digits.slice(1);
+    // For groups, use group_chat_id directly
+    let chatId: string;
+    if (groupChatId) {
+      chatId = groupChatId;
     } else {
-      e164Digits = defaultCountryCode + e164Digits;
-    }
+      const originalPhone = String(phoneNumber || '');
+      let digits = originalPhone.replace(/[^0-9]/g, '');
 
-    const chatId = `${e164Digits}@c.us`;
+      // Handle leading 00 (international prefix)
+      if (digits.startsWith('00')) {
+        digits = digits.slice(2);
+      }
+
+      // Determine country code from integration settings or fallback to IL (972)
+      const configuredCc = (integration.settings?.country_code || integration.settings?.default_country_code || '').toString();
+      const defaultCountryCode = configuredCc && /^(\d{1,3})$/.test(configuredCc) ? configuredCc : '972';
+
+      let e164Digits = digits;
+      // If already starts with country code, keep; else if starts with 0, strip 0 and prefix CC; else prefix CC
+      if (e164Digits.startsWith(defaultCountryCode)) {
+        // ok
+      } else if (e164Digits.startsWith('0')) {
+        e164Digits = defaultCountryCode + e164Digits.slice(1);
+      } else {
+        e164Digits = defaultCountryCode + e164Digits;
+      }
+
+      chatId = `${e164Digits}@c.us`;
+    }
 
     console.log('📤 Sending message via Green API:', { instanceId, chatId, message });
 
@@ -158,6 +174,7 @@ Deno.serve(async (req) => {
       .insert({
         client_id: clientId || null,
         lead_id: leadId || null,
+        group_id: groupId || null,
         tenant_id: tenantId,
         message_text: message,
         direction: 'outbound',
