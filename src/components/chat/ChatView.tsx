@@ -22,6 +22,7 @@ interface Message {
   direction: "inbound" | "outbound";
   message_text: string;
   created_at: string;
+  raw_provider_data?: any;
 }
 
 interface ChatViewProps {
@@ -221,6 +222,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
       direction: msg.direction as "inbound" | "outbound",
       message_text: msg.message_text,
       created_at: msg.created_at || "",
+      raw_provider_data: msg.raw_provider_data,
     })) || [];
 
   const handleSendMessage = async (message: string) => {
