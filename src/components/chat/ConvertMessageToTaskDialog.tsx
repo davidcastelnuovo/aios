@@ -42,7 +42,7 @@ interface ConvertMessageToTaskDialogProps {
   onOpenChange: (open: boolean) => void;
   messageText: string;
   contactId?: string;
-  contactType?: 'client' | 'lead' | 'group';
+  contactType?: 'client' | 'lead' | 'group' | 'unknown';
   agencyId?: string;
 }
 
