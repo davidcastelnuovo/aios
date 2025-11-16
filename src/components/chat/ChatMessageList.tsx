@@ -48,6 +48,33 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
     );
   }
 
+  const getQuotedMessage = (message: Message) => {
+    const quotedMessage = message.raw_provider_data?.messageData?.quotedMessage;
+    if (!quotedMessage) return null;
+
+    return (
+      <div className="bg-background/50 border-r-2 border-primary pr-2 mb-2 text-sm opacity-80">
+        <div className="font-semibold text-xs mb-1">
+          {quotedMessage.chatName || 'הודעה מצוטטת'}
+        </div>
+        <div className="line-clamp-2">
+          {quotedMessage.textMessage || quotedMessage.caption || '[מדיה]'}
+        </div>
+      </div>
+    );
+  };
+
+  const getReactionEmoji = (message: Message) => {
+    const reactionText = message.raw_provider_data?.messageData?.reactionMessageData?.reactionText;
+    if (!reactionText) return null;
+
+    return (
+      <div className="text-2xl mb-1">
+        {reactionText}
+      </div>
+    );
+  };
+
   const getMediaContent = (message: Message) => {
     if (!message.raw_provider_data?.messageData) return null;
     
@@ -116,6 +143,8 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
         {messages.map((message) => {
           const isOutbound = message.direction === 'outbound';
           const mediaContent = getMediaContent(message);
+          const quotedMessage = getQuotedMessage(message);
+          const reactionEmoji = getReactionEmoji(message);
           
           return (
             <div
@@ -129,8 +158,10 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
                     : 'bg-muted'
                 } relative`}
               >
+                {quotedMessage}
+                {reactionEmoji}
                 {mediaContent}
-                {message.message_text && (
+                {message.message_text && !reactionEmoji && (
                   <div className="whitespace-pre-wrap break-words" dir="rtl">
                     {message.message_text}
                   </div>
