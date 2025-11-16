@@ -206,18 +206,27 @@ export default function Chat() {
 
   // Filter contacts by type and sync status with memoization
   const filteredContacts = useMemo(() => {
-    return (contacts || []).filter(contact => {
+    // Merge known contacts with unknown contacts
+    const allContacts = [
+      ...(contacts || []),
+      ...(unknownContacts || [])
+    ];
+    
+    return allContacts.filter(contact => {
       // Filter by contact type
       if (contactFilter === "clients" && contact.contact_type !== "client") return false;
       if (contactFilter === "leads" && contact.contact_type !== "lead") return false;
+      if (contactFilter === "unknown" && contact.contact_type !== "unknown") return false;
       
-      // Filter by sync status
-      if (syncStatusFilter === "synced" && !contact.manychat_subscriber_id) return false;
-      if (syncStatusFilter === "unsynced" && contact.manychat_subscriber_id) return false;
+      // Filter by sync status (only for clients/leads, not unknown)
+      if (contact.contact_type !== 'unknown') {
+        if (syncStatusFilter === "synced" && !contact.manychat_subscriber_id) return false;
+        if (syncStatusFilter === "unsynced" && contact.manychat_subscriber_id) return false;
+      }
       
       return true;
     });
-  }, [contacts, contactFilter, syncStatusFilter]);
+  }, [contacts, unknownContacts, contactFilter, syncStatusFilter]);
 
   const handleLoadMore = () => {
     if (hasMore && !isFetching) {

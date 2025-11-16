@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, AlertCircle } from "lucide-react";
+import { ArrowLeft, AlertCircle, Ban } from "lucide-react";
 import ChatMessageList from "./ChatMessageList";
 import ChatInput from "./ChatInput";
 import { ManyChatControls } from "./ManyChatControls";
@@ -28,6 +29,8 @@ interface ChatViewProps {
 
 export default function ChatView({ contactId, contactType, senderPhone, onBack }: ChatViewProps) {
   const queryClient = useQueryClient();
+  const [convertDialogOpen, setConvertDialogOpen] = useState(false);
+  const [convertType, setConvertType] = useState<"client" | "lead">("client");
 
   // Fetch contact details
   const { data: contact, isLoading: isLoadingContact } = useQuery({
@@ -131,6 +134,37 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
+    },
+  });
+
+  // Block contact mutation
+  const blockMutation = useMutation({
+    mutationFn: async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user || !contact?.tenant_id) throw new Error("Missing user or tenant");
+
+      const { error } = await supabase
+        .from("chat_messages")
+        .update({
+          is_blocked: true,
+          blocked_at: new Date().toISOString(),
+          blocked_by_user_id: userData.user.id,
+        })
+        .eq("sender_phone", senderPhone || contactId)
+        .eq("tenant_id", contact.tenant_id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("המספר נחסם בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
+      onBack?.();
+    },
+    onError: (error) => {
+      toast.error("שגיאה בחסימת המספר");
+      console.error("Block error:", error);
     },
   });
 
@@ -261,22 +295,44 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
         </div>
 
         {contactType === 'unknown' && (
-          <Alert className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="flex items-center justify-between">
-              <span>אדם זה לא מוגדר במערכת</span>
-              <div className="flex gap-2">
-                <ConvertContactDialog
-                  open={false}
-                  onOpenChange={() => {}}
-                  senderPhone={senderPhone || contactId}
-                  senderName={contact?.name}
-                  type="client"
-                  onSuccess={() => {}}
-                />
-              </div>
-            </AlertDescription>
-          </Alert>
+          <>
+            <Alert className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                איש קשר זה לא מוגדר במערכת. המר אותו ללקוח או ליד כדי לנהל אותו בצורה מסודרת.
+              </AlertDescription>
+            </Alert>
+            <div className="flex gap-2 mb-4">
+              <Button
+                onClick={() => {
+                  setConvertType("client");
+                  setConvertDialogOpen(true);
+                }}
+                size="sm"
+              >
+                המר ללקוח
+              </Button>
+              <Button
+                onClick={() => {
+                  setConvertType("lead");
+                  setConvertDialogOpen(true);
+                }}
+                variant="outline"
+                size="sm"
+              >
+                המר לליד
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => blockMutation.mutate()}
+                disabled={blockMutation.isPending}
+              >
+                <Ban className="h-4 w-4 ml-2" />
+                חסום
+              </Button>
+            </div>
+          </>
         )}
 
         {/* Provider Controls */}
@@ -310,6 +366,23 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
       <div className="border-t p-4">
         <ChatInput onSend={handleSendMessage} isLoading={false} />
       </div>
+
+      {contactType === "unknown" && (
+        <ConvertContactDialog
+          open={convertDialogOpen}
+          onOpenChange={setConvertDialogOpen}
+          senderPhone={senderPhone || contactId}
+          senderName={contact?.name}
+          type={convertType}
+          onSuccess={(id, type) => {
+            setConvertDialogOpen(false);
+            queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
+            queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
+            // Switch to the new contact
+            if (onBack) onBack();
+          }}
+        />
+      )}
     </div>
   );
 }
