@@ -94,6 +94,27 @@ export function ConvertContactDialog({
     enabled: !!tenantId && open,
   });
 
+  // Fetch active chat provider for the tenant
+  const { data: activeChatProvider } = useQuery({
+    queryKey: ["active-chat-provider-for-convert", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return null;
+      const { data, error } = await supabase
+        .from("tenant_integrations")
+        .select("integration_type")
+        .eq("tenant_id", tenantId)
+        .eq("is_active", true)
+        .in("integration_type", ["manychat", "green_api"])
+        .single();
+      if (error) {
+        console.error("Error fetching active provider:", error);
+        return null;
+      }
+      return data?.integration_type as "manychat" | "green_api" | null;
+    },
+    enabled: !!tenantId && open,
+  });
+
   const createMutation = useMutation({
     mutationFn: async (values: ClientFormValues | LeadFormValues) => {
       if (type === "client") {
@@ -106,10 +127,10 @@ export function ConvertContactDialog({
             phone: clientData.phone,
             email: clientData.email,
             notes: clientData.notes,
+            active_chat_provider: activeChatProvider,
           })
           .select()
           .single();
-        if (error) throw error;
         if (error) throw error;
         
         // Call edge function to update all messages from this sender
@@ -139,6 +160,7 @@ export function ConvertContactDialog({
             phone: leadData.phone,
             email: leadData.email,
             notes: leadData.notes,
+            active_chat_provider: activeChatProvider,
           })
           .select()
           .single();
