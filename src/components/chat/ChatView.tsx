@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { ConvertContactDialog } from "./ConvertContactDialog";
+import { LinkContactDialog } from "./LinkContactDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
@@ -39,6 +40,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
   const isMobile = useIsMobile();
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [convertType, setConvertType] = useState<"client" | "lead" | "group">("client");
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
   // Fetch contact details
@@ -415,6 +417,13 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
                       <Ban className="h-4 w-4 ml-2" />
                       חסום
                     </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setLinkDialogOpen(true)}
+                    >
+                      שייך לקיים
+                    </Button>
                   </div>
                 </>
               )}
@@ -447,7 +456,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <ChatMessageList messages={messages} isLoading={isLoadingMessages} />
+        <ChatMessageList messages={messages} isLoading={isLoadingMessages} contactId={contactId} contactType={contactType} agencyId={contact?.agency_id} />
       </div>
 
       <div className="border-t">
@@ -455,20 +464,33 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
       </div>
 
       {contactType === "unknown" && (
-        <ConvertContactDialog
-          open={convertDialogOpen}
-          onOpenChange={setConvertDialogOpen}
-          senderPhone={senderPhone || contactId}
-          senderName={contact?.name}
-          type={convertType}
-          onSuccess={(id, type) => {
-            setConvertDialogOpen(false);
-            queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
-            queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
-            // Switch to the new contact
-            if (onBack) onBack();
-          }}
-        />
+        <>
+          <ConvertContactDialog
+            open={convertDialogOpen}
+            onOpenChange={setConvertDialogOpen}
+            senderPhone={senderPhone || contactId}
+            senderName={contact?.name}
+            type={convertType}
+            onSuccess={(id, type) => {
+              setConvertDialogOpen(false);
+              queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
+              queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
+              if (onBack) onBack();
+            }}
+          />
+          <LinkContactDialog
+            open={linkDialogOpen}
+            onOpenChange={setLinkDialogOpen}
+            senderPhone={senderPhone || contactId}
+            senderName={contact?.name}
+            onSuccess={(id, type) => {
+              setLinkDialogOpen(false);
+              queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
+              queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
+              if (onBack) onBack();
+            }}
+          />
+        </>
       )}
     </div>
   );
