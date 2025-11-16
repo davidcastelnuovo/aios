@@ -38,6 +38,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח נדרש"),
+  contact_name: z.string().optional(),
   agency_id: z.string().min(1, "סוכנות נדרשת"),
   phone: z.string().optional(),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
@@ -157,6 +158,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: client.name || "",
+      contact_name: client.contact_name || "",
       agency_id: client.agency_id || "",
       phone: client.phone || "",
       email: client.email || "",
@@ -212,6 +214,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         .from("clients")
         .update({
           name: values.name,
+          contact_name: values.contact_name || null,
           agency_id: values.agency_id,
           phone: values.phone || null,
           email: values.email || null,
@@ -302,6 +305,20 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{getFieldLabel('name', 'שם הלקוח')} *</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="contact_name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>שם איש קשר</FormLabel>
                   <FormControl>
                     <Input {...field} />
                   </FormControl>

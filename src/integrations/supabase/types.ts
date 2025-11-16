@@ -672,6 +672,7 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id: string
+          contact_name: string | null
           created_at: string
           email: string | null
           folder_link: string | null
@@ -695,6 +696,7 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id: string
+          contact_name?: string | null
           created_at?: string
           email?: string | null
           folder_link?: string | null
@@ -718,6 +720,7 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id?: string
+          contact_name?: string | null
           created_at?: string
           email?: string | null
           folder_link?: string | null
@@ -2231,20 +2234,16 @@ export type Database = {
         Returns: undefined
       }
       get_chat_contacts: {
-        Args: {
-          p_agency_ids: string[]
-          p_limit?: number
-          p_offset?: number
-          p_search_term?: string
-          p_tenant_id: string
-        }
+        Args: never
         Returns: {
           active_chat_provider: Database["public"]["Enums"]["chat_provider"]
           agency_id: string
           agency_name: string
+          contact_id: string
+          contact_name: string
           contact_type: string
           email: string
-          id: string
+          is_blocked: boolean
           last_message_at: string
           manychat_subscriber_id: string
           name: string

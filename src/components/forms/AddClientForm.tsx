@@ -37,6 +37,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח הוא שדה חובה"),
+  contact_name: z.string().optional(),
   agency_id: z.string().min(1, "סוכנות היא שדה חובה"),
   phone: z.string().optional(),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
@@ -75,6 +76,7 @@ export function AddClientForm() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
+      contact_name: "",
       agency_id: "",
       phone: "",
       email: "",
@@ -101,6 +103,7 @@ export function AddClientForm() {
       }
       const { error } = await supabase.from("clients").insert({
         name: values.name,
+        contact_name: values.contact_name || null,
         agency_id: values.agency_id,
         tenant_id: tenantId,
         phone: values.phone || null,
