@@ -408,7 +408,7 @@ export default function Chat() {
       </Card>
 
       {/* Chat View - Full width on mobile when contact selected */}
-      <div className={`${isMobile ? (selectedContact ? 'w-full' : 'hidden') : 'flex-1'} h-full`}>
+      <div className={`${isMobile ? (selectedContact ? 'flex flex-1' : 'hidden') : 'flex-1'} h-full`}>
         {selectedContact ? (
           <ChatView 
             contactId={selectedContact.id} 
