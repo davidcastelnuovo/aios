@@ -273,9 +273,9 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] gap-4 overflow-hidden">
+    <div className="flex h-[calc(100dvh-8rem)] md:h-[calc(100vh-8rem)] gap-4 overflow-hidden">
       {/* Clients List - Hidden on mobile when contact selected */}
-      <Card className={`${isMobile ? (selectedContact ? 'hidden' : 'w-full') : 'w-80'} flex-shrink-0 flex flex-col overflow-hidden`}>
+      <Card className={`${isMobile ? (selectedContact ? 'hidden' : 'w-full') : 'w-80'} flex-shrink-0 flex flex-col overflow-hidden h-full`}>
         <div className="p-4 border-b space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -408,7 +408,7 @@ export default function Chat() {
       </Card>
 
       {/* Chat View - Full width on mobile when contact selected */}
-      <div className={`${isMobile ? (selectedContact ? 'w-full' : 'hidden') : 'flex-1'}`}>
+      <div className={`${isMobile ? (selectedContact ? 'w-full' : 'hidden') : 'flex-1'} h-full`}>
         {selectedContact ? (
           <ChatView 
             contactId={selectedContact.id} 
