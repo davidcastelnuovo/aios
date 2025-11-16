@@ -184,7 +184,7 @@ export default function Chat() {
           }
         }
         
-        if (msg.direction === 'incoming' && !msg.read_at) {
+        if ((msg.direction === 'incoming' || msg.direction === 'inbound') && !msg.read_at) {
           grouped.get(key).unread_count++;
         }
       });
@@ -195,14 +195,17 @@ export default function Chat() {
     enabled: !!tenantId && !debouncedSearch,
   });
 
-  // Calculate today's date string for filtering (YYYY-MM-DD format)
-  const todayDateString = useMemo(() => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+  // Today's local date parts for robust timezone-safe comparison
+  const todayParts = useMemo(() => {
+    const t = new Date();
+    return { y: t.getFullYear(), m: t.getMonth(), d: t.getDate() };
   }, []);
+
+  const isTodayLocal = (iso?: string | null) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    return d.getFullYear() === todayParts.y && d.getMonth() === todayParts.m && d.getDate() === todayParts.d;
+  };
 
   // Filter contacts
   const filteredContacts = useMemo(() => {
@@ -236,11 +239,9 @@ export default function Chat() {
       allContacts = allContacts.filter(contact => contact.contact_type === contactFilter);
     }
 
-    // Apply today filter (compare only date part)
+    // Apply today filter (local timezone)
     if (showTodayOnly) {
-      allContacts = allContacts.filter(contact => 
-        contact.last_message_at && contact.last_message_at.startsWith(todayDateString)
-      );
+      allContacts = allContacts.filter(contact => isTodayLocal(contact.last_message_at));
     }
 
     // Apply agency filter if selected
@@ -249,7 +250,7 @@ export default function Chat() {
     }
 
     return allContacts;
-  }, [contacts, unknownContacts, debouncedSearch, contactFilter, showTodayOnly, selectedAgency, todayDateString]);
+  }, [contacts, unknownContacts, debouncedSearch, contactFilter, showTodayOnly, selectedAgency, todayParts]);
 
   const clientsCount = filteredContacts.filter(c => c.contact_type === 'client').length;
   const leadsCount = filteredContacts.filter(c => c.contact_type === 'lead').length;
