@@ -10,6 +10,7 @@ interface Message {
   direction: 'inbound' | 'outbound';
   message_text: string;
   created_at: string;
+  raw_provider_data?: any;
   profiles?: {
     full_name: string;
   };
@@ -47,11 +48,69 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
     );
   }
 
+  const getMediaContent = (message: Message) => {
+    if (!message.raw_provider_data?.messageData) return null;
+    
+    const messageData = message.raw_provider_data.messageData;
+    const fileData = messageData.fileMessageData;
+    
+    if (!fileData?.downloadUrl) return null;
+
+    const messageType = messageData.typeMessage;
+    
+    if (messageType === 'imageMessage') {
+      return (
+        <img 
+          src={fileData.downloadUrl} 
+          alt="תמונה"
+          className="max-w-full rounded-md mb-2"
+        />
+      );
+    }
+    
+    if (messageType === 'videoMessage') {
+      return (
+        <video 
+          src={fileData.downloadUrl} 
+          controls
+          className="max-w-full rounded-md mb-2"
+        />
+      );
+    }
+    
+    if (messageType === 'audioMessage') {
+      return (
+        <audio 
+          src={fileData.downloadUrl} 
+          controls
+          className="w-full mb-2"
+        />
+      );
+    }
+    
+    if (messageType === 'documentMessage') {
+      return (
+        <a 
+          href={fileData.downloadUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 text-sm underline mb-2"
+        >
+          📄 {fileData.fileName || 'מסמך'}
+        </a>
+      );
+    }
+    
+    return null;
+  };
+
   return (
     <ScrollArea className={`h-full ${isMobile ? 'p-2' : 'p-4'}`} ref={scrollRef}>
       <div className="space-y-4">
         {messages.map((message) => {
           const isOutbound = message.direction === 'outbound';
+          const mediaContent = getMediaContent(message);
+          
           return (
             <div
               key={message.id}
@@ -64,9 +123,12 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
                     : 'bg-muted'
                 }`}
               >
-                <div className="whitespace-pre-wrap break-words" dir="rtl">
-                  {message.message_text}
-                </div>
+                {mediaContent}
+                {message.message_text && (
+                  <div className="whitespace-pre-wrap break-words" dir="rtl">
+                    {message.message_text}
+                  </div>
+                )}
                 <div
                   className={`text-xs mt-1 ${
                     isOutbound ? 'opacity-70' : 'text-muted-foreground'
