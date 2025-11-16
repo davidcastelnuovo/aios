@@ -34,7 +34,10 @@ Deno.serve(async (req) => {
     const messageData = webhookData.messageData;
     const senderData = webhookData.senderData;
     
-    // Extract phone number from chatId (format: 972501234567@c.us)
+    // Check if this is a group chat (format: 120363416882903532@g.us)
+    const isGroup = senderData.chatId.endsWith('@g.us');
+    
+    // Extract phone number from chatId (format: 972501234567@c.us or group ID)
     const phoneNumber = senderData.chatId.split('@')[0];
     
     // Extract message text based on message type
@@ -57,9 +60,94 @@ Deno.serve(async (req) => {
       messageText = `[${messageType}]`;
     }
 
-    console.log('📱 Processing message from:', phoneNumber);
+    console.log('📱 Processing message from:', isGroup ? 'Group ' + phoneNumber : phoneNumber);
 
-    // Find client or lead by phone number
+    // Handle group messages differently
+    if (isGroup) {
+      const groupChatId = senderData.chatId;
+      const groupName = senderData.chatName || `קבוצה ${phoneNumber.slice(-4)}`;
+      
+      console.log('👥 Group message detected:', groupName);
+      
+      // Find active Green API integrations
+      const { data: activeIntegrations } = await supabaseClient
+        .from('tenant_integrations')
+        .select('tenant_id')
+        .eq('integration_type', 'green_api')
+        .eq('is_active', true);
+
+      if (!activeIntegrations || activeIntegrations.length === 0) {
+        console.log('⚠️ No active Green API integrations found');
+        return new Response(JSON.stringify({ received: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const tenantId = activeIntegrations[0].tenant_id;
+
+      // Check if group exists, if not create it
+      const { data: existingGroup } = await supabaseClient
+        .from('whatsapp_groups')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('group_chat_id', groupChatId)
+        .maybeSingle();
+
+      let groupId = existingGroup?.id;
+
+      if (!groupId) {
+        // Create new group
+        const { data: newGroup, error: groupError } = await supabaseClient
+          .from('whatsapp_groups')
+          .insert({
+            tenant_id: tenantId,
+            group_chat_id: groupChatId,
+            group_name: groupName,
+          })
+          .select('id')
+          .single();
+
+        if (groupError) {
+          console.error('❌ Failed to create group:', groupError);
+          throw groupError;
+        }
+
+        groupId = newGroup.id;
+        console.log('✅ Created new group:', groupName);
+      }
+
+      // Save group message
+      const { error: insertError } = await supabaseClient
+        .from('chat_messages')
+        .insert({
+          group_id: groupId,
+          tenant_id: tenantId,
+          message_text: messageText,
+          direction: isOutgoing ? 'outbound' : 'inbound',
+          channel: 'whatsapp',
+          provider: 'green_api',
+          sender_phone: phoneNumber,
+          sender_name: senderData.senderName || null,
+          raw_provider_data: webhookData,
+        });
+
+      if (insertError) {
+        console.error('❌ Failed to save group message:', insertError);
+        throw insertError;
+      }
+
+      console.log('✅ Group message saved successfully');
+
+      return new Response(JSON.stringify({ 
+        success: true,
+        contactType: 'group',
+        groupId: groupId,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Find client or lead by phone number for individual contacts
     // We need to get all tenants that have Green API active and search in them
     const { data: activeIntegrations } = await supabaseClient
       .from('tenant_integrations')
