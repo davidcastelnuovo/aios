@@ -275,137 +275,139 @@ export default function Chat() {
   return (
     <div className="flex h-[calc(100dvh-8rem)] md:h-[calc(100vh-8rem)] gap-4 overflow-hidden">
       {/* Clients List - Hidden on mobile when contact selected */}
-      <Card className={`${isMobile ? (selectedContact ? 'hidden' : 'w-full') : 'w-80'} flex-shrink-0 flex flex-col overflow-hidden h-full`}>
-        <div className="p-4 border-b space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold">אנשי קשר</h3>
-              {unsyncedCount !== undefined && unsyncedCount > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {unsyncedCount} לא מסונכרנים
-                </Badge>
-              )}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              asChild
-            >
-              <Link to={buildPath("/manychat-settings")}>
-                <Settings className="h-4 w-4 ml-2" />
-                הגדרות ManyChat
-              </Link>
-            </Button>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder="חפש לקוח..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          
-          <Select value={syncStatusFilter} onValueChange={(value) => setSyncStatusFilter(value as any)}>
-            <SelectTrigger className="text-right" dir="rtl">
-              <SelectValue placeholder="סטטוס סנכרון" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">הכל</SelectItem>
-              <SelectItem value="synced">מסונכרנים</SelectItem>
-              <SelectItem value="unsynced">לא מסונכרנים</SelectItem>
-            </SelectContent>
-          </Select>
-          
-          <Tabs value={contactFilter} onValueChange={(v) => setContactFilter(v as typeof contactFilter)} className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="all">הכל</TabsTrigger>
-              <TabsTrigger value="clients">לקוחות</TabsTrigger>
-              <TabsTrigger value="leads">לידים</TabsTrigger>
-              <TabsTrigger value="unknown">
-                לא מוגדר
-                {unknownCount > 0 && (
-                  <Badge variant="secondary" className="mr-1 text-xs">{unknownCount}</Badge>
-                )}
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-        <ScrollArea className="flex-1">
-          {isLoading ? (
-            <div className="p-4 text-center text-muted-foreground">טוען...</div>
-          ) : filteredContacts?.length === 0 ? (
-            <div className="p-4 text-center">
-              <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-20" />
-              <p className="text-muted-foreground mb-3">לא נמצאו אנשי קשר</p>
-              <Button variant="outline" size="sm" asChild>
-                <Link to={buildPath("/chat-integrations")}>
-                  <Settings className="h-4 w-4 ml-2" />
-                  הגדרות אינטגרציות
-                </Link>
-              </Button>
-            </div>
-          ) : (
-            <div className="p-2">
-              {filteredContacts?.map((contact) => (
-                <button
-                  key={contact.id}
-                  onClick={() => setSelectedContact({ 
-                    id: contact.id, 
-                    type: contact.contact_type as 'client' | 'lead' | 'unknown',
-                    senderPhone: (contact as any).sender_phone 
-                  })}
-                  className={`w-full text-right p-3 rounded-lg mb-1 transition-colors ${
-                    selectedContact?.id === contact.id
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-accent'
-                  } ${(contact as any).is_blocked ? 'opacity-50' : ''}`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    {contact.unread_count > 0 && (
-                      <Badge variant="destructive" className="shrink-0">
-                        {contact.unread_count}
-                      </Badge>
-                    )}
-                    <div className="flex-1 min-w-0 text-right">
-                      <div className="font-medium truncate mb-1 flex items-center gap-2 justify-end">
-                        {contact.name}
-                        {contact.contact_type === 'unknown' && (
-                          <Badge variant="outline" className="text-xs">לא מוגדר</Badge>
-                        )}
-                        {(contact as any).is_blocked && (
-                          <Badge variant="destructive" className="text-xs">חסום</Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-end gap-1.5 mb-1 flex-wrap">
-                        {contact.active_chat_provider === 'manychat' && !contact.manychat_subscriber_id && (
-                          <Badge variant="secondary" className="text-xs shrink-0">
-                            לא מסונכרן
-                          </Badge>
-                        )}
-                        {contact.active_chat_provider === 'green_api' && !contact.phone && (
-                          <Badge variant="secondary" className="text-xs shrink-0">
-                            חסר טלפון
-                          </Badge>
-                        )}
-                        {contact.contact_type === 'lead' && (
-                          <Badge variant="outline" className="text-xs shrink-0">
-                            ליד
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-sm opacity-70 truncate">
-                        {contact.agency_name}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
-      </Card>
+      {(!isMobile || !selectedContact) && (
+        	<Card className={`${isMobile ? 'w-full' : 'w-80'} flex-shrink-0 flex flex-col overflow-hidden h-full`}>
+        	  <div className="p-4 border-b space-y-3">
+        	    <div className="flex items-center justify-between">
+        	      <div className="flex items-center gap-2">
+        	        <h3 className="font-semibold">אנשי קשר</h3>
+        	        {unsyncedCount !== undefined && unsyncedCount > 0 && (
+        	          <Badge variant="secondary" className="text-xs">
+        	            {unsyncedCount} לא מסונכרנים
+        	          </Badge>
+        	        )}
+        	      </div>
+        	      <Button
+        	        variant="outline"
+        	        size="sm"
+        	        asChild
+        	      >
+        	        <Link to={buildPath("/manychat-settings")}>
+        	          <Settings className="h-4 w-4 ml-2" />
+        	          הגדרות ManyChat
+        	        </Link>
+        	      </Button>
+        	    </div>
+        	    <div className="relative">
+        	      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+        	      <Input
+        	        placeholder="חפש לקוח..."
+        	        value={searchTerm}
+        	        onChange={(e) => setSearchTerm(e.target.value)}
+        	        className="pl-9"
+        	      />
+        	    </div>
+        	    
+        	    <Select value={syncStatusFilter} onValueChange={(value) => setSyncStatusFilter(value as any)}>
+        	      <SelectTrigger className="text-right" dir="rtl">
+        	        <SelectValue placeholder="סטטוס סנכרון" />
+        	      </SelectTrigger>
+        	      <SelectContent>
+        	        <SelectItem value="all">הכל</SelectItem>
+        	        <SelectItem value="synced">מסונכרנים</SelectItem>
+        	        <SelectItem value="unsynced">לא מסונכרנים</SelectItem>
+        	      </SelectContent>
+        	    </Select>
+        	    
+        	    <Tabs value={contactFilter} onValueChange={(v) => setContactFilter(v as typeof contactFilter)} className="w-full">
+        	      <TabsList className="grid w-full grid-cols-4">
+        	        <TabsTrigger value="all">הכל</TabsTrigger>
+        	        <TabsTrigger value="clients">לקוחות</TabsTrigger>
+        	        <TabsTrigger value="leads">לידים</TabsTrigger>
+        	        <TabsTrigger value="unknown">
+        	          לא מוגדר
+        	          {unknownCount > 0 && (
+        	            <Badge variant="secondary" className="mr-1 text-xs">{unknownCount}</Badge>
+        	          )}
+        	        </TabsTrigger>
+        	      </TabsList>
+        	    </Tabs>
+        	  </div>
+        	  <ScrollArea className="flex-1">
+        	    {isLoading ? (
+        	      <div className="p-4 text-center text-muted-foreground">טוען...</div>
+        	    ) : filteredContacts?.length === 0 ? (
+        	      <div className="p-4 text-center">
+        	        <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-20" />
+        	        <p className="text-muted-foreground mb-3">לא נמצאו אנשי קשר</p>
+        	        <Button variant="outline" size="sm" asChild>
+        	          <Link to={buildPath("/chat-integrations")}>
+        	            <Settings className="h-4 w-4 ml-2" />
+        	            הגדרות אינטגרציות
+        	          </Link>
+        	        </Button>
+        	      </div>
+        	    ) : (
+        	      <div className="p-2">
+        	        {filteredContacts?.map((contact) => (
+        	          <button
+        	            key={contact.id}
+        	            onClick={() => setSelectedContact({ 
+        	              id: contact.id, 
+        	              type: contact.contact_type as 'client' | 'lead' | 'unknown',
+        	              senderPhone: (contact as any).sender_phone 
+        	            })}
+        	            className={`w-full text-right p-3 rounded-lg mb-1 transition-colors ${
+        	              selectedContact?.id === contact.id
+        	                ? 'bg-primary text-primary-foreground'
+        	                : 'hover:bg-accent'
+        	            } ${(contact as any).is_blocked ? 'opacity-50' : ''}`}
+        	          >
+        	            <div className="flex items-center justify-between gap-2">
+        	              {contact.unread_count > 0 && (
+        	                <Badge variant="destructive" className="shrink-0">
+        	                  {contact.unread_count}
+        	                </Badge>
+        	              )}
+        	              <div className="flex-1 min-w-0 text-right">
+        	                <div className="font-medium truncate mb-1 flex items-center gap-2 justify-end">
+        	                  {contact.name}
+        	                  {contact.contact_type === 'unknown' && (
+        	                    <Badge variant="outline" className="text-xs">לא מוגדר</Badge>
+        	                  )}
+        	                  {(contact as any).is_blocked && (
+        	                    <Badge variant="destructive" className="text-xs">חסום</Badge>
+        	                  )}
+        	                </div>
+        	                <div className="flex items-center justify-end gap-1.5 mb-1 flex-wrap">
+        	                  {contact.active_chat_provider === 'manychat' && !contact.manychat_subscriber_id && (
+        	                    <Badge variant="secondary" className="text-xs shrink-0">
+        	                      לא מסונכרן
+        	                    </Badge>
+        	                  )}
+        	                  {contact.active_chat_provider === 'green_api' && !contact.phone && (
+        	                    <Badge variant="secondary" className="text-xs shrink-0">
+        	                      חסר טלפון
+        	                    </Badge>
+        	                  )}
+        	                  {contact.contact_type === 'lead' && (
+        	                    <Badge variant="outline" className="text-xs shrink-0">
+        	                      ליד
+        	                    </Badge>
+        	                  )}
+        	                </div>
+        	                <div className="text-sm opacity-70 truncate">
+        	                  {contact.agency_name}
+        	                </div>
+        	              </div>
+        	            </div>
+        	          </button>
+        	        ))}
+        	      </div>
+        	    )}
+        	  </ScrollArea>
+        	</Card>
+      )}
 
       {/* Chat View - Full width on mobile when contact selected */}
       <div className={`${isMobile ? (selectedContact ? 'w-full flex flex-col' : 'hidden') : 'flex-1'} h-full`}>
