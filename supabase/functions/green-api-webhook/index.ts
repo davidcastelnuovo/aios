@@ -20,8 +20,11 @@ Deno.serve(async (req) => {
     console.log('📨 Received Green API webhook:', JSON.stringify(webhookData, null, 2));
 
     // Green API sends different types of webhooks
-    // We're interested in incoming messages
-    if (webhookData.typeWebhook !== 'incomingMessageReceived') {
+    // We're interested in incoming AND outgoing messages
+    const isIncoming = webhookData.typeWebhook === 'incomingMessageReceived';
+    const isOutgoing = webhookData.typeWebhook === 'outgoingMessageReceived';
+    
+    if (!isIncoming && !isOutgoing) {
       console.log('⏭️ Ignoring non-message webhook');
       return new Response(JSON.stringify({ received: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -33,7 +36,26 @@ Deno.serve(async (req) => {
     
     // Extract phone number from chatId (format: 972501234567@c.us)
     const phoneNumber = senderData.chatId.split('@')[0];
-    const messageText = messageData.textMessageData?.textMessage || '';
+    
+    // Extract message text based on message type
+    let messageText = '';
+    const messageType = messageData.typeMessage;
+    
+    if (messageType === 'textMessage') {
+      messageText = messageData.textMessageData?.textMessage || '';
+    } else if (messageType === 'extendedTextMessage') {
+      messageText = messageData.extendedTextMessageData?.text || '';
+    } else if (messageType === 'imageMessage') {
+      messageText = messageData.fileMessageData?.caption || '[תמונה]';
+    } else if (messageType === 'videoMessage') {
+      messageText = messageData.fileMessageData?.caption || '[וידאו]';
+    } else if (messageType === 'audioMessage') {
+      messageText = '[הודעת קול]';
+    } else if (messageType === 'documentMessage') {
+      messageText = messageData.fileMessageData?.caption || `[מסמך: ${messageData.fileMessageData?.fileName || 'קובץ'}]`;
+    } else {
+      messageText = `[${messageType}]`;
+    }
 
     console.log('📱 Processing message from:', phoneNumber);
 
@@ -124,7 +146,7 @@ Deno.serve(async (req) => {
         lead_id: contact && contactType === 'lead' ? contact.id : null,
         tenant_id: tenantId,
         message_text: messageText,
-        direction: 'inbound',
+        direction: isOutgoing ? 'outbound' : 'inbound',
         channel: 'whatsapp',
         provider: 'green_api',
         sender_phone: phoneNumber,
