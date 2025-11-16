@@ -160,21 +160,6 @@ export function ConvertContactDialog({
           .single();
         if (error) throw error;
         
-        // Call edge function to update all messages from this sender
-        const { error: convertError } = await supabase.functions.invoke("convert-unknown-contact", {
-          body: {
-            senderPhone,
-            contactId: data.id,
-            contactType: "client",
-            tenantId,
-          },
-        });
-        
-        if (convertError) {
-          console.error("Failed to convert messages:", convertError);
-          // Don't throw - contact was created successfully
-        }
-        
         return { id: data.id, type: "client" as const };
       } else {
         const leadData = values as LeadFormValues;
@@ -192,21 +177,6 @@ export function ConvertContactDialog({
           .select()
           .single();
         if (error) throw error;
-        
-        // Call edge function to update all messages from this sender
-        const { error: convertError } = await supabase.functions.invoke("convert-unknown-contact", {
-          body: {
-            senderPhone,
-            contactId: data.id,
-            contactType: "lead",
-            tenantId,
-          },
-        });
-        
-        if (convertError) {
-          console.error("Failed to convert messages:", convertError);
-          // Don't throw - lead was created successfully
-        }
         
         return { id: data.id, type: "lead" as const };
       }

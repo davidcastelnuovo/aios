@@ -11,28 +11,11 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Use service role key for backend operations
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization')! },
-        },
-      }
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
-
-    // Verify user authentication
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseClient.auth.getUser();
-
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     const { senderPhone, contactId, contactType, tenantId } = await req.json();
 
