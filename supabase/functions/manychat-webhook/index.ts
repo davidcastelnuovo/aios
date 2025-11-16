@@ -103,8 +103,9 @@ Deno.serve(async (req) => {
       // Not found by subscriber_id, try to find by phone
       console.log('🔍 Client not found by subscriber_id, trying phone matching...');
       
-      const phone = subscriber.phone || 
+      const phone = subscriber.full_contact?.whatsapp_phone || 
                     subscriber.whatsapp_phone || 
+                    subscriber.phone || 
                     payload.phone;
       
       if (phone) {
