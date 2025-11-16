@@ -16,12 +16,14 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageCircle, Search, Settings, Loader2 } from "lucide-react";
+import { MessageCircle, Search, Settings, Loader2, Pencil } from "lucide-react";
 import ChatView from "@/components/chat/ChatView";
+import { EditClientDialog } from "@/components/forms/EditClientDialog";
 
 interface Contact {
   id: string;
   name: string;
+  contact_name: string | null;
   phone: string | null;
   email: string | null;
   agency_id: string | null;
@@ -62,6 +64,7 @@ export default function Chat() {
   );
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(0);
+  const [editingClient, setEditingClient] = useState<any>(null);
   const CONTACTS_PER_PAGE = 50;
 
   // Count unsynced clients
@@ -94,41 +97,9 @@ export default function Chat() {
 
       console.time('⏱️ Chat contacts query');
 
-      // Get all accessible agency IDs (owned + shared)
-      const { data: ownedAgencies } = await supabase
-        .from('agencies')
-        .select('id')
-        .eq('tenant_id', tenantId);
-
-      const { data: sharedAgencies } = await supabase
-        .from('agency_tenant_access')
-        .select('agency_id')
-        .eq('accessing_tenant_id', tenantId);
-
-      const allAgencyIds = [
-        ...(ownedAgencies || []).map(a => a.id),
-        ...(sharedAgencies || []).map(a => a.agency_id)
-      ];
-
-      if (allAgencyIds.length === 0) {
-        console.timeEnd('⏱️ Chat contacts query');
-        return [];
-      }
-
-      // Filter agencies based on global selection
-      let filteredAgencyIds = allAgencyIds;
-      if (selectedAgency !== "all") {
-        filteredAgencyIds = allAgencyIds.filter(id => id === selectedAgency);
-      }
-
-      // Call optimized database function for known contacts
-      const { data, error } = await supabase.rpc('get_chat_contacts', {
-        p_tenant_id: tenantId,
-        p_agency_ids: filteredAgencyIds,
-        p_search_term: debouncedSearch || null,
-        p_limit: CONTACTS_PER_PAGE,
-        p_offset: page * CONTACTS_PER_PAGE
-      });
+      // Call the RPC function without parameters
+      const { data, error } = await supabase
+        .rpc('get_chat_contacts');
 
       console.timeEnd('⏱️ Chat contacts query');
 
@@ -138,9 +109,24 @@ export default function Chat() {
       }
 
       // Update hasMore flag
-      setHasMore((data || []).length === CONTACTS_PER_PAGE);
+      setHasMore(false); // No pagination for now
 
-      return data || [];
+      return (data || []).map((row: any) => ({
+        id: row.contact_id || `unknown-${row.phone}`,
+        name: row.name,
+        contact_name: row.contact_name,
+        phone: row.phone,
+        email: row.email,
+        agency_id: row.agency_id,
+        agency_name: row.agency_name,
+        manychat_subscriber_id: row.manychat_subscriber_id,
+        active_chat_provider: row.active_chat_provider,
+        unread_count: row.unread_count || 0,
+        contact_type: row.contact_type,
+        last_message_at: row.last_message_at,
+        is_blocked: row.is_blocked || false,
+        sender_phone: row.phone,
+      }));
     },
     enabled: !!tenantId,
     staleTime: 30000, // 30 seconds
@@ -426,6 +412,16 @@ export default function Chat() {
           </Card>
         )}
       </div>
+      
+      {editingClient && (
+        <EditClientDialog
+          client={editingClient}
+          open={!!editingClient}
+          onOpenChange={(open) => {
+            if (!open) setEditingClient(null);
+          }}
+        />
+      )}
     </div>
   );
 }
