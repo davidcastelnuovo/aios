@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { ConvertContactDialog } from "./ConvertContactDialog";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface Message {
   id: string;
@@ -29,6 +30,7 @@ interface ChatViewProps {
 
 export default function ChatView({ contactId, contactType, senderPhone, onBack }: ChatViewProps) {
   const queryClient = useQueryClient();
+  const { tenant: currentTenant } = useCurrentTenant();
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [convertType, setConvertType] = useState<"client" | "lead">("client");
 
@@ -71,22 +73,24 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
     enabled: !!contactId,
   });
 
-  // Fetch active chat provider
+  // Fetch active chat provider - use currentTenant for unknown contacts
+  const tenantIdForProvider = contactType === "unknown" ? currentTenant?.id : contact?.tenant_id;
+  
   const { data: activeProvider } = useQuery({
-    queryKey: ["active-chat-provider", contact?.tenant_id],
+    queryKey: ["active-chat-provider", tenantIdForProvider],
     queryFn: async () => {
-      if (!contact?.tenant_id) return null;
+      if (!tenantIdForProvider) return null;
       const { data, error } = await supabase
         .from("tenant_integrations")
         .select("integration_type")
-        .eq("tenant_id", contact.tenant_id)
+        .eq("tenant_id", tenantIdForProvider)
         .eq("is_active", true)
         .in("integration_type", ["manychat", "green_api"])
         .single();
       if (error) return null;
       return data?.integration_type as "manychat" | "green_api" | null;
     },
-    enabled: !!contact?.tenant_id,
+    enabled: !!tenantIdForProvider,
   });
 
   // Mark messages as read mutation
