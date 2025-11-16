@@ -11,6 +11,7 @@ interface Message {
   direction: 'inbound' | 'outbound';
   message_text: string;
   created_at: string;
+  sender_name?: string | null;
   raw_provider_data?: any;
   profiles?: {
     full_name: string;
@@ -160,6 +161,11 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
                     : 'bg-muted'
                 } relative`}
               >
+                {!isOutbound && message.sender_name && (
+                  <div className="font-semibold text-xs mb-1 opacity-90">
+                    {message.sender_name}
+                  </div>
+                )}
                 {quotedMessage}
                 {reactionEmoji}
                 {mediaContent}
