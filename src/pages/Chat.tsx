@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { MessageCircle, Search, Settings, Loader2, Pencil } from "lucide-react";
 import ChatView from "@/components/chat/ChatView";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
+import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 
 interface Contact {
   id: string;
@@ -35,6 +36,7 @@ interface Contact {
   last_message_at: string | null;
   sender_phone?: string;
   is_blocked?: boolean;
+  has_messages?: boolean;
 }
 // Normalize phone for comparison: strip non-digits and standardize to local part
 const normalizePhone = (phone?: string | null) => {
@@ -57,15 +59,11 @@ export default function Chat() {
   const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
-  const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups" | "unknown">("all");
-  const [syncStatusFilter, setSyncStatusFilter] = useState<"all" | "synced" | "unsynced">("all");
+  const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups">("all");
   const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown'; senderPhone?: string } | null>(
     clientId ? { id: clientId, type: 'client' } : null
   );
-  const [hasMore, setHasMore] = useState(true);
-  const [page, setPage] = useState(0);
-  const [editingClient, setEditingClient] = useState<any>(null);
-  const CONTACTS_PER_PAGE = 50;
+  const [editingContact, setEditingContact] = useState<{ id: string; type: 'client' | 'lead'; data: any } | null>(null);
 
   // Count unsynced clients
   const { data: unsyncedCount } = useQuery({
@@ -84,12 +82,10 @@ export default function Chat() {
     enabled: !!tenantId,
   });
 
-  // Fetch contacts using optimized database function
-  const { data: contacts, isLoading, isFetching } = useQuery({
-    queryKey: ['chat-contacts', tenantId, userAgencyIds, debouncedSearch, page, selectedAgency],
+  // Fetch active chats (default mode - no search)
+  const { data: activeChats, isLoading: activeChatsLoading } = useQuery({
+    queryKey: ['active-chats', tenantId, userAgencyIds, selectedAgency],
     queryFn: async () => {
-      console.log('🔍 Fetching contacts - tenantId:', tenantId, 'userAgencyIds:', userAgencyIds, 'selectedAgency:', selectedAgency);
-      
       if (!tenantId) {
         console.warn('⚠️ Contacts query skipped - missing tenantId');
         return [];
