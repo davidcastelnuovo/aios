@@ -56,7 +56,7 @@ export default function Chat() {
   const isMobile = useIsMobile();
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
-  const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups">("all");
+  const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups" | "unknown">("all");
   const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown'; senderPhone?: string } | null>(
     clientId ? { id: clientId, type: 'client' } : null
   );
@@ -235,6 +235,7 @@ export default function Chat() {
   const clientsCount = filteredContacts.filter(c => c.contact_type === 'client').length;
   const leadsCount = filteredContacts.filter(c => c.contact_type === 'lead').length;
   const groupsCount = filteredContacts.filter(c => c.contact_type === 'group').length;
+  const unknownCount = filteredContacts.filter(c => c.contact_type === 'unknown').length;
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
@@ -304,20 +305,23 @@ export default function Chat() {
 
           <Tabs value={contactFilter} onValueChange={(value: any) => setContactFilter(value)}>
             <div className="space-y-2">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="all">
-                  הכל ({filteredContacts.length})
-                </TabsTrigger>
-                <TabsTrigger value="clients">
-                  לקוחות ({clientsCount})
-                </TabsTrigger>
-                <TabsTrigger value="leads">
-                  לידים ({leadsCount})
-                </TabsTrigger>
-                <TabsTrigger value="groups">
-                  קבוצות ({groupsCount})
-                </TabsTrigger>
-              </TabsList>
+            <TabsList className="grid w-full grid-cols-5">
+              <TabsTrigger value="all">
+                הכל ({filteredContacts.length})
+              </TabsTrigger>
+              <TabsTrigger value="clients">
+                לקוחות ({clientsCount})
+              </TabsTrigger>
+              <TabsTrigger value="leads">
+                לידים ({leadsCount})
+              </TabsTrigger>
+              <TabsTrigger value="groups">
+                קבוצות ({groupsCount})
+              </TabsTrigger>
+              <TabsTrigger value="unknown">
+                לא משויכים ({unknownCount})
+              </TabsTrigger>
+            </TabsList>
             </div>
           </Tabs>
 
