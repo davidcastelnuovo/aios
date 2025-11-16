@@ -27,7 +27,7 @@ interface Message {
 
 interface ChatViewProps {
   contactId: string;
-  contactType: "client" | "lead" | "unknown";
+  contactType: "client" | "lead" | "group" | "unknown";
   senderPhone?: string;
   onBack?: () => void;
 }
@@ -66,7 +66,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
           .single();
         if (error) throw error;
         return data;
-      } else {
+      } else if (contactType === "lead") {
         const { data, error } = await supabase
           .from("leads")
           .select(`id, company_name, phone, email, agency_id, tenant_id, manychat_subscriber_id, active_chat_provider, agencies (name)`)
@@ -74,6 +74,21 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
           .single();
         if (error) throw error;
         return { ...data, name: data.company_name };
+      } else if (contactType === "group") {
+        const { data, error } = await supabase
+          .from("whatsapp_groups")
+          .select(`id, group_name, group_chat_id, agency_id, tenant_id, agencies (name)`)
+          .eq("id", contactId)
+          .single();
+        if (error) throw error;
+        return { 
+          ...data, 
+          name: data.group_name,
+          phone: null,
+          email: null,
+          manychat_subscriber_id: null,
+          active_chat_provider: 'green_api' as const
+        };
       }
     },
     enabled: !!contactId,
@@ -112,7 +127,11 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
           .is("read_at", null);
         if (error) throw error;
       } else {
-        const filter = contactType === "client" ? { client_id: contactId } : { lead_id: contactId };
+        const filter = contactType === "client" 
+          ? { client_id: contactId } 
+          : contactType === "lead" 
+          ? { lead_id: contactId }
+          : { group_id: contactId };
         const { error } = await supabase
           .from("chat_messages")
           .update({ read_at: new Date().toISOString() })
@@ -196,7 +215,11 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
         return data;
       }
 
-      const filter = contactType === "client" ? { client_id: contactId } : { lead_id: contactId };
+      const filter = contactType === "client" 
+        ? { client_id: contactId } 
+        : contactType === "lead" 
+        ? { lead_id: contactId }
+        : { group_id: contactId };
 
       const { data, error } = await supabase
         .from("chat_messages")
@@ -244,6 +267,11 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
 
       // Validate required contact details
       if (activeProvider === 'manychat') {
+        if (contactType === 'group') {
+          toast.error("קבוצות לא נתמכות ב-ManyChat");
+          return;
+        }
+        
         if (!contact.manychat_subscriber_id) {
           toast.error("חסר Subscriber ID למניצ'אט. אנא הוסף ב-ManyChat Settings.");
           return;
@@ -260,14 +288,16 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
 
         if (error) throw error;
       } else if (activeProvider === 'green_api') {
-        if (!contact.phone) {
+        if (!contact.phone && contactType !== 'group') {
           toast.error("חסר מספר טלפון ל-Green API. אנא הוסף באיש הקשר.");
           return;
         }
 
         const { error } = await supabase.functions.invoke("send-green-api-message", {
           body: {
-            [contactType === "client" ? "clientId" : "leadId"]: contactId,
+            ...(contactType === "client" ? { clientId: contactId } 
+              : contactType === "lead" ? { leadId: contactId }
+              : { groupId: contactId }),
             message,
             phoneNumber: contact.phone,
             provider: "green_api",
