@@ -162,7 +162,7 @@ export default function Chat() {
 
       const { data, error } = await supabase
         .from('chat_messages')
-        .select('sender_phone, provider, created_at, direction, read_at, is_blocked')
+        .select('sender_phone, sender_name, provider, created_at, direction, read_at, is_blocked, raw_provider_data')
         .eq('tenant_id', tenantId)
         .is('client_id', null)
         .is('lead_id', null)
@@ -175,31 +175,83 @@ export default function Chat() {
       }
 
       const grouped = new Map<string, any>();
+      const groupedByWid = new Map<string, any>();
+      
       data.forEach(msg => {
-        const key = normalizePhone(msg.sender_phone);
-        if (!key) return;
+        // Check if this is a group message
+        const rawData = msg.raw_provider_data as any;
+        const wid = rawData?.instanceData?.wid || rawData?.messageData?.chatId;
+        const isGroup = wid && (typeof wid === 'string' && (wid.endsWith('@g.us') || wid.includes('@g.us')));
         
-        if (!grouped.has(key)) {
-          grouped.set(key, {
-            sender_phone: msg.sender_phone,
-            active_chat_provider: msg.provider,
-            last_message_at: msg.created_at,
-            unread_count: 0,
-            is_blocked: msg.is_blocked,
-          });
-        } else {
-          const existing = grouped.get(key);
-          if (new Date(msg.created_at) > new Date(existing.last_message_at)) {
-            existing.last_message_at = msg.created_at;
+        if (isGroup) {
+          // Group message
+          if (!groupedByWid.has(wid)) {
+            const groupName = rawData?.instanceData?.chatName || 
+                            msg.sender_name || 
+                            'קבוצת WhatsApp';
+            groupedByWid.set(wid, {
+              id: wid,
+              name: groupName,
+              sender_phone: wid,
+              active_chat_provider: msg.provider,
+              last_message_at: msg.created_at,
+              unread_count: 0,
+              is_blocked: msg.is_blocked,
+              contact_type: 'group' as const,
+              is_group: true,
+              raw_data: msg.raw_provider_data,
+            });
+          } else {
+            const existing = groupedByWid.get(wid);
+            if (new Date(msg.created_at) > new Date(existing.last_message_at)) {
+              existing.last_message_at = msg.created_at;
+            }
           }
-        }
-        
-        if ((msg.direction === 'incoming' || msg.direction === 'inbound') && !msg.read_at) {
-          grouped.get(key).unread_count++;
+          
+          if ((msg.direction === 'incoming' || msg.direction === 'inbound') && !msg.read_at) {
+            groupedByWid.get(wid).unread_count++;
+          }
+        } else {
+          // Regular phone message
+          const key = normalizePhone(msg.sender_phone);
+          if (!key) return;
+          
+          if (!grouped.has(key)) {
+            grouped.set(key, {
+              name: msg.sender_name || msg.sender_phone,
+              sender_phone: msg.sender_phone,
+              active_chat_provider: msg.provider,
+              last_message_at: msg.created_at,
+              unread_count: 0,
+              is_blocked: msg.is_blocked,
+              contact_type: 'unknown' as const,
+            });
+          } else {
+            const existing = grouped.get(key);
+            if (new Date(msg.created_at) > new Date(existing.last_message_at)) {
+              existing.last_message_at = msg.created_at;
+              // Update name if newer message has one
+              if (msg.sender_name) {
+                existing.name = msg.sender_name;
+              }
+            }
+          }
+          
+          if ((msg.direction === 'incoming' || msg.direction === 'inbound') && !msg.read_at) {
+            grouped.get(key).unread_count++;
+          }
         }
       });
 
-      const unknownContactsData = Array.from(grouped.values());
+      // Merge groups and unknown contacts
+      const unknownContactsData = [
+        ...Array.from(groupedByWid.values()),
+        ...Array.from(grouped.values())
+      ];
+      
+      console.log('🔍 Found unknown contacts:', unknownContactsData.length, 
+                  '(Groups:', groupedByWid.size, 'Unknown:', grouped.size, ')');
+      
       return unknownContactsData;
     },
     enabled: !!tenantId && !debouncedSearch,

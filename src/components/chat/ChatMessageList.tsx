@@ -1,10 +1,19 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { Loader2 } from "lucide-react";
+import { Loader2, MoreVertical, Copy, CheckSquare } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import CustomAudioPlayer from "./CustomAudioPlayer";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { ConvertMessageToTaskDialog } from "./ConvertMessageToTaskDialog";
+import { toast } from "sonner";
 
 interface Message {
   id: string;
@@ -21,11 +30,32 @@ interface Message {
 interface ChatMessageListProps {
   messages: Message[];
   isLoading: boolean;
+  contactId?: string;
+  contactType?: 'client' | 'lead' | 'group';
+  agencyId?: string;
 }
 
-export default function ChatMessageList({ messages, isLoading }: ChatMessageListProps) {
+export default function ChatMessageList({ 
+  messages, 
+  isLoading,
+  contactId,
+  contactType,
+  agencyId,
+}: ChatMessageListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
+  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [showTaskDialog, setShowTaskDialog] = useState(false);
+
+  const handleCopyMessage = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("הועתק ללוח");
+  };
+
+  const handleConvertToTask = (message: Message) => {
+    setSelectedMessage(message);
+    setShowTaskDialog(true);
+  };
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -152,7 +182,7 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
           return (
             <div
               key={message.id}
-              className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
+              className={`flex ${isOutbound ? 'justify-end' : 'justify-start'} group`}
             >
               <div
                 className={`${isMobile ? 'max-w-[85%]' : 'max-w-[70%]'} rounded-lg ${isMobile ? 'px-3 py-1.5' : 'px-4 py-2'} ${
@@ -175,13 +205,38 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
                   </div>
                 )}
                 <div
-                  className={`text-xs mt-1 ${
+                  className={`text-xs mt-1 flex items-center justify-between gap-2 ${
                     isOutbound ? 'opacity-70' : 'text-muted-foreground'
                   }`}
                 >
-                  {format(new Date(message.created_at), 'HH:mm', { locale: he })}
-                  {isOutbound && message.profiles && (
-                    <span className="mr-2">• {message.profiles.full_name}</span>
+                  <span>
+                    {format(new Date(message.created_at), 'HH:mm', { locale: he })}
+                    {isOutbound && message.profiles && (
+                      <span className="mr-2">• {message.profiles.full_name}</span>
+                    )}
+                  </span>
+                  {message.message_text && !reactionEmoji && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <MoreVertical className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleCopyMessage(message.message_text)}>
+                          <Copy className="ml-2 h-4 w-4" />
+                          העתק
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleConvertToTask(message)}>
+                          <CheckSquare className="ml-2 h-4 w-4" />
+                          המר למשימה
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   )}
                 </div>
               </div>
@@ -189,6 +244,17 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
           );
         })}
       </div>
+      
+      {selectedMessage && (
+        <ConvertMessageToTaskDialog
+          open={showTaskDialog}
+          onOpenChange={setShowTaskDialog}
+          messageText={selectedMessage.message_text}
+          contactId={contactId}
+          contactType={contactType}
+          agencyId={agencyId}
+        />
+      )}
     </ScrollArea>
   );
 }
