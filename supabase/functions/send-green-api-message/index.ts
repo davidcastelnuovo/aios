@@ -94,18 +94,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get Green API integration
+    // Get Green API integration for current user
     const { data: integration } = await supabaseClient
       .from('tenant_integrations')
       .select('*')
       .eq('tenant_id', tenantId)
+      .eq('user_id', user.id)
       .eq('integration_type', 'green_api')
       .eq('is_active', true)
       .maybeSingle();
 
     if (!integration?.api_key || !integration?.settings?.instance_id) {
-      console.error('Green API integration not configured');
-      return new Response(JSON.stringify({ error: 'Green API not configured' }), {
+      console.error('Green API integration not configured for user:', user.id);
+      return new Response(JSON.stringify({ error: 'Green API not configured for your account. Please set up your connection in Settings.' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -176,6 +177,7 @@ Deno.serve(async (req) => {
         lead_id: leadId || null,
         group_id: groupId || null,
         tenant_id: tenantId,
+        connection_user_id: user.id,
         message_text: message,
         direction: 'outbound',
         channel: 'whatsapp',

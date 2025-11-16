@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,24 +13,46 @@ import { toast } from "sonner";
 
 export default function ChatIntegrations() {
   const { tenantId } = useCurrentTenant();
+  const { userId } = useCurrentUser();
   const { buildPath } = useTenantPath();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // Fetch integration status
-  const { data: integrations } = useQuery({
-    queryKey: ['chat-integrations', tenantId],
+  // Fetch ManyChat integration (organization-level)
+  const { data: manychatIntegration } = useQuery({
+    queryKey: ['integration-manychat', tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('tenant_integrations')
         .select('*')
         .eq('tenant_id', tenantId)
-        .in('integration_type', ['manychat', 'green_api']);
+        .eq('integration_type', 'manychat')
+        .maybeSingle();
 
       if (error) throw error;
-      return data || [];
+      return data;
     },
     enabled: !!tenantId,
+  });
+
+  // Fetch Green API integration (user-specific)
+  const { data: greenApiIntegration } = useQuery({
+    queryKey: ['integration-green-api', tenantId, userId],
+    queryFn: async () => {
+      if (!userId) return null;
+      
+      const { data, error } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('user_id', userId)
+        .eq('integration_type', 'green_api')
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId && !!userId,
   });
 
   // Toggle provider mutation
@@ -37,45 +60,67 @@ export default function ChatIntegrations() {
     mutationFn: async ({ providerId, isActive }: { providerId: string; isActive: boolean }) => {
       if (!tenantId) throw new Error('No tenant');
 
+      // For Green API: user-specific connection
+      if (providerId === 'green_api') {
+        if (!userId) throw new Error('User not authenticated');
+        
+        const integration = greenApiIntegration;
+        if (!integration) {
+          throw new Error('אין חיבור Green API. יש להגדיר חיבור תחילה.');
+        }
+
+        const { error } = await supabase
+          .from('tenant_integrations')
+          .update({ is_active: isActive })
+          .eq('id', integration.id)
+          .eq('user_id', userId);
+
+        if (error) throw error;
+        return;
+      }
+
+      // For ManyChat: organization-level
       if (isActive) {
-        // First, deactivate all other providers
+        // Deactivate all other organization-level providers
         await supabase
           .from('tenant_integrations')
           .update({ is_active: false })
           .eq('tenant_id', tenantId)
-          .neq('integration_type', providerId);
+          .eq('integration_type', 'manychat');
 
         // Then activate the selected provider
-        const { error } = await supabase
-          .from('tenant_integrations')
-          .update({ is_active: true })
-          .eq('tenant_id', tenantId)
-          .eq('integration_type', providerId);
+        const integration = manychatIntegration;
+        if (integration) {
+          const { error } = await supabase
+            .from('tenant_integrations')
+            .update({ is_active: true })
+            .eq('id', integration.id);
 
-        if (error) throw error;
+          if (error) throw error;
+        }
       } else {
         // Deactivate the provider
-        const { error } = await supabase
-          .from('tenant_integrations')
-          .update({ is_active: false })
-          .eq('tenant_id', tenantId)
-          .eq('integration_type', providerId);
+        const integration = manychatIntegration;
+        if (integration) {
+          const { error } = await supabase
+            .from('tenant_integrations')
+            .update({ is_active: false })
+            .eq('id', integration.id);
 
-        if (error) throw error;
+          if (error) throw error;
+        }
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-integrations', tenantId] });
-      toast.success('סטטוס אינטגרציה עודכן');
+      queryClient.invalidateQueries({ queryKey: ['integration-manychat', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['integration-green-api', tenantId, userId] });
+      toast.success('סטטוס חיבור עודכן');
     },
     onError: (error: any) => {
       console.error('Toggle error:', error);
       toast.error('שגיאה בעדכון סטטוס האינטגרציה');
     },
   });
-
-  const manychatIntegration = integrations?.find(i => i.integration_type === 'manychat');
-  const greenApiIntegration = integrations?.find(i => i.integration_type === 'green_api');
 
   const providers = [
     {
@@ -97,8 +142,8 @@ export default function ChatIntegrations() {
     },
     {
       id: 'green_api',
-      name: 'Green API',
-      description: 'אינטגרציה ישירה ל-WhatsApp Business עם API פשוט ומהיר',
+      name: 'Green API (אישי)',
+      description: 'חבר את חשבון Green API האישי שלך. כל משתמש מחבר את החשבון שלו באופן עצמאי.',
       icon: Webhook,
       color: 'from-green-500 to-green-600',
       features: [

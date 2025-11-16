@@ -31,10 +31,10 @@ Deno.serve(async (req) => {
 
     console.log('🔑 Instance ID:', instanceId);
 
-    // Find the specific tenant for this instance
+    // Find the specific tenant and user for this instance
     const { data: integration, error: integrationError } = await supabaseClient
       .from('tenant_integrations')
-      .select('tenant_id, settings')
+      .select('tenant_id, user_id, settings')
       .eq('integration_type', 'green_api')
       .eq('is_active', true)
       .eq('instance_id', instanceId)
@@ -57,7 +57,9 @@ Deno.serve(async (req) => {
     }
 
     const tenantId = integration.tenant_id;
+    const connectionUserId = integration.user_id;
     console.log('✅ Identified tenant:', tenantId);
+    console.log('✅ Connection owner (user_id):', connectionUserId);
 
     // Green API sends different types of webhooks
     // We're interested in incoming AND outgoing messages
@@ -146,6 +148,7 @@ Deno.serve(async (req) => {
         .insert({
           group_id: groupId,
           tenant_id: tenantId,
+          connection_user_id: connectionUserId,
           message_text: messageText,
           direction: isOutgoing ? 'outbound' : 'inbound',
           channel: 'whatsapp',
