@@ -47,9 +47,13 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
       </div>
     );
   }
+  // Detect placeholder texts like [quotedMessage], [reactionMessage], [הודעת קול]
+  const isPlaceholder = (text?: string) => !!text && /^\s*\[[^\]]+\]\s*$/.test(text);
 
   const getQuotedMessage = (message: Message) => {
-    const quotedMessage = message.raw_provider_data?.messageData?.quotedMessage;
+    const quotedMessage =
+      message.raw_provider_data?.messageData?.quotedMessage ||
+      message.raw_provider_data?.messageData?.extendedTextMessageData?.quotedMessage;
     if (!quotedMessage) return null;
 
     return (
@@ -161,7 +165,7 @@ export default function ChatMessageList({ messages, isLoading }: ChatMessageList
                 {quotedMessage}
                 {reactionEmoji}
                 {mediaContent}
-                {message.message_text && !reactionEmoji && (
+                {message.message_text && !reactionEmoji && !quotedMessage && !isPlaceholder(message.message_text) && (
                   <div className="whitespace-pre-wrap break-words" dir="rtl">
                     {message.message_text}
                   </div>
