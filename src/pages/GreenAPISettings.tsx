@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { ArrowRight, Webhook, Key, CheckCircle2, AlertCircle, Copy, ExternalLink
 
 export default function GreenAPISettings() {
   const { tenantId } = useCurrentTenant();
+  const { userId } = useCurrentUser();
   const { buildPath } = useTenantPath();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -23,14 +25,17 @@ export default function GreenAPISettings() {
   const [instanceId, setInstanceId] = useState("");
   const [apiToken, setApiToken] = useState("");
 
-  // Fetch existing integration
+  // Fetch existing integration for current user
   const { data: integration, isLoading } = useQuery({
-    queryKey: ['green-api-integration', tenantId],
+    queryKey: ['green-api-integration', tenantId, userId],
     queryFn: async () => {
+      if (!tenantId || !userId) return null;
+      
       const { data, error } = await supabase
         .from('tenant_integrations')
         .select('*')
         .eq('tenant_id', tenantId)
+        .eq('user_id', userId)
         .eq('integration_type', 'green_api')
         .maybeSingle();
 
@@ -43,7 +48,7 @@ export default function GreenAPISettings() {
 
       return data;
     },
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!userId,
   });
 
   // Save integration mutation
@@ -52,12 +57,17 @@ export default function GreenAPISettings() {
       if (!instanceId || !apiToken) {
         throw new Error("נא למלא את כל השדות");
       }
+      if (!userId) {
+        throw new Error("משתמש לא מחובר");
+      }
 
       const integrationData = {
         tenant_id: tenantId,
+        user_id: userId,
         integration_type: 'green_api',
         api_key: apiToken,
         instance_id: instanceId,
+        is_active: true,
         api_token_last_4: apiToken.slice(-4),
         settings: {
           instance_id: instanceId,
@@ -81,10 +91,10 @@ export default function GreenAPISettings() {
     },
     onSuccess: () => {
       toast({
-        title: "הגדרות נשמרו בהצלחה",
-        description: "האינטגרציה עם Green API מוכנה לשימוש",
+        title: "החיבור שלך נשמר בהצלחה",
+        description: "כעת תוכל לשלוח ולקבל הודעות דרך חשבון Green API שלך",
       });
-      queryClient.invalidateQueries({ queryKey: ['green-api-integration', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['green-api-integration', tenantId, userId] });
       queryClient.invalidateQueries({ queryKey: ['chat-integrations', tenantId] });
     },
     onError: (error: Error) => {

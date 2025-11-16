@@ -365,6 +365,7 @@ export type Database = {
           blocked_by_user_id: string | null
           channel: string
           client_id: string | null
+          connection_user_id: string | null
           created_at: string | null
           direction: string
           group_id: string | null
@@ -386,6 +387,7 @@ export type Database = {
           blocked_by_user_id?: string | null
           channel?: string
           client_id?: string | null
+          connection_user_id?: string | null
           created_at?: string | null
           direction: string
           group_id?: string | null
@@ -407,6 +409,7 @@ export type Database = {
           blocked_by_user_id?: string | null
           channel?: string
           client_id?: string | null
+          connection_user_id?: string | null
           created_at?: string | null
           direction?: string
           group_id?: string | null
@@ -1808,6 +1811,7 @@ export type Database = {
           settings: Json | null
           tenant_id: string
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           api_key?: string | null
@@ -1823,6 +1827,7 @@ export type Database = {
           settings?: Json | null
           tenant_id: string
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           api_key?: string | null
@@ -1838,6 +1843,7 @@ export type Database = {
           settings?: Json | null
           tenant_id?: string
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
