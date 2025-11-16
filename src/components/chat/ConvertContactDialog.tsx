@@ -183,20 +183,21 @@ export function ConvertContactDialog({
       } else {
         toast.success(
           type === "client"
-            ? `${terms.client.singular} נוצר בהצלחה!`
-            : `${terms.lead.singular} נוצר בהצלחה!`
+            ? `${terms?.client?.singular || "לקוח"} נוצר בהצלחה!`
+            : `${terms?.lead?.singular || "ליד"} נוצר בהצלחה!`
         );
       }
 
       queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
       queryClient.invalidateQueries({ queryKey: ["chat-messages"] });
+      queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
       onOpenChange(false);
       onSuccess(result.id, result.type);
     },
     onError: (error: any) => {
       console.error("Failed to create contact:", error);
       toast.error(
-        error.message || `שגיאה ביצירת ${type === "client" ? terms.client.singular : terms.lead.singular}`
+        error.message || `שגיאה ביצירת ${type === "client" ? terms?.client?.singular || "לקוח" : terms?.lead?.singular || "ליד"}`
       );
     },
   });
@@ -210,10 +211,10 @@ export function ConvertContactDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {type === "client" ? `המר ל${terms.client.singular}` : `המר ל${terms.lead.singular}`}
+            {type === "client" ? `המר ל${terms?.client?.singular || "לקוח"}` : `המר ל${terms?.lead?.singular || "ליד"}`}
           </DialogTitle>
           <DialogDescription>
-            מלא את הפרטים כדי להמיר את איש הקשר ל{type === "client" ? terms.client.singular : terms.lead.singular}
+            מלא את הפרטים כדי להמיר את איש הקשר ל{type === "client" ? terms?.client?.singular || "לקוח" : terms?.lead?.singular || "ליד"}
           </DialogDescription>
         </DialogHeader>
 
