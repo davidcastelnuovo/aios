@@ -22,6 +22,7 @@ interface Message {
   direction: "inbound" | "outbound";
   message_text: string;
   created_at: string;
+  sender_name?: string | null;
   raw_provider_data?: any;
 }
 
@@ -245,6 +246,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
       direction: msg.direction as "inbound" | "outbound",
       message_text: msg.message_text,
       created_at: msg.created_at || "",
+      sender_name: msg.sender_name,
       raw_provider_data: msg.raw_provider_data,
     })) || [];
 
