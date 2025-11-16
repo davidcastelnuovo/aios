@@ -170,8 +170,22 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
 
   // Fetch chat messages
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
-    queryKey: ["chat-messages", contactId, contactType],
+    queryKey: ["chat-messages", contactId, contactType, senderPhone],
     queryFn: async () => {
+      if (contactType === "unknown") {
+        const { data, error } = await supabase
+          .from("chat_messages")
+          .select("*")
+          .eq("sender_phone", senderPhone || contactId)
+          .order("created_at", { ascending: true });
+
+        if (error) throw error;
+
+        // Mark as read automatically for unknown contacts
+        markAsReadMutation.mutate();
+        return data;
+      }
+
       const filter = contactType === "client" ? { client_id: contactId } : { lead_id: contactId };
 
       const { data, error } = await supabase
