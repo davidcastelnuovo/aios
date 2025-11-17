@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    console.log('Webhook lead intake received')
+    console.log('🔔 Webhook lead intake received')
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
 
     // Parse incoming data
     const payload: LeadPayload = await req.json()
-    console.log('Received payload:', payload)
+    console.log('📦 Received payload:', JSON.stringify(payload, null, 2))
 
     // No required fields - accept all leads even with empty fields
 
@@ -44,6 +44,8 @@ Deno.serve(async (req) => {
     let tenantId: string | null = null
     
     if (!agencyId) {
+      console.log('🔍 No agency_id provided, searching for "promo" agency...')
+      
       // Look for "promo" agency first
       const { data: agencies, error: agencyError } = await supabase
         .from('agencies')
@@ -52,25 +54,63 @@ Deno.serve(async (req) => {
         .ilike('name', '%promo%')
         .limit(1)
       
-      console.log('Promo agency query result:', agencies, agencyError)
+      if (agencyError) {
+        console.error('❌ Error querying promo agency:', agencyError)
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Database error while searching for agency',
+            details: agencyError.message
+          }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+      
+      console.log('📊 Promo agency query result:', agencies)
       
       if (agencies && agencies.length > 0) {
         agencyId = agencies[0].id
         tenantId = agencies[0].tenant_id
+        console.log(`✅ Found promo agency: ${agencies[0].name} (${agencyId})`)
       } else {
+        console.log('⚠️ No promo agency found, trying any active agency...')
+        
         // Fallback to any active agency if promo not found
-        const { data: fallbackAgencies } = await supabase
+        const { data: fallbackAgencies, error: fallbackError } = await supabase
           .from('agencies')
-          .select('id, tenant_id')
+          .select('id, tenant_id, name')
           .eq('status', 'active')
           .limit(1)
+        
+        if (fallbackError) {
+          console.error('❌ Error querying fallback agency:', fallbackError)
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Database error while searching for fallback agency',
+              details: fallbackError.message
+            }),
+            { 
+              status: 500, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          )
+        }
         
         if (fallbackAgencies && fallbackAgencies.length > 0) {
           agencyId = fallbackAgencies[0].id
           tenantId = fallbackAgencies[0].tenant_id
+          console.log(`✅ Found fallback agency: ${fallbackAgencies[0].name} (${agencyId})`)
+        } else {
+          console.log('❌ No active agencies found at all')
         }
       }
     } else {
+      console.log(`🔑 Agency ID provided: ${agencyId}`)
+      
       // Get tenant_id for the provided agency
       const { data: agency, error: agencyError } = await supabase
         .from('agencies')
@@ -78,14 +118,30 @@ Deno.serve(async (req) => {
         .eq('id', agencyId)
         .single()
       
-      console.log('Agency tenant_id query result:', agency, agencyError)
+      if (agencyError) {
+        console.error('❌ Error querying agency tenant_id:', agencyError)
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Database error while getting agency details',
+            details: agencyError.message
+          }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
       
       if (agency) {
         tenantId = agency.tenant_id
+        console.log(`✅ Found tenant_id: ${tenantId}`)
+      } else {
+        console.log('⚠️ Agency not found')
       }
     }
     
-    console.log('Final agencyId:', agencyId, 'tenantId:', tenantId)
+    console.log(`📍 Final - agencyId: ${agencyId}, tenantId: ${tenantId}`)
 
     if (!agencyId) {
       return new Response(
@@ -140,11 +196,13 @@ Deno.serve(async (req) => {
       .single()
 
     if (error) {
-      console.error('Error inserting lead:', error)
+      console.error('❌ Error inserting lead:', error)
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: error.message 
+          error: 'Failed to create lead',
+          details: error.message,
+          code: error.code
         }),
         { 
           status: 500, 
@@ -153,7 +211,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log('Lead created successfully:', lead.id)
+    console.log('✅ Lead created successfully:', lead.id)
 
     return new Response(
       JSON.stringify({ 
@@ -168,12 +226,15 @@ Deno.serve(async (req) => {
     )
 
   } catch (error) {
-    console.error('Webhook error:', error)
+    console.error('💥 Webhook error:', error)
     const errorMessage = error instanceof Error ? error.message : 'Internal server error'
+    const errorStack = error instanceof Error ? error.stack : undefined
+    
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: errorMessage
+        error: errorMessage,
+        stack: errorStack
       }),
       { 
         status: 500, 
