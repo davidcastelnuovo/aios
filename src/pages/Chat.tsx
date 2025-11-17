@@ -300,21 +300,9 @@ export default function Chat() {
     enabled: !!tenantId && !debouncedSearch,
   });
 
-  // Today's local date parts for robust timezone-safe comparison
-  const todayParts = useMemo(() => {
-    const t = new Date();
-    return { y: t.getFullYear(), m: t.getMonth(), d: t.getDate() };
-  }, []);
-
-  const isTodayLocal = (iso?: string | null) => {
-    if (!iso) return false;
-    const d = new Date(iso);
-    return d.getFullYear() === todayParts.y && d.getMonth() === todayParts.m && d.getDate() === todayParts.d;
-  };
-
-   // Get all contacts before contact type filtering (for counts)
+  // Get all contacts before contact type filtering (for counts)
   const allContactsBeforeTypeFilter = useMemo(() => {
-    let allContacts = contacts || [];
+    let base = contacts || [];
     
     // Add unknown contacts in active chats mode
     if (!debouncedSearch && unknownContacts && unknownContacts.length > 0) {
@@ -326,8 +314,8 @@ export default function Chat() {
           contact_name: null,
           phone: uc.sender_phone,
           email: null,
-          agency_id: null,
-          agency_name: null,
+          agency_id: uc.agency_id ?? null,
+          agency_name: uc.agency_name ?? null,
           manychat_subscriber_id: null,
           contact_type: uc.contact_type as 'client' | 'lead' | 'group' | 'unknown',
           unread_count: uc.unread_count || 0,
@@ -335,11 +323,30 @@ export default function Chat() {
           has_messages: true,
         };
       });
-      allContacts = [...allContacts, ...normalizedUnknown];
+      // Merge and de-duplicate by type+id to avoid React key collisions
+      const merged = [...base, ...normalizedUnknown];
+      const dedupedMap = new Map<string, any>();
+      for (const c of merged) {
+        const k = `${c.contact_type}-${c.id}`;
+        if (!dedupedMap.has(k)) dedupedMap.set(k, c);
+      }
+      return Array.from(dedupedMap.values());
     }
     
-    return allContacts;
+    return base;
   }, [contacts, unknownContacts, debouncedSearch]);
+
+  // Today's local date parts for robust timezone-safe comparison
+  const todayParts = useMemo(() => {
+    const t = new Date();
+    return { y: t.getFullYear(), m: t.getMonth(), d: t.getDate() };
+  }, []);
+
+  const isTodayLocal = (iso?: string | null) => {
+    if (!iso) return false;
+    const d = new Date(iso);
+    return d.getFullYear() === todayParts.y && d.getMonth() === todayParts.m && d.getDate() === todayParts.d;
+  };
 
   // Filter contacts
   const filteredContacts = useMemo(() => {
