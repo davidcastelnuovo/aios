@@ -2269,6 +2269,21 @@ export type Database = {
         Returns: Json
       }
       get_effective_tenant_id: { Args: never; Returns: string }
+      get_unknown_chat_contacts: {
+        Args: never
+        Returns: {
+          agency_id: string
+          agency_name: string
+          contact_type: string
+          id: string
+          is_blocked: boolean
+          last_message_at: string
+          name: string
+          sender_phone: string
+          unread_count: number
+          wid: string
+        }[]
+      }
       get_user_agency_ids: { Args: { _user_id: string }; Returns: string[] }
       get_user_campaigner_id: { Args: { _user_id: string }; Returns: string }
       get_user_sales_person_agency_ids: {

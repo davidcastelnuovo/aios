@@ -171,7 +171,7 @@ export default function ChatMessageList({
   };
 
   return (
-    <ScrollArea className={`h-full overflow-visible ${isMobile ? 'p-2' : 'p-4'}`} ref={scrollRef}>
+    <ScrollArea className={`h-full overflow-auto ${isMobile ? 'p-2' : 'p-4'}`} ref={scrollRef}>
       <div className="space-y-4">
         {messages.map((message) => {
           const isOutbound = message.direction === 'outbound';
