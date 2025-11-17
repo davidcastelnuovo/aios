@@ -312,15 +312,13 @@ export default function Chat() {
     return d.getFullYear() === todayParts.y && d.getMonth() === todayParts.m && d.getDate() === todayParts.d;
   };
 
-  // Filter contacts
-  const filteredContacts = useMemo(() => {
+   // Get all contacts before contact type filtering (for counts)
+  const allContactsBeforeTypeFilter = useMemo(() => {
     let allContacts = contacts || [];
-    console.log('🔍 Starting filter - contacts from DB:', contacts?.length || 0);
-
+    
     // Add unknown contacts in active chats mode
     if (!debouncedSearch && unknownContacts && unknownContacts.length > 0) {
       const normalizedUnknown = unknownContacts.map(uc => {
-        // Keep original contact_type and all properties
         const isGroupContact = uc.contact_type === 'group' || uc.is_group;
         return {
           ...uc,
@@ -331,7 +329,6 @@ export default function Chat() {
           agency_id: null,
           agency_name: null,
           manychat_subscriber_id: null,
-          // Preserve the original contact_type from unknownContacts
           contact_type: uc.contact_type as 'client' | 'lead' | 'group' | 'unknown',
           unread_count: uc.unread_count || 0,
           is_blocked: uc.is_blocked || false,
@@ -339,17 +336,25 @@ export default function Chat() {
         };
       });
       allContacts = [...allContacts, ...normalizedUnknown];
-      console.log('📞 After adding unknown contacts:', allContacts.length);
-      console.log('📊 Types breakdown:', {
-        groups: normalizedUnknown.filter(c => c.contact_type === 'group').length,
-        unknown: normalizedUnknown.filter(c => c.contact_type === 'unknown').length
-      });
     }
+    
+    return allContacts;
+  }, [contacts, unknownContacts, debouncedSearch]);
+
+  // Filter contacts
+  const filteredContacts = useMemo(() => {
+    let allContacts = allContactsBeforeTypeFilter;
+    console.log('🔍 Starting filter - total contacts:', allContacts.length);
 
     // Apply contact type filter
     if (contactFilter !== "all") {
       const beforeFilter = allContacts.length;
-      allContacts = allContacts.filter(contact => contact.contact_type === contactFilter);
+      // Map plural filter values to singular contact_type values
+      const typeToMatch = contactFilter === 'groups' ? 'group' : 
+                          contactFilter === 'clients' ? 'client' : 
+                          contactFilter === 'leads' ? 'lead' : 
+                          contactFilter;
+      allContacts = allContacts.filter(contact => contact.contact_type === typeToMatch);
       console.log(`🏷️ Contact type filter (${contactFilter}): ${beforeFilter} → ${allContacts.length}`);
     }
 
@@ -358,21 +363,16 @@ export default function Chat() {
       const beforeFilter = allContacts.length;
       allContacts = allContacts.filter(contact => isTodayLocal(contact.last_message_at));
       console.log(`📅 Today filter: ${beforeFilter} → ${allContacts.length}`);
-      if (allContacts.length === 0 && beforeFilter > 0) {
-        console.log('⚠️ Today filter removed all contacts! Sample dates:', 
-          contacts?.slice(0, 3).map(c => ({ date: c.last_message_at, name: c.name }))
-        );
-      }
     }
 
     console.log('✅ Final filtered contacts:', allContacts.length);
     return allContacts;
-  }, [contacts, unknownContacts, debouncedSearch, contactFilter, showTodayOnly, selectedAgency, todayParts]);
+  }, [allContactsBeforeTypeFilter, contactFilter, showTodayOnly, todayParts]);
 
-  const clientsCount = filteredContacts.filter(c => c.contact_type === 'client').length;
-  const leadsCount = filteredContacts.filter(c => c.contact_type === 'lead').length;
-  const groupsCount = filteredContacts.filter(c => c.contact_type === 'group').length;
-  const unknownCount = filteredContacts.filter(c => c.contact_type === 'unknown').length;
+  const clientsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'client').length;
+  const leadsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'lead').length;
+  const groupsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'group').length;
+  const unknownCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'unknown').length;
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
