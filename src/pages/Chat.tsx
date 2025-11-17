@@ -278,8 +278,8 @@ export default function Chat() {
     if (!debouncedSearch && unknownContacts && unknownContacts.length > 0) {
       const normalizedUnknown = unknownContacts.map(uc => ({
         ...uc,
-        id: `unknown-${uc.sender_phone}`,
-        name: uc.sender_phone || 'Unknown',
+        id: uc.is_group ? uc.id : `unknown-${uc.sender_phone}`,
+        name: uc.name || uc.sender_phone || 'Unknown',
         contact_name: null,
         phone: uc.sender_phone,
         email: null,
@@ -287,7 +287,7 @@ export default function Chat() {
         agency_name: null,
         manychat_subscriber_id: null,
         active_chat_provider: uc.active_chat_provider,
-        contact_type: 'unknown' as const,
+        contact_type: uc.contact_type || 'unknown' as const,
         unread_count: uc.unread_count || 0,
         last_message_at: uc.last_message_at,
         sender_phone: uc.sender_phone,
