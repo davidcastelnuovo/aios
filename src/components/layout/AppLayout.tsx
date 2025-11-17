@@ -210,7 +210,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               </DropdownMenu>
             </div>
           </header>
-          <main className="flex-1 overflow-y-scroll overflow-x-hidden">
+          <main className="flex-1 overflow-hidden">
             {children}
           </main>
         </div>
