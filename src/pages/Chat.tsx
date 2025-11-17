@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -423,7 +424,7 @@ export default function Chat() {
   return (
     <div className="flex h-full min-h-0 gap-4" dir="rtl">
       {/* Contact List - Hide on mobile when chat is selected */}
-      <Card className={`${isMobile && selectedContact ? 'hidden' : 'flex'} flex-col w-full md:w-96 overflow-hidden`}>
+      <Card className={`${isMobile && selectedContact ? 'hidden' : 'flex'} flex-col w-full md:w-96 min-h-0 overflow-hidden`}>
         <div className="p-4 border-b space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -502,7 +503,7 @@ export default function Chat() {
                   <Button
                     key={contact.id}
                     variant={isSelected ? "secondary" : "ghost"}
-                    className="w-full justify-start text-right h-auto p-3"
+                    className="w-full justify-start text-right h-auto py-3 px-3"
                     onClick={() => {
                       let type: 'client' | 'lead' | 'group' | 'unknown' = 'client';
                       if (contact.contact_type === 'lead') type = 'lead';
@@ -516,59 +517,73 @@ export default function Chat() {
                       });
                     }}
                   >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 min-w-0">
-                          <span className="font-medium truncate block">
-                            {contact.contact_name || contact.name}
-                          </span>
-                          {contact.contact_name && (
-                            <span className="text-sm opacity-70 truncate block">
-                              {contact.name}
+                    <div className="flex items-center gap-3 w-full">
+                      <Avatar className="h-10 w-10 flex-shrink-0">
+                        <AvatarFallback>
+                          {(contact.contact_name || contact.name)?.charAt(0) || '?'}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0 text-right">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <div className="flex-1 min-w-0">
+                            <div className="block text-sm font-medium leading-tight truncate" dir="auto">
+                              {contact.contact_name || contact.name}
+                            </div>
+                            {contact.contact_name && (
+                              <div className="block text-xs text-muted-foreground leading-tight truncate mt-0.5" dir="auto">
+                                {contact.name}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {contact.unread_count > 0 && (
+                              <Badge variant="destructive" className="h-5 min-w-5 flex items-center justify-center px-1">
+                                {contact.unread_count}
+                              </Badge>
+                            )}
+                            {contact.is_blocked && (
+                              <Badge variant="secondary" className="text-xs">
+                                חסום
+                              </Badge>
+                            )}
+                            {contact.contact_type === 'unknown' && (
+                              <Badge variant="outline" className="text-xs">
+                                לא מזוהה
+                              </Badge>
+                            )}
+                            {!contact.has_messages && (
+                              <Badge variant="outline" className="text-xs">
+                                שיחה חדשה
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {contact.agency_name && (
+                            <span className="text-xs text-muted-foreground truncate" dir="auto">
+                              {contact.agency_name}
                             </span>
                           )}
+                          {contact.phone && (
+                            <span className="text-xs text-muted-foreground" dir="ltr">
+                              {contact.phone}
+                            </span>
+                          )}
+                          {!contact.phone && contact.contact_type !== 'group' && contact.contact_type !== 'unknown' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 px-2 text-xs"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleEditContact(contact);
+                              }}
+                            >
+                              <Pencil className="h-3 w-3 ml-1" />
+                              עדכן פרטים
+                            </Button>
+                          )}
                         </div>
-                        {contact.unread_count > 0 && (
-                          <Badge variant="destructive" className="h-5 min-w-5 flex items-center justify-center px-1 shrink-0">
-                            {contact.unread_count}
-                          </Badge>
-                        )}
-                        {contact.is_blocked && (
-                          <Badge variant="secondary" className="text-xs shrink-0">
-                            חסום
-                          </Badge>
-                        )}
-                        {contact.contact_type === 'unknown' && (
-                          <Badge variant="outline" className="text-xs shrink-0">
-                            לא מזוהה
-                          </Badge>
-                        )}
-                        {!contact.has_messages && (
-                          <Badge variant="outline" className="text-xs shrink-0">
-                            שיחה חדשה
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        {contact.agency_name && (
-                          <span className="text-sm text-muted-foreground truncate">
-                            {contact.agency_name}
-                          </span>
-                        )}
-                        {!contact.phone && contact.contact_type !== 'group' && contact.contact_type !== 'unknown' && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 px-2 text-xs shrink-0"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEditContact(contact);
-                            }}
-                          >
-                            <Pencil className="h-3 w-3 ml-1" />
-                            עדכן פרטים
-                          </Button>
-                        )}
                       </div>
                     </div>
                   </Button>
