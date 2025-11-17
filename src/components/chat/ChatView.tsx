@@ -252,6 +252,15 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
       raw_provider_data: msg.raw_provider_data,
     })) || [];
 
+  // Calculate anchor message for scroll
+  const firstUnreadIndex = messagesData?.findIndex(
+    (msg) => msg.direction === 'inbound' && !msg.read_at
+  ) ?? -1;
+  
+  const anchorMessageId = firstUnreadIndex >= 0 
+    ? messagesData?.[firstUnreadIndex]?.id 
+    : messagesData?.[messagesData.length - 1]?.id;
+
   const handleSendMessage = async (message: string) => {
     if (!contact) return;
 
@@ -456,7 +465,14 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
       </div>
 
       <div className="flex-1 overflow-hidden">
-        <ChatMessageList messages={messages} isLoading={isLoadingMessages} contactId={contactId} contactType={contactType} agencyId={contact?.agency_id} />
+        <ChatMessageList 
+          messages={messages} 
+          isLoading={isLoadingMessages} 
+          contactId={contactId} 
+          contactType={contactType} 
+          agencyId={contact?.agency_id}
+          anchorMessageId={anchorMessageId}
+        />
       </div>
 
       <div className="border-t bg-card">

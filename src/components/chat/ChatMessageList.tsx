@@ -33,6 +33,7 @@ interface ChatMessageListProps {
   contactId?: string;
   contactType?: 'client' | 'lead' | 'group' | 'unknown';
   agencyId?: string;
+  anchorMessageId?: string;
 }
 
 export default function ChatMessageList({ 
@@ -41,11 +42,14 @@ export default function ChatMessageList({
   contactId,
   contactType,
   agencyId,
+  anchorMessageId,
 }: ChatMessageListProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [showTaskDialog, setShowTaskDialog] = useState(false);
+  const msgRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const hasScrolledToAnchor = useRef(false);
 
   const handleCopyMessage = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -57,12 +61,34 @@ export default function ChatMessageList({
     setShowTaskDialog(true);
   };
 
-  // Auto-scroll to bottom on new messages
+  // Scroll to anchor message or bottom
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (!messages.length) return;
+    
+    // Only scroll to anchor once when component mounts or anchorMessageId changes
+    if (!hasScrolledToAnchor.current && anchorMessageId) {
+      requestAnimationFrame(() => {
+        const anchorElement = msgRefs.current[anchorMessageId];
+        if (anchorElement) {
+          anchorElement.scrollIntoView({ behavior: 'auto', block: 'center' });
+          hasScrolledToAnchor.current = true;
+        } else if (bottomRef.current) {
+          bottomRef.current.scrollIntoView({ behavior: 'auto' });
+          hasScrolledToAnchor.current = true;
+        }
+      });
+    } else if (!anchorMessageId && bottomRef.current) {
+      // If no anchor (all messages read), scroll to bottom
+      requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'auto' });
+      });
     }
-  }, [messages]);
+  }, [messages, anchorMessageId]);
+
+  // Reset scroll flag when contact changes (anchorMessageId will change)
+  useEffect(() => {
+    hasScrolledToAnchor.current = false;
+  }, [anchorMessageId]);
 
   if (isLoading) {
     return (
@@ -171,7 +197,7 @@ export default function ChatMessageList({
   };
 
   return (
-    <ScrollArea className={`h-full overflow-auto ${isMobile ? 'p-2' : 'p-4'}`} ref={scrollRef}>
+    <ScrollArea className={`h-full overflow-auto ${isMobile ? 'p-2' : 'p-4'}`}>
       <div className="space-y-4">
         {messages.map((message) => {
           const isOutbound = message.direction === 'outbound';
@@ -243,6 +269,7 @@ export default function ChatMessageList({
             </div>
           );
         })}
+        <div ref={bottomRef} />
       </div>
       
       {selectedMessage && (
