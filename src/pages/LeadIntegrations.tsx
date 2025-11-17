@@ -5,6 +5,7 @@ import { Copy, ExternalLink, Webhook } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import JsonLeadBuilder from "@/components/forms/JsonLeadBuilder";
 
 export default function LeadIntegrations() {
   const { toast } = useToast();
@@ -76,13 +77,18 @@ export default function LeadIntegrations() {
         </AlertDescription>
       </Alert>
 
-      <Tabs defaultValue="instructions" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+      <Tabs defaultValue="builder" className="w-full">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="builder">בונה JSON</TabsTrigger>
           <TabsTrigger value="instructions">הוראות שימוש</TabsTrigger>
           <TabsTrigger value="make">Make</TabsTrigger>
           <TabsTrigger value="zapier">Zapier</TabsTrigger>
           <TabsTrigger value="website">טפסי אתר</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="builder" className="space-y-4">
+          <JsonLeadBuilder />
+        </TabsContent>
 
         <TabsContent value="instructions" className="space-y-4">
           <Card>
