@@ -189,8 +189,8 @@ export function LinkContactDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="client">{terms.client.singular}</SelectItem>
-                <SelectItem value="lead">{terms.lead.singular}</SelectItem>
+                <SelectItem value="client">{terms?.client?.singular || 'לקוח'}</SelectItem>
+                <SelectItem value="lead">{terms?.lead?.singular || 'ליד'}</SelectItem>
                 <SelectItem value="group">קבוצה</SelectItem>
               </SelectContent>
             </Select>
