@@ -160,6 +160,48 @@ export default function Chat() {
     queryFn: async () => {
       if (!tenantId) return [];
 
+      // Fetch groups from whatsapp_groups table
+      const { data: groupsData, error: groupsError } = await supabase
+        .from('whatsapp_groups')
+        .select('id, group_name, group_chat_id, tenant_id, agency_id')
+        .eq('tenant_id', tenantId);
+
+      if (groupsError) {
+        console.error('Error fetching groups:', groupsError);
+      }
+
+      // Fetch group messages for each group
+      const groupsWithMessages = await Promise.all((groupsData || []).map(async (group) => {
+        const { data: messages } = await supabase
+          .from('chat_messages')
+          .select('created_at, direction, read_at, is_blocked, provider')
+          .eq('group_id', group.id)
+          .order('created_at', { ascending: false })
+          .limit(100);
+
+        if (!messages || messages.length === 0) return null;
+
+        const unreadCount = messages.filter(m => 
+          (m.direction === 'incoming' || m.direction === 'inbound') && !m.read_at
+        ).length;
+
+        return {
+          id: group.id,
+          name: group.group_name,
+          sender_phone: group.group_chat_id,
+          active_chat_provider: messages[0]?.provider || 'green_api',
+          last_message_at: messages[0]?.created_at,
+          unread_count: unreadCount,
+          is_blocked: messages[0]?.is_blocked || false,
+          contact_type: 'group' as const,
+          is_group: true,
+          agency_id: group.agency_id,
+        };
+      }));
+
+      const validGroups = groupsWithMessages.filter(g => g !== null);
+
+      // Fetch unknown contacts (non-group messages without client/lead)
       const { data, error } = await supabase
         .from('chat_messages')
         .select('sender_phone, sender_name, provider, created_at, direction, read_at, is_blocked, raw_provider_data')
@@ -171,14 +213,14 @@ export default function Chat() {
 
       if (error) {
         console.error('Error fetching unknown contacts:', error);
-        return [];
+        return validGroups;
       }
 
       const grouped = new Map<string, any>();
       const groupedByWid = new Map<string, any>();
       
       data.forEach(msg => {
-        // Check if this is a group message
+        // Check if this is a group message (for groups not yet in whatsapp_groups table)
         const rawData = msg.raw_provider_data as any;
         const wid = rawData?.instanceData?.wid || rawData?.messageData?.chatId;
         const isGroup = wid && (typeof wid === 'string' && (wid.endsWith('@g.us') || wid.includes('@g.us')));
@@ -243,14 +285,15 @@ export default function Chat() {
         }
       });
 
-      // Merge groups and unknown contacts
+      // Merge all: registered groups + unregistered groups + unknown contacts
       const unknownContactsData = [
+        ...validGroups,
         ...Array.from(groupedByWid.values()),
         ...Array.from(grouped.values())
       ];
       
       console.log('🔍 Found unknown contacts:', unknownContactsData.length, 
-                  '(Groups:', groupedByWid.size, 'Unknown:', grouped.size, ')');
+                  '(Groups:', validGroups.length + groupedByWid.size, 'Unknown:', grouped.size, ')');
       
       return unknownContactsData;
     },
@@ -276,26 +319,31 @@ export default function Chat() {
 
     // Add unknown contacts in active chats mode
     if (!debouncedSearch && unknownContacts && unknownContacts.length > 0) {
-      const normalizedUnknown = unknownContacts.map(uc => ({
-        ...uc,
-        id: uc.is_group ? uc.id : `unknown-${uc.sender_phone}`,
-        name: uc.name || uc.sender_phone || 'Unknown',
-        contact_name: null,
-        phone: uc.sender_phone,
-        email: null,
-        agency_id: null,
-        agency_name: null,
-        manychat_subscriber_id: null,
-        active_chat_provider: uc.active_chat_provider,
-        contact_type: uc.contact_type || 'unknown' as const,
-        unread_count: uc.unread_count || 0,
-        last_message_at: uc.last_message_at,
-        sender_phone: uc.sender_phone,
-        is_blocked: uc.is_blocked || false,
-        has_messages: true,
-      }));
+      const normalizedUnknown = unknownContacts.map(uc => {
+        // Keep original contact_type and all properties
+        const isGroupContact = uc.contact_type === 'group' || uc.is_group;
+        return {
+          ...uc,
+          id: isGroupContact ? uc.id : `unknown-${uc.sender_phone}`,
+          contact_name: null,
+          phone: uc.sender_phone,
+          email: null,
+          agency_id: null,
+          agency_name: null,
+          manychat_subscriber_id: null,
+          // Preserve the original contact_type from unknownContacts
+          contact_type: uc.contact_type as 'client' | 'lead' | 'group' | 'unknown',
+          unread_count: uc.unread_count || 0,
+          is_blocked: uc.is_blocked || false,
+          has_messages: true,
+        };
+      });
       allContacts = [...allContacts, ...normalizedUnknown];
       console.log('📞 After adding unknown contacts:', allContacts.length);
+      console.log('📊 Types breakdown:', {
+        groups: normalizedUnknown.filter(c => c.contact_type === 'group').length,
+        unknown: normalizedUnknown.filter(c => c.contact_type === 'unknown').length
+      });
     }
 
     // Apply contact type filter
