@@ -92,16 +92,20 @@ export default function ChatMessageList({
 
   if (isLoading) {
     return (
-      <div className="h-full flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex flex-col h-full">
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
       </div>
     );
   }
 
   if (messages.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center text-muted-foreground">
-        אין הודעות עדיין
+      <div className="flex flex-col h-full">
+        <div className="flex-1 flex items-center justify-center text-muted-foreground">
+          אין הודעות עדיין
+        </div>
       </div>
     );
   }
@@ -197,8 +201,9 @@ export default function ChatMessageList({
   };
 
   return (
-    <ScrollArea className={`h-full overflow-auto ${isMobile ? 'p-2' : 'p-4'}`}>
-      <div className="space-y-4">
+    <div className="flex flex-col h-full">
+      <ScrollArea className="flex-1">
+        <div className={`space-y-4 ${isMobile ? 'p-2' : 'p-4'}`}>
         {messages.map((message) => {
           const isOutbound = message.direction === 'outbound';
           const mediaContent = getMediaContent(message);
@@ -270,7 +275,8 @@ export default function ChatMessageList({
           );
         })}
         <div ref={bottomRef} />
-      </div>
+        </div>
+      </ScrollArea>
       
       {selectedMessage && (
         <ConvertMessageToTaskDialog
@@ -282,6 +288,6 @@ export default function ChatMessageList({
           agencyId={agencyId}
         />
       )}
-    </ScrollArea>
+    </div>
   );
 }
