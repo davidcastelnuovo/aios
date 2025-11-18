@@ -360,8 +360,8 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
   }
 
   return (
-    <div className="flex flex-col flex-1">
-      <div className={`${isMobile ? 'p-2' : 'p-4'} border-b bg-card`}>
+    <div className="flex flex-col h-full">
+      <div className={`sticky top-0 z-10 ${isMobile ? 'p-2' : 'p-4'} border-b bg-card`}>
         {/* שורה ראשונה - תמיד גלויה */}
         <div className="flex items-center gap-3">
           {onBack && (
@@ -526,7 +526,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
         />
       </div>
 
-      <div className="border-t bg-card">
+      <div className="sticky bottom-0 z-10 border-t bg-card">
         <ChatInput onSend={handleSendMessage} isLoading={false} />
       </div>
 
