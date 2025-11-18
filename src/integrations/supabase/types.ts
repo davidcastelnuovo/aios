@@ -2188,6 +2188,7 @@ export type Database = {
           group_chat_id: string
           group_name: string
           id: string
+          is_blocked: boolean
           tenant_id: string
           updated_at: string
         }
@@ -2198,6 +2199,7 @@ export type Database = {
           group_chat_id: string
           group_name: string
           id?: string
+          is_blocked?: boolean
           tenant_id: string
           updated_at?: string
         }
@@ -2208,6 +2210,7 @@ export type Database = {
           group_chat_id?: string
           group_name?: string
           id?: string
+          is_blocked?: boolean
           tenant_id?: string
           updated_at?: string
         }
