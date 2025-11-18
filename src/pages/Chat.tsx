@@ -313,7 +313,7 @@ export default function Chat() {
           ...uc,
           id: isGroupContact ? uc.id : `unknown-${uc.sender_phone}`,
           contact_name: null,
-          phone: uc.sender_phone,
+          phone: isGroupContact ? null : uc.sender_phone,
           email: null,
           agency_id: uc.agency_id ?? null,
           agency_name: uc.agency_name ?? null,
