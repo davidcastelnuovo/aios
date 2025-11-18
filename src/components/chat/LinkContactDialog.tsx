@@ -218,7 +218,7 @@ export function LinkContactDialog({
               </div>
             ) : (
               <Select
-                value={form.watch("contact_id")}
+                value={form.watch("contact_id") || undefined}
                 onValueChange={(value) => form.setValue("contact_id", value)}
               >
                 <SelectTrigger>
@@ -231,7 +231,7 @@ export function LinkContactDialog({
                     </div>
                   ) : (
                     contactList.map((contact: any) => (
-                      <SelectItem key={contact.id} value={contact.id}>
+                      <SelectItem key={contact.id} value={contact.id || `temp-${Math.random()}`}>
                         {selectedType === "client"
                           ? `${contact.name}${contact.phone ? ` • ${contact.phone}` : ''}${contact.agencies?.name ? ` • ${contact.agencies.name}` : ''}`
                           : selectedType === "lead"

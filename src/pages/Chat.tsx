@@ -500,7 +500,7 @@ export default function Chat() {
           </div>
 
           <div className="space-y-3">
-            <Select value={contactFilter} onValueChange={(value: any) => setContactFilter(value)}>
+            <Select value={contactFilter || "all"} onValueChange={(value: any) => setContactFilter(value)}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
