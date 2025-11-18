@@ -136,6 +136,7 @@ export function LinkContactDialog({
           senderPhone,
           contactType: values.type,
           contactId: values.contact_id,
+          tenantId,
         },
       });
 
