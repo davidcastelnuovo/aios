@@ -1338,6 +1338,7 @@ export type Database = {
           category: string | null
           created_at: string
           custom_label: string | null
+          hidden_from_child_tenants: boolean | null
           icon: string | null
           id: string
           is_visible: boolean
@@ -1354,6 +1355,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           custom_label?: string | null
+          hidden_from_child_tenants?: boolean | null
           icon?: string | null
           id?: string
           is_visible?: boolean
@@ -1370,6 +1372,7 @@ export type Database = {
           category?: string | null
           created_at?: string
           custom_label?: string | null
+          hidden_from_child_tenants?: boolean | null
           icon?: string | null
           id?: string
           is_visible?: boolean
@@ -2312,6 +2315,7 @@ export type Database = {
         Args: { _tenant_id: string }
         Returns: undefined
       }
+      is_root_tenant: { Args: { tenant_id: string }; Returns: boolean }
       is_seo_staff: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
       search_contacts_for_chat: {
