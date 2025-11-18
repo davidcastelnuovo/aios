@@ -553,32 +553,27 @@ export default function Chat() {
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 min-w-0">
-                          {contact.agency_name && (
-                            <span className="flex-1 min-w-0 text-xs text-muted-foreground truncate" dir="auto">
+                        {contact.agency_name && (
+                          <div className="min-w-0">
+                            <span className="text-xs text-muted-foreground truncate block" dir="auto">
                               {contact.agency_name}
                             </span>
-                          )}
-                          {contact.contact_type !== 'group' && contact.phone && (
-                            <span className="text-xs text-muted-foreground flex-shrink-0 truncate max-w-32 text-left" dir="ltr">
-                              {contact.phone}
-                            </span>
-                          )}
-                          {!contact.phone && contact.contact_type !== 'group' && contact.contact_type !== 'unknown' && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-6 px-2 text-xs"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditContact(contact);
-                              }}
-                            >
-                              <Pencil className="h-3 w-3 ml-1" />
-                              עדכן פרטים
-                            </Button>
-                          )}
-                        </div>
+                          </div>
+                        )}
+                        {!contact.phone && contact.contact_type !== 'group' && contact.contact_type !== 'unknown' && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 px-2 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditContact(contact);
+                            }}
+                          >
+                            <Pencil className="h-3 w-3 ml-1" />
+                            עדכן פרטים
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </Button>

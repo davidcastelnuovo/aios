@@ -202,6 +202,7 @@ Deno.serve(async (req) => {
         message_text: messageText,
         channel: channel || 'whatsapp',
         provider: 'manychat',
+        connection_user_id: client.id,
         raw_provider_data: payload,
       });
 
