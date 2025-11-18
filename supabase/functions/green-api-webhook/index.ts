@@ -238,6 +238,7 @@ Deno.serve(async (req) => {
       .insert({
         client_id: clientId,
         lead_id: leadId,
+        group_id: groupData?.id || null,
         tenant_id: tenantId,
         message_text: messageText,
         direction: isOutgoing ? 'outbound' : 'inbound',
@@ -246,6 +247,7 @@ Deno.serve(async (req) => {
         sender_phone: phoneNumber,
         sender_name: senderData.senderName || null,
         is_blocked: isBlocked,
+        connection_user_id: tenantId,
         raw_provider_data: webhookData,
       });
 
