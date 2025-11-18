@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { ConvertContactDialog } from "./ConvertContactDialog";
 import { LinkContactDialog } from "./LinkContactDialog";
+import { LinkPhoneDialog } from "./LinkPhoneDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
@@ -41,6 +42,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [convertType, setConvertType] = useState<"client" | "lead" | "group">("client");
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkPhoneDialogOpen, setLinkPhoneDialogOpen] = useState(false);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
   // Fetch contact details
@@ -170,32 +172,45 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
     },
   });
 
-  // Block contact mutation
+  // Block contact mutation - works for all contact types
   const blockMutation = useMutation({
     mutationFn: async () => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user || !contact?.tenant_id) throw new Error("Missing user or tenant");
 
-      const { error } = await supabase
+      // Build the filter based on contact type
+      let query = supabase
         .from("chat_messages")
         .update({
           is_blocked: true,
           blocked_at: new Date().toISOString(),
           blocked_by_user_id: userData.user.id,
         })
-        .eq("sender_phone", senderPhone || contactId)
         .eq("tenant_id", contact.tenant_id);
 
+      // Apply appropriate filter
+      if (contactType === "unknown") {
+        query = query.eq("sender_phone", senderPhone || contactId);
+      } else if (contactType === "client") {
+        query = query.eq("client_id", contactId);
+      } else if (contactType === "lead") {
+        query = query.eq("lead_id", contactId);
+      } else if (contactType === "group") {
+        query = query.eq("group_id", contactId);
+      }
+
+      const { error } = await query;
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("המספר נחסם בהצלחה");
+      toast.success("השיחה נחסמה בהצלחה - ההודעות לא יישמרו יותר בדטה-בייס");
       queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
       queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", contactId, contactType, senderPhone] });
       onBack?.();
     },
     onError: (error) => {
-      toast.error("שגיאה בחסימת המספר");
+      toast.error("שגיאה בחסימת השיחה");
       console.error("Block error:", error);
     },
   });
@@ -437,6 +452,34 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
                 </>
               )}
 
+              {/* כפתורים לכל סוגי אנשי הקשר */}
+              {contactType !== 'unknown' && (
+                <div className="flex gap-2 flex-wrap">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      if (confirm('האם אתה בטוח שברצונך לחסום את השיחה? הודעות חדשות לא יישמרו בדטה-בייס.')) {
+                        blockMutation.mutate();
+                      }
+                    }}
+                    disabled={blockMutation.isPending}
+                  >
+                    <Ban className="h-4 w-4 ml-2" />
+                    חסום שיחה
+                  </Button>
+                  {contact.phone && contactType !== 'group' && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setLinkPhoneDialogOpen(true)}
+                    >
+                      שייך טלפון לאחר
+                    </Button>
+                  )}
+                </div>
+              )}
+
               {/* Provider Controls */}
               {!activeProvider && contactType !== 'unknown' && (
                 <Alert>
@@ -504,6 +547,18 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
               queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
               queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
               if (onBack) onBack();
+            }}
+          />
+          <LinkPhoneDialog
+            open={linkPhoneDialogOpen}
+            onOpenChange={setLinkPhoneDialogOpen}
+            phone={contact?.phone || ""}
+            contactId={contactId}
+            contactType={contactType as "client" | "lead"}
+            onSuccess={() => {
+              setLinkPhoneDialogOpen(false);
+              queryClient.invalidateQueries({ queryKey: ["contact", contactId, contactType] });
+              queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
             }}
           />
         </>
