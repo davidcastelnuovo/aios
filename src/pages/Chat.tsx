@@ -527,13 +527,12 @@ export default function Chat() {
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <div className="flex-1 min-w-0">
                             <div className="block text-sm font-medium leading-tight truncate" dir="auto">
-                              {contact.contact_name || contact.name}
+                              {(() => {
+                                const fullName = contact.contact_name || contact.name;
+                                const words = fullName.split(' ');
+                                return words.slice(0, 2).join(' ');
+                              })()}
                             </div>
-                            {contact.contact_name && (
-                              <div className="block text-xs text-muted-foreground leading-tight truncate mt-0.5" dir="auto">
-                                {contact.name}
-                              </div>
-                            )}
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
                             {contact.unread_count > 0 && (
