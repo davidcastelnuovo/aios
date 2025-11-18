@@ -243,6 +243,7 @@ Deno.serve(async (req) => {
       channel,
       provider: 'manychat',
       sent_by_user_id: user.id,
+      connection_user_id: user.id,
       raw_provider_data: manychatData,
     };
 
