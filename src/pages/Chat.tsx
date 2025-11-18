@@ -18,7 +18,18 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { MessageCircle, Search, Settings, Pencil } from "lucide-react";
+import { MessageCircle, Search, Settings, Pencil, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 import ChatView from "@/components/chat/ChatView";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
@@ -65,6 +76,7 @@ export default function Chat() {
     clientId ? { id: clientId, type: 'client' } : null
   );
   const [editingContact, setEditingContact] = useState<{ id: string; type: 'client' | 'lead'; data: any } | null>(null);
+  const [showClearHistoryDialog, setShowClearHistoryDialog] = useState(false);
 
   // Fetch active chats (default mode - no search)
   const { data: activeChats, isLoading: activeChatsLoading } = useQuery({
@@ -415,6 +427,30 @@ export default function Chat() {
     }
   };
 
+  const handleClearHistory = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No user found');
+
+      const { error } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('connection_user_id', user.id);
+
+      if (error) throw error;
+
+      toast.success('ההיסטוריה נוקתה בהצלחה');
+      setShowClearHistoryDialog(false);
+      setSelectedContact(null);
+      
+      // Refresh the chats
+      window.location.reload();
+    } catch (error) {
+      console.error('Error clearing history:', error);
+      toast.error('שגיאה בניקוי ההיסטוריה');
+    }
+  };
+
   if (agenciesLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -436,11 +472,21 @@ export default function Chat() {
               <MessageCircle className="h-5 w-5" />
               <h2 className="text-lg font-semibold">צ'אט</h2>
             </div>
-            <Link to={buildPath('/chat-integrations')}>
-              <Button variant="ghost" size="icon">
-                <Settings className="h-4 w-4" />
+            <div className="flex items-center gap-1">
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => setShowClearHistoryDialog(true)}
+                title="ניקוי היסטוריה"
+              >
+                <Trash2 className="h-4 w-4" />
               </Button>
-            </Link>
+              <Link to={buildPath('/chat-integrations')}>
+                <Button variant="ghost" size="icon">
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
           </div>
 
           <div className="relative">
@@ -623,6 +669,27 @@ export default function Chat() {
           }}
         />
       )}
+
+      <AlertDialog open={showClearHistoryDialog} onOpenChange={setShowClearHistoryDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>האם אתה בטוח?</AlertDialogTitle>
+            <AlertDialogDescription>
+              פעולה זו תמחק לצמיתות את כל היסטוריית הצ'אטים שלך.
+              לא ניתן יהיה לשחזר את המידע לאחר המחיקה.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleClearHistory}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              מחק הכל
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
