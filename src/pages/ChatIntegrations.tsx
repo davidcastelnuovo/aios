@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { MessageCircle, Webhook, Settings, CheckCircle2, XCircle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { MessageCircle, Webhook, Settings, CheckCircle2, XCircle, Users } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -53,6 +54,24 @@ export default function ChatIntegrations() {
       return data;
     },
     enabled: !!tenantId && !!userId,
+  });
+
+  // Fetch WhatsApp groups
+  const { data: whatsappGroups = [], isLoading: groupsLoading } = useQuery({
+    queryKey: ['whatsapp-groups', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      
+      const { data, error } = await supabase
+        .from('whatsapp_groups')
+        .select('*, agencies(name)')
+        .eq('tenant_id', tenantId)
+        .order('group_name');
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
   });
 
   // Toggle provider mutation
@@ -119,6 +138,28 @@ export default function ChatIntegrations() {
     onError: (error: any) => {
       console.error('Toggle error:', error);
       toast.error('שגיאה בעדכון סטטוס האינטגרציה');
+    },
+  });
+
+  // Toggle group blocking mutation
+  const toggleGroupMutation = useMutation({
+    mutationFn: async ({ groupId, isBlocked }: { groupId: string; isBlocked: boolean }) => {
+      const { error } = await supabase
+        .from('whatsapp_groups')
+        .update({ is_blocked: isBlocked })
+        .eq('id', groupId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('סטטוס קבוצה עודכן בהצלחה');
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-groups', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['chat-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['unknown-contacts'] });
+    },
+    onError: (error) => {
+      toast.error('שגיאה בעדכון סטטוס קבוצה');
+      console.error('Toggle group error:', error);
     },
   });
 
@@ -259,6 +300,86 @@ export default function ChatIntegrations() {
           );
         })}
       </div>
+
+      {/* WhatsApp Groups Management */}
+      <Card className="mt-8">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-green-500/10">
+              <Users className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <CardTitle>ניהול קבוצות WhatsApp</CardTitle>
+              <CardDescription>
+                בחר אילו קבוצות יופיעו בצ'אט. קבוצות לא מסומנות לא יישמרו בדטה-בייס
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {groupsLoading ? (
+            <div className="text-center py-8 text-muted-foreground">טוען קבוצות...</div>
+          ) : whatsappGroups.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>לא נמצאו קבוצות</p>
+              <p className="text-sm mt-2">קבוצות יווצרו אוטומטית כאשר תגיע הודעה מקבוצה חדשה</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {whatsappGroups.map((group: any) => (
+                <div 
+                  key={group.id}
+                  className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                >
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                    <Checkbox
+                      id={`group-${group.id}`}
+                      checked={!group.is_blocked}
+                      onCheckedChange={(checked) =>
+                        toggleGroupMutation.mutate({
+                          groupId: group.id,
+                          isBlocked: !checked,
+                        })
+                      }
+                      disabled={toggleGroupMutation.isPending}
+                    />
+                    <label
+                      htmlFor={`group-${group.id}`}
+                      className="flex-1 min-w-0 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium truncate">{group.group_name}</span>
+                        {!group.is_blocked ? (
+                          <Badge variant="default" className="bg-green-500/10 text-green-600 flex-shrink-0">
+                            <CheckCircle2 className="h-3 w-3 ml-1" />
+                            פעיל
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="bg-red-500/10 text-red-600 flex-shrink-0">
+                            <XCircle className="h-3 w-3 ml-1" />
+                            חסום
+                          </Badge>
+                        )}
+                      </div>
+                      {group.agencies?.name && (
+                        <p className="text-sm text-muted-foreground truncate">
+                          {group.agencies.name}
+                        </p>
+                      )}
+                      {group.description && (
+                        <p className="text-xs text-muted-foreground truncate mt-1">
+                          {group.description}
+                        </p>
+                      )}
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="mt-8 border-dashed">
         <CardContent className="pt-6">
