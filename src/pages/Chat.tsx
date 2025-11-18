@@ -502,9 +502,9 @@ export default function Chat() {
                 return (
                    <Button
                      key={contact.id}
-                     variant={isSelected ? "secondary" : "ghost"}
-                     className="w-full justify-start text-right h-auto py-3 px-3 overflow-hidden"
-                     onClick={() => {
+                    variant={isSelected ? "secondary" : "ghost"}
+                    className="w-full min-w-0 justify-start text-right h-auto py-3 px-3 overflow-hidden"
+                    onClick={() => {
                       let type: 'client' | 'lead' | 'group' | 'unknown' = 'client';
                       if (contact.contact_type === 'lead') type = 'lead';
                       else if (contact.contact_type === 'group') type = 'group';
@@ -517,7 +517,7 @@ export default function Chat() {
                       });
                     }}
                   >
-                    <div className="flex items-center gap-3 w-full min-w-0 overflow-hidden">
+                    <div className="flex flex-row-reverse items-center gap-3 w-full min-w-0 overflow-hidden">
                       <Avatar className="h-10 w-10 flex-shrink-0">
                         <AvatarFallback>
                           {(contact.contact_name || contact.name)?.charAt(0) || '?'}
