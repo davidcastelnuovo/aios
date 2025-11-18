@@ -489,7 +489,7 @@ export default function Chat() {
           </div>
         </div>
 
-        <ScrollArea className="flex-1 overflow-hidden">
+        <ScrollArea className="flex-1 overflow-hidden [scrollbar-gutter:stable_both-edges]">
           <div className="p-2 space-y-1 overflow-hidden">
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
@@ -553,19 +553,14 @@ export default function Chat() {
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {contact.contact_type !== 'group' && contact.agency_name && (
-                            <span className="text-xs text-muted-foreground truncate" dir="auto">
-                              {contact.agency_name}
-                            </span>
-                          )}
-                          {contact.contact_type === 'group' && contact.agency_name && (
-                            <span className="text-xs text-muted-foreground truncate" dir="auto">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {contact.agency_name && (
+                            <span className="flex-1 min-w-0 text-xs text-muted-foreground truncate" dir="auto">
                               {contact.agency_name}
                             </span>
                           )}
                           {contact.contact_type !== 'group' && contact.phone && (
-                            <span className="text-xs text-muted-foreground" dir="ltr">
+                            <span className="text-xs text-muted-foreground flex-shrink-0 truncate max-w-32 text-left" dir="ltr">
                               {contact.phone}
                             </span>
                           )}
