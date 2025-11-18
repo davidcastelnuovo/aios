@@ -554,7 +554,12 @@ export default function Chat() {
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
-                          {contact.agency_name && (
+                          {contact.contact_type !== 'group' && contact.agency_name && (
+                            <span className="text-xs text-muted-foreground truncate" dir="auto">
+                              {contact.agency_name}
+                            </span>
+                          )}
+                          {contact.contact_type === 'group' && contact.agency_name && (
                             <span className="text-xs text-muted-foreground truncate" dir="auto">
                               {contact.agency_name}
                             </span>
