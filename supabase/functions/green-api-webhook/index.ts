@@ -142,7 +142,14 @@ Deno.serve(async (req) => {
         console.log('✅ Created new group:', groupName);
       }
 
-      // Save group message
+      // Check if group is blocked
+      const { data: groupData } = await supabaseClient
+        .from('whatsapp_groups')
+        .select('is_blocked')
+        .eq('id', groupId)
+        .maybeSingle();
+
+      // Save group message with blocked status from group settings
       const { error: insertError } = await supabaseClient
         .from('chat_messages')
         .insert({
@@ -155,6 +162,7 @@ Deno.serve(async (req) => {
           provider: 'green_api',
           sender_phone: phoneNumber,
           sender_name: senderData.senderName || null,
+          is_blocked: groupData?.is_blocked || false,
           raw_provider_data: webhookData,
         });
 
