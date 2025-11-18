@@ -484,8 +484,8 @@ export default function Chat() {
           </div>
         </div>
 
-        <ScrollArea className="flex-1">
-          <div className="p-2 space-y-1">
+        <ScrollArea className="flex-1 overflow-hidden">
+          <div className="p-2 space-y-1 overflow-hidden">
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="p-3 rounded-lg">
@@ -500,11 +500,11 @@ export default function Chat() {
               filteredContacts.map((contact) => {
                 const isSelected = selectedContact?.id === contact.id;
                 return (
-                  <Button
-                    key={contact.id}
-                    variant={isSelected ? "secondary" : "ghost"}
-                    className="w-full justify-start text-right h-auto py-3 px-3"
-                    onClick={() => {
+                   <Button
+                     key={contact.id}
+                     variant={isSelected ? "secondary" : "ghost"}
+                     className="w-full justify-start text-right h-auto py-3 px-3 overflow-hidden"
+                     onClick={() => {
                       let type: 'client' | 'lead' | 'group' | 'unknown' = 'client';
                       if (contact.contact_type === 'lead') type = 'lead';
                       else if (contact.contact_type === 'group') type = 'group';
@@ -517,7 +517,7 @@ export default function Chat() {
                       });
                     }}
                   >
-                    <div className="flex items-center gap-3 w-full">
+                    <div className="flex items-center gap-3 w-full min-w-0 overflow-hidden">
                       <Avatar className="h-10 w-10 flex-shrink-0">
                         <AvatarFallback>
                           {(contact.contact_name || contact.name)?.charAt(0) || '?'}
