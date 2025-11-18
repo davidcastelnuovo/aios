@@ -354,6 +354,11 @@ export default function Chat() {
     let allContacts = allContactsBeforeTypeFilter;
     console.log('🔍 Starting filter - total contacts:', allContacts.length);
 
+    // Filter out blocked contacts
+    const beforeBlockFilter = allContacts.length;
+    allContacts = allContacts.filter(contact => !contact.is_blocked);
+    console.log(`🚫 Blocked filter: ${beforeBlockFilter} → ${allContacts.length}`);
+
     // Apply contact type filter
     if (contactFilter !== "all") {
       const beforeFilter = allContacts.length;
@@ -527,22 +532,13 @@ export default function Chat() {
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <div className="flex-1 min-w-0">
                             <div className="block text-sm font-medium leading-tight truncate" dir="auto">
-                              {(() => {
-                                const fullName = contact.contact_name || contact.name;
-                                const words = fullName.split(' ');
-                                return words.slice(0, 2).join(' ');
-                              })()}
+                              {contact.contact_name || contact.name}
                             </div>
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
                             {contact.unread_count > 0 && (
                               <Badge variant="destructive" className="h-5 min-w-5 flex items-center justify-center px-1">
                                 {contact.unread_count}
-                              </Badge>
-                            )}
-                            {contact.is_blocked && (
-                              <Badge variant="secondary" className="text-xs">
-                                חסום
                               </Badge>
                             )}
                             {contact.contact_type === 'unknown' && (
@@ -563,7 +559,7 @@ export default function Chat() {
                               {contact.agency_name}
                             </span>
                           )}
-                          {contact.phone && (
+                          {contact.contact_type !== 'group' && contact.phone && (
                             <span className="text-xs text-muted-foreground" dir="ltr">
                               {contact.phone}
                             </span>
