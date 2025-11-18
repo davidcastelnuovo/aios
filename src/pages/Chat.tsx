@@ -465,8 +465,8 @@ export default function Chat() {
   return (
     <div className="flex h-full min-h-0 gap-4" dir="rtl">
       {/* Contact List - Hide on mobile when chat is selected */}
-      <Card className={`${isMobile && selectedContact ? 'hidden' : 'flex'} flex-col w-full md:w-96 min-h-0 overflow-hidden`}>
-        <div className="p-4 border-b space-y-4">
+      <Card className={`${isMobile && selectedContact ? 'hidden' : 'flex'} flex-col w-full md:w-96 h-full overflow-hidden`}>
+        <div className="sticky top-0 z-10 bg-card p-4 border-b space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <MessageCircle className="h-5 w-5" />
@@ -535,7 +535,7 @@ export default function Chat() {
           </div>
         </div>
 
-        <ScrollArea className="flex-1 overflow-hidden [scrollbar-gutter:stable_both-edges]">
+        <div className="flex-1 overflow-y-auto">
           <div className="p-2 space-y-1 overflow-hidden">
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
@@ -627,7 +627,7 @@ export default function Chat() {
               })
             )}
           </div>
-        </ScrollArea>
+        </div>
       </Card>
 
       {/* Chat View */}
