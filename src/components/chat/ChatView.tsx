@@ -316,20 +316,28 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
 
         if (error) throw error;
       } else if (activeProvider === 'green_api') {
-        if (!contact.phone && contactType !== 'group') {
+        if (!contact.phone && contactType !== 'group' && contactType !== 'unknown') {
           toast.error("חסר מספר טלפון ל-Green API. אנא הוסף באיש הקשר.");
           return;
         }
 
+        const body: any = {
+          message,
+          phoneNumber: senderPhone || contact.phone,
+          provider: "green_api",
+        };
+
+        // Only add IDs for known contact types
+        if (contactType === "client") {
+          body.clientId = contactId;
+        } else if (contactType === "lead") {
+          body.leadId = contactId;
+        } else if (contactType === "group") {
+          body.groupId = contactId;
+        }
+
         const { error } = await supabase.functions.invoke("send-green-api-message", {
-          body: {
-            ...(contactType === "client" ? { clientId: contactId } 
-              : contactType === "lead" ? { leadId: contactId }
-              : { groupId: contactId }),
-            message,
-            phoneNumber: contact.phone,
-            provider: "green_api",
-          },
+          body,
         });
 
         if (error) throw error;
