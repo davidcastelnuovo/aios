@@ -515,7 +515,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
         </Collapsible>
       </div>
 
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden bg-[#e5ddd5]">
         <ChatMessageList 
           messages={messages} 
           isLoading={isLoadingMessages} 

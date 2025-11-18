@@ -201,8 +201,8 @@ export default function ChatMessageList({
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <ScrollArea className="flex-1">
+    <div className="flex flex-col h-full min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0">
         <div className={`space-y-2 ${isMobile ? 'p-2' : 'p-4'}`}>
         {messages.map((message) => {
           const isOutbound = message.direction === 'outbound';
@@ -273,7 +273,7 @@ export default function ChatMessageList({
         })}
         <div ref={bottomRef} />
         </div>
-      </ScrollArea>
+      </div>
       
       {selectedMessage && (
         <ConvertMessageToTaskDialog
