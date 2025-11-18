@@ -119,7 +119,7 @@ export default function ChatMessageList({
     if (!quotedMessage) return null;
 
     return (
-      <div className="bg-background/50 border-r-2 border-primary pr-2 mb-2 text-sm opacity-80">
+      <div className="bg-black/5 border-r-4 border-blue-500 pr-2 mb-1 text-[13px]">
         <div className="font-semibold text-xs mb-1">
           {quotedMessage.chatName || 'הודעה מצוטטת'}
         </div>
@@ -157,7 +157,7 @@ export default function ChatMessageList({
           src={fileData.downloadUrl}
           alt="תמונה מצורפת"
           loading="lazy"
-          className="max-w-full rounded-md mb-2"
+          className={`rounded-md mb-1 ${isMobile ? 'max-w-[250px]' : 'max-w-[300px]'} max-h-[400px] object-cover`}
         />
       );
     }
@@ -169,7 +169,7 @@ export default function ChatMessageList({
           controls
           playsInline
           controlsList="nodownload noplaybackrate noremoteplayback"
-          className="max-w-full rounded-md mb-2"
+          className={`rounded-md mb-1 ${isMobile ? 'max-w-[250px]' : 'max-w-[300px]'} max-h-[400px]`}
           onContextMenu={(e) => e.preventDefault()}
         />
       );
@@ -203,7 +203,7 @@ export default function ChatMessageList({
   return (
     <div className="flex flex-col h-full">
       <ScrollArea className="flex-1">
-        <div className={`space-y-4 ${isMobile ? 'p-2' : 'p-4'}`}>
+        <div className={`space-y-2 ${isMobile ? 'p-2' : 'p-4'}`}>
         {messages.map((message) => {
           const isOutbound = message.direction === 'outbound';
           const mediaContent = getMediaContent(message);
@@ -216,14 +216,14 @@ export default function ChatMessageList({
               className={`flex ${isOutbound ? 'justify-end' : 'justify-start'} group`}
             >
               <div
-                className={`${isMobile ? 'max-w-[85%]' : 'max-w-[70%]'} rounded-lg ${isMobile ? 'px-3 py-1.5' : 'px-4 py-2'} ${
-                  isOutbound
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted'
-                } relative`}
+                className={`${isMobile ? 'max-w-[80%]' : 'max-w-[65%]'} 
+                  ${isOutbound ? 'rounded-tl-lg rounded-tr-md rounded-bl-lg rounded-br-md' : 'rounded-tl-md rounded-tr-lg rounded-bl-md rounded-br-lg'}
+                  px-2.5 py-1.5 shadow-sm
+                  ${isOutbound ? 'bg-[#dcf8c6] text-gray-900' : 'bg-white text-gray-900'}
+                  relative`}
               >
                 {!isOutbound && message.sender_name && (
-                  <div className="font-semibold text-xs mb-1 opacity-90">
+                  <div className="font-semibold text-[12.8px] mb-0.5 text-blue-600">
                     {message.sender_name}
                   </div>
                 )}
@@ -231,15 +231,12 @@ export default function ChatMessageList({
                 {reactionEmoji}
                 {mediaContent}
                 {message.message_text && !reactionEmoji && !quotedMessage && !isPlaceholder(message.message_text) && (
-                  <div className="whitespace-pre-wrap break-words" dir="rtl">
+                  <div className="whitespace-pre-wrap break-words text-[14.2px] leading-[19px]" dir="rtl">
                     {message.message_text}
                   </div>
                 )}
                 <div
-                  className={`text-xs mt-1 flex items-center justify-between gap-2 ${
-                    isOutbound ? 'opacity-70' : 'text-muted-foreground'
-                  }`}
-                >
+                  className="text-[11px] mt-0.5 flex items-center justify-end gap-1 text-gray-500">
                   <span>
                     {format(new Date(message.created_at), 'HH:mm', { locale: he })}
                     {isOutbound && message.profiles && (
