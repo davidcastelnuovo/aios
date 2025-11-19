@@ -114,7 +114,7 @@ export default function Tasks() {
   const [viewMode, setViewMode] = useState<"kanban" | "table" | "calendar">("kanban");
   const [hideCompleted, setHideCompleted] = useState(false);
   const [sortBy, setSortBy] = useState<"priority" | "due_date" | "status">("priority");
-  const { selectedAgency } = useAgency();
+  const { selectedAgency, agencies } = useAgency();
   const { userAgencyIds } = useUserAgencies();
   const { campaignerId, isCampaigner, isTeamManager, isOwner, isSeo } = useUserRole();
   const queryClient = useQueryClient();
@@ -142,8 +142,15 @@ export default function Tasks() {
           campaigners (full_name, role),
           task_updates (id)
         `)
-        .eq("tenant_id", tenantId) // 🔒 CRITICAL: Filter by tenant_id from URL
         .order("due_date", { ascending: true });
+
+      // Filter by available agencies (owned + shared)
+      if (selectedAgency && selectedAgency !== "all") {
+        query = query.eq("agency_id", selectedAgency);
+      } else if (agencies && agencies.length > 0) {
+        const agencyIds = agencies.map((a) => a.id);
+        query = query.in("agency_id", agencyIds);
+      }
 
       const { data, error } = await query;
       if (error) throw error;
