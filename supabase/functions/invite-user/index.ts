@@ -92,7 +92,7 @@ serve(async (req: Request) => {
       }
 
       // Validate role
-      const validRoles = ["owner", "agency_owner", "team_manager", "campaigner", "sales_person"];
+      const validRoles = ["owner", "agency_owner", "team_manager", "campaigner", "sales_person", "super_admin", "seo"];
       if (!validRoles.includes(role)) {
         throw new Error("Invalid role");
       }
