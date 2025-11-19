@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { MAIN_MODULES, SALES_MODULES, SETTINGS_MODULES, SPECIAL_PERMISSIONS } from "@/lib/modules";
 
 interface EditUserPermissionsDialogProps {
   open: boolean;
@@ -20,51 +21,6 @@ interface EditUserPermissionsDialogProps {
   userId: string;
   userEmail: string;
 }
-
-type ModuleConfig = {
-  id: string;
-  label: string;
-  description: string;
-};
-
-const MODULES: ModuleConfig[] = [
-  { id: "dashboard", label: "דשבורד", description: "מבט על כללי על המערכת" },
-  { id: "clients", label: "לקוחות", description: "ניהול לקוחות" },
-  { id: "agencies", label: "סוכנויות", description: "ניהול סוכנויות" },
-  { id: "campaigners", label: "קמפיינרים", description: "ניהול קמפיינרים" },
-  { id: "suppliers", label: "ספקים", description: "ניהול ספקים" },
-  { id: "tasks", label: "משימות", description: "ניהול משימות" },
-  { id: "client_onboarding", label: "קליטת לקוחות", description: "תהליך קליטה" },
-  { id: "time_tracking", label: "מעקב זמנים", description: "רישום שעות עבודה" },
-  { id: "products", label: "מוצרים ושירותים", description: "ניהול מוצרים ושירותים" },
-  { id: "chat", label: "צ'אט", description: "תקשורת עם לקוחות ולידים" },
-  { id: "dynamic_tables", label: "טבלאות דינמיות", description: "יצירת וניהול טבלאות מותאמות אישית" },
-  { id: "automations", label: "אוטומציות", description: "הגדרת אוטומציות ותהליכים אוטומטיים" },
-  { id: "finance", label: "כספים", description: "ניהול הכנסות והוצאות" },
-  { id: "reports", label: "דוחות", description: "דוחות וניתוחים" },
-];
-
-const SALES_MODULES: ModuleConfig[] = [
-  { id: "sales_dashboard", label: "דשבורד מכירות", description: "סקירת מכירות ומעקב" },
-  { id: "leads", label: "לידים", description: "ניהול לידים ומעקב אחר הזדמנויות מכירה" },
-  { id: "sales_people", label: "אנשי מכירות", description: "ניהול צוות המכירות" },
-];
-
-const SETTINGS_MODULES: ModuleConfig[] = [
-  { id: "users", label: "ניהול משתמשים", description: "הוספה ועריכת משתמשים" },
-  { id: "branding", label: "ברנדינג", description: "התאמת לוגו וצבעי המערכת" },
-  { id: "menu_management", label: "ניהול תפריטים", description: "התאמת תפריטים אישיים" },
-  { id: "fields_management", label: "ניהול שדות", description: "הוספת שדות מותאמים אישית" },
-  { id: "manychat_settings", label: "הגדרות ManyChat", description: "אינטגרציה עם ManyChat" },
-  { id: "green_api_settings", label: "הגדרות Green API", description: "אינטגרציה עם WhatsApp" },
-  { id: "chat_integrations", label: "אינטגרציות צ'אט", description: "הגדרות אינטגרציות צ'אט" },
-  { id: "lead_integrations", label: "אינטגרציות לידים", description: "הגדרות ואינטגרציות לקבלת לידים" },
-  { id: "accounting_integrations", label: "אינטגרציות הנה\"ח", description: "אינטגרציות הנהלת חשבונות" },
-];
-
-const SPECIAL_PERMISSIONS: ModuleConfig[] = [
-  { id: "finance_view", label: "צפייה בנתונים כספיים", description: "הצגת ריטיינר ונתונים כספיים אחרים" },
-];
 
 export function EditUserPermissionsDialog({
   open,
@@ -120,12 +76,12 @@ export function EditUserPermissionsDialog({
       
       // If user is owner in current tenant, set all permissions to true by default
       if (isOwnerInTenant) {
-        [...MODULES, ...SALES_MODULES, ...SPECIAL_PERMISSIONS].forEach(module => {
+        [...MAIN_MODULES, ...SALES_MODULES, ...SETTINGS_MODULES, ...SPECIAL_PERMISSIONS].forEach(module => {
           permissionsMap[module.id] = true;
         });
       } else {
         // Set all modules to true by default
-        [...MODULES, ...SPECIAL_PERMISSIONS].forEach(module => {
+        [...MAIN_MODULES, ...SETTINGS_MODULES, ...SPECIAL_PERMISSIONS].forEach(module => {
           permissionsMap[module.id] = true;
         });
         
@@ -207,7 +163,7 @@ export function EditUserPermissionsDialog({
           <div>
             <h3 className="text-lg font-semibold mb-3">מודולים כלליים</h3>
             <div className="space-y-3">
-              {MODULES.map((module) => (
+              {MAIN_MODULES.map((module) => (
                 <div key={module.id} className="flex items-start space-x-3 space-x-reverse">
                   <Checkbox
                     id={`module-${module.id}`}
