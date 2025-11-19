@@ -36,27 +36,54 @@ export function ManageIntegrationPermissionsDialog({
   const { userId } = useCurrentUser();
   const { permissions, grantPermission, revokePermission } = useIntegrationPermissions(integrationId);
 
-  // Fetch all users in the tenant
-  const { data: tenantUsers, isLoading } = useQuery({
-    queryKey: ['tenant-users', tenantId],
+  // Fetch all users in the tenant with proper join
+  const { data: tenantUsers, isLoading, error: usersError } = useQuery({
+    queryKey: ['tenant-users', tenantId, open],
     queryFn: async () => {
-      if (!tenantId) return [];
+      if (!tenantId) {
+        console.log('No tenantId available');
+        return [];
+      }
+      
+      console.log('Fetching users for tenant:', tenantId);
       
       const { data, error } = await supabase
-        .from('tenant_users')
+        .from('profiles')
         .select(`
-          user_id,
-          role,
-          profiles:user_id (
-            id,
-            full_name,
-            email
+          id,
+          full_name,
+          email,
+          tenant_users!inner (
+            user_id,
+            role,
+            tenant_id
           )
         `)
-        .eq('tenant_id', tenantId);
+        .eq('tenant_users.tenant_id', tenantId);
       
-      if (error) throw error;
-      return data || [];
+      if (error) {
+        console.error('Error fetching tenant users:', error);
+        throw error;
+      }
+      
+      console.log('Fetched users:', data);
+      
+      // Transform the data to match the expected format
+      return data?.map(profile => {
+        const tenantUser = Array.isArray(profile.tenant_users) 
+          ? profile.tenant_users[0] 
+          : profile.tenant_users;
+        
+        return {
+          user_id: profile.id,
+          role: tenantUser?.role || 'viewer',
+          profiles: {
+            id: profile.id,
+            full_name: profile.full_name,
+            email: profile.email
+          }
+        };
+      }) || [];
     },
     enabled: !!tenantId && open,
   });
@@ -94,6 +121,10 @@ export function ManageIntegrationPermissionsDialog({
           {isLoading ? (
             <div className="text-center py-8 text-muted-foreground">
               טוען משתמשים...
+            </div>
+          ) : usersError ? (
+            <div className="text-center py-8 text-destructive">
+              שגיאה בטעינת משתמשים: {usersError.message}
             </div>
           ) : tenantUsers && tenantUsers.length > 0 ? (
             <div className="space-y-2">
