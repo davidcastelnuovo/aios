@@ -334,23 +334,32 @@ useEffect(() => {
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth?type=recovery`,
-    });
-    if (error) {
+    
+    try {
+      const { data, error } = await supabase.functions.invoke("send-temporary-password", {
+        body: { email }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.success) {
+        toast({
+          title: "הצלחה",
+          description: data.message || "סיסמה זמנית נשלחה למייל שלך",
+        });
+        setResetMode(false);
+      } else {
+        throw new Error(data?.error || "שגיאה בשליחת סיסמה זמנית");
+      }
+    } catch (error: any) {
       toast({
         title: "שגיאה",
-        description: error.message,
+        description: error.message || "שגיאה בשליחת סיסמה זמנית",
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "נשלח מייל",
-        description: "בדוק את תיבת המייל שלך לאיפוס הסיסמה",
-      });
-      setResetMode(false);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleGoogleSignIn = async () => {
@@ -546,6 +555,9 @@ useEffect(() => {
               ) : resetMode ? (
                 <form onSubmit={handleResetPassword} className="space-y-4">
                   <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground mb-4">
+                      נשלח לך סיסמה זמנית למייל. לאחר ההתחברות מומלץ לשנות את הסיסמה דרך "האזור האישי".
+                    </p>
                     <Label htmlFor="email-reset">אימייל</Label>
                     <Input
                       id="email-reset"
@@ -558,7 +570,7 @@ useEffect(() => {
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
-                    {loading ? "שולח..." : "שלח קישור לאיפוס סיסמה"}
+                    {loading ? "שולח..." : "שלח סיסמה זמנית"}
                   </Button>
                   <Button
                     type="button"
