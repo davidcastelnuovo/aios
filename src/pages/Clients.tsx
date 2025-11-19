@@ -157,21 +157,22 @@ export default function Clients() {
       `;
 
       // If no accessible agencies and no specific selection, nothing should be visible
-      if ((!agencies || agencies.length === 0) && (!selectedAgency || selectedAgency === "all")) {
-        return [];
-      }
+      // Skip query if not ready
 
       let query = supabase
         .from("clients")
         .select(selectStr)
         .order("created_at", { ascending: false });
 
-      // Filter by available agencies (owned + shared)
+      // 🔒 CRITICAL SECURITY: Filter by agencies OR tenant_id
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
       } else if (agencies && agencies.length > 0) {
         const ids = agencies.map((a: any) => a.id);
         query = query.in("agency_id", ids);
+      } else {
+        // No agencies available - strict tenant isolation
+        query = query.eq("tenant_id", tenantId);
       }
 
       const { data, error } = await query;
