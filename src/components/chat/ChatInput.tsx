@@ -27,14 +27,14 @@ export default function ChatInput({ onSend, isLoading }: ChatInputProps) {
   };
 
   return (
-    <div className={`${isMobile ? 'p-2' : 'p-4'} flex gap-2 items-end`}>
+    <div className={`${isMobile ? 'p-2' : 'p-4'} flex gap-2 items-center`}>
       <Textarea
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="הקלד הודעה... (Enter לשליחה)"
-        className="resize-none flex-1"
-        rows={isMobile ? 1 : 2}
+        className="resize-none flex-1 h-10 min-h-10 max-h-10"
+        rows={1}
         disabled={isLoading}
       />
       <Button
