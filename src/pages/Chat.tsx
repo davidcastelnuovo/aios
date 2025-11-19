@@ -463,7 +463,7 @@ export default function Chat() {
   }
 
   return (
-    <div className="flex h-full min-h-0 gap-4" dir="rtl">
+    <div className="flex h-screen overflow-hidden gap-4" dir="rtl">
       {/* Contact List - Hide on mobile when chat is selected */}
       <Card className={`${isMobile && selectedContact ? 'hidden' : 'flex'} flex-col w-full md:w-96 h-full overflow-hidden`}>
         <div className="sticky top-0 z-10 bg-card p-4 border-b space-y-4">
