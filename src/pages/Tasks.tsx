@@ -144,12 +144,15 @@ export default function Tasks() {
         `)
         .order("due_date", { ascending: true });
 
-      // Filter by available agencies (owned + shared)
+      // 🔒 CRITICAL SECURITY: Filter by agencies OR tenant_id
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
       } else if (agencies && agencies.length > 0) {
         const agencyIds = agencies.map((a) => a.id);
         query = query.in("agency_id", agencyIds);
+      } else {
+        // No agencies available - strict tenant isolation
+        query = query.eq("tenant_id", tenantId);
       }
 
       const { data, error } = await query;
