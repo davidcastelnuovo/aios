@@ -360,7 +360,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0 overflow-hidden">
+    <div className="flex flex-col h-full min-h-0">
       <div className={`sticky top-0 z-10 ${isMobile ? 'p-2' : 'p-4'} border-b bg-card`}>
         {/* שורה ראשונה - תמיד גלויה */}
         <div className="flex items-center gap-3">
