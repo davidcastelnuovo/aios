@@ -36,17 +36,30 @@ const MODULES: ModuleConfig[] = [
   { id: "tasks", label: "משימות", description: "ניהול משימות" },
   { id: "client_onboarding", label: "קליטת לקוחות", description: "תהליך קליטה" },
   { id: "time_tracking", label: "מעקב זמנים", description: "רישום שעות עבודה" },
+  { id: "products", label: "מוצרים ושירותים", description: "ניהול מוצרים ושירותים" },
+  { id: "chat", label: "צ'אט", description: "תקשורת עם לקוחות ולידים" },
+  { id: "dynamic_tables", label: "טבלאות דינמיות", description: "יצירת וניהול טבלאות מותאמות אישית" },
+  { id: "automations", label: "אוטומציות", description: "הגדרת אוטומציות ותהליכים אוטומטיים" },
   { id: "finance", label: "כספים", description: "ניהול הכנסות והוצאות" },
   { id: "reports", label: "דוחות", description: "דוחות וניתוחים" },
-  { id: "users", label: "ניהול משתמשים", description: "הוספה ועריכת משתמשים" },
-  { id: "accounting", label: "הנהלת חשבונות", description: "אינטגרציות הנהלת חשבונות" },
 ];
 
 const SALES_MODULES: ModuleConfig[] = [
   { id: "sales_dashboard", label: "דשבורד מכירות", description: "סקירת מכירות ומעקב" },
   { id: "leads", label: "לידים", description: "ניהול לידים ומעקב אחר הזדמנויות מכירה" },
   { id: "sales_people", label: "אנשי מכירות", description: "ניהול צוות המכירות" },
+];
+
+const SETTINGS_MODULES: ModuleConfig[] = [
+  { id: "users", label: "ניהול משתמשים", description: "הוספה ועריכת משתמשים" },
+  { id: "branding", label: "ברנדינג", description: "התאמת לוגו וצבעי המערכת" },
+  { id: "menu_management", label: "ניהול תפריטים", description: "התאמת תפריטים אישיים" },
+  { id: "fields_management", label: "ניהול שדות", description: "הוספת שדות מותאמים אישית" },
+  { id: "manychat_settings", label: "הגדרות ManyChat", description: "אינטגרציה עם ManyChat" },
+  { id: "green_api_settings", label: "הגדרות Green API", description: "אינטגרציה עם WhatsApp" },
+  { id: "chat_integrations", label: "אינטגרציות צ'אט", description: "הגדרות אינטגרציות צ'אט" },
   { id: "lead_integrations", label: "אינטגרציות לידים", description: "הגדרות ואינטגרציות לקבלת לידים" },
+  { id: "accounting_integrations", label: "אינטגרציות הנה\"ח", description: "אינטגרציות הנהלת חשבונות" },
 ];
 
 const SPECIAL_PERMISSIONS: ModuleConfig[] = [
@@ -233,6 +246,32 @@ export function EditUserPermissionsDialog({
                   <div className="flex-1">
                     <label
                       htmlFor={`sales-${module.id}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      {module.label}
+                    </label>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {module.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <h3 className="text-lg font-semibold mb-3">הגדרות ואינטגרציות</h3>
+            <div className="space-y-3">
+              {SETTINGS_MODULES.map((module) => (
+                <div key={module.id} className="flex items-start space-x-3 space-x-reverse">
+                  <Checkbox
+                    id={`settings-${module.id}`}
+                    checked={permissions[module.id] ?? false}
+                    onCheckedChange={() => togglePermission(module.id)}
+                  />
+                  <div className="flex-1">
+                    <label
+                      htmlFor={`settings-${module.id}`}
                       className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                     >
                       {module.label}
