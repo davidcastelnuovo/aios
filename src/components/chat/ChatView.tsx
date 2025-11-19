@@ -360,9 +360,9 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
   }
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
+    <div className="flex flex-col h-full">
       {/* Header - קבוע */}
-      <div className={`sticky top-0 z-10 ${isMobile ? 'p-2' : 'p-4'} border-b bg-card shadow-sm`}>
+      <div className={`${isMobile ? 'p-2' : 'p-4'} border-b bg-card shadow-sm`}>
         {/* שורה ראשונה - תמיד גלויה */}
         <div className="flex items-center gap-3">
           {onBack && (
@@ -517,7 +517,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
       </div>
 
       {/* Messages area - גלילה פנימית */}
-      <div className="bg-[#e5ddd5] pb-20">
+      <div className="flex-1 overflow-y-auto bg-[#e5ddd5]">
         <ChatMessageList
           messages={messages} 
           isLoading={isLoadingMessages} 
@@ -529,7 +529,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
       </div>
 
       {/* Input area - קבוע */}
-      <div className="sticky bottom-0 z-10 border-t bg-card shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
+      <div className="border-t bg-card shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
         <ChatInput onSend={handleSendMessage} isLoading={false} />
       </div>
 
