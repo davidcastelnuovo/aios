@@ -22,6 +22,8 @@ interface CalendarEvent {
   start: Date;
   end: Date;
   description?: string;
+  calendarName?: string;
+  calendarColor?: string;
 }
 
 export function InteractiveCalendar() {
@@ -144,10 +146,16 @@ export function InteractiveCalendar() {
             start,
             end,
             description: event.description || '',
+            calendarName: event.calendarName,
+            calendarColor: event.calendarColor,
           } as CalendarEvent;
         })
         .filter(Boolean) as CalendarEvent[]
     );
+  }, [eventsData]);
+
+  const calendars = useMemo(() => {
+    return eventsData?.calendars || [];
   }, [eventsData]);
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
@@ -190,6 +198,28 @@ export function InteractiveCalendar() {
 
   return (
     <div className="space-y-4">
+      {calendars.length > 0 && (
+        <Alert>
+          <AlertTitle>יומנים מחוברים ({calendars.length})</AlertTitle>
+          <AlertDescription>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {calendars.map((cal: any) => (
+                <div 
+                  key={cal.id} 
+                  className="flex items-center gap-2 px-3 py-1 rounded-full border bg-background"
+                  style={{ borderColor: cal.color }}
+                >
+                  <div 
+                    className="w-3 h-3 rounded-full" 
+                    style={{ backgroundColor: cal.color }}
+                  />
+                  <span className="text-sm">{cal.name}</span>
+                </div>
+              ))}
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
       {(error as any)?.message && (((error as any).message || '').includes('invalid_grant') || ((error as any).message || '').includes('401')) && (
         <Alert>
           <AlertTitle>נדרש להתחבר מחדש ליומן</AlertTitle>
@@ -231,6 +261,20 @@ export function InteractiveCalendar() {
             <DialogTitle>{selectedEvent?.title}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {selectedEvent?.calendarName && (
+              <div>
+                <Label>יומן</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  {selectedEvent.calendarColor && (
+                    <div 
+                      className="w-3 h-3 rounded-full" 
+                      style={{ backgroundColor: selectedEvent.calendarColor }}
+                    />
+                  )}
+                  <p className="text-sm">{selectedEvent.calendarName}</p>
+                </div>
+              </div>
+            )}
             {selectedEvent?.description && (
               <div>
                 <Label>תיאור</Label>

@@ -108,35 +108,83 @@ serve(async (req) => {
       console.log('Token refreshed successfully');
     }
 
-    // Fetch events from Google Calendar
-    const url = new URL('https://www.googleapis.com/calendar/v3/calendars/primary/events');
-    url.searchParams.append('timeMin', timeMin);
-    url.searchParams.append('timeMax', timeMax);
-    url.searchParams.append('singleEvents', 'true');
-    url.searchParams.append('orderBy', 'startTime');
-
-    console.log('Fetching events from Google Calendar API...');
-
-    const calendarResponse = await fetch(url.toString(), {
-      method: 'GET',
+    // Fetch calendar list first
+    console.log('Fetching calendar list from Google...');
+    const calendarListUrl = 'https://www.googleapis.com/calendar/v3/users/me/calendarList';
+    
+    const calendarListResponse = await fetch(calendarListUrl, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
     });
 
-    const eventsData = await calendarResponse.json();
-    
-    if (!calendarResponse.ok) {
-      console.error('Google Calendar API error:', eventsData);
-      throw new Error(eventsData.error?.message || 'Failed to fetch events');
+    if (!calendarListResponse.ok) {
+      const errorData = await calendarListResponse.json();
+      console.error('Calendar list API error:', errorData);
+      throw new Error(errorData.error?.message || 'Failed to fetch calendar list');
     }
 
-    console.log('Events fetched successfully:', eventsData.items?.length || 0);
+    const calendarListData = await calendarListResponse.json();
+    const calendars = calendarListData.items || [];
+    console.log(`Found ${calendars.length} calendars`);
+
+    // Fetch events from all calendars
+    console.log('Fetching events from all calendars...');
+    const allEvents: any[] = [];
+    
+    for (const calendar of calendars) {
+      try {
+        const url = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendar.id)}/events`);
+        url.searchParams.append('timeMin', timeMin);
+        url.searchParams.append('timeMax', timeMax);
+        url.searchParams.append('singleEvents', 'true');
+        url.searchParams.append('orderBy', 'startTime');
+
+        const calendarResponse = await fetch(url.toString(), {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (calendarResponse.ok) {
+          const eventsData = await calendarResponse.json();
+          const events = (eventsData.items || []).map((event: any) => ({
+            ...event,
+            calendarId: calendar.id,
+            calendarName: calendar.summary,
+            calendarColor: calendar.backgroundColor || calendar.foregroundColor,
+          }));
+          allEvents.push(...events);
+          console.log(`Fetched ${events.length} events from calendar: ${calendar.summary}`);
+        } else {
+          console.warn(`Failed to fetch events from calendar ${calendar.summary}`);
+        }
+      } catch (calError) {
+        console.error(`Error fetching events from calendar ${calendar.summary}:`, calError);
+      }
+    }
+
+    // Sort all events by start time
+    allEvents.sort((a, b) => {
+      const aStart = new Date(a.start?.dateTime || a.start?.date);
+      const bStart = new Date(b.start?.dateTime || b.start?.date);
+      return aStart.getTime() - bStart.getTime();
+    });
+
+    console.log(`Total events fetched: ${allEvents.length} from ${calendars.length} calendars`);
 
     return new Response(JSON.stringify({ 
       success: true, 
-      events: eventsData.items || []
+      events: allEvents,
+      calendars: calendars.map((cal: any) => ({
+        id: cal.id,
+        name: cal.summary,
+        color: cal.backgroundColor || cal.foregroundColor,
+        primary: cal.primary || false,
+      })),
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
