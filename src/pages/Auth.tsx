@@ -136,17 +136,29 @@ useEffect(() => {
       // Resolve tenant with retries
       const slug = await resolveTenantSlug(session.user.id, 5);
       if (slug) {
-        // Check user role to determine landing page
-        const { data: roleData } = await (supabase as any)
+        // Check user roles to determine landing page
+        const { data: rolesData } = await (supabase as any)
           .from("user_roles")
           .select("role")
           .eq("user_id", session.user.id)
-          .in("role", ["owner", "admin"])
-          .maybeSingle();
+          .eq("tenant_id", (await (supabase as any)
+            .from("tenants")
+            .select("id")
+            .eq("slug", slug)
+            .single()).data.id);
         
-        // Owners and admins go to dashboard, others go to my-profile
-        const landingPage = roleData ? "dashboard" : "my-profile";
-        console.log("✅ Navigating to:", landingPage, "for tenant:", slug);
+        const roles = rolesData?.map((r: any) => r.role) || [];
+        
+        let landingPage = "my-profile";
+        if (roles.includes("owner") || roles.includes("admin")) {
+          landingPage = "dashboard";
+        } else if (roles.includes("sales_person")) {
+          landingPage = "sales-dashboard";
+        } else if (roles.includes("campaigner")) {
+          landingPage = "tasks";
+        }
+        
+        console.log("✅ Navigating to:", landingPage, "for tenant:", slug, "with roles:", roles);
         navigate(`/t/${slug}/${landingPage}`, { replace: true });
       } else {
         toast({
