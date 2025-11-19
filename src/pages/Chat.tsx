@@ -631,7 +631,7 @@ export default function Chat() {
       </Card>
 
       {/* Chat View */}
-      <Card className="flex-1 h-full overflow-hidden flex flex-col">
+      <Card className="flex-1 h-full min-h-0 overflow-hidden flex flex-col">
         {selectedContact ? (
           <ChatView
             contactId={selectedContact.id}

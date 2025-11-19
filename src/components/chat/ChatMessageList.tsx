@@ -201,8 +201,7 @@ export default function ChatMessageList({
   };
 
   return (
-    <div className="w-full">
-      <div className={`flex flex-col gap-2 ${isMobile ? 'p-2' : 'p-4'}`}>
+    <div className={`flex flex-col gap-2 ${isMobile ? 'p-2' : 'p-4'}`}>
         {messages.map((message) => {
           const isOutbound = message.direction === 'outbound';
           const mediaContent = getMediaContent(message);
@@ -272,7 +271,6 @@ export default function ChatMessageList({
           );
         })}
         <div ref={bottomRef} />
-      </div>
 
       {selectedMessage && (
         <ConvertMessageToTaskDialog

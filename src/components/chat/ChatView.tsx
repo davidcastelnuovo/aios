@@ -366,7 +366,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Header - קבוע */}
       <div className={`${isMobile ? 'p-2' : 'p-4'} border-b bg-card shadow-sm`}>
         {/* שורה ראשונה - תמיד גלויה */}
@@ -523,7 +523,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
       </div>
 
       {/* Messages area - גלילה פנימית */}
-      <div className="flex-1 overflow-y-auto bg-[#e5ddd5]">
+      <div className="flex-1 min-h-0 overflow-y-auto bg-[#e5ddd5]">
         <ChatMessageList
           messages={messages} 
           isLoading={isLoadingMessages} 
