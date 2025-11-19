@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -7,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MessageCircle, Webhook, Settings, CheckCircle2, XCircle, Users } from "lucide-react";
+import { MessageCircle, Webhook, Settings, CheckCircle2, XCircle, Users, Shield } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { ManageIntegrationPermissionsDialog } from "@/components/forms/ManageIntegrationPermissionsDialog";
 
 export default function ChatIntegrations() {
   const { tenantId } = useCurrentTenant();
@@ -18,6 +20,18 @@ export default function ChatIntegrations() {
   const { buildPath } = useTenantPath();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  
+  const [permissionsDialog, setPermissionsDialog] = useState<{
+    open: boolean;
+    integrationId: string;
+    integrationName: string;
+    integrationOwnerId?: string | null;
+  }>({
+    open: false,
+    integrationId: '',
+    integrationName: '',
+    integrationOwnerId: null,
+  });
 
   // Fetch ManyChat integration (organization-level)
   const { data: manychatIntegration } = useQuery({
@@ -286,20 +300,47 @@ export default function ChatIntegrations() {
                     </div>
                   )}
 
-                  <Button
-                    onClick={() => navigate(buildPath(provider.settingsPath))}
-                    className="w-full"
-                    variant={provider.hasApiKey ? "outline" : "default"}
-                  >
-                    <Settings className="h-4 w-4 ml-2" />
-                    {provider.hasApiKey ? 'ניהול הגדרות' : 'הגדר עכשיו'}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => navigate(buildPath(provider.settingsPath))}
+                      className="flex-1"
+                      variant={provider.hasApiKey ? "outline" : "default"}
+                    >
+                      <Settings className="h-4 w-4 ml-2" />
+                      {provider.hasApiKey ? 'ניהול הגדרות' : 'הגדר עכשיו'}
+                    </Button>
+                    
+                    {provider.hasApiKey && provider.integration && (
+                      <Button
+                        onClick={() => setPermissionsDialog({
+                          open: true,
+                          integrationId: provider.integration.id,
+                          integrationName: provider.name,
+                          integrationOwnerId: provider.integration.user_id,
+                        })}
+                        variant="outline"
+                        className="flex-shrink-0"
+                      >
+                        <Shield className="h-4 w-4 ml-2" />
+                        הרשאות
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
           );
         })}
       </div>
+
+      {/* Permissions Dialog */}
+      <ManageIntegrationPermissionsDialog
+        open={permissionsDialog.open}
+        onOpenChange={(open) => setPermissionsDialog({ ...permissionsDialog, open })}
+        integrationId={permissionsDialog.integrationId}
+        integrationName={permissionsDialog.integrationName}
+        integrationOwnerId={permissionsDialog.integrationOwnerId}
+      />
 
       {/* WhatsApp Groups Management */}
       <Card className="mt-8">

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, AlertCircle, Ban } from "lucide-react";
+import { ArrowLeft, AlertCircle, Ban, Shield } from "lucide-react";
 import ChatMessageList from "./ChatMessageList";
 import ChatInput from "./ChatInput";
 import { ManyChatControls } from "./ManyChatControls";
@@ -15,9 +15,12 @@ import { ConvertContactDialog } from "./ConvertContactDialog";
 import { LinkContactDialog } from "./LinkContactDialog";
 import { LinkPhoneDialog } from "./LinkPhoneDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useTenantPath } from "@/hooks/useTenantPath";
 
 interface Message {
   id: string;
@@ -37,7 +40,9 @@ interface ChatViewProps {
 
 export default function ChatView({ contactId, contactType, senderPhone, onBack }: ChatViewProps) {
   const queryClient = useQueryClient();
-  const { tenant: currentTenant } = useCurrentTenant();
+  const { tenant: currentTenant, tenantId } = useCurrentTenant();
+  const { userId } = useCurrentUser();
+  const { buildPath } = useTenantPath();
   const isMobile = useIsMobile();
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
   const [convertType, setConvertType] = useState<"client" | "lead" | "group">("client");
@@ -117,6 +122,34 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
       return data?.integration_type as "manychat" | "green_api" | null;
     },
     enabled: !!tenantIdForProvider,
+  });
+
+  // Check if user has permission to use the active integration
+  const { data: hasPermission, isLoading: isCheckingPermission } = useQuery({
+    queryKey: ["integration-permission", tenantIdForProvider, userId, activeProvider],
+    queryFn: async () => {
+      if (!tenantIdForProvider || !userId) return false;
+      
+      // Get the active integration
+      const { data: integration } = await supabase
+        .from("tenant_integrations")
+        .select("id, user_id")
+        .eq("tenant_id", tenantIdForProvider)
+        .eq("is_active", true)
+        .in("integration_type", ["manychat", "green_api"])
+        .maybeSingle();
+      
+      if (!integration) return false;
+      
+      // Check permission using the database function
+      const { data: permission } = await supabase.rpc('user_has_integration_permission', {
+        p_user_id: userId,
+        p_integration_id: integration.id,
+      });
+      
+      return permission || false;
+    },
+    enabled: !!tenantIdForProvider && !!userId && !!activeProvider,
   });
 
   // Mark messages as read mutation
@@ -359,6 +392,28 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
 
   if (!contact) {
     return <div className="p-4">איש קשר לא נמצא</div>;
+  }
+
+  // Check if user has permission to use the active integration
+  if (isCheckingPermission) {
+    return <div className="p-4">בודק הרשאות...</div>;
+  }
+
+  if (activeProvider && !hasPermission) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+        <Shield className="h-16 w-16 text-muted-foreground mb-4" />
+        <h3 className="text-xl font-semibold mb-2">אין לך הרשאה לגשת לצ'אט</h3>
+        <p className="text-muted-foreground mb-6 max-w-md">
+          בעלים של האינטגרציה לא העניק לך הרשאה להשתמש בה. צור קשר עם בעלים של האינטגרציה כדי לקבל גישה.
+        </p>
+        <Link to={buildPath('/chat-integrations')}>
+          <Button variant="outline">
+            חזור לאינטגרציות
+          </Button>
+        </Link>
+      </div>
+    );
   }
 
   return (
