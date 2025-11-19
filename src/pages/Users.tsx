@@ -31,6 +31,7 @@ import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialo
 import { EditUserPermissionsDialog } from "@/components/forms/EditUserPermissionsDialog";
 import { EditUserNameDialog } from "@/components/forms/EditUserNameDialog";
 import EditSalesPersonAgenciesDialog from "@/components/forms/EditSalesPersonAgenciesDialog";
+import { getAllModules } from "@/lib/modules";
 import {
   Dialog,
   DialogContent,
@@ -853,20 +854,8 @@ export default function Users() {
                 </div>
                 <div className="md:col-span-2">
                   <Label>הרשאות מודולים</Label>
-                  <div className="border rounded-md p-3 space-y-2 max-h-32 overflow-y-auto">
-                  {[
-                    { id: "leads", name: "ניהול לידים" },
-                    { id: "clients", name: "ניהול לקוחות" },
-                    { id: "client_onboarding", name: "קליטת לקוחות" },
-                    { id: "campaigners", name: "ניהול קמפיינרים" },
-                    { id: "agencies", name: "ניהול סוכנויות" },
-                    { id: "sales_people", name: "ניהול אנשי מכירות" },
-                    { id: "suppliers", name: "ניהול ספקים" },
-                    { id: "tasks", name: "משימות" },
-                    { id: "finance", name: "פיננסים" },
-                    { id: "reports", name: "דוחות" },
-                    { id: "time_tracking", name: "מעקב זמן" },
-                  ].map((module) => (
+                  <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
+                  {getAllModules().map((module) => (
                     <div key={module.id} className="flex items-center space-x-2 space-x-reverse">
                       <input
                         type="checkbox"
@@ -885,7 +874,7 @@ export default function Users() {
                         htmlFor={`module-${module.id}`}
                         className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                       >
-                        {module.name}
+                        {module.label}
                       </label>
                     </div>
                   ))}
