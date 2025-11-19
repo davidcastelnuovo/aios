@@ -37,13 +37,17 @@ useEffect(() => {
     const type = searchParams.get("type");
     const code = searchParams.get("code");
 
-    // Check for recovery type FIRST - before any navigation
+    // Check for recovery type FIRST - even if there's a code
     if (type === "recovery") {
       setUpdatePasswordMode(true);
+      // If there's a code, exchange it for session but stay on update password screen
+      if (code) {
+        await supabase.auth.exchangeCodeForSession(code);
+      }
       return; // Don't navigate away if in recovery mode
     }
 
-    // If we have a code param, try to exchange it for a session
+    // If we have a code param (but NOT recovery type), try to exchange it for a session
     if (code) {
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) {
@@ -74,7 +78,7 @@ useEffect(() => {
       }
     }
 
-    // Check if user is already authenticated
+    // Check if user is already authenticated (only if not in recovery mode)
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session?.user) {
