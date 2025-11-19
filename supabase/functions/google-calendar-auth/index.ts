@@ -110,25 +110,26 @@ serve(async (req) => {
     }
 
     // For all other actions, require authentication
-    const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
+    const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
     if (!authHeader) {
       console.error('No authorization header provided');
       throw new Error('No authorization header provided');
     }
 
-    const supabaseClient = createClient(
+    // Verify user with anon key
+    const anonClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { 
         global: { 
           headers: { 
-            authorization: authHeader
+            Authorization: authHeader
           } 
         } 
       }
     );
 
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    const { data: { user }, error: userError } = await anonClient.auth.getUser();
     if (userError || !user) {
       console.error('Auth error:', userError);
       throw new Error('Unauthorized - user not authenticated');
@@ -139,7 +140,14 @@ serve(async (req) => {
     // Handle disconnect separately (DELETE with no body)
     if (req.method === 'DELETE') {
       console.log('Disconnecting calendar for user:', user.id);
-      const { error: deleteError } = await supabaseClient
+      
+      // Use service role key to delete (bypasses RLS)
+      const serviceClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      );
+      
+      const { error: deleteError } = await serviceClient
         .from('calendar_tokens')
         .delete()
         .eq('user_id', user.id);
@@ -154,6 +162,9 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // For non-DELETE requests, use anon client
+    const supabaseClient = anonClient;
 
     const requestBody = await req.json();
     const action = requestBody.action;
