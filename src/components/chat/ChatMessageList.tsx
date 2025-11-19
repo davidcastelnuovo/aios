@@ -212,6 +212,7 @@ export default function ChatMessageList({
           return (
             <div
               key={message.id}
+              ref={(el) => { msgRefs.current[message.id] = el; }}
               className={`flex ${isOutbound ? 'justify-end' : 'justify-start'} group`}
             >
               <div
