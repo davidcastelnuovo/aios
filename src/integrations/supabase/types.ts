@@ -1101,6 +1101,44 @@ export type Database = {
           },
         ]
       }
+      integration_user_permissions: {
+        Row: {
+          created_at: string
+          granted_at: string
+          granted_by: string
+          id: string
+          integration_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          granted_at?: string
+          granted_by: string
+          id?: string
+          integration_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          granted_at?: string
+          granted_by?: string
+          id?: string
+          integration_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_user_permissions_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invitation_tokens: {
         Row: {
           created_at: string
@@ -2347,6 +2385,10 @@ export type Database = {
       }
       user_has_cross_tenant_agency_access: {
         Args: { _agency_id: string; _user_id: string }
+        Returns: boolean
+      }
+      user_has_integration_permission: {
+        Args: { p_integration_id: string; p_user_id: string }
         Returns: boolean
       }
       user_manages_agency: {
