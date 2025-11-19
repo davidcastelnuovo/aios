@@ -48,6 +48,20 @@ const [eventEnd, setEventEnd] = useState("");
   const connectMutation = useMutation({
     mutationFn: async () => {
       console.log('Starting Google Calendar connection for user:', userId);
+      
+      // Open popup BEFORE the async call to avoid popup blockers
+      const popup = window.open(
+        'about:blank',
+        'google-calendar-auth',
+        'width=600,height=700,left=100,top=100'
+      );
+      
+      if (!popup) {
+        throw new Error('חלון הקופץ נחסם. נא לאפשר חלונות קופצים ולנסות שוב.');
+      }
+      
+      popupRef.current = popup;
+      
       const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
         body: { action: 'init' }
       });
@@ -61,11 +75,13 @@ const [eventEnd, setEventEnd] = useState("");
 
       if (error) {
         console.error('Error from edge function:', error);
+        popup.close();
         throw error;
       }
       
       if (!data?.authUrl) {
         console.error('No authUrl in response!', data);
+        popup.close();
         throw new Error('לא התקבל קישור התחברות מהשרת');
       }
       
@@ -73,22 +89,10 @@ const [eventEnd, setEventEnd] = useState("");
     },
     onSuccess: (data) => {
       console.log('Success! Auth URL:', data?.authUrl);
-      if (data?.authUrl) {
-        // If we pre-opened a popup, navigate it; otherwise try to open now
-        if (popupRef.current && !popupRef.current.closed) {
-          popupRef.current.location.href = data.authUrl;
-        } else {
-          const popup = window.open(
-            data.authUrl,
-            'google-calendar-auth',
-            'width=600,height=700,left=100,top=100,noopener,noreferrer'
-          );
-          if (!popup) {
-            toast.error('חלון הקופץ נחסם. נא לאפשר חלונות קופצים ולנסות שוב.');
-            return;
-          }
-          popupRef.current = popup;
-        }
+      if (data?.authUrl && popupRef.current && !popupRef.current.closed) {
+        // Navigate the already-open popup to the auth URL
+        popupRef.current.location.href = data.authUrl;
+        
         // Listen for the popup to notify on success
         const onMessage = (event: MessageEvent) => {
           if (event.data?.type === 'calendar_connected') {
