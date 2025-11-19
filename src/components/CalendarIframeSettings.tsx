@@ -223,13 +223,7 @@ const [eventEnd, setEventEnd] = useState("");
               חבר את חשבון Google שלך כדי להוסיף אירועים ישירות ללוח השנה
             </p>
             <Button 
-              onClick={() => {
-                // Pre-open a blank popup to avoid popup blockers
-                try {
-                  popupRef.current = window.open('', 'google-calendar-auth', 'width=600,height=700,left=100,top=100,noopener,noreferrer');
-                } catch {}
-                connectMutation.mutate();
-              }}
+              onClick={() => connectMutation.mutate()}
               disabled={connectMutation.isPending}
             >
               <Calendar className="h-4 w-4 ml-2" />
