@@ -36,7 +36,7 @@ export function ManageIntegrationPermissionsDialog({
   const { userId } = useCurrentUser();
   const { permissions, grantPermission, revokePermission } = useIntegrationPermissions(integrationId);
 
-  // Fetch all users in the tenant with proper join
+  // Fetch all users in the tenant using tenant_users table
   const { data: tenantUsers, isLoading, error: usersError } = useQuery({
     queryKey: ['tenant-users', tenantId, open],
     queryFn: async () => {
@@ -48,18 +48,17 @@ export function ManageIntegrationPermissionsDialog({
       console.log('Fetching users for tenant:', tenantId);
       
       const { data, error } = await supabase
-        .from('profiles')
+        .from('tenant_users')
         .select(`
-          id,
-          full_name,
-          email,
-          tenant_users!inner (
-            user_id,
-            role,
-            tenant_id
+          user_id,
+          role,
+          profiles:user_id (
+            id,
+            full_name,
+            email
           )
         `)
-        .eq('tenant_users.tenant_id', tenantId);
+        .eq('tenant_id', tenantId);
       
       if (error) {
         console.error('Error fetching tenant users:', error);
@@ -68,22 +67,7 @@ export function ManageIntegrationPermissionsDialog({
       
       console.log('Fetched users:', data);
       
-      // Transform the data to match the expected format
-      return data?.map(profile => {
-        const tenantUser = Array.isArray(profile.tenant_users) 
-          ? profile.tenant_users[0] 
-          : profile.tenant_users;
-        
-        return {
-          user_id: profile.id,
-          role: tenantUser?.role || 'viewer',
-          profiles: {
-            id: profile.id,
-            full_name: profile.full_name,
-            email: profile.email
-          }
-        };
-      }) || [];
+      return data || [];
     },
     enabled: !!tenantId && open,
   });
