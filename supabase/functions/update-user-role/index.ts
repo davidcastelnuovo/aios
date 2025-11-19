@@ -71,6 +71,26 @@ serve(async (req: Request) => {
       throw new Error("Invalid role");
     }
 
+    // Check if target user is currently an owner
+    const { data: existingRoles, error: existingRolesError } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("tenant_id", tenantId);
+
+    if (existingRolesError) {
+      console.error("Error checking existing roles:", existingRolesError);
+      throw existingRolesError;
+    }
+
+    const isCurrentlyOwner = existingRoles?.some(r => r.role === "owner");
+
+    // Prevent removing owner role (changing owner to something else)
+    // Only exception: if the new role is also owner (which is just a re-assignment)
+    if (isCurrentlyOwner && role !== "owner") {
+      throw new Error("Cannot demote an owner. Owner role cannot be changed to a different role.");
+    }
+
     console.log(`Updating user ${userId} to role: ${role} in tenant: ${tenantId}`);
 
     // Delete existing roles for this user IN THIS TENANT (don't touch super_admin or other tenants)
