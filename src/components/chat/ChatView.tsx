@@ -219,11 +219,16 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
     queryKey: ["chat-messages", contactId, contactType, senderPhone],
     queryFn: async () => {
+      // Get current user to filter by connection_user_id
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error("No user found");
+
       if (contactType === "unknown") {
         const { data, error } = await supabase
           .from("chat_messages")
           .select("*")
           .eq("sender_phone", senderPhone || contactId)
+          .eq("connection_user_id", userData.user.id)
           .order("created_at", { ascending: true });
 
         if (error) throw error;
@@ -243,6 +248,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
         .from("chat_messages")
         .select("*")
         .match(filter)
+        .eq("connection_user_id", userData.user.id)
         .order("created_at", { ascending: true });
 
       if (error) throw error;
