@@ -30,6 +30,11 @@ export type ModulePermission =
   | "fields_management" // Custom fields management (owner only)
   | "dynamic_tables" // Dynamic tables (owner only)
   | "chat" // Chat with clients via ManyChat
+  | "products" // Products and services management
+  | "manychat_settings" // ManyChat integration settings
+  | "green_api_settings" // Green API WhatsApp integration settings
+  | "chat_integrations" // Chat integrations settings
+  | "accounting_integrations" // Accounting integrations
   | "settings"; // System settings
 
 export function useUserPermissions() {
@@ -112,6 +117,11 @@ export function useUserPermissions() {
       "tenants",
       "menu_management",
       "fields_management",
+      "branding",
+      "manychat_settings",
+      "green_api_settings",
+      "chat_integrations",
+      "accounting_integrations",
     ];
 
     // Owners always see these admin modules in the UI
