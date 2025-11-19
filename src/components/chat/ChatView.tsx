@@ -360,8 +360,8 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className={`sticky top-0 z-10 ${isMobile ? 'p-2' : 'p-4'} border-b bg-card`}>
+    <div className="flex flex-col h-full overflow-y-auto">
+      <div className={`sticky top-0 z-50 ${isMobile ? 'p-2' : 'p-4'} border-b bg-card shadow-sm`}>
         {/* שורה ראשונה - תמיד גלויה */}
         <div className="flex items-center gap-3">
           {onBack && (
@@ -515,8 +515,8 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
         </Collapsible>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden bg-[#e5ddd5] h-full">
-        <ChatMessageList 
+      <div className="bg-[#e5ddd5] pb-4">
+        <ChatMessageList
           messages={messages} 
           isLoading={isLoadingMessages} 
           contactId={contactId} 
@@ -526,7 +526,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
         />
       </div>
 
-      <div className="sticky bottom-0 z-10 border-t bg-card shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
+      <div className="sticky bottom-0 z-50 border-t bg-card shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
         <ChatInput onSend={handleSendMessage} isLoading={false} />
       </div>
 
