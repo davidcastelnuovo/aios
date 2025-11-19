@@ -122,11 +122,30 @@ const [eventEnd, setEventEnd] = useState("");
   // Disconnect calendar
   const disconnectMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.functions.invoke('google-calendar-auth', {
-        method: 'DELETE',
-      });
+      console.log('Disconnecting Google Calendar for user:', userId);
+      
+      // Get current session for auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('לא מחובר למערכת');
 
-      if (error) throw error;
+      // Use DELETE method as expected by the edge function
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-calendar-auth`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'שגיאה בניתוק היומן');
+      }
+
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["calendar-status", userId] });
