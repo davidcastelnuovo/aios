@@ -164,11 +164,9 @@ export default function Clients() {
       let query = supabase
         .from("clients")
         .select(selectStr)
-        .eq("tenant_id", tenantId) // 🔒 CRITICAL: Always filter by tenant_id
         .order("created_at", { ascending: false });
 
-      // Scope by agency: if a specific agency is selected use it, otherwise include
-      // all agencies accessible to this tenant (owned + shared)
+      // Filter by available agencies (owned + shared)
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
       } else if (agencies && agencies.length > 0) {

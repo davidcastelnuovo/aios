@@ -53,7 +53,7 @@ interface Campaigner {
 
 export default function ClientOnboarding() {
   const queryClient = useQueryClient();
-  const { selectedAgency } = useAgency();
+  const { selectedAgency, agencies } = useAgency();
   const { userAgencyIds } = useUserAgencies();
   const { campaignerId, isCampaigner, isTeamManager, isOwner } = useUserRole();
   const [editingItem, setEditingItem] = useState<OnboardingItem | null>(null);
@@ -86,11 +86,14 @@ export default function ClientOnboarding() {
           clients (name, is_seo_client),
           campaigners (full_name)
         `)
-        .eq("tenant_id", tenantId) // 🔒 CRITICAL: Filter by tenant_id from URL
         .order("created_at", { ascending: false });
 
+      // Filter by available agencies (owned + shared)
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
+      } else if (agencies && agencies.length > 0) {
+        const agencyIds = agencies.map((a) => a.id);
+        query = query.in("agency_id", agencyIds);
       }
 
       const { data, error } = await query;
