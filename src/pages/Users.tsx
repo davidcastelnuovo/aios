@@ -215,7 +215,16 @@ export default function Users() {
 
       const { data: profiles, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, email, full_name, status, campaigner_id, sales_person_id, campaigners(full_name), sales_people(full_name)")
+        .select(`
+          id, 
+          email, 
+          full_name, 
+          status, 
+          campaigner_id, 
+          sales_person_id, 
+          campaigners!profiles_campaigner_id_fkey(full_name), 
+          sales_people!profiles_sales_person_id_fkey(full_name)
+        `)
         .in("id", tenantUserIds);
 
       if (profilesError) throw profilesError;
