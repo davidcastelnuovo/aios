@@ -42,6 +42,8 @@ import Chat from "./pages/Chat";
 import ManyChatSettings from "./pages/ManyChatSettings";
 import ChatIntegrations from "./pages/ChatIntegrations";
 import GreenAPISettings from "./pages/GreenAPISettings";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
 import { SuperAdminRoute } from "./components/SuperAdminRoute";
 
@@ -62,6 +64,8 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/setup" element={<Setup />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
             
             {/* Tenant-scoped routes */}
             <Route path="/t/:tenantSlug" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
