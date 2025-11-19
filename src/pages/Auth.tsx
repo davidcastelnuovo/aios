@@ -307,9 +307,6 @@ useEffect(() => {
   const handleGoogleSignIn = async () => {
     setLoading(true);
     try {
-      // Clear any old session data to prevent refresh token errors
-      await supabase.auth.signOut();
-      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
