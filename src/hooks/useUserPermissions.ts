@@ -131,8 +131,14 @@ export function useUserPermissions() {
       return permissions?.[module] === true;
     }
 
-    // If user has no permissions defined at all, owners get full access baseline
-    if (!hasAnyPermissions) return isOwner;
+    // If user has no permissions defined at all:
+    // - Owners get full access to non-restricted modules
+    // - Regular users only get access to their profile
+    if (!hasAnyPermissions) {
+      if (isOwner) return true;
+      // Only allow access to profile for users without explicit permissions
+      return module === "settings";
+    }
 
     // Owners always get access to non-restricted modules, even if permission says false
     if (isOwner && !restrictedModules.includes(module)) return true;
