@@ -122,38 +122,65 @@ const [eventEnd, setEventEnd] = useState("");
   // Disconnect calendar
   const disconnectMutation = useMutation({
     mutationFn: async () => {
-      console.log('Disconnecting Google Calendar for user:', userId);
+      console.log('🔌 Starting disconnect - User ID:', userId);
       
-      // Get current session for auth token
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('לא מחובר למערכת');
+      try {
+        // Get current session for auth token
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        console.log('Session check:', { hasSession: !!session, sessionError });
+        
+        if (sessionError || !session) {
+          console.error('Session error:', sessionError);
+          throw new Error('לא מחובר למערכת');
+        }
 
-      // Use DELETE method as expected by the edge function
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-calendar-auth`,
-        {
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-calendar-auth`;
+        console.log('📡 Sending DELETE to:', url);
+
+        // Use DELETE method as expected by the edge function
+        const response = await fetch(url, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
           },
+        });
+
+        console.log('📥 Response received:', { 
+          status: response.status, 
+          ok: response.ok,
+          statusText: response.statusText 
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('❌ Error response:', errorText);
+          
+          let errorJson;
+          try {
+            errorJson = JSON.parse(errorText);
+          } catch {
+            throw new Error('שגיאה בניתוק היומן');
+          }
+          throw new Error(errorJson.error || 'שגיאה בניתוק היומן');
         }
-      );
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'שגיאה בניתוק היומן');
+        const result = await response.json();
+        console.log('✅ Disconnect successful:', result);
+        return result;
+      } catch (error) {
+        console.error('💥 Exception in disconnect:', error);
+        throw error;
       }
-
-      return await response.json();
     },
     onSuccess: () => {
+      console.log('🎉 Disconnect mutation onSuccess triggered');
       queryClient.invalidateQueries({ queryKey: ["calendar-status", userId] });
       toast.success("הלוח השנה נותק בהצלחה");
     },
     onError: (error) => {
-      console.error("Error disconnecting calendar:", error);
-      toast.error("שגיאה בניתוק לוח השנה");
+      console.error("❌ Disconnect mutation onError:", error);
+      toast.error("שגיאה בניתוק לוח השנה: " + (error as Error).message);
     },
   });
 
@@ -262,7 +289,10 @@ const [eventEnd, setEventEnd] = useState("");
             <div className="flex gap-2">
               <Button
                 variant="destructive"
-                onClick={() => disconnectMutation.mutate()}
+                onClick={() => {
+                  console.log('👆 Disconnect button clicked');
+                  disconnectMutation.mutate();
+                }}
                 disabled={disconnectMutation.isPending}
               >
                 {disconnectMutation.isPending && <Loader2 className="h-4 w-4 animate-spin ml-2" />}
