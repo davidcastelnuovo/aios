@@ -164,21 +164,15 @@ export default function Clients() {
       let query = supabase
         .from("clients")
         .select(selectStr)
+        .eq("tenant_id", tenantId) // 🔒 CRITICAL: Always filter by tenant_id
         .order("created_at", { ascending: false });
 
       // Scope by agency: if a specific agency is selected use it, otherwise include
       // all agencies accessible to this tenant (owned + shared)
       if (selectedAgency && selectedAgency !== "all") {
-        const isOwned = ownedAgencyIds.includes(selectedAgency);
-        // If the agency is owned by the current tenant, keep tenant scoping
-        if (isOwned) {
-          query = query.eq("tenant_id", tenantId);
-        }
         query = query.eq("agency_id", selectedAgency);
       } else if (agencies && agencies.length > 0) {
         const ids = agencies.map((a: any) => a.id);
-        // For "all" agencies we intentionally do NOT filter by tenant_id
-        // to include clients from shared agencies. RLS restricts visibility.
         query = query.in("agency_id", ids);
       }
 

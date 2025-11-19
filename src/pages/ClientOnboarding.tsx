@@ -86,6 +86,7 @@ export default function ClientOnboarding() {
           clients (name, is_seo_client),
           campaigners (full_name)
         `)
+        .eq("tenant_id", tenantId) // 🔒 CRITICAL: Filter by tenant_id from URL
         .order("created_at", { ascending: false });
 
       if (selectedAgency && selectedAgency !== "all") {
