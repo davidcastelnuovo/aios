@@ -110,10 +110,22 @@ serve(async (req) => {
     }
 
     // For all other actions, require authentication
+    const authHeader = req.headers.get('authorization') || req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('No authorization header provided');
+      throw new Error('No authorization header provided');
+    }
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+      { 
+        global: { 
+          headers: { 
+            authorization: authHeader
+          } 
+        } 
+      }
     );
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
@@ -127,11 +139,17 @@ serve(async (req) => {
     // Handle disconnect separately (DELETE with no body)
     if (req.method === 'DELETE') {
       console.log('Disconnecting calendar for user:', user.id);
-      await supabaseClient
+      const { error: deleteError } = await supabaseClient
         .from('calendar_tokens')
         .delete()
         .eq('user_id', user.id);
 
+      if (deleteError) {
+        console.error('Delete error:', deleteError);
+        throw deleteError;
+      }
+
+      console.log('Calendar disconnected successfully for user:', user.id);
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
