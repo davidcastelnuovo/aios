@@ -29,6 +29,9 @@ interface Message {
   created_at: string;
   sender_name?: string | null;
   raw_provider_data?: any;
+  profiles?: {
+    full_name: string;
+  } | null;
 }
 
 interface ChatViewProps {
@@ -275,7 +278,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
 
       const { data, error } = await supabase
         .from("chat_messages")
-        .select("*")
+        .select("*, profiles!sent_by_user_id(full_name)")
         .match(filter)
         .eq("is_blocked", false)
         .order("created_at", { ascending: true });
@@ -293,13 +296,14 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
 
   // Transform messages
   const messages: Message[] =
-    messagesData?.map((msg) => ({
+    messagesData?.map((msg: any) => ({
       id: msg.id,
       direction: msg.direction as "inbound" | "outbound",
       message_text: msg.message_text,
       created_at: msg.created_at || "",
       sender_name: msg.sender_name,
       raw_provider_data: msg.raw_provider_data,
+      profiles: msg.profiles,
     })) || [];
 
   // Calculate anchor message for scroll
