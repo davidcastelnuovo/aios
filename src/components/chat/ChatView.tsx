@@ -286,7 +286,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
 
       const { data, error } = await supabase
         .from("chat_messages")
-        .select("*, profiles!sent_by_user_id(full_name)")
+        .select("*")
         .match(filter)
         .eq("is_blocked", false)
         .order("created_at", { ascending: true });
@@ -316,7 +316,6 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
       created_at: msg.created_at || "",
       sender_name: msg.sender_name,
       raw_provider_data: msg.raw_provider_data,
-      profiles: msg.profiles,
     })) || [];
 
   // Calculate anchor message for scroll
