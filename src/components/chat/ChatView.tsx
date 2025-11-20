@@ -255,6 +255,8 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
     queryKey: ["chat-messages", contactId, contactType, senderPhone],
     queryFn: async () => {
+      console.log("🔵 Fetching messages for:", { contactId, contactType, senderPhone });
+      
       if (contactType === "unknown") {
         const { data, error } = await supabase
           .from("chat_messages")
@@ -263,8 +265,12 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
           .eq("is_blocked", false)
           .order("created_at", { ascending: true });
 
-        if (error) throw error;
+        if (error) {
+          console.error("❌ Error fetching unknown messages:", error);
+          throw error;
+        }
 
+        console.log("✅ Fetched unknown messages:", data?.length);
         // Mark as read automatically for unknown contacts
         markAsReadMutation.mutate();
         return data;
@@ -276,6 +282,8 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
         ? { lead_id: contactId }
         : { group_id: contactId };
 
+      console.log("🔍 Query filter:", filter);
+
       const { data, error } = await supabase
         .from("chat_messages")
         .select("*, profiles!sent_by_user_id(full_name)")
@@ -283,7 +291,12 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
         .eq("is_blocked", false)
         .order("created_at", { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error("❌ Error fetching messages:", error);
+        throw error;
+      }
+
+      console.log("✅ Fetched messages:", data?.length);
 
       // Mark as read automatically
       markAsReadMutation.mutate();
