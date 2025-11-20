@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   DndContext,
   DragEndEvent,
@@ -36,6 +36,7 @@ interface OnboardingItem {
   client_id: string;
   campaigner_id: string;
   agency_id: string;
+  tenant_id: string | null;
   status: OnboardingStatus;
   title: string;
   notes: string | null;
@@ -104,6 +105,22 @@ export default function ClientOnboarding() {
     },
     enabled: !!tenantId,
   });
+
+  // 🔒 SECURITY GUARD: Filter onboarding by current tenant and accessible agencies
+  const secureFilteredOnboarding = useMemo(() => {
+    if (!onboardingItems || !tenantId) return [];
+    
+    return onboardingItems.filter(item => {
+      // Allow if onboarding belongs to current tenant
+      if (item.tenant_id === tenantId) return true;
+      
+      // Allow if onboarding belongs to an accessible agency
+      if (item.agency_id && userAgencyIds?.includes(item.agency_id)) return true;
+      
+      // Block everything else
+      return false;
+    });
+  }, [onboardingItems, tenantId, userAgencyIds]);
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners", tenantId],
