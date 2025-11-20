@@ -221,9 +221,14 @@ export default function ChatMessageList({
                   ${isOutbound ? 'bg-[#dcf8c6] text-gray-900' : 'bg-white text-gray-900'}
                   relative`}
               >
-                {!isOutbound && message.sender_name && (
+                {!isOutbound && message.sender_name && message.sender_name !== "אני" && (
                   <div className="font-semibold text-[12.8px] mb-0.5 text-blue-600">
                     {message.sender_name}
+                  </div>
+                )}
+                {isOutbound && message.profiles?.full_name && (
+                  <div className="font-semibold text-[12.8px] mb-0.5 text-green-600">
+                    {message.profiles.full_name}
                   </div>
                 )}
                 {quotedMessage}
