@@ -172,16 +172,22 @@ export default function Tasks() {
     if (!tasks || !tenantId) return [];
     
     return tasks.filter(task => {
-      // Allow if task belongs to current tenant
-      if (task.tenant_id === tenantId) return true;
+      // ALWAYS check tenant match first - strict isolation
+      const isTenantMatch = task.tenant_id === tenantId;
       
-      // Allow if task belongs to an accessible agency
+      // For owners: only show tasks from CURRENT tenant
+      if (isOwner) {
+        return isTenantMatch;
+      }
+      
+      // For non-owners: allow tenant match OR accessible agency
+      if (isTenantMatch) return true;
       if (task.agency_id && userAgencyIds?.includes(task.agency_id)) return true;
       
       // Block everything else
       return false;
     });
-  }, [tasks, tenantId, userAgencyIds]);
+  }, [tasks, tenantId, userAgencyIds, isOwner]);
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners", tenantId],

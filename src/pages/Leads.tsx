@@ -27,6 +27,8 @@ import { ImportLeadsCSV } from "@/components/forms/ImportLeadsCSV";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
+import { useUserRole } from "@/hooks/useUserRole";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
@@ -47,7 +49,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500" },
@@ -397,6 +398,8 @@ export default function Leads() {
   const { toast } = useToast();
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
   const { userAgencyIds } = useUserAgencies();
+  const { isOwner } = useUserRole();
+  const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
@@ -415,7 +418,6 @@ export default function Leads() {
   const [selectedMobileStage, setSelectedMobileStage] = useState<string>("new");
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
 
-  const { tenantId } = useCurrentTenant();
   const { data: leads, isLoading, refetch } = useQuery({
     queryKey: ["leads", tenantId, selectedAgency],
     queryFn: async () => {
@@ -470,16 +472,22 @@ export default function Leads() {
     if (!leads || !tenantId) return [];
     
     return leads.filter(lead => {
-      // Allow if lead belongs to current tenant
-      if (lead.tenant_id === tenantId) return true;
+      // ALWAYS check tenant match first - strict isolation
+      const isTenantMatch = lead.tenant_id === tenantId;
       
-      // Allow if lead belongs to an accessible agency
+      // For owners: only show leads from CURRENT tenant
+      if (isOwner) {
+        return isTenantMatch;
+      }
+      
+      // For non-owners: allow tenant match OR accessible agency
+      if (isTenantMatch) return true;
       if (lead.agency_id && userAgencyIds?.includes(lead.agency_id)) return true;
       
       // Block everything else
       return false;
     });
-  }, [leads, tenantId, userAgencyIds]);
+  }, [leads, tenantId, userAgencyIds, isOwner]);
 
   // Fetch products for lookup
   const { data: allProducts } = useQuery({

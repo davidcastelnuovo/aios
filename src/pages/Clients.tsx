@@ -186,16 +186,22 @@ export default function Clients() {
     if (!clients || !tenantId) return [];
     
     return clients.filter(client => {
-      // Allow if client belongs to current tenant
-      if (client.tenant_id === tenantId) return true;
+      // ALWAYS check tenant match first - strict isolation
+      const isTenantMatch = client.tenant_id === tenantId;
       
-      // Allow if client belongs to an accessible agency
+      // For owners: only show clients from CURRENT tenant
+      if (isOwner) {
+        return isTenantMatch;
+      }
+      
+      // For non-owners: allow tenant match OR accessible agency
+      if (isTenantMatch) return true;
       if (client.agency_id && userAgencyIds?.includes(client.agency_id)) return true;
       
       // Block everything else
       return false;
     });
-  }, [clients, tenantId, userAgencyIds]);
+  }, [clients, tenantId, userAgencyIds, isOwner]);
 
 
   const { data: campaigners } = useQuery({
