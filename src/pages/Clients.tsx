@@ -164,14 +164,13 @@ export default function Clients() {
         .select(selectStr)
         .order("created_at", { ascending: false });
 
-      // 🔒 CRITICAL SECURITY: Filter by agencies OR tenant_id
+      // 🔒 CRITICAL SECURITY: Filter by tenant_id OR accessible agencies
       if (selectedAgency && selectedAgency !== "all") {
-        query = query.eq("agency_id", selectedAgency);
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
       } else if (agencies && agencies.length > 0) {
         const ids = agencies.map((a: any) => a.id);
-        query = query.in("agency_id", ids);
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${ids.join(',')})`);
       } else {
-        // No agencies available - strict tenant isolation
         query = query.eq("tenant_id", tenantId);
       }
 

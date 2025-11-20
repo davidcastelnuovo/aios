@@ -88,14 +88,13 @@ export default function ClientOnboarding() {
         `)
         .order("created_at", { ascending: false });
 
-      // 🔒 CRITICAL SECURITY: Filter by agencies OR tenant_id
+      // 🔒 CRITICAL SECURITY: Filter by tenant_id OR accessible agencies
       if (selectedAgency && selectedAgency !== "all") {
-        query = query.eq("agency_id", selectedAgency);
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
       } else if (agencies && agencies.length > 0) {
         const agencyIds = agencies.map((a) => a.id);
-        query = query.in("agency_id", agencyIds);
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${agencyIds.join(',')})`);
       } else {
-        // No agencies available - strict tenant isolation
         query = query.eq("tenant_id", tenantId);
       }
 
