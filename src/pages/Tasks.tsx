@@ -144,14 +144,16 @@ export default function Tasks() {
         `)
         .order("due_date", { ascending: true });
 
-      // 🔒 CRITICAL SECURITY: Filter by agencies OR tenant_id
+      // 🔒 CRITICAL SECURITY: Filter by tenant_id OR accessible agencies
       if (selectedAgency && selectedAgency !== "all") {
-        query = query.eq("agency_id", selectedAgency);
+        // Single agency selected - must match tenant OR be accessible
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
       } else if (agencies && agencies.length > 0) {
+        // Multiple agencies - must match tenant OR be in accessible agencies
         const agencyIds = agencies.map((a) => a.id);
-        query = query.in("agency_id", agencyIds);
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${agencyIds.join(',')})`);
       } else {
-        // No agencies available - strict tenant isolation
+        // No agencies - strict tenant isolation
         query = query.eq("tenant_id", tenantId);
       }
 
