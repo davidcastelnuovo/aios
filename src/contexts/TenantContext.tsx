@@ -80,6 +80,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           queryClient.invalidateQueries({ queryKey: ["user-tenants"] });
           queryClient.invalidateQueries({ queryKey: ["clients"] });
           queryClient.invalidateQueries({ queryKey: ["agencies"] });
+          queryClient.invalidateQueries({ queryKey: ["agencies-filter"] });
+          queryClient.invalidateQueries({ queryKey: ["user-agency-ids"] });
           queryClient.invalidateQueries({ queryKey: ["leads"] });
           queryClient.invalidateQueries({ queryKey: ["campaigners"] });
           queryClient.invalidateQueries({ queryKey: ["tasks"] });
