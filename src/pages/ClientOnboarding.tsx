@@ -111,16 +111,22 @@ export default function ClientOnboarding() {
     if (!onboardingItems || !tenantId) return [];
     
     return onboardingItems.filter(item => {
-      // Allow if onboarding belongs to current tenant
-      if (item.tenant_id === tenantId) return true;
+      // ALWAYS check tenant match first - strict isolation
+      const isTenantMatch = item.tenant_id === tenantId;
       
-      // Allow if onboarding belongs to an accessible agency
+      // For owners: only show items from CURRENT tenant
+      if (isOwner) {
+        return isTenantMatch;
+      }
+      
+      // For non-owners: allow tenant match OR accessible agency
+      if (isTenantMatch) return true;
       if (item.agency_id && userAgencyIds?.includes(item.agency_id)) return true;
       
       // Block everything else
       return false;
     });
-  }, [onboardingItems, tenantId, userAgencyIds]);
+  }, [onboardingItems, tenantId, userAgencyIds, isOwner]);
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners", tenantId],
