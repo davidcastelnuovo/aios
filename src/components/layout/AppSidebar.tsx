@@ -220,17 +220,31 @@ export function AppSidebar() {
   // Get menu items ordered by sort_order
   const allMenuItems = [...dbMenuItems].sort((a, b) => a.sort_order - b.sort_order);
   
-  // Separate parent items from child items
-  const parentItems = allMenuItems.filter(item => !item.parent_menu_key && item.is_visible);
+  // Separate parent items from child items, filtering by visibility and permissions
   const childItemsMap = new Map<string, MenuItem[]>();
   
+  // First, collect all children with access
   allMenuItems.forEach(item => {
-    if (item.parent_menu_key && item.is_visible) {
+    if (item.parent_menu_key && item.is_visible && canAccessMenuItem(item)) {
       if (!childItemsMap.has(item.parent_menu_key)) {
         childItemsMap.set(item.parent_menu_key, []);
       }
       childItemsMap.get(item.parent_menu_key)?.push(item);
     }
+  });
+  
+  // Filter parent items: show only if user has access AND (it's not a group OR has accessible children)
+  const parentItems = allMenuItems.filter(item => {
+    if (item.parent_menu_key || !item.is_visible) return false;
+    if (!canAccessMenuItem(item)) return false;
+    
+    // If it's a group (has children), only show if it has accessible children
+    const children = childItemsMap.get(item.menu_key) || [];
+    if (item.route === '#') {
+      return children.length > 0;
+    }
+    
+    return true;
   });
 
   const getMenuItemLabel = (item: MenuItem) => {
@@ -285,8 +299,7 @@ export function AppSidebar() {
     const Icon = getIcon(item.icon);
     const label = getMenuItemLabel(item);
     const badge = getMenuItemBadge(item);
-    const canAccess = canAccessMenuItem(item);
-    const isDisabled = badge === 'premium' || badge === 'coming_soon' || !canAccess;
+    const isDisabled = badge === 'premium' || badge === 'coming_soon';
     const children = childItemsMap.get(item.menu_key) || [];
     const hasChildren = children.length > 0;
 
@@ -310,8 +323,7 @@ export function AppSidebar() {
                   const ChildIcon = getIcon(child.icon);
                   const childLabel = getMenuItemLabel(child);
                   const childBadge = getMenuItemBadge(child);
-                  const childCanAccess = canAccessMenuItem(child);
-                  const childIsDisabled = childBadge === 'premium' || childBadge === 'coming_soon' || !childCanAccess;
+                  const childIsDisabled = childBadge === 'premium' || childBadge === 'coming_soon';
 
                   if (childIsDisabled) {
                     return (
@@ -492,7 +504,7 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* Dynamic CRM Tables Section */}
-        {crmTables && crmTables.length > 0 && (
+        {crmTables && crmTables.length > 0 && hasPermission('dynamic_tables') && (
           <Collapsible defaultOpen className="group/collapsible">
             <SidebarGroup>
               <SidebarGroupLabel asChild>
