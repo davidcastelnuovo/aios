@@ -26,6 +26,7 @@ import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { ImportLeadsCSV } from "@/components/forms/ImportLeadsCSV";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/contexts/AgencyContext";
+import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
@@ -395,6 +396,7 @@ const playBubbleAnimation = () => {
 export default function Leads() {
   const { toast } = useToast();
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
+  const { userAgencyIds } = useUserAgencies();
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
@@ -462,6 +464,22 @@ export default function Leads() {
     },
     enabled: !!tenantId,
   });
+
+  // 🔒 SECURITY GUARD: Filter leads by current tenant and accessible agencies
+  const secureFilteredLeads = useMemo(() => {
+    if (!leads || !tenantId) return [];
+    
+    return leads.filter(lead => {
+      // Allow if lead belongs to current tenant
+      if (lead.tenant_id === tenantId) return true;
+      
+      // Allow if lead belongs to an accessible agency
+      if (lead.agency_id && userAgencyIds?.includes(lead.agency_id)) return true;
+      
+      // Block everything else
+      return false;
+    });
+  }, [leads, tenantId, userAgencyIds]);
 
   // Fetch products for lookup
   const { data: allProducts } = useQuery({

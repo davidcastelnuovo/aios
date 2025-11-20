@@ -9,7 +9,7 @@ import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserRole } from "@/hooks/useUserRole";
 import { CalendarIframeSettings } from "@/components/CalendarIframeSettings";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { DndContext, DragOverlay, closestCorners, DragEndEvent, DragStartEvent, useSensor, useSensors, PointerSensor, useDroppable } from "@dnd-kit/core";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SortableContext, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
@@ -167,6 +167,22 @@ export default function Tasks() {
     enabled: !!tenantId,
   });
 
+  // 🔒 SECURITY GUARD: Filter tasks by current tenant and accessible agencies
+  const secureFilteredTasks = useMemo(() => {
+    if (!tasks || !tenantId) return [];
+    
+    return tasks.filter(task => {
+      // Allow if task belongs to current tenant
+      if (task.tenant_id === tenantId) return true;
+      
+      // Allow if task belongs to an accessible agency
+      if (task.agency_id && userAgencyIds?.includes(task.agency_id)) return true;
+      
+      // Block everything else
+      return false;
+    });
+  }, [tasks, tenantId, userAgencyIds]);
+
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners", tenantId],
     queryFn: async () => {
@@ -261,29 +277,29 @@ export default function Tasks() {
 
   // Filter logic: Role-based access, then global agency filter
   const getTaskAgencyId = (t: any) => t?.clients?.agency_id ?? t?.agency_id;
-  let accessibleTasks = tasks;
+  let accessibleTasks = secureFilteredTasks;
 
   if (!isOwner) {
     if (isSeo && campaignerId) {
       // SEO users see only tasks where BOTH the assigned campaigner is SEO AND the client is SEO
-      accessibleTasks = tasks?.filter(task => 
+      accessibleTasks = secureFilteredTasks?.filter(task => 
         task.campaigners?.role?.includes('SEO') &&
         task.clients?.is_seo_client === true
       );
     } else if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
       // Team managers see all tasks in their agencies (including all team members)
-      accessibleTasks = tasks?.filter(task => 
+      accessibleTasks = secureFilteredTasks?.filter(task => 
         userAgencyIds.includes(getTaskAgencyId(task))
       );
     } else if (isCampaigner && campaignerId) {
       // Pure campaigners see tasks assigned to them OR tasks for their assigned clients
-      accessibleTasks = tasks?.filter(task => 
+      accessibleTasks = secureFilteredTasks?.filter(task => 
         task.campaigner_id === campaignerId || 
         (campaignerClientIds && campaignerClientIds.includes(task.client_id))
       );
     } else if (userAgencyIds && userAgencyIds.length > 0) {
       // Fallback: users with agency access see tasks in their agencies
-      accessibleTasks = tasks?.filter(task => 
+      accessibleTasks = secureFilteredTasks?.filter(task => 
         userAgencyIds.includes(getTaskAgencyId(task))
       );
     }

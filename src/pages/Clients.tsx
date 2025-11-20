@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -180,6 +180,22 @@ export default function Clients() {
     },
     enabled: (!(isCampaigner && !isTeamManager && !isOwner) || !!campaignerId) && !!tenantId && (!!agencies || (selectedAgency && selectedAgency !== "all")),
   });
+
+  // 🔒 SECURITY GUARD: Filter clients by current tenant and accessible agencies
+  const secureFilteredClients = useMemo(() => {
+    if (!clients || !tenantId) return [];
+    
+    return clients.filter(client => {
+      // Allow if client belongs to current tenant
+      if (client.tenant_id === tenantId) return true;
+      
+      // Allow if client belongs to an accessible agency
+      if (client.agency_id && userAgencyIds?.includes(client.agency_id)) return true;
+      
+      // Block everything else
+      return false;
+    });
+  }, [clients, tenantId, userAgencyIds]);
 
 
   const { data: campaigners } = useQuery({
