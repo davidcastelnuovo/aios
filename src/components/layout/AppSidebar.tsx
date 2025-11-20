@@ -217,36 +217,6 @@ export function AppSidebar() {
     }
   };
 
-  // Get menu items ordered by sort_order
-  const allMenuItems = [...dbMenuItems].sort((a, b) => a.sort_order - b.sort_order);
-  
-  // Separate parent items from child items, filtering by visibility and permissions
-  const childItemsMap = new Map<string, MenuItem[]>();
-  
-  // First, collect all children with access
-  allMenuItems.forEach(item => {
-    if (item.parent_menu_key && item.is_visible && canAccessMenuItem(item)) {
-      if (!childItemsMap.has(item.parent_menu_key)) {
-        childItemsMap.set(item.parent_menu_key, []);
-      }
-      childItemsMap.get(item.parent_menu_key)?.push(item);
-    }
-  });
-  
-  // Filter parent items: show only if user has access AND (it's not a group OR has accessible children)
-  const parentItems = allMenuItems.filter(item => {
-    if (item.parent_menu_key || !item.is_visible) return false;
-    if (!canAccessMenuItem(item)) return false;
-    
-    // If it's a group (has children), only show if it has accessible children
-    const children = childItemsMap.get(item.menu_key) || [];
-    if (item.route === '#') {
-      return children.length > 0;
-    }
-    
-    return true;
-  });
-
   const getMenuItemLabel = (item: MenuItem) => {
     return item.custom_label || item.original_label;
   };
@@ -294,6 +264,36 @@ export function AppSidebar() {
     if (!iconName) return LayoutDashboard;
     return iconMap[iconName] || LayoutDashboard;
   };
+
+  // Get menu items ordered by sort_order
+  const allMenuItems = [...dbMenuItems].sort((a, b) => a.sort_order - b.sort_order);
+  
+  // Separate parent items from child items, filtering by visibility and permissions
+  const childItemsMap = new Map<string, MenuItem[]>();
+  
+  // First, collect all children with access
+  allMenuItems.forEach(item => {
+    if (item.parent_menu_key && item.is_visible && canAccessMenuItem(item)) {
+      if (!childItemsMap.has(item.parent_menu_key)) {
+        childItemsMap.set(item.parent_menu_key, []);
+      }
+      childItemsMap.get(item.parent_menu_key)?.push(item);
+    }
+  });
+  
+  // Filter parent items: show only if user has access AND (it's not a group OR has accessible children)
+  const parentItems = allMenuItems.filter(item => {
+    if (item.parent_menu_key || !item.is_visible) return false;
+    if (!canAccessMenuItem(item)) return false;
+    
+    // If it's a group (has children), only show if it has accessible children
+    const children = childItemsMap.get(item.menu_key) || [];
+    if (item.route === '#') {
+      return children.length > 0;
+    }
+    
+    return true;
+  });
 
   const renderMenuItem = (item: MenuItem) => {
     const Icon = getIcon(item.icon);
