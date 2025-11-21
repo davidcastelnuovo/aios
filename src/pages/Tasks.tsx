@@ -110,6 +110,7 @@ export default function Tasks() {
   const [editingTask, setEditingTask] = useState<any>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [selectedRole, setSelectedRole] = useState<string>("all");
+  const [selectedClientId, setSelectedClientId] = useState<string>("all");
   const [activeTask, setActiveTask] = useState<any>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table" | "calendar">("kanban");
   const [hideCompleted, setHideCompleted] = useState(false);
@@ -198,6 +199,23 @@ export default function Tasks() {
         .select("*")
         .eq("active", true)
         .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    enabled: !!tenantId,
+  });
+
+  const { data: clients } = useQuery({
+    queryKey: ["clients-for-filter", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [] as any[];
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, name")
+        .order("name");
       if (error) throw error;
       return data;
     },
@@ -335,9 +353,10 @@ export default function Tasks() {
     })));
   }
 
-  // Then filter by campaigner and role
+  // Then filter by campaigner, role, and client
   let filteredTasks = accessibleTasks?.filter(t => {
     const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
+    const matchesClient = selectedClientId === "all" || t.client_id === selectedClientId;
     
     console.log('🎯 Task filtering:', {
       taskTitle: t.title,
@@ -367,9 +386,9 @@ export default function Tasks() {
       matchesRole = (t.campaigners?.role && t.campaigners.role.includes(selectedRole));
     }
     
-    console.log('🎯 Match result:', { matchesCampaigner, matchesRole });
+    console.log('🎯 Match result:', { matchesCampaigner, matchesRole, matchesClient });
     
-    return matchesCampaigner && matchesRole;
+    return matchesCampaigner && matchesRole && matchesClient;
   }) || [];
 
   // Apply hide completed filter
@@ -773,6 +792,23 @@ export default function Tasks() {
                   </Select>
                 </div>
               )}
+              
+              {/* Client filter */}
+              <div className="w-full md:w-48">
+                <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="כל הלקוחות" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="all">כל הלקוחות</SelectItem>
+                    {clients?.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               
               {/* Sort by dropdown */}
               <div className="w-full md:w-48">
