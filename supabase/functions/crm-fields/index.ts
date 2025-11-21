@@ -36,9 +36,6 @@ serve(async (req) => {
     }
 
     const url = new URL(req.url);
-    const pathParts = url.pathname.split('/').filter(Boolean);
-    const lastPart = pathParts[pathParts.length - 1];
-    const fieldId = lastPart !== 'crm-fields' ? lastPart : null;
 
     switch (req.method) {
       case 'GET': {
@@ -150,13 +147,6 @@ serve(async (req) => {
       }
 
       case 'PATCH': {
-        if (!fieldId) {
-          return new Response(JSON.stringify({ error: 'Field ID required' }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-
         let body;
         try {
           const text = await req.text();
@@ -168,7 +158,14 @@ serve(async (req) => {
           });
         }
         
-        const { name, position, is_required, is_visible, config } = body;
+        const { field_id, name, position, is_required, is_visible, config } = body;
+        
+        if (!field_id) {
+          return new Response(JSON.stringify({ error: 'field_id required' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
 
         const updateData: any = { updated_at: new Date().toISOString() };
         if (name) updateData.name = name;
@@ -180,13 +177,13 @@ serve(async (req) => {
         const { data: field, error } = await supabase
           .from('crm_fields')
           .update(updateData)
-          .eq('id', fieldId)
+          .eq('id', field_id)
           .select()
           .single();
 
         if (error) throw error;
 
-        console.log(`✅ Updated field: ${fieldId}`);
+        console.log(`✅ Updated field: ${field_id}`);
 
         return new Response(JSON.stringify({ field }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -194,8 +191,21 @@ serve(async (req) => {
       }
 
       case 'DELETE': {
-        if (!fieldId) {
-          return new Response(JSON.stringify({ error: 'Field ID required' }), {
+        let body;
+        try {
+          const text = await req.text();
+          body = text ? JSON.parse(text) : {};
+        } catch (e) {
+          return new Response(JSON.stringify({ error: 'Invalid JSON body' }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
+        const { field_id } = body;
+        
+        if (!field_id) {
+          return new Response(JSON.stringify({ error: 'field_id required' }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
@@ -204,11 +214,11 @@ serve(async (req) => {
         const { error } = await supabase
           .from('crm_fields')
           .delete()
-          .eq('id', fieldId);
+          .eq('id', field_id);
 
         if (error) throw error;
 
-        console.log(`✅ Deleted field: ${fieldId}`);
+        console.log(`✅ Deleted field: ${field_id}`);
 
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
