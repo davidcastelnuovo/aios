@@ -82,7 +82,8 @@ export default function DynamicTableView() {
         method: 'GET',
       });
       if (response.error) throw response.error;
-      return (response.data as CrmField[]).sort((a, b) => a.position - b.position);
+      const fields = (response.data as any)?.fields || [];
+      return (fields as CrmField[]).sort((a, b) => a.position - b.position);
     },
     enabled: !!table?.id,
   });
