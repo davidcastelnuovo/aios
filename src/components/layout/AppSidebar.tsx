@@ -228,6 +228,7 @@ export function AppSidebar() {
   };
 
   const canAccessMenuItem = (item: MenuItem) => {
+    // מיפוי בין menu_key לבין permission module
     const modulePermissions: Record<string, string> = {
       'users': 'users',
       'agencies': 'agencies',
@@ -236,9 +237,8 @@ export function AppSidebar() {
       'tasks': 'tasks',
       'client-onboarding': 'client_onboarding',
       'products': 'products',
-      'settings': 'settings',
       'finance': 'finance',
-      'sales-dashboard': 'sales',
+      'sales-dashboard': 'sales_dashboard',
       'reports': 'reports',
       'time-tracking': 'time_tracking',
       'campaigners': 'campaigners',
@@ -248,15 +248,37 @@ export function AppSidebar() {
       'automations': 'automations',
       'tenants': 'tenants',
       'branding': 'branding',
-      'accounting-integrations': 'accounting',
+      'accounting-integrations': 'accounting_integrations',
       'ai-support': 'ai_support',
       'menu-management': 'menu_management',
       'fields-management': 'fields_management',
       'lead-integrations': 'lead_integrations',
+      'manychat-settings': 'manychat_settings',
+      'green-api-settings': 'green_api_settings',
+      'chat-integrations': 'chat_integrations',
+      'chat': 'chat',
+      'dynamic-tables': 'dynamic_tables',
     };
 
+    // פריטים שאינם דורשים הרשאה מיוחדת (נגישים לכולם)
+    const publicMenuKeys = ['my-profile'];
+    
+    if (publicMenuKeys.includes(item.menu_key)) {
+      return true;
+    }
+
+    // אם זה פריט קבוצה (parent) ללא route, הוא נגיש אם יש לו ילדים נגישים
+    if (item.route === '#' && !item.parent_menu_key) {
+      return true; // הבדיקה של ילדים נעשית אחר כך
+    }
+
     const permission = modulePermissions[item.menu_key];
-    if (!permission) return true;
+    if (!permission) {
+      // אם אין permission מוגדר, בודקים אם זה sub-item של קבוצה
+      // במקרה כזה, מניחים שצריך הרשאה
+      return false;
+    }
+    
     return hasPermission(permission as any);
   };
 
