@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
   Dialog,
   DialogContent,
@@ -50,8 +51,8 @@ export default function DynamicTableView() {
   const [showWebhookDialog, setShowWebhookDialog] = useState(false);
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [editingFieldName, setEditingFieldName] = useState("");
-  const [editingCell, setEditingCell] = useState<{ recordId: string; fieldKey: string } | null>(null);
-  const [cellValue, setCellValue] = useState("");
+  const [editingCell, setEditingCell] = useState<{ recordId: string; fieldKey: string; initialValue: string } | null>(null);
+  const [cellValues, setCellValues] = useState<Record<string, string>>({});
   const cellInputRef = useRef<HTMLInputElement>(null);
 
   const { data: tables, isLoading: tablesLoading } = useQuery({
@@ -299,25 +300,36 @@ export default function DynamicTableView() {
   };
 
   const handleCellClick = (recordId: string, fieldKey: string, currentValue: string) => {
-    setEditingCell({ recordId, fieldKey });
-    setCellValue(currentValue || '');
+    const cellKey = `${recordId}-${fieldKey}`;
+    setEditingCell({ recordId, fieldKey, initialValue: currentValue || '' });
+    setCellValues(prev => ({ ...prev, [cellKey]: currentValue || '' }));
   };
 
-  const handleCellBlur = () => {
-    if (editingCell) {
-      const record = records?.find(r => r.id === editingCell.recordId);
-      if (record && record.data[editingCell.fieldKey] !== cellValue) {
-        handleCellChange(editingCell.recordId, editingCell.fieldKey, cellValue);
-      }
+  const handleCellValueChange = (recordId: string, fieldKey: string, value: string) => {
+    const cellKey = `${recordId}-${fieldKey}`;
+    setCellValues(prev => ({ ...prev, [cellKey]: value }));
+  };
+
+  const handleCellBlur = (recordId: string, fieldKey: string) => {
+    const cellKey = `${recordId}-${fieldKey}`;
+    const newValue = cellValues[cellKey] || '';
+    const record = records?.find(r => r.id === recordId);
+    const oldValue = record?.data[fieldKey] || '';
+    
+    if (oldValue !== newValue) {
+      handleCellChange(recordId, fieldKey, newValue);
     }
     setEditingCell(null);
   };
 
-  const handleCellKeyDown = (e: React.KeyboardEvent) => {
+  const handleCellKeyDown = (e: React.KeyboardEvent, recordId: string, fieldKey: string) => {
     if (e.key === 'Enter') {
-      handleCellBlur();
+      e.preventDefault();
+      handleCellBlur(recordId, fieldKey);
     } else if (e.key === 'Escape') {
       setEditingCell(null);
+    } else if (e.key === 'Tab') {
+      handleCellBlur(recordId, fieldKey);
     }
   };
 
@@ -520,28 +532,36 @@ export default function DynamicTableView() {
                       <Trash2 className="h-3 w-3" />
                     </Button>
                   </div>
-                  {fields?.map((field) => (
-                    <div 
-                      key={field.id} 
-                      className="min-w-[180px] flex-shrink-0 border-l p-0 cursor-text"
-                      onClick={() => handleCellClick(record.id, field.key, record.data[field.key] || '')}
-                    >
-                      {editingCell?.recordId === record.id && editingCell?.fieldKey === field.key ? (
-                        <Input
-                          ref={cellInputRef}
-                          value={cellValue}
-                          onChange={(e) => setCellValue(e.target.value)}
-                          onBlur={handleCellBlur}
-                          onKeyDown={handleCellKeyDown}
-                          className="border-none rounded-none h-10 focus-visible:ring-1 focus-visible:ring-primary bg-background"
-                        />
-                      ) : (
-                        <div className="p-2 h-10 flex items-center text-sm hover:bg-accent/50 transition-colors rounded-sm">
-                          {record.data[field.key] || <span className="text-muted-foreground">ריק</span>}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                  {fields?.map((field) => {
+                    const cellKey = `${record.id}-${field.key}`;
+                    const isEditing = editingCell?.recordId === record.id && editingCell?.fieldKey === field.key;
+                    const displayValue = isEditing 
+                      ? (cellValues[cellKey] ?? '') 
+                      : (record.data[field.key] || '');
+                    
+                    return (
+                      <div 
+                        key={field.id} 
+                        className="min-w-[180px] flex-shrink-0 border-l p-0 cursor-text"
+                        onClick={() => !isEditing && handleCellClick(record.id, field.key, record.data[field.key] || '')}
+                      >
+                        {isEditing ? (
+                          <Input
+                            ref={cellInputRef}
+                            value={displayValue}
+                            onChange={(e) => handleCellValueChange(record.id, field.key, e.target.value)}
+                            onBlur={() => handleCellBlur(record.id, field.key)}
+                            onKeyDown={(e) => handleCellKeyDown(e, record.id, field.key)}
+                            className="border-none rounded-none h-10 focus-visible:ring-1 focus-visible:ring-primary bg-background"
+                          />
+                        ) : (
+                          <div className="p-2 h-10 flex items-center text-sm hover:bg-accent/50 transition-colors rounded-sm">
+                            {displayValue || <span className="text-muted-foreground">ריק</span>}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                   <div className="min-w-[180px] flex-shrink-0 border-l" />
                 </div>
               ))}
