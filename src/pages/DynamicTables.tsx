@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Table2, FileSpreadsheet, Pencil, Trash2 } from "lucide-react";
+import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 import { SimpleTableDialog } from "@/components/dynamic-tables/SimpleTableDialog";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
@@ -28,6 +28,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { toast } from "sonner";
 
 interface CrmTable {
@@ -36,6 +41,7 @@ interface CrmTable {
   slug: string;
   description: string | null;
   icon: string | null;
+  category: string | null;
 }
 
 export default function DynamicTables() {
@@ -46,6 +52,7 @@ export default function DynamicTables() {
   const [editingTable, setEditingTable] = useState<CrmTable | null>(null);
   const [deletingTable, setDeletingTable] = useState<CrmTable | null>(null);
   const [editName, setEditName] = useState("");
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['ללא קבוצה']));
 
   const { data: tables, isLoading } = useQuery({
     queryKey: ['crm-tables'],
@@ -148,6 +155,33 @@ export default function DynamicTables() {
     updateTableMutation.mutate({ tableId: editingTable.id, name: editName });
   };
 
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  };
+
+  const groupedTables = useMemo(() => {
+    if (!tables) return {};
+    
+    const groups: Record<string, CrmTable[]> = {};
+    tables.forEach(table => {
+      const category = table.category || 'ללא קבוצה';
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+      groups[category].push(table);
+    });
+    
+    return groups;
+  }, [tables]);
+
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="flex justify-between items-center mb-6">
@@ -187,46 +221,72 @@ export default function DynamicTables() {
           </Button>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {tables.map((table) => (
-            <Card
-              key={table.id}
-              className="cursor-pointer hover:shadow-lg transition-shadow relative"
-              onClick={() => navigate(buildPath(`/table/${table.slug}`))}
+        <div className="space-y-6">
+          {Object.entries(groupedTables).map(([category, categoryTables]) => (
+            <Collapsible 
+              key={category}
+              open={expandedCategories.has(category)}
+              onOpenChange={() => toggleCategory(category)}
             >
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <FileSpreadsheet className="h-5 w-5" />
-                    {table.name}
-                  </CardTitle>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => handleEdit(table, e)}
+              <div className="flex items-center gap-2 mb-3">
+                <CollapsibleTrigger asChild>
+                  <Button variant="ghost" size="sm" className="gap-2">
+                    {expandedCategories.has(category) ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                    <span className="font-semibold text-lg">{category}</span>
+                    <span className="text-muted-foreground">({categoryTables.length})</span>
+                  </Button>
+                </CollapsibleTrigger>
+              </div>
+              
+              <CollapsibleContent>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mr-6">
+                  {categoryTables.map((table) => (
+                    <Card
+                      key={table.id}
+                      className="cursor-pointer hover:shadow-lg transition-shadow relative"
+                      onClick={() => navigate(buildPath(`/table/${table.slug}`))}
                     >
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => handleDelete(table, e)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="flex items-center gap-2">
+                            <FileSpreadsheet className="h-5 w-5" />
+                            {table.name}
+                          </CardTitle>
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => handleEdit(table, e)}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => handleDelete(table, e)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        {table.description && (
+                          <CardDescription>{table.description}</CardDescription>
+                        )}
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm text-muted-foreground">
+                          לחץ לצפייה וניהול
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
-                {table.description && (
-                  <CardDescription>{table.description}</CardDescription>
-                )}
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  לחץ לצפייה וניהול
-                </p>
-              </CardContent>
-            </Card>
+              </CollapsibleContent>
+            </Collapsible>
           ))}
         </div>
       )}

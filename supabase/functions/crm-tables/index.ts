@@ -41,6 +41,7 @@ serve(async (req) => {
         const { data: tables, error } = await supabase
           .from('crm_tables')
           .select('*')
+          .order('category', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -54,7 +55,7 @@ serve(async (req) => {
 
       case 'POST': {
         const body = await req.json();
-        const { name, slug, description, icon } = body;
+        const { name, slug, description, icon, category } = body;
 
         if (!name || !slug) {
           return new Response(JSON.stringify({ error: 'Name and slug are required' }), {
@@ -85,6 +86,7 @@ serve(async (req) => {
             slug,
             description,
             icon,
+            category,
             created_by: user.id,
           })
           .select()
@@ -101,7 +103,7 @@ serve(async (req) => {
 
       case 'PATCH': {
         const body = await req.json();
-        const { table_id, name, slug, description, icon } = body;
+        const { table_id, name, slug, description, icon, category } = body;
 
         if (!table_id) {
           return new Response(JSON.stringify({ error: 'Table ID required' }), {
@@ -115,6 +117,7 @@ serve(async (req) => {
         if (slug) updateData.slug = slug;
         if (description !== undefined) updateData.description = description;
         if (icon !== undefined) updateData.icon = icon;
+        if (category !== undefined) updateData.category = category;
 
         const { data: table, error } = await supabase
           .from('crm_tables')
