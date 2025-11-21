@@ -24,10 +24,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: tenantUser, error: tenantError } = await supabase
-      .from('tenant_users').select('tenant_id').eq('user_id', user.id).single();
+    const { data: tenantId, error: tenantError } = await supabase
+      .rpc('get_user_tenant_id', { _user_id: user.id });
 
-    if (tenantError || !tenantUser) {
+    if (tenantError || !tenantId) {
       console.error('Tenant lookup error:', tenantError, 'user_id:', user.id);
       return new Response(JSON.stringify({ 
         error: 'No tenant found', 
@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
       });
     }
     
-    console.log('Found tenant:', tenantUser.tenant_id, 'for user:', user.id);
+    console.log('Found tenant:', tenantId, 'for user:', user.id);
 
     const method = req.method;
     let body: any = {};
@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
       }
 
       const { data: records, error } = await supabase.from('crm_records')
-        .select('*').eq('table_id', table_id).eq('tenant_id', tenantUser.tenant_id)
+        .select('*').eq('table_id', table_id).eq('tenant_id', tenantId)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
       }
 
       const { data: record, error } = await supabase.from('crm_records').insert({
-        table_id, tenant_id: tenantUser.tenant_id, agency_id: agency_id || null,
+        table_id, tenant_id: tenantId, agency_id: agency_id || null,
         data: recordData, created_by: user.id
       }).select().single();
 
@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
       const { data: existing } = await supabase.from('crm_records')
         .select('data, tenant_id').eq('id', record_id).single();
 
-      if (!existing || existing.tenant_id !== tenantUser.tenant_id) {
+      if (!existing || existing.tenant_id !== tenantId) {
         return new Response(JSON.stringify({ error: 'Record not found' }), {
           status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
       const { data: record } = await supabase.from('crm_records')
         .select('tenant_id').eq('id', record_id).single();
 
-      if (!record || record.tenant_id !== tenantUser.tenant_id) {
+      if (!record || record.tenant_id !== tenantId) {
         return new Response(JSON.stringify({ error: 'Access denied' }), {
           status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
