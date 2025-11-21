@@ -31,6 +31,7 @@ import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialo
 import { EditUserPermissionsDialog } from "@/components/forms/EditUserPermissionsDialog";
 import { EditUserNameDialog } from "@/components/forms/EditUserNameDialog";
 import EditSalesPersonAgenciesDialog from "@/components/forms/EditSalesPersonAgenciesDialog";
+import { ResetPasswordDialog } from "@/components/forms/ResetPasswordDialog";
 import { getAllModules } from "@/lib/modules";
 import {
   Dialog,
@@ -94,6 +95,8 @@ export default function Users() {
   } | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
   const [agencyFilter, setAgencyFilter] = useState<string>("all");
+  const [resetPasswordUserId, setResetPasswordUserId] = useState<string | null>(null);
+  const [resetPasswordUserEmail, setResetPasswordUserEmail] = useState<string>("");
   const { tenantId } = useCurrentTenant();
 
   const { data: agencies } = useQuery({
@@ -1086,6 +1089,18 @@ export default function Users() {
                           <Lock className="h-3 w-3 ml-1" />
                           הרשאות
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setResetPasswordUserId(user.id);
+                            setResetPasswordUserEmail(user.email);
+                          }}
+                          className="flex-1"
+                        >
+                          <Shield className="h-3 w-3 ml-1" />
+                          סיסמה
+                        </Button>
                         <div className="flex gap-2 w-full">
                           <Button
                             variant="outline"
@@ -1281,6 +1296,17 @@ export default function Users() {
                           variant="outline"
                           size="icon"
                           onClick={() => {
+                            setResetPasswordUserId(user.id);
+                            setResetPasswordUserEmail(user.email);
+                          }}
+                          title="הגדר סיסמה חדשה"
+                        >
+                          <Shield className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
                             if (confirm(`האם לשלוח הזמנה מחדש ל-${user.email}?`)) {
                               resendInviteMutation.mutate({ email: user.email });
                             }
@@ -1439,29 +1465,41 @@ export default function Users() {
                        <Settings className="h-3 w-3 ml-1" />
                        סוכנויות
                      </Button>
-                     <Button
-                       variant="outline"
-                       size="sm"
-                       onClick={() => {
-                         setEditPermissionsUserId(user.id);
-                         setEditPermissionsUserEmail(user.email);
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditPermissionsUserId(user.id);
+                          setEditPermissionsUserEmail(user.email);
+                        }}
+                        className="flex-1"
+                      >
+                        <Lock className="h-3 w-3 ml-1" />
+                        הרשאות
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setResetPasswordUserId(user.id);
+                          setResetPasswordUserEmail(user.email);
+                        }}
+                        className="flex-1"
+                      >
+                        <Shield className="h-3 w-3 ml-1" />
+                        סיסמה
+                      </Button>
+                     <Select
+                       value={user.role || ""}
+                       onValueChange={(value) => {
+                         console.log("Users: change role", user.id, value);
+                         toast.info("מעדכן תפקיד...");
+                         updateRoleMutation.mutate({
+                           userId: user.id,
+                           role: value as UserRole,
+                         });
                        }}
-                       className="flex-1"
                      >
-                       <Lock className="h-3 w-3 ml-1" />
-                       הרשאות
-                     </Button>
-                    <Select
-                      value={user.role || ""}
-                      onValueChange={(value) => {
-                        console.log("Users: change role", user.id, value);
-                        toast.info("מעדכן תפקיד...");
-                        updateRoleMutation.mutate({
-                          userId: user.id,
-                          role: value as UserRole,
-                        });
-                      }}
-                    >
                       <SelectTrigger className="w-full" onClick={(e) => e.stopPropagation()}>
                         <SelectValue placeholder="שנה תפקיד" />
                       </SelectTrigger>
@@ -1825,6 +1863,20 @@ export default function Users() {
             setEditNameUserEmail("");
             setEditNameUserFullName("");
           }}
+        />
+      )}
+
+      {resetPasswordUserId && (
+        <ResetPasswordDialog
+          open={!!resetPasswordUserId}
+          onOpenChange={(open) => {
+            if (!open) {
+              setResetPasswordUserId(null);
+              setResetPasswordUserEmail("");
+            }
+          }}
+          userId={resetPasswordUserId}
+          userEmail={resetPasswordUserEmail}
         />
       )}
 
