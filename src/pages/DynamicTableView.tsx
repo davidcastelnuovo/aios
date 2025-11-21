@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
 import {
@@ -56,6 +56,8 @@ export default function DynamicTableView() {
   const [newColumnName, setNewColumnName] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
   const [showWebhookDialog, setShowWebhookDialog] = useState(false);
+  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  const [editingFieldName, setEditingFieldName] = useState("");
 
   const { data: tables, isLoading: tablesLoading } = useQuery({
     queryKey: ['crm-tables'],
@@ -129,6 +131,27 @@ export default function DynamicTableView() {
     },
     onError: (error: any) => {
       toast.error('שגיאה בהוספת עמודה: ' + error.message);
+    },
+  });
+
+  const updateFieldNameMutation = useMutation({
+    mutationFn: async ({ fieldId, name }: { fieldId: string; name: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      const response = await supabase.functions.invoke('crm-fields', {
+        method: 'PATCH',
+        body: { field_id: fieldId, name },
+      });
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['crm-fields', table?.id] });
+      setEditingFieldId(null);
+      toast.success('שם העמודה עודכן בהצלחה');
+    },
+    onError: (error: any) => {
+      toast.error('שגיאה בעדכון שם עמודה: ' + error.message);
     },
   });
 
@@ -263,6 +286,24 @@ export default function DynamicTableView() {
     updateCellMutation.mutate({ recordId, key, value });
   };
 
+  const handleStartEdit = (field: CrmField) => {
+    setEditingFieldId(field.id);
+    setEditingFieldName(field.name);
+  };
+
+  const handleSaveFieldName = (fieldId: string) => {
+    if (!editingFieldName.trim()) {
+      toast.error('שם העמודה לא יכול להיות ריק');
+      return;
+    }
+    updateFieldNameMutation.mutate({ fieldId, name: editingFieldName });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingFieldId(null);
+    setEditingFieldName("");
+  };
+
   if (tablesLoading) {
     return (
       <div className="container mx-auto py-8 px-4">
@@ -346,13 +387,61 @@ export default function DynamicTableView() {
                 <TableRow>
                   <TableHead className="w-[50px]"></TableHead>
                   {fields?.map((field) => (
-                    <TableHead key={field.id} className="min-w-[150px]">
-                      <div className="flex items-center justify-between gap-2">
-                        <span>{field.name}</span>
-                        <Button variant="ghost" size="sm" onClick={() => deleteColumnMutation.mutate(field.id)}>
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </div>
+                    <TableHead key={field.id} className="min-w-[200px]">
+                      {editingFieldId === field.id ? (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={editingFieldName}
+                            onChange={(e) => setEditingFieldName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveFieldName(field.id);
+                              if (e.key === 'Escape') handleCancelEdit();
+                            }}
+                            autoFocus
+                            className="h-8"
+                          />
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            onClick={() => handleSaveFieldName(field.id)}
+                            disabled={updateFieldNameMutation.isPending}
+                          >
+                            <Check className="h-3 w-3" />
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            onClick={handleCancelEdit}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between gap-2">
+                          <span 
+                            className="cursor-pointer hover:text-primary transition-colors" 
+                            onClick={() => handleStartEdit(field)}
+                          >
+                            {field.name}
+                          </span>
+                          <div className="flex gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => handleStartEdit(field)}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => deleteColumnMutation.mutate(field.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
                     </TableHead>
                   ))}
                   <TableHead className="w-[150px]">
