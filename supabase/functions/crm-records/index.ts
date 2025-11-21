@@ -24,14 +24,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: tenantUser } = await supabase
+    const { data: tenantUser, error: tenantError } = await supabase
       .from('tenant_users').select('tenant_id').eq('user_id', user.id).single();
 
-    if (!tenantUser) {
-      return new Response(JSON.stringify({ error: 'No tenant found' }), {
+    if (tenantError || !tenantUser) {
+      console.error('Tenant lookup error:', tenantError, 'user_id:', user.id);
+      return new Response(JSON.stringify({ 
+        error: 'No tenant found', 
+        details: tenantError?.message || 'User not associated with any tenant' 
+      }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
+    
+    console.log('Found tenant:', tenantUser.tenant_id, 'for user:', user.id);
 
     const method = req.method;
     let body: any = {};
