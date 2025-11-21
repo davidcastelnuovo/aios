@@ -67,13 +67,25 @@ export default function DynamicTables() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
-      const response = await supabase.functions.invoke('crm-tables', {
-        method: 'DELETE',
-        body: { table_id: tableId },
-      });
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-tables`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ table_id: tableId }),
+        }
+      );
       
-      if (response.error) throw response.error;
-      return response.data;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete table');
+      }
+      
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
@@ -90,13 +102,25 @@ export default function DynamicTables() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
-      const response = await supabase.functions.invoke('crm-tables', {
-        method: 'PATCH',
-        body: { table_id: tableId, name },
-      });
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-tables`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ table_id: tableId, name }),
+        }
+      );
       
-      if (response.error) throw response.error;
-      return response.data;
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update table');
+      }
+      
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
