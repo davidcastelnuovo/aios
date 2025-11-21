@@ -36,6 +36,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ClientTasksTab } from "@/components/clients/ClientTasksTab";
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח נדרש"),
   contact_name: z.string().optional(),
@@ -264,16 +266,23 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>עריכת לקוח: {client.name}</DialogTitle>
           <DialogDescription>
-            עדכן את פרטי הלקוח, הוסף הערות וקישור לתיקייה
+            עדכן את פרטי הלקוח, צפה במשימות והוסף הערות
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <Tabs defaultValue="details" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="details">פרטי לקוח</TabsTrigger>
+            <TabsTrigger value="tasks">משימות</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="details">
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
               name="agency_id"
@@ -534,6 +543,15 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
             </div>
           </form>
         </Form>
+          </TabsContent>
+
+          <TabsContent value="tasks" className="mt-4">
+            <ClientTasksTab 
+              clientId={client.id}
+              clientName={client.name}
+            />
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
