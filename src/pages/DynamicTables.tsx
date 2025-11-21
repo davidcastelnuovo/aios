@@ -67,8 +67,9 @@ export default function DynamicTables() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
-      const response = await supabase.functions.invoke(`crm-tables/${tableId}`, {
+      const response = await supabase.functions.invoke('crm-tables', {
         method: 'DELETE',
+        body: { table_id: tableId },
       });
       
       if (response.error) throw response.error;
@@ -89,9 +90,9 @@ export default function DynamicTables() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
-      const response = await supabase.functions.invoke(`crm-tables/${tableId}`, {
+      const response = await supabase.functions.invoke('crm-tables', {
         method: 'PATCH',
-        body: { name },
+        body: { table_id: tableId, name },
       });
       
       if (response.error) throw response.error;
