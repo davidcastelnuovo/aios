@@ -47,29 +47,45 @@ export function ManageIntegrationPermissionsDialog({
       
       console.log('Fetching users for tenant:', tenantId);
       
-      // Fetch tenant_users with profiles join
-      const { data, error } = await supabase
+      // First, fetch tenant_users to get user_ids
+      const { data: tenantUsersData, error: tenantUsersError } = await supabase
         .from('tenant_users')
-        .select(`
-          user_id,
-          role,
-          profiles:user_id (
-            id,
-            full_name,
-            email
-          )
-        `)
+        .select('user_id, role')
         .eq('tenant_id', tenantId);
       
-      if (error) {
-        console.error('Error fetching tenant users:', error);
-        throw error;
+      if (tenantUsersError) {
+        console.error('Error fetching tenant users:', tenantUsersError);
+        throw tenantUsersError;
       }
       
-      console.log('Fetched users:', data);
+      if (!tenantUsersData || tenantUsersData.length === 0) {
+        return [];
+      }
       
-      // Data already in expected format
-      return data || [];
+      // Extract user_ids
+      const userIds = tenantUsersData.map(tu => tu.user_id);
+      
+      // Fetch profiles for these users
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', userIds);
+      
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
+        throw profilesError;
+      }
+      
+      // Combine the data
+      const combined = tenantUsersData.map(tu => ({
+        user_id: tu.user_id,
+        role: tu.role,
+        profiles: profilesData?.find(p => p.id === tu.user_id)
+      }));
+      
+      console.log('Fetched users:', combined);
+      
+      return combined;
     },
     enabled: !!tenantId && open,
   });
