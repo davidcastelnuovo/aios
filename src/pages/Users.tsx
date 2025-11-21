@@ -74,12 +74,9 @@ export default function Users() {
   const isMobile = useIsMobile();
   const [isTenantDialogOpen, setIsTenantDialogOpen] = useState(false);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
-  const [isAddExistingUserDialogOpen, setIsAddExistingUserDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteFullName, setInviteFullName] = useState("");
   const [inviteRole, setInviteRole] = useState<UserRole>("campaigner");
-  const [addExistingEmail, setAddExistingEmail] = useState("");
-  const [addExistingRole, setAddExistingRole] = useState<UserRole>("campaigner");
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [selectedCampaignerId, setSelectedCampaignerId] = useState<string>("");
@@ -553,78 +550,6 @@ export default function Users() {
     },
   });
 
-  const addExistingUserMutation = useMutation({
-    mutationFn: async ({
-      email,
-      role,
-    }: {
-      email: string;
-      role: UserRole;
-    }) => {
-      if (!tenantId) throw new Error("No tenant selected");
-      
-      // Find user by email
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .eq("email", email)
-        .single();
-      
-      if (profileError || !profile) {
-        throw new Error("משתמש לא נמצא במערכת");
-      }
-      
-      // Check if user already in tenant
-      const { data: existingTenantUser } = await supabase
-        .from("tenant_users")
-        .select("id")
-        .eq("user_id", profile.id)
-        .eq("tenant_id", tenantId)
-        .single();
-      
-      if (existingTenantUser) {
-        throw new Error("המשתמש כבר שייך לטננט הזה");
-      }
-      
-      // Add user to tenant
-      const { error: tenantUserError } = await supabase
-        .from("tenant_users")
-        .insert({
-          user_id: profile.id,
-          tenant_id: tenantId,
-          role: "member",
-        });
-      
-      if (tenantUserError) throw tenantUserError;
-      
-      // Add role
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("No active session");
-
-      const { data, error } = await supabase.functions.invoke("update-user-role", {
-        body: { userId: profile.id, role, tenantId },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-      
-      if (error) throw error;
-      if (!data.success) throw new Error(data.error);
-      
-      return data;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
-      toast.success("המשתמש נוסף בהצלחה לטננט");
-      setIsAddExistingUserDialogOpen(false);
-      setAddExistingEmail("");
-      setAddExistingRole("campaigner");
-    },
-    onError: (error: Error) => {
-      toast.error("שגיאה בהוספת משתמש: " + error.message);
-    },
-  });
 
   const deleteUserMutation = useMutation({
       mutationFn: async ({ userId, email }: { userId?: string; email?: string }) => {
@@ -781,80 +706,6 @@ export default function Users() {
               </DialogContent>
           </Dialog>
           )}
-          
-          <Dialog open={isAddExistingUserDialogOpen} onOpenChange={setIsAddExistingUserDialogOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="w-full sm:w-auto">
-                <UserPlus className="h-4 w-4 ml-2" />
-                הוסף משתמש קיים
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>הוסף משתמש קיים לטננט</DialogTitle>
-                <DialogDescription>
-                  הזן את המייל של משתמש שכבר רשום במערכת כדי להוסיף אותו לטננט הנוכחי
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4" dir="rtl">
-                <div>
-                  <Label htmlFor="add-existing-email">אימייל משתמש</Label>
-                  <Input
-                    id="add-existing-email"
-                    type="email"
-                    value={addExistingEmail}
-                    onChange={(e) => setAddExistingEmail(e.target.value)}
-                    placeholder="user@example.com"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="add-existing-role">תפקיד</Label>
-                  <Select
-                    value={addExistingRole}
-                    onValueChange={(value) => setAddExistingRole(value as UserRole)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(roleLabels).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 mt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setIsAddExistingUserDialogOpen(false);
-                    setAddExistingEmail("");
-                    setAddExistingRole("campaigner");
-                  }}
-                >
-                  ביטול
-                </Button>
-                <Button
-                  onClick={() => {
-                    if (!addExistingEmail) {
-                      toast.error("נא להזין מייל");
-                      return;
-                    }
-                    addExistingUserMutation.mutate({
-                      email: addExistingEmail,
-                      role: addExistingRole,
-                    });
-                  }}
-                  disabled={addExistingUserMutation.isPending}
-                >
-                  {addExistingUserMutation.isPending ? "מוסיף..." : "הוסף משתמש"}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
           
           <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
           <DialogTrigger asChild>
