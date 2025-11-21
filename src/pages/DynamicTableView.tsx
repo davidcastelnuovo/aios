@@ -133,12 +133,26 @@ export default function DynamicTableView() {
     mutationFn: async ({ fieldId, name }: { fieldId: string; name: string }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-      const response = await supabase.functions.invoke('crm-fields', {
-        method: 'PATCH',
-        body: { field_id: fieldId, name },
-      });
-      if (response.error) throw response.error;
-      return response.data;
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-fields`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ field_id: fieldId, name }),
+        }
+      );
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update field');
+      }
+      
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-fields', table?.id] });
@@ -154,12 +168,26 @@ export default function DynamicTableView() {
     mutationFn: async (fieldId: string) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-      const response = await supabase.functions.invoke('crm-fields', {
-        method: 'DELETE',
-        body: { field_id: fieldId },
-      });
-      if (response.error) throw response.error;
-      return response.data;
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-fields`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ field_id: fieldId }),
+        }
+      );
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete field');
+      }
+      
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-fields', table?.id] });
@@ -204,12 +232,26 @@ export default function DynamicTableView() {
     mutationFn: async (recordId: string) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-      const response = await supabase.functions.invoke('crm-records', {
-        method: 'DELETE',
-        body: { record_id: recordId },
-      });
-      if (response.error) throw response.error;
-      return response.data;
+      
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-records`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ record_id: recordId }),
+        }
+      );
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete record');
+      }
+      
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
@@ -230,15 +272,28 @@ export default function DynamicTableView() {
       
       const updatedData = { ...record.data, [key]: value };
       
-      const response = await supabase.functions.invoke('crm-records', {
-        method: 'PATCH',
-        body: {
-          record_id: recordId,
-          data: updatedData,
-        },
-      });
-      if (response.error) throw response.error;
-      return response.data;
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/crm-records`,
+        {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            record_id: recordId,
+            data: updatedData,
+          }),
+        }
+      );
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update cell');
+      }
+      
+      return await response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
