@@ -41,7 +41,8 @@ Deno.serve(async (req) => {
     } catch (e) {}
 
     if (method === 'GET') {
-      const { table_id } = body;
+      const url = new URL(req.url);
+      const table_id = url.searchParams.get('table_id');
       if (!table_id) {
         return new Response(JSON.stringify({ error: 'table_id required' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
