@@ -78,9 +78,8 @@ export default function DynamicTableView() {
       if (!table?.id) return [];
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-      const response = await supabase.functions.invoke('crm-fields', {
+      const response = await supabase.functions.invoke(`crm-fields?table_id=${table.id}`, {
         method: 'GET',
-        body: { table_id: table.id },
       });
       if (response.error) throw response.error;
       return (response.data as CrmField[]).sort((a, b) => a.position - b.position);
@@ -94,9 +93,8 @@ export default function DynamicTableView() {
       if (!table?.id) return [];
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-      const response = await supabase.functions.invoke('crm-records', {
+      const response = await supabase.functions.invoke(`crm-records?table_id=${table.id}`, {
         method: 'GET',
-        body: { table_id: table.id },
       });
       if (response.error) throw response.error;
       return response.data as CrmRecord[];
