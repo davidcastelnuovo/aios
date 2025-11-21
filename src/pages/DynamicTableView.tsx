@@ -1,22 +1,13 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
 
 interface CrmTable {
   id: string;
@@ -58,6 +50,9 @@ export default function DynamicTableView() {
   const [showWebhookDialog, setShowWebhookDialog] = useState(false);
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [editingFieldName, setEditingFieldName] = useState("");
+  const [editingCell, setEditingCell] = useState<{ recordId: string; fieldKey: string } | null>(null);
+  const [cellValue, setCellValue] = useState("");
+  const cellInputRef = useRef<HTMLInputElement>(null);
 
   const { data: tables, isLoading: tablesLoading } = useQuery({
     queryKey: ['crm-tables'],
@@ -303,6 +298,36 @@ export default function DynamicTableView() {
     setEditingFieldName("");
   };
 
+  const handleCellClick = (recordId: string, fieldKey: string, currentValue: string) => {
+    setEditingCell({ recordId, fieldKey });
+    setCellValue(currentValue || '');
+  };
+
+  const handleCellBlur = () => {
+    if (editingCell) {
+      const record = records?.find(r => r.id === editingCell.recordId);
+      if (record && record.data[editingCell.fieldKey] !== cellValue) {
+        handleCellChange(editingCell.recordId, editingCell.fieldKey, cellValue);
+      }
+    }
+    setEditingCell(null);
+  };
+
+  const handleCellKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleCellBlur();
+    } else if (e.key === 'Escape') {
+      setEditingCell(null);
+    }
+  };
+
+  useEffect(() => {
+    if (editingCell && cellInputRef.current) {
+      cellInputRef.current.focus();
+      cellInputRef.current.select();
+    }
+  }, [editingCell]);
+
   if (tablesLoading) {
     return (
       <div className="container mx-auto py-8 px-4">
@@ -379,131 +404,168 @@ export default function DynamicTableView() {
       {isLoading ? (
         <Skeleton className="h-96 w-full" />
       ) : (
-        <Card className="p-6">
+        <div className="border rounded-lg overflow-hidden bg-background shadow-sm">
           <div className="overflow-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[50px]"></TableHead>
-                  {fields?.map((field) => (
-                    <TableHead key={field.id} className="min-w-[200px]">
-                      {editingFieldId === field.id ? (
-                        <div className="flex items-center gap-2">
-                          <Input
-                            value={editingFieldName}
-                            onChange={(e) => setEditingFieldName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveFieldName(field.id);
-                              if (e.key === 'Escape') handleCancelEdit();
-                            }}
-                            autoFocus
-                            className="h-8"
-                          />
+            <div className="min-w-full inline-block">
+              {/* Header */}
+              <div className="flex border-b bg-muted/30 sticky top-0 z-10">
+                <div className="w-12 flex-shrink-0 border-l p-2 flex items-center justify-center">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => addRowMutation.mutate()}
+                    disabled={addRowMutation.isPending}
+                    className="h-6 w-6 p-0"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+                {fields?.map((field) => (
+                  <div key={field.id} className="min-w-[180px] flex-shrink-0 border-l p-2">
+                    {editingFieldId === field.id ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          value={editingFieldName}
+                          onChange={(e) => setEditingFieldName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveFieldName(field.id);
+                            if (e.key === 'Escape') handleCancelEdit();
+                          }}
+                          autoFocus
+                          className="h-7 text-sm font-medium"
+                        />
+                        <Button 
+                          size="sm" 
+                          variant="ghost"
+                          onClick={() => handleSaveFieldName(field.id)}
+                          disabled={updateFieldNameMutation.isPending}
+                          className="h-6 w-6 p-0"
+                        >
+                          <Check className="h-3 w-3" />
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          onClick={handleCancelEdit}
+                          className="h-6 w-6 p-0"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2 group">
+                        <span 
+                          className="text-sm font-medium cursor-pointer hover:text-primary transition-colors truncate" 
+                          onClick={() => handleStartEdit(field)}
+                        >
+                          {field.name}
+                        </span>
+                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button 
+                            variant="ghost" 
                             size="sm" 
-                            variant="ghost"
-                            onClick={() => handleSaveFieldName(field.id)}
-                            disabled={updateFieldNameMutation.isPending}
+                            onClick={() => handleStartEdit(field)}
+                            className="h-6 w-6 p-0"
                           >
-                            <Check className="h-3 w-3" />
+                            <Pencil className="h-3 w-3" />
                           </Button>
                           <Button 
-                            size="sm" 
                             variant="ghost" 
-                            onClick={handleCancelEdit}
+                            size="sm" 
+                            onClick={() => deleteColumnMutation.mutate(field.id)}
+                            className="h-6 w-6 p-0"
                           >
-                            <X className="h-3 w-3" />
+                            <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <div className="min-w-[180px] flex-shrink-0 border-l p-2">
+                  <div className="flex items-center gap-1">
+                    <Input
+                      placeholder="עמודה חדשה"
+                      value={newColumnName}
+                      onChange={(e) => setNewColumnName(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && newColumnName.trim()) {
+                          addColumnMutation.mutate(newColumnName);
+                        }
+                      }}
+                      className="h-7 text-sm"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => newColumnName.trim() && addColumnMutation.mutate(newColumnName)}
+                      disabled={!newColumnName.trim() || addColumnMutation.isPending}
+                      className="h-6 w-6 p-0 flex-shrink-0"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rows */}
+              {records?.map((record) => (
+                <div key={record.id} className="flex border-b hover:bg-muted/20 transition-colors group">
+                  <div className="w-12 flex-shrink-0 border-l p-2 flex items-center justify-center bg-muted/10">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => deleteRowMutation.mutate(record.id)}
+                      className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  {fields?.map((field) => (
+                    <div 
+                      key={field.id} 
+                      className="min-w-[180px] flex-shrink-0 border-l p-0 cursor-text"
+                      onClick={() => handleCellClick(record.id, field.key, record.data[field.key] || '')}
+                    >
+                      {editingCell?.recordId === record.id && editingCell?.fieldKey === field.key ? (
+                        <Input
+                          ref={cellInputRef}
+                          value={cellValue}
+                          onChange={(e) => setCellValue(e.target.value)}
+                          onBlur={handleCellBlur}
+                          onKeyDown={handleCellKeyDown}
+                          className="border-none rounded-none h-10 focus-visible:ring-1 focus-visible:ring-primary bg-background"
+                        />
                       ) : (
-                        <div className="flex items-center justify-between gap-2">
-                          <span 
-                            className="cursor-pointer hover:text-primary transition-colors" 
-                            onClick={() => handleStartEdit(field)}
-                          >
-                            {field.name}
-                          </span>
-                          <div className="flex gap-1">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => handleStartEdit(field)}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              onClick={() => deleteColumnMutation.mutate(field.id)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
+                        <div className="p-2 h-10 flex items-center text-sm hover:bg-accent/50 transition-colors rounded-sm">
+                          {record.data[field.key] || <span className="text-muted-foreground">ריק</span>}
                         </div>
                       )}
-                    </TableHead>
-                  ))}
-                  <TableHead className="w-[150px]">
-                    <div className="flex items-center gap-2">
-                      <Input
-                        placeholder="עמודה חדשה"
-                        value={newColumnName}
-                        onChange={(e) => setNewColumnName(e.target.value)}
-                        onKeyPress={(e) => {
-                          if (e.key === 'Enter' && newColumnName.trim()) {
-                            addColumnMutation.mutate(newColumnName);
-                          }
-                        }}
-                        className="h-8"
-                      />
-                      <Button
-                        size="sm"
-                        onClick={() => newColumnName.trim() && addColumnMutation.mutate(newColumnName)}
-                        disabled={!newColumnName.trim() || addColumnMutation.isPending}
-                      >
-                        <Plus className="h-4 w-4" />
-                      </Button>
                     </div>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {records?.map((record) => (
-                  <TableRow key={record.id}>
-                    <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => deleteRowMutation.mutate(record.id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </TableCell>
-                    {fields?.map((field) => (
-                      <TableCell key={field.id}>
-                        <Input
-                          value={record.data[field.key] || ''}
-                          onChange={(e) => handleCellChange(record.id, field.key, e.target.value)}
-                          className="border-0 focus-visible:ring-1"
-                        />
-                      </TableCell>
-                    ))}
-                    <TableCell></TableCell>
-                  </TableRow>
-                ))}
-                <TableRow>
-                  <TableCell colSpan={(fields?.length || 0) + 2}>
+                  ))}
+                  <div className="min-w-[180px] flex-shrink-0 border-l" />
+                </div>
+              ))}
+
+              {/* Empty state */}
+              {(!records || records.length === 0) && (
+                <div className="flex items-center justify-center p-12 text-center">
+                  <div>
+                    <p className="text-muted-foreground mb-3">אין שורות בטבלה</p>
                     <Button
                       variant="outline"
+                      size="sm"
                       onClick={() => addRowMutation.mutate()}
                       disabled={addRowMutation.isPending}
-                      className="w-full"
                     >
                       <Plus className="ml-2 h-4 w-4" />
-                      הוסף שורה
+                      הוסף שורה ראשונה
                     </Button>
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </Card>
+        </div>
       )}
     </div>
   );
