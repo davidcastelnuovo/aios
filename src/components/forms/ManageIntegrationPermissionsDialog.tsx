@@ -47,16 +47,19 @@ export function ManageIntegrationPermissionsDialog({
       
       console.log('Fetching users for tenant:', tenantId);
       
-      // Fetch profiles with tenant_users join
+      // Fetch tenant_users with profiles join
       const { data, error } = await supabase
-        .from('profiles')
+        .from('tenant_users')
         .select(`
-          id,
-          full_name,
-          email,
-          tenant_users!inner(tenant_id, role, user_id)
+          user_id,
+          role,
+          profiles:user_id (
+            id,
+            full_name,
+            email
+          )
         `)
-        .eq('tenant_users.tenant_id', tenantId);
+        .eq('tenant_id', tenantId);
       
       if (error) {
         console.error('Error fetching tenant users:', error);
@@ -65,16 +68,8 @@ export function ManageIntegrationPermissionsDialog({
       
       console.log('Fetched users:', data);
       
-      // Transform data to match expected format
-      return data?.map(profile => ({
-        user_id: profile.id,
-        role: (profile.tenant_users as any)?.role,
-        profiles: {
-          id: profile.id,
-          full_name: profile.full_name,
-          email: profile.email,
-        }
-      })) || [];
+      // Data already in expected format
+      return data || [];
     },
     enabled: !!tenantId && open,
   });
