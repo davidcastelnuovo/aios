@@ -11,20 +11,29 @@ export function useIntegrationPermissions(integrationId: string | undefined) {
     queryFn: async () => {
       if (!integrationId) return [];
       
-      const { data, error } = await supabase
+      // First get the permissions
+      const { data: permData, error: permError } = await supabase
         .from('integration_user_permissions')
-        .select(`
-          *,
-          profiles:user_id (
-            id,
-            full_name,
-            email
-          )
-        `)
+        .select('*')
         .eq('integration_id', integrationId);
       
-      if (error) throw error;
-      return data || [];
+      if (permError) throw permError;
+      if (!permData || permData.length === 0) return [];
+      
+      // Then get the profiles for those users
+      const userIds = permData.map(p => p.user_id);
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', userIds);
+      
+      if (profilesError) throw profilesError;
+      
+      // Combine the data
+      return permData.map(perm => ({
+        ...perm,
+        profiles: profiles?.find(p => p.id === perm.user_id) || null
+      }));
     },
     enabled: !!integrationId,
   });
