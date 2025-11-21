@@ -25,6 +25,7 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const [tableName, setTableName] = useState("");
+  const [category, setCategory] = useState("");
 
   const createMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -38,7 +39,7 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
 
       const response = await supabase.functions.invoke('crm-tables', {
         method: 'POST',
-        body: { name, slug, description: '' },
+        body: { name, slug, description: '', category: category || null },
       });
 
       if (response.error) throw response.error;
@@ -66,6 +67,7 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
 
   const handleClose = () => {
     setTableName("");
+    setCategory("");
     onOpenChange(false);
   };
 
@@ -86,6 +88,16 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
               value={tableName}
               onChange={(e) => setTableName(e.target.value)}
               placeholder="לדוגמה: פרויקטים, משימות..."
+              dir="rtl"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="category">קבוצה (אופציונלי)</Label>
+            <Input
+              id="category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="לדוגמה: דוחות, ניהול..."
               dir="rtl"
             />
           </div>

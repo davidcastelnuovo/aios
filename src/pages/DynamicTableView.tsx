@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -17,6 +17,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 
@@ -434,38 +440,49 @@ export default function DynamicTableView() {
             {table.description && <p className="text-muted-foreground mt-1">{table.description}</p>}
           </div>
         </div>
-        <Dialog open={showWebhookDialog} onOpenChange={setShowWebhookDialog}>
-          <DialogTrigger asChild>
-            <Button variant="outline">
-              <Send className="ml-2 h-4 w-4" />
-              שלח ל-Webhook
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>שליחה ל-Webhook</DialogTitle>
-              <DialogDescription>הזן כתובת URL לשליחת הנתונים</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="webhook-url">Webhook URL</Label>
-                <Input
-                  id="webhook-url"
-                  value={webhookUrl}
-                  onChange={(e) => setWebhookUrl(e.target.value)}
-                  placeholder="https://example.com/webhook"
-                />
+        
+        <div className="flex items-center gap-2">
+          <Dialog open={showWebhookDialog} onOpenChange={setShowWebhookDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>שליחה ל-Webhook</DialogTitle>
+                <DialogDescription>הזן כתובת URL לשליחת הנתונים</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="webhook-url">Webhook URL</Label>
+                  <Input
+                    id="webhook-url"
+                    value={webhookUrl}
+                    onChange={(e) => setWebhookUrl(e.target.value)}
+                    placeholder="https://example.com/webhook"
+                  />
+                </div>
+                <Button 
+                  onClick={() => sendWebhookMutation.mutate()} 
+                  disabled={sendWebhookMutation.isPending || !webhookUrl}
+                  className="w-full"
+                >
+                  {sendWebhookMutation.isPending ? 'שולח...' : 'שלח נתונים'}
+                </Button>
               </div>
-              <Button 
-                onClick={() => sendWebhookMutation.mutate()} 
-                disabled={sendWebhookMutation.isPending || !webhookUrl}
-                className="w-full"
-              >
-                {sendWebhookMutation.isPending ? 'שולח...' : 'שלח נתונים'}
+            </DialogContent>
+          </Dialog>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="icon">
+                <MoreVertical className="h-4 w-4" />
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setShowWebhookDialog(true)}>
+                <Send className="ml-2 h-4 w-4" />
+                שלח ל-Webhook
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {isLoading ? (
@@ -522,7 +539,7 @@ export default function DynamicTableView() {
                     ) : (
                       <div className="flex items-center justify-between gap-2 group">
                         <span 
-                          className="text-sm font-medium cursor-pointer hover:text-primary transition-colors truncate" 
+                          className="text-sm font-medium cursor-pointer hover:text-primary transition-colors truncate text-blue-600 dark:text-blue-400" 
                           onClick={() => handleStartEdit(field)}
                         >
                           {field.name}
