@@ -99,15 +99,15 @@ serve(async (req) => {
       }
 
       case 'PATCH': {
-        if (!tableId) {
+        const body = await req.json();
+        const { table_id, name, slug, description, icon } = body;
+
+        if (!table_id) {
           return new Response(JSON.stringify({ error: 'Table ID required' }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
         }
-
-        const body = await req.json();
-        const { name, slug, description, icon } = body;
 
         const updateData: any = { updated_at: new Date().toISOString() };
         if (name) updateData.name = name;
@@ -118,13 +118,13 @@ serve(async (req) => {
         const { data: table, error } = await supabase
           .from('crm_tables')
           .update(updateData)
-          .eq('id', tableId)
+          .eq('id', table_id)
           .select()
           .single();
 
         if (error) throw error;
 
-        console.log(`✅ Updated table: ${tableId}`);
+        console.log(`✅ Updated table: ${table_id}`);
 
         return new Response(JSON.stringify({ table }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -132,7 +132,10 @@ serve(async (req) => {
       }
 
       case 'DELETE': {
-        if (!tableId) {
+        const body = await req.json();
+        const { table_id } = body;
+        
+        if (!table_id) {
           return new Response(JSON.stringify({ error: 'Table ID required' }), {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -142,11 +145,11 @@ serve(async (req) => {
         const { error } = await supabase
           .from('crm_tables')
           .delete()
-          .eq('id', tableId);
+          .eq('id', table_id);
 
         if (error) throw error;
 
-        console.log(`✅ Deleted table: ${tableId}`);
+        console.log(`✅ Deleted table: ${table_id}`);
 
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
