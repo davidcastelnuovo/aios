@@ -51,15 +51,19 @@ export function AddCampaignerForm() {
   const { tenantId } = useCurrentTenant();
 
   const { data: agencies } = useQuery({
-    queryKey: ["agencies"],
+    queryKey: ["agencies", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
+      
       const { data, error } = await supabase
         .from("agencies")
         .select("id, name")
+        .eq("tenant_id", tenantId)
         .order("name");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const form = useForm<FormValues>({
