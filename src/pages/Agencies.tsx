@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Phone, Mail, Calendar, Link as LinkIcon } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Building2, Phone, Mail, Calendar, Link as LinkIcon, Pencil } from "lucide-react";
 import { AddAgencyForm } from "@/components/forms/AddAgencyForm";
+import { EditAgencyDialog } from "@/components/forms/EditAgencyDialog";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -14,6 +17,7 @@ export default function Agencies() {
   const { userAgencyIds } = useUserAgencies();
   const { tenantId } = useCurrentTenant();
   const { t } = useTerminology();
+  const [editingAgency, setEditingAgency] = useState<any | null>(null);
   
   const { data: agencies, isLoading } = useQuery({
     queryKey: ["agencies-list", tenantId, userId, userAgencyIds],
@@ -138,9 +142,20 @@ export default function Agencies() {
                     )}
                   </div>
                 </div>
-                <Badge variant="outline" className={getStatusColor(agency.status)}>
-                  {getStatusText(agency.status)}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  {agency.is_owned && isOwner && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setEditingAgency(agency)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <Badge variant="outline" className={getStatusColor(agency.status)}>
+                    {getStatusText(agency.status)}
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -180,6 +195,14 @@ export default function Agencies() {
             <p className="text-sm text-muted-foreground">התחל בהוספת {t('agency')} ראשונה</p>
           </CardContent>
         </Card>
+      )}
+
+      {editingAgency && (
+        <EditAgencyDialog
+          agency={editingAgency}
+          open={!!editingAgency}
+          onOpenChange={(open) => !open && setEditingAgency(null)}
+        />
       )}
     </div>
   );
