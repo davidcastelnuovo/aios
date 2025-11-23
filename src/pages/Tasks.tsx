@@ -176,9 +176,12 @@ export default function Tasks() {
       // ALWAYS check tenant match first - strict isolation
       const isTenantMatch = task.tenant_id === tenantId;
       
-      // For owners: only show tasks from CURRENT tenant
+      // For owners: show tasks from CURRENT tenant OR from accessible shared agencies
       if (isOwner) {
-        return isTenantMatch;
+        if (isTenantMatch) return true;
+        // Allow tasks from shared agencies
+        if (task.agency_id && agencies && agencies.some(a => a.id === task.agency_id)) return true;
+        return false;
       }
       
       // For non-owners: allow tenant match OR accessible agency
@@ -188,7 +191,7 @@ export default function Tasks() {
       // Block everything else
       return false;
     });
-  }, [tasks, tenantId, userAgencyIds, isOwner]);
+  }, [tasks, tenantId, userAgencyIds, isOwner, agencies]);
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners", tenantId],
