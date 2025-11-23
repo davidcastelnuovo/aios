@@ -93,11 +93,33 @@ Deno.serve(async (req) => {
 
     console.log('Contact tenant_id:', tenantId);
 
-    // Build query
+    // Verify user has access to this tenant
+    const { data: userTenantData, error: userTenantError } = await supabase
+      .rpc('get_user_tenant_id', { _user_id: user.id });
+
+    if (userTenantError) {
+      console.error('Failed to get user tenant:', userTenantError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to verify access' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check if user's tenant matches the contact's tenant
+    if (tenantId !== userTenantData) {
+      console.error('User trying to access messages from different tenant');
+      return new Response(
+        JSON.stringify({ error: 'Access denied - different tenant' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Build query - filter by tenant, connection_user, and contact
     let query = supabase
       .from('chat_messages')
       .select('*')
       .eq('tenant_id', tenantId)
+      .eq('connection_user_id', user.id)
       .order('created_at', { ascending: true })
       .limit(limit);
 
