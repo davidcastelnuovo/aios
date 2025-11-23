@@ -998,42 +998,73 @@ export default function Users() {
                       
                       <div className="space-y-2">
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1">תפקיד:</p>
-                          {user.roles?.includes("owner") ? (
-                            <div className="flex items-center gap-2 h-8">
-                              <Badge className="bg-primary">
-                                {roleLabels.owner}
+                          <p className="text-xs text-muted-foreground mb-1">תפקידים:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {user.roles?.map((role: UserRole) => (
+                              <Badge 
+                                key={role}
+                                className={`${roleBadgeColors[role] || 'bg-gray-500'} relative group text-xs`}
+                              >
+                                {roleLabels[role]}
+                                {/* Allow deletion of super_admin or owner (only own) */}
+                                {((role === "super_admin" && user.id === currentUserId) || 
+                                  (role === "owner" && user.id === currentUserId)) && (
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (confirm(`האם להסיר את תפקיד ${roleLabels[role]} מעצמך?`)) {
+                                        try {
+                                          const { error } = await supabase
+                                            .from("user_roles")
+                                            .delete()
+                                            .eq("user_id", user.id)
+                                            .eq("role", role);
+                                          
+                                          if (error) throw error;
+                                          
+                                          queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+                                          toast.success(`תפקיד ${roleLabels[role]} הוסר בהצלחה`);
+                                        } catch (error: any) {
+                                          toast.error("שגיאה בהסרת תפקיד: " + error.message);
+                                        }
+                                      }
+                                    }}
+                                    className="mr-1 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="הסר תפקיד"
+                                  >
+                                    ×
+                                  </button>
+                                )}
                               </Badge>
-                              <span className="text-xs text-muted-foreground" title="לא ניתן לשנות תפקיד של בעלים">
-                                🔒
-                              </span>
-                            </div>
-                          ) : (
-                            <Select
-                              value={user.role || ""}
-                              onValueChange={(role) => {
-                                console.log("Users: change role", user.id, role);
-                                toast.info("מעדכן תפקיד...");
-                                updateRoleMutation.mutate({
-                                  userId: user.id,
-                                  role: role as UserRole,
-                                });
-                              }}
-                            >
-                              <SelectTrigger className="h-8 text-sm">
-                                <SelectValue>
-                                  {user.role ? roleLabels[user.role] : <span className="text-muted-foreground">-</span>}
-                                </SelectValue>
-                              </SelectTrigger>
-                              <SelectContent className="bg-background z-50">
-                                {Object.entries(roleLabels).map(([value, label]) => (
-                                  <SelectItem key={value} value={value}>
-                                    {label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          )}
+                            ))}
+                            {/* Allow adding roles if not owner of others */}
+                            {!user.roles?.includes("owner") || user.id === currentUserId ? (
+                              <Select
+                                value=""
+                                onValueChange={(role) => {
+                                  console.log("Users: add role", user.id, role);
+                                  toast.info("מוסיף תפקיד...");
+                                  updateRoleMutation.mutate({
+                                    userId: user.id,
+                                    role: role as UserRole,
+                                  });
+                                }}
+                              >
+                                <SelectTrigger className="w-[60px] h-6 px-2 text-xs">
+                                  <SelectValue>הוסף</SelectValue>
+                                </SelectTrigger>
+                                <SelectContent className="bg-background z-50">
+                                  {Object.entries(roleLabels)
+                                    .filter(([value]) => !user.roles?.includes(value))
+                                    .map(([value, label]) => (
+                                      <SelectItem key={value} value={value}>
+                                        {label}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            ) : null}
+                          </div>
                         </div>
                         
                         <div>
@@ -1213,41 +1244,72 @@ export default function Users() {
                     </TableCell>
                     <TableCell>{user.email}</TableCell>
                     <TableCell>
-                      {user.roles?.includes("owner") ? (
-                        <div className="flex items-center gap-2">
-                          <Badge className="bg-primary">
-                            {roleLabels.owner}
+                      <div className="flex flex-wrap gap-2">
+                        {user.roles?.map((role: UserRole) => (
+                          <Badge 
+                            key={role}
+                            className={`${roleBadgeColors[role] || 'bg-gray-500'} relative group`}
+                          >
+                            {roleLabels[role]}
+                            {/* Allow deletion of super_admin or owner (only own) */}
+                            {((role === "super_admin" && user.id === currentUserId) || 
+                              (role === "owner" && user.id === currentUserId)) && (
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (confirm(`האם להסיר את תפקיד ${roleLabels[role]} מעצמך?`)) {
+                                    try {
+                                      const { error } = await supabase
+                                        .from("user_roles")
+                                        .delete()
+                                        .eq("user_id", user.id)
+                                        .eq("role", role);
+                                      
+                                      if (error) throw error;
+                                      
+                                      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+                                      toast.success(`תפקיד ${roleLabels[role]} הוסר בהצלחה`);
+                                    } catch (error: any) {
+                                      toast.error("שגיאה בהסרת תפקיד: " + error.message);
+                                    }
+                                  }
+                                }}
+                                className="mr-1 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="הסר תפקיד"
+                              >
+                                ×
+                              </button>
+                            )}
                           </Badge>
-                          <span className="text-xs text-muted-foreground" title="לא ניתן לשנות תפקיד של בעלים">
-                            🔒
-                          </span>
-                        </div>
-                      ) : (
-                        <Select
-                          value={user.role || ""}
-                          onValueChange={(role) => {
-                            console.log("Users: change role", user.id, role);
-                            toast.info("מעדכן תפקיד...");
-                            updateRoleMutation.mutate({
-                              userId: user.id,
-                              role: role as UserRole,
-                            });
-                          }}
-                        >
-                          <SelectTrigger className="w-[140px]">
-                            <SelectValue>
-                              {user.role ? roleLabels[user.role] : <span className="text-muted-foreground">-</span>}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent className="bg-background z-50">
-                            {Object.entries(roleLabels).map(([value, label]) => (
-                              <SelectItem key={value} value={value}>
-                                {label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
+                        ))}
+                        {/* Allow adding roles if not owner of others */}
+                        {!user.roles?.includes("owner") || user.id === currentUserId ? (
+                          <Select
+                            value=""
+                            onValueChange={(role) => {
+                              console.log("Users: add role", user.id, role);
+                              toast.info("מוסיף תפקיד...");
+                              updateRoleMutation.mutate({
+                                userId: user.id,
+                                role: role as UserRole,
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="w-[40px] h-6 px-2">
+                              <SelectValue>+</SelectValue>
+                            </SelectTrigger>
+                            <SelectContent className="bg-background z-50">
+                              {Object.entries(roleLabels)
+                                .filter(([value]) => !user.roles?.includes(value))
+                                .map(([value, label]) => (
+                                  <SelectItem key={value} value={value}>
+                                    {label}
+                                  </SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
+                        ) : null}
+                      </div>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <Select
