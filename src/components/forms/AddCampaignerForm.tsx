@@ -156,7 +156,10 @@ export function AddCampaignerForm() {
     },
     onSuccess: () => {
       toast.success("איש הצוות נוסף בהצלחה");
+      // Invalidate and refetch all related queries
       queryClient.invalidateQueries({ queryKey: ["campaigners"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigner_agencies"] });
+      queryClient.refetchQueries({ queryKey: ["campaigners", tenantId] });
       form.reset();
       setOpen(false);
     },
