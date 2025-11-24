@@ -133,18 +133,13 @@ export default function Tasks() {
   const { data: tasks, isLoading } = useQuery({
     queryKey: ["tasks", tenantId, selectedAgency],
     queryFn: async () => {
-      if (!tenantId) {
-        console.log('❌ No tenantId available for tasks query');
-        return [] as any[];
-      }
-      
       console.log('🔍 Tasks Query - Starting fetch:', {
         tenantId,
         selectedAgency,
-        agenciesCount: agencies?.length,
-        agencies: agencies?.map(a => ({ id: a.id, name: a.name }))
+        agenciesCount: agencies?.length
       });
       
+      // Build query - let RLS handle filtering
       let query = supabase
         .from("tasks")
         .select(`
@@ -156,22 +151,9 @@ export default function Tasks() {
         `)
         .order("due_date", { ascending: true });
 
-      // 🔒 CRITICAL SECURITY: Filter by tenant_id OR accessible agencies
+      // Only filter by selected agency if specified
       if (selectedAgency && selectedAgency !== "all") {
-        // Single agency selected - must match tenant OR be accessible
-        const filterStr = `tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`;
-        console.log('🔍 Applying single agency filter:', filterStr);
-        query = query.or(filterStr);
-      } else if (agencies && agencies.length > 0) {
-        // Multiple agencies - must match tenant OR be in accessible agencies
-        const agencyIds = agencies.map((a) => a.id);
-        const filterStr = `tenant_id.eq.${tenantId},agency_id.in.(${agencyIds.join(',')})`;
-        console.log('🔍 Applying multiple agencies filter:', filterStr);
-        query = query.or(filterStr);
-      } else {
-        // No agencies - strict tenant isolation
-        console.log('🔍 Applying strict tenant filter:', tenantId);
-        query = query.eq("tenant_id", tenantId);
+        query = query.eq("agency_id", selectedAgency);
       }
 
       const { data, error } = await query;
@@ -191,79 +173,21 @@ export default function Tasks() {
         }))
       });
       
-      return data;
+      return data || [];
     },
     staleTime: 1000 * 60 * 5,
-    refetchOnWindowFocus: false,
-    refetchOnMount: false,
     enabled: !!tenantId,
   });
 
-  // 🔒 SECURITY GUARD: Filter tasks by current tenant and accessible agencies
+  // RLS already filters by tenant and accessible agencies
+  // No need for additional security filtering here
   const secureFilteredTasks = useMemo(() => {
-    if (!tasks || !tenantId) {
-      console.log('⚠️ secureFilteredTasks: No tasks or tenantId', { tasksCount: tasks?.length, tenantId });
-      return [];
-    }
-    
-    console.log('🔍 secureFilteredTasks: Starting filter', {
-      totalTasks: tasks.length,
-      tenantId,
-      isOwner,
-      agenciesCount: agencies?.length,
-      userAgencyIdsCount: userAgencyIds?.length
+    console.log('✅ Tasks from RLS:', {
+      count: tasks?.length,
+      tasks: tasks?.map(t => ({ title: t.title, tenant_id: t.tenant_id, agency_id: t.agency_id }))
     });
-    
-    const filtered = tasks.filter(task => {
-      // ALWAYS check tenant match first - strict isolation
-      const isTenantMatch = task.tenant_id === tenantId;
-      
-      console.log('🔍 Checking task:', {
-        title: task.title,
-        task_tenant_id: task.tenant_id,
-        current_tenant_id: tenantId,
-        isTenantMatch,
-        task_agency_id: task.agency_id,
-        isOwner
-      });
-      
-      // For owners: show tasks from CURRENT tenant OR from accessible shared agencies
-      if (isOwner) {
-        if (isTenantMatch) {
-          console.log('✅ Owner - tenant match:', task.title);
-          return true;
-        }
-        // Allow tasks from shared agencies
-        if (task.agency_id && agencies && agencies.some(a => a.id === task.agency_id)) {
-          console.log('✅ Owner - agency match:', task.title);
-          return true;
-        }
-        console.log('❌ Owner - no match:', task.title);
-        return false;
-      }
-      
-      // For non-owners: allow tenant match OR accessible agency
-      if (isTenantMatch) {
-        console.log('✅ Non-owner - tenant match:', task.title);
-        return true;
-      }
-      if (task.agency_id && userAgencyIds?.includes(task.agency_id)) {
-        console.log('✅ Non-owner - agency match:', task.title);
-        return true;
-      }
-      
-      console.log('❌ Non-owner - no match:', task.title);
-      // Block everything else
-      return false;
-    });
-    
-    console.log('✅ secureFilteredTasks result:', {
-      filteredCount: filtered.length,
-      tasks: filtered.map(t => ({ title: t.title, tenant_id: t.tenant_id, agency_id: t.agency_id }))
-    });
-    
-    return filtered;
-  }, [tasks, tenantId, userAgencyIds, isOwner, agencies]);
+    return tasks || [];
+  }, [tasks]);
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners", tenantId],
