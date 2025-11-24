@@ -207,13 +207,17 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     );
   }
 
+  // CRITICAL: When on tenant-scoped route, ALWAYS use tenant from URL
+  const effectiveTenantId = tenantFromSlug?.id || currentTenantId;
+  const effectiveTenant = tenantFromSlug || currentTenant || userTenant?.tenants;
+
   return (
     <TenantContext.Provider 
       value={{ 
-        currentTenantId, 
-        currentTenantSlug: currentTenant?.slug || tenantFromSlug?.slug || null,
+        currentTenantId: effectiveTenantId, 
+        currentTenantSlug: effectiveTenant?.slug || null,
         setCurrentTenantId, 
-        currentTenant: currentTenant || tenantFromSlug || userTenant?.tenants,
+        currentTenant: effectiveTenant,
         isLoading 
       }}
     >
