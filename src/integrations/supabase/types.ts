@@ -2284,6 +2284,10 @@ export type Database = {
         Args: { _email: string; _role: Database["public"]["Enums"]["app_role"] }
         Returns: string
       }
+      can_access_agency: {
+        Args: { _agency_id: string; _user_id: string }
+        Returns: boolean
+      }
       can_manage_user_permissions: {
         Args: { target_user_id: string }
         Returns: boolean
