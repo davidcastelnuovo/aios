@@ -386,25 +386,26 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Header - קבוע */}
-      <div className={`${isMobile ? 'p-2' : 'p-4'} border-b bg-card shadow-sm`}>
+      {/* Header - קבוע וקומפקטי */}
+      <div className={`${isMobile ? 'p-1.5' : 'px-3 py-2'} border-b bg-card shadow-sm`}>
         {/* שורה ראשונה - תמיד גלויה */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {onBack && (
-            <Button variant="ghost" size="icon" onClick={onBack}>
-              <ArrowLeft className="h-5 w-5" />
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={onBack}>
+              <ArrowLeft className="h-4 w-4" />
             </Button>
           )}
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <h2 className="font-semibold text-lg">{contact.name}</h2>
-              <ChatProviderIndicator provider={contact.active_chat_provider} size="md" />
+              <h2 className="font-medium text-base">{contact.name}</h2>
+              <ChatProviderIndicator provider={contact.active_chat_provider} size="sm" />
             </div>
           </div>
           {isMobile && (
             <Button 
               variant="ghost" 
               size="sm"
+              className="h-7 w-7 p-0"
               onClick={() => setIsHeaderExpanded(!isHeaderExpanded)}
             >
               {isHeaderExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -415,71 +416,40 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
         {/* פרטים נוספים - מתקפל במובייל, תמיד פתוח בדסקטופ */}
         <Collapsible open={isMobile ? isHeaderExpanded : true}>
           <CollapsibleContent>
-            <div className={`space-y-2 ${isMobile ? 'mt-2' : 'mt-4'}`}>
+            <div className={`space-y-1 ${isMobile ? 'mt-1' : 'mt-2'}`}>
               {/* פרטי קשר */}
-              <div className="text-sm text-muted-foreground space-y-1">
+              <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-0.5">
                 {(contact as any).agencies?.name && (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline">{(contact as any).agencies.name}</Badge>
-                  </div>
+                  <Badge variant="outline" className="text-xs h-5">{(contact as any).agencies.name}</Badge>
                 )}
-                {contact.phone && <div>טלפון: {contact.phone}</div>}
-                {contact.email && <div>אימייל: {contact.email}</div>}
+                {contact.phone && <span>טלפון: {contact.phone}</span>}
+                {contact.email && <span>אימייל: {contact.email}</span>}
               </div>
 
               {/* Alerts וכפתורים למשתמשים unknown */}
               {contactType === 'unknown' && (
                 <>
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      איש קשר זה לא מוגדר במערכת. המר אותו ללקוח, ליד או קבוצה כדי לנהל אותו בצורה מסודרת.
+                  <Alert className="py-1.5">
+                    <AlertCircle className="h-3 w-3" />
+                    <AlertDescription className="text-xs">
+                      איש קשר לא מוגדר במערכת. המר אותו ללקוח, ליד או קבוצה.
                     </AlertDescription>
                   </Alert>
-                  <div className="flex gap-2 flex-wrap">
-                    <Button
-                      onClick={() => {
-                        setConvertType("client");
-                        setConvertDialogOpen(true);
-                      }}
-                      size="sm"
-                    >
+                  <div className="flex gap-1.5 flex-wrap">
+                    <Button onClick={() => { setConvertType("client"); setConvertDialogOpen(true); }} size="sm" className="h-7 text-xs">
                       המר ללקוח
                     </Button>
-                    <Button
-                      onClick={() => {
-                        setConvertType("lead");
-                        setConvertDialogOpen(true);
-                      }}
-                      size="sm"
-                      variant="outline"
-                    >
+                    <Button onClick={() => { setConvertType("lead"); setConvertDialogOpen(true); }} size="sm" variant="outline" className="h-7 text-xs">
                       המר לליד
                     </Button>
-                    <Button
-                      onClick={() => {
-                        setConvertType("group");
-                        setConvertDialogOpen(true);
-                      }}
-                      size="sm"
-                      variant="outline"
-                    >
+                    <Button onClick={() => { setConvertType("group"); setConvertDialogOpen(true); }} size="sm" variant="outline" className="h-7 text-xs">
                       המר לקבוצה
                     </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => blockMutation.mutate()}
-                      disabled={blockMutation.isPending}
-                    >
-                      <Ban className="h-4 w-4 ml-2" />
+                    <Button variant="destructive" size="sm" className="h-7 text-xs" onClick={() => blockMutation.mutate()} disabled={blockMutation.isPending}>
+                      <Ban className="h-3 w-3 ml-1" />
                       חסום
                     </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setLinkDialogOpen(true)}
-                    >
+                    <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => setLinkDialogOpen(true)}>
                       שייך לקיים
                     </Button>
                   </div>
@@ -488,56 +458,66 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
 
               {/* כפתורים לכל סוגי אנשי הקשר */}
               {contactType !== 'unknown' && (
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-1.5 flex-wrap items-center">
                   <Button
                     variant="destructive"
                     size="sm"
+                    className="h-7 text-xs"
                     onClick={() => {
-                      if (confirm('האם אתה בטוח שברצונך לחסום את השיחה? הודעות חדשות לא יישמרו בדטה-בייס.')) {
+                      if (confirm('האם אתה בטוח שברצונך לחסום את השיחה?')) {
                         blockMutation.mutate();
                       }
                     }}
                     disabled={blockMutation.isPending}
                   >
-                    <Ban className="h-4 w-4 ml-2" />
+                    <Ban className="h-3 w-3 ml-1" />
                     חסום שיחה
                   </Button>
                   {contact.phone && contactType !== 'group' && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setLinkPhoneDialogOpen(true)}
-                    >
+                    <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => setLinkPhoneDialogOpen(true)}>
                       שייך טלפון לאחר
                     </Button>
+                  )}
+                  
+                  {/* Provider Controls - inline */}
+                  {activeProvider === 'green_api' && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-2">
+                      <Badge variant="outline" className="h-5 text-xs bg-blue-500/10 text-blue-700 dark:text-blue-400">Green API</Badge>
+                      {contactType === 'group' && (contact as any).group_chat_id && (
+                        <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded cursor-pointer hover:bg-muted/80" 
+                          onClick={() => {
+                            navigator.clipboard.writeText((contact as any).group_chat_id);
+                            toast.success("מזהה הקבוצה הועתק");
+                          }}
+                          title="לחץ להעתקה"
+                        >
+                          {(contact as any).group_chat_id}
+                        </code>
+                      )}
+                      {contactType !== 'group' && contact.phone && (
+                        <span className="font-mono">{contact.phone}</span>
+                      )}
+                    </div>
+                  )}
+                  {activeProvider === 'manychat' && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mr-2">
+                      <Badge variant="outline" className="h-5 text-xs bg-green-500/10 text-green-700 dark:text-green-400">ManyChat</Badge>
+                      {contact.manychat_subscriber_id && (
+                        <span className="font-mono text-xs">{contact.manychat_subscriber_id}</span>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
 
-              {/* Provider Controls */}
+              {/* Provider Controls - full for unknown */}
               {!activeProvider && contactType !== 'unknown' && (
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    לא מוגדר ספק צ'אט פעיל. אנא הגדר באינטגרציות צ'אט.
+                <Alert className="py-1.5">
+                  <AlertCircle className="h-3 w-3" />
+                  <AlertDescription className="text-xs">
+                    לא מוגדר ספק צ'אט פעיל.
                   </AlertDescription>
                 </Alert>
-              )}
-
-              {activeProvider === 'manychat' && contactType !== 'unknown' && (
-                <ManyChatControls
-                  contactId={contactId}
-                  contactType={contactType as 'client' | 'lead'}
-                  subscriberId={contact.manychat_subscriber_id}
-                  tenantId={contact.tenant_id}
-                />
-              )}
-
-              {activeProvider === 'green_api' && contactType !== 'unknown' && (
-                <GreenAPIControls 
-                  phone={contact.phone} 
-                  groupChatId={contactType === 'group' ? (contact as any).group_chat_id : null}
-                />
               )}
             </div>
           </CollapsibleContent>
