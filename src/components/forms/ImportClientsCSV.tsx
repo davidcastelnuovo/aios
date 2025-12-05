@@ -138,6 +138,7 @@ export function ImportClientsCSV() {
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvData, setCsvData] = useState<string[][]>([]);
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
+  const [defaultAgencyId, setDefaultAgencyId] = useState<string>('');
   const queryClient = useQueryClient();
 
   // Fetch agencies for agency name resolution
@@ -288,9 +289,13 @@ export function ImportClientsCSV() {
 
   const requiredFieldsMapped = useMemo(() => {
     const mappedFields = new Set(Object.values(fieldMappings));
-    return SYSTEM_FIELDS
-      .filter(f => f.required)
-      .every(f => mappedFields.has(f.key));
+    const hasName = mappedFields.has('name');
+    const hasAgency = mappedFields.has('agency') || !!defaultAgencyId;
+    return hasName && hasAgency;
+  }, [fieldMappings, defaultAgencyId]);
+
+  const agencyMappedFromCSV = useMemo(() => {
+    return Object.values(fieldMappings).includes('agency');
   }, [fieldMappings]);
 
   const getMappedData = useMemo(() => {
@@ -300,9 +305,13 @@ export function ImportClientsCSV() {
         const value = row[parseInt(headerIndex)] || '';
         mappedRow[fieldKey] = value;
       });
+      // Use default agency if not mapped from CSV
+      if (!mappedRow.agency && defaultAgencyId) {
+        mappedRow.agency = defaultAgencyId;
+      }
       return mappedRow;
     });
-  }, [csvData, fieldMappings]);
+  }, [csvData, fieldMappings, defaultAgencyId]);
 
   const previewData = useMemo(() => {
     return getMappedData.slice(0, 5);
@@ -525,6 +534,7 @@ export function ImportClientsCSV() {
     setCsvHeaders([]);
     setCsvData([]);
     setFieldMappings({});
+    setDefaultAgencyId('');
   };
 
   const handleImport = () => {
@@ -601,9 +611,31 @@ export function ImportClientsCSV() {
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    יש למפות את שדות החובה: <strong>שם</strong> ו<strong>סוכנות</strong>
+                    יש למפות את שדות החובה: <strong>שם</strong> {!agencyMappedFromCSV && !defaultAgencyId && <>ו<strong>סוכנות</strong> (או לבחור סוכנות ברירת מחדל)</>}
                   </AlertDescription>
                 </Alert>
+              )}
+
+              {/* Default agency selector */}
+              {!agencyMappedFromCSV && (
+                <div className="p-4 border rounded-md bg-muted/30 space-y-2">
+                  <Label className="text-sm font-medium">סוכנות ברירת מחדל לכל הלקוחות בקובץ</Label>
+                  <Select value={defaultAgencyId} onValueChange={setDefaultAgencyId}>
+                    <SelectTrigger className="bg-background">
+                      <SelectValue placeholder="בחר סוכנות..." />
+                    </SelectTrigger>
+                    <SelectContent position="popper" sideOffset={5}>
+                      {agencies?.map((agency) => (
+                        <SelectItem key={agency.id} value={agency.id}>
+                          {agency.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    כל הלקוחות שיובאו ישויכו לסוכנות זו
+                  </p>
+                </div>
               )}
 
               <div className="text-sm text-muted-foreground">
