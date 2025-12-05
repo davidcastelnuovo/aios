@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import {
   Dialog,
   DialogContent,
@@ -140,6 +141,7 @@ export function ImportClientsCSV() {
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
   const [defaultAgencyId, setDefaultAgencyId] = useState<string>('');
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   // Fetch agencies for agency name resolution
   const { data: agencies } = useQuery({
@@ -326,13 +328,7 @@ export function ImportClientsCSV() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("משתמש לא מחובר");
       
-      const { data: tenantData } = await supabase
-        .from("tenant_users")
-        .select("tenant_id")
-        .eq("user_id", user.id)
-        .single();
-      
-      if (!tenantData) throw new Error("לא נמצא tenant למשתמש");
+      if (!tenantId) throw new Error("לא נמצא tenant למשתמש");
 
       const rows = getMappedData;
       const validRows = rows.filter(row => row.name && row.agency);
@@ -421,7 +417,7 @@ export function ImportClientsCSV() {
             website: row.website || null,
             notes: row.notes || null,
             is_seo_client: isSeoClient,
-            tenant_id: tenantData.tenant_id,
+            tenant_id: tenantId,
           });
         }
       });
@@ -447,7 +443,7 @@ export function ImportClientsCSV() {
         await supabase
           .from("import_history")
           .insert({
-            tenant_id: tenantData.tenant_id,
+            tenant_id: tenantId,
             import_type: "clients",
             file_name: file.name,
             file_content: text,
