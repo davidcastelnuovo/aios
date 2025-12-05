@@ -44,6 +44,7 @@ interface FieldOption {
 const SYSTEM_FIELDS: FieldOption[] = [
   { key: 'name', label: 'שם', required: true },
   { key: 'agency', label: 'סוכנות', required: true },
+  { key: 'campaigner', label: 'קמפיינר' },
   { key: 'contact_name', label: 'איש קשר' },
   { key: 'phone', label: 'טלפון' },
   { key: 'email', label: 'אימייל' },
@@ -94,6 +95,10 @@ const AUTO_DETECT_MAPPINGS: Record<string, string> = {
   'הערה': 'notes',
   'seo': 'is_seo_client',
   'לקוח seo': 'is_seo_client',
+  'קמפיינר': 'campaigner',
+  'שם קמפיינר': 'campaigner',
+  'מנהל לקוח': 'campaigner',
+  'אחראי': 'campaigner',
   // English
   'name': 'name',
   'client name': 'name',
@@ -122,6 +127,8 @@ const AUTO_DETECT_MAPPINGS: Record<string, string> = {
   'comments': 'notes',
   'is_seo_client': 'is_seo_client',
   'seo client': 'is_seo_client',
+  'campaigner': 'campaigner',
+  'account manager': 'campaigner',
 };
 
 export function ImportClientsCSV() {
@@ -146,9 +153,26 @@ export function ImportClientsCSV() {
     enabled: open,
   });
 
+  // Fetch campaigners for campaigner name resolution
+  const { data: campaigners } = useQuery({
+    queryKey: ['campaigners-for-import'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('campaigners')
+        .select('id, full_name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open,
+  });
+
   const agencyMap = useMemo(() => {
     return new Map(agencies?.map(a => [a.name.toLowerCase(), a.id]) || []);
   }, [agencies]);
+
+  const campaignerMap = useMemo(() => {
+    return new Map(campaigners?.map(c => [c.full_name.toLowerCase(), c.id]) || []);
+  }, [campaigners]);
 
   const parseCSVRaw = (text: string): { headers: string[]; data: string[][] } => {
     const lines = text.split("\n").filter(line => line.trim());
@@ -423,16 +447,44 @@ export function ImportClientsCSV() {
           });
       }
 
-      // Insert new rows
+      // Insert new rows and track campaigner assignments
       let insertedCount = 0;
+      const clientCampaignerAssignments: Array<{ clientId: string; campaignerId: string }> = [];
+      
       if (inserts.length > 0) {
         const { data: inserted, error: insertError } = await supabase
           .from("clients")
           .insert(inserts)
-          .select("id");
+          .select("id, name");
 
         if (insertError) throw insertError;
         insertedCount = inserted?.length || 0;
+
+        // Match inserted clients to their campaigner assignments
+        if (inserted) {
+          inserted.forEach((client) => {
+            const row = validRows.find(r => r.name?.trim().toLowerCase() === client.name.toLowerCase());
+            if (row?.campaigner) {
+              let campaignerId = row.campaigner;
+              if (!row.campaigner.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+                campaignerId = campaignerMap.get(row.campaigner.toLowerCase()) || '';
+              }
+              if (campaignerId) {
+                clientCampaignerAssignments.push({ clientId: client.id, campaignerId });
+              }
+            }
+          });
+        }
+      }
+
+      // Create client_team records for campaigner assignments
+      if (clientCampaignerAssignments.length > 0) {
+        await supabase
+          .from("client_team")
+          .insert(clientCampaignerAssignments.map(a => ({
+            client_id: a.clientId,
+            campaigner_id: a.campaignerId,
+          })));
       }
 
       return {
