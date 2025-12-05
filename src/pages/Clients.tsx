@@ -367,7 +367,8 @@ export default function Clients() {
   // Filter by selected campaigner (only for team managers and owners)
   const campaignerFilteredClients = selectedCampaigner && selectedCampaigner !== "all"
     ? filteredClients?.filter(client => {
-        const hasMatch = clientTeam?.some(ct => ct.client_id === client.id && ct.campaigner_id === selectedCampaigner);
+        // Use client_team data from the client object (already fetched with the client)
+        const hasMatch = client.client_team?.some((ct: any) => ct.campaigner_id === selectedCampaigner);
         return !!hasMatch;
       })
     : filteredClients;
