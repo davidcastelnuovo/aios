@@ -534,7 +534,10 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
               )}
 
               {activeProvider === 'green_api' && contactType !== 'unknown' && (
-                <GreenAPIControls phone={contact.phone} />
+                <GreenAPIControls 
+                  phone={contact.phone} 
+                  groupChatId={contactType === 'group' ? (contact as any).group_chat_id : null}
+                />
               )}
             </div>
           </CollapsibleContent>
