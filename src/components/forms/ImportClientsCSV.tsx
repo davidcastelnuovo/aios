@@ -633,7 +633,12 @@ export function ImportClientsCSV() {
                             <SelectTrigger className="bg-background">
                               <SelectValue placeholder="בחר שדה" />
                             </SelectTrigger>
-                            <SelectContent className="bg-popover z-50">
+                            <SelectContent 
+                              className="bg-popover" 
+                              position="popper" 
+                              sideOffset={5}
+                              style={{ zIndex: 9999 }}
+                            >
                               <SelectItem value="_skip">לא למפות</SelectItem>
                               {SYSTEM_FIELDS.map((field) => (
                                 <SelectItem key={field.key} value={field.key}>
