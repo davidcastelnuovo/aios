@@ -309,17 +309,23 @@ export default function Tasks() {
         task.campaigners?.role?.includes('SEO') &&
         task.clients?.is_seo_client === true
       );
-    } else if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
-      // Team managers see all tasks in their agencies (including all team members)
+    } else if (isTeamManager && !isCampaigner && userAgencyIds && userAgencyIds.length > 0) {
+      // Team managers (who are NOT also campaigners) see all tasks in their agencies
       accessibleTasks = secureFilteredTasks?.filter(task => 
         userAgencyIds.includes(getTaskAgencyId(task))
       );
-    } else if (isCampaigner && campaignerId) {
-      // Pure campaigners see tasks assigned to them OR tasks for their assigned clients
-      accessibleTasks = secureFilteredTasks?.filter(task => 
-        task.campaigner_id === campaignerId || 
-        (campaignerClientIds && campaignerClientIds.includes(task.client_id))
-      );
+    } else if (isCampaigner) {
+      // Campaigners see ONLY tasks assigned to them OR tasks for their assigned clients
+      // Important: filter even if campaignerId not loaded yet (show nothing until loaded)
+      if (campaignerId) {
+        accessibleTasks = secureFilteredTasks?.filter(task => 
+          task.campaigner_id === campaignerId || 
+          (campaignerClientIds && campaignerClientIds.includes(task.client_id))
+        );
+      } else {
+        // Wait for campaignerId to load - show empty until then
+        accessibleTasks = [];
+      }
     } else if (userAgencyIds && userAgencyIds.length > 0) {
       // Fallback: users with agency access see tasks in their agencies
       accessibleTasks = secureFilteredTasks?.filter(task => 
