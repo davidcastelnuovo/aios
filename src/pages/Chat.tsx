@@ -454,14 +454,14 @@ export default function Chat() {
                     <div className="flex flex-row-reverse items-center gap-3 w-full min-w-0 overflow-hidden">
                       <Avatar className="h-10 w-10 flex-shrink-0">
                         <AvatarFallback>
-                          {(contact.contact_name || contact.name)?.charAt(0) || '?'}
+                          {(contact.contact_type === 'group' ? contact.name : (contact.contact_name || contact.name))?.charAt(0) || '?'}
                         </AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0 text-right">
                         <div className="flex items-center justify-between gap-2 mb-1">
                           <div className="flex-1 min-w-0">
                             <div className="block text-sm font-medium leading-tight truncate" dir="auto">
-                              {contact.contact_name || contact.name}
+                              {contact.contact_type === 'group' ? contact.name : (contact.contact_name || contact.name)}
                             </div>
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
