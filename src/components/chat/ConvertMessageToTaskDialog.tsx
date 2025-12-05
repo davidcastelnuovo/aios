@@ -235,15 +235,15 @@ export function ConvertMessageToTaskDialog({
           <div className="space-y-2">
             <Label htmlFor="client_id">לקוח (אופציונלי)</Label>
             <Select
-              value={form.watch("client_id")}
-              onValueChange={(value) => form.setValue("client_id", value)}
+              value={form.watch("client_id") || "__none__"}
+              onValueChange={(value) => form.setValue("client_id", value === "__none__" ? "" : value)}
               disabled={!selectedAgencyId}
             >
               <SelectTrigger>
                 <SelectValue placeholder="בחר לקוח" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">ללא לקוח</SelectItem>
+                <SelectItem value="__none__">ללא לקוח</SelectItem>
                 {clients.map((client) => (
                   <SelectItem key={client.id} value={client.id}>
                     {client.name}

@@ -230,12 +230,12 @@ export function AddTenantForm({
       {!parentTenantId && tenants && tenants.length > 0 && (
         <div className="space-y-2">
           <Label htmlFor="parent_tenant">ארגון אב (אופציונלי)</Label>
-          <Select value={selectedParentTenant} onValueChange={setSelectedParentTenant}>
+          <Select value={selectedParentTenant || "__none__"} onValueChange={(value) => setSelectedParentTenant(value === "__none__" ? "" : value)}>
             <SelectTrigger id="parent_tenant">
               <SelectValue placeholder="בחר ארגון אב אם זה תת-ארגון" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">ללא ארגון אב (ארגון עצמאי)</SelectItem>
+              <SelectItem value="__none__">ללא ארגון אב (ארגון עצמאי)</SelectItem>
               {tenants.map((tenant) => (
                 <SelectItem key={tenant.id} value={tenant.id}>
                   {tenant.name}

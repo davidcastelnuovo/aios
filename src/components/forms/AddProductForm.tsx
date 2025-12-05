@@ -137,14 +137,14 @@ export default function AddProductForm({ onSuccess }: AddProductFormProps) {
           render={({ field }) => (
             <FormItem>
               <FormLabel>סוכנות (אופציונלי)</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
+              <Select onValueChange={(value) => field.onChange(value === "__none__" ? "" : value)} value={field.value || "__none__"}>
                 <FormControl>
                   <SelectTrigger>
                     <SelectValue placeholder="בחר סוכנות או השאר כללי" />
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="">כללי (ללא סוכנות)</SelectItem>
+                  <SelectItem value="__none__">כללי (ללא סוכנות)</SelectItem>
                   {agencies?.map((agency: any) => (
                     <SelectItem key={agency.id} value={agency.id}>
                       {agency.name}
