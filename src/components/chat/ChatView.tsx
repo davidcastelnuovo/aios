@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { ConvertContactDialog } from "./ConvertContactDialog";
 import { LinkContactDialog } from "./LinkContactDialog";
 import { LinkPhoneDialog } from "./LinkPhoneDialog";
+import { LinkCampaignerDialog } from "./LinkCampaignerDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -51,6 +52,7 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
   const [convertType, setConvertType] = useState<"client" | "lead" | "group">("client");
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkPhoneDialogOpen, setLinkPhoneDialogOpen] = useState(false);
+  const [linkCampaignerDialogOpen, setLinkCampaignerDialogOpen] = useState(false);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
 
   // Fetch contact details
@@ -455,6 +457,9 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
                     <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => setLinkDialogOpen(true)}>
                       שייך לקיים
                     </Button>
+                    <Button variant="secondary" size="sm" className="h-7 text-xs" onClick={() => setLinkCampaignerDialogOpen(true)}>
+                      שייך לקמפיינר
+                    </Button>
                   </div>
                 </>
               )}
@@ -581,6 +586,18 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
               setLinkPhoneDialogOpen(false);
               queryClient.invalidateQueries({ queryKey: ["contact", contactId, contactType] });
               queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
+            }}
+          />
+          <LinkCampaignerDialog
+            open={linkCampaignerDialogOpen}
+            onOpenChange={setLinkCampaignerDialogOpen}
+            senderPhone={senderPhone || contactId}
+            senderName={contact?.name}
+            onSuccess={(campaignerId) => {
+              setLinkCampaignerDialogOpen(false);
+              queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
+              queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
+              if (onBack) onBack();
             }}
           />
         </>
