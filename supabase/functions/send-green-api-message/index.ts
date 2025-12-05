@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     
     console.log('✅ User authenticated:', user.id);
 
-    const { clientId, leadId, groupId, message, phoneNumber } = await req.json();
+    const { clientId, leadId, groupId, message, phoneNumber, tenantId: providedTenantId } = await req.json();
     
     if (!message) {
       return new Response(JSON.stringify({ error: 'Missing message' }), {
@@ -59,25 +59,25 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get tenant_id
-    let tenantId: string | undefined;
+    // Get tenant_id - from provided value, entity, or user's active tenant
+    let tenantId: string | undefined = providedTenantId;
     let groupChatId: string | undefined;
     
-    if (clientId) {
+    if (!tenantId && clientId) {
       const { data: client } = await supabaseClient
         .from('clients')
         .select('tenant_id')
         .eq('id', clientId)
         .single();
       tenantId = client?.tenant_id;
-    } else if (leadId) {
+    } else if (!tenantId && leadId) {
       const { data: lead } = await supabaseClient
         .from('leads')
         .select('tenant_id')
         .eq('id', leadId)
         .single();
       tenantId = lead?.tenant_id;
-    } else if (groupId) {
+    } else if (!tenantId && groupId) {
       const { data: group } = await supabaseClient
         .from('whatsapp_groups')
         .select('tenant_id, group_chat_id')
@@ -85,14 +85,35 @@ Deno.serve(async (req) => {
         .single();
       tenantId = group?.tenant_id;
       groupChatId = group?.group_chat_id;
+    } else if (groupId && tenantId) {
+      // If tenantId is provided but we also have groupId, get the group_chat_id
+      const { data: group } = await supabaseClient
+        .from('whatsapp_groups')
+        .select('group_chat_id')
+        .eq('id', groupId)
+        .single();
+      groupChatId = group?.group_chat_id;
+    }
+    
+    // If still no tenant, get from user's active tenant
+    if (!tenantId) {
+      const { data: activeTenant } = await supabaseClient
+        .from('user_active_tenant')
+        .select('tenant_id')
+        .eq('user_id', user.id)
+        .single();
+      tenantId = activeTenant?.tenant_id;
     }
 
     if (!tenantId) {
+      console.error('❌ Could not determine tenant for user:', user.id);
       return new Response(JSON.stringify({ error: 'Tenant not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+    
+    console.log('✅ Using tenant:', tenantId);
 
     // Get Green API integration for current user
     const { data: integration } = await supabaseClient
@@ -169,6 +190,9 @@ Deno.serve(async (req) => {
       throw new Error(`Green API error: ${JSON.stringify(responseData)}`);
     }
 
+    // Extract normalized phone from chatId (remove @c.us suffix if present)
+    const senderPhoneForDb = !groupChatId ? chatId.replace('@c.us', '') : null;
+
     // Save message to database
     const { error: insertError } = await supabaseClient
       .from('chat_messages')
@@ -184,6 +208,7 @@ Deno.serve(async (req) => {
         provider: 'green_api',
         sent_by_user_id: user.id,
         raw_provider_data: responseData,
+        sender_phone: senderPhoneForDb,
       });
 
     if (insertError) {
