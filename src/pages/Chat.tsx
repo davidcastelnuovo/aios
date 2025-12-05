@@ -91,7 +91,7 @@ export default function Chat() {
       console.log('👥 User agencies:', userAgencyIds);
       console.log('🏢 Selected agency:', selectedAgency);
 
-      const { data, error } = await supabase.rpc('get_chat_contacts');
+      const { data, error } = await supabase.rpc('get_chat_contacts', { p_tenant_id: tenantId });
 
       if (error) {
         console.error('❌ Error fetching active chats:', error);
@@ -135,6 +135,7 @@ export default function Chat() {
 
       const { data, error } = await supabase.rpc('search_contacts_for_chat', {
         p_search_term: debouncedSearch,
+        p_tenant_id: tenantId,
       });
 
       if (error) {
