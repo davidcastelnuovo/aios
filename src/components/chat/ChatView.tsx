@@ -358,6 +358,9 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
           body.leadId = contactId;
         } else if (contactType === "group") {
           body.groupId = contactId;
+        } else if (contactType === "unknown") {
+          // For unknown contacts, pass the tenant ID explicitly
+          body.tenantId = tenantId;
         }
 
         const { error } = await supabase.functions.invoke("send-green-api-message", {
