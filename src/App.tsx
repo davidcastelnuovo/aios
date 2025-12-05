@@ -97,9 +97,9 @@ const App = () => (
             <Route path="/t/:tenantSlug/table/:tableSlug" element={<ProtectedRoute><AppLayout><DynamicTableView /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/chat" element={<ProtectedRoute requiredPermission="chat"><AppLayout><Chat /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/chat/:clientId" element={<ProtectedRoute requiredPermission="chat"><AppLayout><Chat /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/chat-integrations" element={<ProtectedRoute requiredPermission="settings"><AppLayout><ChatIntegrations /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/manychat-settings" element={<ProtectedRoute requiredPermission="settings"><AppLayout><ManyChatSettings /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/green-api-settings" element={<ProtectedRoute requiredPermission="settings"><AppLayout><GreenAPISettings /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/chat-integrations" element={<ProtectedRoute requiredPermission="chat_integrations"><AppLayout><ChatIntegrations /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/manychat-settings" element={<ProtectedRoute requiredPermission="manychat_settings"><AppLayout><ManyChatSettings /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/green-api-settings" element={<ProtectedRoute requiredPermission="green_api_settings"><AppLayout><GreenAPISettings /></AppLayout></ProtectedRoute>} />
             
             {/* Root path redirects to auth */}
             <Route path="/" element={<Auth />} />
