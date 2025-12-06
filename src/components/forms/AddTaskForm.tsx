@@ -1,5 +1,5 @@
 import { useForm } from "react-hook-form";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
+import { useUserRole } from "@/hooks/useUserRole";
 import {
   Form,
   FormControl,
@@ -84,13 +85,17 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
   const queryClient = useQueryClient();
   const { tenantId: currentTenantId } = useCurrentTenant();
   const { getFieldLabel } = useCustomFieldLabels('task');
+  const { isCampaigner, isTeamManager, isOwner, isSuperAdmin, campaignerId: userCampaignerId } = useUserRole();
+
+  // Determine default campaigner - if user is a campaigner, default to themselves
+  const effectiveCampaignerId = defaultCampaignerId || (isCampaigner && userCampaignerId ? userCampaignerId : "");
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       title: "",
       notes: "",
-      campaigner_id: defaultCampaignerId || "",
+      campaigner_id: effectiveCampaignerId,
       task_category: clientId ? "client" : "general",
       client_id: clientId || "",
       agency_id: agencyId || "",
@@ -100,15 +105,17 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
     },
   });
 
-  // Update form when clientId or defaultCampaignerId changes
+  // Update form when clientId, defaultCampaignerId or userCampaignerId changes
   useEffect(() => {
     if (clientId) {
       form.setValue("client_id", clientId);
     }
     if (defaultCampaignerId) {
       form.setValue("campaigner_id", defaultCampaignerId);
+    } else if (isCampaigner && userCampaignerId && !form.getValues("campaigner_id")) {
+      form.setValue("campaigner_id", userCampaignerId);
     }
-  }, [clientId, defaultCampaignerId, form]);
+  }, [clientId, defaultCampaignerId, userCampaignerId, isCampaigner, form]);
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners"],
@@ -122,6 +129,18 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
       return data;
     },
   });
+
+  // Filter campaigners - campaigners only see themselves, team_manager+ sees all
+  const canSelectAnyCampaigner = isOwner || isTeamManager || isSuperAdmin;
+  const visibleCampaigners = useMemo(() => {
+    if (!campaigners) return [];
+    if (canSelectAnyCampaigner) return campaigners;
+    // Campaigners only see themselves
+    if (isCampaigner && userCampaignerId) {
+      return campaigners.filter(c => c.id === userCampaignerId);
+    }
+    return campaigners;
+  }, [campaigners, canSelectAnyCampaigner, isCampaigner, userCampaignerId]);
 
   const { data: clients } = useQuery({
     queryKey: ["clients"],
@@ -308,14 +327,18 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>קמפיינר</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value}
+                      disabled={isCampaigner && !canSelectAnyCampaigner}
+                    >
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="בחר קמפיינר" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-background z-50">
-                        {campaigners?.map((campaigner) => (
+                        {visibleCampaigners?.map((campaigner) => (
                           <SelectItem key={campaigner.id} value={campaigner.id}>
                             {campaigner.full_name}
                           </SelectItem>
