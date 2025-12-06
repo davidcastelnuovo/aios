@@ -50,6 +50,7 @@ const formSchema = z.object({
   website: z.string().url("כתובת אתר לא תקינה").optional().or(z.literal("")),
   notes: z.string().optional(),
   status: z.enum(["active", "paused", "ended", "onboarding"]),
+  mood_status: z.enum(["happy", "wavering", "churn_risk"]).optional(),
   is_seo_client: z.boolean().default(false),
 });
 
@@ -170,6 +171,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       website: client.website || "",
       notes: client.notes || "",
       status: client.status || "active",
+      mood_status: client.mood_status || "happy",
       is_seo_client: client.is_seo_client || false,
     },
   });
@@ -224,6 +226,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
           website: values.website || null,
           notes: values.notes || null,
           status: values.status,
+          mood_status: values.mood_status || "happy",
           is_seo_client: values.is_seo_client,
         })
         .eq("id", client.id);
@@ -426,29 +429,69 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>סטטוס</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent className="bg-background">
-                      <SelectItem value="active">פעיל</SelectItem>
-                      <SelectItem value="onboarding">בקליטה</SelectItem>
-                      <SelectItem value="paused">מושהה</SelectItem>
-                      <SelectItem value="ended">הסתיים</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>סטטוס</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background">
+                        <SelectItem value="active">פעיל</SelectItem>
+                        <SelectItem value="onboarding">בקליטה</SelectItem>
+                        <SelectItem value="paused">מושהה</SelectItem>
+                        <SelectItem value="ended">הסתיים</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="mood_status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>מצב רוח לקוח</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "happy"}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background">
+                        <SelectItem value="happy">
+                          <span className="flex items-center gap-2">
+                            <span>😊</span>
+                            <span className="text-green-600">לקוח מבסוט</span>
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="wavering">
+                          <span className="flex items-center gap-2">
+                            <span>😐</span>
+                            <span className="text-yellow-600">לקוח מתנדנד</span>
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="churn_risk">
+                          <span className="flex items-center gap-2">
+                            <span>😟</span>
+                            <span className="text-red-600">סכנת נטישה</span>
+                          </span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}
