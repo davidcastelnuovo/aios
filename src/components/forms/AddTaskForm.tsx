@@ -358,39 +358,40 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
               )}
             />
 
+            {/* Campaigner selector - shown for all task types */}
+            <FormField
+              control={form.control}
+              name="campaigner_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>קמפיינר</FormLabel>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    value={field.value || ""}
+                    disabled={isCampaigner && !canSelectAnyCampaigner}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר קמפיינר" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-background z-50">
+                      {visibleCampaigners?.map((campaigner) => (
+                        <SelectItem key={campaigner.id} value={campaigner.id}>
+                          {campaigner.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {/* Show additional fields only for client tasks */}
             {taskCategory === "client" && (
               <>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="campaigner_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>קמפיינר</FormLabel>
-                        <Select 
-                          onValueChange={field.onChange} 
-                          value={field.value || ""}
-                          disabled={isCampaigner && !canSelectAnyCampaigner}
-                        >
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="בחר קמפיינר" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-background z-50">
-                            {visibleCampaigners?.map((campaigner) => (
-                              <SelectItem key={campaigner.id} value={campaigner.id}>
-                                {campaigner.full_name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
                   <FormField
                     control={form.control}
                     name="priority"
