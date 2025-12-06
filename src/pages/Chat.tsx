@@ -18,7 +18,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { MessageCircle, Search, Settings, Pencil, Trash2 } from "lucide-react";
+import { MessageCircle, Search, Settings, Pencil, Trash2, Check } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -73,6 +74,7 @@ export default function Chat() {
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
   const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups" | "unknown">("all");
   const [showTodayOnly, setShowTodayOnly] = useState(false);
+  const [showUnreadOnly, setShowUnreadOnly] = useState(false);
   const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown'; senderPhone?: string } | null>(
     clientId ? { id: clientId, type: 'client' } : null
   );
@@ -274,14 +276,59 @@ export default function Chat() {
       console.log(`📅 Today filter: ${beforeFilter} → ${allContacts.length}`);
     }
 
+    // Apply unread only filter
+    if (showUnreadOnly) {
+      const beforeFilter = allContacts.length;
+      allContacts = allContacts.filter(contact => contact.unread_count > 0);
+      console.log(`📬 Unread filter: ${beforeFilter} → ${allContacts.length}`);
+    }
+
     console.log('✅ Final filtered contacts:', allContacts.length);
     return allContacts;
-  }, [allContactsBeforeTypeFilter, contactFilter, showTodayOnly, todayParts]);
+  }, [allContactsBeforeTypeFilter, contactFilter, showTodayOnly, showUnreadOnly, todayParts]);
 
   const clientsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'client').length;
   const leadsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'lead').length;
   const groupsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'group').length;
   const unknownCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'unknown').length;
+
+  // Mark as read mutation
+  const markAsReadMutation = useMutation({
+    mutationFn: async (contact: Contact) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No user found');
+
+      let query = supabase
+        .from('chat_messages')
+        .update({ read_at: new Date().toISOString() })
+        .eq('connection_user_id', user.id)
+        .eq('direction', 'incoming')
+        .is('read_at', null);
+
+      if (contact.contact_type === 'client') {
+        query = query.eq('client_id', contact.id);
+      } else if (contact.contact_type === 'lead') {
+        query = query.eq('lead_id', contact.id);
+      } else if (contact.contact_type === 'group') {
+        query = query.eq('group_id', contact.id);
+      } else if (contact.contact_type === 'unknown' && contact.sender_phone) {
+        query = query.eq('sender_phone', contact.sender_phone);
+      }
+
+      const { error } = await query;
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['active-chats'] });
+      queryClient.invalidateQueries({ queryKey: ['unknown-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-contacts'] });
+      toast.success('השיחה סומנה כנקראה');
+    },
+    onError: (error) => {
+      console.error('Error marking as read:', error);
+      toast.error('שגיאה בסימון כנקרא');
+    },
+  });
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
@@ -400,15 +447,27 @@ export default function Chat() {
               </SelectContent>
             </Select>
 
-            <div className="flex items-center gap-2 px-2">
-              <Switch
-                id="today-filter"
-                checked={showTodayOnly}
-                onCheckedChange={setShowTodayOnly}
-              />
-              <Label htmlFor="today-filter" className="text-sm cursor-pointer">
-                הצג רק שיחות מהיום
-              </Label>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 px-2">
+                <Switch
+                  id="today-filter"
+                  checked={showTodayOnly}
+                  onCheckedChange={setShowTodayOnly}
+                />
+                <Label htmlFor="today-filter" className="text-sm cursor-pointer">
+                  הצג רק שיחות מהיום
+                </Label>
+              </div>
+              <div className="flex items-center gap-2 px-2">
+                <Switch
+                  id="unread-filter"
+                  checked={showUnreadOnly}
+                  onCheckedChange={setShowUnreadOnly}
+                />
+                <Label htmlFor="unread-filter" className="text-sm cursor-pointer">
+                  הצג רק שיחות לא נקראות
+                </Label>
+              </div>
             </div>
           </div>
 
@@ -470,9 +529,23 @@ export default function Chat() {
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
                             {contact.unread_count > 0 && (
-                              <Badge variant="destructive" className="h-5 min-w-5 flex items-center justify-center px-1">
-                                {contact.unread_count}
-                              </Badge>
+                              <>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-5 w-5 p-0 hover:bg-primary/10"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    markAsReadMutation.mutate(contact);
+                                  }}
+                                  title="סמן כנקרא"
+                                >
+                                  <Check className="h-3 w-3" />
+                                </Button>
+                                <Badge variant="destructive" className="h-5 min-w-5 flex items-center justify-center px-1">
+                                  {contact.unread_count}
+                                </Badge>
+                              </>
                             )}
                             {contact.contact_type === 'unknown' && (
                               <Badge variant="outline" className="text-xs">
