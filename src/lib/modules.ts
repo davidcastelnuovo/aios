@@ -35,6 +35,7 @@ export const SETTINGS_MODULES: ModuleConfig[] = [
   { id: "fields_management", label: "ניהול שדות", description: "הוספת שדות מותאמים אישית", category: "settings" },
   { id: "automations", label: "אוטומציות", description: "הגדרת אוטומציות מבוססות טריגרים", category: "settings" },
   { id: "dynamic_tables", label: "טבלאות דינמיות", description: "יצירת טבלאות מותאמות אישית", category: "settings" },
+  { id: "ai_support", label: "תמיכה טכנית AI", description: "גישה לצ'אטבוט AI לתמיכה טכנית", category: "settings" },
   { id: "manychat_settings", label: "הגדרות ManyChat", description: "אינטגרציה עם ManyChat", category: "settings" },
   { id: "green_api_settings", label: "הגדרות Green API", description: "אינטגרציה עם Green API", category: "settings" },
   { id: "chat_integrations", label: "אינטגרציות צ'אט", description: "ניהול אינטגרציות צ'אט", category: "settings" },
