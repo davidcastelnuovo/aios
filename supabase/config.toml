@@ -53,3 +53,6 @@ verify_jwt = true
 
 [functions.green-api-webhook]
 verify_jwt = false
+
+[functions.configure-green-api]
+verify_jwt = true

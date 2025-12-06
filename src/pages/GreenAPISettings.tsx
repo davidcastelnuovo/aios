@@ -51,6 +51,28 @@ export default function GreenAPISettings() {
     enabled: !!tenantId && !!userId,
   });
 
+  // Configure Green API webhooks
+  const configureWebhooks = async (instId: string, token: string) => {
+    console.log("🔧 Configuring Green API webhooks...");
+    try {
+      const { data, error } = await supabase.functions.invoke('configure-green-api', {
+        body: { instanceId: instId, apiToken: token }
+      });
+
+      if (error) {
+        console.error("❌ Error configuring webhooks:", error);
+        throw error;
+      }
+
+      console.log("✅ Webhooks configured:", data);
+      return data;
+    } catch (err) {
+      console.error("❌ Failed to configure webhooks:", err);
+      // Don't throw - webhook config failure shouldn't block saving
+      return null;
+    }
+  };
+
   // Save integration mutation
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -88,11 +110,14 @@ export default function GreenAPISettings() {
 
         if (error) throw error;
       }
+
+      // Configure webhooks automatically after saving
+      await configureWebhooks(instanceId, apiToken);
     },
     onSuccess: () => {
       toast({
         title: "החיבור שלך נשמר בהצלחה",
-        description: "כעת תוכל לשלוח ולקבל הודעות דרך חשבון Green API שלך",
+        description: "הגדרות ה-Webhook הוגדרו אוטומטית - תקבל גם הודעות שאתה שולח מהוואטסאפ",
       });
       queryClient.invalidateQueries({ queryKey: ['green-api-integration', tenantId, userId] });
       queryClient.invalidateQueries({ queryKey: ['chat-integrations', tenantId] });
@@ -292,12 +317,16 @@ export default function GreenAPISettings() {
             <Separator />
 
             <div className="text-sm space-y-2">
-              <p className="font-semibold">איך מגדירים Webhook ב-Green API?</p>
+              <p className="font-semibold">הגדרה אוטומטית</p>
+              <p className="text-muted-foreground">
+                כשתשמור את פרטי החיבור, המערכת תגדיר אוטומטית את ה-Webhook כדי שתקבל גם הודעות נכנסות וגם הודעות שאתה שולח מהוואטסאפ.
+              </p>
+              <p className="font-semibold mt-4">הגדרה ידנית (במידת הצורך)</p>
               <ol className="list-decimal list-inside space-y-1 text-muted-foreground mr-4">
                 <li>עבור ל-Instance Settings בקונסול</li>
                 <li>מצא את הקטגוריה Webhook</li>
                 <li>הדבק את ה-URL למעלה בשדה Webhook URL</li>
-                <li>סמן את האירועים: incoming messages</li>
+                <li>סמן את האירועים: <strong>incoming messages</strong> וגם <strong>outgoing messages</strong></li>
                 <li>שמור שינויים</li>
               </ol>
             </div>
