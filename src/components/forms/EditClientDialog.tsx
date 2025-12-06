@@ -37,7 +37,7 @@ import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ClientTasksTab } from "@/components/clients/ClientTasksTab";
+import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח נדרש"),
   contact_name: z.string().optional(),
@@ -277,7 +277,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         <Tabs defaultValue="details" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="details">פרטי לקוח</TabsTrigger>
-            <TabsTrigger value="tasks">משימות</TabsTrigger>
+            <TabsTrigger value="updates">עדכונים</TabsTrigger>
           </TabsList>
 
           <TabsContent value="details">
@@ -545,8 +545,8 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         </Form>
           </TabsContent>
 
-          <TabsContent value="tasks" className="mt-4">
-            <ClientTasksTab 
+          <TabsContent value="updates" className="mt-4">
+            <ClientUpdatesTab 
               clientId={client.id}
               clientName={client.name}
             />
