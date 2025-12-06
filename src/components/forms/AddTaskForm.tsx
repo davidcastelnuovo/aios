@@ -96,8 +96,8 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
   const { getFieldLabel } = useCustomFieldLabels('task');
   const { isCampaigner, isTeamManager, isOwner, isSuperAdmin, campaignerId: userCampaignerId } = useUserRole();
 
-  // Determine default campaigner - if user is a campaigner, default to themselves
-  const effectiveCampaignerId = defaultCampaignerId || (isCampaigner && userCampaignerId ? userCampaignerId : "");
+  // Determine default campaigner - any user with a linked campaigner_id gets themselves as default
+  const effectiveCampaignerId = defaultCampaignerId || userCampaignerId || "";
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -121,7 +121,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
     }
     if (defaultCampaignerId) {
       form.setValue("campaigner_id", defaultCampaignerId);
-    } else if (isCampaigner && userCampaignerId && !form.getValues("campaigner_id")) {
+    } else if (userCampaignerId && !form.getValues("campaigner_id")) {
       form.setValue("campaigner_id", userCampaignerId);
     }
   }, [clientId, defaultCampaignerId, userCampaignerId, isCampaigner, form]);
