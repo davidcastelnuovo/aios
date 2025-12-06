@@ -187,9 +187,46 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
   const blockMutation = useMutation({
     mutationFn: async () => {
       const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user || !contact?.tenant_id) throw new Error("Missing user or tenant");
+      if (!userData.user) throw new Error("Missing user");
+      
+      const effectiveTenantId = contactType === "unknown" ? tenantId : contact?.tenant_id;
+      if (!effectiveTenantId) throw new Error("Missing tenant");
 
-      // Build the filter based on contact type
+      // 1. Save to blocked_contacts table for permanent blocking
+      const blockedContactData: any = {
+        tenant_id: effectiveTenantId,
+        connection_user_id: userData.user.id,
+        blocked_by_user_id: userData.user.id,
+      };
+
+      if (contactType === "unknown") {
+        blockedContactData.sender_phone = senderPhone || contactId;
+      } else if (contactType === "client") {
+        blockedContactData.client_id = contactId;
+      } else if (contactType === "lead") {
+        blockedContactData.lead_id = contactId;
+      } else if (contactType === "group") {
+        blockedContactData.group_id = contactId;
+      }
+
+      const { error: blockedError } = await supabase
+        .from("blocked_contacts")
+        .upsert(blockedContactData, { onConflict: 'id' });
+
+      if (blockedError) {
+        console.error("Error saving to blocked_contacts:", blockedError);
+        // Continue anyway - the message blocking should still work
+      }
+
+      // 2. Update whatsapp_groups.is_blocked for groups
+      if (contactType === "group") {
+        await supabase
+          .from("whatsapp_groups")
+          .update({ is_blocked: true })
+          .eq("id", contactId);
+      }
+
+      // 3. Update all existing messages as blocked
       let query = supabase
         .from("chat_messages")
         .update({
@@ -197,9 +234,8 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
           blocked_at: new Date().toISOString(),
           blocked_by_user_id: userData.user.id,
         })
-        .eq("tenant_id", contact.tenant_id);
+        .eq("tenant_id", effectiveTenantId);
 
-      // Apply appropriate filter
       if (contactType === "unknown") {
         query = query.eq("sender_phone", senderPhone || contactId);
       } else if (contactType === "client") {
@@ -214,9 +250,10 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("השיחה נחסמה בהצלחה - ההודעות לא יישמרו יותר בדטה-בייס");
+      toast.success("השיחה נחסמה בהצלחה - ההודעות לא יישמרו יותר");
       queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
       queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["active-chats"] });
       queryClient.invalidateQueries({ queryKey: ["chat-messages", contactId, contactType, senderPhone] });
       onBack?.();
     },
