@@ -98,6 +98,14 @@ Deno.serve(async (req) => {
       messageText = '[הודעת קול]';
     } else if (messageType === 'documentMessage') {
       messageText = messageData.fileMessageData?.caption || `[מסמך: ${messageData.fileMessageData?.fileName || 'קובץ'}]`;
+    } else if (messageType === 'templateMessage') {
+      // Template messages have content in templateMessage object
+      const templateData = messageData.templateMessage;
+      messageText = templateData?.contentText || templateData?.titleText || '[הודעת תבנית]';
+    } else if (messageType === 'buttonsMessage') {
+      messageText = messageData.buttonsMessage?.contentText || '[הודעת כפתורים]';
+    } else if (messageType === 'listMessage') {
+      messageText = messageData.listMessage?.description || messageData.listMessage?.title || '[הודעת רשימה]';
     } else {
       messageText = `[${messageType}]`;
     }
