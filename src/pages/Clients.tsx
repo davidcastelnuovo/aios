@@ -265,6 +265,23 @@ export default function Clients() {
     },
   });
 
+  const updateMoodStatusMutation = useMutation({
+    mutationFn: async ({ clientId, moodStatus }: { clientId: string; moodStatus: "happy" | "wavering" | "churn_risk" }) => {
+      const { error } = await supabase
+        .from("clients")
+        .update({ mood_status: moodStatus })
+        .eq("id", clientId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("מצב הלקוח עודכן בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון מצב הלקוח");
+    },
+  });
+
   const assignCampaignerMutation = useMutation({
     mutationFn: async ({ clientId, campaignerId }: { clientId: string; campaignerId: string }) => {
       // First, check if already assigned
@@ -414,6 +431,19 @@ export default function Clients() {
     }
   };
 
+  const getMoodStatusDisplay = (moodStatus: string | null) => {
+    switch (moodStatus) {
+      case "happy":
+        return { emoji: "😊", text: "לקוח מבסוט", color: "text-green-600 bg-green-50 border-green-200" };
+      case "wavering":
+        return { emoji: "😐", text: "לקוח מתנדנד", color: "text-yellow-600 bg-yellow-50 border-yellow-200" };
+      case "churn_risk":
+        return { emoji: "😟", text: "סכנת נטישה", color: "text-red-600 bg-red-50 border-red-200" };
+      default:
+        return { emoji: "😊", text: "לקוח מבסוט", color: "text-green-600 bg-green-50 border-green-200" };
+    }
+  };
+
   if (isLoading) {
     return <div className="flex justify-center p-8">טוען...</div>;
   }
@@ -534,9 +564,14 @@ export default function Clients() {
                     )}
                   </div>
                 </div>
-                <Badge variant="outline" className={getStatusColor(client.status)}>
-                  {getStatusText(client.status)}
-                </Badge>
+                <div className="flex flex-col gap-1 items-end">
+                  <Badge variant="outline" className={getStatusColor(client.status)}>
+                    {getStatusText(client.status)}
+                  </Badge>
+                  <Badge variant="outline" className={getMoodStatusDisplay(client.mood_status).color}>
+                    {getMoodStatusDisplay(client.mood_status).emoji} {getMoodStatusDisplay(client.mood_status).text}
+                  </Badge>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
@@ -614,6 +649,45 @@ export default function Clients() {
                       <div className="flex items-center gap-2">
                         <div className="h-2 w-2 rounded-full bg-muted-foreground"></div>
                         הסתיים
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
+                <p className="text-sm text-muted-foreground">מצב לקוח:</p>
+                <Select
+                  value={client.mood_status || "happy"}
+                  onValueChange={(value: "happy" | "wavering" | "churn_risk") => 
+                    updateMoodStatusMutation.mutate({ clientId: client.id, moodStatus: value })
+                  }
+                >
+                  <SelectTrigger className={`h-9 ${getMoodStatusDisplay(client.mood_status).color}`}>
+                    <SelectValue>
+                      <span className="flex items-center gap-2">
+                        <span>{getMoodStatusDisplay(client.mood_status).emoji}</span>
+                        <span>{getMoodStatusDisplay(client.mood_status).text}</span>
+                      </span>
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent className="bg-background" align="end">
+                    <SelectItem value="happy">
+                      <div className="flex items-center gap-2">
+                        <span>😊</span>
+                        <span className="text-green-600">לקוח מבסוט</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="wavering">
+                      <div className="flex items-center gap-2">
+                        <span>😐</span>
+                        <span className="text-yellow-600">לקוח מתנדנד</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="churn_risk">
+                      <div className="flex items-center gap-2">
+                        <span>😟</span>
+                        <span className="text-red-600">סכנת נטישה</span>
                       </div>
                     </SelectItem>
                   </SelectContent>

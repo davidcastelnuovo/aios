@@ -804,6 +804,7 @@ export type Database = {
           is_seo_client: boolean | null
           manychat_subscriber_id: string | null
           monthly_budget: number | null
+          mood_status: Database["public"]["Enums"]["client_mood_status"] | null
           name: string
           notes: string | null
           phone: string | null
@@ -828,6 +829,7 @@ export type Database = {
           is_seo_client?: boolean | null
           manychat_subscriber_id?: string | null
           monthly_budget?: number | null
+          mood_status?: Database["public"]["Enums"]["client_mood_status"] | null
           name: string
           notes?: string | null
           phone?: string | null
@@ -852,6 +854,7 @@ export type Database = {
           is_seo_client?: boolean | null
           manychat_subscriber_id?: string | null
           monthly_budget?: number | null
+          mood_status?: Database["public"]["Enums"]["client_mood_status"] | null
           name?: string
           notes?: string | null
           phone?: string | null
@@ -2655,6 +2658,7 @@ export type Database = {
         | "client_status_changed"
         | "onboarding_status_changed"
       chat_provider: "manychat" | "green_api" | "internal"
+      client_mood_status: "happy" | "wavering" | "churn_risk"
       client_status: "active" | "paused" | "ended" | "onboarding"
       finance_type: "income" | "expense"
       lead_response_status:
@@ -2847,6 +2851,7 @@ export const Constants = {
         "onboarding_status_changed",
       ],
       chat_provider: ["manychat", "green_api", "internal"],
+      client_mood_status: ["happy", "wavering", "churn_risk"],
       client_status: ["active", "paused", "ended", "onboarding"],
       finance_type: ["income", "expense"],
       lead_response_status: [
