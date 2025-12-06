@@ -124,8 +124,7 @@ export default function Tasks() {
   const [editingTask, setEditingTask] = useState<any>(null);
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
   const [selectedRole, setSelectedRole] = useState<string>("all");
-  const [selectedClientId, setSelectedClientId] = useState<string>("all");
-  const [clientFilterOpen, setClientFilterOpen] = useState(false);
+  const [clientSearchQuery, setClientSearchQuery] = useState<string>("");
   const [activeTask, setActiveTask] = useState<any>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table" | "calendar">("kanban");
   const [hideCompleted, setHideCompleted] = useState(false);
@@ -378,10 +377,11 @@ export default function Tasks() {
     })));
   }
 
-  // Then filter by campaigner, role, and client
+  // Then filter by campaigner, role, and client search
   let filteredTasks = accessibleTasks?.filter(t => {
     const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
-    const matchesClient = selectedClientId === "all" || t.client_id === selectedClientId;
+    const matchesClientSearch = !clientSearchQuery || 
+      t.clients?.name?.toLowerCase().includes(clientSearchQuery.toLowerCase());
     
     console.log('🎯 Task filtering:', {
       taskTitle: t.title,
@@ -411,9 +411,9 @@ export default function Tasks() {
       matchesRole = (t.campaigners?.role && t.campaigners.role.includes(selectedRole));
     }
     
-    console.log('🎯 Match result:', { matchesCampaigner, matchesRole, matchesClient });
+    console.log('🎯 Match result:', { matchesCampaigner, matchesRole, matchesClientSearch });
     
-    return matchesCampaigner && matchesRole && matchesClient;
+    return matchesCampaigner && matchesRole && matchesClientSearch;
   }) || [];
 
   // Apply hide completed filter
@@ -818,68 +818,17 @@ export default function Tasks() {
                 </div>
               )}
               
-              {/* Client filter with search */}
-              <div className="w-full md:w-48">
-                <Popover open={clientFilterOpen} onOpenChange={setClientFilterOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={clientFilterOpen}
-                      className="w-full justify-between"
-                    >
-                      <span className="truncate">
-                        {selectedClientId === "all"
-                          ? "כל הלקוחות"
-                          : clients?.find((c) => c.id === selectedClientId)?.name || "כל הלקוחות"}
-                      </span>
-                      <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[250px] p-0" align="start" side="bottom" sideOffset={4} avoidCollisions={true}>
-                    <Command dir="rtl">
-                      <CommandInput placeholder="חפש לקוח..." />
-                      <CommandList>
-                        <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
-                        <CommandGroup>
-                          <CommandItem
-                            value="all"
-                            onSelect={() => {
-                              setSelectedClientId("all");
-                              setClientFilterOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "ml-2 h-4 w-4",
-                                selectedClientId === "all" ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            כל הלקוחות
-                          </CommandItem>
-                          {clients?.map((client) => (
-                            <CommandItem
-                              key={client.id}
-                              value={client.name}
-                              onSelect={() => {
-                                setSelectedClientId(client.id);
-                                setClientFilterOpen(false);
-                              }}
-                            >
-                              <Check
-                                className={cn(
-                                  "ml-2 h-4 w-4",
-                                  selectedClientId === client.id ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              {client.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+              {/* Client search filter */}
+              <div className="w-full md:w-48 relative">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="חיפוש לפי לקוח..."
+                  value={clientSearchQuery}
+                  onChange={(e) => setClientSearchQuery(e.target.value)}
+                  className="w-full h-10 pr-9 pl-3 rounded-md border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  dir="rtl"
+                />
               </div>
               
               {/* Sort by dropdown */}
