@@ -146,15 +146,16 @@ export default function Tasks() {
   );
 
   const { data: tasks, isLoading } = useQuery({
-    queryKey: ["tasks", tenantId, selectedAgency],
+    queryKey: ["tasks", tenantId, selectedAgency, agencies?.map(a => a.id).join(',')],
     queryFn: async () => {
       console.log('🔍 Tasks Query - Starting fetch:', {
         tenantId,
         selectedAgency,
-        agenciesCount: agencies?.length
+        agenciesCount: agencies?.length,
+        availableAgencyIds: agencies?.map(a => a.id)
       });
       
-      // Build query - let RLS handle filtering
+      // Build query
       let query = supabase
         .from("tasks")
         .select(`
@@ -166,9 +167,13 @@ export default function Tasks() {
         `)
         .order("due_date", { ascending: true });
 
-      // Only filter by selected agency if specified
+      // Filter by selected agency or by all available agencies for current tenant
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
+      } else if (agencies && agencies.length > 0) {
+        // CRITICAL: Filter to only agencies available for current tenant
+        const agencyIds = agencies.map(a => a.id);
+        query = query.in("agency_id", agencyIds);
       }
 
       const { data, error } = await query;
@@ -191,7 +196,7 @@ export default function Tasks() {
       return data || [];
     },
     staleTime: 1000 * 60 * 5,
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!agencies,
   });
 
   // RLS already filters by tenant and accessible agencies
