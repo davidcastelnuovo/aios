@@ -597,24 +597,25 @@ export default function Chat() {
                             </div>
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
+                            {/* Always show mark as read button if not already manually marked */}
+                            {!isManuallyMarkedRead(contact) && (
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-5 w-5 p-0 hover:bg-primary/10"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  markAsReadMutation.mutate(contact);
+                                }}
+                                title="סמן כנקרא"
+                              >
+                                <Check className="h-3 w-3" />
+                              </Button>
+                            )}
                             {contact.unread_count > 0 && (
-                              <>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-5 w-5 p-0 hover:bg-primary/10"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    markAsReadMutation.mutate(contact);
-                                  }}
-                                  title="סמן כנקרא"
-                                >
-                                  <Check className="h-3 w-3" />
-                                </Button>
-                                <Badge variant="destructive" className="h-5 min-w-5 flex items-center justify-center px-1">
-                                  {contact.unread_count}
-                                </Badge>
-                              </>
+                              <Badge variant="destructive" className="h-5 min-w-5 flex items-center justify-center px-1">
+                                {contact.unread_count}
+                              </Badge>
                             )}
                             {contact.contact_type === 'unknown' && (
                               <Badge variant="outline" className="text-xs">
