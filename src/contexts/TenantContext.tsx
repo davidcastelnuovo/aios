@@ -9,6 +9,7 @@ interface TenantContextType {
   setCurrentTenantId: (tenantId: string) => void;
   currentTenant: any;
   isLoading: boolean;
+  isActiveTenantSynced: boolean;
 }
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
@@ -47,24 +48,29 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     enabled: !!tenantSlug,
   });
 
+  // State to track if the active tenant has been synced to DB
+  const [isActiveTenantSynced, setIsActiveTenantSynced] = useState(false);
+
   // Update currentTenantId when URL slug changes
   useEffect(() => {
     if (tenantFromSlug?.id && tenantFromSlug.id !== currentTenantId) {
+      setIsActiveTenantSynced(false); // Mark as not synced when tenant changes
       setCurrentTenantId(tenantFromSlug.id);
     }
   }, [tenantFromSlug, currentTenantId]);
 
   // Persist tenant selection and clear cache when tenant changes
+  // CRITICAL: This must complete BEFORE data is fetched
   useEffect(() => {
     const updateActiveTenant = async () => {
       try {
         if (currentTenantId) {
           localStorage.setItem("selectedTenantId", currentTenantId);
           
-          // Update user_active_tenant in the database
+          // Update user_active_tenant in the database - MUST complete for RLS to work correctly
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
-            await (supabase as any)
+            const { error } = await (supabase as any)
               .from("user_active_tenant")
               .upsert({
                 user_id: user.id,
@@ -73,7 +79,16 @@ export function TenantProvider({ children }: { children: ReactNode }) {
               }, {
                 onConflict: "user_id"
               });
+            
+            if (error) {
+              console.error("Error updating active tenant in DB:", error);
+            } else {
+              console.log("✅ Active tenant synced to DB:", currentTenantId);
+            }
           }
+          
+          // Mark as synced AFTER the DB update completes
+          setIsActiveTenantSynced(true);
           
           // CRITICAL: Clear all tenant-specific data from cache when switching tenants
           console.log("🔄 Clearing cache for tenant switch:", currentTenantId);
@@ -94,9 +109,11 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           queryClient.invalidateQueries({ queryKey: ["time-entries"] });
         } else {
           localStorage.removeItem("selectedTenantId");
+          setIsActiveTenantSynced(false);
         }
       } catch (error) {
         console.error("Error updating active tenant:", error);
+        setIsActiveTenantSynced(true); // Still allow loading even if DB update fails
       }
     };
     
@@ -198,8 +215,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   const isLoading = isLoadingUserTenant || isLoadingTenant || isLoadingSlug;
 
-  // Wait for initial loading
-  if (isLoading && !currentTenant && !userTenant) {
+  // Wait for initial loading OR wait for active tenant to sync to DB
+  if ((isLoading && !currentTenant && !userTenant) || (currentTenantId && !isActiveTenantSynced)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -218,7 +235,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         currentTenantSlug: effectiveTenant?.slug || null,
         setCurrentTenantId, 
         currentTenant: effectiveTenant,
-        isLoading 
+        isLoading,
+        isActiveTenantSynced
       }}
     >
       {children}
