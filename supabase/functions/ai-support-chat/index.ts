@@ -162,30 +162,45 @@ async function executeTool(
 
         const { data, error } = await query;
 
-        if (error) throw error;
+        if (error) {
+          console.error('❌ list_tasks query error:', error);
+          throw error;
+        }
+
+        console.log('✅ list_tasks query completed:', {
+          tenant_id: tenantId,
+          my_tasks,
+          userCampaignerId,
+          tasksFound: data?.length || 0,
+          taskTitles: data?.map((t: any) => t.title) || []
+        });
 
         // If my_tasks was requested but no campaigner_id, notify user
         const noCampaignerWarning = my_tasks && !userCampaignerId 
           ? 'שים לב: הפרופיל שלך לא מקושר לקמפיינר. מציג את כל המשימות בארגון.' 
           : null;
 
+        const result = {
+          count: data.length,
+          warning: noCampaignerWarning,
+          is_filtered_by_user: my_tasks && !!userCampaignerId,
+          tasks: data.map((t: any) => ({
+            id: t.id,
+            title: t.title,
+            status: t.status,
+            priority: t.priority,
+            due_date: t.due_date,
+            client_name: t.clients?.name,
+            agency_name: t.agencies?.name,
+            campaigner_name: t.campaigners?.full_name,
+          }))
+        };
+
+        console.log('📋 list_tasks returning result:', JSON.stringify(result).slice(0, 500));
+
         return {
           success: true,
-          result: {
-            count: data.length,
-            warning: noCampaignerWarning,
-            is_filtered_by_user: my_tasks && !!userCampaignerId,
-            tasks: data.map((t: any) => ({
-              id: t.id,
-              title: t.title,
-              status: t.status,
-              priority: t.priority,
-              due_date: t.due_date,
-              client_name: t.clients?.name,
-              agency_name: t.agencies?.name,
-              campaigner_name: t.campaigners?.full_name,
-            }))
-          }
+          result
         };
       }
 
@@ -629,6 +644,13 @@ serve(async (req) => {
                 tenantId
               );
 
+              console.log('🔧 Tool execution result:', {
+                toolName,
+                success: toolResult.success,
+                error: toolResult.error,
+                resultPreview: toolResult.result ? JSON.stringify(toolResult.result).slice(0, 300) : null
+              });
+
               // Add tool call to messages
               messages.push({
                 role: 'tool_call',
@@ -640,6 +662,9 @@ serve(async (req) => {
 
               // If tool succeeded, get AI's response with the result
               if (toolResult.success) {
+                const toolResultContent = JSON.stringify(toolResult.result);
+                console.log('📤 Sending tool result to OpenAI:', toolResultContent.slice(0, 500));
+
                 const followUpResponse = await fetch('https://api.openai.com/v1/chat/completions', {
                   method: 'POST',
                   headers: {
@@ -652,11 +677,17 @@ serve(async (req) => {
                       { role: 'system', content: buildSystemPrompt(userName, userEmail, campaignerName || undefined, campaignerId || undefined) },
                       ...aiMessages,
                       { role: 'assistant', content: null, tool_calls: [{ id: 'call_1', type: 'function', function: { name: toolName, arguments: JSON.stringify(toolArgs) } }] },
-                      { role: 'tool', tool_call_id: 'call_1', content: JSON.stringify(toolResult.result) },
+                      { role: 'tool', tool_call_id: 'call_1', content: toolResultContent },
                     ],
                     stream: true,
                   }),
                 });
+
+                if (!followUpResponse.ok) {
+                  console.error('❌ Follow-up OpenAI request failed:', followUpResponse.status, await followUpResponse.text());
+                } else {
+                  console.log('✅ Follow-up OpenAI request started successfully');
+                }
 
                 const followReader = followUpResponse.body!.getReader();
                 let followBuffer = '';
