@@ -67,12 +67,43 @@ async function executeTool(
   try {
     switch (toolCall.name) {
       case 'create_task': {
-        const { title, agency_id, campaigner_id, client_id, priority, due_date, notes } = toolCall.args;
+        const { title, client_id, priority, due_date, notes } = toolCall.args;
         
+        // Get user's campaigner_id and their first agency
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('campaigner_id')
+          .eq('id', userId)
+          .single();
+        
+        if (!profileData?.campaigner_id) {
+          return {
+            success: false,
+            error: 'לא נמצא קמפיינר מקושר למשתמש שלך. אנא פנה למנהל המערכת.'
+          };
+        }
+
+        const userCampaignerId = profileData.campaigner_id;
+
+        // Get the first agency associated with this campaigner
+        const { data: campaignerAgency } = await supabase
+          .from('campaigner_agencies')
+          .select('agency_id')
+          .eq('campaigner_id', userCampaignerId)
+          .limit(1)
+          .single();
+
+        if (!campaignerAgency?.agency_id) {
+          return {
+            success: false,
+            error: 'לא נמצאה סוכנות מקושרת לקמפיינר שלך. אנא פנה למנהל המערכת.'
+          };
+        }
+
         const taskData: any = {
           title,
-          agency_id,
-          campaigner_id,
+          agency_id: campaignerAgency.agency_id,
+          campaigner_id: userCampaignerId,
           tenant_id: tenantId,
           priority: priority || 5,
           status: 'open',
@@ -429,19 +460,17 @@ serve(async (req) => {
             type: 'function',
             function: {
               name: 'create_task',
-              description: 'יצירת משימה חדשה במערכת',
+              description: 'יצירת משימה חדשה במערכת. הסוכנות והקמפיינר נקבעים אוטומטית לפי המשתמש המחובר.',
               parameters: {
                 type: 'object',
                 properties: {
                   title: { type: 'string', description: 'כותרת המשימה' },
-                  agency_id: { type: 'string', description: 'מזהה הסוכנות (UUID)' },
-                  campaigner_id: { type: 'string', description: 'מזהה הקמפיינר (UUID)' },
                   client_id: { type: 'string', description: 'מזהה הלקוח (UUID, אופציונלי)' },
                   priority: { type: 'integer', description: 'עדיפות 1-10 (אופציונלי)', minimum: 1, maximum: 10 },
                   due_date: { type: 'string', format: 'date', description: 'תאריך יעד (YYYY-MM-DD, אופציונלי)' },
                   notes: { type: 'string', description: 'הערות נוספות (אופציונלי)' },
                 },
-                required: ['title', 'agency_id', 'campaigner_id'],
+                required: ['title'],
               },
             },
           },
