@@ -301,56 +301,56 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    // Get user's tenant - with fallback for super_admin
-    const { data: tenantData } = await supabase
-      .from('tenant_users')
-      .select('tenant_id')
-      .eq('user_id', user.id)
-      .single();
+    // Parse request body early to get tenant_slug
+    const reqBody = await req.json();
+    const { message, conversation_id, tenant_slug } = reqBody;
 
-    // Check if user is super_admin
-    const { data: superAdminCheck } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'super_admin')
-      .single();
+    console.log('📍 Request tenant_slug:', tenant_slug);
 
-    let tenantId = tenantData?.tenant_id;
+    let tenantId: string | null = null;
 
-    // If no tenant found and not super_admin, try to get first available tenant
-    if (!tenantId && !superAdminCheck) {
-      const { data: firstTenant } = await supabase
+    // If tenant_slug provided, use it to find the correct tenant
+    if (tenant_slug) {
+      const { data: tenantBySlug } = await supabase
         .from('tenants')
-        .select('id')
-        .limit(1)
+        .select('id, name')
+        .eq('slug', tenant_slug)
         .single();
       
-      if (firstTenant) {
-        // Auto-assign user to the first tenant
-        await supabase
-          .from('tenant_users')
-          .insert({
-            user_id: user.id,
-            tenant_id: firstTenant.id,
-            role: 'member'
-          });
-        
-        tenantId = firstTenant.id;
-      } else {
-        throw new Error('אין לך גישה למערכת. אנא צור קשר עם מנהל המערכת.');
+      if (tenantBySlug) {
+        tenantId = tenantBySlug.id;
+        console.log('✅ Found tenant by slug:', tenantBySlug.name, tenantId);
       }
     }
 
-    // For super_admin without tenant, use first available tenant
-    if (!tenantId && superAdminCheck) {
-      const { data: firstTenant } = await supabase
-        .from('tenants')
-        .select('id')
-        .limit(1)
+    // Fallback: Get user's active tenant or first tenant
+    if (!tenantId) {
+      // Try user_active_tenant first
+      const { data: activeTenant } = await supabase
+        .from('user_active_tenant')
+        .select('tenant_id')
+        .eq('user_id', user.id)
         .single();
       
-      tenantId = firstTenant?.id;
+      if (activeTenant?.tenant_id) {
+        tenantId = activeTenant.tenant_id;
+        console.log('📍 Using active tenant:', tenantId);
+      } else {
+        // Fall back to first tenant_users entry
+        const { data: tenantData } = await supabase
+          .from('tenant_users')
+          .select('tenant_id')
+          .eq('user_id', user.id)
+          .limit(1)
+          .single();
+        
+        tenantId = tenantData?.tenant_id;
+        console.log('📍 Using first tenant_users entry:', tenantId);
+      }
+    }
+
+    if (!tenantId) {
+      throw new Error('אין לך גישה למערכת. אנא צור קשר עם מנהל המערכת.');
     }
 
     // Get user profile and campaigner info
@@ -379,7 +379,7 @@ serve(async (req) => {
     const userName = profileData?.full_name || user.email?.split('@')[0] || 'משתמש';
     const userEmail = profileData?.email || user.email || '';
 
-    const { message, conversation_id } = await req.json();
+    // message, conversation_id already extracted from reqBody above
 
     // Load conversation history if exists
     let conversation = null;

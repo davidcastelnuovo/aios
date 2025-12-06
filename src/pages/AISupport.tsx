@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,6 +29,7 @@ interface Conversation {
 }
 
 export default function AISupport() {
+  const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const [input, setInput] = useState("");
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -115,6 +117,7 @@ export default function AISupport() {
           body: JSON.stringify({
             message: input,
             conversation_id: currentConversationId,
+            tenant_slug: tenantSlug,
           }),
         }
       );
