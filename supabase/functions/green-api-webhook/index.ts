@@ -107,14 +107,16 @@ Deno.serve(async (req) => {
     // Handle group messages differently
     if (isGroup) {
       const groupChatId = senderData.chatId;
-      const groupName = senderData.chatName || `קבוצה ${phoneNumber.slice(-4)}`;
+      // For outgoing messages, chatName is the sender's name, not the group name
+      // Only use chatName for group name on INCOMING messages
+      const potentialGroupName = isIncoming ? (senderData.chatName || null) : null;
       
-      console.log('👥 Group message detected:', groupName);
+      console.log('👥 Group message detected. ChatId:', groupChatId, 'Potential name:', potentialGroupName, 'Direction:', isOutgoing ? 'outgoing' : 'incoming');
 
       // Check if group exists, if not create it
       const { data: existingGroup } = await supabaseClient
         .from('whatsapp_groups')
-        .select('id, is_blocked')
+        .select('id, is_blocked, group_name')
         .eq('tenant_id', tenantId)
         .eq('group_chat_id', groupChatId)
         .maybeSingle();
@@ -123,13 +125,14 @@ Deno.serve(async (req) => {
       let groupIsBlocked = existingGroup?.is_blocked || false;
 
       if (!groupId) {
-        // Create new group
+        // Create new group - only use real group name from incoming message
+        const newGroupName = potentialGroupName || `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
         const { data: newGroup, error: groupError } = await supabaseClient
           .from('whatsapp_groups')
           .insert({
             tenant_id: tenantId,
             group_chat_id: groupChatId,
-            group_name: groupName,
+            group_name: newGroupName,
           })
           .select('id')
           .single();
@@ -140,27 +143,35 @@ Deno.serve(async (req) => {
         }
 
         groupId = newGroup.id;
-        console.log('✅ Created new group:', groupName);
-      } else {
-        // Check if group is blocked in blocked_contacts table
-        const { data: blockedContact } = await supabaseClient
-          .from('blocked_contacts')
-          .select('id')
-          .eq('tenant_id', tenantId)
-          .eq('connection_user_id', connectionUserId)
-          .eq('group_id', groupId)
-          .maybeSingle();
+        console.log('✅ Created new group:', newGroupName);
+      } else if (existingGroup && isIncoming && potentialGroupName && existingGroup.group_name !== potentialGroupName) {
+        // Update group name only from incoming messages if it has changed
+        // This prevents overwriting with sender name from outgoing messages
+        await supabaseClient
+          .from('whatsapp_groups')
+          .update({ group_name: potentialGroupName })
+          .eq('id', groupId);
+        console.log('📝 Updated group name to:', potentialGroupName);
+      }
+      
+      // Check if group is blocked in blocked_contacts table
+      const { data: blockedContact } = await supabaseClient
+        .from('blocked_contacts')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('connection_user_id', connectionUserId)
+        .eq('group_id', groupId)
+        .maybeSingle();
 
-        if (blockedContact || groupIsBlocked) {
-          console.log('🚫 Group is blocked, ignoring message');
-          return new Response(JSON.stringify({ 
-            success: true, 
-            blocked: true,
-            message: 'Group is blocked' 
-          }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
+      if (blockedContact || groupIsBlocked) {
+        console.log('🚫 Group is blocked, ignoring message');
+        return new Response(JSON.stringify({ 
+          success: true, 
+          blocked: true,
+          message: 'Group is blocked' 
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
 
       // Save group message
