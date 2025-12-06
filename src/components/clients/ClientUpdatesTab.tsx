@@ -17,7 +17,11 @@ import {
   CheckCheck, 
   MessageSquare,
   Send,
-  Loader2
+  Loader2,
+  Pencil,
+  Trash2,
+  X,
+  Check
 } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -104,6 +108,9 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
     enabled: !!clientId,
   });
 
+  const [editingUpdateId, setEditingUpdateId] = useState<string | null>(null);
+  const [editingUpdateContent, setEditingUpdateContent] = useState("");
+
   // Add update mutation
   const addUpdateMutation = useMutation({
     mutationFn: async (content: string) => {
@@ -125,6 +132,44 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
     },
     onError: () => {
       toast.error("שגיאה בהוספת העדכון");
+    },
+  });
+
+  // Edit update mutation
+  const editUpdateMutation = useMutation({
+    mutationFn: async ({ id, content }: { id: string; content: string }) => {
+      const { error } = await supabase
+        .from("client_updates")
+        .update({ content })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["client-updates"] });
+      setEditingUpdateId(null);
+      setEditingUpdateContent("");
+      toast.success("העדכון נערך בהצלחה");
+    },
+    onError: () => {
+      toast.error("שגיאה בעריכת העדכון");
+    },
+  });
+
+  // Delete update mutation
+  const deleteUpdateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("client_updates")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["client-updates"] });
+      toast.success("העדכון נמחק בהצלחה");
+    },
+    onError: () => {
+      toast.error("שגיאה במחיקת העדכון");
     },
   });
 
@@ -297,26 +342,96 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
             <h3 className="font-semibold">היסטוריית עדכונים</h3>
           </div>
           <div className="space-y-2 max-h-[200px] overflow-y-auto">
-            {updates.map((update: any) => (
-              <Card key={update.id} className="bg-muted/50">
-                <CardContent className="p-3">
-                  <p className="text-sm">{update.content}</p>
-                  <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                    <User className="h-3 w-3" />
-                    <span>{update.profiles?.full_name || update.profiles?.email || "משתמש"}</span>
-                    <span>•</span>
-                    <Calendar className="h-3 w-3" />
-                    <span>{format(new Date(update.created_at), "d/M/yy HH:mm", { locale: he })}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {updates.map((update: any) => {
+              const isEditing = editingUpdateId === update.id;
+              const isOwner = user?.id === update.user_id;
+              
+              return (
+                <Card key={update.id} className="bg-muted/50">
+                  <CardContent className="p-3">
+                    {isEditing ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={editingUpdateContent}
+                          onChange={(e) => setEditingUpdateContent(e.target.value)}
+                          className="min-h-[60px] resize-none text-sm"
+                        />
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingUpdateId(null);
+                              setEditingUpdateContent("");
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => editUpdateMutation.mutate({ id: update.id, content: editingUpdateContent })}
+                            disabled={!editingUpdateContent.trim() || editUpdateMutation.isPending}
+                          >
+                            {editUpdateMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Check className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm whitespace-pre-wrap">{update.content}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+                            <User className="h-3 w-3 shrink-0" />
+                            <span>{update.profiles?.full_name || update.profiles?.email || "משתמש"}</span>
+                            <span>•</span>
+                            <Calendar className="h-3 w-3 shrink-0" />
+                            <span>{format(new Date(update.created_at), "d/M/yy HH:mm", { locale: he })}</span>
+                          </div>
+                          {isOwner && (
+                            <div className="flex gap-1 shrink-0">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6"
+                                onClick={() => {
+                                  setEditingUpdateId(update.id);
+                                  setEditingUpdateContent(update.content);
+                                }}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6 text-destructive hover:text-destructive"
+                                onClick={() => deleteUpdateMutation.mutate(update.id)}
+                                disabled={deleteUpdateMutation.isPending}
+                              >
+                                {deleteUpdateMutation.isPending ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-3 w-3" />
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}
 
       {/* Tasks Columns */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* In Progress */}
         <div className="space-y-2">
           <div className="flex items-center gap-2">
