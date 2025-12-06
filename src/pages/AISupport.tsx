@@ -239,8 +239,8 @@ export default function AISupport() {
                     : 'hover:bg-muted'
                 }`}
               >
-                <div className="font-medium text-sm truncate">
-                  {conv.title || 'שיחה חדשה'}
+                <div className="font-medium text-sm truncate max-w-[180px]">
+                  {(conv.title || 'שיחה חדשה').split(' ').slice(0, 3).join(' ')}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {new Date(conv.created_at).toLocaleDateString('he-IL')}
