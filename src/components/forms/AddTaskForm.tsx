@@ -370,7 +370,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
                         <FormLabel>קמפיינר</FormLabel>
                         <Select 
                           onValueChange={field.onChange} 
-                          value={field.value}
+                          value={field.value || ""}
                           disabled={isCampaigner && !canSelectAnyCampaigner}
                         >
                           <FormControl>
