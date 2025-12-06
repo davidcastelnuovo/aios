@@ -122,10 +122,11 @@ export function useUserPermissions() {
       "green_api_settings",
       "chat_integrations",
       "accounting_integrations",
+      "ai_support",
     ];
 
     // Owners always see these admin modules in the UI
-    if ((module === "tenants" || module === "menu_management" || module === "fields_management") && isOwner) return true;
+    if ((module === "tenants" || module === "menu_management" || module === "fields_management" || module === "ai_support") && isOwner) return true;
 
     if (restrictedModules.includes(module)) {
       return permissions?.[module] === true;
