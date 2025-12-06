@@ -41,7 +41,6 @@ type DateFilter = "week" | "month" | "all";
 export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps) {
   const [dateFilter, setDateFilter] = useState<DateFilter>("month");
   const [editingTask, setEditingTask] = useState<any>(null);
-  const [showAddTask, setShowAddTask] = useState(false);
   const [newUpdate, setNewUpdate] = useState("");
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
@@ -285,21 +284,21 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 overflow-x-hidden w-full">
       {/* Add Update Form */}
       <Card>
-        <CardContent className="p-4">
+        <CardContent className="p-3 sm:p-4">
           <div className="flex gap-2">
             <Textarea
               placeholder="הוסף עדכון חדש..."
               value={newUpdate}
               onChange={(e) => setNewUpdate(e.target.value)}
-              className="min-h-[60px] resize-none"
+              className="min-h-[60px] resize-none flex-1"
             />
             <Button 
               onClick={handleAddUpdate} 
               disabled={!newUpdate.trim() || addUpdateMutation.isPending}
-              className="self-end"
+              className="self-end shrink-0"
             >
               {addUpdateMutation.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -312,13 +311,22 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
       </Card>
 
       {/* Header with filters */}
-      <div className="flex items-center justify-between gap-4">
-        <Button onClick={() => setShowAddTask(true)} size="sm" variant="outline">
-          <Plus className="h-4 w-4 mr-2" />
-          הוסף משימה
-        </Button>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <AddTaskForm
+          clientId={clientId}
+          triggerButton={
+            <Button size="sm" variant="outline" className="w-full sm:w-auto">
+              <Plus className="h-4 w-4 mr-2" />
+              הוסף משימה
+            </Button>
+          }
+        />
 
-        <RadioGroup value={dateFilter} onValueChange={(value) => setDateFilter(value as DateFilter)} className="flex gap-4">
+        <RadioGroup 
+          value={dateFilter} 
+          onValueChange={(value) => setDateFilter(value as DateFilter)} 
+          className="flex gap-3 flex-wrap"
+        >
           <div className="flex items-center space-x-2 space-x-reverse">
             <RadioGroupItem value="week" id="week" />
             <Label htmlFor="week" className="cursor-pointer text-sm">שבוע</Label>
@@ -488,14 +496,6 @@ export function ClientUpdatesTab({ clientId, clientName }: ClientUpdatesTabProps
           </div>
         </div>
       </div>
-
-      {/* Dialogs */}
-      {showAddTask && (
-        <AddTaskForm
-          clientId={clientId}
-          triggerButton={<div />}
-        />
-      )}
 
       {editingTask && (
         <EditTaskDialog
