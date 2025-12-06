@@ -131,7 +131,17 @@ async function executeTool(
       }
 
       case 'list_tasks': {
-        const { agency_id, client_id, status, limit = 10, my_tasks = false } = toolCall.args;
+        const { agency_id, client_id, status, limit = 20, my_tasks = false } = toolCall.args;
+
+        // Get user's campaigner_id
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('campaigner_id')
+          .eq('id', userId)
+          .single();
+        
+        const userCampaignerId = profileData?.campaigner_id;
+        console.log('User campaigner_id:', userCampaignerId, 'my_tasks:', my_tasks);
 
         let query = supabase
           .from('tasks')
@@ -141,17 +151,9 @@ async function executeTool(
           .order('created_at', { ascending: false })
           .limit(limit);
 
-        if (my_tasks) {
-          // Get tasks for the current user's campaigner
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('campaigner_id')
-            .eq('id', userId)
-            .single();
-          
-          if (profileData?.campaigner_id) {
-            query = query.eq('campaigner_id', profileData.campaigner_id);
-          }
+        // If my_tasks is true, filter by user's campaigner
+        if (my_tasks && userCampaignerId) {
+          query = query.eq('campaigner_id', userCampaignerId);
         }
 
         if (agency_id) query = query.eq('agency_id', agency_id);
@@ -162,10 +164,17 @@ async function executeTool(
 
         if (error) throw error;
 
+        // If my_tasks was requested but no campaigner_id, notify user
+        const noCampaignerWarning = my_tasks && !userCampaignerId 
+          ? 'שים לב: הפרופיל שלך לא מקושר לקמפיינר. מציג את כל המשימות בארגון.' 
+          : null;
+
         return {
           success: true,
           result: {
             count: data.length,
+            warning: noCampaignerWarning,
+            is_filtered_by_user: my_tasks && !!userCampaignerId,
             tasks: data.map((t: any) => ({
               id: t.id,
               title: t.title,
