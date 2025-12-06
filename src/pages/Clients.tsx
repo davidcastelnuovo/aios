@@ -540,20 +540,6 @@ export default function Clients() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {(() => {
-                const financialData = getClientFinancialData(client.id);
-                const retainerValue = financialData?.retainer || (ownedAgencyIds.includes(client.agency_id) ? client.retainer : null);
-                return canViewFinance() && retainerValue ? (
-                  <div className="flex items-center gap-2">
-                    <Coins className="h-4 w-4 text-muted-foreground" />
-                  <div className="text-sm">
-                      <span className="text-muted-foreground">{getFieldLabel('retainer', 'ריטיינר')}:</span>
-                      <span className="font-medium mr-2">₪{Number(retainerValue).toLocaleString()}</span>
-                      <span className="text-muted-foreground">לחודש</span>
-                    </div>
-                  </div>
-                ) : null;
-              })()}
               {client.website && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Globe className="h-4 w-4" />
