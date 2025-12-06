@@ -53,8 +53,8 @@ import {
 const formSchema = z.object({
   title: z.string().min(1, "שם המשימה הוא שדה חובה"),
   notes: z.string().optional(),
-  campaigner_id: z.string().min(1, "יש לבחור קמפיינר"),
-  task_category: z.enum(["client", "general"]),
+  campaigner_id: z.string().optional(), // Optional for quick tasks - will be auto-filled
+  task_category: z.enum(["client", "quick"]),
   client_id: z.string().optional(),
   agency_id: z.string().optional(),
   due_date: z.string().optional(),
@@ -69,6 +69,15 @@ const formSchema = z.object({
 }, {
   message: "יש לבחור לקוח למשימת לקוח",
   path: ["client_id"],
+}).refine((data) => {
+  // For client tasks, require campaigner
+  if (data.task_category === "client" && !data.campaigner_id) {
+    return false;
+  }
+  return true;
+}, {
+  message: "יש לבחור קמפיינר למשימת לקוח",
+  path: ["campaigner_id"],
 });
 
 interface AddTaskFormProps {
@@ -81,7 +90,7 @@ interface AddTaskFormProps {
 export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, triggerButton }: AddTaskFormProps) {
   const [open, setOpen] = useState(false);
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
-  const [taskCategory, setTaskCategory] = useState<"client" | "general">(clientId ? "client" : "general");
+  const [taskCategory, setTaskCategory] = useState<"client" | "quick">(clientId ? "client" : "client");
   const queryClient = useQueryClient();
   const { tenantId: currentTenantId } = useCurrentTenant();
   const { getFieldLabel } = useCustomFieldLabels('task');
@@ -96,7 +105,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
       title: "",
       notes: "",
       campaigner_id: effectiveCampaignerId,
-      task_category: clientId ? "client" : "general",
+      task_category: "client",
       client_id: clientId || "",
       agency_id: agencyId || "",
       due_date: "",
@@ -170,6 +179,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
     mutationFn: async (values: z.infer<typeof formSchema>) => {
       let selectedClient = null;
       let finalAgencyId = null;
+      let finalCampaignerId = values.campaigner_id;
 
       if (values.task_category === "client") {
         // Get agency_id from the selected client
@@ -179,23 +189,25 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
         }
         finalAgencyId = selectedClient.agency_id;
       } else {
-        // For general tasks, agency is optional
-        finalAgencyId = values.agency_id || null;
+        // For quick tasks - auto-assign to current user's campaigner
+        if (!finalCampaignerId && userCampaignerId) {
+          finalCampaignerId = userCampaignerId;
+        }
+        if (!finalCampaignerId) {
+          throw new Error("לא נמצא קמפיינר לשיוך המשימה");
+        }
+        finalAgencyId = null;
       }
 
       // Get campaigner name
-      const selectedCampaigner = campaigners?.find(c => c.id === values.campaigner_id);
+      const selectedCampaigner = campaigners?.find(c => c.id === finalCampaignerId);
       
       // Get tenant_id
       let tenantId: string;
       if (values.task_category === "client" && selectedClient) {
         tenantId = selectedClient.tenant_id;
-      } else if (values.task_category === "general" && values.agency_id) {
-        const selectedAgency = agencies?.find(a => a.id === values.agency_id);
-        if (!selectedAgency?.tenant_id) throw new Error("הסוכנות לא משויכת לטנט");
-        tenantId = selectedAgency.tenant_id;
       } else {
-        // For general tasks without agency, use current tenant
+        // For quick tasks, use current tenant
         if (!currentTenantId) throw new Error("לא נמצא טנט פעיל");
         tenantId = currentTenantId;
       }
@@ -203,7 +215,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
       const { error } = await supabase.from("tasks").insert([{
         title: values.title,
         notes: values.notes || null,
-        campaigner_id: values.campaigner_id,
+        campaigner_id: finalCampaignerId,
         client_id: values.task_category === "client" ? values.client_id : null,
         agency_id: finalAgencyId,
         due_date: values.due_date || null,
@@ -300,7 +312,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
                   <Select 
                     onValueChange={(value) => {
                       field.onChange(value);
-                      setTaskCategory(value as "client" | "general");
+                      setTaskCategory(value as "client" | "quick");
                     }} 
                     value={field.value}
                     disabled={!!clientId}
@@ -312,7 +324,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
                     </FormControl>
                     <SelectContent className="bg-background z-50">
                       <SelectItem value="client">משימה ללקוח</SelectItem>
-                      <SelectItem value="general">משימה כללית</SelectItem>
+                      <SelectItem value="quick">משימה מהירה</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -320,211 +332,197 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
               )}
             />
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="campaigner_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>קמפיינר</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value}
-                      disabled={isCampaigner && !canSelectAnyCampaigner}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="בחר קמפיינר" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-background z-50">
-                        {visibleCampaigners?.map((campaigner) => (
-                          <SelectItem key={campaigner.id} value={campaigner.id}>
-                            {campaigner.full_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {/* Show additional fields only for client tasks */}
+            {taskCategory === "client" && (
+              <>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="campaigner_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>קמפיינר</FormLabel>
+                        <Select 
+                          onValueChange={field.onChange} 
+                          value={field.value}
+                          disabled={isCampaigner && !canSelectAnyCampaigner}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="בחר קמפיינר" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-background z-50">
+                            {visibleCampaigners?.map((campaigner) => (
+                              <SelectItem key={campaigner.id} value={campaigner.id}>
+                                {campaigner.full_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <FormField
-                control={form.control}
-                name="priority"
-                render={({ field }) => {
-                  const getPriorityColor = (priority: number) => {
-                    const hue = 240 - ((priority - 1) / 9) * 240;
-                    return `hsl(${hue}, 70%, 50%)`;
-                  };
-                  
-                  const getPriorityText = (priority: number) => {
-                    if (priority >= 8) return "דחיפות גבוהה";
-                    if (priority >= 5) return "דחיפות בינונית";
-                    return "דחיפות נמוכה";
-                  };
+                  <FormField
+                    control={form.control}
+                    name="priority"
+                    render={({ field }) => {
+                      const getPriorityColor = (priority: number) => {
+                        const hue = 240 - ((priority - 1) / 9) * 240;
+                        return `hsl(${hue}, 70%, 50%)`;
+                      };
+                      
+                      const getPriorityText = (priority: number) => {
+                        if (priority >= 8) return "דחיפות גבוהה";
+                        if (priority >= 5) return "דחיפות בינונית";
+                        return "דחיפות נמוכה";
+                      };
 
-                  return (
-                    <FormItem>
-                      <FormLabel>דחיפות</FormLabel>
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">{getPriorityText(field.value)}</span>
-                          <span className="text-sm font-medium" style={{ color: getPriorityColor(field.value) }}>
-                            {field.value}/10
-                          </span>
-                        </div>
-                        <div style={{ ['--slider-color' as any]: getPriorityColor(field.value) }}>
-                          <Slider
-                            value={[field.value]}
-                            onValueChange={(value) => field.onChange(value[0])}
-                            min={1}
-                            max={10}
-                            step={1}
-                            className="cursor-pointer [&_[role=slider]]:border-[var(--slider-color)] [&_.bg-primary]:bg-[var(--slider-color)]"
-                            style={{ ['--slider-color' as any]: getPriorityColor(field.value) }}
-                          />
-                        </div>
-                      </div>
+                      return (
+                        <FormItem>
+                          <FormLabel>דחיפות</FormLabel>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">{getPriorityText(field.value)}</span>
+                              <span className="text-sm font-medium" style={{ color: getPriorityColor(field.value) }}>
+                                {field.value}/10
+                              </span>
+                            </div>
+                            <div style={{ ['--slider-color' as any]: getPriorityColor(field.value) }}>
+                              <Slider
+                                value={[field.value]}
+                                onValueChange={(value) => field.onChange(value[0])}
+                                min={1}
+                                max={10}
+                                step={1}
+                                className="cursor-pointer [&_[role=slider]]:border-[var(--slider-color)] [&_.bg-primary]:bg-[var(--slider-color)]"
+                                style={{ ['--slider-color' as any]: getPriorityColor(field.value) }}
+                              />
+                            </div>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="client_id"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>לקוח</FormLabel>
+                      <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              disabled={!!clientId}
+                              className={cn(
+                                "justify-between",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value
+                                ? clients?.find((client) => client.id === field.value)?.name
+                                : "בחר לקוח"}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[300px] p-0 bg-background" align="start">
+                          <Command>
+                            <CommandInput placeholder="חפש לקוח..." />
+                            <CommandList>
+                              <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
+                              <CommandGroup>
+                                {clients?.map((client) => (
+                                  <CommandItem
+                                    key={client.id}
+                                    value={client.name}
+                                    onSelect={() => {
+                                      form.setValue("client_id", client.id);
+                                      setClientPopoverOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        field.value === client.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {client.name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                       <FormMessage />
                     </FormItem>
-                  );
-                }}
-              />
-            </div>
-
-            {taskCategory === "client" ? (
-              <FormField
-                control={form.control}
-                name="client_id"
-                render={({ field }) => (
-                  <FormItem className="flex flex-col">
-                    <FormLabel>לקוח</FormLabel>
-                    <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            disabled={!!clientId}
-                            className={cn(
-                              "justify-between",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value
-                              ? clients?.find((client) => client.id === field.value)?.name
-                              : "בחר לקוח"}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[300px] p-0 bg-background" align="start">
-                        <Command>
-                          <CommandInput placeholder="חפש לקוח..." />
-                          <CommandList>
-                            <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
-                            <CommandGroup>
-                              {clients?.map((client) => (
-                                <CommandItem
-                                  key={client.id}
-                                  value={client.name}
-                                  onSelect={() => {
-                                    form.setValue("client_id", client.id);
-                                    setClientPopoverOpen(false);
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      field.value === client.id ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                  {client.name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            ) : (
-              <FormField
-                control={form.control}
-                name="agency_id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>סוכנות (אופציונלי)</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      value={field.value}
-                      disabled={!!agencyId}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="בחר סוכנות (אופציונלי)" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-background z-50">
-                        {agencies?.map((agency) => (
-                          <SelectItem key={agency.id} value={agency.id}>
-                            {agency.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                  )}
+                />
+              </>
             )}
 
-            <FormField
-              control={form.control}
-              name="due_date"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>תאריך יעד</FormLabel>
-                  <FormControl>
-                    <Input type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Quick task info message */}
+            {taskCategory === "quick" && (
+              <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+                משימה מהירה תשויך אליך אוטומטית עם דחיפות בינונית
+              </div>
+            )}
 
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>סטטוס</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger className={cn(
-                        "border-0 text-white font-medium",
-                        field.value === "open" && "bg-blue-400 hover:bg-blue-500",
-                        field.value === "in_progress" && "bg-yellow-400 hover:bg-yellow-500",
-                        field.value === "done" && "bg-green-400 hover:bg-green-500"
-                      )}>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent className="bg-background z-50">
-                      <SelectItem value="open" className="text-blue-600 focus:text-blue-600 focus:bg-blue-50">פתוח</SelectItem>
-                      <SelectItem value="in_progress" className="text-yellow-600 focus:text-yellow-600 focus:bg-yellow-50">בעבודה</SelectItem>
-                      <SelectItem value="done" className="text-green-600 focus:text-green-600 focus:bg-green-50">הושלם</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Show additional fields only for client tasks */}
+            {taskCategory === "client" && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="due_date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>תאריך יעד</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>סטטוס</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger className={cn(
+                            "border-0 text-white font-medium",
+                            field.value === "open" && "bg-blue-400 hover:bg-blue-500",
+                            field.value === "in_progress" && "bg-yellow-400 hover:bg-yellow-500",
+                            field.value === "done" && "bg-green-400 hover:bg-green-500"
+                          )}>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-50">
+                          <SelectItem value="open" className="text-blue-600 focus:text-blue-600 focus:bg-blue-50">פתוח</SelectItem>
+                          <SelectItem value="in_progress" className="text-yellow-600 focus:text-yellow-600 focus:bg-yellow-50">בעבודה</SelectItem>
+                          <SelectItem value="done" className="text-green-600 focus:text-green-600 focus:bg-green-50">הושלם</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
 
             <Button type="submit" disabled={mutation.isPending} className="w-full">
               {mutation.isPending ? "מוסיף..." : "הוסף משימה"}
