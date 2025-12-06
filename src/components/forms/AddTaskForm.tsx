@@ -178,7 +178,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
       let selectedClient = null;
-      let finalAgencyId = null;
+      let finalAgencyId: string | null = null;
       let finalCampaignerId = values.campaigner_id;
 
       if (values.task_category === "client") {
@@ -193,10 +193,36 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
         if (!finalCampaignerId && userCampaignerId) {
           finalCampaignerId = userCampaignerId;
         }
+        // If still no campaigner, use the first available one
+        if (!finalCampaignerId && campaigners && campaigners.length > 0) {
+          finalCampaignerId = campaigners[0].id;
+        }
         if (!finalCampaignerId) {
           throw new Error("לא נמצא קמפיינר לשיוך המשימה");
         }
-        finalAgencyId = null;
+        // For quick tasks - get agency from the selected campaigner
+        const selectedCampaignerForAgency = campaigners?.find(c => c.id === finalCampaignerId);
+        if (selectedCampaignerForAgency) {
+          // Get agency from campaigner_agencies
+          const { data: campaignerAgencies } = await supabase
+            .from("campaigner_agencies")
+            .select("agency_id")
+            .eq("campaigner_id", finalCampaignerId)
+            .limit(1);
+          
+          if (campaignerAgencies && campaignerAgencies.length > 0) {
+            finalAgencyId = campaignerAgencies[0].agency_id;
+          } else if (agencies && agencies.length > 0) {
+            // Fallback to first available agency
+            finalAgencyId = agencies[0].id;
+          }
+        }
+        if (!finalAgencyId && agencies && agencies.length > 0) {
+          finalAgencyId = agencies[0].id;
+        }
+        if (!finalAgencyId) {
+          throw new Error("לא נמצאה סוכנות לשיוך המשימה");
+        }
       }
 
       // Get campaigner name
