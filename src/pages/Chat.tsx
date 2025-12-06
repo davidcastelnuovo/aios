@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -247,6 +247,39 @@ export default function Chat() {
     return d.getFullYear() === todayParts.y && d.getMonth() === todayParts.m && d.getDate() === todayParts.d;
   };
 
+  // Fetch manually marked read contacts (must be before filteredContacts)
+  const { data: manuallyReadContacts = [] } = useQuery({
+    queryKey: ['manually-read-contacts', tenantId],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !tenantId) return [];
+
+      const { data, error } = await supabase
+        .from('manually_read_contacts')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('tenant_id', tenantId);
+
+      if (error) {
+        console.error('Error fetching manually read contacts:', error);
+        return [];
+      }
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  // Check if contact was manually marked as read
+  const isManuallyMarkedRead = useCallback((contact: Contact) => {
+    return manuallyReadContacts.some(mrc => {
+      if (contact.contact_type === 'client' && mrc.client_id === contact.id) return true;
+      if (contact.contact_type === 'lead' && mrc.lead_id === contact.id) return true;
+      if (contact.contact_type === 'group' && mrc.group_id === contact.id) return true;
+      if (contact.contact_type === 'unknown' && contact.sender_phone && mrc.sender_phone === contact.sender_phone) return true;
+      return false;
+    });
+  }, [manuallyReadContacts]);
+
   // Filter contacts
   const filteredContacts = useMemo(() => {
     let allContacts = allContactsBeforeTypeFilter;
@@ -276,28 +309,29 @@ export default function Chat() {
       console.log(`📅 Today filter: ${beforeFilter} → ${allContacts.length}`);
     }
 
-    // Apply unread only filter
+    // Apply unread only filter - hide contacts that were MANUALLY marked as read
     if (showUnreadOnly) {
       const beforeFilter = allContacts.length;
-      allContacts = allContacts.filter(contact => contact.unread_count > 0);
-      console.log(`📬 Unread filter: ${beforeFilter} → ${allContacts.length}`);
+      allContacts = allContacts.filter(contact => !isManuallyMarkedRead(contact));
+      console.log(`📬 Unread filter (manual): ${beforeFilter} → ${allContacts.length}`);
     }
 
     console.log('✅ Final filtered contacts:', allContacts.length);
     return allContacts;
-  }, [allContactsBeforeTypeFilter, contactFilter, showTodayOnly, showUnreadOnly, todayParts]);
+  }, [allContactsBeforeTypeFilter, contactFilter, showTodayOnly, showUnreadOnly, todayParts, isManuallyMarkedRead]);
 
   const clientsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'client').length;
   const leadsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'lead').length;
   const groupsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'group').length;
   const unknownCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'unknown').length;
 
-  // Mark as read mutation
+  // Mark as read mutation - now also adds to manually_read_contacts
   const markAsReadMutation = useMutation({
     mutationFn: async (contact: Contact) => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('No user found');
+      if (!user || !tenantId) throw new Error('No user or tenant found');
 
+      // Update chat_messages read_at
       let query = supabase
         .from('chat_messages')
         .update({ read_at: new Date().toISOString() })
@@ -315,13 +349,48 @@ export default function Chat() {
         query = query.eq('sender_phone', contact.sender_phone);
       }
 
-      const { error } = await query;
-      if (error) throw error;
+      const { error: msgError } = await query;
+      if (msgError) throw msgError;
+
+      // Also add to manually_read_contacts table
+      const insertData: {
+        user_id: string;
+        tenant_id: string;
+        client_id?: string;
+        lead_id?: string;
+        group_id?: string;
+        sender_phone?: string;
+      } = {
+        user_id: user.id,
+        tenant_id: tenantId,
+      };
+
+      if (contact.contact_type === 'client') {
+        insertData.client_id = contact.id;
+      } else if (contact.contact_type === 'lead') {
+        insertData.lead_id = contact.id;
+      } else if (contact.contact_type === 'group') {
+        insertData.group_id = contact.id;
+      } else if (contact.contact_type === 'unknown' && contact.sender_phone) {
+        insertData.sender_phone = contact.sender_phone;
+      }
+
+      const { error: insertError } = await supabase
+        .from('manually_read_contacts')
+        .insert(insertData);
+
+      if (insertError) {
+        // Ignore duplicate errors (already marked)
+        if (!insertError.message.includes('duplicate')) {
+          throw insertError;
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['active-chats'] });
       queryClient.invalidateQueries({ queryKey: ['unknown-contacts'] });
       queryClient.invalidateQueries({ queryKey: ['chat-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['manually-read-contacts'] });
       toast.success('השיחה סומנה כנקראה');
     },
     onError: (error) => {

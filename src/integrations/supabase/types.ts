@@ -1441,6 +1441,71 @@ export type Database = {
           },
         ]
       }
+      manually_read_contacts: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          group_id: string | null
+          id: string
+          lead_id: string | null
+          marked_at: string
+          sender_phone: string | null
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          lead_id?: string | null
+          marked_at?: string
+          sender_phone?: string | null
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          lead_id?: string | null
+          marked_at?: string
+          sender_phone?: string | null
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manually_read_contacts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manually_read_contacts_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manually_read_contacts_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manually_read_contacts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       menu_items: {
         Row: {
           badge: string | null
