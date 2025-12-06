@@ -67,6 +67,25 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         if (currentTenantId) {
           localStorage.setItem("selectedTenantId", currentTenantId);
           
+          // CRITICAL: Clear all cached data FIRST before updating DB
+          // This ensures old data is not shown while we update the tenant
+          console.log("🔄 Clearing cache before tenant sync:", currentTenantId);
+          await queryClient.cancelQueries();
+          queryClient.removeQueries({ queryKey: ["tasks"] });
+          queryClient.removeQueries({ queryKey: ["clients"] });
+          queryClient.removeQueries({ queryKey: ["agencies"] });
+          queryClient.removeQueries({ queryKey: ["agencies-filter"] });
+          queryClient.removeQueries({ queryKey: ["user-agency-ids"] });
+          queryClient.removeQueries({ queryKey: ["leads"] });
+          queryClient.removeQueries({ queryKey: ["campaigners"] });
+          queryClient.removeQueries({ queryKey: ["client-onboarding"] });
+          queryClient.removeQueries({ queryKey: ["finance"] });
+          queryClient.removeQueries({ queryKey: ["sales-people"] });
+          queryClient.removeQueries({ queryKey: ["suppliers"] });
+          queryClient.removeQueries({ queryKey: ["products"] });
+          queryClient.removeQueries({ queryKey: ["automations"] });
+          queryClient.removeQueries({ queryKey: ["time-entries"] });
+          
           // Update user_active_tenant in the database - MUST complete for RLS to work correctly
           const { data: { user } } = await supabase.auth.getUser();
           if (user) {
@@ -85,28 +104,13 @@ export function TenantProvider({ children }: { children: ReactNode }) {
             } else {
               console.log("✅ Active tenant synced to DB:", currentTenantId);
             }
+            
+            // Add a small delay to ensure DB has processed the update
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
           
           // Mark as synced AFTER the DB update completes
           setIsActiveTenantSynced(true);
-          
-          // CRITICAL: Clear all tenant-specific data from cache when switching tenants
-          console.log("🔄 Clearing cache for tenant switch:", currentTenantId);
-          queryClient.invalidateQueries({ queryKey: ["user-tenants"] });
-          queryClient.invalidateQueries({ queryKey: ["clients"] });
-          queryClient.invalidateQueries({ queryKey: ["agencies"] });
-          queryClient.invalidateQueries({ queryKey: ["agencies-filter"] });
-          queryClient.invalidateQueries({ queryKey: ["user-agency-ids"] });
-          queryClient.invalidateQueries({ queryKey: ["leads"] });
-          queryClient.invalidateQueries({ queryKey: ["campaigners"] });
-          queryClient.invalidateQueries({ queryKey: ["tasks"] });
-          queryClient.invalidateQueries({ queryKey: ["client-onboarding"] });
-          queryClient.invalidateQueries({ queryKey: ["finance"] });
-          queryClient.invalidateQueries({ queryKey: ["sales-people"] });
-          queryClient.invalidateQueries({ queryKey: ["suppliers"] });
-          queryClient.invalidateQueries({ queryKey: ["products"] });
-          queryClient.invalidateQueries({ queryKey: ["automations"] });
-          queryClient.invalidateQueries({ queryKey: ["time-entries"] });
         } else {
           localStorage.removeItem("selectedTenantId");
           setIsActiveTenantSynced(false);
