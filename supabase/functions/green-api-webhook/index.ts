@@ -114,12 +114,13 @@ Deno.serve(async (req) => {
       // Check if group exists, if not create it
       const { data: existingGroup } = await supabaseClient
         .from('whatsapp_groups')
-        .select('id')
+        .select('id, is_blocked')
         .eq('tenant_id', tenantId)
         .eq('group_chat_id', groupChatId)
         .maybeSingle();
 
       let groupId = existingGroup?.id;
+      let groupIsBlocked = existingGroup?.is_blocked || false;
 
       if (!groupId) {
         // Create new group
@@ -140,16 +141,29 @@ Deno.serve(async (req) => {
 
         groupId = newGroup.id;
         console.log('✅ Created new group:', groupName);
+      } else {
+        // Check if group is blocked in blocked_contacts table
+        const { data: blockedContact } = await supabaseClient
+          .from('blocked_contacts')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('connection_user_id', connectionUserId)
+          .eq('group_id', groupId)
+          .maybeSingle();
+
+        if (blockedContact || groupIsBlocked) {
+          console.log('🚫 Group is blocked, ignoring message');
+          return new Response(JSON.stringify({ 
+            success: true, 
+            blocked: true,
+            message: 'Group is blocked' 
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
       }
 
-      // Check if group is blocked
-      const { data: groupData } = await supabaseClient
-        .from('whatsapp_groups')
-        .select('is_blocked')
-        .eq('id', groupId)
-        .maybeSingle();
-
-      // Save group message with blocked status from group settings
+      // Save group message
       const { error: insertError } = await supabaseClient
         .from('chat_messages')
         .insert({
@@ -162,7 +176,7 @@ Deno.serve(async (req) => {
           provider: 'green_api',
           sender_phone: phoneNumber,
           sender_name: senderData.senderName || null,
-          is_blocked: groupData?.is_blocked || false,
+          is_blocked: false,
           raw_provider_data: webhookData,
         });
 
@@ -182,14 +196,35 @@ Deno.serve(async (req) => {
       });
     }
 
-    // For individual messages, search for client or lead in THIS tenant only
+    // For individual messages, first check if sender is in blocked_contacts
+    console.log('🔍 Checking if sender is blocked:', phoneNumber);
+    
+    const { data: blockedByPhone } = await supabaseClient
+      .from('blocked_contacts')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('connection_user_id', connectionUserId)
+      .eq('sender_phone', phoneNumber)
+      .maybeSingle();
+
+    if (blockedByPhone) {
+      console.log('🚫 Sender phone is blocked, ignoring message');
+      return new Response(JSON.stringify({ 
+        success: true, 
+        blocked: true,
+        message: 'Sender is blocked by phone' 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Search for client or lead in THIS tenant only
     console.log('👤 Individual message, searching for contact in tenant:', tenantId);
     
     let clientId: string | null = null;
     let leadId: string | null = null;
     
     // Search for client with matching phone in THIS tenant only
-    // IMPORTANT: Only search for clients with Green API as active provider
     const { data: client } = await supabaseClient
       .from('clients')
       .select('id')
@@ -201,9 +236,28 @@ Deno.serve(async (req) => {
     if (client) {
       clientId = client.id;
       console.log(`✅ Found client ${clientId} in tenant ${tenantId}`);
+      
+      // Check if client is in blocked_contacts
+      const { data: blockedClient } = await supabaseClient
+        .from('blocked_contacts')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('connection_user_id', connectionUserId)
+        .eq('client_id', clientId)
+        .maybeSingle();
+
+      if (blockedClient) {
+        console.log('🚫 Client is blocked, ignoring message');
+        return new Response(JSON.stringify({ 
+          success: true, 
+          blocked: true,
+          message: 'Client is blocked' 
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     } else {
       // Search for lead with matching phone in THIS tenant only
-      // IMPORTANT: Only search for leads with Green API as active provider
       const { data: lead } = await supabaseClient
         .from('leads')
         .select('id')
@@ -215,30 +269,32 @@ Deno.serve(async (req) => {
       if (lead) {
         leadId = lead.id;
         console.log(`✅ Found lead ${leadId} in tenant ${tenantId}`);
+        
+        // Check if lead is in blocked_contacts
+        const { data: blockedLead } = await supabaseClient
+          .from('blocked_contacts')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('connection_user_id', connectionUserId)
+          .eq('lead_id', leadId)
+          .maybeSingle();
+
+        if (blockedLead) {
+          console.log('🚫 Lead is blocked, ignoring message');
+          return new Response(JSON.stringify({ 
+            success: true, 
+            blocked: true,
+            message: 'Lead is blocked' 
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
       } else {
         console.log(`⚠️ No contact found with Green API provider in tenant ${tenantId}`);
       }
     }
 
-    // Check if contact is blocked
-    let isBlocked = false;
-    if (clientId || leadId) {
-      const { data: lastMessage } = await supabaseClient
-        .from('chat_messages')
-        .select('is_blocked')
-        .eq('tenant_id', tenantId)
-        .or(`client_id.eq.${clientId || 'null'},lead_id.eq.${leadId || 'null'}`)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (lastMessage?.is_blocked) {
-        isBlocked = true;
-        console.log('🚫 Contact is blocked');
-      }
-    }
-
-    console.log(`💾 Saving message (blocked: ${isBlocked})...`);
+    console.log('💾 Saving message...');
 
     // Save the message to THIS tenant only
     const { error: insertError } = await supabaseClient
@@ -253,7 +309,7 @@ Deno.serve(async (req) => {
         provider: 'green_api',
         sender_phone: phoneNumber,
         sender_name: senderData.senderName || null,
-        is_blocked: isBlocked,
+        is_blocked: false,
         connection_user_id: connectionUserId,
         raw_provider_data: webhookData,
       });

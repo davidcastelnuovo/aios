@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenantPath } from "@/hooks/useTenantPath";
@@ -68,6 +68,7 @@ export default function Chat() {
   const { userAgencyIds, isLoading: agenciesLoading } = useUserAgencies();
   const { selectedAgency } = useAgency();
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearch = useDebouncedValue(searchTerm, 300);
   const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups" | "unknown">("all");
@@ -315,6 +316,7 @@ export default function Chat() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No user found');
 
+      // Delete only messages, NOT blocked_contacts - so blocks persist
       const { error } = await supabase
         .from('chat_messages')
         .delete()
@@ -322,12 +324,14 @@ export default function Chat() {
 
       if (error) throw error;
 
-      toast.success('ההיסטוריה נוקתה בהצלחה');
+      toast.success('ההיסטוריה נוקתה בהצלחה (אנשי קשר חסומים נשארים חסומים)');
       setShowClearHistoryDialog(false);
       setSelectedContact(null);
       
-      // Refresh the chats
-      window.location.reload();
+      // Refresh the chats using query invalidation instead of reload
+      queryClient.invalidateQueries({ queryKey: ['active-chats'] });
+      queryClient.invalidateQueries({ queryKey: ['unknown-contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['chat-contacts'] });
     } catch (error) {
       console.error('Error clearing history:', error);
       toast.error('שגיאה בניקוי ההיסטוריה');

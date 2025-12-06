@@ -243,6 +243,74 @@ export type Database = {
           },
         ]
       }
+      blocked_contacts: {
+        Row: {
+          blocked_at: string
+          blocked_by_user_id: string | null
+          client_id: string | null
+          connection_user_id: string
+          created_at: string
+          group_id: string | null
+          id: string
+          lead_id: string | null
+          sender_phone: string | null
+          tenant_id: string
+        }
+        Insert: {
+          blocked_at?: string
+          blocked_by_user_id?: string | null
+          client_id?: string | null
+          connection_user_id: string
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          lead_id?: string | null
+          sender_phone?: string | null
+          tenant_id: string
+        }
+        Update: {
+          blocked_at?: string
+          blocked_by_user_id?: string | null
+          client_id?: string | null
+          connection_user_id?: string
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          lead_id?: string | null
+          sender_phone?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blocked_contacts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocked_contacts_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocked_contacts_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blocked_contacts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calendar_tokens: {
         Row: {
           access_token: string
