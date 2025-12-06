@@ -525,6 +525,10 @@ serve(async (req) => {
         const decoder = new TextDecoder();
         let buffer = '';
         let assistantMessage = '';
+        
+        // Accumulate tool call data across streaming chunks
+        const toolCallAccumulators: Record<number, { name: string; arguments: string }> = {};
+        let finishReason: string | null = null;
 
         try {
           while (true) {
@@ -540,107 +544,34 @@ serve(async (req) => {
               if (!line.startsWith('data: ')) continue;
 
               const data = line.slice(6);
-              if (data === '[DONE]') continue;
+              if (data === '[DONE]') {
+                finishReason = 'stop';
+                continue;
+              }
 
               try {
                 const parsed = JSON.parse(data);
                 const delta = parsed.choices?.[0]?.delta;
+                const choiceFinishReason = parsed.choices?.[0]?.finish_reason;
+                
+                if (choiceFinishReason) {
+                  finishReason = choiceFinishReason;
+                }
 
-                // Check for tool calls
+                // Accumulate tool calls across chunks
                 if (delta?.tool_calls) {
                   for (const toolCall of delta.tool_calls) {
-                    if (toolCall.function) {
-                      const toolName = toolCall.function.name;
-                      const toolArgs = JSON.parse(toolCall.function.arguments || '{}');
-
-                      // Send tool execution notification
-                      controller.enqueue(
-                        new TextEncoder().encode(
-                          `data: ${JSON.stringify({ type: 'tool_call', tool: toolName, args: toolArgs })}\n\n`
-                        )
-                      );
-
-                      // Execute tool
-                      const toolResult = await executeTool(
-                        { name: toolName, args: toolArgs },
-                        supabase,
-                        user.id,
-                        tenantId
-                      );
-
-                      // Add tool call to messages
-                      messages.push({
-                        role: 'tool_call',
-                        tool: toolName,
-                        args: toolArgs,
-                        result: toolResult,
-                        timestamp: new Date().toISOString(),
-                      });
-
-                      // If tool succeeded, get AI's response with the result
-                      if (toolResult.success) {
-                        const followUpResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-                          method: 'POST',
-                          headers: {
-                            'Authorization': `Bearer ${OPENAI_API_KEY}`,
-                            'Content-Type': 'application/json',
-                          },
-                          body: JSON.stringify({
-                            model: 'gpt-4o',
-                            messages: [
-                              { role: 'system', content: buildSystemPrompt(userName, userEmail, campaignerName || undefined, campaignerId || undefined) },
-                              ...aiMessages,
-                              { role: 'assistant', content: null, tool_calls: [{ id: 'call_1', type: 'function', function: { name: toolName, arguments: JSON.stringify(toolArgs) } }] },
-                              { role: 'tool', tool_call_id: 'call_1', content: JSON.stringify(toolResult.result) },
-                            ],
-                            stream: true,
-                          }),
-                        });
-
-                        const followReader = followUpResponse.body!.getReader();
-                        let followBuffer = '';
-
-                        while (true) {
-                          const { done: followDone, value: followValue } = await followReader.read();
-                          if (followDone) break;
-
-                          followBuffer += decoder.decode(followValue, { stream: true });
-                          const followLines = followBuffer.split('\n');
-                          followBuffer = followLines.pop() || '';
-
-                          for (const followLine of followLines) {
-                            if (!followLine.trim() || followLine.startsWith(':')) continue;
-                            if (!followLine.startsWith('data: ')) continue;
-
-                            const followData = followLine.slice(6);
-                            if (followData === '[DONE]') continue;
-
-                            try {
-                              const followParsed = JSON.parse(followData);
-                              const followContent = followParsed.choices?.[0]?.delta?.content;
-                              if (followContent) {
-                                assistantMessage += followContent;
-                                controller.enqueue(
-                                  new TextEncoder().encode(
-                                    `data: ${JSON.stringify({ type: 'token', content: followContent })}\n\n`
-                                  )
-                                );
-                              }
-                            } catch (e) {
-                              // Ignore parse errors
-                            }
-                          }
-                        }
-                      } else {
-                        // Tool failed, inform user
-                        const errorMsg = `❌ שגיאה בביצוע הפעולה: ${toolResult.error}`;
-                        assistantMessage = errorMsg;
-                        controller.enqueue(
-                          new TextEncoder().encode(
-                            `data: ${JSON.stringify({ type: 'token', content: errorMsg })}\n\n`
-                          )
-                        );
-                      }
+                    const index = toolCall.index ?? 0;
+                    
+                    if (!toolCallAccumulators[index]) {
+                      toolCallAccumulators[index] = { name: '', arguments: '' };
+                    }
+                    
+                    if (toolCall.function?.name) {
+                      toolCallAccumulators[index].name = toolCall.function.name;
+                    }
+                    if (toolCall.function?.arguments) {
+                      toolCallAccumulators[index].arguments += toolCall.function.arguments;
                     }
                   }
                 } else if (delta?.content) {
@@ -654,6 +585,113 @@ serve(async (req) => {
                 }
               } catch (e) {
                 console.error('Parse error:', e);
+              }
+            }
+          }
+          
+          // Process accumulated tool calls after streaming is complete
+          if (finishReason === 'tool_calls' || Object.keys(toolCallAccumulators).length > 0) {
+            for (const [_, accumulated] of Object.entries(toolCallAccumulators)) {
+              if (!accumulated.name) continue;
+              
+              let toolArgs = {};
+              try {
+                toolArgs = JSON.parse(accumulated.arguments || '{}');
+              } catch (e) {
+                console.error('Failed to parse tool arguments:', accumulated.arguments, e);
+                continue;
+              }
+              
+              const toolName = accumulated.name;
+              console.log('Executing accumulated tool:', toolName, 'with args:', toolArgs);
+
+              // Send tool execution notification
+              controller.enqueue(
+                new TextEncoder().encode(
+                  `data: ${JSON.stringify({ type: 'tool_call', tool: toolName, args: toolArgs })}\n\n`
+                )
+              );
+
+              // Execute tool
+              const toolResult = await executeTool(
+                { name: toolName, args: toolArgs },
+                supabase,
+                user.id,
+                tenantId
+              );
+
+              // Add tool call to messages
+              messages.push({
+                role: 'tool_call',
+                tool: toolName,
+                args: toolArgs,
+                result: toolResult,
+                timestamp: new Date().toISOString(),
+              });
+
+              // If tool succeeded, get AI's response with the result
+              if (toolResult.success) {
+                const followUpResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    model: 'gpt-4o',
+                    messages: [
+                      { role: 'system', content: buildSystemPrompt(userName, userEmail, campaignerName || undefined, campaignerId || undefined) },
+                      ...aiMessages,
+                      { role: 'assistant', content: null, tool_calls: [{ id: 'call_1', type: 'function', function: { name: toolName, arguments: JSON.stringify(toolArgs) } }] },
+                      { role: 'tool', tool_call_id: 'call_1', content: JSON.stringify(toolResult.result) },
+                    ],
+                    stream: true,
+                  }),
+                });
+
+                const followReader = followUpResponse.body!.getReader();
+                let followBuffer = '';
+
+                while (true) {
+                  const { done: followDone, value: followValue } = await followReader.read();
+                  if (followDone) break;
+
+                  followBuffer += decoder.decode(followValue, { stream: true });
+                  const followLines = followBuffer.split('\n');
+                  followBuffer = followLines.pop() || '';
+
+                  for (const followLine of followLines) {
+                    if (!followLine.trim() || followLine.startsWith(':')) continue;
+                    if (!followLine.startsWith('data: ')) continue;
+
+                    const followData = followLine.slice(6);
+                    if (followData === '[DONE]') continue;
+
+                    try {
+                      const followParsed = JSON.parse(followData);
+                      const followContent = followParsed.choices?.[0]?.delta?.content;
+                      if (followContent) {
+                        assistantMessage += followContent;
+                        controller.enqueue(
+                          new TextEncoder().encode(
+                            `data: ${JSON.stringify({ type: 'token', content: followContent })}\n\n`
+                          )
+                        );
+                      }
+                    } catch (e) {
+                      // Ignore parse errors
+                    }
+                  }
+                }
+              } else {
+                // Tool failed, inform user
+                const errorMsg = `❌ שגיאה בביצוע הפעולה: ${toolResult.error}`;
+                assistantMessage = errorMsg;
+                controller.enqueue(
+                  new TextEncoder().encode(
+                    `data: ${JSON.stringify({ type: 'token', content: errorMsg })}\n\n`
+                  )
+                );
               }
             }
           }
