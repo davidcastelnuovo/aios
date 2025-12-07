@@ -119,6 +119,67 @@ serve(async (req: Request) => {
         console.error("Error deleting role:", deleteError);
         throw deleteError;
       }
+
+      // Clean up related links based on the removed role
+      if (role === "team_manager") {
+        // Remove all managed agencies for this user in this tenant
+        console.log(`Cleaning up user_managed_agencies for user ${userId}`);
+        const { error: cleanupError } = await supabaseAdmin
+          .from("user_managed_agencies")
+          .delete()
+          .eq("user_id", userId);
+        
+        if (cleanupError) {
+          console.error("Error cleaning up managed agencies:", cleanupError);
+          // Don't throw - this is cleanup, not critical
+        }
+      }
+
+      if (role === "campaigner") {
+        // Check if user has campaigner role in another tenant
+        const { data: otherCampaignerRoles } = await supabaseAdmin
+          .from("user_roles")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("role", "campaigner")
+          .neq("tenant_id", tenantId);
+
+        if (!otherCampaignerRoles || otherCampaignerRoles.length === 0) {
+          // No other campaigner roles, unlink campaigner from profile
+          console.log(`Unlinking campaigner_id from profile for user ${userId}`);
+          const { error: unlinkError } = await supabaseAdmin
+            .from("profiles")
+            .update({ campaigner_id: null })
+            .eq("id", userId);
+          
+          if (unlinkError) {
+            console.error("Error unlinking campaigner:", unlinkError);
+          }
+        }
+      }
+
+      if (role === "sales_person") {
+        // Check if user has sales_person role in another tenant
+        const { data: otherSalesRoles } = await supabaseAdmin
+          .from("user_roles")
+          .select("id")
+          .eq("user_id", userId)
+          .eq("role", "sales_person")
+          .neq("tenant_id", tenantId);
+
+        if (!otherSalesRoles || otherSalesRoles.length === 0) {
+          // No other sales_person roles, unlink sales_person from profile
+          console.log(`Unlinking sales_person_id from profile for user ${userId}`);
+          const { error: unlinkError } = await supabaseAdmin
+            .from("profiles")
+            .update({ sales_person_id: null })
+            .eq("id", userId);
+          
+          if (unlinkError) {
+            console.error("Error unlinking sales_person:", unlinkError);
+          }
+        }
+      }
     }
 
     return new Response(

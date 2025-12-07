@@ -328,8 +328,8 @@ export default function Tasks() {
         task.campaigners?.role?.includes('SEO') &&
         task.clients?.is_seo_client === true
       );
-    } else if (isTeamManager && !isCampaigner && userAgencyIds && userAgencyIds.length > 0) {
-      // Team managers (who are NOT also campaigners) see all tasks in their agencies
+    } else if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
+      // Team managers see all tasks in their managed agencies (even if also campaigners)
       accessibleTasks = secureFilteredTasks?.filter(task => 
         userAgencyIds.includes(getTaskAgencyId(task))
       );
