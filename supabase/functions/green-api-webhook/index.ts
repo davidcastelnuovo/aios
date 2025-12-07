@@ -156,14 +156,20 @@ Deno.serve(async (req) => {
 
         groupId = newGroup.id;
         console.log('✅ Created new group:', newGroupName);
-      } else if (existingGroup && isIncoming && potentialGroupName && existingGroup.group_name !== potentialGroupName) {
-        // Update group name only from incoming messages if it has changed
-        // This prevents overwriting with sender name from outgoing messages
-        await supabaseClient
-          .from('whatsapp_groups')
-          .update({ group_name: potentialGroupName })
-          .eq('id', groupId);
-        console.log('📝 Updated group name to:', potentialGroupName);
+      } else if (existingGroup && isIncoming && potentialGroupName) {
+        // Only update group name from incoming messages if:
+        // 1. Current name is a placeholder (starts with "קבוצה ")
+        // 2. OR the new name looks like a real group name (not a person's name)
+        // Skip update if the existing name already looks good (not a placeholder)
+        const currentNameIsPlaceholder = existingGroup.group_name?.startsWith('קבוצה ');
+        
+        if (currentNameIsPlaceholder && potentialGroupName !== existingGroup.group_name) {
+          await supabaseClient
+            .from('whatsapp_groups')
+            .update({ group_name: potentialGroupName })
+            .eq('id', groupId);
+          console.log('📝 Updated group name from placeholder to:', potentialGroupName);
+        }
       }
       
       // Check if group is blocked in blocked_contacts table
