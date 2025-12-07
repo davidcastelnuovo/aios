@@ -316,7 +316,7 @@ export default function Users() {
     return user.agency_ids?.includes(agencyFilter);
   });
 
-  const updateRoleMutation = useMutation({
+  const addRoleMutation = useMutation({
     mutationFn: async ({
       userId,
       role,
@@ -329,8 +329,8 @@ export default function Users() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No active session");
 
-      const { data, error } = await supabase.functions.invoke("update-user-role", {
-        body: { userId, role, tenantId }, // Add tenantId
+      const { data, error } = await supabase.functions.invoke("manage-user-roles", {
+        body: { userId, role, tenantId, action: "add" },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
@@ -343,10 +343,44 @@ export default function Users() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
       await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
-      toast.success("התפקיד עודכן בהצלחה");
+      toast.success("התפקיד נוסף בהצלחה");
     },
     onError: (error: Error) => {
-      toast.error("שגיאה בעדכון תפקיד: " + error.message);
+      toast.error("שגיאה בהוספת תפקיד: " + error.message);
+    },
+  });
+
+  const removeRoleMutation = useMutation({
+    mutationFn: async ({
+      userId,
+      role,
+    }: {
+      userId: string;
+      role: UserRole;
+    }) => {
+      if (!tenantId) throw new Error("No tenant selected");
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No active session");
+
+      const { data, error } = await supabase.functions.invoke("manage-user-roles", {
+        body: { userId, role, tenantId, action: "remove" },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+      
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
+      await queryClient.refetchQueries({ queryKey: ["users-with-roles"] });
+      toast.success("התפקיד הוסר בהצלחה");
+    },
+    onError: (error: Error) => {
+      toast.error("שגיאה בהסרת תפקיד: " + error.message);
     },
   });
 
@@ -1001,69 +1035,50 @@ export default function Users() {
                           <p className="text-xs text-muted-foreground mb-1">תפקידים:</p>
                           <div className="flex flex-wrap gap-2">
                             {user.roles?.map((role: UserRole) => (
-                              <Badge 
+                          <Badge 
                                 key={role}
                                 className={`${roleBadgeColors[role] || 'bg-gray-500'} relative group text-xs`}
                               >
                                 {roleLabels[role]}
-                                {/* Allow deletion of super_admin or owner (only own) */}
-                                {((role === "super_admin" && user.id === currentUserId) || 
-                                  (role === "owner" && user.id === currentUserId)) && (
-                                  <button
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      if (confirm(`האם להסיר את תפקיד ${roleLabels[role]} מעצמך?`)) {
-                                        try {
-                                          const { error } = await supabase
-                                            .from("user_roles")
-                                            .delete()
-                                            .eq("user_id", user.id)
-                                            .eq("role", role);
-                                          
-                                          if (error) throw error;
-                                          
-                                          queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-                                          toast.success(`תפקיד ${roleLabels[role]} הוסר בהצלחה`);
-                                        } catch (error: any) {
-                                          toast.error("שגיאה בהסרת תפקיד: " + error.message);
-                                        }
-                                      }
-                                    }}
-                                    className="mr-1 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="הסר תפקיד"
-                                  >
-                                    ×
-                                  </button>
-                                )}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm(`האם להסיר את תפקיד ${roleLabels[role]}?`)) {
+                                      removeRoleMutation.mutate({
+                                        userId: user.id,
+                                        role: role as UserRole,
+                                      });
+                                    }
+                                  }}
+                                  className="mr-1 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="הסר תפקיד"
+                                >
+                                  ×
+                                </button>
                               </Badge>
                             ))}
-                            {/* Allow adding roles if not owner of others */}
-                            {!user.roles?.includes("owner") || user.id === currentUserId ? (
-                              <Select
-                                value=""
-                                onValueChange={(role) => {
-                                  console.log("Users: add role", user.id, role);
-                                  toast.info("מוסיף תפקיד...");
-                                  updateRoleMutation.mutate({
-                                    userId: user.id,
-                                    role: role as UserRole,
-                                  });
-                                }}
-                              >
-                                <SelectTrigger className="w-[60px] h-6 px-2 text-xs">
-                                  <SelectValue>הוסף</SelectValue>
-                                </SelectTrigger>
-                                <SelectContent className="bg-background z-50">
-                                  {Object.entries(roleLabels)
-                                    .filter(([value]) => !user.roles?.includes(value))
-                                    .map(([value, label]) => (
-                                      <SelectItem key={value} value={value}>
-                                        {label}
-                                      </SelectItem>
-                                    ))}
-                                </SelectContent>
-                              </Select>
-                            ) : null}
+                            <Select
+                              value=""
+                              onValueChange={(role) => {
+                                addRoleMutation.mutate({
+                                  userId: user.id,
+                                  role: role as UserRole,
+                                });
+                              }}
+                            >
+                              <SelectTrigger className="w-[60px] h-6 px-2 text-xs">
+                                <SelectValue>הוסף</SelectValue>
+                              </SelectTrigger>
+                              <SelectContent className="bg-background z-50">
+                                {Object.entries(roleLabels)
+                                  .filter(([value]) => !user.roles?.includes(value))
+                                  .map(([value, label]) => (
+                                    <SelectItem key={value} value={value}>
+                                      {label}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
                         
@@ -1251,64 +1266,45 @@ export default function Users() {
                             className={`${roleBadgeColors[role] || 'bg-gray-500'} relative group`}
                           >
                             {roleLabels[role]}
-                            {/* Allow deletion of super_admin or owner (only own) */}
-                            {((role === "super_admin" && user.id === currentUserId) || 
-                              (role === "owner" && user.id === currentUserId)) && (
-                              <button
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  if (confirm(`האם להסיר את תפקיד ${roleLabels[role]} מעצמך?`)) {
-                                    try {
-                                      const { error } = await supabase
-                                        .from("user_roles")
-                                        .delete()
-                                        .eq("user_id", user.id)
-                                        .eq("role", role);
-                                      
-                                      if (error) throw error;
-                                      
-                                      queryClient.invalidateQueries({ queryKey: ["users-with-roles"] });
-                                      toast.success(`תפקיד ${roleLabels[role]} הוסר בהצלחה`);
-                                    } catch (error: any) {
-                                      toast.error("שגיאה בהסרת תפקיד: " + error.message);
-                                    }
-                                  }
-                                }}
-                                className="mr-1 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                                title="הסר תפקיד"
-                              >
-                                ×
-                              </button>
-                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm(`האם להסיר את תפקיד ${roleLabels[role]}?`)) {
+                                  removeRoleMutation.mutate({
+                                    userId: user.id,
+                                    role: role as UserRole,
+                                  });
+                                }
+                              }}
+                              className="mr-1 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="הסר תפקיד"
+                            >
+                              ×
+                            </button>
                           </Badge>
                         ))}
-                        {/* Allow adding roles if not owner of others */}
-                        {!user.roles?.includes("owner") || user.id === currentUserId ? (
-                          <Select
-                            value=""
-                            onValueChange={(role) => {
-                              console.log("Users: add role", user.id, role);
-                              toast.info("מוסיף תפקיד...");
-                              updateRoleMutation.mutate({
-                                userId: user.id,
-                                role: role as UserRole,
-                              });
-                            }}
-                          >
-                            <SelectTrigger className="w-[40px] h-6 px-2">
-                              <SelectValue>+</SelectValue>
-                            </SelectTrigger>
-                            <SelectContent className="bg-background z-50">
-                              {Object.entries(roleLabels)
-                                .filter(([value]) => !user.roles?.includes(value))
-                                .map(([value, label]) => (
-                                  <SelectItem key={value} value={value}>
-                                    {label}
-                                  </SelectItem>
-                                ))}
-                            </SelectContent>
-                          </Select>
-                        ) : null}
+                        <Select
+                          value=""
+                          onValueChange={(role) => {
+                            addRoleMutation.mutate({
+                              userId: user.id,
+                              role: role as UserRole,
+                            });
+                          }}
+                        >
+                          <SelectTrigger className="w-[40px] h-6 px-2">
+                            <SelectValue>+</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50">
+                            {Object.entries(roleLabels)
+                              .filter(([value]) => !user.roles?.includes(value))
+                              .map(([value, label]) => (
+                                <SelectItem key={value} value={value}>
+                                  {label}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -1605,28 +1601,53 @@ export default function Users() {
                         <Shield className="h-3 w-3 ml-1" />
                         סיסמה
                       </Button>
-                     <Select
-                       value={user.role || ""}
-                       onValueChange={(value) => {
-                         console.log("Users: change role", user.id, value);
-                         toast.info("מעדכן תפקיד...");
-                         updateRoleMutation.mutate({
-                           userId: user.id,
-                           role: value as UserRole,
-                         });
-                       }}
-                     >
-                      <SelectTrigger className="w-full" onClick={(e) => e.stopPropagation()}>
-                        <SelectValue placeholder="שנה תפקיד" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(roleLabels).map(([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
+                     <div className="flex flex-wrap gap-1">
+                        {user.roles?.map((role: UserRole) => (
+                          <Badge 
+                            key={role}
+                            className={`${roleBadgeColors[role] || 'bg-gray-500'} relative group text-xs`}
+                          >
+                            {roleLabels[role]}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (confirm(`האם להסיר את תפקיד ${roleLabels[role]}?`)) {
+                                  removeRoleMutation.mutate({
+                                    userId: user.id,
+                                    role: role as UserRole,
+                                  });
+                                }
+                              }}
+                              className="mr-1 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="הסר תפקיד"
+                            >
+                              ×
+                            </button>
+                          </Badge>
                         ))}
-                      </SelectContent>
-                    </Select>
+                        <Select
+                          value=""
+                          onValueChange={(role) => {
+                            addRoleMutation.mutate({
+                              userId: user.id,
+                              role: role as UserRole,
+                            });
+                          }}
+                        >
+                          <SelectTrigger className="w-[50px] h-6 px-2 text-xs">
+                            <SelectValue>+</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(roleLabels)
+                              .filter(([value]) => !user.roles?.includes(value))
+                              .map(([value, label]) => (
+                                <SelectItem key={value} value={value}>
+                                  {label}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     <div className="flex gap-2 w-full">
                       <Button
                         variant="outline"
@@ -1696,30 +1717,53 @@ export default function Users() {
                         </TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>
-                          <Select
-                            value={user.role || ""}
-                            onValueChange={(role) => {
-                              console.log("Users: change role", user.id, role);
-                              toast.info("מעדכן תפקיד...");
-                              updateRoleMutation.mutate({
-                                userId: user.id,
-                                role: role as UserRole,
-                              });
-                            }}
-                          >
-                            <SelectTrigger className="w-[140px]">
-                              <SelectValue>
-                                {user.role ? roleLabels[user.role] : <span className="text-muted-foreground">-</span>}
-                              </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent className="bg-background z-50">
-                              {Object.entries(roleLabels).map(([value, label]) => (
-                                <SelectItem key={value} value={value}>
-                                  {label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          <div className="flex flex-wrap gap-1">
+                            {user.roles?.map((role: UserRole) => (
+                              <Badge 
+                                key={role}
+                                className={`${roleBadgeColors[role] || 'bg-gray-500'} relative group text-xs`}
+                              >
+                                {roleLabels[role]}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm(`האם להסיר את תפקיד ${roleLabels[role]}?`)) {
+                                      removeRoleMutation.mutate({
+                                        userId: user.id,
+                                        role: role as UserRole,
+                                      });
+                                    }
+                                  }}
+                                  className="mr-1 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="הסר תפקיד"
+                                >
+                                  ×
+                                </button>
+                              </Badge>
+                            ))}
+                            <Select
+                              value=""
+                              onValueChange={(role) => {
+                                addRoleMutation.mutate({
+                                  userId: user.id,
+                                  role: role as UserRole,
+                                });
+                              }}
+                            >
+                              <SelectTrigger className="w-[40px] h-6 px-2 text-xs">
+                                <SelectValue>+</SelectValue>
+                              </SelectTrigger>
+                              <SelectContent className="bg-background z-50">
+                                {Object.entries(roleLabels)
+                                  .filter(([value]) => !user.roles?.includes(value))
+                                  .map(([value, label]) => (
+                                    <SelectItem key={value} value={value}>
+                                      {label}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Select
@@ -1833,28 +1877,53 @@ export default function Users() {
                               <Lock className="h-3 w-3 ml-1" />
                               הרשאות
                             </Button>
-                            <Select
-                              value={user.role || ""}
-                              onValueChange={(value) => {
-                                console.log("Users: change role", user.id, value);
-                                toast.info("מעדכן תפקיד...");
-                                updateRoleMutation.mutate({
-                                  userId: user.id,
-                                  role: value as UserRole,
-                                });
-                              }}
-                            >
-                              <SelectTrigger className="h-8 w-[140px]">
-                                <SelectValue placeholder="שנה תפקיד" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(roleLabels).map(([value, label]) => (
-                                  <SelectItem key={value} value={value}>
-                                    {label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <div className="flex flex-wrap gap-1">
+                              {user.roles?.map((role: UserRole) => (
+                                <Badge 
+                                  key={role}
+                                  className={`${roleBadgeColors[role] || 'bg-gray-500'} relative group text-xs`}
+                                >
+                                  {roleLabels[role]}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (confirm(`האם להסיר את תפקיד ${roleLabels[role]}?`)) {
+                                        removeRoleMutation.mutate({
+                                          userId: user.id,
+                                          role: role as UserRole,
+                                        });
+                                      }
+                                    }}
+                                    className="mr-1 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="הסר תפקיד"
+                                  >
+                                    ×
+                                  </button>
+                                </Badge>
+                              ))}
+                              <Select
+                                value=""
+                                onValueChange={(role) => {
+                                  addRoleMutation.mutate({
+                                    userId: user.id,
+                                    role: role as UserRole,
+                                  });
+                                }}
+                              >
+                                <SelectTrigger className="w-[40px] h-6 px-2 text-xs">
+                                  <SelectValue>+</SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {Object.entries(roleLabels)
+                                    .filter(([value]) => !user.roles?.includes(value))
+                                    .map(([value, label]) => (
+                                      <SelectItem key={value} value={value}>
+                                        {label}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
                             <Button
                               variant="outline"
                               size="sm"
