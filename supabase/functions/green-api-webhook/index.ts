@@ -64,7 +64,8 @@ Deno.serve(async (req) => {
     // Green API sends different types of webhooks
     // We're interested in incoming AND outgoing messages
     const isIncoming = webhookData.typeWebhook === 'incomingMessageReceived';
-    const isOutgoing = webhookData.typeWebhook === 'outgoingMessageReceived';
+    const isOutgoing = webhookData.typeWebhook === 'outgoingMessageReceived' || 
+                       webhookData.typeWebhook === 'outgoingAPIMessageReceived';
     
     if (!isIncoming && !isOutgoing) {
       console.log('⏭️ Ignoring non-message webhook');
