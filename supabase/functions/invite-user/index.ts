@@ -320,7 +320,7 @@ serve(async (req: Request) => {
           if (role) {
             await supabaseAdmin
               .from("user_roles")
-              .upsert({ user_id: newUserId, role }, { onConflict: 'user_id,role' });
+              .upsert({ user_id: newUserId, role, tenant_id: tenantIdFinal }, { onConflict: 'user_id,role,tenant_id' });
           }
 
           // Link invited user to tenant immediately so owners can see them
@@ -336,6 +336,26 @@ serve(async (req: Request) => {
               .insert({ user_id: newUserId, tenant_id: tenantIdFinal, role: role || 'member' });
           }
 
+          // *** CRITICAL FIX: Insert module permissions immediately for new users ***
+          if (modulePermissions && modulePermissions.length > 0) {
+            console.log("Inserting permissions for new user:", modulePermissions);
+            const permissionsToInsert = modulePermissions.map((module) => ({
+              user_id: newUserId,
+              module: module,
+              can_access: true,
+            }));
+
+            const { error: permError } = await supabaseAdmin
+              .from("user_permissions")
+              .insert(permissionsToInsert);
+            
+            if (permError) {
+              console.error("Error inserting permissions:", permError);
+            } else {
+              console.log("Successfully inserted permissions for new user");
+            }
+          }
+
           // Optionally attach campaigner/sales person ids provided
           if (campaignerId) {
             await supabaseAdmin
@@ -348,6 +368,30 @@ serve(async (req: Request) => {
               .from("profiles")
               .update({ sales_person_id: salesPersonId })
               .eq("id", newUserId);
+          }
+
+          // Link campaigner to agencies if provided
+          if (campaignerId && agencyIds && agencyIds.length > 0) {
+            const campaignerAgenciesToInsert = agencyIds.map((agencyId) => ({
+              campaigner_id: campaignerId,
+              agency_id: agencyId,
+            }));
+
+            await supabaseAdmin
+              .from("campaigner_agencies")
+              .upsert(campaignerAgenciesToInsert, { onConflict: 'campaigner_id,agency_id' });
+          }
+
+          // Link sales person to agencies if provided
+          if (salesPersonId && agencyIds && agencyIds.length > 0) {
+            const salesPersonAgenciesToInsert = agencyIds.map((agencyId) => ({
+              sales_person_id: salesPersonId,
+              agency_id: agencyId,
+            }));
+
+            await supabaseAdmin
+              .from("sales_person_agencies")
+              .upsert(salesPersonAgenciesToInsert, { onConflict: 'sales_person_id,agency_id' });
           }
         }
       }
