@@ -78,7 +78,7 @@ export default function Users() {
   const [inviteFullName, setInviteFullName] = useState("");
   const [inviteRole, setInviteRole] = useState<UserRole>("campaigner");
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
-  const [selectedModules, setSelectedModules] = useState<string[]>([]);
+  const [selectedModules, setSelectedModules] = useState<string[]>(['dashboard', 'clients', 'tasks', 'chat', 'time_tracking']); // Default modules for campaigner
   const [selectedCampaignerId, setSelectedCampaignerId] = useState<string>("");
   const [selectedSalesPersonId, setSelectedSalesPersonId] = useState<string>("");
   const [editAgenciesUserId, setEditAgenciesUserId] = useState<string | null>(null);
@@ -854,9 +854,31 @@ export default function Users() {
                   <Select
                     value={inviteRole}
                     onValueChange={(value) => {
-                      setInviteRole(value as UserRole);
+                      const newRole = value as UserRole;
+                      setInviteRole(newRole);
                       // Reset agencies when role changes
                       setSelectedAgencies([]);
+                      
+                      // *** FIX: Set default modules based on role ***
+                      if (newRole === 'campaigner') {
+                        // Campaigners get basic modules
+                        setSelectedModules(['dashboard', 'clients', 'tasks', 'chat', 'time_tracking']);
+                      } else if (newRole === 'sales_person') {
+                        // Sales people get sales modules
+                        setSelectedModules(['dashboard', 'leads', 'sales_dashboard', 'products', 'chat']);
+                      } else if (newRole === 'team_manager') {
+                        // Team managers get more access
+                        setSelectedModules(['dashboard', 'clients', 'tasks', 'campaigners', 'reports', 'client_onboarding', 'chat', 'time_tracking']);
+                      } else if (newRole === 'seo') {
+                        // SEO gets specific modules
+                        setSelectedModules(['dashboard', 'clients', 'tasks', 'time_tracking']);
+                      } else if (newRole === 'owner') {
+                        // Owners get all modules
+                        setSelectedModules(getAllModules().map(m => m.id));
+                      } else {
+                        // Other roles start with empty selection
+                        setSelectedModules([]);
+                      }
                     }}
                   >
                     <SelectTrigger>

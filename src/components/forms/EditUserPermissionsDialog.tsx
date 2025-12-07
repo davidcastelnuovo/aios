@@ -80,18 +80,14 @@ export function EditUserPermissionsDialog({
           permissionsMap[module.id] = true;
         });
       } else {
-        // Set all modules to true by default
-        [...MAIN_MODULES, ...SETTINGS_MODULES, ...SPECIAL_PERMISSIONS].forEach(module => {
-          permissionsMap[module.id] = true;
-        });
-        
-        // Set sales modules to false by default
-        SALES_MODULES.forEach(module => {
+        // *** FIX: Set all modules to FALSE by default - only grant what's explicitly set ***
+        [...MAIN_MODULES, ...SALES_MODULES, ...SETTINGS_MODULES, ...SPECIAL_PERMISSIONS].forEach(module => {
           permissionsMap[module.id] = false;
         });
       }
 
       // Override with actual values from database (only for current tenant)
+      // This will set to true only the modules that were explicitly granted
       data?.forEach((perm) => {
         permissionsMap[perm.module] = perm.can_access;
       });
@@ -167,7 +163,7 @@ export function EditUserPermissionsDialog({
                 <div key={module.id} className="flex items-start space-x-3 space-x-reverse">
                   <Checkbox
                     id={`module-${module.id}`}
-                    checked={permissions[module.id] ?? true}
+                    checked={permissions[module.id] ?? false}
                     onCheckedChange={() => togglePermission(module.id)}
                   />
                   <div className="flex-1">
@@ -248,7 +244,7 @@ export function EditUserPermissionsDialog({
                 <div key={perm.id} className="flex items-start space-x-3 space-x-reverse">
                   <Checkbox
                     id={`perm-${perm.id}`}
-                    checked={permissions[perm.id] ?? true}
+                    checked={permissions[perm.id] ?? false}
                     onCheckedChange={() => togglePermission(perm.id)}
                   />
                   <div className="flex-1">
