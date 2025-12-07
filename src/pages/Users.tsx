@@ -31,6 +31,7 @@ import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialo
 import { EditUserPermissionsDialog } from "@/components/forms/EditUserPermissionsDialog";
 import { EditUserNameDialog } from "@/components/forms/EditUserNameDialog";
 import EditSalesPersonAgenciesDialog from "@/components/forms/EditSalesPersonAgenciesDialog";
+import EditManagedAgenciesDialog from "@/components/forms/EditManagedAgenciesDialog";
 import { ResetPasswordDialog } from "@/components/forms/ResetPasswordDialog";
 import { getAllModules } from "@/lib/modules";
 import {
@@ -92,6 +93,11 @@ export default function Users() {
     id: string;
     full_name: string;
     agencies: Array<{ id: string; name: string }>;
+  } | null>(null);
+  const [editManagedAgenciesUser, setEditManagedAgenciesUser] = useState<{
+    id: string;
+    full_name: string;
+    managed_agencies: Array<{ id: string; name: string }>;
   } | null>(null);
   const [selectedTenantId, setSelectedTenantId] = useState<string>("");
   const [agencyFilter, setAgencyFilter] = useState<string>("all");
@@ -211,6 +217,25 @@ export default function Users() {
         full_name: sp.full_name,
         agencies: sp.sales_person_agencies.map((spa: any) => spa.agencies).filter(Boolean),
       }));
+    },
+    enabled: !!tenantId,
+  });
+
+  // Query for user_managed_agencies to show in dialog
+  const { data: userManagedAgencies } = useQuery({
+    queryKey: ["user-managed-agencies", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("user_managed_agencies")
+        .select(`
+          user_id,
+          agency_id,
+          agencies (id, name)
+        `);
+      
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!tenantId,
   });
@@ -1180,8 +1205,23 @@ export default function Users() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            setEditAgenciesUserId(user.id);
-                            setEditAgenciesUserEmail(user.email);
+                            // Determine which dialog to open based on user's roles
+                            if (user.roles?.includes('team_manager')) {
+                              // Team manager - open managed agencies dialog
+                              const managedAgencies = userManagedAgencies
+                                ?.filter(uma => uma.user_id === user.id)
+                                .map(uma => uma.agencies)
+                                .filter(Boolean) || [];
+                              setEditManagedAgenciesUser({
+                                id: user.id,
+                                full_name: user.full_name || user.email,
+                                managed_agencies: managedAgencies as Array<{ id: string; name: string }>,
+                              });
+                            } else {
+                              // Campaigner or other - open regular agencies dialog
+                              setEditAgenciesUserId(user.id);
+                              setEditAgenciesUserEmail(user.email);
+                            }
                           }}
                           className="flex-1"
                         >
@@ -1408,8 +1448,23 @@ export default function Users() {
                           variant="outline"
                           size="icon"
                           onClick={() => {
-                            setEditAgenciesUserId(user.id);
-                            setEditAgenciesUserEmail(user.email);
+                            // Determine which dialog to open based on user's roles
+                            if (user.roles?.includes('team_manager')) {
+                              // Team manager - open managed agencies dialog
+                              const managedAgencies = userManagedAgencies
+                                ?.filter(uma => uma.user_id === user.id)
+                                .map(uma => uma.agencies)
+                                .filter(Boolean) || [];
+                              setEditManagedAgenciesUser({
+                                id: user.id,
+                                full_name: user.full_name || user.email,
+                                managed_agencies: managedAgencies as Array<{ id: string; name: string }>,
+                              });
+                            } else {
+                              // Campaigner or other - open regular agencies dialog
+                              setEditAgenciesUserId(user.id);
+                              setEditAgenciesUserEmail(user.email);
+                            }
                           }}
                           title="ערוך סוכנויות"
                         >
@@ -2096,6 +2151,18 @@ export default function Users() {
             }
           }}
           salesPerson={editSalesPersonAgencies}
+        />
+      )}
+
+      {editManagedAgenciesUser && (
+        <EditManagedAgenciesDialog
+          open={!!editManagedAgenciesUser}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditManagedAgenciesUser(null);
+            }
+          }}
+          user={editManagedAgenciesUser}
         />
       )}
     </div>
