@@ -134,8 +134,11 @@ Deno.serve(async (req) => {
       let groupIsBlocked = existingGroup?.is_blocked || false;
 
       if (!groupId) {
-        // Create new group - only use real group name from incoming message
-        const newGroupName = potentialGroupName || `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
+        // Create new group - NEVER use chatName from outgoing messages as it contains sender name, not group name
+        // For outgoing messages, use a placeholder until we get an incoming message with the real group name
+        const newGroupName = (isIncoming && potentialGroupName) 
+          ? potentialGroupName 
+          : `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
         const { data: newGroup, error: groupError } = await supabaseClient
           .from('whatsapp_groups')
           .insert({
