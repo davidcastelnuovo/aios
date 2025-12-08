@@ -723,9 +723,12 @@ export default function Tasks() {
       <div className="space-y-4 md:space-y-6 p-6">
         {/* Header with tabs on right, filters on left */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          {/* Right side: Title and tabs */}
+          {/* Right side: Title, tabs and add button */}
           <div className="flex flex-col gap-3">
-            <h2 className="text-2xl md:text-3xl font-bold">משימות</h2>
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-2xl md:text-3xl font-bold">משימות</h2>
+              <AddTaskForm />
+            </div>
             <Tabs value={selectedRole} onValueChange={setSelectedRole} dir="rtl">
               <TabsList className="bg-muted">
                 <TabsTrigger value="all">כל המשימות</TabsTrigger>
@@ -845,7 +848,7 @@ export default function Tasks() {
                 </Select>
               </div>
               
-              <div className="w-full md:w-auto"><AddTaskForm /></div>
+              
             </div>
           </div>
         </div>
