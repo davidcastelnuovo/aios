@@ -721,14 +721,10 @@ export default function Tasks() {
       onDragEnd={handleDragEnd}
     >
       <div className="space-y-4 md:space-y-6 p-6">
-        {/* Header with tabs on right, filters on left */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          {/* Right side: Title, tabs and add button */}
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-4">
-              <h2 className="text-2xl md:text-3xl font-bold">משימות</h2>
-              <AddTaskForm />
-            </div>
+        {/* Header Row 1: Title, Tabs, View Toggle, Add Button */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
+            <h2 className="text-2xl md:text-3xl font-bold">משימות</h2>
             <Tabs value={selectedRole} onValueChange={setSelectedRole} dir="rtl">
               <TabsList className="bg-muted">
                 <TabsTrigger value="all">כל המשימות</TabsTrigger>
@@ -737,119 +733,109 @@ export default function Tasks() {
               </TabsList>
             </Tabs>
           </div>
-
-          {/* Left side: Filters and controls */}
-          <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:mr-auto">
-            <div className="flex gap-3 flex-wrap lg:flex-nowrap w-full lg:w-auto items-stretch">
-              {/* View mode toggle */}
-              <div className="flex gap-1 border rounded-md p-1">
-                <Button
-                  variant={viewMode === "kanban" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("kanban")}
-                  title="תצוגת לוח"
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={viewMode === "table" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("table")}
-                  title="תצוגת טבלה"
-                >
-                  <TableIcon className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={viewMode === "calendar" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("calendar")}
-                  title="יומן"
-                >
-                  <CalendarIcon className="h-4 w-4" />
-                </Button>
-              </div>
-              
-              <div className="h-8 w-px bg-border"></div>
-              
-              {/* Hide completed toggle */}
-              <div className="flex items-center gap-2" dir="ltr">
-                <Label htmlFor="hide-completed" className="cursor-pointer whitespace-nowrap">
-                  הסתר הושלמו
-                </Label>
-                <Switch
-                  id="hide-completed"
-                  checked={hideCompleted}
-                  onCheckedChange={setHideCompleted}
-                />
-              </div>
-              
-              {/* Hide campaigner filter for pure campaigners */}
-              {!(isCampaigner && !isTeamManager && !isOwner) && (
-                <div className="w-full md:w-40 lg:w-48">
-                  <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="כל הקמפיינרים" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background z-50">
-                      <SelectItem value="all">כל הקמפיינרים</SelectItem>
-                      {campaigners
-                        ?.filter((campaigner) => {
-                          // Filter by selected role tab (SEO / קמפיינר)
-                          if (selectedRole !== "all" && campaigner.role) {
-                            // If SEO tab is selected, show only SEO campaigners
-                            // If קמפיינר tab is selected, show only קמפיינר campaigners
-                            if (!campaigner.role.includes(selectedRole)) {
-                              return false;
-                            }
-                          }
-                          
-                          // If user is a campaigner with roles, show only campaigners with overlapping roles
-                          if (isCampaigner && currentUserRole && currentUserRole.length > 0 && campaigner.role) {
-                            return currentUserRole.some(userRole => campaigner.role?.includes(userRole));
-                          }
-                          
-                          // Otherwise show all
-                          return true;
-                        })
-                        .map((campaigner) => (
-                          <SelectItem key={campaigner.id} value={campaigner.id}>
-                            {campaigner.full_name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              
-              {/* Client search filter */}
-              <div className="w-full md:w-40 lg:w-48 relative">
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <input
-                  type="text"
-                  placeholder="חיפוש לפי לקוח..."
-                  value={clientSearchQuery}
-                  onChange={(e) => setClientSearchQuery(e.target.value)}
-                  className="w-full h-10 pr-9 pl-3 rounded-md border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  dir="rtl"
-                />
-              </div>
-              
-              {/* Sort by dropdown */}
-              <div className="w-full md:w-40 lg:w-48">
-                <Select value={sortBy} onValueChange={(value: "priority" | "due_date" | "status") => setSortBy(value)}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="מיין לפי" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-50">
-                    <SelectItem value="priority">מיין לפי דחיפות</SelectItem>
-                    <SelectItem value="due_date">מיין לפי תאריך יעד</SelectItem>
-                    <SelectItem value="status">מיין לפי סטטוס</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              
+          
+          <div className="flex items-center gap-3">
+            {/* View mode toggle */}
+            <div className="flex gap-1 border rounded-md p-1">
+              <Button
+                variant={viewMode === "kanban" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("kanban")}
+                title="תצוגת לוח"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "table" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("table")}
+                title="תצוגת טבלה"
+              >
+                <TableIcon className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "calendar" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("calendar")}
+                title="יומן"
+              >
+                <CalendarIcon className="h-4 w-4" />
+              </Button>
             </div>
+            <AddTaskForm />
+          </div>
+        </div>
+
+        {/* Header Row 2: Filters */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Hide completed toggle */}
+          <div className="flex items-center gap-2" dir="ltr">
+            <Label htmlFor="hide-completed" className="cursor-pointer whitespace-nowrap text-sm">
+              הסתר הושלמו
+            </Label>
+            <Switch
+              id="hide-completed"
+              checked={hideCompleted}
+              onCheckedChange={setHideCompleted}
+            />
+          </div>
+          
+          {/* Hide campaigner filter for pure campaigners */}
+          {!(isCampaigner && !isTeamManager && !isOwner) && (
+            <div className="w-40">
+              <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
+                <SelectTrigger className="w-full h-9">
+                  <SelectValue placeholder="כל הקמפיינרים" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="all">כל הקמפיינרים</SelectItem>
+                  {campaigners
+                    ?.filter((campaigner) => {
+                      if (selectedRole !== "all" && campaigner.role) {
+                        if (!campaigner.role.includes(selectedRole)) {
+                          return false;
+                        }
+                      }
+                      if (isCampaigner && currentUserRole && currentUserRole.length > 0 && campaigner.role) {
+                        return currentUserRole.some(userRole => campaigner.role?.includes(userRole));
+                      }
+                      return true;
+                    })
+                    .map((campaigner) => (
+                      <SelectItem key={campaigner.id} value={campaigner.id}>
+                        {campaigner.full_name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          
+          {/* Client search filter */}
+          <div className="w-40 relative">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              placeholder="חיפוש לפי לקוח..."
+              value={clientSearchQuery}
+              onChange={(e) => setClientSearchQuery(e.target.value)}
+              className="w-full h-9 pr-9 pl-3 rounded-md border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              dir="rtl"
+            />
+          </div>
+          
+          {/* Sort by dropdown */}
+          <div className="w-40">
+            <Select value={sortBy} onValueChange={(value: "priority" | "due_date" | "status") => setSortBy(value)}>
+              <SelectTrigger className="w-full h-9">
+                <SelectValue placeholder="מיין לפי" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="priority">מיין לפי דחיפות</SelectItem>
+                <SelectItem value="due_date">מיין לפי תאריך יעד</SelectItem>
+                <SelectItem value="status">מיין לפי סטטוס</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
