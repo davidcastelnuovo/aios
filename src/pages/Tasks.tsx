@@ -722,7 +722,7 @@ export default function Tasks() {
     >
       <div className="space-y-4 md:space-y-6 p-6">
         {/* Header with tabs on right, filters on left */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           {/* Right side: Title and tabs */}
           <div className="flex flex-col gap-3">
             <h2 className="text-2xl md:text-3xl font-bold">משימות</h2>
@@ -736,8 +736,8 @@ export default function Tasks() {
           </div>
 
           {/* Left side: Filters and controls */}
-          <div className="flex flex-col md:flex-row md:items-center gap-4 md:mr-auto">
-            <div className="flex gap-3 flex-wrap md:flex-nowrap w-full md:w-auto items-stretch">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4 lg:mr-auto">
+            <div className="flex gap-3 flex-wrap lg:flex-nowrap w-full lg:w-auto items-stretch">
               {/* View mode toggle */}
               <div className="flex gap-1 border rounded-md p-1">
                 <Button
@@ -782,7 +782,7 @@ export default function Tasks() {
               
               {/* Hide campaigner filter for pure campaigners */}
               {!(isCampaigner && !isTeamManager && !isOwner) && (
-                <div className="w-full md:w-48">
+                <div className="w-full md:w-40 lg:w-48">
                   <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
                     <SelectTrigger className="w-full">
                       <SelectValue placeholder="כל הקמפיינרים" />
@@ -819,7 +819,7 @@ export default function Tasks() {
               )}
               
               {/* Client search filter */}
-              <div className="w-full md:w-48 relative">
+              <div className="w-full md:w-40 lg:w-48 relative">
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <input
                   type="text"
@@ -832,7 +832,7 @@ export default function Tasks() {
               </div>
               
               {/* Sort by dropdown */}
-              <div className="w-full md:w-48">
+              <div className="w-full md:w-40 lg:w-48">
                 <Select value={sortBy} onValueChange={(value: "priority" | "due_date" | "status") => setSortBy(value)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="מיין לפי" />
@@ -853,7 +853,7 @@ export default function Tasks() {
         {viewMode === "calendar" ? (
           <CalendarIframeSettings />
         ) : viewMode === "kanban" ? (
-          <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-3">
+          <div className="grid gap-4 md:gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
           <DroppableColumn status="open">
             <SortableContext items={tasksByStatus.open.map(t => t.id)} strategy={verticalListSortingStrategy}>
               <div className="flex items-center gap-2">
