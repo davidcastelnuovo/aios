@@ -77,12 +77,20 @@ serve(async (req: Request) => {
     // Step 1: Create the tenant with slug
     // Generate slug from tenant name
     const generateSlug = (name: string): string => {
-      return name
+      let slug = name
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
         .replace(/\s+/g, '-') // Replace spaces with hyphens
         .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
+        .replace(/^-+|-+$/g, '') // Remove leading/trailing hyphens
         .trim();
+      
+      // If slug is empty or just dashes, generate a random one
+      if (!slug || slug === '-' || slug.length < 2) {
+        slug = `org-${Date.now().toString(36)}`;
+      }
+      
+      return slug;
     };
     
     const baseSlug = generateSlug(payload.tenant_name);
