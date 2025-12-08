@@ -2,7 +2,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckSquare, Calendar as CalendarIcon, Building2, Users, Megaphone, AlertCircle, GripVertical, LayoutGrid, Table as TableIcon, MessageSquare, Search, Check, ChevronsUpDown } from "lucide-react";
+import { CheckSquare, Calendar as CalendarIcon, Building2, Users, Megaphone, AlertCircle, GripVertical, LayoutGrid, Table as TableIcon, MessageSquare, Search, Check, ChevronsUpDown, CalendarDays } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, isBefore, isToday } from "date-fns";
+import { he } from "date-fns/locale";
+import { DateRange } from "react-day-picker";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import EditTaskDialog from "@/components/forms/EditTaskDialog";
 import { useAgency } from "@/contexts/AgencyContext";
@@ -129,6 +133,8 @@ export default function Tasks() {
   const [viewMode, setViewMode] = useState<"kanban" | "table" | "calendar">("kanban");
   const [hideCompleted, setHideCompleted] = useState(false);
   const [sortBy, setSortBy] = useState<"priority" | "due_date" | "status">("priority");
+  const [dateFilter, setDateFilter] = useState<string>("all");
+  const [customDateRange, setCustomDateRange] = useState<DateRange | undefined>(undefined);
   const { selectedAgency, agencies } = useAgency();
   const { userAgencyIds } = useUserAgencies();
   const { campaignerId, isCampaigner, isTeamManager, isOwner, isSeo } = useUserRole();
@@ -419,6 +425,44 @@ export default function Tasks() {
   // Apply hide completed filter
   if (hideCompleted) {
     filteredTasks = filteredTasks.filter(t => t.status !== "done");
+  }
+
+  // Apply date filter
+  if (dateFilter !== "all") {
+    const today = startOfDay(new Date());
+    
+    filteredTasks = filteredTasks.filter(task => {
+      if (!task.due_date) return dateFilter === "no_date";
+      const dueDate = startOfDay(new Date(task.due_date));
+      
+      switch (dateFilter) {
+        case "today":
+          return isToday(dueDate);
+        case "week":
+          return isWithinInterval(dueDate, { 
+            start: startOfWeek(today, { weekStartsOn: 0 }), 
+            end: endOfWeek(today, { weekStartsOn: 0 }) 
+          });
+        case "month":
+          return isWithinInterval(dueDate, { 
+            start: startOfMonth(today), 
+            end: endOfMonth(today) 
+          });
+        case "overdue":
+          return isBefore(dueDate, today) && task.status !== "done";
+        case "custom":
+          if (customDateRange?.from) {
+            const from = startOfDay(customDateRange.from);
+            const to = customDateRange.to ? endOfDay(customDateRange.to) : endOfDay(customDateRange.from);
+            return isWithinInterval(dueDate, { start: from, end: to });
+          }
+          return true;
+        case "no_date":
+          return !task.due_date;
+        default:
+          return true;
+      }
+    });
   }
 
   // Sort tasks based on selected sort option
@@ -836,6 +880,57 @@ export default function Tasks() {
                 <SelectItem value="status">מיין לפי סטטוס</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          
+          {/* Date filter */}
+          <div className="flex items-center gap-2">
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="w-40 h-9">
+                <CalendarDays className="h-4 w-4 ml-2" />
+                <SelectValue placeholder="כל התאריכים" />
+              </SelectTrigger>
+              <SelectContent className="bg-background z-50">
+                <SelectItem value="all">כל התאריכים</SelectItem>
+                <SelectItem value="today">היום</SelectItem>
+                <SelectItem value="week">השבוע</SelectItem>
+                <SelectItem value="month">החודש</SelectItem>
+                <SelectItem value="overdue">באיחור</SelectItem>
+                <SelectItem value="no_date">ללא תאריך</SelectItem>
+                <SelectItem value="custom">טווח מותאם...</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            {dateFilter === "custom" && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9">
+                    <CalendarIcon className="h-4 w-4 ml-2" />
+                    {customDateRange?.from ? (
+                      customDateRange.to ? (
+                        <>
+                          {format(customDateRange.from, "dd/MM", { locale: he })} - {format(customDateRange.to, "dd/MM", { locale: he })}
+                        </>
+                      ) : (
+                        format(customDateRange.from, "dd/MM/yyyy", { locale: he })
+                      )
+                    ) : (
+                      "בחר טווח"
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-background z-50" align="start">
+                  <Calendar
+                    mode="range"
+                    selected={customDateRange}
+                    onSelect={setCustomDateRange}
+                    numberOfMonths={2}
+                    locale={he}
+                    className="pointer-events-auto"
+                    dir="rtl"
+                  />
+                </PopoverContent>
+              </Popover>
+            )}
           </div>
         </div>
 
