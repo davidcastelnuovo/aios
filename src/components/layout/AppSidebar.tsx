@@ -253,6 +253,7 @@ export function AppSidebar() {
       'menu-management': 'menu_management',
       'fields-management': 'fields_management',
       'lead-integrations': 'lead_integrations',
+      'integrations': 'lead_integrations',
       'manychat-settings': 'manychat_settings',
       'green-api-settings': 'green_api_settings',
       'chat-integrations': 'chat_integrations',

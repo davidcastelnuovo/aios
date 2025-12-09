@@ -39,7 +39,7 @@ export const SETTINGS_MODULES: ModuleConfig[] = [
   { id: "manychat_settings", label: "הגדרות ManyChat", description: "אינטגרציה עם ManyChat", category: "settings" },
   { id: "green_api_settings", label: "הגדרות Green API", description: "אינטגרציה עם Green API", category: "settings" },
   { id: "chat_integrations", label: "אינטגרציות צ'אט", description: "ניהול אינטגרציות צ'אט", category: "settings" },
-  { id: "lead_integrations", label: "אינטגרציות לידים", description: "ניהול אינטגרציות לידים", category: "settings" },
+  { id: "lead_integrations", label: "אינטגרציות", description: "ניהול אינטגרציות לידים ופייסבוק", category: "settings" },
   { id: "accounting_integrations", label: "אינטגרציות הנה\"ח", description: "חיבור למערכות הנהלת חשבונות", category: "settings" },
 ];
 
