@@ -38,14 +38,11 @@ export default function FacebookCallback() {
       try {
         const redirectUri = `${window.location.origin}/t/${currentTenant?.slug}/facebook-callback`;
 
-        const { data, error: fnError } = await supabase.functions.invoke('facebook-auth', {
+        const { data, error: fnError } = await supabase.functions.invoke('facebook-auth?action=callback', {
           body: {
             code,
             state,
             redirect_uri: redirectUri,
-          },
-          headers: {
-            'Content-Type': 'application/json',
           },
         });
 
