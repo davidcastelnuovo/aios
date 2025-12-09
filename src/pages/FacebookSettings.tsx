@@ -86,15 +86,12 @@ export default function FacebookSettings() {
     mutationFn: async (integrationType: string) => {
       const redirectUri = `${window.location.origin}/t/${currentTenant?.slug}/facebook-callback`;
       
-      const { data, error } = await supabase.functions.invoke('facebook-auth', {
+      const { data, error } = await supabase.functions.invoke('facebook-auth?action=get_auth_url', {
         body: {
           tenant_id: currentTenant?.id,
           user_id: user?.id,
           integration_type: integrationType,
           redirect_uri: redirectUri,
-        },
-        headers: {
-          'Content-Type': 'application/json',
         },
       });
 
@@ -133,13 +130,10 @@ export default function FacebookSettings() {
   // Subscribe page mutation
   const subscribePageMutation = useMutation({
     mutationFn: async ({ integrationId, pageId }: { integrationId: string; pageId: string }) => {
-      const { data, error } = await supabase.functions.invoke('facebook-auth', {
+      const { data, error } = await supabase.functions.invoke('facebook-auth?action=subscribe_page', {
         body: {
           integration_id: integrationId,
           page_id: pageId,
-        },
-        headers: {
-          'Content-Type': 'application/json',
         },
       });
       if (error) throw error;
