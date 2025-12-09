@@ -13,17 +13,40 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const facebookAppId = Deno.env.get('FACEBOOK_APP_ID');
-  const facebookAppSecret = Deno.env.get('FACEBOOK_APP_SECRET');
-
-  if (!facebookAppId || !facebookAppSecret) {
-    return new Response(
-      JSON.stringify({ error: 'Facebook App credentials not configured' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  // Helper function to get Facebook credentials - first from DB, then from env
+  async function getFacebookCredentials(tenantId?: string): Promise<{ appId: string; appSecret: string } | null> {
+    // Try to get from tenant_settings first
+    if (tenantId) {
+      const { data } = await supabase
+        .from('tenant_settings')
+        .select('setting_value')
+        .eq('tenant_id', tenantId)
+        .eq('setting_key', 'facebook_app_credentials')
+        .maybeSingle();
+      
+      if (data?.setting_value) {
+        const creds = data.setting_value as { app_id?: string; app_secret?: string };
+        if (creds.app_id && creds.app_secret) {
+          console.log('Using Facebook credentials from tenant_settings');
+          return { appId: creds.app_id, appSecret: creds.app_secret };
+        }
+      }
+    }
+    
+    // Fallback to environment variables
+    const envAppId = Deno.env.get('FACEBOOK_APP_ID');
+    const envAppSecret = Deno.env.get('FACEBOOK_APP_SECRET');
+    
+    if (envAppId && envAppSecret) {
+      console.log('Using Facebook credentials from environment variables');
+      return { appId: envAppId, appSecret: envAppSecret };
+    }
+    
+    return null;
+  }
 
   try {
     const url = new URL(req.url);
@@ -32,6 +55,14 @@ serve(async (req) => {
     // Generate OAuth URL
     if (action === 'get_auth_url') {
       const { tenant_id, integration_type, redirect_uri, user_id } = await req.json();
+      
+      const credentials = await getFacebookCredentials(tenant_id);
+      if (!credentials) {
+        return new Response(
+          JSON.stringify({ error: 'Facebook App credentials not configured. Please add App ID and App Secret in Facebook Settings.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
       if (!tenant_id || !redirect_uri) {
         return new Response(
@@ -67,7 +98,7 @@ serve(async (req) => {
         });
 
       const authUrl = new URL('https://www.facebook.com/v21.0/dialog/oauth');
-      authUrl.searchParams.set('client_id', facebookAppId);
+      authUrl.searchParams.set('client_id', credentials.appId);
       authUrl.searchParams.set('redirect_uri', redirect_uri);
       authUrl.searchParams.set('scope', scopes);
       authUrl.searchParams.set('state', `${tenant_id}:${state}`);
@@ -117,11 +148,20 @@ serve(async (req) => {
         .eq('tenant_id', tenantId)
         .eq('setting_key', `facebook_oauth_state_${stateToken}`);
 
+      // Get credentials for this tenant
+      const credentials = await getFacebookCredentials(tenantId);
+      if (!credentials) {
+        return new Response(
+          JSON.stringify({ error: 'Facebook App credentials not configured' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       // Exchange code for access token
       const tokenUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token');
-      tokenUrl.searchParams.set('client_id', facebookAppId);
+      tokenUrl.searchParams.set('client_id', credentials.appId);
       tokenUrl.searchParams.set('redirect_uri', redirect_uri || storedRedirectUri);
-      tokenUrl.searchParams.set('client_secret', facebookAppSecret);
+      tokenUrl.searchParams.set('client_secret', credentials.appSecret);
       tokenUrl.searchParams.set('code', code);
 
       const tokenResponse = await fetch(tokenUrl.toString());
@@ -140,8 +180,8 @@ serve(async (req) => {
       // Get long-lived token
       const longLivedUrl = new URL('https://graph.facebook.com/v21.0/oauth/access_token');
       longLivedUrl.searchParams.set('grant_type', 'fb_exchange_token');
-      longLivedUrl.searchParams.set('client_id', facebookAppId);
-      longLivedUrl.searchParams.set('client_secret', facebookAppSecret);
+      longLivedUrl.searchParams.set('client_id', credentials.appId);
+      longLivedUrl.searchParams.set('client_secret', credentials.appSecret);
       longLivedUrl.searchParams.set('fb_exchange_token', access_token);
 
       const longLivedResponse = await fetch(longLivedUrl.toString());
