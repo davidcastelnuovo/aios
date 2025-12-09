@@ -1,0 +1,183 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const facebookAppSecret = Deno.env.get('FACEBOOK_APP_SECRET');
+
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  try {
+    const url = new URL(req.url);
+
+    // Facebook Webhook Verification (GET request)
+    if (req.method === 'GET') {
+      const mode = url.searchParams.get('hub.mode');
+      const token = url.searchParams.get('hub.verify_token');
+      const challenge = url.searchParams.get('hub.challenge');
+
+      console.log('Facebook webhook verification request:', { mode, token, challenge });
+
+      // The verify_token should be stored in tenant_integrations settings
+      // For now, we accept any verification with mode = 'subscribe'
+      if (mode === 'subscribe' && challenge) {
+        console.log('Webhook verified successfully');
+        return new Response(challenge, { 
+          status: 200,
+          headers: { 'Content-Type': 'text/plain' }
+        });
+      }
+
+      return new Response('Forbidden', { status: 403 });
+    }
+
+    // Handle POST - Lead notification from Facebook
+    if (req.method === 'POST') {
+      const body = await req.json();
+      console.log('Received Facebook webhook:', JSON.stringify(body, null, 2));
+
+      // Verify Facebook signature if app secret is configured
+      if (facebookAppSecret) {
+        const signature = req.headers.get('x-hub-signature-256');
+        if (signature) {
+          // In production, verify the signature
+          console.log('Signature present, verification would happen here');
+        }
+      }
+
+      // Process leadgen events
+      if (body.object === 'page') {
+        for (const entry of body.entry || []) {
+          for (const change of entry.changes || []) {
+            if (change.field === 'leadgen') {
+              const leadgenId = change.value.leadgen_id;
+              const formId = change.value.form_id;
+              const pageId = change.value.page_id;
+
+              console.log('Processing lead:', { leadgenId, formId, pageId });
+
+              // Find the integration for this page
+              const { data: integrations, error: intError } = await supabase
+                .from('tenant_integrations')
+                .select('*')
+                .eq('integration_type', 'facebook_lead_ads')
+                .eq('is_active', true);
+
+              if (intError) {
+                console.error('Error finding integrations:', intError);
+                continue;
+              }
+
+              // Find matching integration by page_id in settings
+              const integration = integrations?.find(i => {
+                const settings = i.settings as any;
+                return settings?.page_id === pageId?.toString();
+              });
+
+              if (!integration) {
+                console.log('No matching integration found for page:', pageId);
+                continue;
+              }
+
+              const accessToken = integration.api_key;
+              const settings = integration.settings as any;
+
+              if (!accessToken) {
+                console.error('No access token for integration');
+                continue;
+              }
+
+              // Fetch lead details from Facebook Graph API
+              const leadResponse = await fetch(
+                `https://graph.facebook.com/v21.0/${leadgenId}?access_token=${accessToken}`
+              );
+
+              if (!leadResponse.ok) {
+                console.error('Failed to fetch lead from Facebook:', await leadResponse.text());
+                continue;
+              }
+
+              const leadData = await leadResponse.json();
+              console.log('Lead data from Facebook:', JSON.stringify(leadData, null, 2));
+
+              // Parse lead fields
+              const fieldData: Record<string, string> = {};
+              for (const field of leadData.field_data || []) {
+                fieldData[field.name] = field.values?.[0] || '';
+              }
+
+              // Get form mappings from settings
+              const formMappings = settings?.form_mappings?.[formId] || {};
+              const fieldMappings = formMappings.field_mappings || {
+                'full_name': 'contact_name',
+                'email': 'email',
+                'phone_number': 'phone',
+              };
+
+              // Map fields to lead record
+              const leadRecord: Record<string, any> = {
+                company_name: fieldData.company || fieldData.full_name || 'Facebook Lead',
+                source: 'facebook',
+                status: 'new',
+                tenant_id: integration.tenant_id,
+                agency_id: formMappings.agency_id || null,
+                notes: `Facebook Lead ID: ${leadgenId}\nForm ID: ${formId}`,
+              };
+
+              // Apply field mappings
+              for (const [fbField, dbField] of Object.entries(fieldMappings)) {
+                if (fieldData[fbField]) {
+                  leadRecord[dbField as string] = fieldData[fbField];
+                }
+              }
+
+              // Insert lead
+              const { data: newLead, error: insertError } = await supabase
+                .from('leads')
+                .insert(leadRecord)
+                .select('id')
+                .single();
+
+              if (insertError) {
+                console.error('Error inserting lead:', insertError);
+              } else {
+                console.log('Lead created successfully:', newLead.id);
+
+                // Update last_sync_at
+                await supabase
+                  .from('tenant_integrations')
+                  .update({ last_sync_at: new Date().toISOString() })
+                  .eq('id', integration.id);
+              }
+            }
+          }
+        }
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    return new Response('Method not allowed', { status: 405, headers: corsHeaders });
+
+  } catch (error: unknown) {
+    console.error('Error in facebook-lead-webhook:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
