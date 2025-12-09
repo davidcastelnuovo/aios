@@ -27,6 +27,63 @@ export default function FacebookSettings() {
   const [selectedPage, setSelectedPage] = useState<string>("");
   const [pixelId, setPixelId] = useState<string>("");
   const [testEventCode, setTestEventCode] = useState<string>("");
+  const [appId, setAppId] = useState<string>("");
+  const [appSecret, setAppSecret] = useState<string>("");
+
+  // Fetch Facebook App credentials from tenant_settings
+  const { data: appCredentials, isLoading: loadingCredentials } = useQuery({
+    queryKey: ['facebook-app-credentials', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant?.id) return null;
+      const { data, error } = await supabase
+        .from('tenant_settings')
+        .select('setting_value')
+        .eq('tenant_id', currentTenant.id)
+        .eq('setting_key', 'facebook_app_credentials')
+        .maybeSingle();
+      if (error) throw error;
+      if (data?.setting_value) {
+        const creds = data.setting_value as { app_id?: string; app_secret?: string };
+        setAppId(creds.app_id || '');
+        setAppSecret(creds.app_secret || '');
+        return creds;
+      }
+      return null;
+    },
+    enabled: !!currentTenant?.id,
+  });
+
+  // Save Facebook App credentials mutation
+  const saveAppCredentialsMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentTenant?.id) throw new Error('No tenant');
+      if (!appId.trim() || !appSecret.trim()) throw new Error('App ID and App Secret are required');
+
+      // Upsert the credentials
+      const { error } = await supabase
+        .from('tenant_settings')
+        .upsert({
+          tenant_id: currentTenant.id,
+          setting_key: 'facebook_app_credentials',
+          setting_value: {
+            app_id: appId.trim(),
+            app_secret: appSecret.trim(),
+          },
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'tenant_id,setting_key',
+        });
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('הגדרות Facebook App נשמרו בהצלחה');
+      queryClient.invalidateQueries({ queryKey: ['facebook-app-credentials'] });
+    },
+    onError: (error) => {
+      toast.error('שגיאה בשמירת ההגדרות: ' + (error as Error).message);
+    },
+  });
 
   const projectUrl = import.meta.env.VITE_SUPABASE_URL || '';
   const webhookUrl = `${projectUrl}/functions/v1/facebook-lead-webhook`;
@@ -220,6 +277,54 @@ export default function FacebookSettings() {
           </p>
         </div>
       </div>
+
+      {/* Facebook App Credentials Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Facebook className="h-5 w-5 text-[#1877F2]" />
+            הגדרות Facebook App
+          </CardTitle>
+          <CardDescription>
+            הזן את פרטי ה-Facebook App שלך (מ-Meta for Developers)
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="app-id">App ID</Label>
+            <Input
+              id="app-id"
+              value={appId}
+              onChange={(e) => setAppId(e.target.value)}
+              placeholder="לדוגמה: 123456789012345"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="app-secret">App Secret</Label>
+            <Input
+              id="app-secret"
+              type="password"
+              value={appSecret}
+              onChange={(e) => setAppSecret(e.target.value)}
+              placeholder="••••••••••••••••"
+            />
+          </div>
+          <Button
+            onClick={() => saveAppCredentialsMutation.mutate()}
+            disabled={saveAppCredentialsMutation.isPending || !appId.trim() || !appSecret.trim()}
+          >
+            {saveAppCredentialsMutation.isPending ? 'שומר...' : 'שמור הגדרות'}
+          </Button>
+          {appCredentials && (
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>
+                הגדרות App נשמרו. App ID: {appCredentials.app_id?.slice(0, 6)}...
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="lead-ads" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
