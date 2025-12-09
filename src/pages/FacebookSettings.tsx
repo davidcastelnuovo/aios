@@ -205,10 +205,10 @@ export default function FacebookSettings() {
   });
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-6 space-y-6" dir="rtl">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="icon" onClick={() => navigate(buildPath('/lead-integrations'))}>
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="h-5 w-5 rotate-180" />
         </Button>
         <div>
           <h1 className="text-3xl font-bold flex items-center gap-3">
@@ -240,13 +240,13 @@ export default function FacebookSettings() {
               <CardTitle className="flex items-center justify-between">
                 <span>Facebook Lead Ads</span>
                 {leadAdsIntegration?.is_active ? (
-                  <Badge variant="default" className="bg-green-500">
-                    <CheckCircle2 className="h-3 w-3 ml-1" />
+                  <Badge variant="default" className="bg-green-500 flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" />
                     מחובר
                   </Badge>
                 ) : (
-                  <Badge variant="secondary">
-                    <AlertCircle className="h-3 w-3 ml-1" />
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
                     לא מחובר
                   </Badge>
                 )}
@@ -268,9 +268,9 @@ export default function FacebookSettings() {
                   <Button
                     onClick={() => connectMutation.mutate('facebook_lead_ads')}
                     disabled={connectMutation.isPending}
-                    className="bg-[#1877F2] hover:bg-[#166FE5]"
+                    className="bg-[#1877F2] hover:bg-[#166FE5] gap-2"
                   >
-                    <Facebook className="h-4 w-4 ml-2" />
+                    <Facebook className="h-4 w-4" />
                     {connectMutation.isPending ? 'מתחבר...' : 'התחבר עם Facebook'}
                   </Button>
                 </div>
@@ -317,8 +317,9 @@ export default function FacebookSettings() {
                             }
                           }}
                           disabled={!selectedPage || subscribePageMutation.isPending}
+                          className="gap-2"
                         >
-                          <RefreshCw className={`h-4 w-4 ml-2 ${subscribePageMutation.isPending ? 'animate-spin' : ''}`} />
+                          <RefreshCw className={`h-4 w-4 ${subscribePageMutation.isPending ? 'animate-spin' : ''}`} />
                           עדכן
                         </Button>
                       </div>
@@ -341,8 +342,9 @@ export default function FacebookSettings() {
                       variant="destructive"
                       onClick={() => leadAdsIntegration?.id && disconnectMutation.mutate(leadAdsIntegration.id)}
                       disabled={disconnectMutation.isPending}
+                      className="gap-2"
                     >
-                      <Unlink className="h-4 w-4 ml-2" />
+                      <Unlink className="h-4 w-4" />
                       נתק חיבור
                     </Button>
                   </div>
@@ -357,7 +359,7 @@ export default function FacebookSettings() {
               <CardTitle>הגדרת Facebook App</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
-              <ol className="list-decimal list-inside space-y-2">
+              <ol className="list-decimal space-y-2 pr-5">
                 <li>עבור ל-<a href="https://developers.facebook.com" target="_blank" rel="noopener" className="text-primary underline">Meta for Developers</a></li>
                 <li>צור App חדש או בחר App קיים</li>
                 <li>הוסף את המוצר "Webhooks"</li>
@@ -377,13 +379,13 @@ export default function FacebookSettings() {
               <CardTitle className="flex items-center justify-between">
                 <span>Facebook Conversions API</span>
                 {capiIntegration?.is_active && (capiIntegration.settings as any)?.pixel_id ? (
-                  <Badge variant="default" className="bg-green-500">
-                    <CheckCircle2 className="h-3 w-3 ml-1" />
+                  <Badge variant="default" className="bg-green-500 flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" />
                     פעיל
                   </Badge>
                 ) : (
-                  <Badge variant="secondary">
-                    <AlertCircle className="h-3 w-3 ml-1" />
+                  <Badge variant="secondary" className="flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
                     לא מוגדר
                   </Badge>
                 )}
