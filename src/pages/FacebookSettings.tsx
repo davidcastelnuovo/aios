@@ -29,6 +29,7 @@ export default function FacebookSettings() {
   const [testEventCode, setTestEventCode] = useState<string>("");
   const [appId, setAppId] = useState<string>("");
   const [appSecret, setAppSecret] = useState<string>("");
+  const [manualAccessToken, setManualAccessToken] = useState<string>("");
 
   // Fetch Facebook App credentials from tenant_settings
   const { data: appCredentials, isLoading: loadingCredentials } = useQuery({
@@ -69,6 +70,7 @@ export default function FacebookSettings() {
             app_id: appId.trim(),
             app_secret: appSecret.trim(),
           },
+          created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'tenant_id,setting_key',
@@ -82,6 +84,37 @@ export default function FacebookSettings() {
     },
     onError: (error) => {
       toast.error('שגיאה בשמירת ההגדרות: ' + (error as Error).message);
+    },
+  });
+
+  // Save manual Access Token mutation
+  const saveAccessTokenMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentTenant?.id) throw new Error('No tenant');
+      if (!manualAccessToken.trim()) throw new Error('Access Token is required');
+
+      // Upsert to tenant_integrations
+      const { error } = await supabase
+        .from('tenant_integrations')
+        .upsert({
+          tenant_id: currentTenant.id,
+          integration_type: 'facebook_lead_ads',
+          api_key: manualAccessToken.trim(),
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'tenant_id,integration_type',
+        });
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Access Token נשמר בהצלחה - האינטגרציה פעילה!');
+      queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
+      setManualAccessToken('');
+    },
+    onError: (error) => {
+      toast.error('שגיאה בשמירת ה-Token: ' + (error as Error).message);
     },
   });
 
@@ -323,6 +356,41 @@ export default function FacebookSettings() {
               </AlertDescription>
             </Alert>
           )}
+          
+          {/* Manual Access Token Section */}
+          <div className="border-t pt-4 mt-4 space-y-4">
+            <div>
+              <Label className="text-base font-medium">הזנה ידנית של Access Token (אופציונלי)</Label>
+              <p className="text-sm text-muted-foreground mt-1">
+                אם יש לך Access Token מ-Graph API Explorer, הזן אותו כאן לחיבור מהיר
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="access-token">Access Token</Label>
+              <Input
+                id="access-token"
+                value={manualAccessToken}
+                onChange={(e) => setManualAccessToken(e.target.value)}
+                placeholder="EAAxxxxxxxx..."
+                className="font-mono text-sm"
+              />
+            </div>
+            <Button
+              onClick={() => saveAccessTokenMutation.mutate()}
+              disabled={saveAccessTokenMutation.isPending || !manualAccessToken.trim()}
+              variant="secondary"
+            >
+              {saveAccessTokenMutation.isPending ? 'שומר...' : 'שמור Access Token'}
+            </Button>
+            {leadAdsIntegration?.is_active && leadAdsIntegration?.api_key && (
+              <Alert className="bg-green-50 border-green-200">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">
+                  Access Token פעיל - האינטגרציה מחוברת!
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
         </CardContent>
       </Card>
 
