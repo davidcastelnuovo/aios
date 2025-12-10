@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { Facebook, Link, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { FacebookFormMappingSection } from "@/components/forms/FacebookFormMappingSection";
 
 export default function FacebookSettings() {
   const { tenant: currentTenant } = useCurrentTenant();
@@ -547,6 +548,16 @@ export default function FacebookSettings() {
               )}
             </CardContent>
           </Card>
+
+          {/* Form Mapping Section */}
+          {leadAdsIntegration?.is_active && (
+            <FacebookFormMappingSection
+              tenantId={currentTenant?.id || ''}
+              integrationId={leadAdsIntegration?.id || null}
+              accessToken={leadAdsIntegration?.api_key || null}
+              agencies={agencies || []}
+            />
+          )}
 
           {/* Lead Ads Instructions */}
           <Card>
