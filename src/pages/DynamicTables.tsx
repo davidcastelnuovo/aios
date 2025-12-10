@@ -455,16 +455,17 @@ export default function DynamicTables() {
             <div className="space-y-2">
               <Label>שיוך לסוכנות (אופציונלי)</Label>
               <div className="flex gap-2">
-                <Select value={editAgencyId} onValueChange={(val) => {
-                  setEditAgencyId(val);
-                  if (val !== editAgencyId) setEditClientId("");
+              <Select value={editAgencyId || "__none__"} onValueChange={(val) => {
+                  const newVal = val === "__none__" ? "" : val;
+                  setEditAgencyId(newVal);
+                  if (newVal !== editAgencyId) setEditClientId("");
                 }}>
                   <SelectTrigger className="flex-1">
                     <SelectValue placeholder="ללא שיוך - כל הסוכנויות" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">ללא שיוך - כל הסוכנויות</SelectItem>
-                    {agencies.map((agency) => (
+                    <SelectItem value="__none__">ללא שיוך - כל הסוכנויות</SelectItem>
+                    {agencies.filter(a => a.id).map((agency) => (
                       <SelectItem key={agency.id} value={agency.id}>
                         {agency.name}
                       </SelectItem>
@@ -489,13 +490,13 @@ export default function DynamicTables() {
               <div className="space-y-2">
                 <Label>שיוך ללקוח (אופציונלי)</Label>
                 <div className="flex gap-2">
-                  <Select value={editClientId} onValueChange={setEditClientId}>
+                  <Select value={editClientId || "__none__"} onValueChange={(val) => setEditClientId(val === "__none__" ? "" : val)}>
                     <SelectTrigger className="flex-1">
                       <SelectValue placeholder="ללא שיוך - כל הלקוחות" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">ללא שיוך - כל הלקוחות</SelectItem>
-                      {editFilteredClients.map((client) => (
+                      <SelectItem value="__none__">ללא שיוך - כל הלקוחות</SelectItem>
+                      {editFilteredClients.filter(c => c.id).map((client) => (
                         <SelectItem key={client.id} value={client.id}>
                           {client.name}
                         </SelectItem>
