@@ -61,19 +61,26 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   const [selectedAgency, setSelectedAgency] = useState<string>("");
 
   // Fetch pages
-  const { data: pagesData, isLoading: loadingPages, refetch: refetchPages } = useQuery({
+  const { data: pagesData, isLoading: loadingPages, isFetching: fetchingPages, refetch: refetchPages } = useQuery({
     queryKey: ['facebook-pages', tenantId, accessToken],
     queryFn: async () => {
       if (!accessToken) return { pages: [] };
+      
+      console.log('Fetching Facebook pages with token:', accessToken?.substring(0, 20) + '...');
       
       const { data, error } = await supabase.functions.invoke('get-facebook-forms', {
         body: { tenant_id: tenantId, access_token: accessToken },
       });
 
-      if (error) throw error;
+      console.log('Facebook pages response:', data);
+      if (error) {
+        console.error('Facebook pages error:', error);
+        throw error;
+      }
       return data;
     },
     enabled: !!accessToken,
+    staleTime: 0, // Always refetch when requested
   });
 
   // Fetch forms for selected page
@@ -223,10 +230,13 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
             <Button 
               variant="ghost" 
               size="sm" 
-              onClick={() => refetchPages()}
-              disabled={loadingPages}
+              onClick={() => {
+                console.log('Refresh pages clicked');
+                refetchPages();
+              }}
+              disabled={loadingPages || fetchingPages}
             >
-              <RefreshCw className={`h-4 w-4 ${loadingPages ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 ${(loadingPages || fetchingPages) ? 'animate-spin' : ''}`} />
             </Button>
           </div>
           <Select value={selectedPageId} onValueChange={(value) => {
