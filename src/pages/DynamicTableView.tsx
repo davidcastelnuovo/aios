@@ -543,32 +543,34 @@ export default function DynamicTableView() {
 
   return (
     <div className="container mx-auto py-8 px-4">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
+      <div className="flex flex-col gap-4 mb-6">
+        {/* Title Row */}
+        <div className="text-center md:text-right">
+          <div className="flex items-center justify-center md:justify-start gap-2">
+            <h1 className="text-2xl md:text-3xl font-bold">{table.name}</h1>
+            {table.integration_type === 'facebook_insights' && (
+              <Badge variant="secondary" className="gap-1">
+                <Facebook className="h-3 w-3 text-blue-600" />
+                Facebook
+              </Badge>
+            )}
+          </div>
+          {table.description && <p className="text-muted-foreground mt-1">{table.description}</p>}
+          {table.integration_type === 'facebook_insights' && table.integration_settings?.last_sync_at && (
+            <p className="text-xs text-muted-foreground">
+              עודכן לאחרונה: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
+            </p>
+          )}
+        </div>
+        
+        {/* Controls Row */}
+        <div className="flex flex-wrap items-center justify-center md:justify-between gap-2">
           <Button variant="ghost" size="sm" onClick={() => navigate(buildPath('/dynamic-tables'))}>
             <ArrowRight className="ml-2 h-4 w-4" />
             חזור
           </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold">{table.name}</h1>
-              {table.integration_type === 'facebook_insights' && (
-                <Badge variant="secondary" className="gap-1">
-                  <Facebook className="h-3 w-3 text-blue-600" />
-                  Facebook
-                </Badge>
-              )}
-            </div>
-            {table.description && <p className="text-muted-foreground mt-1">{table.description}</p>}
-            {table.integration_type === 'facebook_insights' && table.integration_settings?.last_sync_at && (
-              <p className="text-xs text-muted-foreground">
-                עודכן לאחרונה: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
-              </p>
-            )}
-          </div>
-        </div>
         
-        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
           {table.integration_type === 'facebook_insights' && (
             <>
               <Button 
@@ -724,6 +726,7 @@ export default function DynamicTableView() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
         </div>
       </div>
 
