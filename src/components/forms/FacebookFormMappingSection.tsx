@@ -71,6 +71,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
   const [selectedAgency, setSelectedAgency] = useState<string>("");
   const [pageTokens, setPageTokens] = useState<Record<string, string>>({});
+  const [pageSearchQuery, setPageSearchQuery] = useState<string>("");
 
   // Graph API Explorer URL with permissions
   const graphExplorerUrl = `https://developers.facebook.com/tools/explorer/?permissions=pages_show_list%2Cpages_manage_metadata%2Cpages_manage_ads%2Cleads_retrieval%2Cpages_read_engagement`;
@@ -343,22 +344,39 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
               </p>
             </div>
           ) : (
-            <Select value={selectedPageId} onValueChange={(value) => {
-              setSelectedPageId(value);
-              setSelectedFormId("");
-              setFieldMappings({});
-            }}>
-              <SelectTrigger>
-                <SelectValue placeholder={loadingPages ? "טוען עמודים..." : (pages.length === 0 ? "לא נמצאו עמודים - הזן ידנית" : "בחר עמוד")} />
-              </SelectTrigger>
-              <SelectContent>
-                {pages.map((page: any) => (
-                  <SelectItem key={page.id} value={page.id}>
-                    {page.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="space-y-2">
+              {/* Search input for pages */}
+              {pages.length > 10 && (
+                <Input
+                  placeholder="חפש עמוד לפי שם..."
+                  value={pageSearchQuery}
+                  onChange={(e) => setPageSearchQuery(e.target.value)}
+                  className="mb-2"
+                />
+              )}
+              
+              <Select value={selectedPageId} onValueChange={(value) => {
+                setSelectedPageId(value);
+                setSelectedFormId("");
+                setFieldMappings({});
+                setPageSearchQuery("");
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingPages ? "טוען עמודים..." : (pages.length === 0 ? "לא נמצאו עמודים - הזן ידנית" : `בחר עמוד (${pages.length} עמודים)`)} />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  {pages
+                    .filter((page: FacebookPage) => 
+                      pageSearchQuery === "" || page.name.toLowerCase().includes(pageSearchQuery.toLowerCase())
+                    )
+                    .map((page: FacebookPage) => (
+                      <SelectItem key={page.id} value={page.id}>
+                        {page.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
           )}
           
           {pages.length === 0 && !loadingPages && !showManualPageInput && (

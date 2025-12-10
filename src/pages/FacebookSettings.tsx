@@ -39,6 +39,7 @@ export default function FacebookSettings() {
   const [manualAccessToken, setManualAccessToken] = useState<string>("");
   const [loadedPages, setLoadedPages] = useState<FacebookPage[]>([]);
   const [isLoadingPages, setIsLoadingPages] = useState(false);
+  const [pageSearchQuery, setPageSearchQuery] = useState("");
 
   // Fetch Facebook App credentials from tenant_settings
   const { data: appCredentials, isLoading: loadingCredentials } = useQuery({
@@ -512,18 +513,42 @@ export default function FacebookSettings() {
                 </div>
                 
                 {loadedPages.length > 0 && (
-                  <div className="grid gap-2">
-                    {loadedPages.map((page) => (
-                      <div key={page.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <Facebook className="h-4 w-4 text-[#1877F2]" />
-                          <span className="font-medium">{page.name}</span>
-                        </div>
-                        <Badge variant="outline" className="font-mono text-xs">
-                          {page.id}
-                        </Badge>
-                      </div>
-                    ))}
+                  <div className="space-y-3">
+                    {/* Search Input */}
+                    <Input
+                      placeholder="חפש לפי שם עמוד..."
+                      value={pageSearchQuery}
+                      onChange={(e) => setPageSearchQuery(e.target.value)}
+                      className="max-w-sm"
+                    />
+                    
+                    {/* Pages Count */}
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      <span>נמצאו {loadedPages.length} עמודים</span>
+                      {pageSearchQuery && (
+                        <span>
+                          (מציג {loadedPages.filter(p => p.name.toLowerCase().includes(pageSearchQuery.toLowerCase())).length})
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Pages List */}
+                    <div className="grid gap-2 max-h-[300px] overflow-y-auto">
+                      {loadedPages
+                        .filter(page => page.name.toLowerCase().includes(pageSearchQuery.toLowerCase()))
+                        .map((page) => (
+                          <div key={page.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <Facebook className="h-4 w-4 text-[#1877F2]" />
+                              <span className="font-medium">{page.name}</span>
+                            </div>
+                            <Badge variant="outline" className="font-mono text-xs">
+                              {page.id}
+                            </Badge>
+                          </div>
+                        ))}
+                    </div>
                   </div>
                 )}
                 
