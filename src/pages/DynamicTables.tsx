@@ -3,7 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook, Building2, User, X } from "lucide-react";
+import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook, Building2, User, X, Check, ChevronsUpDown } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -78,6 +81,7 @@ export default function DynamicTables() {
   const [editName, setEditName] = useState("");
   const [editAgencyId, setEditAgencyId] = useState<string>("");
   const [editClientId, setEditClientId] = useState<string>("");
+  const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['ללא קבוצה', 'Facebook Insights']));
 
   // Fetch agencies and clients for displaying names
@@ -490,19 +494,64 @@ export default function DynamicTables() {
               <div className="space-y-2">
                 <Label>שיוך ללקוח (אופציונלי)</Label>
                 <div className="flex gap-2">
-                  <Select value={editClientId || "__none__"} onValueChange={(val) => setEditClientId(val === "__none__" ? "" : val)}>
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="ללא שיוך - כל הלקוחות" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">ללא שיוך - כל הלקוחות</SelectItem>
-                      {editFilteredClients.filter(c => c.id).map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={clientPopoverOpen}
+                        className="flex-1 justify-between"
+                      >
+                        {editClientId
+                          ? editFilteredClients.find((c) => c.id === editClientId)?.name
+                          : "ללא שיוך - כל הלקוחות"}
+                        <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="חפש לקוח..." className="h-9" />
+                        <CommandList>
+                          <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              value="__none__"
+                              onSelect={() => {
+                                setEditClientId("");
+                                setClientPopoverOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "ml-2 h-4 w-4",
+                                  !editClientId ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              ללא שיוך - כל הלקוחות
+                            </CommandItem>
+                            {editFilteredClients.filter(c => c.id).map((client) => (
+                              <CommandItem
+                                key={client.id}
+                                value={client.name}
+                                onSelect={() => {
+                                  setEditClientId(client.id);
+                                  setClientPopoverOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "ml-2 h-4 w-4",
+                                    editClientId === client.id ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {client.name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                   {editClientId && (
                     <Button 
                       variant="ghost" 
