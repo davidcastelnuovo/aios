@@ -4,9 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Save, RefreshCw, ListTree, AlertCircle } from "lucide-react";
+import { Loader2, Save, RefreshCw, ListTree, AlertCircle, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface FormField {
@@ -56,6 +57,8 @@ const DEFAULT_MAPPINGS: Record<string, string> = {
 export function FacebookFormMappingSection({ tenantId, integrationId, accessToken, agencies }: Props) {
   const queryClient = useQueryClient();
   const [selectedPageId, setSelectedPageId] = useState<string>("");
+  const [manualPageId, setManualPageId] = useState<string>("");
+  const [showManualPageInput, setShowManualPageInput] = useState<boolean>(false);
   const [selectedFormId, setSelectedFormId] = useState<string>("");
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
   const [selectedAgency, setSelectedAgency] = useState<string>("");
@@ -227,41 +230,85 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label>בחר עמוד פייסבוק</Label>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => {
-                console.log('Refresh pages clicked');
-                refetchPages();
-              }}
-              disabled={loadingPages || fetchingPages}
-            >
-              <RefreshCw className={`h-4 w-4 ${(loadingPages || fetchingPages) ? 'animate-spin' : ''}`} />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowManualPageInput(!showManualPageInput)}
+                title="הזן Page ID ידנית"
+              >
+                <Edit2 className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => {
+                  console.log('Refresh pages clicked');
+                  refetchPages();
+                }}
+                disabled={loadingPages || fetchingPages}
+              >
+                <RefreshCw className={`h-4 w-4 ${(loadingPages || fetchingPages) ? 'animate-spin' : ''}`} />
+              </Button>
+            </div>
           </div>
-          <Select value={selectedPageId} onValueChange={(value) => {
-            setSelectedPageId(value);
-            setSelectedFormId("");
-            setFieldMappings({});
-          }}>
-            <SelectTrigger>
-              <SelectValue placeholder={loadingPages ? "טוען עמודים..." : "בחר עמוד"} />
-            </SelectTrigger>
-            <SelectContent>
-              {pages.map((page: any) => (
-                <SelectItem key={page.id} value={page.id}>
-                  {page.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {pages.length === 0 && !loadingPages && (
-            <Alert variant="destructive" className="mt-2">
+          
+          {showManualPageInput ? (
+            <div className="flex gap-2">
+              <Input
+                placeholder="הזן Page ID ידנית (למשל: 123456789)"
+                value={manualPageId}
+                onChange={(e) => setManualPageId(e.target.value)}
+                className="flex-1"
+              />
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (manualPageId.trim()) {
+                    setSelectedPageId(manualPageId.trim());
+                    setSelectedFormId("");
+                    setFieldMappings({});
+                    setShowManualPageInput(false);
+                    toast.success('Page ID הוזן בהצלחה');
+                  }
+                }}
+                disabled={!manualPageId.trim()}
+              >
+                אשר
+              </Button>
+            </div>
+          ) : (
+            <Select value={selectedPageId} onValueChange={(value) => {
+              setSelectedPageId(value);
+              setSelectedFormId("");
+              setFieldMappings({});
+            }}>
+              <SelectTrigger>
+                <SelectValue placeholder={loadingPages ? "טוען עמודים..." : (pages.length === 0 ? "לא נמצאו עמודים - הזן ידנית" : "בחר עמוד")} />
+              </SelectTrigger>
+              <SelectContent>
+                {pages.map((page: any) => (
+                  <SelectItem key={page.id} value={page.id}>
+                    {page.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          
+          {pages.length === 0 && !loadingPages && !showManualPageInput && (
+            <Alert className="mt-2">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                לא נמצאו עמודים. וודא שה-Access Token כולל הרשאות: <strong>pages_show_list</strong>, <strong>pages_manage_metadata</strong> ו-<strong>leads_retrieval</strong>
+                לא נמצאו עמודים. לחץ על <Edit2 className="h-3 w-3 inline mx-1" /> כדי להזין Page ID ידנית, או וודא שה-Access Token כולל הרשאות: <strong>pages_show_list</strong>, <strong>pages_manage_metadata</strong> ו-<strong>leads_retrieval</strong>
               </AlertDescription>
             </Alert>
+          )}
+          
+          {selectedPageId && (
+            <p className="text-xs text-muted-foreground">
+              Page ID: {selectedPageId}
+            </p>
           )}
         </div>
 
