@@ -108,14 +108,15 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
 
   // Fetch forms for selected page
   const { data: formsData, isLoading: loadingForms, refetch: refetchForms } = useQuery({
-    queryKey: ['facebook-forms', selectedPageId, accessToken, pageTokens],
+    queryKey: ['facebook-forms', selectedPageId, accessToken, manualPageToken],
     queryFn: async () => {
       if (!accessToken || !selectedPageId) return { forms: [] };
       
-      // Use page-specific token if available, otherwise fall back to user token
-      const pageAccessToken = pageTokens[selectedPageId] || manualPageToken || accessToken;
+      // Use page-specific token if available, otherwise manual token, otherwise user token
+      const pageAccessToken = pageTokens[selectedPageId] || manualPageToken || null;
       
-      console.log('Fetching forms with page token:', pageAccessToken ? 'using page token' : 'using user token');
+      console.log('Fetching forms for page:', selectedPageId);
+      console.log('Using page token:', pageAccessToken ? 'yes (page-specific)' : 'no (will use user token)');
       
       const { data, error } = await supabase.functions.invoke('get-facebook-forms', {
         body: { 
