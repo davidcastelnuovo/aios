@@ -71,8 +71,10 @@ export function FacebookTableDialog({ open, onOpenChange }: FacebookTableDialogP
         .from('tenant_integrations')
         .select('id, is_active, api_key')
         .eq('tenant_id', tenantId)
-        .eq('integration_type', 'facebook')
-        .single();
+        .in('integration_type', ['facebook', 'facebook_lead_ads'])
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle();
       
       return data;
     },
