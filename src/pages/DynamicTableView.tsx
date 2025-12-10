@@ -766,7 +766,7 @@ export default function DynamicTableView() {
                   </thead>
                   <tbody>
                     {(() => {
-                      const currency = table.integration_settings?.currency === 'ILS' ? '₪' : '$';
+                      const currency = table.integration_settings?.currency === 'USD' ? '$' : '₪';
                       return Object.entries(campaignGroups).map(([campaignName, data]) => {
                         const costPerLead = data.leads > 0 ? data.spend / data.leads : 0;
                         return (
@@ -784,7 +784,7 @@ export default function DynamicTableView() {
                   </tbody>
                   <tfoot className="bg-primary/10 font-bold">
                     {(() => {
-                      const currency = table.integration_settings?.currency === 'ILS' ? '₪' : '$';
+                      const currency = table.integration_settings?.currency === 'USD' ? '$' : '₪';
                       return (
                         <tr>
                           <td className="p-2 text-right">סה״כ</td>
