@@ -564,19 +564,19 @@ export default function DynamicTableView() {
         </div>
         
         {/* Controls Row */}
-        <div className="flex flex-wrap items-center justify-center md:justify-between gap-2">
-          <Button variant="ghost" size="sm" onClick={() => navigate(buildPath('/dynamic-tables'))}>
+        <div className="flex flex-col md:flex-row items-center md:justify-between gap-3">
+          <Button variant="ghost" size="sm" onClick={() => navigate(buildPath('/dynamic-tables'))} className="w-full md:w-auto">
             <ArrowRight className="ml-2 h-4 w-4" />
             חזור
           </Button>
         
-          <div className="flex items-center gap-2">
           {table.integration_type === 'facebook_insights' && (
-            <>
+            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
               <Button 
                 variant="outline" 
                 onClick={() => syncFacebookMutation.mutate()}
                 disabled={syncFacebookMutation.isPending}
+                className="flex-1 md:flex-none"
               >
                 <RefreshCw className={`ml-2 h-4 w-4 ${syncFacebookMutation.isPending ? 'animate-spin' : ''}`} />
                 {syncFacebookMutation.isPending ? 'מסנכרן...' : 'סנכרן עכשיו'}
@@ -592,13 +592,13 @@ export default function DynamicTableView() {
               >
                 <Settings className="h-4 w-4" />
               </Button>
-            </>
+            </div>
           )}
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full md:w-auto justify-center">
             <Calendar className="h-4 w-4 text-muted-foreground" />
             <Select value={dateFilter} onValueChange={setDateFilter}>
-              <SelectTrigger className="w-[160px]">
+              <SelectTrigger className="w-full md:w-[160px]">
                 <SelectValue placeholder="סנן לפי תאריך" />
               </SelectTrigger>
               <SelectContent>
@@ -726,7 +726,6 @@ export default function DynamicTableView() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
         </div>
       </div>
 
