@@ -160,6 +160,7 @@ export function FacebookTableDialog({ open, onOpenChange }: FacebookTableDialogP
           integration_settings: {
             ad_account_id: selectedAdAccount,
             ad_account_name: selectedAccount?.name || '',
+            currency: selectedAccount?.currency || 'ILS',
             date_range: dateRange,
             sync_frequency: 'daily',
           },
