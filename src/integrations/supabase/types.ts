@@ -995,6 +995,8 @@ export type Database = {
           description: string | null
           icon: string | null
           id: string
+          integration_settings: Json | null
+          integration_type: string | null
           name: string
           slug: string
           tenant_id: string
@@ -1007,6 +1009,8 @@ export type Database = {
           description?: string | null
           icon?: string | null
           id?: string
+          integration_settings?: Json | null
+          integration_type?: string | null
           name: string
           slug: string
           tenant_id: string
@@ -1019,6 +1023,8 @@ export type Database = {
           description?: string | null
           icon?: string | null
           id?: string
+          integration_settings?: Json | null
+          integration_type?: string | null
           name?: string
           slug?: string
           tenant_id?: string
