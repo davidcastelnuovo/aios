@@ -30,21 +30,27 @@ serve(async (req) => {
 
     // If no page_id provided, first get the pages the user has access to
     if (!page_id) {
-      const pagesResponse = await fetch(
-        `https://graph.facebook.com/v21.0/me/accounts?access_token=${access_token}&fields=id,name,access_token`
-      );
+      const url = `https://graph.facebook.com/v21.0/me/accounts?access_token=${access_token}&fields=id,name,access_token`;
+      console.log('Fetching pages from URL (token hidden)');
+      
+      const pagesResponse = await fetch(url);
+      const pagesData = await pagesResponse.json();
+      
+      console.log('Facebook API response status:', pagesResponse.status);
+      console.log('Facebook API response:', JSON.stringify(pagesData));
 
-      if (!pagesResponse.ok) {
-        const errorData = await pagesResponse.json();
-        console.error('Error fetching pages:', errorData);
-        return new Response(JSON.stringify({ error: 'Failed to fetch pages', details: errorData }), {
+      if (!pagesResponse.ok || pagesData.error) {
+        console.error('Error fetching pages:', pagesData.error || pagesData);
+        return new Response(JSON.stringify({ 
+          error: 'Failed to fetch pages', 
+          details: pagesData.error || pagesData 
+        }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
-      const pagesData = await pagesResponse.json();
-      console.log('Pages found:', pagesData.data?.length);
+      console.log('Pages found:', pagesData.data?.length || 0);
 
       return new Response(JSON.stringify({ pages: pagesData.data || [] }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
