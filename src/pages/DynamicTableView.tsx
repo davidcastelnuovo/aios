@@ -73,6 +73,7 @@ export default function DynamicTableView() {
   const [editingCell, setEditingCell] = useState<{ recordId: string; fieldKey: string; initialValue: string } | null>(null);
   const [cellValues, setCellValues] = useState<Record<string, string>>({});
   const [dateFilter, setDateFilter] = useState<string>("all");
+  const [selectedSyncDateRange, setSelectedSyncDateRange] = useState<string>("last_30_days");
   const cellInputRef = useRef<HTMLInputElement>(null);
 
   const dateFilterOptions = [
@@ -84,6 +85,15 @@ export default function DynamicTableView() {
     { value: "last_14_days", label: "14 יום" },
     { value: "last_30_days", label: "30 יום" },
     { value: "this_month", label: "החודש" },
+  ];
+
+  const syncDateRangeOptions = [
+    { value: "last_7_days", label: "7 ימים אחרונים" },
+    { value: "last_14_days", label: "14 יום" },
+    { value: "last_30_days", label: "30 יום (ברירת מחדל)" },
+    { value: "last_90_days", label: "3 חודשים" },
+    { value: "last_180_days", label: "6 חודשים" },
+    { value: "last_365_days", label: "שנה" },
   ];
 
   const { data: tables, isLoading: tablesLoading } = useQuery({
@@ -414,6 +424,7 @@ export default function DynamicTableView() {
           integration_settings: {
             ...table.integration_settings,
             ad_account_id: adAccountId,
+            date_range: selectedSyncDateRange,
           }
         })
         .eq('id', table.id);
@@ -563,6 +574,7 @@ export default function DynamicTableView() {
                 size="icon"
                 onClick={() => {
                   setSelectedAdAccount(table.integration_settings?.ad_account_id || '');
+                  setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
                   setShowSettingsDialog(true);
                 }}
               >
@@ -659,6 +671,24 @@ export default function DynamicTableView() {
                       </Select>
                     </>
                   )}
+                </div>
+                <div>
+                  <Label>טווח סנכרון</Label>
+                  <Select 
+                    value={selectedSyncDateRange} 
+                    onValueChange={setSelectedSyncDateRange}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר טווח זמן" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {syncDateRangeOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <Button 
                   onClick={() => updateTableSettingsMutation.mutate(selectedAdAccount)}
