@@ -31,33 +31,47 @@ serve(async (req) => {
 
     // If no page_id provided, first get the pages the user has access to
     if (!page_id) {
-      const url = `https://graph.facebook.com/v21.0/me/accounts?access_token=${access_token}&fields=id,name,access_token`;
-      console.log('Fetching pages from URL (token hidden)');
+      const allPages: Array<{ id: string; name: string; access_token?: string }> = [];
+      let nextUrl = `https://graph.facebook.com/v21.0/me/accounts?access_token=${access_token}&fields=id,name,access_token&limit=100`;
       
-      const pagesResponse = await fetch(url);
-      const pagesData = await pagesResponse.json();
-      
-      console.log('Facebook API response status:', pagesResponse.status);
-      console.log('Facebook API response:', JSON.stringify(pagesData));
+      // Paginate through all pages
+      while (nextUrl) {
+        console.log('Fetching pages batch...');
+        const pagesResponse: Response = await fetch(nextUrl);
+        const pagesData: { data?: Array<{ id: string; name: string; access_token?: string }>; paging?: { next?: string }; error?: unknown } = await pagesResponse.json();
+        
+        console.log('Facebook API response status:', pagesResponse.status);
 
-      if (!pagesResponse.ok || pagesData.error) {
-        console.error('Error fetching pages:', pagesData.error || pagesData);
-        return new Response(JSON.stringify({ 
-          error: 'Failed to fetch pages', 
-          details: pagesData.error || pagesData 
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        if (!pagesResponse.ok || pagesData.error) {
+          console.error('Error fetching pages:', pagesData.error || pagesData);
+          return new Response(JSON.stringify({ 
+            error: 'Failed to fetch pages', 
+            details: pagesData.error || pagesData 
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Add pages from this batch
+        if (pagesData.data) {
+          allPages.push(...pagesData.data);
+        }
+        
+        // Check if there's a next page
+        nextUrl = pagesData.paging?.next || '';
+        console.log('Pages in batch:', pagesData.data?.length || 0, 'Total so far:', allPages.length, 'Has next:', !!nextUrl);
+        
+        if (!nextUrl) break;
       }
 
-      console.log('Pages found:', pagesData.data?.length || 0);
+      console.log('Total pages found:', allPages.length);
 
       // Return pages with their access tokens
-      const pages = (pagesData.data || []).map((page: any) => ({
+      const pages = allPages.map((page) => ({
         id: page.id,
         name: page.name,
-        access_token: page.access_token, // Include page access token
+        access_token: page.access_token,
       }));
 
       return new Response(JSON.stringify({ pages }), {
