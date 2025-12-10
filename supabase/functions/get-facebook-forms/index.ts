@@ -52,14 +52,27 @@ serve(async (req) => {
 
       console.log('Pages found:', pagesData.data?.length || 0);
 
-      return new Response(JSON.stringify({ pages: pagesData.data || [] }), {
+      // Return pages with their access tokens
+      const pages = (pagesData.data || []).map((page: any) => ({
+        id: page.id,
+        name: page.name,
+        access_token: page.access_token, // Include page access token
+      }));
+
+      return new Response(JSON.stringify({ pages }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Fetch lead forms for the specified page
+    // Get page_access_token from request body if provided
+    const body = await req.clone().json();
+    const page_access_token = body.page_access_token || access_token;
+
+    // Fetch lead forms for the specified page using page access token
+    console.log('Fetching forms for page:', page_id, 'with page token:', page_access_token ? 'provided' : 'using user token');
+    
     const formsResponse = await fetch(
-      `https://graph.facebook.com/v21.0/${page_id}/leadgen_forms?access_token=${access_token}&fields=id,name,status,questions`
+      `https://graph.facebook.com/v21.0/${page_id}/leadgen_forms?access_token=${page_access_token}&fields=id,name,status,questions`
     );
 
     if (!formsResponse.ok) {

@@ -54,14 +54,22 @@ const DEFAULT_MAPPINGS: Record<string, string> = {
   'company_name': 'company_name',
 };
 
+interface FacebookPage {
+  id: string;
+  name: string;
+  access_token?: string;
+}
+
 export function FacebookFormMappingSection({ tenantId, integrationId, accessToken, agencies }: Props) {
   const queryClient = useQueryClient();
   const [selectedPageId, setSelectedPageId] = useState<string>("");
   const [manualPageId, setManualPageId] = useState<string>("");
+  const [manualPageToken, setManualPageToken] = useState<string>("");
   const [showManualPageInput, setShowManualPageInput] = useState<boolean>(false);
   const [selectedFormId, setSelectedFormId] = useState<string>("");
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
   const [selectedAgency, setSelectedAgency] = useState<string>("");
+  const [pageTokens, setPageTokens] = useState<Record<string, string>>({});
 
   // Fetch pages
   const { data: pagesData, isLoading: loadingPages, isFetching: fetchingPages, refetch: refetchPages } = useQuery({
@@ -80,6 +88,18 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
         console.error('Facebook pages error:', error);
         throw error;
       }
+      
+      // Store page tokens
+      if (data?.pages) {
+        const tokens: Record<string, string> = {};
+        data.pages.forEach((page: FacebookPage) => {
+          if (page.access_token) {
+            tokens[page.id] = page.access_token;
+          }
+        });
+        setPageTokens(tokens);
+      }
+      
       return data;
     },
     enabled: !!accessToken,
@@ -88,12 +108,22 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
 
   // Fetch forms for selected page
   const { data: formsData, isLoading: loadingForms, refetch: refetchForms } = useQuery({
-    queryKey: ['facebook-forms', selectedPageId, accessToken],
+    queryKey: ['facebook-forms', selectedPageId, accessToken, pageTokens],
     queryFn: async () => {
       if (!accessToken || !selectedPageId) return { forms: [] };
       
+      // Use page-specific token if available, otherwise fall back to user token
+      const pageAccessToken = pageTokens[selectedPageId] || manualPageToken || accessToken;
+      
+      console.log('Fetching forms with page token:', pageAccessToken ? 'using page token' : 'using user token');
+      
       const { data, error } = await supabase.functions.invoke('get-facebook-forms', {
-        body: { tenant_id: tenantId, page_id: selectedPageId, access_token: accessToken },
+        body: { 
+          tenant_id: tenantId, 
+          page_id: selectedPageId, 
+          access_token: accessToken,
+          page_access_token: pageAccessToken,
+        },
       });
 
       if (error) throw error;
@@ -254,28 +284,48 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
           </div>
           
           {showManualPageInput ? (
-            <div className="flex gap-2">
+            <div className="space-y-2">
               <Input
-                placeholder="הזן Page ID ידנית (למשל: 123456789)"
+                placeholder="הזן Page ID (למשל: 123456789)"
                 value={manualPageId}
                 onChange={(e) => setManualPageId(e.target.value)}
-                className="flex-1"
               />
-              <Button
-                size="sm"
-                onClick={() => {
-                  if (manualPageId.trim()) {
-                    setSelectedPageId(manualPageId.trim());
-                    setSelectedFormId("");
-                    setFieldMappings({});
-                    setShowManualPageInput(false);
-                    toast.success('Page ID הוזן בהצלחה');
-                  }
-                }}
-                disabled={!manualPageId.trim()}
-              >
-                אשר
-              </Button>
+              <Input
+                placeholder="הזן Page Access Token (חובה להזנה ידנית)"
+                value={manualPageToken}
+                onChange={(e) => setManualPageToken(e.target.value)}
+                type="password"
+              />
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (manualPageId.trim() && manualPageToken.trim()) {
+                      setPageTokens(prev => ({ ...prev, [manualPageId.trim()]: manualPageToken.trim() }));
+                      setSelectedPageId(manualPageId.trim());
+                      setSelectedFormId("");
+                      setFieldMappings({});
+                      setShowManualPageInput(false);
+                      toast.success('Page ID הוזן בהצלחה');
+                    } else {
+                      toast.error('יש להזין גם Page ID וגם Page Access Token');
+                    }
+                  }}
+                  disabled={!manualPageId.trim() || !manualPageToken.trim()}
+                >
+                  אשר
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowManualPageInput(false)}
+                >
+                  ביטול
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                לקבלת Page Access Token: לך ל-Graph Explorer, בחר את העמוד הספציפי ב-"User or Page" ולחץ "Generate Access Token"
+              </p>
             </div>
           ) : (
             <Select value={selectedPageId} onValueChange={(value) => {
