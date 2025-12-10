@@ -46,6 +46,12 @@ function getDateRange(filter: string): { startDate: string | null; endDate: stri
       startDate = startOfMonth.toISOString().split('T')[0];
       endDate = today.toISOString().split('T')[0];
       break;
+    case 'last_month':
+      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      startDate = startOfLastMonth.toISOString().split('T')[0];
+      endDate = endOfLastMonth.toISOString().split('T')[0];
+      break;
     case 'last_90_days':
       startDate = new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       endDate = today.toISOString().split('T')[0];
