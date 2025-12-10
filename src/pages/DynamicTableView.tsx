@@ -733,8 +733,8 @@ export default function DynamicTableView() {
                           <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
                           <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
                           <td className="p-2 text-center text-green-600 font-medium">{data.leads.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center">₪{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          <td className="p-2 text-center text-blue-600 font-medium">₪{costPerLead.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                          <td className="p-2 text-center">${data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                          <td className="p-2 text-center text-blue-600 font-medium">${costPerLead.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
                         </tr>
                       );
                     })}
@@ -745,8 +745,8 @@ export default function DynamicTableView() {
                       <td className="p-2 text-center">{totals.impressions.toLocaleString('he-IL')}</td>
                       <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
                       <td className="p-2 text-center text-green-600">{totals.leads.toLocaleString('he-IL')}</td>
-                      <td className="p-2 text-center">₪{totals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                      <td className="p-2 text-center text-blue-600">₪{(totals.leads > 0 ? totals.spend / totals.leads : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                      <td className="p-2 text-center">${totals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                      <td className="p-2 text-center text-blue-600">${(totals.leads > 0 ? totals.spend / totals.leads : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
                     </tr>
                   </tfoot>
                 </table>
