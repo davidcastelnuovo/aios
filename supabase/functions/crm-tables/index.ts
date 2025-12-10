@@ -32,17 +32,22 @@ serve(async (req) => {
     }
 
     const url = new URL(req.url);
-    const pathParts = url.pathname.split('/').filter(Boolean);
-    const lastPart = pathParts[pathParts.length - 1];
-    const tableId = lastPart !== 'crm-tables' ? lastPart : null;
+    const agencyIdFilter = url.searchParams.get('agency_id');
 
     switch (req.method) {
       case 'GET': {
-        const { data: tables, error } = await supabase
+        let query = supabase
           .from('crm_tables')
           .select('*')
           .order('category', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: false });
+
+        // Filter by agency_id if provided
+        if (agencyIdFilter && agencyIdFilter !== 'all') {
+          query = query.or(`agency_id.eq.${agencyIdFilter},agency_id.is.null`);
+        }
+
+        const { data: tables, error } = await query;
 
         if (error) throw error;
 
@@ -55,7 +60,7 @@ serve(async (req) => {
 
       case 'POST': {
         const body = await req.json();
-        const { name, slug, description, icon, category, integration_type, integration_settings } = body;
+        const { name, slug, description, icon, category, integration_type, integration_settings, agency_id, client_id } = body;
 
         if (!name || !slug) {
           return new Response(JSON.stringify({ error: 'Name and slug are required' }), {
@@ -89,6 +94,8 @@ serve(async (req) => {
             category,
             integration_type: integration_type || null,
             integration_settings: integration_settings || {},
+            agency_id: agency_id || null,
+            client_id: client_id || null,
             created_by: user.id,
           })
           .select()
@@ -96,7 +103,7 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        console.log(`✅ Created table: ${name} (${table.id})${integration_type ? ` [${integration_type}]` : ''}`);
+        console.log(`✅ Created table: ${name} (${table.id})${integration_type ? ` [${integration_type}]` : ''} agency_id: ${agency_id || 'none'} client_id: ${client_id || 'none'}`);
 
         return new Response(JSON.stringify(table), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -105,7 +112,7 @@ serve(async (req) => {
 
       case 'PATCH': {
         const body = await req.json();
-        const { table_id, name, slug, description, icon, category } = body;
+        const { table_id, name, slug, description, icon, category, agency_id, client_id } = body;
 
         if (!table_id) {
           return new Response(JSON.stringify({ error: 'Table ID required' }), {
@@ -120,6 +127,8 @@ serve(async (req) => {
         if (description !== undefined) updateData.description = description;
         if (icon !== undefined) updateData.icon = icon;
         if (category !== undefined) updateData.category = category;
+        if (agency_id !== undefined) updateData.agency_id = agency_id || null;
+        if (client_id !== undefined) updateData.client_id = client_id || null;
 
         const { data: table, error } = await supabase
           .from('crm_tables')
