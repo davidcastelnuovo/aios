@@ -13,10 +13,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Facebook, Link, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft } from "lucide-react";
+import { Facebook, Link, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { FacebookFormMappingSection } from "@/components/forms/FacebookFormMappingSection";
+
+interface FacebookPage {
+  id: string;
+  name: string;
+  access_token?: string;
+}
 
 export default function FacebookSettings() {
   const { tenant: currentTenant } = useCurrentTenant();
@@ -31,6 +37,8 @@ export default function FacebookSettings() {
   const [appId, setAppId] = useState<string>("");
   const [appSecret, setAppSecret] = useState<string>("");
   const [manualAccessToken, setManualAccessToken] = useState<string>("");
+  const [loadedPages, setLoadedPages] = useState<FacebookPage[]>([]);
+  const [isLoadingPages, setIsLoadingPages] = useState(false);
 
   // Fetch Facebook App credentials from tenant_settings
   const { data: appCredentials, isLoading: loadingCredentials } = useQuery({
@@ -140,6 +148,51 @@ export default function FacebookSettings() {
       toast.error('שגיאה בשמירת ה-Token: ' + (error as Error).message);
     },
   });
+
+  // Load Facebook pages function
+  const loadFacebookPages = async (token: string) => {
+    setIsLoadingPages(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('get-facebook-forms', {
+        body: { tenant_id: currentTenant?.id, access_token: token },
+      });
+      
+      if (error) throw error;
+      
+      const pages = data?.pages || [];
+      setLoadedPages(pages);
+      
+      if (pages.length > 0) {
+        toast.success(`נמצאו ${pages.length} עמודים!`);
+        
+        // Save pages to integration settings
+        if (leadAdsIntegration?.id) {
+          const currentSettings = leadAdsIntegration.settings || {};
+          await supabase
+            .from('tenant_integrations')
+            .update({ 
+              settings: { ...currentSettings as any, pages },
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', leadAdsIntegration.id);
+          queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
+        }
+      } else {
+        toast.error('לא נמצאו עמודים - וודא שה-Token כולל את כל ההרשאות הנדרשות');
+      }
+      
+      return pages;
+    } catch (error) {
+      console.error('Error loading pages:', error);
+      toast.error('שגיאה בטעינת עמודים: ' + (error as Error).message);
+      return [];
+    } finally {
+      setIsLoadingPages(false);
+    }
+  };
+
+  // Graph API Explorer URL with permissions
+  const graphExplorerUrl = `https://developers.facebook.com/tools/explorer/?permissions=pages_show_list%2Cpages_manage_metadata%2Cpages_manage_ads%2Cleads_retrieval%2Cpages_read_engagement`;
 
   const projectUrl = import.meta.env.VITE_SUPABASE_URL || '';
   const webhookUrl = `${projectUrl}/functions/v1/facebook-lead-webhook`;
@@ -383,11 +436,35 @@ export default function FacebookSettings() {
           {/* Manual Access Token Section */}
           <div className="border-t pt-4 mt-4 space-y-4">
             <div>
-              <Label className="text-base font-medium">הזנה ידנית של Access Token (אופציונלי)</Label>
+              <Label className="text-base font-medium">הזנה ידנית של Access Token</Label>
               <p className="text-sm text-muted-foreground mt-1">
-                אם יש לך Access Token מ-Graph API Explorer, הזן אותו כאן לחיבור מהיר
+                קבל Access Token מ-Graph API Explorer עם כל ההרשאות הנדרשות
               </p>
             </div>
+            
+            {/* Graph API Explorer Link */}
+            <Alert className="bg-blue-50 border-blue-200">
+              <Facebook className="h-4 w-4 text-[#1877F2]" />
+              <AlertTitle className="text-blue-800">איך לקבל Access Token?</AlertTitle>
+              <AlertDescription className="text-blue-700 space-y-2">
+                <ol className="list-decimal pr-5 space-y-1 text-sm">
+                  <li>לחץ על הקישור למטה לפתיחת Graph API Explorer</li>
+                  <li>בחר את ה-App שלך בצד ימין</li>
+                  <li>לחץ "Generate Access Token" (ההרשאות כבר מסומנות)</li>
+                  <li>העתק את ה-Token שנוצר והדבק כאן</li>
+                </ol>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 gap-2"
+                  onClick={() => window.open(graphExplorerUrl, '_blank')}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  פתח Graph API Explorer
+                </Button>
+              </AlertDescription>
+            </Alert>
+            
             <div className="space-y-2">
               <Label htmlFor="access-token">Access Token</Label>
               <Input
@@ -412,6 +489,50 @@ export default function FacebookSettings() {
                   Access Token פעיל - האינטגרציה מחוברת!
                 </AlertDescription>
               </Alert>
+            )}
+
+            {/* Load Pages Button */}
+            {leadAdsIntegration?.is_active && leadAdsIntegration?.api_key && (
+              <div className="border-t pt-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-medium">עמודי פייסבוק שלך</Label>
+                  <Button
+                    onClick={() => loadFacebookPages(leadAdsIntegration.api_key!)}
+                    disabled={isLoadingPages}
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    {isLoadingPages ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    {isLoadingPages ? 'טוען...' : 'טען עמודים'}
+                  </Button>
+                </div>
+                
+                {loadedPages.length > 0 && (
+                  <div className="grid gap-2">
+                    {loadedPages.map((page) => (
+                      <div key={page.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <Facebook className="h-4 w-4 text-[#1877F2]" />
+                          <span className="font-medium">{page.name}</span>
+                        </div>
+                        <Badge variant="outline" className="font-mono text-xs">
+                          {page.id}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {loadedPages.length === 0 && !isLoadingPages && (
+                  <p className="text-sm text-muted-foreground">
+                    לחץ על "טען עמודים" כדי לראות את העמודים שאתה מנהל
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </CardContent>

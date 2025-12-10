@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Save, RefreshCw, ListTree, AlertCircle, Edit2 } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Loader2, Save, RefreshCw, ListTree, AlertCircle, Edit2, ExternalLink, Facebook, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 
 interface FormField {
   key: string;
@@ -70,6 +71,9 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
   const [selectedAgency, setSelectedAgency] = useState<string>("");
   const [pageTokens, setPageTokens] = useState<Record<string, string>>({});
+
+  // Graph API Explorer URL with permissions
+  const graphExplorerUrl = `https://developers.facebook.com/tools/explorer/?permissions=pages_show_list%2Cpages_manage_metadata%2Cpages_manage_ads%2Cleads_retrieval%2Cpages_read_engagement`;
 
   // Fetch pages
   const { data: pagesData, isLoading: loadingPages, isFetching: fetchingPages, refetch: refetchPages } = useQuery({
@@ -271,18 +275,28 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
                 <Edit2 className="h-4 w-4" />
               </Button>
               <Button 
-                variant="ghost" 
+                variant="outline" 
                 size="sm" 
                 onClick={() => {
                   console.log('Refresh pages clicked');
                   refetchPages();
                 }}
                 disabled={loadingPages || fetchingPages}
+                className="gap-2"
               >
                 <RefreshCw className={`h-4 w-4 ${(loadingPages || fetchingPages) ? 'animate-spin' : ''}`} />
+                רענן עמודים
               </Button>
             </div>
           </div>
+          
+          {/* Pages count indicator */}
+          {pages.length > 0 && (
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+              <span className="text-green-700">נמצאו {pages.length} עמודים</span>
+            </div>
+          )}
           
           {showManualPageInput ? (
             <div className="space-y-2">
@@ -348,10 +362,36 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
           )}
           
           {pages.length === 0 && !loadingPages && !showManualPageInput && (
-            <Alert className="mt-2">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                לא נמצאו עמודים. לחץ על <Edit2 className="h-3 w-3 inline mx-1" /> כדי להזין Page ID ידנית, או וודא שה-Access Token כולל הרשאות: <strong>pages_show_list</strong>, <strong>pages_manage_metadata</strong> ו-<strong>leads_retrieval</strong>
+            <Alert className="mt-2 bg-amber-50 border-amber-200">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <AlertTitle className="text-amber-800">לא נמצאו עמודים</AlertTitle>
+              <AlertDescription className="text-amber-700 space-y-2">
+                <p>וודא שה-Access Token כולל את כל ההרשאות הנדרשות:</p>
+                <ul className="list-disc pr-5 text-sm space-y-1">
+                  <li><strong>pages_show_list</strong> - לצפייה בעמודים</li>
+                  <li><strong>pages_manage_metadata</strong> - לניהול הגדרות</li>
+                  <li><strong>leads_retrieval</strong> - לקבלת לידים</li>
+                </ul>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => window.open(graphExplorerUrl, '_blank')}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    קבל Token חדש
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => setShowManualPageInput(true)}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                    הזן Page ID ידנית
+                  </Button>
+                </div>
               </AlertDescription>
             </Alert>
           )}
