@@ -693,15 +693,41 @@ export default function DynamicTableView() {
                   {fields?.map((field) => {
                     const cellKey = `${record.id}-${field.key}`;
                     const isEditing = editingCell?.recordId === record.id && editingCell?.fieldKey === field.key;
-                    const displayValue = isEditing 
-                      ? (cellValues[cellKey] ?? '') 
-                      : (record.data[field.key] || '');
+                    const rawValue = record.data[field.key];
+                    const editValue = isEditing ? (cellValues[cellKey] ?? '') : '';
+                    
+                    // Format display value
+                    const formatDisplayValue = (value: any, fieldType: string): string => {
+                      if (value === null || value === undefined || value === '') return '';
+                      
+                      // Check if it's a number (either by field type or by actual type)
+                      if (fieldType === 'number' || typeof value === 'number') {
+                        const num = typeof value === 'number' ? value : parseFloat(value);
+                        if (!isNaN(num)) {
+                          // Check if it has decimals
+                          if (num % 1 !== 0) {
+                            // Format with max 1 decimal place and thousands separator
+                            return num.toLocaleString('he-IL', { 
+                              minimumFractionDigits: 0,
+                              maximumFractionDigits: 1 
+                            });
+                          } else {
+                            // Integer - just add thousands separator
+                            return num.toLocaleString('he-IL');
+                          }
+                        }
+                      }
+                      
+                      return String(value);
+                    };
+                    
+                    const displayValue = isEditing ? editValue : formatDisplayValue(rawValue, field.type);
                     
                     return (
                       <div 
                         key={field.id} 
                         className="min-w-[180px] flex-shrink-0 border-l p-0 cursor-text"
-                        onClick={() => !isEditing && handleCellClick(record.id, field.key, record.data[field.key] || '')}
+                        onClick={() => !isEditing && handleCellClick(record.id, field.key, String(rawValue ?? ''))}
                       >
                         {isEditing ? (
                           <Input
