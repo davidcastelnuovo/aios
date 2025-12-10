@@ -53,19 +53,22 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get table with integration settings
+    // Get table with integration settings - let RLS handle access control
     const { data: table, error: tableError } = await supabase
       .from('crm_tables')
       .select('*')
       .eq('id', table_id)
-      .eq('tenant_id', tenantId)
-      .single();
+      .maybeSingle();
 
     if (tableError || !table) {
+      console.error('Table lookup error:', tableError, 'table_id:', table_id);
       return new Response(JSON.stringify({ error: 'Table not found' }), {
         status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
+    
+    // Use the table's tenant_id for subsequent operations
+    const tableTenantId = table.tenant_id;
 
     if (table.integration_type !== 'facebook_insights') {
       return new Response(JSON.stringify({ error: 'Table is not a Facebook Insights table' }), {
@@ -87,7 +90,7 @@ Deno.serve(async (req) => {
     const { data: integration } = await supabase
       .from('tenant_integrations')
       .select('api_key')
-      .eq('tenant_id', tenantId)
+      .eq('tenant_id', tableTenantId)
       .in('integration_type', ['facebook', 'facebook_lead_ads'])
       .eq('is_active', true)
       .limit(1)
@@ -224,13 +227,13 @@ Deno.serve(async (req) => {
       .from('crm_records')
       .delete()
       .eq('table_id', table_id)
-      .eq('tenant_id', tenantId);
+      .eq('tenant_id', tableTenantId);
 
     // Insert new records
     for (const insight of insights) {
       await supabase.from('crm_records').insert({
         table_id,
-        tenant_id: tenantId,
+        tenant_id: tableTenantId,
         created_by: user.id,
         data: insight,
       });
