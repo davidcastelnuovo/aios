@@ -345,12 +345,12 @@ export function FacebookTableDialog({ open, onOpenChange }: FacebookTableDialogP
 
             <div className="space-y-2">
               <Label>שיוך לסוכנות (אופציונלי)</Label>
-              <Select value={agencyId} onValueChange={setAgencyId}>
+              <Select value={agencyId || "__none__"} onValueChange={(v) => setAgencyId(v === "__none__" ? "" : v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="ללא שיוך - כל הסוכנויות" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">ללא שיוך - כל הסוכנויות</SelectItem>
+                  <SelectItem value="__none__">ללא שיוך - כל הסוכנויות</SelectItem>
                   {agencies.map((agency) => (
                     <SelectItem key={agency.id} value={agency.id}>
                       {agency.name}
@@ -363,12 +363,12 @@ export function FacebookTableDialog({ open, onOpenChange }: FacebookTableDialogP
             {agencyId && (
               <div className="space-y-2">
                 <Label>שיוך ללקוח (אופציונלי)</Label>
-                <Select value={clientId} onValueChange={setClientId}>
+                <Select value={clientId || "__none__"} onValueChange={(v) => setClientId(v === "__none__" ? "" : v)}>
                   <SelectTrigger>
                     <SelectValue placeholder="ללא שיוך - כל הלקוחות" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">ללא שיוך - כל הלקוחות</SelectItem>
+                    <SelectItem value="__none__">ללא שיוך - כל הלקוחות</SelectItem>
                     {clients.map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.name}
