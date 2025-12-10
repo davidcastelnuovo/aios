@@ -750,7 +750,7 @@ export default function DynamicTableView() {
                   </Button>
                 </div>
                 {fields?.map((field) => (
-                  <div key={field.id} className="min-w-[180px] flex-shrink-0 border-l p-2">
+                  <div key={field.id} className="w-[150px] flex-shrink-0 border-l p-2">
                     {editingFieldId === field.id ? (
                       <div className="flex items-center gap-1">
                         <Input
@@ -811,7 +811,7 @@ export default function DynamicTableView() {
                     )}
                   </div>
                 ))}
-                <div className="min-w-[180px] flex-shrink-0 border-l p-2">
+                <div className="w-[150px] flex-shrink-0 border-l p-2">
                   <div className="flex items-center gap-1">
                     <Input
                       placeholder="עמודה חדשה"
@@ -901,7 +901,7 @@ export default function DynamicTableView() {
                     return (
                       <div 
                         key={field.id} 
-                        className="min-w-[180px] flex-shrink-0 border-l p-0 cursor-text"
+                        className="w-[150px] flex-shrink-0 border-l p-0 cursor-text"
                         onClick={() => !isEditing && handleCellClick(record.id, field.key, String(rawValue ?? ''))}
                       >
                         {isEditing ? (
@@ -921,7 +921,7 @@ export default function DynamicTableView() {
                       </div>
                     );
                   })}
-                  <div className="min-w-[180px] flex-shrink-0 border-l" />
+                  <div className="w-[150px] flex-shrink-0 border-l" />
                 </div>
               ))}
 
