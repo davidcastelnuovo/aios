@@ -17,7 +17,8 @@ serve(async (req) => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
-    const { tenant_id, page_id, access_token } = await req.json();
+    const body = await req.json();
+    const { tenant_id, page_id, access_token, page_access_token } = body;
 
     console.log('Fetching Facebook forms for page:', page_id);
 
@@ -64,15 +65,14 @@ serve(async (req) => {
       });
     }
 
-    // Get page_access_token from request body if provided
-    const body = await req.clone().json();
-    const page_access_token = body.page_access_token || access_token;
+    // Use page_access_token if provided, otherwise fallback to access_token
+    const tokenToUse = page_access_token || access_token;
 
     // Fetch lead forms for the specified page using page access token
-    console.log('Fetching forms for page:', page_id, 'with page token:', page_access_token ? 'provided' : 'using user token');
+    console.log('Fetching forms for page:', page_id, 'with token type:', page_access_token ? 'page token' : 'user token');
     
     const formsResponse = await fetch(
-      `https://graph.facebook.com/v21.0/${page_id}/leadgen_forms?access_token=${page_access_token}&fields=id,name,status,questions`
+      `https://graph.facebook.com/v21.0/${page_id}/leadgen_forms?access_token=${tokenToUse}&fields=id,name,status,questions`
     );
 
     if (!formsResponse.ok) {
