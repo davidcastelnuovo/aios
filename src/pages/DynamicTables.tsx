@@ -3,7 +3,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook, Building2, User } from "lucide-react";
+import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook, Building2, User, X } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { SimpleTableDialog } from "@/components/dynamic-tables/SimpleTableDialog";
 import { FacebookTableDialog } from "@/components/dynamic-tables/FacebookTableDialog";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +76,8 @@ export default function DynamicTables() {
   const [editingTable, setEditingTable] = useState<CrmTable | null>(null);
   const [deletingTable, setDeletingTable] = useState<CrmTable | null>(null);
   const [editName, setEditName] = useState("");
+  const [editAgencyId, setEditAgencyId] = useState<string>("");
+  const [editClientId, setEditClientId] = useState<string>("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['ללא קבוצה', 'Facebook Insights']));
 
   // Fetch agencies and clients for displaying names
@@ -92,12 +101,18 @@ export default function DynamicTables() {
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from('clients')
-        .select('id, name');
+        .select('id, name, agency_id');
       if (error) throw error;
       return data || [];
     },
     enabled: !!tenantId,
   });
+
+  // Filter clients by selected agency in edit dialog
+  const editFilteredClients = useMemo(() => {
+    if (!editAgencyId) return [];
+    return clients.filter(c => c.agency_id === editAgencyId);
+  }, [clients, editAgencyId]);
 
   const { data: tables, isLoading } = useQuery({
     queryKey: ['crm-tables'],
@@ -161,7 +176,7 @@ export default function DynamicTables() {
   });
 
   const updateTableMutation = useMutation({
-    mutationFn: async ({ tableId, name }: { tableId: string; name: string }) => {
+    mutationFn: async ({ tableId, name, agency_id, client_id }: { tableId: string; name: string; agency_id: string | null; client_id: string | null }) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
@@ -174,7 +189,7 @@ export default function DynamicTables() {
             'Authorization': `Bearer ${session.access_token}`,
             'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
-          body: JSON.stringify({ table_id: tableId, name }),
+          body: JSON.stringify({ table_id: tableId, name, agency_id, client_id }),
         }
       );
       
@@ -199,6 +214,8 @@ export default function DynamicTables() {
     e.stopPropagation();
     setEditingTable(table);
     setEditName(table.name);
+    setEditAgencyId(table.agency_id || "");
+    setEditClientId(table.client_id || "");
   };
 
   const handleDelete = (table: CrmTable, e: React.MouseEvent) => {
@@ -208,7 +225,12 @@ export default function DynamicTables() {
 
   const handleSaveEdit = () => {
     if (!editingTable || !editName.trim()) return;
-    updateTableMutation.mutate({ tableId: editingTable.id, name: editName });
+    updateTableMutation.mutate({ 
+      tableId: editingTable.id, 
+      name: editName,
+      agency_id: editAgencyId || null,
+      client_id: editClientId || null,
+    });
   };
 
   const toggleCategory = (category: string) => {
@@ -418,7 +440,7 @@ export default function DynamicTables() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>עריכת טבלה</DialogTitle>
-            <DialogDescription>ערוך את שם הטבלה</DialogDescription>
+            <DialogDescription>ערוך את פרטי הטבלה</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -430,6 +452,68 @@ export default function DynamicTables() {
                 placeholder="שם הטבלה"
               />
             </div>
+            <div className="space-y-2">
+              <Label>שיוך לסוכנות (אופציונלי)</Label>
+              <div className="flex gap-2">
+                <Select value={editAgencyId} onValueChange={(val) => {
+                  setEditAgencyId(val);
+                  if (val !== editAgencyId) setEditClientId("");
+                }}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="ללא שיוך - כל הסוכנויות" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">ללא שיוך - כל הסוכנויות</SelectItem>
+                    {agencies.map((agency) => (
+                      <SelectItem key={agency.id} value={agency.id}>
+                        {agency.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {editAgencyId && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => {
+                      setEditAgencyId("");
+                      setEditClientId("");
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+            {editAgencyId && (
+              <div className="space-y-2">
+                <Label>שיוך ללקוח (אופציונלי)</Label>
+                <div className="flex gap-2">
+                  <Select value={editClientId} onValueChange={setEditClientId}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="ללא שיוך - כל הלקוחות" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">ללא שיוך - כל הלקוחות</SelectItem>
+                      {editFilteredClients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {editClientId && (
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      onClick={() => setEditClientId("")}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingTable(null)}>
