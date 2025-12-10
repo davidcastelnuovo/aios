@@ -689,44 +689,70 @@ export default function DynamicTableView() {
 
       {/* Summary Stats for Facebook Insights */}
       {table.integration_type === 'facebook_insights' && records && records.length > 0 && (
-        <Card className="mb-4 p-4">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
-            {(() => {
-              const totals = records.reduce((acc, record) => ({
-                impressions: acc.impressions + (Number(record.data?.impressions) || 0),
-                clicks: acc.clicks + (Number(record.data?.clicks) || 0),
-                leads: acc.leads + (Number(record.data?.leads) || 0),
-                spend: acc.spend + (Number(record.data?.spend) || 0),
-              }), { impressions: 0, clicks: 0, leads: 0, spend: 0 });
-              
-              const avgCostPerLead = totals.leads > 0 ? totals.spend / totals.leads : 0;
-              
-              return (
-                <>
-                  <div>
-                    <p className="text-xs text-muted-foreground">חשיפות</p>
-                    <p className="text-lg font-bold">{totals.impressions.toLocaleString('he-IL')}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">קליקים</p>
-                    <p className="text-lg font-bold">{totals.clicks.toLocaleString('he-IL')}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">לידים</p>
-                    <p className="text-lg font-bold text-green-600">{totals.leads.toLocaleString('he-IL')}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">הוצאה</p>
-                    <p className="text-lg font-bold">₪{totals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">עלות לליד</p>
-                    <p className="text-lg font-bold text-blue-600">₪{avgCostPerLead.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</p>
-                  </div>
-                </>
-              );
-            })()}
-          </div>
+        <Card className="mb-4 overflow-hidden">
+          {(() => {
+            // Group records by campaign_name
+            const campaignGroups = records.reduce((acc, record) => {
+              const campaignName = String(record.data?.campaign_name || 'ללא קמפיין');
+              if (!acc[campaignName]) {
+                acc[campaignName] = { impressions: 0, clicks: 0, leads: 0, spend: 0 };
+              }
+              acc[campaignName].impressions += Number(record.data?.impressions) || 0;
+              acc[campaignName].clicks += Number(record.data?.clicks) || 0;
+              acc[campaignName].leads += Number(record.data?.leads) || 0;
+              acc[campaignName].spend += Number(record.data?.spend) || 0;
+              return acc;
+            }, {} as Record<string, { impressions: number; clicks: number; leads: number; spend: number }>);
+
+            const totals = Object.values(campaignGroups).reduce((acc, campaign) => ({
+              impressions: acc.impressions + campaign.impressions,
+              clicks: acc.clicks + campaign.clicks,
+              leads: acc.leads + campaign.leads,
+              spend: acc.spend + campaign.spend,
+            }), { impressions: 0, clicks: 0, leads: 0, spend: 0 });
+
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" dir="rtl">
+                  <thead className="bg-muted/50 border-b">
+                    <tr>
+                      <th className="p-2 text-right font-medium">קמפיין</th>
+                      <th className="p-2 text-center font-medium">חשיפות</th>
+                      <th className="p-2 text-center font-medium">קליקים</th>
+                      <th className="p-2 text-center font-medium">לידים</th>
+                      <th className="p-2 text-center font-medium">הוצאה</th>
+                      <th className="p-2 text-center font-medium">עלות לליד</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(campaignGroups).map(([campaignName, data]) => {
+                      const costPerLead = data.leads > 0 ? data.spend / data.leads : 0;
+                      return (
+                        <tr key={campaignName} className="border-b hover:bg-muted/30">
+                          <td className="p-2 text-right font-medium">{campaignName}</td>
+                          <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center text-green-600 font-medium">{data.leads.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center">₪{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                          <td className="p-2 text-center text-blue-600 font-medium">₪{costPerLead.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-primary/10 font-bold">
+                    <tr>
+                      <td className="p-2 text-right">סה״כ</td>
+                      <td className="p-2 text-center">{totals.impressions.toLocaleString('he-IL')}</td>
+                      <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
+                      <td className="p-2 text-center text-green-600">{totals.leads.toLocaleString('he-IL')}</td>
+                      <td className="p-2 text-center">₪{totals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                      <td className="p-2 text-center text-blue-600">₪{(totals.leads > 0 ? totals.spend / totals.leads : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            );
+          })()}
         </Card>
       )}
 
