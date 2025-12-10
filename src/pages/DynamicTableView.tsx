@@ -424,7 +424,7 @@ export default function DynamicTableView() {
       
       // Find the selected ad account to get its currency
       const selectedAccount = adAccounts?.find((acc: any) => acc.id === adAccountId);
-      const currency = selectedAccount?.currency || 'USD';
+      const currency = selectedAccount?.currency || 'ILS';
       
       const { error } = await supabase
         .from('crm_tables')
