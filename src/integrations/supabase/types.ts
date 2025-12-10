@@ -989,7 +989,9 @@ export type Database = {
       }
       crm_tables: {
         Row: {
+          agency_id: string | null
           category: string | null
+          client_id: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -1003,7 +1005,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          agency_id?: string | null
           category?: string | null
+          client_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -1017,7 +1021,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          agency_id?: string | null
           category?: string | null
+          client_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -1031,6 +1037,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "crm_tables_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_tables_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "crm_tables_tenant_id_fkey"
             columns: ["tenant_id"]

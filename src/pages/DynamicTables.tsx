@@ -3,9 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook } from "lucide-react";
+import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook, Building2, User } from "lucide-react";
 import { SimpleTableDialog } from "@/components/dynamic-tables/SimpleTableDialog";
 import { FacebookTableDialog } from "@/components/dynamic-tables/FacebookTableDialog";
+import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +42,8 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { toast } from "sonner";
+import { useAgency } from "@/contexts/AgencyContext";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface CrmTable {
   id: string;
@@ -51,18 +54,50 @@ interface CrmTable {
   category: string | null;
   integration_type: string | null;
   integration_settings: any;
+  agency_id: string | null;
+  client_id: string | null;
 }
 
 export default function DynamicTables() {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
+  const { selectedAgency } = useAgency();
+  const { tenantId } = useCurrentTenant();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showFacebookDialog, setShowFacebookDialog] = useState(false);
   const [editingTable, setEditingTable] = useState<CrmTable | null>(null);
   const [deletingTable, setDeletingTable] = useState<CrmTable | null>(null);
   const [editName, setEditName] = useState("");
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['ללא קבוצה', 'Facebook Insights']));
+
+  // Fetch agencies and clients for displaying names
+  const { data: agencies = [] } = useQuery({
+    queryKey: ['agencies', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from('agencies')
+        .select('id, name')
+        .eq('tenant_id', tenantId);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients-all', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
 
   const { data: tables, isLoading } = useQuery({
     queryKey: ['crm-tables'],
@@ -78,6 +113,17 @@ export default function DynamicTables() {
       return response.data as CrmTable[];
     },
   });
+
+  // Filter tables by selected agency
+  const filteredTables = useMemo(() => {
+    if (!tables) return [];
+    if (!selectedAgency || selectedAgency === 'all') return tables;
+    
+    return tables.filter(table => 
+      table.agency_id === null ||  // General tables always shown
+      table.agency_id === selectedAgency
+    );
+  }, [tables, selectedAgency]);
 
   const deleteTableMutation = useMutation({
     mutationFn: async (tableId: string) => {
@@ -177,11 +223,23 @@ export default function DynamicTables() {
     });
   };
 
+  const getAgencyName = (agencyId: string | null) => {
+    if (!agencyId) return null;
+    const agency = agencies.find(a => a.id === agencyId);
+    return agency?.name || null;
+  };
+
+  const getClientName = (clientId: string | null) => {
+    if (!clientId) return null;
+    const client = clients.find(c => c.id === clientId);
+    return client?.name || null;
+  };
+
   const groupedTables = useMemo(() => {
-    if (!tables) return {};
+    if (!filteredTables) return {};
     
     const groups: Record<string, CrmTable[]> = {};
-    tables.forEach(table => {
+    filteredTables.forEach(table => {
       const category = table.category || 'ללא קבוצה';
       if (!groups[category]) {
         groups[category] = [];
@@ -190,7 +248,7 @@ export default function DynamicTables() {
     });
     
     return groups;
-  }, [tables]);
+  }, [filteredTables]);
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -232,7 +290,7 @@ export default function DynamicTables() {
             </Card>
           ))}
         </div>
-      ) : !tables || tables.length === 0 ? (
+      ) : !filteredTables || filteredTables.length === 0 ? (
         <Card className="p-12 text-center">
           <Table2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold mb-2">אין טבלאות עדיין</h3>
@@ -300,6 +358,21 @@ export default function DynamicTables() {
                               <Trash2 className="h-3 w-3" />
                             </Button>
                           </div>
+                        </div>
+                        {/* Agency & Client Badges */}
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {table.agency_id && (
+                            <Badge variant="outline" className="text-xs">
+                              <Building2 className="h-3 w-3 ml-1" />
+                              {getAgencyName(table.agency_id)}
+                            </Badge>
+                          )}
+                          {table.client_id && (
+                            <Badge variant="secondary" className="text-xs">
+                              <User className="h-3 w-3 ml-1" />
+                              {getClientName(table.client_id)}
+                            </Badge>
+                          )}
                         </div>
                         {table.description && (
                           <CardDescription>{table.description}</CardDescription>

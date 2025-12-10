@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
@@ -7,13 +7,22 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 interface SimpleTableDialogProps {
   open: boolean;
@@ -24,8 +33,48 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
+  const { tenantId } = useCurrentTenant();
   const [tableName, setTableName] = useState("");
   const [category, setCategory] = useState("");
+  const [agencyId, setAgencyId] = useState<string>("");
+  const [clientId, setClientId] = useState<string>("");
+
+  // Fetch agencies
+  const { data: agencies = [] } = useQuery({
+    queryKey: ['agencies', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from('agencies')
+        .select('id, name')
+        .eq('tenant_id', tenantId)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && !!tenantId,
+  });
+
+  // Fetch clients based on selected agency
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients-for-table', agencyId],
+    queryFn: async () => {
+      if (!agencyId) return [];
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, name')
+        .eq('agency_id', agencyId)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && !!agencyId,
+  });
+
+  // Reset client when agency changes
+  useEffect(() => {
+    setClientId("");
+  }, [agencyId]);
 
   const createMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -39,7 +88,14 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
 
       const response = await supabase.functions.invoke('crm-tables', {
         method: 'POST',
-        body: { name, slug, description: '', category: category || null },
+        body: { 
+          name, 
+          slug, 
+          description: '', 
+          category: category || null,
+          agency_id: agencyId || null,
+          client_id: clientId || null,
+        },
       });
 
       if (response.error) throw response.error;
@@ -68,6 +124,8 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
   const handleClose = () => {
     setTableName("");
     setCategory("");
+    setAgencyId("");
+    setClientId("");
     onOpenChange(false);
   };
 
@@ -101,14 +159,48 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
               dir="rtl"
             />
           </div>
-          <div className="flex justify-end gap-2">
+          <div className="space-y-2">
+            <Label>שיוך לסוכנות (אופציונלי)</Label>
+            <Select value={agencyId} onValueChange={setAgencyId}>
+              <SelectTrigger>
+                <SelectValue placeholder="ללא שיוך - כל הסוכנויות" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">ללא שיוך - כל הסוכנויות</SelectItem>
+                {agencies.map((agency) => (
+                  <SelectItem key={agency.id} value={agency.id}>
+                    {agency.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {agencyId && (
+            <div className="space-y-2">
+              <Label>שיוך ללקוח (אופציונלי)</Label>
+              <Select value={clientId} onValueChange={setClientId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="ללא שיוך - כל הלקוחות" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">ללא שיוך - כל הלקוחות</SelectItem>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={handleClose}>
               ביטול
             </Button>
             <Button type="submit" disabled={createMutation.isPending}>
               {createMutation.isPending ? 'יוצר...' : 'צור טבלה'}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

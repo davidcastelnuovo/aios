@@ -22,6 +22,7 @@ import {
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Loader2, Facebook, AlertCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -51,12 +52,52 @@ export function FacebookTableDialog({ open, onOpenChange }: FacebookTableDialogP
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
+  const { tenantId } = useCurrentTenant();
 
   const [tableName, setTableName] = useState("");
   const [selectedAdAccount, setSelectedAdAccount] = useState("");
   const [dateRange, setDateRange] = useState("last_30_days");
   const [category, setCategory] = useState("");
   const [adAccountSearch, setAdAccountSearch] = useState("");
+  const [agencyId, setAgencyId] = useState<string>("");
+  const [clientId, setClientId] = useState<string>("");
+
+  // Fetch agencies
+  const { data: agencies = [] } = useQuery({
+    queryKey: ['agencies', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from('agencies')
+        .select('id, name')
+        .eq('tenant_id', tenantId)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && !!tenantId,
+  });
+
+  // Fetch clients based on selected agency
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients-for-table', agencyId],
+    queryFn: async () => {
+      if (!agencyId) return [];
+      const { data, error } = await supabase
+        .from('clients')
+        .select('id, name')
+        .eq('agency_id', agencyId)
+        .order('name');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: open && !!agencyId,
+  });
+
+  // Reset client when agency changes
+  useEffect(() => {
+    setClientId("");
+  }, [agencyId]);
 
   // Check if Facebook is connected
   const { data: facebookIntegration, isLoading: checkingFacebook } = useQuery({
@@ -121,7 +162,9 @@ export function FacebookTableDialog({ open, onOpenChange }: FacebookTableDialogP
             ad_account_name: selectedAccount?.name || '',
             date_range: dateRange,
             sync_frequency: 'daily',
-          }
+          },
+          agency_id: agencyId || null,
+          client_id: clientId || null,
         },
       });
 
@@ -172,6 +215,8 @@ export function FacebookTableDialog({ open, onOpenChange }: FacebookTableDialogP
     setDateRange("last_30_days");
     setCategory("");
     setAdAccountSearch("");
+    setAgencyId("");
+    setClientId("");
     onOpenChange(false);
   };
 
@@ -297,6 +342,42 @@ export function FacebookTableDialog({ open, onOpenChange }: FacebookTableDialogP
                 placeholder="Facebook Insights"
               />
             </div>
+
+            <div className="space-y-2">
+              <Label>שיוך לסוכנות (אופציונלי)</Label>
+              <Select value={agencyId} onValueChange={setAgencyId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="ללא שיוך - כל הסוכנויות" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">ללא שיוך - כל הסוכנויות</SelectItem>
+                  {agencies.map((agency) => (
+                    <SelectItem key={agency.id} value={agency.id}>
+                      {agency.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {agencyId && (
+              <div className="space-y-2">
+                <Label>שיוך ללקוח (אופציונלי)</Label>
+                <Select value={clientId} onValueChange={setClientId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="ללא שיוך - כל הלקוחות" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">ללא שיוך - כל הלקוחות</SelectItem>
+                    {clients.map((client) => (
+                      <SelectItem key={client.id} value={client.id}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={handleClose}>
