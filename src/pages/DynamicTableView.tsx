@@ -108,7 +108,7 @@ export default function DynamicTableView() {
         method: 'POST',
       });
       if (response.error) throw response.error;
-      return response.data?.adAccounts || [];
+      return response.data?.ad_accounts || [];
     },
     enabled: showSettingsDialog && table?.integration_type === 'facebook_insights',
   });
