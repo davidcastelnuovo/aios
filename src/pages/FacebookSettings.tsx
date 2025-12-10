@@ -92,21 +92,43 @@ export default function FacebookSettings() {
     mutationFn: async () => {
       if (!currentTenant?.id) throw new Error('No tenant');
       if (!manualAccessToken.trim()) throw new Error('Access Token is required');
-
-      // Upsert to tenant_integrations
-      const { error } = await supabase
-        .from('tenant_integrations')
-        .upsert({
-          tenant_id: currentTenant.id,
-          integration_type: 'facebook_lead_ads',
-          api_key: manualAccessToken.trim(),
-          is_active: true,
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'tenant_id,integration_type',
-        });
       
-      if (error) throw error;
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user?.id) throw new Error('No user');
+
+      // Check if integration exists
+      const { data: existing } = await supabase
+        .from('tenant_integrations')
+        .select('id')
+        .eq('tenant_id', currentTenant.id)
+        .eq('integration_type', 'facebook_lead_ads')
+        .eq('user_id', user.user.id)
+        .maybeSingle();
+
+      if (existing) {
+        // Update existing
+        const { error } = await supabase
+          .from('tenant_integrations')
+          .update({
+            api_key: manualAccessToken.trim(),
+            is_active: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id);
+        if (error) throw error;
+      } else {
+        // Insert new
+        const { error } = await supabase
+          .from('tenant_integrations')
+          .insert({
+            tenant_id: currentTenant.id,
+            user_id: user.user.id,
+            integration_type: 'facebook_lead_ads',
+            api_key: manualAccessToken.trim(),
+            is_active: true,
+          });
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       toast.success('Access Token נשמר בהצלחה - האינטגרציה פעילה!');
