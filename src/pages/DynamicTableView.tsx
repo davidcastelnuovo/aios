@@ -67,6 +67,7 @@ export default function DynamicTableView() {
   const [showWebhookDialog, setShowWebhookDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const [selectedAdAccount, setSelectedAdAccount] = useState<string>("");
+  const [adAccountSearch, setAdAccountSearch] = useState("");
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [editingFieldName, setEditingFieldName] = useState("");
   const [editingCell, setEditingCell] = useState<{ recordId: string; fieldKey: string; initialValue: string } | null>(null);
@@ -614,7 +615,10 @@ export default function DynamicTableView() {
           </Dialog>
 
           {/* Settings Dialog for Facebook Insights */}
-          <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
+          <Dialog open={showSettingsDialog} onOpenChange={(open) => {
+            setShowSettingsDialog(open);
+            if (!open) setAdAccountSearch("");
+          }}>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>הגדרות טבלה</DialogTitle>
@@ -626,21 +630,34 @@ export default function DynamicTableView() {
                   {adAccountsLoading ? (
                     <Skeleton className="h-10 w-full" />
                   ) : (
-                    <Select 
-                      value={selectedAdAccount} 
-                      onValueChange={setSelectedAdAccount}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="בחר חשבון מודעות" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {adAccounts?.map((account: any) => (
-                          <SelectItem key={account.id} value={account.id}>
-                            {account.name} ({account.id})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <>
+                      <Input
+                        placeholder="חפש חשבון מודעות..."
+                        value={adAccountSearch}
+                        onChange={(e) => setAdAccountSearch(e.target.value)}
+                        className="mb-2"
+                      />
+                      <Select 
+                        value={selectedAdAccount} 
+                        onValueChange={setSelectedAdAccount}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="בחר חשבון מודעות" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {adAccounts
+                            ?.filter((account: any) => 
+                              account.name?.toLowerCase().includes(adAccountSearch.toLowerCase()) ||
+                              account.id?.includes(adAccountSearch)
+                            )
+                            .map((account: any) => (
+                              <SelectItem key={account.id} value={account.id}>
+                                {account.name} ({account.id})
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </>
                   )}
                 </div>
                 <Button 
