@@ -56,6 +56,7 @@ export function FacebookTableDialog({ open, onOpenChange }: FacebookTableDialogP
   const [selectedAdAccount, setSelectedAdAccount] = useState("");
   const [dateRange, setDateRange] = useState("last_30_days");
   const [category, setCategory] = useState("");
+  const [adAccountSearch, setAdAccountSearch] = useState("");
 
   // Check if Facebook is connected
   const { data: facebookIntegration, isLoading: checkingFacebook } = useQuery({
@@ -170,6 +171,7 @@ export function FacebookTableDialog({ open, onOpenChange }: FacebookTableDialogP
     setSelectedAdAccount("");
     setDateRange("last_30_days");
     setCategory("");
+    setAdAccountSearch("");
     onOpenChange(false);
   };
 
@@ -242,18 +244,31 @@ export function FacebookTableDialog({ open, onOpenChange }: FacebookTableDialogP
                   </AlertDescription>
                 </Alert>
               ) : (
-                <Select value={selectedAdAccount} onValueChange={setSelectedAdAccount}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="בחר חשבון מודעות" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {adAccounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.name} ({account.currency})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <>
+                  <Input
+                    placeholder="חפש חשבון מודעות..."
+                    value={adAccountSearch}
+                    onChange={(e) => setAdAccountSearch(e.target.value)}
+                    className="mb-2"
+                  />
+                  <Select value={selectedAdAccount} onValueChange={setSelectedAdAccount}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר חשבון מודעות" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {adAccounts
+                        .filter((account) => 
+                          account.name?.toLowerCase().includes(adAccountSearch.toLowerCase()) ||
+                          account.id?.includes(adAccountSearch)
+                        )
+                        .map((account) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            {account.name} ({account.currency})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </>
               )}
             </div>
 
