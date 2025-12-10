@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar, RefreshCw, Facebook } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar, RefreshCw, Facebook, Settings } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -65,6 +65,8 @@ export default function DynamicTableView() {
   const [newColumnName, setNewColumnName] = useState("");
   const [webhookUrl, setWebhookUrl] = useState("");
   const [showWebhookDialog, setShowWebhookDialog] = useState(false);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [selectedAdAccount, setSelectedAdAccount] = useState<string>("");
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
   const [editingFieldName, setEditingFieldName] = useState("");
   const [editingCell, setEditingCell] = useState<{ recordId: string; fieldKey: string; initialValue: string } | null>(null);
@@ -95,6 +97,21 @@ export default function DynamicTableView() {
   });
 
   const table = tables?.find((t) => t.slug === tableSlug);
+
+  // Fetch ad accounts for settings dialog
+  const { data: adAccounts, isLoading: adAccountsLoading } = useQuery({
+    queryKey: ['facebook-ad-accounts'],
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      const response = await supabase.functions.invoke('get-facebook-ad-accounts', {
+        method: 'POST',
+      });
+      if (response.error) throw response.error;
+      return response.data?.adAccounts || [];
+    },
+    enabled: showSettingsDialog && table?.integration_type === 'facebook_insights',
+  });
 
   const { data: fields, isLoading: fieldsLoading } = useQuery({
     queryKey: ['crm-fields', table?.id],
@@ -377,10 +394,39 @@ export default function DynamicTableView() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
-      toast.success(`נתוני פייסבוק סונכרנו בהצלחה (${data.records_synced} קמפיינים)`);
+      toast.success(`נתוני פייסבוק סונכרנו בהצלחה (${data.records_synced} שורות)`);
     },
     onError: (error: any) => {
       toast.error('שגיאה בסנכרון מפייסבוק: ' + error.message);
+    },
+  });
+
+  const updateTableSettingsMutation = useMutation({
+    mutationFn: async (adAccountId: string) => {
+      if (!table?.id) throw new Error('No table');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      
+      const { error } = await supabase
+        .from('crm_tables')
+        .update({
+          integration_settings: {
+            ...table.integration_settings,
+            ad_account_id: adAccountId,
+          }
+        })
+        .eq('id', table.id);
+      
+      if (error) throw error;
+      return { adAccountId };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      setShowSettingsDialog(false);
+      toast.success('הגדרות הטבלה עודכנו בהצלחה');
+    },
+    onError: (error: any) => {
+      toast.error('שגיאה בעדכון הגדרות: ' + error.message);
     },
   });
 
@@ -502,14 +548,26 @@ export default function DynamicTableView() {
         
         <div className="flex items-center gap-2">
           {table.integration_type === 'facebook_insights' && (
-            <Button 
-              variant="outline" 
-              onClick={() => syncFacebookMutation.mutate()}
-              disabled={syncFacebookMutation.isPending}
-            >
-              <RefreshCw className={`ml-2 h-4 w-4 ${syncFacebookMutation.isPending ? 'animate-spin' : ''}`} />
-              {syncFacebookMutation.isPending ? 'מסנכרן...' : 'סנכרן עכשיו'}
-            </Button>
+            <>
+              <Button 
+                variant="outline" 
+                onClick={() => syncFacebookMutation.mutate()}
+                disabled={syncFacebookMutation.isPending}
+              >
+                <RefreshCw className={`ml-2 h-4 w-4 ${syncFacebookMutation.isPending ? 'animate-spin' : ''}`} />
+                {syncFacebookMutation.isPending ? 'מסנכרן...' : 'סנכרן עכשיו'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => {
+                  setSelectedAdAccount(table.integration_settings?.ad_account_id || '');
+                  setShowSettingsDialog(true);
+                }}
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            </>
           )}
           
           <div className="flex items-center gap-2">
@@ -550,6 +608,47 @@ export default function DynamicTableView() {
                   className="w-full"
                 >
                   {sendWebhookMutation.isPending ? 'שולח...' : 'שלח נתונים'}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Settings Dialog for Facebook Insights */}
+          <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>הגדרות טבלה</DialogTitle>
+                <DialogDescription>שנה את חשבון המודעות המסונכרן</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>חשבון מודעות</Label>
+                  {adAccountsLoading ? (
+                    <Skeleton className="h-10 w-full" />
+                  ) : (
+                    <Select 
+                      value={selectedAdAccount} 
+                      onValueChange={setSelectedAdAccount}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר חשבון מודעות" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {adAccounts?.map((account: any) => (
+                          <SelectItem key={account.id} value={account.id}>
+                            {account.name} ({account.id})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <Button 
+                  onClick={() => updateTableSettingsMutation.mutate(selectedAdAccount)}
+                  disabled={updateTableSettingsMutation.isPending || !selectedAdAccount}
+                  className="w-full"
+                >
+                  {updateTableSettingsMutation.isPending ? 'שומר...' : 'שמור שינויים'}
                 </Button>
               </div>
             </DialogContent>
