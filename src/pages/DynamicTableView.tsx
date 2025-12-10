@@ -422,12 +422,18 @@ export default function DynamicTableView() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       
+      // Find the selected ad account to get its currency
+      const selectedAccount = adAccounts?.find((acc: any) => acc.id === adAccountId);
+      const currency = selectedAccount?.currency || 'USD';
+      
       const { error } = await supabase
         .from('crm_tables')
         .update({
           integration_settings: {
             ...table.integration_settings,
             ad_account_id: adAccountId,
+            ad_account_name: selectedAccount?.name,
+            currency: currency,
             date_range: selectedSyncDateRange,
           }
         })
@@ -759,29 +765,37 @@ export default function DynamicTableView() {
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.entries(campaignGroups).map(([campaignName, data]) => {
-                      const costPerLead = data.leads > 0 ? data.spend / data.leads : 0;
-                      return (
-                        <tr key={campaignName} className="border-b hover:bg-muted/30">
-                          <td className="p-2 text-right font-medium">{campaignName}</td>
-                          <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center text-green-600 font-medium">{data.leads.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center">${data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          <td className="p-2 text-center text-blue-600 font-medium">${costPerLead.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
-                        </tr>
-                      );
-                    })}
+                    {(() => {
+                      const currency = table.integration_settings?.currency === 'ILS' ? '₪' : '$';
+                      return Object.entries(campaignGroups).map(([campaignName, data]) => {
+                        const costPerLead = data.leads > 0 ? data.spend / data.leads : 0;
+                        return (
+                          <tr key={campaignName} className="border-b hover:bg-muted/30">
+                            <td className="p-2 text-right font-medium">{campaignName}</td>
+                            <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
+                            <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
+                            <td className="p-2 text-center text-green-600 font-medium">{data.leads.toLocaleString('he-IL')}</td>
+                            <td className="p-2 text-center">{currency}{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                            <td className="p-2 text-center text-blue-600 font-medium">{currency}{costPerLead.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                   <tfoot className="bg-primary/10 font-bold">
-                    <tr>
-                      <td className="p-2 text-right">סה״כ</td>
-                      <td className="p-2 text-center">{totals.impressions.toLocaleString('he-IL')}</td>
-                      <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
-                      <td className="p-2 text-center text-green-600">{totals.leads.toLocaleString('he-IL')}</td>
-                      <td className="p-2 text-center">${totals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                      <td className="p-2 text-center text-blue-600">${(totals.leads > 0 ? totals.spend / totals.leads : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
-                    </tr>
+                    {(() => {
+                      const currency = table.integration_settings?.currency === 'ILS' ? '₪' : '$';
+                      return (
+                        <tr>
+                          <td className="p-2 text-right">סה״כ</td>
+                          <td className="p-2 text-center">{totals.impressions.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center text-green-600">{totals.leads.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center">{currency}{totals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                          <td className="p-2 text-center text-blue-600">{currency}{(totals.leads > 0 ? totals.spend / totals.leads : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                        </tr>
+                      );
+                    })()}
                   </tfoot>
                 </table>
               </div>
