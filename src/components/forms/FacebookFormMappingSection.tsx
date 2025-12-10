@@ -351,16 +351,6 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
             </div>
           ) : (
             <div className="space-y-2">
-              {/* Search input for pages */}
-              {pages.length > 10 && (
-                <Input
-                  placeholder="חפש עמוד לפי שם..."
-                  value={pageSearchQuery}
-                  onChange={(e) => setPageSearchQuery(e.target.value)}
-                  className="mb-2"
-                />
-              )}
-              
               <Select value={selectedPageId} onValueChange={(value) => {
                 setSelectedPageId(value);
                 setSelectedFormId("");
@@ -370,16 +360,34 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
                 <SelectTrigger>
                   <SelectValue placeholder={loadingPages ? "טוען עמודים..." : (pages.length === 0 ? "לא נמצאו עמודים - הזן ידנית" : `בחר עמוד (${pages.length} עמודים)`)} />
                 </SelectTrigger>
-                <SelectContent className="max-h-[300px]">
-                  {pages
-                    .filter((page: FacebookPage) => 
-                      pageSearchQuery === "" || page.name.toLowerCase().includes(pageSearchQuery.toLowerCase())
-                    )
-                    .map((page: FacebookPage) => (
-                      <SelectItem key={page.id} value={page.id}>
-                        {page.name}
-                      </SelectItem>
-                    ))}
+                <SelectContent className="max-h-[400px]">
+                  {/* Search input inside dropdown */}
+                  {pages.length > 10 && (
+                    <div className="p-2 sticky top-0 bg-popover z-10 border-b">
+                      <Input
+                        placeholder="חפש עמוד לפי שם..."
+                        value={pageSearchQuery}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          setPageSearchQuery(e.target.value);
+                        }}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        className="h-8"
+                        autoFocus
+                      />
+                    </div>
+                  )}
+                  <div className="max-h-[300px] overflow-y-auto">
+                    {pages
+                      .filter((page: FacebookPage) => 
+                        pageSearchQuery === "" || page.name.toLowerCase().includes(pageSearchQuery.toLowerCase())
+                      )
+                      .map((page: FacebookPage) => (
+                        <SelectItem key={page.id} value={page.id}>
+                          {page.name}
+                        </SelectItem>
+                      ))}
+                  </div>
                 </SelectContent>
               </Select>
             </div>
