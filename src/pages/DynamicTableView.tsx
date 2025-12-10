@@ -667,8 +667,8 @@ export default function DynamicTableView() {
                           <SelectValue placeholder="בחר חשבון מודעות" />
                         </SelectTrigger>
                         <SelectContent>
-                          {adAccounts
-                            ?.filter((account: any) => 
+                          {(adAccounts || [])
+                            .filter((account: any) => 
                               account.name?.toLowerCase().includes(adAccountSearch.toLowerCase()) ||
                               account.id?.includes(adAccountSearch)
                             )
