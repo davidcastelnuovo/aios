@@ -571,6 +571,49 @@ export default function DynamicTableView() {
         </div>
       </div>
 
+      {/* Summary Stats for Facebook Insights */}
+      {table.integration_type === 'facebook_insights' && records && records.length > 0 && (
+        <Card className="mb-4 p-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
+            {(() => {
+              const totals = records.reduce((acc, record) => ({
+                impressions: acc.impressions + (Number(record.data?.impressions) || 0),
+                clicks: acc.clicks + (Number(record.data?.clicks) || 0),
+                leads: acc.leads + (Number(record.data?.leads) || 0),
+                spend: acc.spend + (Number(record.data?.spend) || 0),
+              }), { impressions: 0, clicks: 0, leads: 0, spend: 0 });
+              
+              const avgCostPerLead = totals.leads > 0 ? totals.spend / totals.leads : 0;
+              
+              return (
+                <>
+                  <div>
+                    <p className="text-xs text-muted-foreground">חשיפות</p>
+                    <p className="text-lg font-bold">{totals.impressions.toLocaleString('he-IL')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">קליקים</p>
+                    <p className="text-lg font-bold">{totals.clicks.toLocaleString('he-IL')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">לידים</p>
+                    <p className="text-lg font-bold text-green-600">{totals.leads.toLocaleString('he-IL')}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">הוצאה</p>
+                    <p className="text-lg font-bold">₪{totals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">עלות לליד</p>
+                    <p className="text-lg font-bold text-blue-600">₪{avgCostPerLead.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</p>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </Card>
+      )}
+
       {isLoading ? (
         <Skeleton className="h-96 w-full" />
       ) : (
@@ -697,8 +740,24 @@ export default function DynamicTableView() {
                     const editValue = isEditing ? (cellValues[cellKey] ?? '') : '';
                     
                     // Format display value
-                    const formatDisplayValue = (value: any, fieldType: string): string => {
+                    const formatDisplayValue = (value: any, fieldType: string, fieldKey: string): string => {
                       if (value === null || value === undefined || value === '') return '';
+                      
+                      // Format date fields
+                      if (fieldType === 'date' || fieldKey === 'date') {
+                        try {
+                          const date = new Date(value);
+                          if (!isNaN(date.getTime())) {
+                            return date.toLocaleDateString('he-IL', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric'
+                            });
+                          }
+                        } catch {
+                          return String(value);
+                        }
+                      }
                       
                       // Check if it's a number (either by field type or by actual type)
                       if (fieldType === 'number' || typeof value === 'number') {
@@ -721,7 +780,7 @@ export default function DynamicTableView() {
                       return String(value);
                     };
                     
-                    const displayValue = isEditing ? editValue : formatDisplayValue(rawValue, field.type);
+                    const displayValue = isEditing ? editValue : formatDisplayValue(rawValue, field.type, field.key);
                     
                     return (
                       <div 

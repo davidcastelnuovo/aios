@@ -6,6 +6,51 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
 };
 
+// Helper to get date range for filtering
+function getDateRange(filter: string): { startDate: string | null; endDate: string | null } {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let startDate: string | null = null;
+  let endDate: string | null = null;
+  
+  switch (filter) {
+    case 'today':
+      startDate = today.toISOString().split('T')[0];
+      endDate = startDate;
+      break;
+    case 'yesterday':
+      const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+      startDate = yesterday.toISOString().split('T')[0];
+      endDate = startDate;
+      break;
+    case 'this_week':
+      const dayOfWeek = now.getDay();
+      const startOfWeek = new Date(today.getTime() - dayOfWeek * 24 * 60 * 60 * 1000);
+      startDate = startOfWeek.toISOString().split('T')[0];
+      endDate = today.toISOString().split('T')[0];
+      break;
+    case 'last_7_days':
+      startDate = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      endDate = today.toISOString().split('T')[0];
+      break;
+    case 'last_14_days':
+      startDate = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      endDate = today.toISOString().split('T')[0];
+      break;
+    case 'last_30_days':
+      startDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      endDate = today.toISOString().split('T')[0];
+      break;
+    case 'this_month':
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      startDate = startOfMonth.toISOString().split('T')[0];
+      endDate = today.toISOString().split('T')[0];
+      break;
+  }
+  
+  return { startDate, endDate };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -58,57 +103,43 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Calculate date range based on filter
-      let startDate: string | null = null;
-      let endDate: string | null = null;
+      // First get all records
+      const { data: records, error } = await supabase.from('crm_records')
+        .select('*')
+        .eq('table_id', table_id)
+        .eq('tenant_id', tenantId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Filter by date in data->'date' field if filter is provided
+      let filteredRecords = records || [];
       
       if (date_filter && date_filter !== 'all') {
-        const now = new Date();
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const { startDate, endDate } = getDateRange(date_filter);
         
-        switch (date_filter) {
-          case 'today':
-            startDate = today.toISOString();
-            endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1).toISOString();
-            break;
-          case 'yesterday':
-            const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-            startDate = yesterday.toISOString();
-            endDate = new Date(yesterday.getTime() + 24 * 60 * 60 * 1000 - 1).toISOString();
-            break;
-          case 'this_week':
-            const dayOfWeek = now.getDay();
-            const startOfWeek = new Date(today.getTime() - dayOfWeek * 24 * 60 * 60 * 1000);
-            startDate = startOfWeek.toISOString();
-            break;
-          case 'last_7_days':
-            startDate = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
-            break;
-          case 'last_14_days':
-            startDate = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
-            break;
-          case 'last_30_days':
-            startDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-            break;
-          case 'this_month':
-            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            startDate = startOfMonth.toISOString();
-            break;
+        if (startDate) {
+          filteredRecords = filteredRecords.filter((record: any) => {
+            const recordDate = record.data?.date;
+            if (!recordDate) return false;
+            
+            // Compare dates as strings (YYYY-MM-DD format)
+            if (endDate) {
+              return recordDate >= startDate && recordDate <= endDate;
+            }
+            return recordDate >= startDate;
+          });
         }
       }
 
-      let query = supabase.from('crm_records')
-        .select('*')
-        .eq('table_id', table_id)
-        .eq('tenant_id', tenantId);
-      
-      if (startDate) query = query.gte('created_at', startDate);
-      if (endDate) query = query.lte('created_at', endDate);
-      
-      const { data: records, error } = await query.order('created_at', { ascending: false });
+      // Sort by date descending (newest first)
+      filteredRecords.sort((a: any, b: any) => {
+        const dateA = a.data?.date || '';
+        const dateB = b.data?.date || '';
+        return dateB.localeCompare(dateA);
+      });
 
-      if (error) throw error;
-      return new Response(JSON.stringify(records), {
+      return new Response(JSON.stringify(filteredRecords), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }

@@ -7,9 +7,9 @@ const corsHeaders = {
 };
 
 interface InsightRecord {
+  date: string;
   campaign_id: string;
   campaign_name: string;
-  campaign_status?: string;
   impressions: number;
   clicks: number;
   cpm: number;
@@ -17,8 +17,6 @@ interface InsightRecord {
   leads: number;
   cost_per_lead: number;
   spend: number;
-  date_start: string;
-  date_stop: string;
 }
 
 Deno.serve(async (req) => {
@@ -137,10 +135,10 @@ Deno.serve(async (req) => {
     const sinceStr = since.toISOString().split('T')[0];
     const untilStr = until.toISOString().split('T')[0];
 
-    console.log(`Syncing insights for ${adAccountId} from ${sinceStr} to ${untilStr}`);
+    console.log(`Syncing daily insights for ${adAccountId} from ${sinceStr} to ${untilStr}`);
 
-    // Fetch insights from Facebook
-    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,cost_per_action_type,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&limit=500&access_token=${accessToken}`;
+    // Fetch insights from Facebook with time_increment=1 for daily breakdown
+    const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,cost_per_action_type,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&limit=500&access_token=${accessToken}`;
     
     const response = await fetch(insightsUrl);
     const data = await response.json();
@@ -165,6 +163,7 @@ Deno.serve(async (req) => {
       const costPerLead = cplAction ? parseFloat(cplAction.value) : 0;
 
       return {
+        date: insight.date_start, // Use date_start as the single date field
         campaign_id: insight.campaign_id,
         campaign_name: insight.campaign_name,
         impressions: parseInt(insight.impressions) || 0,
@@ -174,16 +173,15 @@ Deno.serve(async (req) => {
         leads,
         cost_per_lead: costPerLead,
         spend: parseFloat(insight.spend) || 0,
-        date_start: insight.date_start,
-        date_stop: insight.date_stop,
       };
     });
 
-    console.log(`Got ${insights.length} campaign insights`);
+    console.log(`Got ${insights.length} daily campaign insights`);
 
     // Make sure fields exist for Facebook Insights table
-    const fieldKeys = ['campaign_name', 'campaign_id', 'impressions', 'clicks', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend', 'date_start', 'date_stop'];
-    const fieldNames = ['שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'עלות לליד', 'הוצאה', 'תאריך התחלה', 'תאריך סיום'];
+    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend'];
+    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'עלות לליד', 'הוצאה'];
+    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
     
     for (let i = 0; i < fieldKeys.length; i++) {
       const { data: existingField } = await supabase
@@ -198,11 +196,17 @@ Deno.serve(async (req) => {
           table_id,
           key: fieldKeys[i],
           name: fieldNames[i],
-          type: i >= 2 && i <= 8 ? 'number' : 'text',
+          type: fieldTypes[i],
           position: i,
         });
       }
     }
+
+    // Delete old fields that are no longer needed (date_start, date_stop)
+    await supabase.from('crm_fields')
+      .delete()
+      .eq('table_id', table_id)
+      .in('key', ['date_start', 'date_stop']);
 
     // Delete existing records and insert new ones
     await supabase
@@ -232,7 +236,7 @@ Deno.serve(async (req) => {
       })
       .eq('id', table_id);
 
-    console.log(`Successfully synced ${insights.length} records`);
+    console.log(`Successfully synced ${insights.length} daily records`);
 
     return new Response(JSON.stringify({ 
       success: true,
