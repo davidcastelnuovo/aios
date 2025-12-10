@@ -55,7 +55,7 @@ serve(async (req) => {
 
       case 'POST': {
         const body = await req.json();
-        const { name, slug, description, icon, category } = body;
+        const { name, slug, description, icon, category, integration_type, integration_settings } = body;
 
         if (!name || !slug) {
           return new Response(JSON.stringify({ error: 'Name and slug are required' }), {
@@ -87,6 +87,8 @@ serve(async (req) => {
             description,
             icon,
             category,
+            integration_type: integration_type || null,
+            integration_settings: integration_settings || {},
             created_by: user.id,
           })
           .select()
@@ -94,7 +96,7 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        console.log(`✅ Created table: ${name} (${table.id})`);
+        console.log(`✅ Created table: ${name} (${table.id})${integration_type ? ` [${integration_type}]` : ''}`);
 
         return new Response(JSON.stringify(table), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

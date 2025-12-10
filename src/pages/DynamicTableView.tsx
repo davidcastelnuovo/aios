@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar, RefreshCw, Facebook } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -32,12 +32,15 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 
 interface CrmTable {
   id: string;
   name: string;
   slug: string;
   description: string | null;
+  integration_type: string | null;
+  integration_settings: any;
 }
 
 interface CrmField {
@@ -361,6 +364,26 @@ export default function DynamicTableView() {
     },
   });
 
+  const syncFacebookMutation = useMutation({
+    mutationFn: async () => {
+      if (!table?.id) throw new Error('No table');
+      const response = await supabase.functions.invoke('sync-facebook-insights', {
+        method: 'POST',
+        body: { table_id: table.id },
+      });
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      toast.success(`נתוני פייסבוק סונכרנו בהצלחה (${data.records_synced} קמפיינים)`);
+    },
+    onError: (error: any) => {
+      toast.error('שגיאה בסנכרון מפייסבוק: ' + error.message);
+    },
+  });
+
   const handleCellChange = (recordId: string, key: string, value: string) => {
     updateCellMutation.mutate({ recordId, key, value });
   };
@@ -459,12 +482,36 @@ export default function DynamicTableView() {
             חזור
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">{table.name}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold">{table.name}</h1>
+              {table.integration_type === 'facebook_insights' && (
+                <Badge variant="secondary" className="gap-1">
+                  <Facebook className="h-3 w-3 text-blue-600" />
+                  Facebook
+                </Badge>
+              )}
+            </div>
             {table.description && <p className="text-muted-foreground mt-1">{table.description}</p>}
+            {table.integration_type === 'facebook_insights' && table.integration_settings?.last_sync_at && (
+              <p className="text-xs text-muted-foreground">
+                עודכן לאחרונה: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
+              </p>
+            )}
           </div>
         </div>
         
         <div className="flex items-center gap-2">
+          {table.integration_type === 'facebook_insights' && (
+            <Button 
+              variant="outline" 
+              onClick={() => syncFacebookMutation.mutate()}
+              disabled={syncFacebookMutation.isPending}
+            >
+              <RefreshCw className={`ml-2 h-4 w-4 ${syncFacebookMutation.isPending ? 'animate-spin' : ''}`} />
+              {syncFacebookMutation.isPending ? 'מסנכרן...' : 'סנכרן עכשיו'}
+            </Button>
+          )}
+          
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-muted-foreground" />
             <Select value={dateFilter} onValueChange={setDateFilter}>

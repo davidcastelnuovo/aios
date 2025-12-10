@@ -3,8 +3,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook } from "lucide-react";
 import { SimpleTableDialog } from "@/components/dynamic-tables/SimpleTableDialog";
+import { FacebookTableDialog } from "@/components/dynamic-tables/FacebookTableDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -42,6 +49,8 @@ interface CrmTable {
   description: string | null;
   icon: string | null;
   category: string | null;
+  integration_type: string | null;
+  integration_settings: any;
 }
 
 export default function DynamicTables() {
@@ -49,10 +58,11 @@ export default function DynamicTables() {
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showFacebookDialog, setShowFacebookDialog] = useState(false);
   const [editingTable, setEditingTable] = useState<CrmTable | null>(null);
   const [deletingTable, setDeletingTable] = useState<CrmTable | null>(null);
   const [editName, setEditName] = useState("");
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['ללא קבוצה']));
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['ללא קבוצה', 'Facebook Insights']));
 
   const { data: tables, isLoading } = useQuery({
     queryKey: ['crm-tables'],
@@ -191,10 +201,24 @@ export default function DynamicTables() {
             צור וערוך טבלאות נתונים עם webhook integration
           </p>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)}>
-          <Plus className="ml-2 h-4 w-4" />
-          טבלה חדשה
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button>
+              <Plus className="ml-2 h-4 w-4" />
+              טבלה חדשה
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setShowCreateDialog(true)}>
+              <Table2 className="ml-2 h-4 w-4" />
+              טבלה רגילה
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowFacebookDialog(true)}>
+              <Facebook className="ml-2 h-4 w-4 text-blue-600" />
+              טבלת Facebook Insights
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {isLoading ? (
@@ -253,7 +277,11 @@ export default function DynamicTables() {
                       <CardHeader>
                         <div className="flex items-center justify-between">
                           <CardTitle className="flex items-center gap-2">
-                            <FileSpreadsheet className="h-5 w-5" />
+                            {table.integration_type === 'facebook_insights' ? (
+                              <Facebook className="h-5 w-5 text-blue-600" />
+                            ) : (
+                              <FileSpreadsheet className="h-5 w-5" />
+                            )}
                             {table.name}
                           </CardTitle>
                           <div className="flex gap-1">
@@ -279,7 +307,18 @@ export default function DynamicTables() {
                       </CardHeader>
                       <CardContent>
                         <p className="text-sm text-muted-foreground">
-                          לחץ לצפייה וניהול
+                          {table.integration_type === 'facebook_insights' ? (
+                            <>
+                              <span className="text-blue-600">סנכרון אוטומטי</span>
+                              {table.integration_settings?.last_sync_at && (
+                                <span className="mr-2">
+                                  • עודכן {new Date(table.integration_settings.last_sync_at).toLocaleDateString('he-IL')}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            'לחץ לצפייה וניהול'
+                          )}
                         </p>
                       </CardContent>
                     </Card>
@@ -294,6 +333,11 @@ export default function DynamicTables() {
       <SimpleTableDialog
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
+      />
+
+      <FacebookTableDialog
+        open={showFacebookDialog}
+        onOpenChange={setShowFacebookDialog}
       />
 
       {/* Edit Dialog */}
