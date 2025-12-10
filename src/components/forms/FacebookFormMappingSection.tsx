@@ -246,9 +246,12 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
             </SelectContent>
           </Select>
           {pages.length === 0 && !loadingPages && (
-            <p className="text-xs text-muted-foreground">
-              לא נמצאו עמודים. וודא שה-Access Token תקף ויש לך הרשאות לעמודים.
-            </p>
+            <Alert variant="destructive" className="mt-2">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                לא נמצאו עמודים. וודא שה-Access Token כולל הרשאות: <strong>pages_show_list</strong>, <strong>pages_manage_metadata</strong> ו-<strong>leads_retrieval</strong>
+              </AlertDescription>
+            </Alert>
           )}
         </div>
 
