@@ -5,7 +5,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -59,7 +66,19 @@ export default function DynamicTableView() {
   const [editingFieldName, setEditingFieldName] = useState("");
   const [editingCell, setEditingCell] = useState<{ recordId: string; fieldKey: string; initialValue: string } | null>(null);
   const [cellValues, setCellValues] = useState<Record<string, string>>({});
+  const [dateFilter, setDateFilter] = useState<string>("all");
   const cellInputRef = useRef<HTMLInputElement>(null);
+
+  const dateFilterOptions = [
+    { value: "all", label: "כל התאריכים" },
+    { value: "today", label: "היום" },
+    { value: "yesterday", label: "אתמול" },
+    { value: "this_week", label: "השבוע" },
+    { value: "last_7_days", label: "7 ימים אחרונים" },
+    { value: "last_14_days", label: "14 יום" },
+    { value: "last_30_days", label: "30 יום" },
+    { value: "this_month", label: "החודש" },
+  ];
 
   const { data: tables, isLoading: tablesLoading } = useQuery({
     queryKey: ['crm-tables'],
@@ -91,12 +110,16 @@ export default function DynamicTableView() {
   });
 
   const { data: records, isLoading: recordsLoading } = useQuery({
-    queryKey: ['crm-records', table?.id],
+    queryKey: ['crm-records', table?.id, dateFilter],
     queryFn: async () => {
       if (!table?.id) return [];
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
-      const response = await supabase.functions.invoke(`crm-records?table_id=${table.id}`, {
+      const params = new URLSearchParams({ table_id: table.id });
+      if (dateFilter !== 'all') {
+        params.append('date_filter', dateFilter);
+      }
+      const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
         method: 'GET',
       });
       if (response.error) throw response.error;
@@ -442,6 +465,22 @@ export default function DynamicTableView() {
         </div>
         
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <Select value={dateFilter} onValueChange={setDateFilter}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="סנן לפי תאריך" />
+              </SelectTrigger>
+              <SelectContent>
+                {dateFilterOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          
           <Dialog open={showWebhookDialog} onOpenChange={setShowWebhookDialog}>
             <DialogContent>
               <DialogHeader>

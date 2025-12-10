@@ -50,15 +50,62 @@ Deno.serve(async (req) => {
     if (method === 'GET') {
       const url = new URL(req.url);
       const table_id = url.searchParams.get('table_id');
+      const date_filter = url.searchParams.get('date_filter');
+      
       if (!table_id) {
         return new Response(JSON.stringify({ error: 'table_id required' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
 
-      const { data: records, error } = await supabase.from('crm_records')
-        .select('*').eq('table_id', table_id).eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false });
+      // Calculate date range based on filter
+      let startDate: string | null = null;
+      let endDate: string | null = null;
+      
+      if (date_filter && date_filter !== 'all') {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        
+        switch (date_filter) {
+          case 'today':
+            startDate = today.toISOString();
+            endDate = new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1).toISOString();
+            break;
+          case 'yesterday':
+            const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+            startDate = yesterday.toISOString();
+            endDate = new Date(yesterday.getTime() + 24 * 60 * 60 * 1000 - 1).toISOString();
+            break;
+          case 'this_week':
+            const dayOfWeek = now.getDay();
+            const startOfWeek = new Date(today.getTime() - dayOfWeek * 24 * 60 * 60 * 1000);
+            startDate = startOfWeek.toISOString();
+            break;
+          case 'last_7_days':
+            startDate = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+            break;
+          case 'last_14_days':
+            startDate = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
+            break;
+          case 'last_30_days':
+            startDate = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+            break;
+          case 'this_month':
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            startDate = startOfMonth.toISOString();
+            break;
+        }
+      }
+
+      let query = supabase.from('crm_records')
+        .select('*')
+        .eq('table_id', table_id)
+        .eq('tenant_id', tenantId);
+      
+      if (startDate) query = query.gte('created_at', startDate);
+      if (endDate) query = query.lte('created_at', endDate);
+      
+      const { data: records, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
       return new Response(JSON.stringify(records), {
