@@ -90,9 +90,10 @@ Deno.serve(async (req) => {
       .from('tenant_integrations')
       .select('api_key')
       .eq('tenant_id', tenantId)
-      .eq('integration_type', 'facebook')
+      .in('integration_type', ['facebook', 'facebook_lead_ads'])
       .eq('is_active', true)
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     if (!integration?.api_key) {
       return new Response(JSON.stringify({ error: 'Facebook not configured' }), {
