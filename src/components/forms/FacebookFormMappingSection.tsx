@@ -80,7 +80,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   const { data: pagesData, isLoading: loadingPages, isFetching: fetchingPages, refetch: refetchPages } = useQuery({
     queryKey: ['facebook-pages', tenantId, accessToken],
     queryFn: async () => {
-      if (!accessToken) return { pages: [] };
+      if (!accessToken) return { pages: [], pageTokens: {} };
       
       console.log('Fetching Facebook pages with token:', accessToken?.substring(0, 20) + '...');
       
@@ -94,34 +94,39 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
         throw error;
       }
       
-      // Store page tokens
+      // Build page tokens map
+      const tokens: Record<string, string> = {};
       if (data?.pages) {
-        const tokens: Record<string, string> = {};
         data.pages.forEach((page: FacebookPage) => {
           if (page.access_token) {
             tokens[page.id] = page.access_token;
           }
         });
-        setPageTokens(tokens);
       }
       
-      return data;
+      return { pages: data?.pages || [], pageTokens: tokens };
     },
     enabled: !!accessToken,
-    staleTime: 0, // Always refetch when requested
+    staleTime: 0,
   });
 
-  // Fetch forms for selected page
+  // Get page tokens from query data
+  const pageTokensFromQuery = pagesData?.pageTokens || {};
+  
+  // Merge with manually entered tokens
+  const effectivePageTokens = { ...pageTokensFromQuery, ...pageTokens };
+
+  // Fetch forms for selected page - use the token directly from the merged map
   const { data: formsData, isLoading: loadingForms, refetch: refetchForms } = useQuery({
-    queryKey: ['facebook-forms', selectedPageId, accessToken, manualPageToken],
+    queryKey: ['facebook-forms', selectedPageId, accessToken, effectivePageTokens[selectedPageId]],
     queryFn: async () => {
       if (!accessToken || !selectedPageId) return { forms: [] };
       
-      // Use page-specific token if available, otherwise manual token, otherwise user token
-      const pageAccessToken = pageTokens[selectedPageId] || manualPageToken || null;
+      // Use page-specific token from the effective tokens map
+      const pageAccessToken = effectivePageTokens[selectedPageId] || manualPageToken || null;
       
       console.log('Fetching forms for page:', selectedPageId);
-      console.log('Using page token:', pageAccessToken ? 'yes (page-specific)' : 'no (will use user token)');
+      console.log('Using page token:', pageAccessToken ? `yes (${pageAccessToken.substring(0, 20)}...)` : 'no (will use user token)');
       
       const { data, error } = await supabase.functions.invoke('get-facebook-forms', {
         body: { 
@@ -135,7 +140,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       if (error) throw error;
       return data;
     },
-    enabled: !!accessToken && !!selectedPageId,
+    enabled: !!accessToken && !!selectedPageId && !!effectivePageTokens[selectedPageId],
   });
 
   // Fetch existing mappings from integration settings
@@ -227,6 +232,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
 
   const pages = pagesData?.pages || [];
   const forms = formsData?.forms || [];
+  const hasPageToken = selectedPageId && !!effectivePageTokens[selectedPageId];
   const selectedForm = forms.find((f: FacebookForm) => f.id === selectedFormId);
 
   if (!accessToken) {
@@ -447,7 +453,25 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
                 ))}
               </SelectContent>
             </Select>
-            {forms.length === 0 && !loadingForms && selectedPageId && (
+            {forms.length === 0 && !loadingForms && selectedPageId && !hasPageToken && (
+              <Alert variant="destructive" className="mt-2">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>חסר Page Access Token</AlertTitle>
+                <AlertDescription>
+                  <p>לא ניתן לטעון טפסים ללא Page Access Token.</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 gap-2"
+                    onClick={() => setShowManualPageInput(true)}
+                  >
+                    <Edit2 className="h-4 w-4" />
+                    הזן Page Token ידנית
+                  </Button>
+                </AlertDescription>
+              </Alert>
+            )}
+            {forms.length === 0 && !loadingForms && selectedPageId && hasPageToken && (
               <p className="text-xs text-muted-foreground">
                 לא נמצאו טפסי Lead Ads בעמוד זה.
               </p>
