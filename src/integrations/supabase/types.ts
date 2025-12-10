@@ -2522,6 +2522,10 @@ export type Database = {
             }[]
           }
       get_client_tenant_id: { Args: { _client_id: string }; Returns: string }
+      get_cross_tenant_campaigner_ids: {
+        Args: { p_user_id: string }
+        Returns: string[]
+      }
       get_effective_setting: {
         Args: { _setting_key: string; _tenant_id: string }
         Returns: Json
