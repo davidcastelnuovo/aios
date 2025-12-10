@@ -104,6 +104,7 @@ const App = () => (
             <Route path="/t/:tenantSlug/manychat-settings" element={<ProtectedRoute requiredPermission="manychat_settings"><AppLayout><ManyChatSettings /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/green-api-settings" element={<ProtectedRoute requiredPermission="green_api_settings"><AppLayout><GreenAPISettings /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/integrations" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><Integrations /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/integrations/facebook" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><FacebookSettings /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/facebook-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><FacebookSettings /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/facebook-callback" element={<ProtectedRoute><AppLayout><FacebookCallback /></AppLayout></ProtectedRoute>} />
             
