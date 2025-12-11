@@ -425,7 +425,7 @@ const updateMutation = useMutation({
                     control={form.control}
                     name="contact_name"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className={!isFieldVisible('company_name') ? 'col-start-1' : ''}>
                         <FormLabel className="text-sm font-medium">{getFieldLabel('contact_name', 'שם איש קשר')} *</FormLabel>
                         <FormControl>
                           <Input {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
