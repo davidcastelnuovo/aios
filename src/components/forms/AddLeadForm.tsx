@@ -429,7 +429,7 @@ export function AddLeadForm() {
                 name="monthly_budget"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">תקציב חד"פ (₪)</FormLabel>
+                    <FormLabel className="text-sm font-medium">{getFieldLabel('monthly_budget', 'תקציב')} (₪)</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} placeholder="0" className="rounded-lg border-2 h-11 px-4" />
                     </FormControl>
