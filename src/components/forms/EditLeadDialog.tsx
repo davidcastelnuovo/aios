@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300" },
@@ -52,7 +53,6 @@ const formSchema = z.object({
   response_status: z.string().optional(),
   estimated_deal_value: z.string().optional(),
   monthly_budget: z.string().optional(),
-  three_month_budget: z.string().optional(),
   proposal_date: z.date().optional(),
   itai_meeting_date: z.date().optional(),
   sale_date: z.date().optional(),
@@ -87,6 +87,7 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
   const { getFieldLabel } = useCustomFieldLabels('lead');
+  const { tenantId } = useCurrentTenant();
 
 const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -100,7 +101,6 @@ const form = useForm<FormValues>({
       response_status: lead.response_status || "",
       estimated_deal_value: lead.estimated_deal_value?.toString() || "",
       monthly_budget: lead.monthly_budget?.toString() || "",
-      three_month_budget: lead.three_month_budget?.toString() || "",
       proposal_date: lead.proposal_date ? new Date(lead.proposal_date) : undefined,
       itai_meeting_date: lead.itai_meeting_date ? new Date(lead.itai_meeting_date) : undefined,
       sale_date: lead.sale_date ? new Date(lead.sale_date) : undefined,
@@ -150,16 +150,19 @@ const form = useForm<FormValues>({
   });
 
   const { data: products } = useQuery({
-    queryKey: ["products"],
+    queryKey: ["products", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("products")
         .select("*")
         .eq("active", true)
+        .eq("tenant_id", tenantId)
         .order("name");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const { data: leadUpdates, refetch: refetchUpdates } = useQuery({
@@ -194,9 +197,6 @@ const updateMutation = useMutation({
           : null,
         monthly_budget: values.monthly_budget 
           ? parseFloat(values.monthly_budget) 
-          : null,
-        three_month_budget: values.three_month_budget 
-          ? parseFloat(values.three_month_budget) 
           : null,
         proposal_date: values.proposal_date || null,
         sale_date: values.sale_date || null,
@@ -762,20 +762,6 @@ const updateMutation = useMutation({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-sm font-medium">תקציב חד"פ (₪)</FormLabel>
-                        <FormControl>
-                          <Input type="number" {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" placeholder="0" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="three_month_budget"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">הצעה 3 חודשים (₪)</FormLabel>
                         <FormControl>
                           <Input type="number" {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" placeholder="0" />
                         </FormControl>

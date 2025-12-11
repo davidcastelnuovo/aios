@@ -30,7 +30,6 @@ const formSchema = z.object({
   response_status: z.string().optional(),
   estimated_deal_value: z.string().optional(),
   monthly_budget: z.string().optional(),
-  three_month_budget: z.string().optional(),
   industry: z.string().optional(),
   products: z.string().optional(),
   notes: z.string().optional(),
@@ -62,7 +61,6 @@ export function AddLeadForm() {
       response_status: "",
       estimated_deal_value: "",
       monthly_budget: "",
-      three_month_budget: "",
       industry: "",
       products: "",
       notes: "",
@@ -99,16 +97,19 @@ export function AddLeadForm() {
   });
 
   const { data: products } = useQuery({
-    queryKey: ["products"],
+    queryKey: ["products", tenantId],
     queryFn: async () => {
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("products")
         .select("*")
         .eq("active", true)
+        .eq("tenant_id", tenantId)
         .order("name");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const createMutation = useMutation({
@@ -128,9 +129,6 @@ export function AddLeadForm() {
           : null,
         monthly_budget: values.monthly_budget 
           ? parseFloat(values.monthly_budget) 
-          : null,
-        three_month_budget: values.three_month_budget 
-          ? parseFloat(values.three_month_budget) 
           : null,
         industry: values.industry || null,
         products: values.products || null,
@@ -432,20 +430,6 @@ export function AddLeadForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-sm font-medium">תקציב חד"פ (₪)</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} placeholder="0" className="rounded-lg border-2 h-11 px-4" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="three_month_budget"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">הצעה 3 חודשים (₪)</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} placeholder="0" className="rounded-lg border-2 h-11 px-4" />
                     </FormControl>
