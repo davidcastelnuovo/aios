@@ -52,10 +52,16 @@ export function useUserTenants(userId?: string | null) {
         return [] as any[];
       }
 
-      const tenants = (data as any)?.tenants ?? [];
+      const tenants = (data as any)?.tenants;
+      // Ensure tenants is always an array before filtering
+      if (!Array.isArray(tenants)) {
+        console.warn("Tenants data is not an array:", tenants);
+        return [] as any[];
+      }
+      
       console.log(`✅ Received ${tenants.length} tenants from backend`);
       // sanitize
-      return (tenants as any[]).filter((t) => t && t.id && t.name);
+      return tenants.filter((t: any) => t && t.id && t.name);
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,

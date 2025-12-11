@@ -107,7 +107,8 @@ export default function DynamicTableView() {
       if (!session) throw new Error('Not authenticated');
       const response = await supabase.functions.invoke('crm-tables', { method: 'GET' });
       if (response.error) throw response.error;
-      return response.data as CrmTable[];
+      // Ensure we always return an array
+      return Array.isArray(response.data) ? response.data as CrmTable[] : [];
     },
   });
 
@@ -123,7 +124,9 @@ export default function DynamicTableView() {
         method: 'POST',
       });
       if (response.error) throw response.error;
-      return response.data?.ad_accounts || [];
+      // Ensure we always return an array
+      const accounts = response.data?.ad_accounts;
+      return Array.isArray(accounts) ? accounts : [];
     },
     enabled: showSettingsDialog && table?.integration_type === 'facebook_insights',
   });
@@ -158,7 +161,8 @@ export default function DynamicTableView() {
         method: 'GET',
       });
       if (response.error) throw response.error;
-      return response.data as CrmRecord[];
+      // Ensure we always return an array
+      return Array.isArray(response.data) ? response.data as CrmRecord[] : [];
     },
     enabled: !!table?.id,
   });

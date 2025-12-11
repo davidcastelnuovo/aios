@@ -129,7 +129,8 @@ export default function DynamicTables() {
       });
 
       if (response.error) throw response.error;
-      return response.data as CrmTable[];
+      // Ensure we always return an array
+      return Array.isArray(response.data) ? response.data as CrmTable[] : [];
     },
   });
 
