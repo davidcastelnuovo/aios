@@ -21,24 +21,24 @@ interface FieldMapping {
   systemField: string | null;
 }
 
-const SYSTEM_FIELDS = [
-  { key: "company_name", label: "שם העסק", required: true },
-  { key: "contact_name", label: "שם איש קשר", required: false },
-  { key: "email", label: "אימייל", required: false },
-  { key: "phone", label: "טלפון", required: false },
-  { key: "source", label: "מקור הגעה", required: false },
-  { key: "status", label: "סטטוס", required: false },
-  { key: "notes", label: "הערות", required: false },
-  { key: "products", label: "מוצרים", required: false },
-  { key: "campaign_name", label: "שם קמפיין", required: false },
-  { key: "industry", label: "תעשייה/תחום", required: false },
-  { key: "monthly_budget", label: "תקציב חד\"פ", required: false },
-  { key: "three_month_budget", label: "הצעה 3 חודשים", required: false },
-  { key: "estimated_deal_value", label: "שווי עסקה", required: false },
-  { key: "proposal_date", label: "תאריך הצעה", required: false },
-  { key: "won_date", label: "תאריך סגירה", required: false },
-  { key: "created_at", label: "תאריך יצירה", required: false },
-  { key: "folder_link", label: "קישור לתיקייה", required: false },
+const BASE_SYSTEM_FIELDS = [
+  { key: "company_name", label: "שם העסק" },
+  { key: "contact_name", label: "שם איש קשר" },
+  { key: "email", label: "אימייל" },
+  { key: "phone", label: "טלפון" },
+  { key: "source", label: "מקור הגעה" },
+  { key: "status", label: "סטטוס" },
+  { key: "notes", label: "הערות" },
+  { key: "products", label: "מוצרים" },
+  { key: "campaign_name", label: "שם קמפיין" },
+  { key: "industry", label: "תעשייה/תחום" },
+  { key: "monthly_budget", label: "תקציב חד\"פ" },
+  { key: "three_month_budget", label: "הצעה 3 חודשים" },
+  { key: "estimated_deal_value", label: "שווי עסקה" },
+  { key: "proposal_date", label: "תאריך הצעה" },
+  { key: "won_date", label: "תאריך סגירה" },
+  { key: "created_at", label: "תאריך יצירה" },
+  { key: "folder_link", label: "קישור לתיקייה" },
 ];
 
 const AUTO_DETECT_MAPPINGS: Record<string, string> = {
@@ -123,6 +123,34 @@ export function ImportLeadsWithMapping() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+
+  // Fetch custom fields configuration
+  const { data: customFields = [] } = useQuery({
+    queryKey: ["custom-fields", tenantId, "lead"],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("custom_fields")
+        .select("field_key, is_required, is_visible")
+        .eq("tenant_id", tenantId)
+        .eq("entity_type", "lead");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId && open,
+  });
+
+  // Build dynamic system fields based on custom_fields
+  const systemFields = useMemo(() => {
+    return BASE_SYSTEM_FIELDS.map(field => {
+      const customField = customFields.find(cf => cf.field_key === field.key);
+      return {
+        ...field,
+        required: customField?.is_required ?? false,
+        visible: customField?.is_visible ?? true,
+      };
+    }).filter(f => f.visible);
+  }, [customFields]);
 
   // Fetch agencies
   const { data: agencies = [] } = useQuery({
@@ -251,9 +279,10 @@ export function ImportLeadsWithMapping() {
     );
   };
 
-  const hasCompanyNameMapping = useMemo(() => {
-    return mappings.some(m => m.systemField === 'company_name');
-  }, [mappings]);
+  const missingRequiredFields = useMemo(() => {
+    const requiredFields = systemFields.filter(f => f.required);
+    return requiredFields.filter(rf => !mappings.some(m => m.systemField === rf.key));
+  }, [mappings, systemFields]);
 
   const previewData = useMemo(() => {
     if (rawData.length === 0) return [];
@@ -319,8 +348,12 @@ export function ImportLeadsWithMapping() {
       return;
     }
 
-    if (!hasCompanyNameMapping) {
-      toast({ title: "שגיאה", description: "חובה למפות את שדה שם העסק", variant: "destructive" });
+    if (missingRequiredFields.length > 0) {
+      toast({ 
+        title: "שגיאה", 
+        description: `חובה למפות את השדות: ${missingRequiredFields.map(f => f.label).join(', ')}`,
+        variant: "destructive" 
+      });
       return;
     }
 
@@ -598,7 +631,7 @@ export function ImportLeadsWithMapping() {
                   <SelectItem value="skip">
                     <span className="text-muted-foreground">דלג על שדה זה</span>
                   </SelectItem>
-                  {SYSTEM_FIELDS.map(field => (
+                  {systemFields.map(field => (
                     <SelectItem key={field.key} value={field.key}>
                       {field.label} {field.required && "*"}
                     </SelectItem>
@@ -610,8 +643,8 @@ export function ImportLeadsWithMapping() {
         </div>
       </ScrollArea>
 
-      {!hasCompanyNameMapping && (
-        <p className="text-sm text-destructive">* חובה למפות את שדה "שם העסק"</p>
+      {missingRequiredFields.length > 0 && (
+        <p className="text-sm text-destructive">* חובה למפות: {missingRequiredFields.map(f => f.label).join(', ')}</p>
       )}
 
       <div className="flex justify-between pt-4">
@@ -621,7 +654,7 @@ export function ImportLeadsWithMapping() {
         </Button>
         <Button 
           onClick={() => setStep("preview")} 
-          disabled={!hasCompanyNameMapping || !defaultAgencyId}
+          disabled={missingRequiredFields.length > 0 || !defaultAgencyId}
         >
           המשך לתצוגה מקדימה
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -644,7 +677,7 @@ export function ImportLeadsWithMapping() {
         <Table>
           <TableHeader>
             <TableRow>
-              {SYSTEM_FIELDS.filter(f => mappings.some(m => m.systemField === f.key)).map(field => (
+              {systemFields.filter(f => mappings.some(m => m.systemField === f.key)).map(field => (
                 <TableHead key={field.key} className="whitespace-nowrap">
                   {field.label}
                 </TableHead>
@@ -654,7 +687,7 @@ export function ImportLeadsWithMapping() {
           <TableBody>
             {previewData.map((row, idx) => (
               <TableRow key={idx}>
-                {SYSTEM_FIELDS.filter(f => mappings.some(m => m.systemField === f.key)).map(field => (
+                {systemFields.filter(f => mappings.some(m => m.systemField === f.key)).map(field => (
                   <TableCell key={field.key} className="max-w-[150px] truncate">
                     {row[field.key] ?? "-"}
                   </TableCell>
