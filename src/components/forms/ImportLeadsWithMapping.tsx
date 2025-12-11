@@ -210,9 +210,26 @@ export function ImportLeadsWithMapping() {
       return parsed.data || [];
     } else if (extension === 'xlsx' || extension === 'xls') {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
+      const workbook = XLSX.read(buffer, { 
+        type: 'array',
+        cellFormula: true,
+        cellNF: true,
+        cellText: true,
+      });
       const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-      return XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+      const data = XLSX.utils.sheet_to_json(firstSheet, { 
+        defval: '',
+        raw: true,
+      });
+      
+      // Normalize column names by trimming whitespace
+      return data.map((row: any) => {
+        const normalized: Record<string, any> = {};
+        Object.entries(row).forEach(([key, value]) => {
+          normalized[key.trim()] = value;
+        });
+        return normalized;
+      });
     }
     
     throw new Error("פורמט קובץ לא נתמך. יש להעלות CSV או Excel");
@@ -614,32 +631,43 @@ export function ImportLeadsWithMapping() {
       <div className="text-sm font-medium mb-2">מיפוי שדות:</div>
       <ScrollArea className="h-[300px] border rounded-lg p-2">
         <div className="space-y-2">
-          {mappings.map((mapping, idx) => (
-            <div key={idx} className="flex items-center gap-3 p-2 bg-muted/50 rounded">
-              <div className="flex-1 font-mono text-sm truncate" title={mapping.csvColumn}>
-                {mapping.csvColumn}
-              </div>
-              <ArrowLeft className="h-4 w-4 text-muted-foreground" />
-              <Select
-                value={mapping.systemField || "skip"}
-                onValueChange={(value) => updateMapping(mapping.csvColumn, value)}
-              >
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="skip">
-                    <span className="text-muted-foreground">דלג על שדה זה</span>
-                  </SelectItem>
-                  {systemFields.map(field => (
-                    <SelectItem key={field.key} value={field.key}>
-                      {field.label} {field.required && "*"}
+          {mappings.map((mapping, idx) => {
+            const sampleValue = rawData[0]?.[mapping.csvColumn];
+            const displaySample = sampleValue !== undefined && sampleValue !== null && sampleValue !== '' 
+              ? String(sampleValue) 
+              : "(ריק)";
+            return (
+              <div key={idx} className="flex items-center gap-3 p-2 bg-muted/50 rounded">
+                <div className="flex-1">
+                  <div className="font-mono text-sm truncate" title={mapping.csvColumn}>
+                    {mapping.csvColumn}
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate" title={displaySample}>
+                    דוגמה: {displaySample}
+                  </div>
+                </div>
+                <ArrowLeft className="h-4 w-4 text-muted-foreground" />
+                <Select
+                  value={mapping.systemField || "skip"}
+                  onValueChange={(value) => updateMapping(mapping.csvColumn, value)}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="skip">
+                      <span className="text-muted-foreground">דלג על שדה זה</span>
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ))}
+                    {systemFields.map(field => (
+                      <SelectItem key={field.key} value={field.key}>
+                        {field.label} {field.required && "*"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            );
+          })}
         </div>
       </ScrollArea>
 
