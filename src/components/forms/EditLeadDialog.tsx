@@ -761,7 +761,7 @@ const updateMutation = useMutation({
                     name="monthly_budget"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-sm font-medium">תקציב חד"פ (₪)</FormLabel>
+                        <FormLabel className="text-sm font-medium">{getFieldLabel('monthly_budget', 'תקציב')} (₪)</FormLabel>
                         <FormControl>
                           <Input type="number" {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" placeholder="0" />
                         </FormControl>
