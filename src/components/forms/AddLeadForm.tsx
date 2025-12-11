@@ -47,7 +47,7 @@ export function AddLeadForm() {
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
-  const { getFieldLabel } = useCustomFieldLabels('lead');
+  const { getFieldLabel, isFieldVisible } = useCustomFieldLabels('lead');
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -185,26 +185,28 @@ export function AddLeadForm() {
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="company_name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">שם העסק *</FormLabel>
-                    <FormControl>
-                      <Input {...field} className="rounded-lg border-2 h-11 px-4" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {isFieldVisible('company_name') && (
+                <FormField
+                  control={form.control}
+                  name="company_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">{getFieldLabel('company_name', 'שם העסק')} *</FormLabel>
+                      <FormControl>
+                        <Input {...field} className="rounded-lg border-2 h-11 px-4" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <FormField
                 control={form.control}
                 name="contact_name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-sm font-medium">שם איש קשר</FormLabel>
+                    <FormLabel className="text-sm font-medium">{getFieldLabel('contact_name', 'שם איש קשר')}</FormLabel>
                     <FormControl>
                       <Input {...field} className="rounded-lg border-2 h-11 px-4" />
                     </FormControl>
