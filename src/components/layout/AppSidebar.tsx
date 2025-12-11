@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -57,6 +57,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { useAgency } from "@/contexts/AgencyContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useMenuItems, MenuItem } from "@/hooks/useMenuItems";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -109,6 +110,7 @@ export function AppSidebar() {
 
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId } = useTenant();
+  const { selectedAgency } = useAgency();
   const tenantPath = useTenantPath();
   
   const { data: userTenants, isLoading: isLoadingTenants } = useQuery({
@@ -527,76 +529,87 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* Dynamic CRM Tables Section */}
-        {crmTables && crmTables.length > 0 && hasPermission('dynamic_tables') && (
-          <Collapsible defaultOpen className="group/collapsible">
-            <SidebarGroup>
-              <SidebarGroupLabel asChild>
-                <div className="flex items-center justify-between">
-                  <CollapsibleTrigger className="flex items-center gap-2 flex-1 hover:bg-accent rounded-md px-2 py-1">
-                    <Table2 className="h-4 w-4" />
-                    {!isCollapsed && <span>ניהול טבלאות</span>}
-                    <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180 mr-auto" />
-                  </CollapsibleTrigger>
-                  {!isCollapsed && (
-                    <button
-                      onClick={() => setIsQuickCreateOpen(true)}
-                      className="h-6 w-6 flex items-center justify-center rounded hover:bg-accent transition-colors"
-                      title="טבלה חדשה"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              </SidebarGroupLabel>
-              <CollapsibleContent>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {/* Management Link */}
-                    <SidebarMenuItem>
-                      <SidebarMenuButton asChild>
-                        <NavLink
-                          to={buildPath('dynamic-tables')}
-                          onClick={handleLinkClick}
-                          className={({ isActive }) =>
-                            isActive
-                              ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                              : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                          }
-                        >
-                          <Settings className="h-4 w-4" />
-                          {!isCollapsed && <span>ניהול טבלאות</span>}
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
+        {crmTables && crmTables.length > 0 && hasPermission('dynamic_tables') && (() => {
+          // Filter tables by selected agency
+          const filteredCrmTables = crmTables.filter((table: any) => {
+            if (!selectedAgency || selectedAgency === 'all') return true;
+            // Show general tables (no agency_id) and tables matching selected agency
+            return table.agency_id === null || table.agency_id === selectedAgency;
+          });
+          
+          if (filteredCrmTables.length === 0) return null;
+          
+          return (
+            <Collapsible defaultOpen className="group/collapsible">
+              <SidebarGroup>
+                <SidebarGroupLabel asChild>
+                  <div className="flex items-center justify-between">
+                    <CollapsibleTrigger className="flex items-center gap-2 flex-1 hover:bg-accent rounded-md px-2 py-1">
+                      <Table2 className="h-4 w-4" />
+                      {!isCollapsed && <span>ניהול טבלאות</span>}
+                      <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]/collapsible:rotate-180 mr-auto" />
+                    </CollapsibleTrigger>
+                    {!isCollapsed && (
+                      <button
+                        onClick={() => setIsQuickCreateOpen(true)}
+                        className="h-6 w-6 flex items-center justify-center rounded hover:bg-accent transition-colors"
+                        title="טבלה חדשה"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </SidebarGroupLabel>
+                <CollapsibleContent>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {/* Management Link */}
+                      <SidebarMenuItem>
+                        <SidebarMenuButton asChild>
+                          <NavLink
+                            to={buildPath('dynamic-tables')}
+                            onClick={handleLinkClick}
+                            className={({ isActive }) =>
+                              isActive
+                                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                                : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                            }
+                          >
+                            <Settings className="h-4 w-4" />
+                            {!isCollapsed && <span>ניהול טבלאות</span>}
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
 
-                    {/* Individual Tables */}
-                    {crmTables.map((table: any) => {
-                      const Icon = iconMap[table.icon] || Table;
-                      return (
-                        <SidebarMenuItem key={table.id}>
-                          <SidebarMenuButton asChild>
-                            <NavLink
-                              to={buildPath(`table/${table.slug}`)}
-                              onClick={handleLinkClick}
-                              className={({ isActive }) =>
-                                isActive
-                                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                                  : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                              }
-                            >
-                              <Icon className="h-4 w-4" />
-                              {!isCollapsed && <span>{table.name}</span>}
-                            </NavLink>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      );
-                    })}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </CollapsibleContent>
-            </SidebarGroup>
-          </Collapsible>
-        )}
+                      {/* Individual Tables */}
+                      {filteredCrmTables.map((table: any) => {
+                        const Icon = iconMap[table.icon] || Table;
+                        return (
+                          <SidebarMenuItem key={table.id}>
+                            <SidebarMenuButton asChild>
+                              <NavLink
+                                to={buildPath(`table/${table.slug}`)}
+                                onClick={handleLinkClick}
+                                className={({ isActive }) =>
+                                  isActive
+                                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                                    : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                                }
+                              >
+                                <Icon className="h-4 w-4" />
+                                {!isCollapsed && <span>{table.name}</span>}
+                              </NavLink>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        );
+                      })}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </CollapsibleContent>
+              </SidebarGroup>
+            </Collapsible>
+          );
+        })()}
       </SidebarContent>
 
       {/* Quick Create Table Dialog */}
