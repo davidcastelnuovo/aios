@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/table";
 import { AddLeadForm } from "@/components/forms/AddLeadForm";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
-import { ImportLeadsCSV } from "@/components/forms/ImportLeadsCSV";
+import { ImportLeadsWithMapping } from "@/components/forms/ImportLeadsWithMapping";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
@@ -868,7 +868,7 @@ export default function Leads() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <AddLeadForm />
-          <ImportLeadsCSV />
+          <ImportLeadsWithMapping />
         </div>
       </div>
 
@@ -900,7 +900,7 @@ export default function Leads() {
               </Button>
             </div>
             <div className="flex gap-2">
-              <ImportLeadsCSV />
+              <ImportLeadsWithMapping />
               <AddLeadForm />
             </div>
           </div>
