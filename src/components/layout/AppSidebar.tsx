@@ -149,7 +149,8 @@ export function AppSidebar() {
         return [];
       }
       
-      return response.data || [];
+      // Ensure we always return an array
+      return Array.isArray(response.data) ? response.data : [];
     },
     enabled: !!currentTenantId,
   });
