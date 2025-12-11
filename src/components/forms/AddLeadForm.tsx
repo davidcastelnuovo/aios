@@ -29,6 +29,8 @@ const formSchema = z.object({
   status: z.string().optional(),
   response_status: z.string().optional(),
   estimated_deal_value: z.string().optional(),
+  monthly_budget: z.string().optional(),
+  three_month_budget: z.string().optional(),
   industry: z.string().optional(),
   products: z.string().optional(),
   notes: z.string().optional(),
@@ -59,6 +61,8 @@ export function AddLeadForm() {
       status: "new",
       response_status: "",
       estimated_deal_value: "",
+      monthly_budget: "",
+      three_month_budget: "",
       industry: "",
       products: "",
       notes: "",
@@ -121,6 +125,12 @@ export function AddLeadForm() {
         response_status: (values.response_status as any) || null,
         estimated_deal_value: values.estimated_deal_value 
           ? parseFloat(values.estimated_deal_value) 
+          : null,
+        monthly_budget: values.monthly_budget 
+          ? parseFloat(values.monthly_budget) 
+          : null,
+        three_month_budget: values.three_month_budget 
+          ? parseFloat(values.three_month_budget) 
           : null,
         industry: values.industry || null,
         products: values.products || null,
@@ -406,6 +416,36 @@ export function AddLeadForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-sm font-medium">שווי שירות (₪)</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} placeholder="0" className="rounded-lg border-2 h-11 px-4" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="monthly_budget"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">תקציב חד"פ (₪)</FormLabel>
+                    <FormControl>
+                      <Input type="number" {...field} placeholder="0" className="rounded-lg border-2 h-11 px-4" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="three_month_budget"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-sm font-medium">הצעה 3 חודשים (₪)</FormLabel>
                     <FormControl>
                       <Input type="number" {...field} placeholder="0" className="rounded-lg border-2 h-11 px-4" />
                     </FormControl>

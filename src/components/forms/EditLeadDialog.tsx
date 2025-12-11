@@ -51,6 +51,8 @@ const formSchema = z.object({
   status: z.string().optional(),
   response_status: z.string().optional(),
   estimated_deal_value: z.string().optional(),
+  monthly_budget: z.string().optional(),
+  three_month_budget: z.string().optional(),
   proposal_date: z.date().optional(),
   itai_meeting_date: z.date().optional(),
   sale_date: z.date().optional(),
@@ -97,6 +99,8 @@ const form = useForm<FormValues>({
       status: lead.status || "new",
       response_status: lead.response_status || "",
       estimated_deal_value: lead.estimated_deal_value?.toString() || "",
+      monthly_budget: lead.monthly_budget?.toString() || "",
+      three_month_budget: lead.three_month_budget?.toString() || "",
       proposal_date: lead.proposal_date ? new Date(lead.proposal_date) : undefined,
       itai_meeting_date: lead.itai_meeting_date ? new Date(lead.itai_meeting_date) : undefined,
       sale_date: lead.sale_date ? new Date(lead.sale_date) : undefined,
@@ -187,6 +191,12 @@ const updateMutation = useMutation({
         response_status: (values.response_status as any) || null,
         estimated_deal_value: values.estimated_deal_value 
           ? parseFloat(values.estimated_deal_value) 
+          : null,
+        monthly_budget: values.monthly_budget 
+          ? parseFloat(values.monthly_budget) 
+          : null,
+        three_month_budget: values.three_month_budget 
+          ? parseFloat(values.three_month_budget) 
           : null,
         proposal_date: values.proposal_date || null,
         sale_date: values.sale_date || null,
@@ -744,6 +754,36 @@ const updateMutation = useMutation({
                     </FormItem>
                   )}
                 />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="monthly_budget"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">תקציב חד"פ (₪)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" placeholder="0" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="three_month_budget"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">הצעה 3 חודשים (₪)</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" placeholder="0" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
