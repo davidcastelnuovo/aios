@@ -251,7 +251,7 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   console.log('Executing send WhatsApp:', config)
   console.log('Data:', data)
   
-  const { manychat_trigger_name, field_mapping } = config
+  const { manychat_tag_id, field_mapping } = config
   
   // Get ManyChat integration settings for this tenant
   const { data: integration, error: integrationError } = await supabase
@@ -353,34 +353,42 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     }
   }
   
-  // Trigger the ManyChat flow/automation
-  const triggerName = manychat_trigger_name || 'meeting_scheduled'
-  console.log(`Triggering ManyChat flow: ${triggerName}`)
-  
-  const triggerResponse = await fetch(`${baseUrl}/sending/sendFlow`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
+  // Add tag to trigger ManyChat automation (instead of sending a Flow)
+  if (manychat_tag_id) {
+    console.log(`Adding ManyChat tag: ${manychat_tag_id}`)
+    
+    const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        subscriber_id: subscriberId,
+        tag_id: parseInt(manychat_tag_id),
+      }),
+    })
+    
+    const tagResult = await tagResponse.json()
+    console.log('ManyChat addTag response:', tagResult)
+    
+    if (!tagResponse.ok) {
+      throw new Error(`שגיאה בהוספת טאג ב-ManyChat: ${JSON.stringify(tagResult)}`)
+    }
+    
+    return {
+      success: true,
       subscriber_id: subscriberId,
-      flow_ns: triggerName,
-    }),
-  })
-  
-  const triggerResult = await triggerResponse.json()
-  console.log('ManyChat trigger response:', triggerResult)
-  
-  if (!triggerResponse.ok) {
-    throw new Error(`שגיאה בהפעלת Flow ב-ManyChat: ${JSON.stringify(triggerResult)}`)
+      fields_updated: customFieldUpdates.length,
+      tag_id: manychat_tag_id,
+      tag_result: tagResult
+    }
   }
   
   return {
     success: true,
     subscriber_id: subscriberId,
     fields_updated: customFieldUpdates.length,
-    trigger_name: triggerName,
-    trigger_result: triggerResult
+    message: 'No tag configured'
   }
 }
