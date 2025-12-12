@@ -16,7 +16,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
-import { Pencil, CalendarIcon, FileText, DollarSign, MessageSquare, Send, Trash2, Settings2 } from "lucide-react";
+import { Pencil, CalendarIcon, FileText, DollarSign, MessageSquare, Send, Trash2, Settings2, Clock, Users, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ManageLeadStatusesDialog } from "./ManageLeadStatusesDialog";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -69,6 +70,13 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
   const [newUpdate, setNewUpdate] = useState("");
   const [editingUpdateId, setEditingUpdateId] = useState<string | null>(null);
   const [editingUpdateContent, setEditingUpdateContent] = useState("");
+  
+  // Meeting scheduling state
+  const [meetingDate, setMeetingDate] = useState<Date | undefined>(undefined);
+  const [meetingTime, setMeetingTime] = useState("10:00");
+  const [meetingSubject, setMeetingSubject] = useState("");
+  const [personalMessage, setPersonalMessage] = useState("");
+  const [isSchedulingMeeting, setIsSchedulingMeeting] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
@@ -343,7 +351,89 @@ const updateMutation = useMutation({
     }
   };
 
+  const handleScheduleMeeting = async () => {
+    if (!meetingDate || !meetingTime) {
+      sonnerToast.error("נא לבחור תאריך ושעה");
+      return;
+    }
+
+    setIsSchedulingMeeting(true);
+
+    try {
+      // Combine date and time
+      const [hours, minutes] = meetingTime.split(':').map(Number);
+      const startDateTime = new Date(meetingDate);
+      startDateTime.setHours(hours, minutes, 0, 0);
+      
+      const endDateTime = new Date(startDateTime);
+      endDateTime.setHours(startDateTime.getHours() + 1); // 1 hour meeting
+
+      const subject = meetingSubject || `פגישה עם ${lead.contact_name || lead.company_name}`;
+
+      // Create calendar event
+      const { data: calendarData, error: calendarError } = await supabase.functions.invoke('add-calendar-event', {
+        body: {
+          summary: subject,
+          description: personalMessage || `פגישה עם ליד: ${lead.company_name}`,
+          start: startDateTime.toISOString(),
+          end: endDateTime.toISOString(),
+        }
+      });
+
+      let calendarLink = null;
+      if (calendarError) {
+        console.error('Calendar error:', calendarError);
+        sonnerToast.warning("הפגישה נקבעה אך לא נוספה ליומן גוגל");
+      } else {
+        calendarLink = calendarData?.eventLink;
+        sonnerToast.success("הפגישה נוספה ליומן!");
+      }
+
+      // Send email invitation if lead has email
+      if (lead.email) {
+        const { error: emailError } = await supabase.functions.invoke('send-meeting-invitation', {
+          body: {
+            to_email: lead.email,
+            to_name: lead.contact_name || lead.company_name,
+            meeting_subject: subject,
+            meeting_date: startDateTime.toISOString(),
+            meeting_time: meetingTime,
+            personal_message: personalMessage,
+            calendar_link: calendarLink,
+          }
+        });
+
+        if (emailError) {
+          console.error('Email error:', emailError);
+          sonnerToast.warning("הפגישה נקבעה אך המייל לא נשלח");
+        } else {
+          sonnerToast.success("זימון לפגישה נשלח בהצלחה!");
+        }
+      }
+
+      // Reset form
+      setMeetingDate(undefined);
+      setMeetingTime("10:00");
+      setMeetingSubject("");
+      setPersonalMessage("");
+
+    } catch (error: any) {
+      console.error('Meeting scheduling error:', error);
+      sonnerToast.error(`שגיאה בקביעת פגישה: ${error.message}`);
+    } finally {
+      setIsSchedulingMeeting(false);
+    }
+  };
+
   const showLostReason = form.watch("status") === "closed";
+
+  // Generate time options
+  const timeOptions = [];
+  for (let h = 7; h <= 21; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      timeOptions.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -358,24 +448,31 @@ const updateMutation = useMutation({
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3 bg-muted/50 p-1 rounded-lg shadow-sm">
+          <TabsList className="grid w-full grid-cols-4 bg-muted/50 p-1 rounded-lg shadow-sm">
             <TabsTrigger 
               value="details" 
-              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all"
+              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-sm"
             >
               <FileText className="h-4 w-4" />
               פרטי ליד
             </TabsTrigger>
             <TabsTrigger 
               value="proposals" 
-              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all"
+              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-sm"
             >
               <DollarSign className="h-4 w-4" />
               הצעות מחיר
             </TabsTrigger>
             <TabsTrigger 
+              value="meeting" 
+              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-sm"
+            >
+              <Users className="h-4 w-4" />
+              קביעת פגישה
+            </TabsTrigger>
+            <TabsTrigger 
               value="updates" 
-              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all"
+              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-sm"
             >
               <MessageSquare className="h-4 w-4" />
               עדכונים
@@ -951,7 +1048,120 @@ const updateMutation = useMutation({
                 </Button>
               </TabsContent>
 
-              {/* Tab 3: Updates */}
+              {/* Tab 3: Schedule Meeting */}
+              <TabsContent value="meeting" className="space-y-4 mt-0">
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium flex items-center gap-2">
+                    <CalendarIcon className="h-4 w-4" />
+                    קביעת פגישה חדשה
+                  </h4>
+
+                  {!lead.email && (
+                    <Alert variant="default" className="border-amber-500 bg-amber-50 dark:bg-amber-950/20">
+                      <AlertCircle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-amber-700 dark:text-amber-400">
+                        לליד זה אין כתובת אימייל. ניתן לקבוע פגישה ביומן אך לא לשלוח זימון במייל.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Calendar Side */}
+                    <div className="space-y-3">
+                      <label className="text-sm font-medium">בחר תאריך</label>
+                      <Card className="p-2">
+                        <Calendar
+                          mode="single"
+                          selected={meetingDate}
+                          onSelect={setMeetingDate}
+                          disabled={(date) => date < new Date()}
+                          className="pointer-events-auto"
+                          locale={he}
+                        />
+                      </Card>
+                    </div>
+
+                    {/* Details Side */}
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          שעת הפגישה
+                        </label>
+                        <Select value={meetingTime} onValueChange={setMeetingTime}>
+                          <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
+                            <SelectValue placeholder="בחר שעה" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50 max-h-[200px]">
+                            {timeOptions.map((time) => (
+                              <SelectItem key={time} value={time}>
+                                {time}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">נושא הפגישה</label>
+                        <Input
+                          value={meetingSubject}
+                          onChange={(e) => setMeetingSubject(e.target.value)}
+                          placeholder={`פגישה עם ${lead.contact_name || lead.company_name}`}
+                          className="text-right rounded-lg border-2 h-11 px-4"
+                          dir="rtl"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">הודעה אישית (אופציונלי)</label>
+                        <Textarea
+                          value={personalMessage}
+                          onChange={(e) => setPersonalMessage(e.target.value)}
+                          placeholder="הוסף הודעה אישית לזימון..."
+                          rows={3}
+                          className="text-right rounded-lg border-2 px-4 py-3"
+                          dir="rtl"
+                        />
+                      </div>
+
+                      {meetingDate && (
+                        <Card className="p-3 bg-primary/5 border-primary/20">
+                          <div className="flex items-center gap-2 text-sm">
+                            <CheckCircle2 className="h-4 w-4 text-primary" />
+                            <span className="font-medium">
+                              {format(meetingDate, "EEEE, d בMMMM yyyy", { locale: he })} בשעה {meetingTime}
+                            </span>
+                          </div>
+                        </Card>
+                      )}
+
+                      <Button
+                        type="button"
+                        onClick={handleScheduleMeeting}
+                        disabled={!meetingDate || isSchedulingMeeting}
+                        className="w-full h-11"
+                      >
+                        {isSchedulingMeeting ? (
+                          "קובע פגישה..."
+                        ) : lead.email ? (
+                          <>
+                            <Send className="h-4 w-4 ml-2" />
+                            קבע פגישה ושלח זימון
+                          </>
+                        ) : (
+                          <>
+                            <CalendarIcon className="h-4 w-4 ml-2" />
+                            קבע פגישה ביומן
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Tab 4: Updates */}
               <TabsContent value="updates" className="space-y-4 mt-0">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
