@@ -43,8 +43,9 @@ const formSchema = z.object({
     "client_created",
     "client_status_changed",
     "onboarding_status_changed",
+    "meeting_created",
   ]),
-  action_type: z.enum(["webhook", "email", "notification", "update_status"]),
+  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp"]),
   webhook_url: z.string().optional(),
   webhook_method: z.enum(["POST", "GET", "PUT"]).optional(),
   body_template: z.string().optional(),
@@ -54,6 +55,12 @@ const formSchema = z.object({
   trigger_status_value: z.string().optional(),
   update_field_name: z.string().optional(),
   update_field_value: z.string().optional(),
+  // ManyChat WhatsApp fields
+  manychat_trigger_name: z.string().optional(),
+  field_mapping_date: z.string().optional(),
+  field_mapping_time: z.string().optional(),
+  field_mapping_location: z.string().optional(),
+  field_mapping_contact: z.string().optional(),
 }).refine((data) => {
   if (data.action_type === "webhook" && !data.webhook_url) {
     return false;
@@ -120,6 +127,11 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       trigger_status_value: automation.conditions?.new_status || "any",
       update_field_name: automation.configuration?.update_field || "none",
       update_field_value: automation.configuration?.update_field_value || "today",
+      manychat_trigger_name: automation.configuration?.manychat_trigger_name || "meeting_scheduled",
+      field_mapping_date: automation.configuration?.field_mapping?.date || "",
+      field_mapping_time: automation.configuration?.field_mapping?.time || "",
+      field_mapping_location: automation.configuration?.field_mapping?.location || "",
+      field_mapping_contact: automation.configuration?.field_mapping?.contact || "",
     },
   });
 
@@ -159,6 +171,16 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
           cfg.update_field_value = values.update_field_value || 'today';
         }
         configuration = cfg;
+      } else if (values.action_type === "send_whatsapp") {
+        configuration = {
+          manychat_trigger_name: values.manychat_trigger_name || "meeting_scheduled",
+          field_mapping: {
+            date: values.field_mapping_date,
+            time: values.field_mapping_time,
+            location: values.field_mapping_location,
+            contact: values.field_mapping_contact,
+          },
+        };
       }
 
       const { error } = await supabase
@@ -251,6 +273,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                       <SelectItem value="client_created">לקוח נוצר</SelectItem>
                       <SelectItem value="client_status_changed">סטטוס לקוח השתנה</SelectItem>
                       <SelectItem value="onboarding_status_changed">סטטוס קליטה השתנה</SelectItem>
+                      <SelectItem value="meeting_created">נוצרה פגישה</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -309,6 +332,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                     <SelectContent className="bg-background">
                       <SelectItem value="webhook">Webhook (Make.com, Zapier וכו')</SelectItem>
                       <SelectItem value="update_status">שינוי סטטוס</SelectItem>
+                      <SelectItem value="send_whatsapp">שלח WhatsApp (ManyChat)</SelectItem>
                       <SelectItem value="email">אימייל (בקרוב)</SelectItem>
                       <SelectItem value="notification">התראה (בקרוב)</SelectItem>
                     </SelectContent>
@@ -478,6 +502,90 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                     </FormItem>
                   )}
                 />
+              </>
+            )}
+
+            {actionType === "send_whatsapp" && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="manychat_trigger_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>שם ה-Trigger ב-ManyChat *</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="meeting_scheduled" />
+                      </FormControl>
+                      <FormDescription className="text-xs">
+                        שם ה-Flow או ה-Automation שיופעל ב-ManyChat
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
+                  <p className="text-sm font-medium">מיפוי שדות ל-ManyChat Custom Fields</p>
+                  <p className="text-xs text-muted-foreground">
+                    העתק את ה-Field ID מ-ManyChat עבור כל שדה
+                  </p>
+
+                  <FormField
+                    control={form.control}
+                    name="field_mapping_date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">תאריך הפגישה (Field ID)</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="לדוגמה: 123456" className="h-8 text-sm" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="field_mapping_time"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">שעת הפגישה (Field ID)</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="לדוגמה: 123457" className="h-8 text-sm" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="field_mapping_location"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">מיקום/נושא הפגישה (Field ID)</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="לדוגמה: 123458" className="h-8 text-sm" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="field_mapping_contact"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">שם איש הקשר (Field ID)</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="לדוגמה: 123459" className="h-8 text-sm" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </>
             )}
 
