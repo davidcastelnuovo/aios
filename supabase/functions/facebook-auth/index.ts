@@ -16,35 +16,17 @@ serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // Helper function to get Facebook credentials - first from DB, then from env
-  async function getFacebookCredentials(tenantId?: string): Promise<{ appId: string; appSecret: string } | null> {
-    // Try to get from tenant_settings first
-    if (tenantId) {
-      const { data } = await supabase
-        .from('tenant_settings')
-        .select('setting_value')
-        .eq('tenant_id', tenantId)
-        .eq('setting_key', 'facebook_app_credentials')
-        .maybeSingle();
-      
-      if (data?.setting_value) {
-        const creds = data.setting_value as { app_id?: string; app_secret?: string };
-        if (creds.app_id && creds.app_secret) {
-          console.log('Using Facebook credentials from tenant_settings');
-          return { appId: creds.app_id, appSecret: creds.app_secret };
-        }
-      }
-    }
-    
-    // Fallback to environment variables
+  // Get Facebook Master App credentials from environment variables
+  function getFacebookCredentials(): { appId: string; appSecret: string } | null {
     const envAppId = Deno.env.get('FACEBOOK_APP_ID');
     const envAppSecret = Deno.env.get('FACEBOOK_APP_SECRET');
     
     if (envAppId && envAppSecret) {
-      console.log('Using Facebook credentials from environment variables');
+      console.log('Using Facebook Master App credentials');
       return { appId: envAppId, appSecret: envAppSecret };
     }
     
+    console.error('Facebook Master App credentials not configured');
     return null;
   }
 
@@ -56,10 +38,10 @@ serve(async (req) => {
     if (action === 'get_auth_url') {
       const { tenant_id, integration_type, redirect_uri, user_id } = await req.json();
       
-      const credentials = await getFacebookCredentials(tenant_id);
+      const credentials = getFacebookCredentials();
       if (!credentials) {
         return new Response(
-          JSON.stringify({ error: 'Facebook App credentials not configured. Please add App ID and App Secret in Facebook Settings.' }),
+          JSON.stringify({ error: 'Facebook integration not configured. Please contact system administrator.' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -148,11 +130,11 @@ serve(async (req) => {
         .eq('tenant_id', tenantId)
         .eq('setting_key', `facebook_oauth_state_${stateToken}`);
 
-      // Get credentials for this tenant
-      const credentials = await getFacebookCredentials(tenantId);
+      // Get Master App credentials
+      const credentials = getFacebookCredentials();
       if (!credentials) {
         return new Response(
-          JSON.stringify({ error: 'Facebook App credentials not configured' }),
+          JSON.stringify({ error: 'Facebook integration not configured' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
