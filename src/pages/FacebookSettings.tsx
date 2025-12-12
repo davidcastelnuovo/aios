@@ -545,7 +545,8 @@ export default function FacebookSettings() {
           )}
 
           {/* Form Mapping Section */}
-          {leadAdsIntegration?.is_active && (
+          {/* Form Mapping Section - only show when we have a token or shared connection */}
+          {leadAdsIntegration?.is_active && !hasTokenButNoApiKey && (
             <FacebookFormMappingSection
               tenantId={currentTenant?.id || ''}
               integrationId={leadAdsIntegration?.id || null}
