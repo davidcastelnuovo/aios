@@ -59,7 +59,7 @@ const formSchema = z.object({
   update_field_name: z.string().optional(),
   update_field_value: z.string().optional(),
   // ManyChat WhatsApp fields
-  manychat_trigger_name: z.string().optional(),
+  manychat_tag_id: z.string().optional(),
   field_mapping_date: z.string().optional(),
   field_mapping_time: z.string().optional(),
   field_mapping_location: z.string().optional(),
@@ -138,12 +138,26 @@ export function AddAutomationForm() {
       trigger_status_value: "any",
       update_field_name: "none",
       update_field_value: "today",
-      manychat_trigger_name: "meeting_scheduled",
+      manychat_tag_id: "",
       field_mapping_date: "",
       field_mapping_time: "",
       field_mapping_location: "",
       field_mapping_contact: "",
     },
+  });
+
+  // Fetch ManyChat tags when action type is send_whatsapp
+  const { data: manychatTags, isLoading: isLoadingTags } = useQuery({
+    queryKey: ['manychat-tags', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase.functions.invoke('get-manychat-tags', {
+        body: { tenantId }
+      });
+      if (error) throw error;
+      return Array.isArray(data?.tags) ? data.tags : [];
+    },
+    enabled: !!tenantId && form.watch("action_type") === "send_whatsapp",
   });
 
   const createAutomationMutation = useMutation({
@@ -187,7 +201,7 @@ export function AddAutomationForm() {
         configuration = cfg;
       } else if (values.action_type === "send_whatsapp") {
         configuration = {
-          manychat_trigger_name: values.manychat_trigger_name || "meeting_scheduled",
+          manychat_tag_id: values.manychat_tag_id,
           field_mapping: {
             date: values.field_mapping_date,
             time: values.field_mapping_time,
@@ -539,15 +553,26 @@ export function AddAutomationForm() {
               <>
                 <FormField
                   control={form.control}
-                  name="manychat_trigger_name"
+                  name="manychat_tag_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>שם ה-Trigger ב-ManyChat *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="meeting_scheduled" {...field} />
-                      </FormControl>
+                      <FormLabel>בחר טאג להפעלה ב-ManyChat *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={isLoadingTags ? "טוען טאגים..." : "בחר טאג"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          {manychatTags?.map((tag: { id: number; name: string }) => (
+                            <SelectItem key={tag.id} value={String(tag.id)}>
+                              {tag.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormDescription className="text-xs">
-                        שם ה-Flow או ה-Automation שיופעל ב-ManyChat
+                        הטאג שייושם ב-ManyChat ויפעיל את ה-Automation
                       </FormDescription>
                       <FormMessage />
                     </FormItem>

@@ -2,7 +2,7 @@ import { useForm } from "react-hook-form";
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -56,7 +56,7 @@ const formSchema = z.object({
   update_field_name: z.string().optional(),
   update_field_value: z.string().optional(),
   // ManyChat WhatsApp fields
-  manychat_trigger_name: z.string().optional(),
+  manychat_tag_id: z.string().optional(),
   field_mapping_date: z.string().optional(),
   field_mapping_time: z.string().optional(),
   field_mapping_location: z.string().optional(),
@@ -127,12 +127,26 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       trigger_status_value: automation.conditions?.new_status || "any",
       update_field_name: automation.configuration?.update_field || "none",
       update_field_value: automation.configuration?.update_field_value || "today",
-      manychat_trigger_name: automation.configuration?.manychat_trigger_name || "meeting_scheduled",
+      manychat_tag_id: automation.configuration?.manychat_tag_id || "",
       field_mapping_date: automation.configuration?.field_mapping?.date || "",
       field_mapping_time: automation.configuration?.field_mapping?.time || "",
       field_mapping_location: automation.configuration?.field_mapping?.location || "",
       field_mapping_contact: automation.configuration?.field_mapping?.contact || "",
     },
+  });
+
+  // Fetch ManyChat tags
+  const { data: manychatTags, isLoading: isLoadingTags } = useQuery({
+    queryKey: ['manychat-tags', automation.tenant_id],
+    queryFn: async () => {
+      if (!automation.tenant_id) return [];
+      const { data, error } = await supabase.functions.invoke('get-manychat-tags', {
+        body: { tenantId: automation.tenant_id }
+      });
+      if (error) throw error;
+      return Array.isArray(data?.tags) ? data.tags : [];
+    },
+    enabled: !!automation.tenant_id && form.watch("action_type") === "send_whatsapp",
   });
 
   const updateAutomationMutation = useMutation({
@@ -173,7 +187,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
         configuration = cfg;
       } else if (values.action_type === "send_whatsapp") {
         configuration = {
-          manychat_trigger_name: values.manychat_trigger_name || "meeting_scheduled",
+          manychat_tag_id: values.manychat_tag_id,
           field_mapping: {
             date: values.field_mapping_date,
             time: values.field_mapping_time,
@@ -509,15 +523,26 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
               <>
                 <FormField
                   control={form.control}
-                  name="manychat_trigger_name"
+                  name="manychat_tag_id"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>שם ה-Trigger ב-ManyChat *</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="meeting_scheduled" />
-                      </FormControl>
+                      <FormLabel>בחר טאג להפעלה ב-ManyChat *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={isLoadingTags ? "טוען טאגים..." : "בחר טאג"} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          {manychatTags?.map((tag: { id: number; name: string }) => (
+                            <SelectItem key={tag.id} value={String(tag.id)}>
+                              {tag.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormDescription className="text-xs">
-                        שם ה-Flow או ה-Automation שיופעל ב-ManyChat
+                        הטאג שייושם ב-ManyChat ויפעיל את ה-Automation
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
