@@ -437,10 +437,28 @@ export default function FacebookSettings() {
                   </div>
                 </div>
               ) : isSharedConnection ? (
-                // Shared connection - show simplified view
-                <div className="space-y-2 text-muted-foreground text-right">
-                  <p>הגדרות החיבור מנוהלות מהארגון המקורי.</p>
-                  <p>ניתן להגדיר Form Mapping ייחודי לארגון זה בסקשן למטה.</p>
+                // Shared connection - show simplified view with test button
+                <div className="space-y-4">
+                  <div className="text-muted-foreground text-right">
+                    <p>הגדרות החיבור מנוהלות מהארגון המקורי.</p>
+                    <p>ניתן להגדיר Form Mapping ייחודי לארגון זה בסקשן למטה.</p>
+                  </div>
+                  
+                  {/* Test Webhook Button for shared connections */}
+                  <div className="pt-4 border-t">
+                    <Button
+                      variant="outline"
+                      onClick={() => testWebhookMutation.mutate()}
+                      disabled={testWebhookMutation.isPending}
+                      className="gap-2"
+                    >
+                      <TestTube className={`h-4 w-4 ${testWebhookMutation.isPending ? 'animate-spin' : ''}`} />
+                      {testWebhookMutation.isPending ? 'מבצע בדיקה...' : 'בדוק Webhook (צור ליד טסט)'}
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      לחץ כדי ליצור ליד טסט ולוודא שהמיפוי עובד נכון
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
