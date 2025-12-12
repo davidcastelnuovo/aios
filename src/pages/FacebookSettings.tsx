@@ -35,6 +35,7 @@ export default function FacebookSettings() {
   const [selectedPage, setSelectedPage] = useState<string>("");
   const [pixelId, setPixelId] = useState<string>("");
   const [testEventCode, setTestEventCode] = useState<string>("");
+  const [manualToken, setManualToken] = useState<string>("");
 
   const projectUrl = import.meta.env.VITE_SUPABASE_URL || '';
   const webhookUrl = `${projectUrl}/functions/v1/facebook-lead-webhook`;
@@ -203,6 +204,33 @@ export default function FacebookSettings() {
     },
   });
 
+  // Save manual token mutation
+  const saveManualTokenMutation = useMutation({
+    mutationFn: async () => {
+      if (!leadAdsIntegration?.id || !manualToken.trim()) {
+        throw new Error('Missing integration ID or token');
+      }
+      
+      const { error } = await supabase
+        .from('tenant_integrations')
+        .update({ 
+          api_key: manualToken.trim(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', leadAdsIntegration.id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Token נשמר בהצלחה');
+      setManualToken('');
+      queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
+    },
+    onError: (error) => {
+      toast.error('שגיאה בשמירת Token: ' + (error as Error).message);
+    },
+  });
+
   // Test webhook mutation
   const testWebhookMutation = useMutation({
     mutationFn: async () => {
@@ -247,6 +275,7 @@ export default function FacebookSettings() {
   // Check if this integration is shared from another
   const isSharedConnection = !!(leadAdsIntegration as any)?.shared_from_integration_id;
   const isOwnConnection = leadAdsIntegration?.is_active && !isSharedConnection;
+  const hasTokenButNoApiKey = leadAdsIntegration?.is_active && !leadAdsIntegration?.api_key && !isSharedConnection;
 
   return (
     <div className="container mx-auto p-6 space-y-6" dir="rtl">
@@ -331,6 +360,67 @@ export default function FacebookSettings() {
                       'התחבר עם Facebook'
                     )}
                   </Button>
+                </div>
+              ) : hasTokenButNoApiKey ? (
+                // Integration exists but missing token - allow manual entry
+                <div className="space-y-4">
+                  <Alert className="border-amber-200 bg-amber-50 text-right">
+                    <AlertTitle className="text-amber-800 flex items-center gap-2 flex-row-reverse justify-end">
+                      <AlertCircle className="h-4 w-4 text-amber-600" />
+                      חסר Access Token
+                    </AlertTitle>
+                    <AlertDescription className="text-amber-700 text-right">
+                      האינטגרציה פעילה אבל חסר Access Token. הזן Token חדש מ-Graph API Explorer או התחבר מחדש.
+                    </AlertDescription>
+                  </Alert>
+                  
+                  <div className="space-y-2 text-right">
+                    <Label>Access Token</Label>
+                    <div className="flex gap-2 flex-row-reverse">
+                      <Input 
+                        value={manualToken} 
+                        onChange={(e) => setManualToken(e.target.value)}
+                        placeholder="הדבק Access Token כאן..."
+                        className="font-mono text-sm text-left" 
+                        dir="ltr" 
+                      />
+                      <Button
+                        onClick={() => saveManualTokenMutation.mutate()}
+                        disabled={!manualToken.trim() || saveManualTokenMutation.isPending}
+                        className="gap-2"
+                      >
+                        {saveManualTokenMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4" />
+                        )}
+                        שמור
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      ניתן לקבל Token מ-<a href="https://developers.facebook.com/tools/explorer/" target="_blank" rel="noopener noreferrer" className="underline text-primary">Graph API Explorer</a>
+                    </p>
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <p className="text-sm text-muted-foreground mb-2">או התחבר מחדש דרך OAuth:</p>
+                    <Button
+                      onClick={() => connectMutation.mutate('facebook_lead_ads')}
+                      disabled={connectMutation.isPending}
+                      variant="outline"
+                      className="gap-2"
+                    >
+                      <Facebook className="h-4 w-4" />
+                      {connectMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          מתחבר...
+                        </>
+                      ) : (
+                        'התחבר מחדש עם Facebook'
+                      )}
+                    </Button>
+                  </div>
                 </div>
               ) : isSharedConnection ? (
                 // Shared connection - show simplified view
