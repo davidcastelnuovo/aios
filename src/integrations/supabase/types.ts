@@ -2805,6 +2805,7 @@ export type Database = {
         | "notification"
         | "update_status"
         | "send_whatsapp"
+        | "create_manychat_subscriber"
       automation_trigger:
         | "task_assigned"
         | "task_status_changed"
@@ -3003,6 +3004,7 @@ export const Constants = {
         "notification",
         "update_status",
         "send_whatsapp",
+        "create_manychat_subscriber",
       ],
       automation_trigger: [
         "task_assigned",
