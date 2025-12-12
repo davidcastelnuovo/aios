@@ -2,7 +2,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckSquare, Calendar as CalendarIcon, Building2, Users, Megaphone, AlertCircle, GripVertical, LayoutGrid, Table as TableIcon, MessageSquare, Search, Check, ChevronsUpDown, CalendarDays } from "lucide-react";
+import { CheckSquare, Calendar as CalendarIcon, Building2, Users, Megaphone, AlertCircle, GripVertical, LayoutGrid, Table as TableIcon, MessageSquare, Search, Check, ChevronsUpDown, CalendarDays, Settings2 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import TerminologyManagement from "@/components/TerminologyManagement";
 import { Calendar } from "@/components/ui/calendar";
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, isBefore, isToday } from "date-fns";
 import { he } from "date-fns/locale";
@@ -778,6 +786,23 @@ export default function Tasks() {
                 <TabsTrigger value="קמפיינר">{t('task_tab_campaign')}</TabsTrigger>
               </TabsList>
             </Tabs>
+            
+            {/* Edit tab names button */}
+            {(isOwner || isTeamManager) && (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" title="ערוך שמות טאבים">
+                    <Settings2 className="h-4 w-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto" dir="rtl">
+                  <DialogHeader>
+                    <DialogTitle className="text-right">ניהול שמות טאבים</DialogTitle>
+                  </DialogHeader>
+                  <TerminologyManagement category="tabs" />
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
           
           <div className="flex items-center gap-3">
