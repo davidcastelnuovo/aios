@@ -1,244 +1,218 @@
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import { resolveTenantSlug } from "@/hooks/useResolveTenant";
-import { Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { 
+  Users, 
+  Target, 
+  BarChart3, 
+  MessageSquare, 
+  CheckCircle2, 
+  ArrowLeft,
+  Zap,
+  Shield,
+  Clock
+} from "lucide-react";
+import logo from "@/assets/logo.png";
 
 const Landing = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (error) {
-        toast.error(error.message);
-        setLoading(false);
-        return;
-      }
-
-      if (data.user) {
-        const tenantSlug = await resolveTenantSlug(data.user.id);
-        if (tenantSlug) {
-          navigate(`/t/${tenantSlug}/dashboard`);
-        } else {
-          navigate("/setup");
-        }
-      }
-    } catch (error: any) {
-      toast.error(error.message || "שגיאה בהתחברות");
-    } finally {
-      setLoading(false);
+  const features = [
+    {
+      icon: Users,
+      title: "ניהול לקוחות וסוכנויות",
+      description: "מעקב מלא אחר כל הלקוחות והסוכנויות שלך במקום אחד"
+    },
+    {
+      icon: Target,
+      title: "ניהול לידים",
+      description: "מעקב אחר לידים, סטטוסים, ופייפליין מכירות מתקדם"
+    },
+    {
+      icon: BarChart3,
+      title: "דוחות ואנליטיקה",
+      description: "תובנות עסקיות ודוחות מפורטים לקבלת החלטות חכמות"
+    },
+    {
+      icon: MessageSquare,
+      title: "אינטגרציות צ'אט",
+      description: "חיבור לוואטסאפ, ManyChat ופייסבוק לתקשורת ישירה עם לקוחות"
+    },
+    {
+      icon: CheckCircle2,
+      title: "ניהול משימות",
+      description: "מערכת משימות מתקדמת עם תזכורות ומעקב ביצוע"
+    },
+    {
+      icon: Zap,
+      title: "אוטומציות",
+      description: "הפעלת אוטומציות חכמות לחיסכון בזמן ומשאבים"
     }
-  };
+  ];
 
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (error) {
-        toast.error(error.message);
-        setLoading(false);
-        return;
-      }
-
-      if (data.user) {
-        toast.success("נרשמת בהצלחה! מעביר אותך להגדרות...");
-        navigate("/setup");
-      }
-    } catch (error: any) {
-      toast.error(error.message || "שגיאה בהרשמה");
-    } finally {
-      setLoading(false);
+  const benefits = [
+    {
+      icon: Shield,
+      title: "אבטחה מתקדמת",
+      description: "הנתונים שלך מוגנים עם הצפנה ברמה הגבוהה ביותר"
+    },
+    {
+      icon: Clock,
+      title: "חיסכון בזמן",
+      description: "ממשק אינטואיטיבי שחוסך שעות עבודה בכל שבוע"
+    },
+    {
+      icon: Users,
+      title: "עבודה צוותית",
+      description: "שיתוף פעולה קל בין חברי הצוות והארגון"
     }
-  };
-
-  const handleGoogleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth`,
-      },
-    });
-
-    if (error) {
-      toast.error(error.message);
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    if (!email) {
-      toast.error("אנא הזן את כתובת האימייל שלך");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth`,
-      });
-
-      if (error) {
-        toast.error(error.message);
-      } else {
-        toast.success("נשלח אימייל לאיפוס סיסמה");
-      }
-    } catch (error: any) {
-      toast.error(error.message || "שגיאה בשליחת אימייל");
-    } finally {
-      setLoading(false);
-    }
-  };
+  ];
 
   return (
-    <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4" dir="rtl">
-      <Card className="w-full max-w-md shadow-xl">
-        <CardHeader className="text-center space-y-2 pb-6">
-          <CardTitle className="text-2xl font-bold">מערכת ניהול סוכנויות</CardTitle>
-          <CardDescription className="text-base">
-            ניהול מקצועי של סוכנויות, לקוחות וקמפיינרים
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "login" | "signup")}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">התחברות</TabsTrigger>
-              <TabsTrigger value="signup">הרשמה</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="login" className="space-y-4 mt-6">
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="text-right block">אימייל</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="text-right"
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password" className="text-right block">סיסמה</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    dir="ltr"
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "התחבר"}
-                </Button>
-              </form>
-            </TabsContent>
-
-            <TabsContent value="signup" className="space-y-4 mt-6">
-              <form onSubmit={handleSignup} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email" className="text-right block">אימייל</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    className="text-right"
-                    dir="ltr"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password" className="text-right block">סיסמה</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    dir="ltr"
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "הרשם"}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">או</span>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30" dir="rtl">
+      {/* Header */}
+      <header className="container mx-auto px-4 py-6">
+        <nav className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src={logo} alt="AfterLead" className="h-10 w-auto" />
+            <span className="text-xl font-bold text-foreground">AfterLead</span>
           </div>
+          <div className="flex items-center gap-4">
+            <Link to="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              מדיניות פרטיות
+            </Link>
+            <Link to="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+              תנאי שימוש
+            </Link>
+            <Button variant="outline" onClick={() => navigate("/auth")}>
+              התחברות
+            </Button>
+          </div>
+        </nav>
+      </header>
 
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={handleGoogleLogin}
-            disabled={loading}
-          >
-            <svg className="h-4 w-4 ml-2" viewBox="0 0 24 24">
-              <path
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                fill="#4285F4"
-              />
-              <path
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                fill="#34A853"
-              />
-              <path
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                fill="#FBBC05"
-              />
-              <path
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                fill="#EA4335"
-              />
-            </svg>
-            התחבר עם Google
-          </Button>
+      {/* Hero Section */}
+      <section className="container mx-auto px-4 py-16 md:py-24">
+        <div className="text-center max-w-4xl mx-auto space-y-8">
+          <h1 className="text-4xl md:text-6xl font-bold text-foreground leading-tight">
+            מערכת ניהול סוכנויות
+            <span className="block text-primary mt-2">המתקדמת בישראל</span>
+          </h1>
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            נהל את הסוכנות שלך בצורה חכמה יותר. מעקב אחר לקוחות, לידים, משימות ואינטגרציות - הכל במקום אחד.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <Button size="lg" className="text-lg px-8 py-6" onClick={() => navigate("/signup")}>
+              התחל בחינם
+              <ArrowLeft className="mr-2 h-5 w-5" />
+            </Button>
+            <Button size="lg" variant="outline" className="text-lg px-8 py-6" onClick={() => navigate("/auth")}>
+              כניסה למערכת
+            </Button>
+          </div>
+        </div>
+      </section>
 
-          <div className="text-center space-y-2">
-            <button
-              type="button"
-              className="text-sm text-destructive hover:underline"
-              onClick={handleForgotPassword}
-              disabled={loading}
+      {/* Features Section */}
+      <section className="container mx-auto px-4 py-16 md:py-24">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+            כל מה שצריך לניהול הסוכנות
+          </h2>
+          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+            מערכת מקיפה שמאחדת את כל הכלים שאתה צריך
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {features.map((feature, index) => (
+            <Card key={index} className="border-border/50 hover:border-primary/50 transition-colors">
+              <CardContent className="p-6">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-lg bg-primary/10">
+                    <feature.icon className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-foreground">{feature.title}</h3>
+                    <p className="text-sm text-muted-foreground">{feature.description}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      {/* Benefits Section */}
+      <section className="bg-muted/30 py-16 md:py-24">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
+              למה לבחור בנו?
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {benefits.map((benefit, index) => (
+              <div key={index} className="text-center space-y-4">
+                <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                  <benefit.icon className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className="text-xl font-semibold text-foreground">{benefit.title}</h3>
+                <p className="text-muted-foreground">{benefit.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="container mx-auto px-4 py-16 md:py-24">
+        <Card className="bg-primary text-primary-foreground">
+          <CardContent className="p-8 md:p-12 text-center">
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+              מוכן להתחיל?
+            </h2>
+            <p className="text-lg opacity-90 mb-8 max-w-xl mx-auto">
+              הצטרף לאלפי סוכנויות שכבר משתמשות במערכת שלנו
+            </p>
+            <Button 
+              size="lg" 
+              variant="secondary" 
+              className="text-lg px-8 py-6"
+              onClick={() => navigate("/signup")}
             >
-              שכחתי סיסמה
-            </button>
+              התחל עכשיו בחינם
+              <ArrowLeft className="mr-2 h-5 w-5" />
+            </Button>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-border bg-muted/20">
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <img src={logo} alt="AfterLead" className="h-8 w-auto" />
+              <span className="font-semibold text-foreground">AfterLead</span>
+            </div>
+            <div className="flex items-center gap-6">
+              <Link to="/privacy" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                מדיניות פרטיות
+              </Link>
+              <Link to="/terms" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                תנאי שימוש
+              </Link>
+              <Link to="/auth" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                התחברות
+              </Link>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              © {new Date().getFullYear()} AfterLead. כל הזכויות שמורות.
+            </p>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </footer>
     </div>
   );
 };
