@@ -247,9 +247,29 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
         .eq('id', integrationId);
 
       if (error) throw error;
+
+      // Auto-subscribe the page to leadgen webhook
+      if (selectedPageId) {
+        console.log('Subscribing page to leadgen webhook:', selectedPageId);
+        const { data: subscribeResult, error: subscribeError } = await supabase.functions.invoke('facebook-auth', {
+          body: {
+            action: 'subscribe_page',
+            integration_id: integrationId,
+            page_id: selectedPageId,
+          },
+        });
+
+        if (subscribeError) {
+          console.error('Error subscribing page to webhook:', subscribeError);
+          // Don't throw - mapping was saved successfully, just log the webhook issue
+          toast.warning('המיפוי נשמר, אך ייתכן שיש בעיה ברישום לקבלת לידים אוטומטית');
+        } else {
+          console.log('Page subscribed to webhook successfully:', subscribeResult);
+        }
+      }
     },
     onSuccess: () => {
-      toast.success('מיפוי השדות נשמר בהצלחה');
+      toast.success('מיפוי השדות נשמר והעמוד נרשם לקבלת לידים');
       setIsAddingNewForm(false);
       setEditingFormId(null);
       setSelectedFormId("");
