@@ -19,15 +19,22 @@ export default function FacebookCallback() {
     const pagesCount = searchParams.get('pages_count');
     const error = searchParams.get('facebook_error');
 
+    console.log('FacebookCallback params:', { success, pagesCount, error });
+
     if (success === 'true') {
       setStatus('success');
       setMessage(`החיבור הצליח! נמצאו ${pagesCount || 0} עמודים`);
+      // Auto redirect after 2 seconds
+      setTimeout(() => navigate(buildPath('/facebook-settings')), 2000);
     } else if (error) {
       setStatus('error');
       setMessage(decodeURIComponent(error));
     } else {
-      // No params - redirect to settings
-      navigate(buildPath('/facebook-settings'));
+      // No params - wait a bit then redirect (might be loading)
+      setMessage('בודק את סטטוס החיבור...');
+      setTimeout(() => {
+        navigate(buildPath('/facebook-settings'));
+      }, 1500);
     }
   }, [searchParams, navigate, buildPath]);
 
