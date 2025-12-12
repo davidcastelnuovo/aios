@@ -205,7 +205,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   // Redirect to tenant-scoped route if we have a tenant but no slug in URL
   useEffect(() => {
     const path = window.location.pathname;
-    const isPublicRoute = ['/auth', '/signup', '/landing', '/setup'].includes(path);
+    const isPublicRoute = ['/', '/auth', '/signup', '/landing', '/setup', '/privacy', '/terms'].includes(path);
     const isAlreadyTenantScoped = path.startsWith('/t/');
     
     // Only redirect if not public, not already tenant-scoped, and we have a tenant slug
