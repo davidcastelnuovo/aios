@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Facebook, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft, Loader2, TestTube } from "lucide-react";
+import { Facebook, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft, Loader2, TestTube, Download } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { FacebookFormMappingSection } from "@/components/forms/FacebookFormMappingSection";
@@ -263,6 +263,38 @@ export default function FacebookSettings() {
     },
   });
 
+  // Sync Facebook leads mutation
+  const syncLeadsMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('sync-facebook-leads', {
+        body: { 
+          tenant_id: currentTenant?.id,
+          integration_id: leadAdsIntegration?.id,
+        },
+      });
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      if (data?.success) {
+        if (data.synced > 0) {
+          toast.success(`סונכרנו ${data.synced} לידים חדשים מפייסבוק!`);
+        } else if (data.skipped > 0) {
+          toast.info(`לא נמצאו לידים חדשים (${data.skipped} כבר קיימים)`);
+        } else {
+          toast.info('לא נמצאו לידים חדשים');
+        }
+        queryClient.invalidateQueries({ queryKey: ['leads'] });
+      } else {
+        toast.error('שגיאה: ' + (data?.error || 'Unknown error'));
+      }
+    },
+    onError: (error) => {
+      toast.error('שגיאה בסנכרון: ' + (error as Error).message);
+    },
+  });
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success('הועתק ללוח');
@@ -444,19 +476,30 @@ export default function FacebookSettings() {
                     <p>ניתן להגדיר Form Mapping ייחודי לארגון זה בסקשן למטה.</p>
                   </div>
                   
-                  {/* Test Webhook Button for shared connections */}
-                  <div className="pt-4 border-t">
-                    <Button
-                      variant="outline"
-                      onClick={() => testWebhookMutation.mutate()}
-                      disabled={testWebhookMutation.isPending}
-                      className="gap-2"
-                    >
-                      <TestTube className={`h-4 w-4 ${testWebhookMutation.isPending ? 'animate-spin' : ''}`} />
-                      {testWebhookMutation.isPending ? 'מבצע בדיקה...' : 'בדוק Webhook (צור ליד טסט)'}
-                    </Button>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      לחץ כדי ליצור ליד טסט ולוודא שהמיפוי עובד נכון
+                  {/* Sync & Test Buttons for shared connections */}
+                  <div className="pt-4 border-t space-y-3">
+                    <div className="flex gap-2 flex-wrap">
+                      <Button
+                        variant="default"
+                        onClick={() => syncLeadsMutation.mutate()}
+                        disabled={syncLeadsMutation.isPending}
+                        className="gap-2"
+                      >
+                        <Download className={`h-4 w-4 ${syncLeadsMutation.isPending ? 'animate-spin' : ''}`} />
+                        {syncLeadsMutation.isPending ? 'מסנכרן...' : 'סנכרן לידים מפייסבוק'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => testWebhookMutation.mutate()}
+                        disabled={testWebhookMutation.isPending}
+                        className="gap-2"
+                      >
+                        <TestTube className={`h-4 w-4 ${testWebhookMutation.isPending ? 'animate-spin' : ''}`} />
+                        {testWebhookMutation.isPending ? 'מבצע בדיקה...' : 'צור ליד טסט'}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      סנכרון ימשוך לידים מ-30 הימים האחרונים מכל הטפסים המחוברים
                     </p>
                   </div>
                 </div>
@@ -535,19 +578,30 @@ export default function FacebookSettings() {
                     </Alert>
                   )}
 
-                  {/* Test Webhook Button */}
-                  <div className="pt-4 border-t">
-                    <Button
-                      variant="outline"
-                      onClick={() => testWebhookMutation.mutate()}
-                      disabled={testWebhookMutation.isPending}
-                      className="gap-2"
-                    >
-                      <TestTube className={`h-4 w-4 ${testWebhookMutation.isPending ? 'animate-spin' : ''}`} />
-                      {testWebhookMutation.isPending ? 'מבצע בדיקה...' : 'בדוק Webhook (צור ליד טסט)'}
-                    </Button>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      לחץ כדי ליצור ליד טסט ולוודא שהמיפוי עובד נכון
+                  {/* Sync & Test Buttons */}
+                  <div className="pt-4 border-t space-y-3">
+                    <div className="flex gap-2 flex-wrap">
+                      <Button
+                        variant="default"
+                        onClick={() => syncLeadsMutation.mutate()}
+                        disabled={syncLeadsMutation.isPending}
+                        className="gap-2"
+                      >
+                        <Download className={`h-4 w-4 ${syncLeadsMutation.isPending ? 'animate-spin' : ''}`} />
+                        {syncLeadsMutation.isPending ? 'מסנכרן...' : 'סנכרן לידים מפייסבוק'}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => testWebhookMutation.mutate()}
+                        disabled={testWebhookMutation.isPending}
+                        className="gap-2"
+                      >
+                        <TestTube className={`h-4 w-4 ${testWebhookMutation.isPending ? 'animate-spin' : ''}`} />
+                        {testWebhookMutation.isPending ? 'מבצע בדיקה...' : 'צור ליד טסט'}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      סנכרון ימשוך לידים מ-30 הימים האחרונים מכל הטפסים המחוברים
                     </p>
                   </div>
 
