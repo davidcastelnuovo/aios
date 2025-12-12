@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Info } from "lucide-react";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם האוטומציה הוא שדה חובה"),
@@ -48,7 +49,7 @@ const formSchema = z.object({
     "onboarding_status_changed",
     "meeting_created",
   ]),
-  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp"]),
+  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber"]),
   webhook_url: z.string().optional(),
   webhook_method: z.enum(["POST", "GET", "PUT"]).optional(),
   body_template: z.string().optional(),
@@ -90,14 +91,7 @@ const TRIGGER_OPTIONS = [
   { value: "meeting_created", label: "נוצרה פגישה" },
 ];
 
-const LEAD_STATUS_OPTIONS = [
-  { value: "new", label: "ליד חדש" },
-  { value: "contacted", label: "נוצר קשר" },
-  { value: "follow_up", label: "בתהליך" },
-  { value: "proposal_sent", label: "נשלחה הצעה" },
-  { value: "closed", label: "נסגר" },
-  { value: "transferred_to_onboarding", label: "הועבר לקליטה" },
-];
+// LEAD_STATUS_OPTIONS removed - now using dynamic statuses from useLeadStatuses hook
 
 const TASK_STATUS_OPTIONS = [
   { value: "open", label: "פתוח" },
@@ -121,6 +115,7 @@ export function AddAutomationForm() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { activeStatuses: leadStatuses, isLoading: isLoadingStatuses } = useLeadStatuses();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -146,7 +141,9 @@ export function AddAutomationForm() {
     },
   });
 
-  // Fetch ManyChat tags when action type is send_whatsapp
+  const actionType = form.watch("action_type");
+
+  // Fetch ManyChat tags when action type is send_whatsapp or create_manychat_subscriber
   const { data: manychatTags, isLoading: isLoadingTags } = useQuery({
     queryKey: ['manychat-tags', tenantId],
     queryFn: async () => {
@@ -157,7 +154,7 @@ export function AddAutomationForm() {
       if (error) throw error;
       return Array.isArray(data?.tags) ? data.tags : [];
     },
-    enabled: !!tenantId && form.watch("action_type") === "send_whatsapp",
+    enabled: !!tenantId && (actionType === "send_whatsapp" || actionType === "create_manychat_subscriber"),
   });
 
   const createAutomationMutation = useMutation({
@@ -209,6 +206,10 @@ export function AddAutomationForm() {
             contact: values.field_mapping_contact,
           },
         };
+      } else if (values.action_type === "create_manychat_subscriber") {
+        configuration = {
+          manychat_tag_id: values.manychat_tag_id || null,
+        };
       }
 
       const { data, error } = await supabase
@@ -252,7 +253,6 @@ export function AddAutomationForm() {
     createAutomationMutation.mutate(values);
   };
 
-  const actionType = form.watch("action_type");
   const statusEntity = form.watch("status_entity");
   const triggerType = form.watch("trigger_type");
 
@@ -341,9 +341,9 @@ export function AddAutomationForm() {
                       </FormControl>
                       <SelectContent className="bg-background z-[100]">
                         <SelectItem value="any">כל סטטוס</SelectItem>
-                        {triggerType === "lead_status_changed" && LEAD_STATUS_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
+                        {triggerType === "lead_status_changed" && leadStatuses.map((status) => (
+                          <SelectItem key={status.status_key} value={status.status_key}>
+                            {status.label}
                           </SelectItem>
                         ))}
                         {triggerType === "task_status_changed" && TASK_STATUS_OPTIONS.map((option) => (
@@ -378,6 +378,7 @@ export function AddAutomationForm() {
                       <SelectItem value="webhook">Webhook</SelectItem>
                       <SelectItem value="update_status">שינוי סטטוס</SelectItem>
                       <SelectItem value="send_whatsapp">שלח WhatsApp (ManyChat)</SelectItem>
+                      <SelectItem value="create_manychat_subscriber">צור subscriber ב-ManyChat</SelectItem>
                       <SelectItem value="email" disabled>אימייל (בקרוב)</SelectItem>
                       <SelectItem value="notification" disabled>התראה (בקרוב)</SelectItem>
                     </SelectContent>
@@ -493,9 +494,9 @@ export function AddAutomationForm() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
-                          {statusEntity === "lead" && LEAD_STATUS_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
+                          {statusEntity === "lead" && leadStatuses.map((status) => (
+                            <SelectItem key={status.status_key} value={status.status_key}>
+                              {status.label}
                             </SelectItem>
                           ))}
                           {statusEntity === "task" && TASK_STATUS_OPTIONS.map((option) => (
