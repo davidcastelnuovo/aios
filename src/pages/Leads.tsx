@@ -280,6 +280,19 @@ function LeadCard({
                   {option.label}
                 </SelectItem>
               ))}
+              <div className="border-t mt-1 pt-1">
+                <ManageLeadStatusesDialog 
+                  trigger={
+                    <button 
+                      type="button"
+                      className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
+                    >
+                      <Settings2 className="h-4 w-4" />
+                      ניהול סטטוסים
+                    </button>
+                  }
+                />
+              </div>
             </SelectContent>
           </Select>
         </div>
