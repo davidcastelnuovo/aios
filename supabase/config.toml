@@ -67,7 +67,7 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.facebook-auth]
-verify_jwt = true
+verify_jwt = false
 
 [functions.sync-facebook-leads]
 verify_jwt = true
