@@ -80,7 +80,7 @@ serve(async (req) => {
               }
 
               // Find matching integration by page_id in settings
-              const integration = integrations?.find(i => {
+              let integration = integrations?.find(i => {
                 const settings = i.settings as any;
                 return settings?.page_id === pageId?.toString();
               });
@@ -90,8 +90,22 @@ serve(async (req) => {
                 continue;
               }
 
-              const accessToken = integration.api_key;
+              let accessToken = integration.api_key;
               const settings = integration.settings as any;
+
+              // If this is a shared integration, get the token from the source
+              if ((integration as any).shared_from_integration_id && !accessToken) {
+                const { data: sourceIntegration } = await supabase
+                  .from('tenant_integrations')
+                  .select('api_key')
+                  .eq('id', (integration as any).shared_from_integration_id)
+                  .eq('is_active', true)
+                  .maybeSingle();
+                
+                if (sourceIntegration?.api_key) {
+                  accessToken = sourceIntegration.api_key;
+                }
+              }
 
               if (!accessToken) {
                 console.error('No access token for integration');

@@ -34,6 +34,7 @@ interface Props {
   integrationId: string | null;
   accessToken: string | null;
   agencies: Array<{ id: string; name: string }>;
+  sharedFromIntegrationId?: string | null;
 }
 
 const SYSTEM_FIELDS = [
@@ -61,7 +62,7 @@ interface FacebookPage {
   access_token?: string;
 }
 
-export function FacebookFormMappingSection({ tenantId, integrationId, accessToken, agencies }: Props) {
+export function FacebookFormMappingSection({ tenantId, integrationId, accessToken, agencies, sharedFromIntegrationId }: Props) {
   const queryClient = useQueryClient();
   const [selectedPageId, setSelectedPageId] = useState<string>("");
   const [manualPageId, setManualPageId] = useState<string>("");
@@ -73,19 +74,41 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   const [pageTokens, setPageTokens] = useState<Record<string, string>>({});
   const [pageSearchQuery, setPageSearchQuery] = useState<string>("");
 
+  // Fetch source integration token if this is a shared connection
+  const { data: sourceToken } = useQuery({
+    queryKey: ['source-integration-token', sharedFromIntegrationId],
+    queryFn: async () => {
+      if (!sharedFromIntegrationId) return null;
+      
+      const { data, error } = await supabase
+        .from('tenant_integrations')
+        .select('api_key')
+        .eq('id', sharedFromIntegrationId)
+        .eq('is_active', true)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data?.api_key || null;
+    },
+    enabled: !!sharedFromIntegrationId && !accessToken,
+  });
+
+  // Use either direct token or source token
+  const effectiveAccessToken = accessToken || sourceToken;
+
   // Graph API Explorer URL with permissions
   const graphExplorerUrl = `https://developers.facebook.com/tools/explorer/?permissions=pages_show_list%2Cpages_manage_metadata%2Cpages_manage_ads%2Cleads_retrieval%2Cpages_read_engagement`;
 
   // Fetch pages
   const { data: pagesData, isLoading: loadingPages, isFetching: fetchingPages, refetch: refetchPages } = useQuery({
-    queryKey: ['facebook-pages', tenantId, accessToken],
+    queryKey: ['facebook-pages', tenantId, effectiveAccessToken],
     queryFn: async () => {
-      if (!accessToken) return { pages: [], pageTokens: {} };
+      if (!effectiveAccessToken) return { pages: [], pageTokens: {} };
       
-      console.log('Fetching Facebook pages with token:', accessToken?.substring(0, 20) + '...');
+      console.log('Fetching Facebook pages with token:', effectiveAccessToken?.substring(0, 20) + '...');
       
       const { data, error } = await supabase.functions.invoke('get-facebook-forms', {
-        body: { tenant_id: tenantId, access_token: accessToken },
+        body: { tenant_id: tenantId, access_token: effectiveAccessToken },
       });
 
       console.log('Facebook pages response:', data);
@@ -106,7 +129,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       
       return { pages: data?.pages || [], pageTokens: tokens };
     },
-    enabled: !!accessToken,
+    enabled: !!effectiveAccessToken,
     staleTime: 0,
   });
 
@@ -118,9 +141,9 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
 
   // Fetch forms for selected page - use the token directly from the merged map
   const { data: formsData, isLoading: loadingForms, refetch: refetchForms } = useQuery({
-    queryKey: ['facebook-forms', selectedPageId, accessToken, effectivePageTokens[selectedPageId]],
+    queryKey: ['facebook-forms', selectedPageId, effectiveAccessToken, effectivePageTokens[selectedPageId]],
     queryFn: async () => {
-      if (!accessToken || !selectedPageId) return { forms: [] };
+      if (!effectiveAccessToken || !selectedPageId) return { forms: [] };
       
       // Use page-specific token from the effective tokens map
       const pageAccessToken = effectivePageTokens[selectedPageId] || manualPageToken || null;

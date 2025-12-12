@@ -16,6 +16,8 @@ import { Facebook, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, 
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { FacebookFormMappingSection } from "@/components/forms/FacebookFormMappingSection";
+import { ShareFacebookConnectionSection } from "@/components/forms/ShareFacebookConnectionSection";
+import { SharedFacebookConnectionBanner } from "@/components/forms/SharedFacebookConnectionBanner";
 
 interface FacebookPage {
   id: string;
@@ -209,6 +211,10 @@ export default function FacebookSettings() {
   const leadAdsSettings = leadAdsIntegration?.settings as any;
   const pages = leadAdsSettings?.pages || [];
   const selectedPageName = leadAdsSettings?.page_name;
+  
+  // Check if this integration is shared from another
+  const isSharedConnection = !!(leadAdsIntegration as any)?.shared_from_integration_id;
+  const isOwnConnection = leadAdsIntegration?.is_active && !isSharedConnection;
 
   return (
     <div className="container mx-auto p-6 space-y-6" dir="rtl">
@@ -262,6 +268,11 @@ export default function FacebookSettings() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Show shared connection banner if applicable */}
+              {isSharedConnection && (
+                <SharedFacebookConnectionBanner integration={leadAdsIntegration} />
+              )}
+              
               {!leadAdsIntegration?.is_active ? (
                 <div className="space-y-4">
                   <Alert className="text-right">
@@ -288,6 +299,12 @@ export default function FacebookSettings() {
                       'התחבר עם Facebook'
                     )}
                   </Button>
+                </div>
+              ) : isSharedConnection ? (
+                // Shared connection - show simplified view
+                <div className="space-y-2 text-muted-foreground text-right">
+                  <p>הגדרות החיבור מנוהלות מהארגון המקורי.</p>
+                  <p>ניתן להגדיר Form Mapping ייחודי לארגון זה בסקשן למטה.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -381,6 +398,14 @@ export default function FacebookSettings() {
             </CardContent>
           </Card>
 
+          {/* Share Connection Section - only for own connections */}
+          {isOwnConnection && leadAdsIntegration?.id && currentTenant?.id && (
+            <ShareFacebookConnectionSection 
+              integrationId={leadAdsIntegration.id}
+              currentTenantId={currentTenant.id}
+            />
+          )}
+
           {/* Form Mapping Section */}
           {leadAdsIntegration?.is_active && (
             <FacebookFormMappingSection
@@ -388,6 +413,7 @@ export default function FacebookSettings() {
               integrationId={leadAdsIntegration?.id || null}
               accessToken={leadAdsIntegration?.api_key || null}
               agencies={agencies || []}
+              sharedFromIntegrationId={(leadAdsIntegration as any)?.shared_from_integration_id}
             />
           )}
 
