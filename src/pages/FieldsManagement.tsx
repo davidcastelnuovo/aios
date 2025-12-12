@@ -217,11 +217,11 @@ export default function FieldsManagement() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-6" dir="rtl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">ניהול שדות</h1>
-          <p className="text-muted-foreground mt-2">
+          <h1 className="text-3xl font-bold text-right">ניהול שדות</h1>
+          <p className="text-muted-foreground mt-2 text-right">
             התאם אישית את השדות עבור משימות, לקוחות ולידים
           </p>
         </div>
