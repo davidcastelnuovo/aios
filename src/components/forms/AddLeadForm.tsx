@@ -152,8 +152,35 @@ export function AddLeadForm() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
+      
+      // Trigger lead_created automation
+      if (data && tenantId) {
+        try {
+          await supabase.functions.invoke('trigger-automation', {
+            body: {
+              trigger_type: 'lead_created',
+              data: {
+                id: data.id,
+                lead_id: data.id,
+                company_name: data.company_name,
+                contact_name: data.contact_name,
+                phone: data.phone,
+                email: data.email,
+                status: data.status,
+                source: data.source,
+                agency_id: data.agency_id,
+              },
+              tenant_id: tenantId,
+            },
+          });
+          console.log('✅ lead_created automation triggered');
+        } catch (automationError) {
+          console.error('Error triggering lead_created automation:', automationError);
+        }
+      }
+      
       toast({
         title: "ליד נוסף בהצלחה",
       });

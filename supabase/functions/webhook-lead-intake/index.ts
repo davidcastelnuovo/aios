@@ -213,6 +213,42 @@ Deno.serve(async (req) => {
 
     console.log('✅ Lead created successfully:', lead.id)
 
+    // Trigger lead_created automation
+    if (tenantId) {
+      try {
+        const automationResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({
+            trigger_type: 'lead_created',
+            data: {
+              id: lead.id,
+              lead_id: lead.id,
+              company_name: lead.company_name,
+              contact_name: lead.contact_name,
+              phone: lead.phone,
+              email: lead.email,
+              status: lead.status,
+              source: lead.source,
+              agency_id: lead.agency_id,
+            },
+            tenant_id: tenantId,
+          }),
+        });
+        
+        if (automationResponse.ok) {
+          console.log('✅ lead_created automation triggered successfully');
+        } else {
+          console.error('⚠️ Failed to trigger automation:', await automationResponse.text());
+        }
+      } catch (automationError) {
+        console.error('⚠️ Error triggering lead_created automation:', automationError);
+      }
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true, 
