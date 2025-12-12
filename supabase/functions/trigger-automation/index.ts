@@ -367,8 +367,60 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     }
   }
   
+  // If still no subscriber found, try to create a new one in ManyChat
+  if (!subscriberId && contactPhone) {
+    console.log('No subscriber found via search, attempting to create new subscriber in ManyChat')
+    
+    const cleanPhone = contactPhone.replace(/\D/g, '')
+    // Format for WhatsApp: international format with + for whatsapp_phone
+    const last9Digits = cleanPhone.slice(-9)
+    const whatsappPhone = '+972' + last9Digits
+    
+    console.log(`Creating subscriber with whatsapp_phone: ${whatsappPhone}`)
+    
+    try {
+      const createResponse = await fetch(`${baseUrl}/subscriber/createSubscriber`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          first_name: contactRecord?.contact_name || 'Unknown',
+          whatsapp_phone: whatsappPhone,
+          consent_phrase: 'Opted in via CRM automation'
+        }),
+      })
+      
+      const createResult = await createResponse.json()
+      console.log('ManyChat createSubscriber response:', createResult)
+      
+      if (createResult.status === 'success' && createResult.data?.id) {
+        subscriberId = createResult.data.id.toString()
+        console.log(`Created new subscriber: ${subscriberId}`)
+        
+        // Save the new subscriber ID to the lead/client
+        if (contactType === 'lead' && contactRecord?.id) {
+          await supabase.from('leads')
+            .update({ manychat_subscriber_id: subscriberId })
+            .eq('id', contactRecord.id)
+          console.log(`Updated lead ${contactRecord.id} with new subscriber ID ${subscriberId}`)
+        } else if (contactType === 'client' && contactRecord?.id) {
+          await supabase.from('clients')
+            .update({ manychat_subscriber_id: subscriberId })
+            .eq('id', contactRecord.id)
+          console.log(`Updated client ${contactRecord.id} with new subscriber ID ${subscriberId}`)
+        }
+      } else {
+        console.error('Failed to create subscriber:', createResult)
+      }
+    } catch (createError) {
+      console.error('Error creating subscriber:', createError)
+    }
+  }
+  
   if (!subscriberId) {
-    throw new Error('לא נמצא Subscriber ID של ManyChat לאיש הקשר. ודא שלליד יש מספר טלפון וש-Subscriber קיים ב-ManyChat')
+    throw new Error('לא נמצא Subscriber ID של ManyChat ולא ניתן היה ליצור subscriber חדש. ודא שלליד יש מספר טלפון תקין')
   }
   
   // Update custom fields if mapping is provided
