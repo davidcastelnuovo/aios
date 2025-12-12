@@ -184,7 +184,7 @@ const updateMutation = useMutation({
         phone: values.phone || null,
         source: (values.source as any) || null,
         status: (values.status as any) || 'new',
-        response_status: (values.response_status as any) || null,
+        response_status: values.response_status && values.response_status !== 'none' ? (values.response_status as any) : null,
         estimated_deal_value: values.estimated_deal_value 
           ? parseFloat(values.estimated_deal_value) 
           : null,
@@ -531,7 +531,7 @@ const updateMutation = useMutation({
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent className="bg-background z-50 text-right" align="end">
-                              <SelectItem value="">ללא סטטוס</SelectItem>
+                              <SelectItem value="none">ללא סטטוס</SelectItem>
                               {leadStatuses.map((status) => (
                                 <SelectItem 
                                   key={status.status_key} 

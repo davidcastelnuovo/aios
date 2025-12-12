@@ -36,8 +36,8 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
   const { tenantId } = useCurrentTenant();
   const [tableName, setTableName] = useState("");
   const [category, setCategory] = useState("");
-  const [agencyId, setAgencyId] = useState<string>("");
-  const [clientId, setClientId] = useState<string>("");
+  const [agencyId, setAgencyId] = useState<string>("none");
+  const [clientId, setClientId] = useState<string>("none");
 
   // Fetch agencies
   const { data: agencies = [] } = useQuery({
@@ -73,7 +73,7 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
 
   // Reset client when agency changes
   useEffect(() => {
-    setClientId("");
+    setClientId("none");
   }, [agencyId]);
 
   const createMutation = useMutation({
@@ -93,8 +93,8 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
           slug, 
           description: '', 
           category: category || null,
-          agency_id: agencyId || null,
-          client_id: clientId || null,
+          agency_id: agencyId && agencyId !== 'none' ? agencyId : null,
+          client_id: clientId && clientId !== 'none' ? clientId : null,
         },
       });
 
@@ -166,7 +166,7 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
                 <SelectValue placeholder="ללא שיוך - כל הסוכנויות" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">ללא שיוך - כל הסוכנויות</SelectItem>
+                <SelectItem value="none">ללא שיוך - כל הסוכנויות</SelectItem>
                 {agencies.map((agency) => (
                   <SelectItem key={agency.id} value={agency.id}>
                     {agency.name}
@@ -175,7 +175,7 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
               </SelectContent>
             </Select>
           </div>
-          {agencyId && (
+          {agencyId && agencyId !== 'none' && (
             <div className="space-y-2">
               <Label>שיוך ללקוח (אופציונלי)</Label>
               <Select value={clientId} onValueChange={setClientId}>
@@ -183,7 +183,7 @@ export function SimpleTableDialog({ open, onOpenChange }: SimpleTableDialogProps
                   <SelectValue placeholder="ללא שיוך - כל הלקוחות" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">ללא שיוך - כל הלקוחות</SelectItem>
+                  <SelectItem value="none">ללא שיוך - כל הלקוחות</SelectItem>
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id}>
                       {client.name}
