@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTerminology } from "@/hooks/useTerminology";
 import {
   Table,
   TableBody,
@@ -51,13 +52,15 @@ import {
   TabsTrigger,
 } from "@/components/ui/tabs";
 
-const roleLabels: Record<UserRole, string> = {
-  owner: "בעלים",
-  team_manager: "מנהל צוות",
-  campaigner: "קמפיינר",
-  sales_person: "איש מכירות",
-  super_admin: "סופר אדמין",
-  seo: "SEO",
+// Role labels are now dynamic via useTerminology hook
+// Mapping from role key to terminology key
+const roleTerminologyKeys: Record<UserRole, string> = {
+  owner: "role_owner",
+  team_manager: "role_team_manager",
+  campaigner: "role_campaigner",
+  sales_person: "role_sales_person",
+  super_admin: "role_super_admin",
+  seo: "role_seo",
 };
 
 const roleBadgeColors: Record<UserRole, string> = {
@@ -73,6 +76,23 @@ export default function Users() {
   const { isOwner, isSuperAdmin, userId: currentUserId } = useUserRole();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
+  const { t } = useTerminology();
+  
+  // Helper function to get role label using terminology
+  const getRoleLabel = (role: UserRole): string => {
+    const key = roleTerminologyKeys[role];
+    return key ? t(key) : role;
+  };
+  
+  // Generate role labels object dynamically for dropdown usage
+  const roleLabels: Record<UserRole, string> = {
+    owner: getRoleLabel('owner'),
+    team_manager: getRoleLabel('team_manager'),
+    campaigner: getRoleLabel('campaigner'),
+    sales_person: getRoleLabel('sales_person'),
+    super_admin: getRoleLabel('super_admin'),
+    seo: getRoleLabel('seo'),
+  };
   const [isTenantDialogOpen, setIsTenantDialogOpen] = useState(false);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
