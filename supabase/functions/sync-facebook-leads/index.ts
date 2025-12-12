@@ -27,11 +27,11 @@ serve(async (req) => {
 
     console.log('Syncing Facebook leads for tenant:', tenant_id, 'integration:', integration_id);
 
-    // Get Facebook integrations for this tenant
+    // Get Facebook integrations for this tenant (both own and shared)
     let query = supabase
       .from('tenant_integrations')
       .select('*')
-      .eq('integration_type', 'facebook')
+      .eq('integration_type', 'facebook_lead_ads')
       .eq('is_active', true);
 
     if (integration_id) {
