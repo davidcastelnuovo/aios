@@ -324,8 +324,8 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     for (const phoneFormat of uniqueFormats) {
       console.log(`Trying phone format: ${phoneFormat}`)
       
-      // Use GET method with query params for findBySystemField (ManyChat WhatsApp API)
-      const searchUrl = `${baseUrl}/subscriber/findBySystemField?field_name=whatsapp_phone&field_value=${encodeURIComponent(phoneFormat)}`
+      // Use GET method with query params for findBySystemField (ManyChat API uses "phone" not "whatsapp_phone")
+      const searchUrl = `${baseUrl}/subscriber/findBySystemField?field_name=phone&field_value=${encodeURIComponent(phoneFormat)}`
       const searchResponse = await fetch(searchUrl, {
         method: 'GET',
         headers: {
