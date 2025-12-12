@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useAgency } from "@/contexts/AgencyContext";
 
 export default function Campaigners() {
   const [expandedCampaigner, setExpandedCampaigner] = useState<string | null>(null);
@@ -19,6 +20,7 @@ export default function Campaigners() {
   const { canViewFinance } = useUserPermissions();
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { selectedAgency } = useAgency();
   
   // Fetch campaigners - RLS will return both own tenant campaigners and cross-tenant ones assigned to your clients
   const { data: campaigners, isLoading } = useQuery({
@@ -32,7 +34,8 @@ export default function Campaigners() {
         .select(`
           *,
           campaigner_agencies(
-            agencies(name)
+            agency_id,
+            agencies(id, name)
           ),
           client_team(
             id,
@@ -59,6 +62,16 @@ export default function Campaigners() {
       return filteredData;
     },
   });
+
+  // Filter campaigners by selected agency
+  const filteredCampaigners = useMemo(() => {
+    if (!campaigners) return [];
+    if (!selectedAgency || selectedAgency === 'all') return campaigners;
+    
+    return campaigners.filter((campaigner: any) => 
+      campaigner.campaigner_agencies?.some((ca: any) => ca.agency_id === selectedAgency)
+    );
+  }, [campaigners, selectedAgency]);
 
   const updatePaymentMutation = useMutation({
     mutationFn: async ({ clientTeamId, amount }: { clientTeamId: string; amount: number }) => {
@@ -119,7 +132,7 @@ export default function Campaigners() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {campaigners?.map((campaigner: any) => (
+        {filteredCampaigners?.map((campaigner: any) => (
           <Card key={campaigner.id} className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02]">
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -235,7 +248,7 @@ export default function Campaigners() {
         ))}
       </div>
 
-      {campaigners?.length === 0 && (
+      {filteredCampaigners?.length === 0 && (
         <Card className="shadow-card">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Megaphone className="h-12 w-12 text-muted-foreground mb-4" />
