@@ -36,11 +36,20 @@ serve(async (req) => {
 
     switch (req.method) {
       case 'GET': {
+        // Get user's tenant_id for filtering
+        const { data: tenantId } = await supabase
+          .rpc('get_user_tenant_id', { _user_id: user.id });
+
         let query = supabase
           .from('crm_tables')
           .select('*')
           .order('category', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: false });
+
+        // Always filter by tenant_id
+        if (tenantId) {
+          query = query.eq('tenant_id', tenantId);
+        }
 
         // Filter by agency_id if provided
         if (agencyIdFilter && agencyIdFilter !== 'all') {
