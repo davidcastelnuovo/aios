@@ -2799,7 +2799,12 @@ export type Database = {
         | "sales_person"
         | "super_admin"
         | "seo"
-      automation_action: "webhook" | "email" | "notification" | "update_status"
+      automation_action:
+        | "webhook"
+        | "email"
+        | "notification"
+        | "update_status"
+        | "send_whatsapp"
       automation_trigger:
         | "task_assigned"
         | "task_status_changed"
@@ -2808,6 +2813,7 @@ export type Database = {
         | "client_created"
         | "client_status_changed"
         | "onboarding_status_changed"
+        | "meeting_created"
       chat_provider: "manychat" | "green_api" | "internal"
       client_mood_status: "happy" | "wavering" | "churn_risk"
       client_status: "active" | "paused" | "ended" | "onboarding"
@@ -2991,7 +2997,13 @@ export const Constants = {
         "super_admin",
         "seo",
       ],
-      automation_action: ["webhook", "email", "notification", "update_status"],
+      automation_action: [
+        "webhook",
+        "email",
+        "notification",
+        "update_status",
+        "send_whatsapp",
+      ],
       automation_trigger: [
         "task_assigned",
         "task_status_changed",
@@ -3000,6 +3012,7 @@ export const Constants = {
         "client_created",
         "client_status_changed",
         "onboarding_status_changed",
+        "meeting_created",
       ],
       chat_provider: ["manychat", "green_api", "internal"],
       client_mood_status: ["happy", "wavering", "churn_risk"],

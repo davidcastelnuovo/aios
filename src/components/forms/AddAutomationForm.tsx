@@ -535,6 +535,90 @@ export function AddAutomationForm() {
               </>
             )}
 
+            {actionType === "send_whatsapp" && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="manychat_trigger_name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>שם ה-Trigger ב-ManyChat *</FormLabel>
+                      <FormControl>
+                        <Input placeholder="meeting_scheduled" {...field} />
+                      </FormControl>
+                      <FormDescription className="text-xs">
+                        שם ה-Flow או ה-Automation שיופעל ב-ManyChat
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
+                  <p className="text-sm font-medium">מיפוי שדות ל-ManyChat Custom Fields</p>
+                  <p className="text-xs text-muted-foreground">
+                    העתק את ה-Field ID מ-ManyChat עבור כל שדה
+                  </p>
+
+                  <FormField
+                    control={form.control}
+                    name="field_mapping_date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">תאריך הפגישה (Field ID)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="לדוגמה: 123456" {...field} className="h-8 text-sm" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="field_mapping_time"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">שעת הפגישה (Field ID)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="לדוגמה: 123457" {...field} className="h-8 text-sm" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="field_mapping_location"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">מיקום/נושא הפגישה (Field ID)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="לדוגמה: 123458" {...field} className="h-8 text-sm" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="field_mapping_contact"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">שם איש הקשר (Field ID)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="לדוגמה: 123459" {...field} className="h-8 text-sm" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </>
+            )}
+
             <FormField
               control={form.control}
               name="conditions"

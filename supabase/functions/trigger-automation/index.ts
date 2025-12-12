@@ -65,6 +65,8 @@ Deno.serve(async (req) => {
             response = await executeNotification(automation.configuration, payload.data)
           } else if (automation.action_type === 'update_status') {
             response = await executeStatusUpdate(supabase, automation.configuration, payload.data)
+          } else if (automation.action_type === 'send_whatsapp') {
+            response = await executeSendWhatsapp(supabase, automation.configuration, payload.data, payload.tenant_id)
           }
 
           const executionTime = Date.now() - startTime
@@ -241,5 +243,144 @@ async function executeStatusUpdate(supabase: any, config: any, data: any) {
     recordId: recordId,
     updates: updateData,
     result: updateResult
+  }
+}
+
+// Execute send WhatsApp action via ManyChat
+async function executeSendWhatsapp(supabase: any, config: any, data: any, tenantId: string) {
+  console.log('Executing send WhatsApp:', config)
+  console.log('Data:', data)
+  
+  const { manychat_trigger_name, field_mapping } = config
+  
+  // Get ManyChat integration settings for this tenant
+  const { data: integration, error: integrationError } = await supabase
+    .from('tenant_integrations')
+    .select('api_key, settings')
+    .eq('tenant_id', tenantId)
+    .eq('integration_type', 'manychat')
+    .eq('is_active', true)
+    .maybeSingle()
+  
+  if (integrationError) {
+    console.error('Error fetching ManyChat integration:', integrationError)
+    throw new Error('שגיאה בטעינת הגדרות ManyChat')
+  }
+  
+  if (!integration?.api_key) {
+    throw new Error('לא נמצא חיבור ManyChat פעיל לארגון זה')
+  }
+  
+  // Get the subscriber ID from lead or client
+  let subscriberId = null
+  
+  if (data.lead_id) {
+    const { data: lead } = await supabase
+      .from('leads')
+      .select('manychat_subscriber_id, contact_name')
+      .eq('id', data.lead_id)
+      .single()
+    subscriberId = lead?.manychat_subscriber_id
+  } else if (data.client_id) {
+    const { data: client } = await supabase
+      .from('clients')
+      .select('manychat_subscriber_id, contact_name')
+      .eq('id', data.client_id)
+      .single()
+    subscriberId = client?.manychat_subscriber_id
+  }
+  
+  if (!subscriberId) {
+    throw new Error('לא נמצא Subscriber ID של ManyChat לאיש הקשר')
+  }
+  
+  const apiKey = integration.api_key
+  const baseUrl = 'https://api.manychat.com/fb'
+  
+  // Update custom fields if mapping is provided
+  const customFieldUpdates: any[] = []
+  
+  if (field_mapping?.date && data.meeting_date) {
+    customFieldUpdates.push({
+      field_id: parseInt(field_mapping.date),
+      field_value: data.meeting_date
+    })
+  }
+  
+  if (field_mapping?.time && data.meeting_time) {
+    customFieldUpdates.push({
+      field_id: parseInt(field_mapping.time),
+      field_value: data.meeting_time
+    })
+  }
+  
+  if (field_mapping?.location && data.meeting_location) {
+    customFieldUpdates.push({
+      field_id: parseInt(field_mapping.location),
+      field_value: data.meeting_location
+    })
+  }
+  
+  if (field_mapping?.contact && data.contact_name) {
+    customFieldUpdates.push({
+      field_id: parseInt(field_mapping.contact),
+      field_value: data.contact_name
+    })
+  }
+  
+  // Update custom fields
+  if (customFieldUpdates.length > 0) {
+    console.log('Updating ManyChat custom fields:', customFieldUpdates)
+    
+    for (const fieldUpdate of customFieldUpdates) {
+      const fieldResponse = await fetch(`${baseUrl}/subscriber/setCustomField`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subscriber_id: subscriberId,
+          field_id: fieldUpdate.field_id,
+          field_value: fieldUpdate.field_value,
+        }),
+      })
+      
+      if (!fieldResponse.ok) {
+        const errorText = await fieldResponse.text()
+        console.error(`Failed to set custom field ${fieldUpdate.field_id}:`, errorText)
+      }
+    }
+  }
+  
+  // Trigger the ManyChat flow/automation
+  const triggerName = manychat_trigger_name || 'meeting_scheduled'
+  console.log(`Triggering ManyChat flow: ${triggerName}`)
+  
+  const triggerResponse = await fetch(`${baseUrl}/sending/sendFlow`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      subscriber_id: subscriberId,
+      flow_ns: triggerName,
+    }),
+  })
+  
+  const triggerResult = await triggerResponse.json()
+  console.log('ManyChat trigger response:', triggerResult)
+  
+  if (!triggerResponse.ok) {
+    throw new Error(`שגיאה בהפעלת Flow ב-ManyChat: ${JSON.stringify(triggerResult)}`)
+  }
+  
+  return {
+    success: true,
+    subscriber_id: subscriberId,
+    fields_updated: customFieldUpdates.length,
+    trigger_name: triggerName,
+    trigger_result: triggerResult
   }
 }
