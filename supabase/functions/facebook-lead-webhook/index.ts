@@ -67,7 +67,7 @@ serve(async (req) => {
 
               console.log('Processing lead:', { leadgenId, formId, pageId });
 
-              // Find the integration for this page
+              // Find the integration for this page/form
               const { data: integrations, error: intError } = await supabase
                 .from('tenant_integrations')
                 .select('*')
@@ -79,16 +79,46 @@ serve(async (req) => {
                 continue;
               }
 
-              // Find matching integration by page_id in settings
+              console.log('Found integrations:', integrations?.length);
+
+              // Find matching integration by form_id in form_mappings first, then by page_id
               let integration = integrations?.find(i => {
                 const settings = i.settings as any;
-                return settings?.page_id === pageId?.toString();
+                // Check if form_id exists in form_mappings
+                if (settings?.form_mappings?.[formId]) {
+                  console.log('Found integration by form_id:', formId, 'tenant:', i.tenant_id);
+                  return true;
+                }
+                return false;
               });
 
+              // Fallback: check by page_id in settings or in form_mappings
               if (!integration) {
-                console.log('No matching integration found for page:', pageId);
+                integration = integrations?.find(i => {
+                  const settings = i.settings as any;
+                  // Check root page_id
+                  if (settings?.page_id === pageId?.toString()) {
+                    console.log('Found integration by root page_id:', pageId);
+                    return true;
+                  }
+                  // Check page_id inside form_mappings
+                  const formMappings = settings?.form_mappings || {};
+                  for (const [fId, mapping] of Object.entries(formMappings)) {
+                    if ((mapping as any)?.page_id === pageId?.toString()) {
+                      console.log('Found integration by form_mappings page_id:', pageId);
+                      return true;
+                    }
+                  }
+                  return false;
+                });
+              }
+
+              if (!integration) {
+                console.log('No matching integration found for page:', pageId, 'form:', formId);
                 continue;
               }
+              
+              console.log('Using integration for tenant:', integration.tenant_id);
 
               let accessToken = integration.api_key;
               const settings = integration.settings as any;
@@ -139,14 +169,14 @@ serve(async (req) => {
                 'phone_number': 'phone',
               };
 
-              // Map fields to lead record
+              // Map fields to lead record (use 'paid_ads' as source since it's a valid enum value)
               const leadRecord: Record<string, any> = {
                 company_name: fieldData.company || fieldData.full_name || 'Facebook Lead',
-                source: 'facebook',
+                source: 'paid_ads',
                 status: 'new',
                 tenant_id: integration.tenant_id,
                 agency_id: formMappings.agency_id || null,
-                notes: `Facebook Lead ID: ${leadgenId}\nForm ID: ${formId}`,
+                notes: `Facebook Lead ID: ${leadgenId}\nForm ID: ${formId}\nSource: Facebook Lead Ads`,
               };
 
               // Apply field mappings
