@@ -14,7 +14,9 @@ import {
   Shield,
   BarChart3,
   ArrowLeft,
-  Check
+  Check,
+  CalendarClock,
+  PieChart
 } from "lucide-react";
 import logoImage from "@/assets/logo.png";
 
@@ -55,6 +57,20 @@ const Landing = () => {
       description: "Green API, ManyChat, צ'אט מובנה",
       icon: MessageSquare,
       color: "from-green-400/20 to-green-400/5"
+    },
+    {
+      title: "זימון פגישות אוטומטי",
+      description: "אינטגרציה ל-Google Calendar, שליחת זימונים ללקוחות ולידים",
+      icon: CalendarClock,
+      color: "from-sky-500/20 to-sky-500/5",
+      isNew: true
+    },
+    {
+      title: "דוחות אוטומטיים",
+      description: "אינטגרציה ישירה למערכות פרסום, דוחות ביצועים בזמן אמת",
+      icon: PieChart,
+      color: "from-pink-500/20 to-pink-500/5",
+      isNew: true
     },
     {
       title: "בינה מלאכותית",
@@ -185,11 +201,11 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Modules Section - Stacked Cards */}
-      <section id="modules" className="relative bg-[#0d1a2d]">
+      {/* Modules Section - Grid Layout */}
+      <section id="modules" className="relative py-24 bg-[#0d1a2d]">
         <div className="container mx-auto px-6">
           {/* Section Header */}
-          <div className="text-center py-24 sticky top-0 z-0 bg-[#0d1a2d]">
+          <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
               כל מה שצריך, <span className="text-[#36d399]">במקום אחד</span>
             </h2>
@@ -199,53 +215,27 @@ const Landing = () => {
             <div className="w-20 h-1 bg-gradient-to-r from-transparent via-[#36d399] to-transparent mx-auto mt-6" />
           </div>
 
-          {/* Stacked Cards Container */}
-          <div className="relative pb-24">
-            {modules.map((module, index) => {
-              const bgShade = 5 + index * 2;
-              return (
-                <div 
-                  key={index}
-                  className="sticky w-full max-w-2xl mx-auto"
-                  style={{ 
-                    top: `${70 + index * 20}px`,
-                    zIndex: index + 10
-                  }}
-                >
-                  <div 
-                    className="group relative p-8 rounded-2xl border border-white/10 hover:border-[#36d399]/50 transition-all duration-300 shadow-2xl backdrop-blur-sm"
-                    style={{ 
-                      backgroundColor: `rgba(13, 26, 45, ${0.95 - index * 0.02})`,
-                      transform: `scale(${1 - index * 0.015})`,
-                      boxShadow: `0 ${20 + index * 5}px ${40 + index * 10}px rgba(0,0,0,0.3)`
-                    }}
-                  >
-                    {module.isNew && (
-                      <span className="absolute top-4 left-4 px-3 py-1.5 text-xs font-bold bg-[#36d399] text-[#0A1526] rounded-full animate-pulse">
-                        חדש
-                      </span>
-                    )}
-                    
-                    <div className="flex items-start gap-6">
-                      <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${module.color} flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform shadow-lg`}>
-                        <module.icon className="h-8 w-8 text-white" />
-                      </div>
-                      
-                      <div className="flex-1">
-                        <h3 className="text-2xl font-bold text-white mb-2">{module.title}</h3>
-                        <p className="text-white/60 text-base leading-relaxed">{module.description}</p>
-                      </div>
-                    </div>
-                    
-                    {/* Decorative line */}
-                    <div className="absolute bottom-0 left-8 right-8 h-px bg-gradient-to-r from-transparent via-[#36d399]/20 to-transparent" />
-                  </div>
-                  
-                  {/* Spacer for scroll */}
-                  <div className="h-32" />
+          {/* Modules Grid */}
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+            {modules.map((module, index) => (
+              <div 
+                key={index}
+                className="group relative p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-[#36d399]/50 transition-all duration-300 hover:bg-white/[0.07] hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(54,211,153,0.15)]"
+              >
+                {module.isNew && (
+                  <span className="absolute top-4 left-4 px-2 py-1 text-xs font-medium bg-[#36d399] text-[#0A1526] rounded-full">
+                    חדש
+                  </span>
+                )}
+                
+                <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${module.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
+                  <module.icon className="h-7 w-7 text-white" />
                 </div>
-              );
-            })}
+                
+                <h3 className="text-xl font-semibold text-white mb-2">{module.title}</h3>
+                <p className="text-white/50 text-sm leading-relaxed">{module.description}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
