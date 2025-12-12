@@ -1380,6 +1380,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   const { selectedAgency } = useAgency();
   const { activeStatuses: leadStatuses } = useLeadStatuses();
   const { activeStages: pipelineStagesData } = useLeadPipelineStages();
+  const { isFieldVisible } = useCustomFieldLabels('lead');
   
   // Convert dynamic pipeline stages to format compatible with existing code
   const PIPELINE_STAGES = useMemo(() => {
@@ -1593,7 +1594,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                 </a>
               ) : "-"
             },
-            { 
+            ...(isFieldVisible('company_name') ? [{ 
               id: "company", 
               label: "שם חברה", 
               width: 170,
@@ -1603,7 +1604,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                   <span className="truncate">{lead.company_name}</span>
                 </div>
               )
-            },
+            }] : []),
             { 
               id: "status", 
               label: "שלב במשפך", 
