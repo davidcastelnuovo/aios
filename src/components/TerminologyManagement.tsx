@@ -131,6 +131,10 @@ export default function TerminologyManagement() {
       role_sales_person: 'תפקיד: איש מכירות',
       role_seo: 'תפקיד: SEO',
       role_super_admin: 'תפקיד: סופר אדמין',
+      // Task tab names
+      task_tab_all: 'טאב משימות: הכל',
+      task_tab_seo: 'טאב משימות: SEO',
+      task_tab_campaign: 'טאב משימות: קמפיינרים',
     };
     return labels[key] || key;
   };

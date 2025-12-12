@@ -55,6 +55,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
+import { useTerminology } from "@/hooks/useTerminology";
 
 // Faster bubble pop animation for task completion
 const playBubbleAnimation = () => {
@@ -141,6 +142,7 @@ export default function Tasks() {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { getFieldLabel } = useCustomFieldLabels('task');
+  const { t } = useTerminology();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -771,9 +773,9 @@ export default function Tasks() {
             <h2 className="text-2xl md:text-3xl font-bold">משימות</h2>
             <Tabs value={selectedRole} onValueChange={setSelectedRole} dir="rtl">
               <TabsList className="bg-muted">
-                <TabsTrigger value="all">כל המשימות</TabsTrigger>
-                <TabsTrigger value="SEO">משימות SEO</TabsTrigger>
-                <TabsTrigger value="קמפיינר">משימות קמפיינים</TabsTrigger>
+                <TabsTrigger value="all">{t('task_tab_all')}</TabsTrigger>
+                <TabsTrigger value="SEO">{t('task_tab_seo')}</TabsTrigger>
+                <TabsTrigger value="קמפיינר">{t('task_tab_campaign')}</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
