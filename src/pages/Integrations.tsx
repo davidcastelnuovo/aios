@@ -95,6 +95,23 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
+  // Check ManyChat integration status
+  const { data: manychatIntegration } = useQuery({
+    queryKey: ['manychat-integration', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .eq('integration_type', 'manychat')
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   const integrations: IntegrationCardProps[] = [
     {
       icon: <Webhook className="h-6 w-6" />,
@@ -105,7 +122,7 @@ export default function Integrations() {
         "קליטה מטפסי אתר",
         "בונה JSON אינטראקטיבי",
       ],
-      isConnected: true, // Webhook is always available
+      isConnected: true,
       route: "lead-integrations",
       gradient: "bg-gradient-to-r from-purple-600 to-purple-800",
     },
@@ -134,6 +151,19 @@ export default function Integrations() {
       isConnected: !!greenApiIntegration,
       route: "green-api-settings",
       gradient: "bg-gradient-to-r from-green-600 to-green-800",
+    },
+    {
+      icon: <MessageCircle className="h-6 w-6" />,
+      title: "ManyChat",
+      description: "פלטפורמת צ'אט והודעות עם אוטומציות מתקדמות",
+      features: [
+        "אינטגרציה עם Facebook Messenger",
+        "סנכרון אוטומטי של contacts",
+        "תמיכה בטאגים ואוטומציות",
+      ],
+      isConnected: !!manychatIntegration,
+      route: "manychat-settings",
+      gradient: "bg-gradient-to-r from-blue-500 to-indigo-600",
     },
   ];
 
