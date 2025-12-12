@@ -310,11 +310,13 @@ export function AddLeadForm() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-background z-[100]">
-                        <SelectItem value="phone">טלפון</SelectItem>
                         <SelectItem value="website">אתר</SelectItem>
-                        <SelectItem value="facebook">פייסבוק</SelectItem>
-                        <SelectItem value="google">גוגל</SelectItem>
                         <SelectItem value="referral">הפניה</SelectItem>
+                        <SelectItem value="social_media">רשתות חברתיות</SelectItem>
+                        <SelectItem value="paid_ads">פרסום ממומן</SelectItem>
+                        <SelectItem value="cold_call">שיחה קרה</SelectItem>
+                        <SelectItem value="email_campaign">קמפיין מייל</SelectItem>
+                        <SelectItem value="event">אירוע</SelectItem>
                         <SelectItem value="other">אחר</SelectItem>
                       </SelectContent>
                     </Select>
