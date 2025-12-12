@@ -310,11 +310,12 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     const cleanPhone = contactPhone.replace(/\D/g, '')
     
     // Try multiple phone formats since ManyChat might store different formats
+    // ManyChat expects format like +15400000000
     const phoneFormats = [
+      '+' + cleanPhone,                     // With +: +972507677613
       cleanPhone,                           // Full number: 972507677613
-      cleanPhone.slice(-10),                // Last 10 digits: 0507677613
-      cleanPhone.slice(-9),                 // Last 9 digits: 507677613
-      '972' + cleanPhone.slice(-9),         // With country code: 972507677613
+      '+972' + cleanPhone.slice(-9),        // +972 + last 9: +972507677613
+      '+' + cleanPhone.slice(-10),          // +last 10: +0507677613
     ]
     
     // Remove duplicates
@@ -324,8 +325,8 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     for (const phoneFormat of uniqueFormats) {
       console.log(`Trying phone format: ${phoneFormat}`)
       
-      // Use GET method with query params for findBySystemField (ManyChat API uses "phone" not "whatsapp_phone")
-      const searchUrl = `${baseUrl}/subscriber/findBySystemField?field_name=phone&field_value=${encodeURIComponent(phoneFormat)}`
+      // ManyChat API uses direct "phone" parameter (not field_name/field_value)
+      const searchUrl = `${baseUrl}/subscriber/findBySystemField?phone=${encodeURIComponent(phoneFormat)}`
       const searchResponse = await fetch(searchUrl, {
         method: 'GET',
         headers: {
