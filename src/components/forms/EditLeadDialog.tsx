@@ -370,44 +370,27 @@ const updateMutation = useMutation({
 
       const subject = meetingSubject || `פגישה עם ${lead.contact_name || lead.company_name}`;
 
-      // Create calendar event
+      // Create calendar event with attendee - Google will send the invitation automatically
+      const attendees = lead.email ? [lead.email] : [];
+      
       const { data: calendarData, error: calendarError } = await supabase.functions.invoke('add-calendar-event', {
         body: {
           summary: subject,
           description: personalMessage || `פגישה עם ליד: ${lead.company_name}`,
           start: startDateTime.toISOString(),
           end: endDateTime.toISOString(),
+          attendees,
         }
       });
 
-      let calendarLink = null;
       if (calendarError) {
         console.error('Calendar error:', calendarError);
-        sonnerToast.warning("הפגישה נקבעה אך לא נוספה ליומן גוגל");
+        sonnerToast.error("שגיאה ביצירת הפגישה ביומן");
       } else {
-        calendarLink = calendarData?.eventLink;
-        sonnerToast.success("הפגישה נוספה ליומן!");
-      }
-
-      // Send email invitation if lead has email
-      if (lead.email) {
-        const { error: emailError } = await supabase.functions.invoke('send-meeting-invitation', {
-          body: {
-            to_email: lead.email,
-            to_name: lead.contact_name || lead.company_name,
-            meeting_subject: subject,
-            meeting_date: startDateTime.toISOString(),
-            meeting_time: meetingTime,
-            personal_message: personalMessage,
-            calendar_link: calendarLink,
-          }
-        });
-
-        if (emailError) {
-          console.error('Email error:', emailError);
-          sonnerToast.warning("הפגישה נקבעה אך המייל לא נשלח");
+        if (lead.email) {
+          sonnerToast.success("הפגישה נוצרה וזימון נשלח למייל של הליד!");
         } else {
-          sonnerToast.success("זימון לפגישה נשלח בהצלחה!");
+          sonnerToast.success("הפגישה נוספה ליומן!");
         }
       }
 

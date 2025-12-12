@@ -23,8 +23,8 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    const { summary, description, start, end } = await req.json();
-    console.log('Creating calendar event:', { summary, start, end, userId: user.id });
+    const { summary, description, start, end, attendees } = await req.json();
+    console.log('Creating calendar event:', { summary, start, end, attendees, userId: user.id });
 
     if (!summary || !start) {
       throw new Error('Missing required fields: summary and start are required');
@@ -89,7 +89,7 @@ serve(async (req) => {
     }
 
     // Create event in Google Calendar
-    const event = {
+    const event: Record<string, unknown> = {
       summary,
       description: description || '',
       start: {
@@ -102,10 +102,16 @@ serve(async (req) => {
       },
     };
 
-    console.log('Sending event to Google Calendar API...');
+    // Add attendees if provided
+    if (attendees && Array.isArray(attendees) && attendees.length > 0) {
+      event.attendees = attendees.map((email: string) => ({ email }));
+    }
 
+    console.log('Sending event to Google Calendar API...', { hasAttendees: !!event.attendees });
+
+    // Use sendUpdates=all to send email invitations to attendees
     const calendarResponse = await fetch(
-      'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+      'https://www.googleapis.com/calendar/v3/calendars/primary/events?sendUpdates=all',
       {
         method: 'POST',
         headers: {
