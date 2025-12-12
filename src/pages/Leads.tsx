@@ -1135,6 +1135,7 @@ export default function Leads() {
                             key={lead.id} 
                             lead={lead}
                             productsLookup={productsLookup}
+                            leadStatuses={leadStatuses}
                             onStatusChange={(leadId, newStatus) => 
                               updateLeadStatus.mutate({ 
                                 leadId, 
@@ -1159,6 +1160,7 @@ export default function Leads() {
                   <LeadCard 
                     lead={activeLead}
                     productsLookup={productsLookup}
+                    leadStatuses={leadStatuses}
                     onStatusChange={() => {}}
                     onResponseStatusChange={() => {}}
                   />
@@ -1238,6 +1240,7 @@ export default function Leads() {
                             key={lead.id} 
                             lead={lead}
                             productsLookup={productsLookup}
+                            leadStatuses={leadStatuses}
                             onStatusChange={(leadId, newStatus) => 
                               updateLeadStatus.mutate({ 
                                 leadId, 
@@ -1264,6 +1267,7 @@ export default function Leads() {
                 <LeadCard 
                   lead={activeLead}
                   productsLookup={productsLookup}
+                  leadStatuses={leadStatuses}
                   onStatusChange={() => {}}
                   onResponseStatusChange={() => {}}
                 />
