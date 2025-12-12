@@ -117,24 +117,69 @@ serve(async (req) => {
           for (const lead of leads) {
             const leadgenId = lead.id;
 
-            // Check if this lead already exists
-            const { data: existingLead } = await supabase
+            // Parse lead fields early to check for duplicates
+            const fieldData: Record<string, string> = {};
+            for (const field of lead.field_data || []) {
+              fieldData[field.name] = field.values?.[0] || '';
+            }
+            
+            const leadPhone = fieldData.phone_number || fieldData.phone || '';
+            const leadEmail = fieldData.email || '';
+
+            // Check if this lead already exists by leadgen_id
+            const { data: existingByLeadgenId } = await supabase
               .from('leads')
               .select('id')
               .eq('tenant_id', integration.tenant_id)
               .ilike('notes', `%${leadgenId}%`)
               .maybeSingle();
 
-            if (existingLead) {
+            if (existingByLeadgenId) {
+              console.log('Skipping duplicate lead (by leadgen_id):', leadgenId);
               totalSkipped++;
               continue;
             }
 
-            // Parse lead fields
-            const fieldData: Record<string, string> = {};
-            for (const field of lead.field_data || []) {
-              fieldData[field.name] = field.values?.[0] || '';
+            // Check by phone number (normalize to last 9 digits)
+            if (leadPhone) {
+              const normalizedPhone = leadPhone.replace(/\D/g, '').slice(-9);
+              if (normalizedPhone.length >= 9) {
+                const { data: existingByPhone } = await supabase
+                  .from('leads')
+                  .select('id, phone')
+                  .eq('tenant_id', integration.tenant_id)
+                  .not('phone', 'is', null);
+                
+                const phoneMatch = existingByPhone?.find(l => {
+                  const existingNormalized = (l.phone || '').replace(/\D/g, '').slice(-9);
+                  return existingNormalized === normalizedPhone;
+                });
+                
+                if (phoneMatch) {
+                  console.log('Skipping duplicate lead (by phone):', leadPhone, '-> existing lead:', phoneMatch.id);
+                  totalSkipped++;
+                  continue;
+                }
+              }
             }
+
+            // Check by email
+            if (leadEmail) {
+              const { data: existingByEmail } = await supabase
+                .from('leads')
+                .select('id')
+                .eq('tenant_id', integration.tenant_id)
+                .ilike('email', leadEmail)
+                .maybeSingle();
+
+              if (existingByEmail) {
+                console.log('Skipping duplicate lead (by email):', leadEmail);
+                totalSkipped++;
+                continue;
+              }
+            }
+
+            // Map fields based on form mapping (fieldData already parsed above)
 
             // Map fields based on form mapping
             const fieldMappings = formMapping.fields || {};
