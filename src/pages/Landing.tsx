@@ -907,6 +907,21 @@ const Landing = () => {
             <p className="text-muted-foreground max-w-md">
               הפלטפורמה המובילה לניהול מכירות עבור סוכנויות דיגיטל בישראל
             </p>
+            <div className="flex items-center gap-6 text-sm">
+              <button 
+                onClick={() => navigate("/privacy")} 
+                className="text-muted-foreground hover:text-primary transition-colors"
+              >
+                מדיניות פרטיות
+              </button>
+              <span className="text-muted-foreground">|</span>
+              <button 
+                onClick={() => navigate("/terms")} 
+                className="text-muted-foreground hover:text-primary transition-colors"
+              >
+                תנאי שימוש
+              </button>
+            </div>
             <p className="text-sm text-muted-foreground">
               © 2025 AfterLead. כל הזכויות שמורות.
             </p>
