@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Facebook, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft, Loader2 } from "lucide-react";
+import { Facebook, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft, Loader2, TestTube } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { FacebookFormMappingSection } from "@/components/forms/FacebookFormMappingSection";
@@ -203,6 +203,38 @@ export default function FacebookSettings() {
     },
   });
 
+  // Test webhook mutation
+  const testWebhookMutation = useMutation({
+    mutationFn: async () => {
+      const settings = leadAdsIntegration?.settings as any;
+      const pageId = settings?.page_id;
+      const formMappings = settings?.form_mappings || {};
+      const firstFormId = Object.keys(formMappings)[0];
+      
+      const { data, error } = await supabase.functions.invoke('test-facebook-lead-webhook', {
+        body: { 
+          page_id: pageId,
+          form_id: firstFormId,
+          tenant_id: currentTenant?.id,
+        },
+      });
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      if (data?.success) {
+        toast.success(`ליד טסט נוצר בהצלחה! ID: ${data.lead_id}`);
+        queryClient.invalidateQueries({ queryKey: ['leads'] });
+      } else {
+        toast.error('שגיאה: ' + (data?.error || 'Unknown error'));
+      }
+    },
+    onError: (error) => {
+      toast.error('שגיאה בבדיקה: ' + (error as Error).message);
+    },
+  });
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success('הועתק ללוח');
@@ -380,6 +412,22 @@ export default function FacebookSettings() {
                       </AlertDescription>
                     </Alert>
                   )}
+
+                  {/* Test Webhook Button */}
+                  <div className="pt-4 border-t">
+                    <Button
+                      variant="outline"
+                      onClick={() => testWebhookMutation.mutate()}
+                      disabled={testWebhookMutation.isPending}
+                      className="gap-2"
+                    >
+                      <TestTube className={`h-4 w-4 ${testWebhookMutation.isPending ? 'animate-spin' : ''}`} />
+                      {testWebhookMutation.isPending ? 'מבצע בדיקה...' : 'בדוק Webhook (צור ליד טסט)'}
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      לחץ כדי ליצור ליד טסט ולוודא שהמיפוי עובד נכון
+                    </p>
+                  </div>
 
                   {/* Disconnect */}
                   <div className="pt-4 border-t">

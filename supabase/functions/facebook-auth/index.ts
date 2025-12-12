@@ -32,7 +32,23 @@ serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const action = url.searchParams.get('action');
+    let action = url.searchParams.get('action');
+    
+    // Also check for action in body for POST requests
+    let bodyData: any = null;
+    if (req.method === 'POST' && !action) {
+      try {
+        const clonedReq = req.clone();
+        bodyData = await clonedReq.json();
+        if (bodyData?.action) {
+          action = bodyData.action;
+        }
+      } catch {
+        // Body parsing failed, continue with URL action
+      }
+    }
+    
+    console.log('Facebook auth action:', action);
 
     // Generate OAuth URL
     if (action === 'get_auth_url') {
@@ -473,7 +489,8 @@ serve(async (req) => {
 
     // Subscribe to page webhooks
     if (action === 'subscribe_page') {
-      const { integration_id, page_id } = await req.json();
+      const data = bodyData || await req.json();
+      const { integration_id, page_id } = data;
 
       const { data: integration, error } = await supabase
         .from('tenant_integrations')
