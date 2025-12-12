@@ -16,7 +16,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
-import { Pencil, CalendarIcon, FileText, DollarSign, MessageSquare, Send, Trash2 } from "lucide-react";
+import { Pencil, CalendarIcon, FileText, DollarSign, MessageSquare, Send, Trash2, Settings2 } from "lucide-react";
+import { ManageLeadStatusesDialog } from "./ManageLeadStatusesDialog";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -541,6 +542,19 @@ const updateMutation = useMutation({
                                   {status.label}
                                 </SelectItem>
                               ))}
+                              <div className="border-t mt-1 pt-1">
+                                <ManageLeadStatusesDialog 
+                                  trigger={
+                                    <button 
+                                      type="button"
+                                      className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
+                                    >
+                                      <Settings2 className="h-4 w-4" />
+                                      ניהול סטטוסים
+                                    </button>
+                                  }
+                                />
+                              </div>
                             </SelectContent>
                           </Select>
                           <FormMessage />
