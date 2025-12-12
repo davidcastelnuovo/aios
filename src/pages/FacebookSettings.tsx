@@ -243,8 +243,7 @@ export default function FacebookSettings() {
         <TabsContent value="lead-ads" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Facebook Lead Ads</span>
+              <CardTitle className="flex items-center justify-between flex-row-reverse">
                 {leadAdsIntegration?.is_active ? (
                   <Badge variant="default" className="bg-green-500 flex items-center gap-1">
                     <CheckCircle2 className="h-3 w-3" />
@@ -256,18 +255,21 @@ export default function FacebookSettings() {
                     לא מחובר
                   </Badge>
                 )}
+                <span className="text-right">Facebook Lead Ads</span>
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-right">
                 קבל לידים אוטומטית מקמפיינים של Facebook Lead Ads ישירות למערכת
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {!leadAdsIntegration?.is_active ? (
                 <div className="space-y-4">
-                  <Alert>
-                    <Facebook className="h-4 w-4" />
-                    <AlertTitle>התחבר לפייסבוק</AlertTitle>
-                    <AlertDescription>
+                  <Alert className="text-right">
+                    <AlertTitle className="flex items-center gap-2 flex-row-reverse justify-end">
+                      <Facebook className="h-4 w-4" />
+                      התחבר לפייסבוק
+                    </AlertTitle>
+                    <AlertDescription className="text-right">
                       לחץ על הכפתור למטה כדי לאשר גישה לעמודי הפייסבוק שלך וטפסי Lead Ads
                     </AlertDescription>
                   </Alert>
@@ -290,19 +292,21 @@ export default function FacebookSettings() {
               ) : (
                 <div className="space-y-4">
                   {/* Connection Status */}
-                  <Alert className="bg-green-50 border-green-200">
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    <AlertTitle className="text-green-800">מחובר בהצלחה!</AlertTitle>
-                    <AlertDescription className="text-green-700">
+                  <Alert className="bg-green-50 border-green-200 text-right">
+                    <AlertTitle className="text-green-800 flex items-center gap-2 flex-row-reverse justify-end">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      מחובר בהצלחה!
+                    </AlertTitle>
+                    <AlertDescription className="text-green-700 text-right">
                       החשבון שלך מחובר. לידים חדשים יתקבלו אוטומטית למערכת.
                     </AlertDescription>
                   </Alert>
 
                   {/* Webhook URL */}
-                  <div className="space-y-2">
+                  <div className="space-y-2 text-right">
                     <Label>Webhook URL</Label>
-                    <div className="flex gap-2">
-                      <Input value={webhookUrl} readOnly className="font-mono text-sm" />
+                    <div className="flex gap-2 flex-row-reverse">
+                      <Input value={webhookUrl} readOnly className="font-mono text-sm text-left" dir="ltr" />
                       <Button variant="outline" size="icon" onClick={() => copyToClipboard(webhookUrl)}>
                         <Copy className="h-4 w-4" />
                       </Button>
@@ -314,9 +318,9 @@ export default function FacebookSettings() {
 
                   {/* Page Selection */}
                   {pages.length > 0 && (
-                    <div className="space-y-2">
+                    <div className="space-y-2 text-right">
                       <Label>בחר עמוד פייסבוק</Label>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-row-reverse">
                         <Select value={selectedPage || leadAdsSettings?.page_id || ''} onValueChange={setSelectedPage}>
                           <SelectTrigger className="flex-1">
                             <SelectValue placeholder="בחר עמוד" />
@@ -349,10 +353,12 @@ export default function FacebookSettings() {
                   )}
 
                   {selectedPageName && (
-                    <Alert>
-                      <CheckCircle2 className="h-4 w-4" />
-                      <AlertTitle>עמוד פעיל</AlertTitle>
-                      <AlertDescription>
+                    <Alert className="text-right">
+                      <AlertTitle className="flex items-center gap-2 flex-row-reverse justify-end">
+                        <CheckCircle2 className="h-4 w-4" />
+                        עמוד פעיל
+                      </AlertTitle>
+                      <AlertDescription className="text-right">
                         לידים מהעמוד "{selectedPageName}" יתקבלו אוטומטית למערכת
                       </AlertDescription>
                     </Alert>
@@ -388,10 +394,10 @@ export default function FacebookSettings() {
           {/* Lead Ads Instructions */}
           <Card>
             <CardHeader>
-              <CardTitle>הגדרת Webhook בפייסבוק</CardTitle>
+              <CardTitle className="text-right">הגדרת Webhook בפייסבוק</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              <ol className="list-decimal space-y-2 pr-5">
+            <CardContent className="space-y-4 text-sm text-right">
+              <ol className="list-decimal space-y-2 mr-5 list-inside">
                 <li>עבור ל-<a href="https://developers.facebook.com" target="_blank" rel="noopener" className="text-primary underline">Meta for Developers</a></li>
                 <li>בחר את ה-App המשותף</li>
                 <li>הוסף את המוצר "Webhooks"</li>
@@ -406,8 +412,7 @@ export default function FacebookSettings() {
         <TabsContent value="capi" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Facebook Conversions API</span>
+              <CardTitle className="flex items-center justify-between flex-row-reverse">
                 {capiIntegration?.is_active && (capiIntegration.settings as any)?.pixel_id ? (
                   <Badge variant="default" className="bg-green-500 flex items-center gap-1">
                     <CheckCircle2 className="h-3 w-3" />
@@ -419,12 +424,13 @@ export default function FacebookSettings() {
                     לא מוגדר
                   </Badge>
                 )}
+                <span className="text-right">Facebook Conversions API</span>
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-right">
                 שלח אירועי המרה לפייסבוק לשיפור אופטימיזציה של קמפיינים
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 text-right">
               <div className="space-y-2">
                 <Label htmlFor="pixel-id">Pixel ID *</Label>
                 <Input
@@ -432,6 +438,8 @@ export default function FacebookSettings() {
                   value={pixelId || (capiIntegration?.settings as any)?.pixel_id || ''}
                   onChange={(e) => setPixelId(e.target.value)}
                   placeholder="לדוגמה: 123456789012345"
+                  dir="ltr"
+                  className="text-left"
                 />
                 <p className="text-xs text-muted-foreground">
                   מצא את ה-Pixel ID ב-Events Manager של פייסבוק
@@ -445,16 +453,20 @@ export default function FacebookSettings() {
                   value={testEventCode || (capiIntegration?.settings as any)?.test_event_code || ''}
                   onChange={(e) => setTestEventCode(e.target.value)}
                   placeholder="לדוגמה: TEST12345"
+                  dir="ltr"
+                  className="text-left"
                 />
                 <p className="text-xs text-muted-foreground">
                   קוד לבדיקת אירועים ב-Test Events של פייסבוק (לא חובה)
                 </p>
               </div>
 
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Access Token</AlertTitle>
-                <AlertDescription>
+              <Alert className="text-right">
+                <AlertTitle className="flex items-center gap-2 flex-row-reverse justify-end">
+                  <AlertCircle className="h-4 w-4" />
+                  Access Token
+                </AlertTitle>
+                <AlertDescription className="text-right">
                   אם התחברת דרך Lead Ads, אותו Token ישמש גם עבור CAPI. אחרת, התחבר קודם בטאב Lead Ads.
                 </AlertDescription>
               </Alert>
@@ -471,36 +483,36 @@ export default function FacebookSettings() {
           {/* CAPI Events Info */}
           <Card>
             <CardHeader>
-              <CardTitle>אירועים נתמכים</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-right">אירועים נתמכים</CardTitle>
+              <CardDescription className="text-right">
                 המערכת שולחת אוטומטית את האירועים הבאים לפייסבוק
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid gap-3">
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div>
+                <div className="flex items-center justify-between p-3 bg-muted rounded-lg flex-row-reverse">
+                  <div className="text-right">
                     <p className="font-medium">Lead</p>
                     <p className="text-xs text-muted-foreground">כאשר ליד חדש נוצר במערכת</p>
                   </div>
                   <Badge>אוטומטי</Badge>
                 </div>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div>
+                <div className="flex items-center justify-between p-3 bg-muted rounded-lg flex-row-reverse">
+                  <div className="text-right">
                     <p className="font-medium">Contact</p>
                     <p className="text-xs text-muted-foreground">כאשר יוצרים קשר עם ליד</p>
                   </div>
                   <Badge variant="secondary">עתידי</Badge>
                 </div>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div>
+                <div className="flex items-center justify-between p-3 bg-muted rounded-lg flex-row-reverse">
+                  <div className="text-right">
                     <p className="font-medium">Lead Qualified</p>
                     <p className="text-xs text-muted-foreground">כאשר ליד עובר לסטטוס proposal</p>
                   </div>
                   <Badge variant="secondary">עתידי</Badge>
                 </div>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div>
+                <div className="flex items-center justify-between p-3 bg-muted rounded-lg flex-row-reverse">
+                  <div className="text-right">
                     <p className="font-medium">Purchase</p>
                     <p className="text-xs text-muted-foreground">כאשר ליד נסגר (won)</p>
                   </div>
