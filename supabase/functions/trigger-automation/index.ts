@@ -309,13 +309,12 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     // Clean phone number - remove all non-digits
     const cleanPhone = contactPhone.replace(/\D/g, '')
     
-    // Try multiple phone formats since ManyChat might store different formats
-    // ManyChat expects format like +15400000000
+    // Try multiple phone formats - without + sign first (ManyChat may not use +)
     const phoneFormats = [
-      '+' + cleanPhone,                     // With +: +972507677613
       cleanPhone,                           // Full number: 972507677613
-      '+972' + cleanPhone.slice(-9),        // +972 + last 9: +972507677613
-      '+' + cleanPhone.slice(-10),          // +last 10: +0507677613
+      cleanPhone.slice(-9),                 // Last 9 digits: 507677613
+      '972' + cleanPhone.slice(-9),         // With country code: 972507677613
+      '0' + cleanPhone.slice(-9),           // With leading 0: 0507677613
     ]
     
     // Remove duplicates
