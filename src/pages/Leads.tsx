@@ -1006,6 +1006,15 @@ export default function Leads() {
             </SelectContent>
           </Select>
           
+          {/* Manage Lead Statuses Button */}
+          <ManageLeadStatusesDialog 
+            trigger={
+              <Button variant="outline" size="icon" title="ניהול סטטוסי לידים">
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            }
+          />
+          
           {/* Date Range Filters */}
           <Popover>
             <PopoverTrigger asChild>
