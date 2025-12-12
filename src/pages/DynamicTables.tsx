@@ -119,7 +119,7 @@ export default function DynamicTables() {
   }, [clients, editAgencyId]);
 
   const { data: tables, isLoading } = useQuery({
-    queryKey: ['crm-tables'],
+    queryKey: ['crm-tables', tenantId],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
@@ -132,13 +132,18 @@ export default function DynamicTables() {
       // Ensure we always return an array
       return Array.isArray(response.data) ? response.data as CrmTable[] : [];
     },
+    enabled: !!tenantId,
   });
 
   // Filter tables by selected agency
   const filteredTables = useMemo(() => {
     if (!tables) return [];
+    
+    // When "all agencies" is selected, show all tables for this tenant
+    // (tenant filtering is done in the Edge Function)
     if (!selectedAgency || selectedAgency === 'all') return tables;
     
+    // Filter by selected agency - show general tables + agency-specific tables
     return tables.filter(table => 
       table.agency_id === null ||  // General tables always shown
       table.agency_id === selectedAgency
