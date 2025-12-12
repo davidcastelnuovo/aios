@@ -306,44 +306,62 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   if (!subscriberId && contactPhone) {
     console.log(`No subscriber ID found, trying to sync by phone: ${contactPhone}`)
     
-    // Normalize phone number - extract last 9-10 digits
-    const normalizedPhone = contactPhone.replace(/\D/g, '').slice(-10)
+    // Clean phone number - remove all non-digits
+    const cleanPhone = contactPhone.replace(/\D/g, '')
     
-    // Try to find subscriber by phone in ManyChat
-    const searchResponse = await fetch(`${baseUrl}/subscriber/findBySystemField`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        field_name: 'whatsapp_phone',
-        field_value: normalizedPhone,
-      }),
-    })
+    // Try multiple phone formats since ManyChat might store different formats
+    const phoneFormats = [
+      cleanPhone,                           // Full number: 972507677613
+      cleanPhone.slice(-10),                // Last 10 digits: 0507677613
+      cleanPhone.slice(-9),                 // Last 9 digits: 507677613
+      '972' + cleanPhone.slice(-9),         // With country code: 972507677613
+    ]
     
-    if (searchResponse.ok) {
-      const searchResult = await searchResponse.json()
-      console.log('ManyChat findBySystemField response:', searchResult)
+    // Remove duplicates
+    const uniqueFormats = [...new Set(phoneFormats)]
+    console.log('Trying phone formats:', uniqueFormats)
+    
+    for (const phoneFormat of uniqueFormats) {
+      console.log(`Trying phone format: ${phoneFormat}`)
       
-      if (searchResult.status === 'success' && searchResult.data?.id) {
-        subscriberId = searchResult.data.id.toString()
-        console.log(`Found subscriber by phone: ${subscriberId}`)
+      const searchResponse = await fetch(`${baseUrl}/subscriber/findBySystemField`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          field_name: 'whatsapp_phone',
+          field_value: phoneFormat,
+        }),
+      })
+      
+      if (searchResponse.ok) {
+        const searchResult = await searchResponse.json()
+        console.log(`ManyChat findBySystemField response for ${phoneFormat}:`, searchResult)
         
-        // Update the contact record with the found subscriber ID
-        if (contactType === 'lead' && contactRecord?.id) {
-          await supabase
-            .from('leads')
-            .update({ manychat_subscriber_id: subscriberId })
-            .eq('id', contactRecord.id)
-          console.log(`Updated lead ${contactRecord.id} with subscriber ID ${subscriberId}`)
-        } else if (contactType === 'client' && contactRecord?.id) {
-          await supabase
-            .from('clients')
-            .update({ manychat_subscriber_id: subscriberId })
-            .eq('id', contactRecord.id)
-          console.log(`Updated client ${contactRecord.id} with subscriber ID ${subscriberId}`)
+        if (searchResult.status === 'success' && searchResult.data?.id) {
+          subscriberId = searchResult.data.id.toString()
+          console.log(`Found subscriber by phone ${phoneFormat}: ${subscriberId}`)
+          
+          // Update the contact record with the found subscriber ID
+          if (contactType === 'lead' && contactRecord?.id) {
+            await supabase
+              .from('leads')
+              .update({ manychat_subscriber_id: subscriberId })
+              .eq('id', contactRecord.id)
+            console.log(`Updated lead ${contactRecord.id} with subscriber ID ${subscriberId}`)
+          } else if (contactType === 'client' && contactRecord?.id) {
+            await supabase
+              .from('clients')
+              .update({ manychat_subscriber_id: subscriberId })
+              .eq('id', contactRecord.id)
+            console.log(`Updated client ${contactRecord.id} with subscriber ID ${subscriberId}`)
+          }
+          break // Found subscriber, exit loop
         }
+      } else {
+        console.log(`Search failed for ${phoneFormat}: ${searchResponse.status}`)
       }
     }
   }
