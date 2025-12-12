@@ -275,7 +275,16 @@ export default function FacebookSettings() {
   // Check if this integration is shared from another
   const isSharedConnection = !!(leadAdsIntegration as any)?.shared_from_integration_id;
   const isOwnConnection = leadAdsIntegration?.is_active && !isSharedConnection;
-  const hasTokenButNoApiKey = leadAdsIntegration?.is_active && !leadAdsIntegration?.api_key && !isSharedConnection;
+  
+  // Check if token is valid (Facebook tokens start with "EAA" and are long)
+  const isValidFacebookToken = (token: string | null | undefined): boolean => {
+    if (!token) return false;
+    // Facebook access tokens start with "EAA" and are typically 150+ characters
+    return token.startsWith('EAA') && token.length > 100;
+  };
+  
+  const hasValidToken = isValidFacebookToken(leadAdsIntegration?.api_key);
+  const hasTokenButNoApiKey = leadAdsIntegration?.is_active && !hasValidToken && !isSharedConnection;
 
   return (
     <div className="container mx-auto p-6 space-y-6" dir="rtl">
@@ -311,10 +320,15 @@ export default function FacebookSettings() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between flex-row-reverse">
-                {leadAdsIntegration?.is_active ? (
+                {leadAdsIntegration?.is_active && hasValidToken ? (
                   <Badge variant="default" className="bg-green-500 flex items-center gap-1">
                     <CheckCircle2 className="h-3 w-3" />
                     מחובר
+                  </Badge>
+                ) : leadAdsIntegration?.is_active && !hasValidToken ? (
+                  <Badge variant="default" className="bg-amber-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    חסר Token
                   </Badge>
                 ) : (
                   <Badge variant="secondary" className="flex items-center gap-1">
