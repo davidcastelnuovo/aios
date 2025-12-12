@@ -39,7 +39,7 @@ export default function TerminologyManagement() {
   const [editingTerm, setEditingTerm] = useState<TerminologyItem | null>(null);
   const [editForm, setEditForm] = useState({ singular: '', plural: '' });
 
-  const { data: terms = [], isLoading } = useQuery({
+  const { data: termsData, isLoading } = useQuery({
     queryKey: ['terminology', tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -49,10 +49,12 @@ export default function TerminologyManagement() {
         .order('term_key');
 
       if (error) throw error;
-      return ((data || []) as unknown) as TerminologyItem[];
+      return data || [];
     },
     enabled: !!tenantId,
   });
+
+  const terms: TerminologyItem[] = Array.isArray(termsData) ? termsData : [];
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, singular, plural }: { id: string; singular: string; plural: string }) => {
