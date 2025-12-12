@@ -398,6 +398,20 @@ const updateMutation = useMutation({
               {/* Tab 1: Lead Details */}
               <TabsContent value="details" className="space-y-4 mt-0">
                 <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="contact_name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-sm font-medium">{getFieldLabel('contact_name', 'שם איש קשר')} *</FormLabel>
+                        <FormControl>
+                          <Input {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
                   {isFieldVisible('company_name') && (
                     <FormField
                       control={form.control}
@@ -413,20 +427,6 @@ const updateMutation = useMutation({
                       )}
                     />
                   )}
-
-                  <FormField
-                    control={form.control}
-                    name="contact_name"
-                    render={({ field }) => (
-                      <FormItem className={!isFieldVisible('company_name') ? 'col-start-1' : ''}>
-                        <FormLabel className="text-sm font-medium">{getFieldLabel('contact_name', 'שם איש קשר')} *</FormLabel>
-                        <FormControl>
-                          <Input {...field} className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
                 </div>
 
                 <FormField
