@@ -75,6 +75,7 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
   const { getFieldLabel, isFieldVisible } = useCustomFieldLabels('lead');
   const { activeStatuses: leadStatuses } = useLeadStatuses();
   const { activeStages: pipelineStages } = useLeadPipelineStages();
+  const { tenantId } = useCurrentTenant();
 
 const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
