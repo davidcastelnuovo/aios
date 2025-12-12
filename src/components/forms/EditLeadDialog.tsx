@@ -26,15 +26,8 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
-
-const PIPELINE_STAGES = [
-  { id: "new", label: "ליד חדש", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300" },
-  { id: "contacted", label: "נוצר קשר", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300" },
-  { id: "follow_up", label: "תהליך פולואפ", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300" },
-  { id: "proposal_sent", label: "נשלחה הצעה", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300" },
-  { id: "transferred_to_onboarding", label: "הועבר לקליטה", bgClass: "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-100 border-teal-300" },
-  { id: "closed", label: "נסגר", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300" },
-];
+import { useLeadPipelineStages } from "@/hooks/useLeadPipelineStages";
+import { ManagePipelineStagesDialog } from "./ManagePipelineStagesDialog";
 
 const formSchema = z.object({
   company_name: z.string().min(1, "שם העסק הוא שדה חובה"),
@@ -80,8 +73,8 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
   const { getFieldLabel, isFieldVisible } = useCustomFieldLabels('lead');
-  const { tenantId } = useCurrentTenant();
   const { activeStatuses: leadStatuses } = useLeadStatuses();
+  const { activeStages: pipelineStages } = useLeadPipelineStages();
 
 const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -566,28 +559,52 @@ const updateMutation = useMutation({
                   <FormField
                     control={form.control}
                     name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">שלב במשפך *</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger className={`text-right rounded-lg border-2 h-11 ${
-                              PIPELINE_STAGES.find(s => s.id === field.value)?.bgClass || ""
-                            }`}>
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-background z-50 text-right" align="end">
-                            {PIPELINE_STAGES.map((stage) => (
-                              <SelectItem key={stage.id} value={stage.id} className={stage.bgClass}>
-                                {stage.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    render={({ field }) => {
+                      const selectedStage = pipelineStages.find(s => s.stage_key === field.value);
+                      return (
+                        <FormItem>
+                          <FormLabel className="text-sm font-medium">שלב במשפך *</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger 
+                                className="text-right rounded-lg border-2 h-11"
+                                style={{ 
+                                  backgroundColor: selectedStage?.color || undefined,
+                                  color: field.value ? '#fff' : undefined 
+                                }}
+                              >
+                                <SelectValue />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="bg-background z-50 text-right" align="end">
+                              {pipelineStages.map((stage) => (
+                                <SelectItem 
+                                  key={stage.stage_key} 
+                                  value={stage.stage_key}
+                                  style={{ backgroundColor: stage.color, color: '#fff' }}
+                                >
+                                  {stage.label}
+                                </SelectItem>
+                              ))}
+                              <div className="border-t mt-1 pt-1">
+                                <ManagePipelineStagesDialog 
+                                  trigger={
+                                    <button 
+                                      type="button"
+                                      className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
+                                    >
+                                      <Settings2 className="h-4 w-4" />
+                                      ניהול שלבי משפך
+                                    </button>
+                                  }
+                                />
+                              </div>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
                   />
 
                   <FormField

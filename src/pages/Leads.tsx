@@ -25,12 +25,14 @@ import { AddLeadForm } from "@/components/forms/AddLeadForm";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { ImportLeadsWithMapping } from "@/components/forms/ImportLeadsWithMapping";
 import { ManageLeadStatusesDialog } from "@/components/forms/ManageLeadStatusesDialog";
+import { ManagePipelineStagesDialog } from "@/components/forms/ManagePipelineStagesDialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useLeadStatuses, LeadStatus } from "@/hooks/useLeadStatuses";
+import { useLeadPipelineStages, LeadPipelineStage } from "@/hooks/useLeadPipelineStages";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
@@ -52,14 +54,14 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
-const PIPELINE_STAGES = [
-  { id: "new", label: "ליד חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500" },
-  { id: "contacted", label: "נוצר קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300", borderColor: "border-purple-500" },
-  { id: "follow_up", label: "בתהליך", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300", borderColor: "border-yellow-500" },
-  { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300", borderColor: "border-orange-500" },
-  { id: "closed", label: "נסגר", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300", borderColor: "border-green-500" },
-  { id: "transferred_to_onboarding", label: "הועבר לקליטה", color: "bg-teal-100 dark:bg-teal-900", bgClass: "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-100 border-teal-300", borderColor: "border-teal-500" },
-];
+// Helper functions for dynamic pipeline stages
+function hexToLightBg(hex: string): string {
+  // Convert hex to HSL and make it lighter for background
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  return `rgba(${Math.round(r * 255)}, ${Math.round(g * 255)}, ${Math.round(b * 255)}, 0.15)`;
+}
 
 const SOURCE_LABELS: Record<string, string> = {
   phone: "טלפון",
@@ -235,21 +237,38 @@ function LeadCard({
             value={lead.status}
             onValueChange={(value) => onStatusChange(lead.id, value)}
           >
-            <SelectTrigger className={`h-9 text-sm border-2 ${
-              PIPELINE_STAGES.find(s => s.id === lead.status)?.bgClass || ""
-            }`}>
+            <SelectTrigger 
+              className="h-9 text-sm border-2 font-medium"
+              style={{ 
+                backgroundColor: pipelineStages.find(s => s.id === lead.status)?.hexColor || undefined,
+                color: lead.status ? '#fff' : undefined 
+              }}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-background z-[100]">
-              {PIPELINE_STAGES.map((stage) => (
+              {pipelineStages.map((stage) => (
                 <SelectItem 
                   key={stage.id} 
                   value={stage.id}
-                  className={stage.bgClass}
+                  style={{ backgroundColor: stage.hexColor, color: '#fff' }}
                 >
                   {stage.label}
                 </SelectItem>
               ))}
+              <div className="border-t mt-1 pt-1">
+                <ManagePipelineStagesDialog 
+                  trigger={
+                    <button 
+                      type="button"
+                      className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
+                    >
+                      <Settings2 className="h-4 w-4" />
+                      ניהול שלבי משפך
+                    </button>
+                  }
+                />
+              </div>
             </SelectContent>
           </Select>
         </div>
@@ -428,6 +447,32 @@ export default function Leads() {
   const { isOwner } = useUserRole();
   const { tenantId } = useCurrentTenant();
   const { activeStatuses: leadStatuses } = useLeadStatuses();
+  const { activeStages: pipelineStagesData } = useLeadPipelineStages();
+  
+  // Convert dynamic pipeline stages to format compatible with existing code
+  const PIPELINE_STAGES = useMemo(() => {
+    if (!pipelineStagesData || pipelineStagesData.length === 0) {
+      // Fallback to defaults while loading
+      return [
+        { id: "new", label: "חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500" },
+        { id: "contacted", label: "יצרנו קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300", borderColor: "border-purple-500" },
+        { id: "meeting_scheduled", label: "נקבעה פגישה", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300", borderColor: "border-yellow-500" },
+        { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300", borderColor: "border-orange-500" },
+        { id: "negotiation", label: "משא ומתן", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300", borderColor: "border-green-500" },
+        { id: "won", label: "נסגר בהצלחה", color: "bg-emerald-100 dark:bg-emerald-900", bgClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 border-emerald-300", borderColor: "border-emerald-500" },
+        { id: "lost", label: "אבוד", color: "bg-red-100 dark:bg-red-900", bgClass: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100 border-red-300", borderColor: "border-red-500" },
+      ];
+    }
+    return pipelineStagesData.map(stage => ({
+      id: stage.stage_key,
+      label: stage.label,
+      color: hexToLightBg(stage.color),
+      bgClass: `border-2`,
+      borderColor: `border-2`,
+      hexColor: stage.color,
+    }));
+  }, [pipelineStagesData]);
+
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
@@ -436,15 +481,16 @@ export default function Leads() {
   const [filterResponseStatus, setFilterResponseStatus] = useState<string>("all");
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
-  const [openTables, setOpenTables] = useState<Record<string, boolean>>({
-    new: false,
-    contacted: false,
-    follow_up: false,
-    proposal_sent: false,
-    closed: false,
-  });
-  const [selectedMobileStage, setSelectedMobileStage] = useState<string>("new");
+  const [openTables, setOpenTables] = useState<Record<string, boolean>>({});
+  const [selectedMobileStage, setSelectedMobileStage] = useState<string>("");
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+
+  // Set default selected mobile stage when stages load
+  useEffect(() => {
+    if (PIPELINE_STAGES.length > 0 && !selectedMobileStage) {
+      setSelectedMobileStage(PIPELINE_STAGES[0].id);
+    }
+  }, [PIPELINE_STAGES, selectedMobileStage]);
 
   const { data: leads, isLoading, refetch } = useQuery({
     queryKey: ["leads", tenantId, selectedAgency],
