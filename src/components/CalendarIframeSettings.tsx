@@ -124,54 +124,18 @@ const [eventEnd, setEventEnd] = useState("");
     mutationFn: async () => {
       console.log('🔌 Starting disconnect - User ID:', userId);
       
-      try {
-        // Get current session for auth token
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        console.log('Session check:', { hasSession: !!session, sessionError });
-        
-        if (sessionError || !session) {
-          console.error('Session error:', sessionError);
-          throw new Error('לא מחובר למערכת');
-        }
+      // Use supabase.functions.invoke with DELETE-like action
+      const { data, error } = await supabase.functions.invoke('google-calendar-auth', {
+        body: { action: 'disconnect' },
+      });
 
-        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/google-calendar-auth`;
-        console.log('📡 Sending DELETE to:', url);
-
-        // Use DELETE method as expected by the edge function
-        const response = await fetch(url, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        });
-
-        console.log('📥 Response received:', { 
-          status: response.status, 
-          ok: response.ok,
-          statusText: response.statusText 
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('❌ Error response:', errorText);
-          
-          let errorJson;
-          try {
-            errorJson = JSON.parse(errorText);
-          } catch {
-            throw new Error('שגיאה בניתוק היומן');
-          }
-          throw new Error(errorJson.error || 'שגיאה בניתוק היומן');
-        }
-
-        const result = await response.json();
-        console.log('✅ Disconnect successful:', result);
-        return result;
-      } catch (error) {
-        console.error('💥 Exception in disconnect:', error);
+      if (error) {
+        console.error('❌ Disconnect error:', error);
         throw error;
       }
+
+      console.log('✅ Disconnect successful:', data);
+      return data;
     },
     onSuccess: () => {
       console.log('🎉 Disconnect mutation onSuccess triggered');
