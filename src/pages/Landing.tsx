@@ -208,7 +208,7 @@ const Landing = () => {
                   key={index}
                   className="sticky w-full max-w-2xl mx-auto"
                   style={{ 
-                    top: `${100 + index * 30}px`,
+                    top: `${70 + index * 20}px`,
                     zIndex: index + 10
                   }}
                 >
