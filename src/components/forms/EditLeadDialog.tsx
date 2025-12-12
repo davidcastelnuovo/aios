@@ -392,7 +392,7 @@ const updateMutation = useMutation({
               
               {/* Tab 1: Lead Details */}
               <TabsContent value="details" className="space-y-4 mt-0">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4" dir="rtl">
                   <FormField
                     control={form.control}
                     name="contact_name"
