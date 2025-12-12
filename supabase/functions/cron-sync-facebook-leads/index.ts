@@ -118,12 +118,12 @@ serve(async (req) => {
           for (const fbLead of leads) {
             const leadgenId = fbLead.id;
 
-            // Check if lead already exists by leadgen_id in notes
+            // Check if lead already exists by leadgen_id in notes (both formats)
             const { data: existingLeads } = await supabase
               .from('leads')
               .select('id')
               .eq('tenant_id', integration.tenant_id)
-              .ilike('notes', `%leadgen_id: ${leadgenId}%`)
+              .or(`notes.ilike.%leadgen_id: ${leadgenId}%,notes.ilike.%Facebook Lead ID: ${leadgenId}%`)
               .limit(1);
 
             if (existingLeads && existingLeads.length > 0) {
@@ -236,7 +236,7 @@ serve(async (req) => {
                 .from('leads')
                 .select('id')
                 .eq('tenant_id', integration.tenant_id)
-                .ilike('notes', `%leadgen_id: ${leadgenId}%`)
+                .or(`notes.ilike.%leadgen_id: ${leadgenId}%,notes.ilike.%Facebook Lead ID: ${leadgenId}%`)
                 .limit(1);
 
               if (existingLeads && existingLeads.length > 0) {
