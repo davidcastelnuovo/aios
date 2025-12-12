@@ -602,22 +602,54 @@ export default function MenuManagement() {
 
     if (oldIndex === -1 || newIndex === -1) return;
 
+    const draggedItem = displayItems[oldIndex];
+    const targetItem = displayItems[newIndex];
+    
+    // Determine the new parent_menu_key based on where the item was dropped
+    let newParentMenuKey: string | null = null;
+    
+    // If dropped on a child item, inherit its parent
+    if (targetItem.isChild && targetItem.parentKey) {
+      newParentMenuKey = targetItem.parentKey;
+    }
+    // If dropped on a parent item that has children and dragging downward, make it a child
+    else if (!targetItem.isChild && childrenMap.has(targetItem.menu_key) && newIndex > oldIndex) {
+      newParentMenuKey = targetItem.menu_key;
+    }
+    // Otherwise, it becomes a root-level item (no parent)
+    else {
+      newParentMenuKey = null;
+    }
+
     const reordered = arrayMove(displayItems, oldIndex, newIndex);
 
-    // Update sort_order for all items
-    const updates = reordered.map((item, index) => ({
-      id: item.id,
-      sort_order: index,
-    }));
+    // Update sort_order for all items, and parent_menu_key for the dragged item
+    const updates = reordered.map((item, index) => {
+      const update: { id: string; sort_order: number; parent_menu_key?: string | null } = {
+        id: item.id,
+        sort_order: index,
+      };
+      // Only update parent_menu_key for the dragged item
+      if (item.id === draggedItem.id) {
+        update.parent_menu_key = newParentMenuKey;
+      }
+      return update;
+    });
 
     // Update all items in parallel
     Promise.all(
-      updates.map(update =>
-        supabase
+      updates.map(update => {
+        const updateData: { sort_order: number; parent_menu_key?: string | null } = { 
+          sort_order: update.sort_order 
+        };
+        if ('parent_menu_key' in update) {
+          updateData.parent_menu_key = update.parent_menu_key;
+        }
+        return supabase
           .from('menu_items')
-          .update({ sort_order: update.sort_order })
-          .eq('id', update.id)
-      )
+          .update(updateData)
+          .eq('id', update.id);
+      })
     ).then(() => {
       queryClient.invalidateQueries({ queryKey: ['menu-items', tenantId] });
       toast.success('סדר הפריטים עודכן');
