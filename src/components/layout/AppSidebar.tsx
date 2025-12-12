@@ -499,7 +499,7 @@ export function AppSidebar() {
                     <SelectValue placeholder="בחר ארגון" />
                   </SelectTrigger>
                   <SelectContent className="bg-popover z-50">
-                    {userTenants.map((tenant) => (
+                    {userTenants.filter(tenant => tenant.id).map((tenant) => (
                       <SelectItem key={tenant.id} value={tenant.id}>
                         {tenant.name}
                       </SelectItem>

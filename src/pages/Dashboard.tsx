@@ -349,7 +349,7 @@ export default function Dashboard() {
           </SelectTrigger>
           <SelectContent className="bg-background">
             <SelectItem value="all">כל הלקוחות</SelectItem>
-            {filteredClients?.map((client) => (
+            {filteredClients?.filter(client => client.id).map((client) => (
               <SelectItem key={client.id} value={client.id}>
                 {client.name}
               </SelectItem>
@@ -363,7 +363,7 @@ export default function Dashboard() {
           </SelectTrigger>
           <SelectContent className="bg-background">
             <SelectItem value="all">כל הספקים</SelectItem>
-            {suppliers?.map((supplier) => (
+            {suppliers?.filter(supplier => supplier.id).map((supplier) => (
               <SelectItem key={supplier.id} value={supplier.id}>
                 {supplier.name}
               </SelectItem>
