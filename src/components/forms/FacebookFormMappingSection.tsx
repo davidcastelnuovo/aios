@@ -7,9 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, Save, RefreshCw, ListTree, AlertCircle, Edit2, ExternalLink, Facebook, CheckCircle2 } from "lucide-react";
+import { Loader2, Save, RefreshCw, ListTree, AlertCircle, Edit2, ExternalLink, Facebook, CheckCircle2, Plus, Trash2, Settings2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface FormField {
   key: string;
@@ -73,6 +74,8 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   const [selectedAgency, setSelectedAgency] = useState<string>("");
   const [pageTokens, setPageTokens] = useState<Record<string, string>>({});
   const [pageSearchQuery, setPageSearchQuery] = useState<string>("");
+  const [isAddingNewForm, setIsAddingNewForm] = useState<boolean>(false);
+  const [editingFormId, setEditingFormId] = useState<string | null>(null);
 
   // Fetch source integration token if this is a shared connection
   const { data: sourceToken } = useQuery({
@@ -225,6 +228,8 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       formMappings[selectedFormId] = {
         field_mappings: fieldMappings,
         agency_id: selectedAgency || null,
+        form_name: selectedForm?.name || `טופס ${selectedFormId}`,
+        page_id: selectedPageId,
       };
 
       const updatedSettings = {
@@ -245,6 +250,11 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
     },
     onSuccess: () => {
       toast.success('מיפוי השדות נשמר בהצלחה');
+      setIsAddingNewForm(false);
+      setEditingFormId(null);
+      setSelectedFormId("");
+      setFieldMappings({});
+      setSelectedAgency("");
       queryClient.invalidateQueries({ queryKey: ['facebook-integration-settings'] });
       queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
     },
@@ -252,6 +262,46 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       toast.error('שגיאה בשמירת המיפוי: ' + (error as Error).message);
     },
   });
+
+  // Delete form mapping mutation
+  const deleteFormMutation = useMutation({
+    mutationFn: async (formIdToDelete: string) => {
+      if (!integrationId) throw new Error('חסר מזהה אינטגרציה');
+      
+      const currentSettings = existingSettings || {};
+      const formMappings = { ...(currentSettings.form_mappings || {}) };
+      delete formMappings[formIdToDelete];
+
+      const updatedSettings = {
+        ...currentSettings,
+        form_mappings: formMappings,
+      };
+
+      const { error } = await supabase
+        .from('tenant_integrations')
+        .update({ 
+          settings: updatedSettings,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', integrationId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('הטופס הוסר בהצלחה');
+      queryClient.invalidateQueries({ queryKey: ['facebook-integration-settings'] });
+      queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
+    },
+    onError: (error) => {
+      toast.error('שגיאה בהסרת הטופס: ' + (error as Error).message);
+    },
+  });
+
+  // Get existing form mappings
+  const existingFormMappings = (existingSettings?.form_mappings || {}) as Record<string, FormMapping & { form_name?: string; page_id?: string }>;
+  const mappedFormIds = Object.keys(existingFormMappings);
+  const hasMappedForms = mappedFormIds.length > 0;
+  const showFormEditor = isAddingNewForm || editingFormId;
 
   const pages = pagesData?.pages || [];
   const forms = formsData?.forms || [];
@@ -282,16 +332,116 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ListTree className="h-5 w-5" />
-          מיפוי טפסי לידים
+        <CardTitle className="flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <ListTree className="h-5 w-5" />
+            מיפוי טפסי לידים
+          </span>
+          {hasMappedForms && !showFormEditor && (
+            <Button 
+              size="sm" 
+              onClick={() => setIsAddingNewForm(true)}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              הוסף טופס
+            </Button>
+          )}
         </CardTitle>
         <CardDescription>
           מפה שדות מטפסי Facebook Lead Ads לשדות במערכת
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Page Selection */}
+        {/* Display existing mapped forms */}
+        {hasMappedForms && !showFormEditor && (
+          <div className="space-y-3">
+            <Label className="text-base font-medium">טפסים מחוברים</Label>
+            {mappedFormIds.map((formId) => {
+              const mapping = existingFormMappings[formId];
+              const agencyName = agencies.find(a => a.id === mapping.agency_id)?.name;
+              const fieldCount = Object.values(mapping.field_mappings || {}).filter(v => v !== 'skip').length;
+              
+              return (
+                <div 
+                  key={formId} 
+                  className="flex items-center justify-between p-4 border rounded-lg bg-muted/30"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Facebook className="h-4 w-4 text-[#1877F2]" />
+                      <span className="font-medium">{mapping.form_name || `טופס ${formId}`}</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {fieldCount} שדות ממופים
+                      </Badge>
+                    </div>
+                    {agencyName && (
+                      <p className="text-sm text-muted-foreground">
+                        סוכנות: {agencyName}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setEditingFormId(formId);
+                        setSelectedPageId(mapping.page_id || existingSettings?.page_id || '');
+                        setSelectedFormId(formId);
+                        setFieldMappings(mapping.field_mappings || {});
+                        setSelectedAgency(mapping.agency_id || '');
+                      }}
+                      title="ערוך מיפוי"
+                    >
+                      <Settings2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        if (confirm('האם אתה בטוח שברצונך להסיר טופס זה?')) {
+                          deleteFormMutation.mutate(formId);
+                        }
+                      }}
+                      disabled={deleteFormMutation.isPending}
+                      title="הסר טופס"
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Show form editor when adding new or editing */}
+        {(showFormEditor || !hasMappedForms) && (
+          <>
+            {showFormEditor && (
+              <div className="flex items-center justify-between pb-2 border-b">
+                <Label className="text-base font-medium">
+                  {editingFormId ? 'עריכת טופס' : 'הוספת טופס חדש'}
+                </Label>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => {
+                    setIsAddingNewForm(false);
+                    setEditingFormId(null);
+                    setSelectedFormId("");
+                    setFieldMappings({});
+                    setSelectedAgency("");
+                  }}
+                >
+                  ביטול
+                </Button>
+              </div>
+            )}
+            
+            {/* Page Selection */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label>בחר עמוד פייסבוק</Label>
@@ -580,6 +730,8 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
               שמור מיפוי
             </Button>
           </div>
+        )}
+          </>
         )}
       </CardContent>
     </Card>
