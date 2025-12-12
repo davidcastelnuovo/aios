@@ -32,15 +32,29 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get Facebook access token from tenant_integrations
-    const { data: integration } = await supabase
+    // Get Facebook access token from tenant_integrations (including shared)
+    let { data: integration } = await supabase
       .from('tenant_integrations')
-      .select('api_key, settings')
+      .select('api_key, settings, shared_from_integration_id')
       .eq('tenant_id', tenantId)
       .in('integration_type', ['facebook', 'facebook_lead_ads'])
       .eq('is_active', true)
       .limit(1)
       .maybeSingle();
+
+    // If this is a shared integration, fetch the source integration's token
+    if (integration?.shared_from_integration_id && !integration?.api_key) {
+      const { data: sourceIntegration } = await supabase
+        .from('tenant_integrations')
+        .select('api_key, settings')
+        .eq('id', integration.shared_from_integration_id)
+        .eq('is_active', true)
+        .maybeSingle();
+      
+      if (sourceIntegration?.api_key) {
+        integration = { ...integration, api_key: sourceIntegration.api_key };
+      }
+    }
 
     if (!integration?.api_key) {
       return new Response(JSON.stringify({ 

@@ -2111,6 +2111,7 @@ export type Database = {
           is_active: boolean
           last_sync_at: string | null
           settings: Json | null
+          shared_from_integration_id: string | null
           tenant_id: string
           updated_at: string
           user_id: string | null
@@ -2127,6 +2128,7 @@ export type Database = {
           is_active?: boolean
           last_sync_at?: string | null
           settings?: Json | null
+          shared_from_integration_id?: string | null
           tenant_id: string
           updated_at?: string
           user_id?: string | null
@@ -2143,11 +2145,20 @@ export type Database = {
           is_active?: boolean
           last_sync_at?: string | null
           settings?: Json | null
+          shared_from_integration_id?: string | null
           tenant_id?: string
           updated_at?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tenant_integrations_shared_from_integration_id_fkey"
+            columns: ["shared_from_integration_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tenant_settings: {
         Row: {
