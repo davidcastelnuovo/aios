@@ -9,6 +9,7 @@ import { Plus, Zap, Activity, Trash2, Edit, TestTube } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddAutomationForm } from "@/components/forms/AddAutomationForm";
 import { EditAutomationDialog } from "@/components/forms/EditAutomationDialog";
+import { TestAutomationDialog } from "@/components/forms/TestAutomationDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import {
   Dialog,
@@ -52,6 +53,7 @@ export default function Automations() {
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
   const [selectedAutomationId, setSelectedAutomationId] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [selectedAutomation, setSelectedAutomation] = useState<any>(null);
   const { tenantId } = useCurrentTenant();
 
@@ -141,48 +143,10 @@ export default function Automations() {
     },
   });
 
-  // Test automation
-  const testMutation = useMutation({
-    mutationFn: async (automation: any) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const { data: tenantUser } = await supabase
-        .from("tenant_users")
-        .select("tenant_id")
-        .eq("user_id", user.id)
-        .single();
-
-      const response = await supabase.functions.invoke('trigger-automation', {
-        body: {
-          trigger_type: automation.trigger_type,
-          tenant_id: tenantUser?.tenant_id,
-          data: {
-            test: true,
-            automation_name: automation.name,
-            timestamp: new Date().toISOString(),
-          },
-        },
-      });
-
-      if (response.error) throw response.error;
-      return response.data;
-    },
-    onSuccess: () => {
-      toast({
-        title: "בדיקה הופעלה",
-        description: "בדוק את הלוגים לתוצאות",
-      });
-      queryClient.invalidateQueries({ queryKey: ["automation-logs"] });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "שגיאה בבדיקה",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+  const handleTest = (automation: any) => {
+    setSelectedAutomation(automation);
+    setTestDialogOpen(true);
+  };
 
   const handleViewLogs = (automationId: string) => {
     setSelectedAutomationId(automationId);
@@ -277,8 +241,7 @@ export default function Automations() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => testMutation.mutate(automation)}
-                  disabled={testMutation.isPending}
+                  onClick={() => handleTest(automation)}
                 >
                   <TestTube className="h-3 w-3 ml-1" />
                   בדיקה
@@ -325,6 +288,15 @@ export default function Automations() {
           automation={selectedAutomation}
           open={editDialogOpen}
           onOpenChange={setEditDialogOpen}
+        />
+      )}
+
+      {/* Test Dialog */}
+      {selectedAutomation && (
+        <TestAutomationDialog
+          automation={selectedAutomation}
+          open={testDialogOpen}
+          onOpenChange={setTestDialogOpen}
         />
       )}
 
