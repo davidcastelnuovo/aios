@@ -54,6 +54,9 @@ verify_jwt = false
 [functions.send-green-api-message]
 verify_jwt = true
 
+[functions.send-meeting-invitation]
+verify_jwt = true
+
 [functions.green-api-webhook]
 verify_jwt = false
 
