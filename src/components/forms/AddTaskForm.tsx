@@ -54,8 +54,9 @@ const formSchema = z.object({
   title: z.string().min(1, "שם המשימה הוא שדה חובה"),
   notes: z.string().optional(),
   campaigner_id: z.string().optional(), // Optional for quick tasks - will be auto-filled
-  task_category: z.enum(["client", "quick"]),
+  task_category: z.enum(["client", "lead", "quick"]),
   client_id: z.string().optional(),
+  lead_id: z.string().optional(),
   agency_id: z.string().optional(),
   due_date: z.string().optional(),
   status: z.enum(["open", "in_progress", "done"]),
@@ -70,27 +71,40 @@ const formSchema = z.object({
   message: "יש לבחור לקוח למשימת לקוח",
   path: ["client_id"],
 }).refine((data) => {
-  // For client tasks, require campaigner
-  if (data.task_category === "client" && !data.campaigner_id) {
+  // Only require lead for lead tasks
+  if (data.task_category === "lead" && !data.lead_id) {
     return false;
   }
   return true;
 }, {
-  message: "יש לבחור קמפיינר למשימת לקוח",
+  message: "יש לבחור ליד למשימת ליד",
+  path: ["lead_id"],
+}).refine((data) => {
+  // For client/lead tasks, require campaigner
+  if ((data.task_category === "client" || data.task_category === "lead") && !data.campaigner_id) {
+    return false;
+  }
+  return true;
+}, {
+  message: "יש לבחור קמפיינר",
   path: ["campaigner_id"],
 });
 
 interface AddTaskFormProps {
   clientId?: string;
+  leadId?: string;
   agencyId?: string;
   defaultCampaignerId?: string;
   triggerButton?: React.ReactNode;
 }
 
-export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, triggerButton }: AddTaskFormProps) {
+export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaignerId, triggerButton }: AddTaskFormProps) {
   const [open, setOpen] = useState(false);
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
-  const [taskCategory, setTaskCategory] = useState<"client" | "quick">(clientId ? "client" : "client");
+  const [leadPopoverOpen, setLeadPopoverOpen] = useState(false);
+  const [taskCategory, setTaskCategory] = useState<"client" | "lead" | "quick">(
+    leadId ? "lead" : clientId ? "client" : "client"
+  );
   const queryClient = useQueryClient();
   const { tenantId: currentTenantId } = useCurrentTenant();
   const { getFieldLabel } = useCustomFieldLabels('task');
@@ -105,8 +119,9 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
       title: "",
       notes: "",
       campaigner_id: effectiveCampaignerId,
-      task_category: "client",
+      task_category: leadId ? "lead" : clientId ? "client" : "client",
       client_id: clientId || "",
+      lead_id: leadId || "",
       agency_id: agencyId || "",
       due_date: "",
       status: "open",
@@ -114,17 +129,24 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
     },
   });
 
-  // Update form when clientId, defaultCampaignerId or userCampaignerId changes
+  // Update form when clientId, leadId, defaultCampaignerId or userCampaignerId changes
   useEffect(() => {
     if (clientId) {
       form.setValue("client_id", clientId);
+      form.setValue("task_category", "client");
+      setTaskCategory("client");
+    }
+    if (leadId) {
+      form.setValue("lead_id", leadId);
+      form.setValue("task_category", "lead");
+      setTaskCategory("lead");
     }
     if (defaultCampaignerId) {
       form.setValue("campaigner_id", defaultCampaignerId);
     } else if (userCampaignerId && !form.getValues("campaigner_id")) {
       form.setValue("campaigner_id", userCampaignerId);
     }
-  }, [clientId, defaultCampaignerId, userCampaignerId, isCampaigner, form]);
+  }, [clientId, leadId, defaultCampaignerId, userCampaignerId, isCampaigner, form]);
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners"],
@@ -175,11 +197,25 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
     },
   });
 
+  const { data: leads } = useQuery({
+    queryKey: ["leads"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("leads")
+        .select("*")
+        .order("company_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
       let selectedClient = null;
+      let selectedLead = null;
       let finalAgencyId: string | null = null;
       let finalCampaignerId = values.campaigner_id;
+      let entityName = 'משימה כללית';
 
       if (values.task_category === "client") {
         // Get agency_id from the selected client
@@ -188,6 +224,20 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
           throw new Error("הלקוח שנבחר לא משויך לסוכנות");
         }
         finalAgencyId = selectedClient.agency_id;
+        entityName = selectedClient.name;
+      } else if (values.task_category === "lead") {
+        // Get agency_id from the selected lead
+        selectedLead = leads?.find(l => l.id === values.lead_id);
+        if (selectedLead?.agency_id) {
+          finalAgencyId = selectedLead.agency_id;
+        } else if (agencies && agencies.length > 0) {
+          // Fallback to first available agency
+          finalAgencyId = agencies[0].id;
+        }
+        entityName = selectedLead?.company_name || selectedLead?.contact_name || 'ליד';
+        if (!finalAgencyId) {
+          throw new Error("לא נמצאה סוכנות לשיוך המשימה");
+        }
       } else {
         // For quick tasks - auto-assign to current user's campaigner
         if (!finalCampaignerId && userCampaignerId) {
@@ -232,6 +282,8 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
       let tenantId: string;
       if (values.task_category === "client" && selectedClient) {
         tenantId = selectedClient.tenant_id;
+      } else if (values.task_category === "lead" && selectedLead) {
+        tenantId = selectedLead.tenant_id;
       } else {
         // For quick tasks, use current tenant
         if (!currentTenantId) throw new Error("לא נמצא טנט פעיל");
@@ -243,6 +295,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
         notes: values.notes || null,
         campaigner_id: finalCampaignerId,
         client_id: values.task_category === "client" ? values.client_id : null,
+        lead_id: values.task_category === "lead" ? values.lead_id : null,
         agency_id: finalAgencyId,
         due_date: values.due_date || null,
         status: values.status,
@@ -261,7 +314,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
             task_title: values.title,
             task_notes: values.notes || '',
             campaigner_name: selectedCampaigner?.full_name || '',
-            client_name: selectedClient ? selectedClient.name : 'משימה כללית',
+            client_name: entityName,
             priority: values.priority,
             status: values.status,
             due_date: values.due_date || '',
@@ -338,10 +391,10 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
                   <Select 
                     onValueChange={(value) => {
                       field.onChange(value);
-                      setTaskCategory(value as "client" | "quick");
+                      setTaskCategory(value as "client" | "lead" | "quick");
                     }} 
                     value={field.value}
-                    disabled={!!clientId}
+                    disabled={!!clientId || !!leadId}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -350,6 +403,7 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
                     </FormControl>
                     <SelectContent className="bg-background z-50">
                       <SelectItem value="client">משימה ללקוח</SelectItem>
+                      <SelectItem value="lead">משימה לליד</SelectItem>
                       <SelectItem value="quick">משימה מהירה</SelectItem>
                     </SelectContent>
                   </Select>
@@ -497,6 +551,120 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
               </>
             )}
 
+            {/* Show lead selector for lead tasks */}
+            {taskCategory === "lead" && (
+              <>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="priority"
+                    render={({ field }) => {
+                      const getPriorityColor = (priority: number) => {
+                        const hue = 240 - ((priority - 1) / 9) * 240;
+                        return `hsl(${hue}, 70%, 50%)`;
+                      };
+                      
+                      const getPriorityText = (priority: number) => {
+                        if (priority >= 8) return "דחיפות גבוהה";
+                        if (priority >= 5) return "דחיפות בינונית";
+                        return "דחיפות נמוכה";
+                      };
+
+                      return (
+                        <FormItem>
+                          <FormLabel>דחיפות</FormLabel>
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-muted-foreground">{getPriorityText(field.value)}</span>
+                              <span className="text-sm font-medium" style={{ color: getPriorityColor(field.value) }}>
+                                {field.value}/10
+                              </span>
+                            </div>
+                            <div style={{ ['--slider-color' as any]: getPriorityColor(field.value) }}>
+                              <Slider
+                                value={[field.value]}
+                                onValueChange={(value) => field.onChange(value[0])}
+                                min={1}
+                                max={10}
+                                step={1}
+                                className="cursor-pointer [&_[role=slider]]:border-[var(--slider-color)] [&_.bg-primary]:bg-[var(--slider-color)]"
+                                style={{ ['--slider-color' as any]: getPriorityColor(field.value) }}
+                              />
+                            </div>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="lead_id"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>ליד</FormLabel>
+                      <Popover open={leadPopoverOpen} onOpenChange={setLeadPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              disabled={!!leadId}
+                              className={cn(
+                                "justify-between",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                              {field.value
+                                ? leads?.find((lead) => lead.id === field.value)?.company_name || leads?.find((lead) => lead.id === field.value)?.contact_name
+                                : "בחר ליד"}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[300px] p-0 bg-background" align="start">
+                          <Command>
+                            <CommandInput placeholder="חפש ליד..." />
+                            <CommandList>
+                              <CommandEmpty>לא נמצאו לידים</CommandEmpty>
+                              <CommandGroup>
+                                {leads?.map((lead) => (
+                                  <CommandItem
+                                    key={lead.id}
+                                    value={`${lead.company_name} ${lead.contact_name || ''}`}
+                                    onSelect={() => {
+                                      form.setValue("lead_id", lead.id);
+                                      setLeadPopoverOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        field.value === lead.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex flex-col">
+                                      <span>{lead.company_name}</span>
+                                      {lead.contact_name && (
+                                        <span className="text-xs text-muted-foreground">{lead.contact_name}</span>
+                                      )}
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
+
             {/* Quick task info message */}
             {taskCategory === "quick" && (
               <div className="text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
@@ -504,8 +672,8 @@ export default function AddTaskForm({ clientId, agencyId, defaultCampaignerId, t
               </div>
             )}
 
-            {/* Show additional fields only for client tasks */}
-            {taskCategory === "client" && (
+            {/* Show additional fields for client/lead tasks */}
+            {(taskCategory === "client" || taskCategory === "lead") && (
               <>
                 <FormField
                   control={form.control}

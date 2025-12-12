@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar as CalendarIcon, Search, X, Settings2 } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -53,6 +53,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import AddTaskForm from "@/components/forms/AddTaskForm";
 
 // Helper functions for dynamic pipeline stages
 function hexToLightBg(hex: string): string {
@@ -325,6 +326,20 @@ function LeadCard({
             lead={lead} 
             open={editDialogOpen} 
             onOpenChange={setEditDialogOpen}
+          />
+          <AddTaskForm
+            leadId={lead.id}
+            agencyId={lead.agency_id || undefined}
+            triggerButton={
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                title="הוסף משימה"
+              >
+                <CheckSquare className="h-4 w-4" />
+              </Button>
+            }
           />
           <Button
             variant="outline"

@@ -2073,6 +2073,7 @@ export type Database = {
           created_at: string
           due_date: string | null
           id: string
+          lead_id: string | null
           notes: string | null
           priority: number
           status: Database["public"]["Enums"]["task_status"]
@@ -2088,6 +2089,7 @@ export type Database = {
           created_at?: string
           due_date?: string | null
           id?: string
+          lead_id?: string | null
           notes?: string | null
           priority?: number
           status?: Database["public"]["Enums"]["task_status"]
@@ -2103,6 +2105,7 @@ export type Database = {
           created_at?: string
           due_date?: string | null
           id?: string
+          lead_id?: string | null
           notes?: string | null
           priority?: number
           status?: Database["public"]["Enums"]["task_status"]
@@ -2131,6 +2134,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
             referencedColumns: ["id"]
           },
           {
