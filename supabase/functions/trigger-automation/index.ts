@@ -271,31 +271,86 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     throw new Error('לא נמצא חיבור ManyChat פעיל לארגון זה')
   }
   
+  const apiKey = integration.api_key
+  const baseUrl = 'https://api.manychat.com/fb'
+  
   // Get the subscriber ID from lead or client
-  let subscriberId = null
+  let subscriberId: string | null = null
+  let contactPhone: string | null = null
+  let contactRecord: any = null
+  let contactType: 'lead' | 'client' | null = null
   
   if (data.lead_id) {
     const { data: lead } = await supabase
       .from('leads')
-      .select('manychat_subscriber_id, contact_name')
+      .select('id, manychat_subscriber_id, contact_name, phone')
       .eq('id', data.lead_id)
       .single()
+    contactRecord = lead
+    contactType = 'lead'
     subscriberId = lead?.manychat_subscriber_id
+    contactPhone = lead?.phone
   } else if (data.client_id) {
     const { data: client } = await supabase
       .from('clients')
-      .select('manychat_subscriber_id, contact_name')
+      .select('id, manychat_subscriber_id, contact_name, phone')
       .eq('id', data.client_id)
       .single()
+    contactRecord = client
+    contactType = 'client'
     subscriberId = client?.manychat_subscriber_id
+    contactPhone = client?.phone
+  }
+  
+  // If no subscriber ID, try to find by phone number
+  if (!subscriberId && contactPhone) {
+    console.log(`No subscriber ID found, trying to sync by phone: ${contactPhone}`)
+    
+    // Normalize phone number - extract last 9-10 digits
+    const normalizedPhone = contactPhone.replace(/\D/g, '').slice(-10)
+    
+    // Try to find subscriber by phone in ManyChat
+    const searchResponse = await fetch(`${baseUrl}/subscriber/findBySystemField`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        field_name: 'whatsapp_phone',
+        field_value: normalizedPhone,
+      }),
+    })
+    
+    if (searchResponse.ok) {
+      const searchResult = await searchResponse.json()
+      console.log('ManyChat findBySystemField response:', searchResult)
+      
+      if (searchResult.status === 'success' && searchResult.data?.id) {
+        subscriberId = searchResult.data.id.toString()
+        console.log(`Found subscriber by phone: ${subscriberId}`)
+        
+        // Update the contact record with the found subscriber ID
+        if (contactType === 'lead' && contactRecord?.id) {
+          await supabase
+            .from('leads')
+            .update({ manychat_subscriber_id: subscriberId })
+            .eq('id', contactRecord.id)
+          console.log(`Updated lead ${contactRecord.id} with subscriber ID ${subscriberId}`)
+        } else if (contactType === 'client' && contactRecord?.id) {
+          await supabase
+            .from('clients')
+            .update({ manychat_subscriber_id: subscriberId })
+            .eq('id', contactRecord.id)
+          console.log(`Updated client ${contactRecord.id} with subscriber ID ${subscriberId}`)
+        }
+      }
+    }
   }
   
   if (!subscriberId) {
-    throw new Error('לא נמצא Subscriber ID של ManyChat לאיש הקשר')
+    throw new Error('לא נמצא Subscriber ID של ManyChat לאיש הקשר. ודא שלליד יש מספר טלפון וש-Subscriber קיים ב-ManyChat')
   }
-  
-  const apiKey = integration.api_key
-  const baseUrl = 'https://api.manychat.com/fb'
   
   // Update custom fields if mapping is provided
   const customFieldUpdates: any[] = []
