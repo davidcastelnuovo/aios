@@ -129,9 +129,9 @@ const Landing = () => {
         <div className="container mx-auto px-6">
           <div className="max-w-4xl mx-auto text-center">
             {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#36d399]/10 border border-[#36d399]/20 mb-8">
-              <Sparkles className="h-4 w-4 text-[#36d399]" />
-              <span className="text-sm text-[#36d399]">מערכת CRM לסוכנויות שיווק</span>
+            <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-[#36d399]/10 border border-[#36d399]/30 mb-10">
+              <Sparkles className="h-5 w-5 text-[#36d399]" />
+              <span className="text-lg md:text-xl font-medium text-[#36d399]">מערכת CRM לסוכנויות שיווק</span>
             </div>
 
             {/* Main Headline */}
