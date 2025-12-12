@@ -114,15 +114,23 @@ export default function TerminologyManagement() {
 
   const getTermLabel = (key: string): string => {
     const labels: Record<string, string> = {
-      agency: 'סוכנות',
-      client: 'לקוח',
-      lead: 'ליד',
-      task: 'משימה',
-      campaigner: 'קמפיינר',
-      sales_person: 'איש מכירות',
-      supplier: 'ספק',
-      product: 'מוצר',
-      onboarding: 'קליטה',
+      // Module names
+      agency: 'מודול: סוכנות',
+      client: 'מודול: לקוח',
+      lead: 'מודול: ליד',
+      task: 'מודול: משימה',
+      campaigner: 'מודול: קמפיינר',
+      sales_person: 'מודול: איש מכירות',
+      supplier: 'מודול: ספק',
+      product: 'מודול: מוצר',
+      onboarding: 'מודול: קליטה',
+      // Role names
+      role_owner: 'תפקיד: בעלים',
+      role_team_manager: 'תפקיד: מנהל צוות',
+      role_campaigner: 'תפקיד: קמפיינר',
+      role_sales_person: 'תפקיד: איש מכירות',
+      role_seo: 'תפקיד: SEO',
+      role_super_admin: 'תפקיד: סופר אדמין',
     };
     return labels[key] || key;
   };
