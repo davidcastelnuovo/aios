@@ -324,17 +324,17 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     for (const phoneFormat of uniqueFormats) {
       console.log(`Trying phone format: ${phoneFormat}`)
       
-      const searchResponse = await fetch(`${baseUrl}/subscriber/findBySystemField`, {
-        method: 'POST',
+      // Use GET method with query params for findBySystemField (ManyChat WhatsApp API)
+      const searchUrl = `${baseUrl}/subscriber/findBySystemField?field_name=whatsapp_phone&field_value=${encodeURIComponent(phoneFormat)}`
+      const searchResponse = await fetch(searchUrl, {
+        method: 'GET',
         headers: {
           'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          field_name: 'whatsapp_phone',
-          field_value: phoneFormat,
-        }),
       })
+      
+      console.log(`Search response status for ${phoneFormat}: ${searchResponse.status}`)
       
       if (searchResponse.ok) {
         const searchResult = await searchResponse.json()
@@ -361,7 +361,8 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
           break // Found subscriber, exit loop
         }
       } else {
-        console.log(`Search failed for ${phoneFormat}: ${searchResponse.status}`)
+        const errorText = await searchResponse.text()
+        console.log(`Search failed for ${phoneFormat}: ${searchResponse.status} - ${errorText}`)
       }
     }
   }
