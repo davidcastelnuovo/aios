@@ -21,8 +21,8 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 
 const formSchema = z.object({
-  company_name: z.string().min(1, "שם העסק הוא שדה חובה"),
-  contact_name: z.string().optional(),
+  company_name: z.string().optional().default(""),
+  contact_name: z.string().min(1, "שם איש קשר הוא שדה חובה"),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   phone: z.string().optional(),
   source: z.string().optional(),
@@ -116,8 +116,11 @@ export function AddLeadForm() {
     mutationFn: async (values: FormValues) => {
       if (!tenantId) throw new Error("לא נמצא tenant_id");
       
+      // Use contact_name as company_name if company_name is empty
+      const companyName = values.company_name?.trim() || values.contact_name?.trim() || "ליד חדש";
+      
       const submitData: any = {
-        company_name: values.company_name,
+        company_name: companyName,
         contact_name: values.contact_name || null,
         email: values.email || null,
         phone: values.phone || null,
