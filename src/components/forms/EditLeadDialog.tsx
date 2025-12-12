@@ -76,6 +76,8 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
   const [meetingTime, setMeetingTime] = useState("10:00");
   const [meetingSubject, setMeetingSubject] = useState("");
   const [personalMessage, setPersonalMessage] = useState("");
+  const [meetingLocation, setMeetingLocation] = useState("");
+  const [sendWhatsAppNotification, setSendWhatsAppNotification] = useState(true);
   const [isSchedulingMeeting, setIsSchedulingMeeting] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -387,10 +389,43 @@ const updateMutation = useMutation({
         console.error('Calendar error:', calendarError);
         sonnerToast.error("שגיאה ביצירת הפגישה ביומן");
       } else {
-        if (lead.email) {
-          sonnerToast.success("הפגישה נוצרה וזימון נשלח למייל של הליד!");
+        // Send WhatsApp notification if enabled and has ManyChat subscriber
+        if (sendWhatsAppNotification && (lead.manychat_subscriber_id || tenantId)) {
+          try {
+            const formattedDate = format(meetingDate, "dd/MM/yyyy");
+            const { data: notifData, error: notifError } = await supabase.functions.invoke('send-meeting-notification', {
+              body: {
+                tenantId,
+                leadId: lead.id,
+                contactName: lead.contact_name || lead.company_name,
+                meetingDate: formattedDate,
+                meetingTime,
+                meetingLocation: meetingLocation || undefined,
+              }
+            });
+
+            if (notifError) {
+              console.error('WhatsApp notification error:', notifError);
+              // Don't show error - calendar was created successfully
+            } else if (notifData?.success) {
+              sonnerToast.success("הפגישה נוצרה והודעת WhatsApp נשלחה!");
+            } else if (notifData?.skipped) {
+              // Subscriber not found or integration not configured - just show calendar success
+              if (lead.email) {
+                sonnerToast.success("הפגישה נוצרה וזימון נשלח למייל!");
+              } else {
+                sonnerToast.success("הפגישה נוספה ליומן!");
+              }
+            }
+          } catch (notifErr) {
+            console.error('WhatsApp notification exception:', notifErr);
+          }
         } else {
-          sonnerToast.success("הפגישה נוספה ליומן!");
+          if (lead.email) {
+            sonnerToast.success("הפגישה נוצרה וזימון נשלח למייל של הליד!");
+          } else {
+            sonnerToast.success("הפגישה נוספה ליומן!");
+          }
         }
       }
 
@@ -399,6 +434,8 @@ const updateMutation = useMutation({
       setMeetingTime("10:00");
       setMeetingSubject("");
       setPersonalMessage("");
+      setMeetingLocation("");
+      setSendWhatsAppNotification(true);
 
     } catch (error: any) {
       console.error('Meeting scheduling error:', error);
@@ -1097,6 +1134,17 @@ const updateMutation = useMutation({
                       </div>
 
                       <div className="space-y-2">
+                        <label className="text-sm font-medium">מיקום הפגישה (אופציונלי)</label>
+                        <Input
+                          value={meetingLocation}
+                          onChange={(e) => setMeetingLocation(e.target.value)}
+                          placeholder="למשל: זום, משרד, כתובת..."
+                          className="text-right rounded-lg border-2 h-11 px-4"
+                          dir="rtl"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
                         <label className="text-sm font-medium">הודעה אישית (אופציונלי)</label>
                         <Textarea
                           value={personalMessage}
@@ -1106,6 +1154,18 @@ const updateMutation = useMutation({
                           className="text-right rounded-lg border-2 px-4 py-3"
                           dir="rtl"
                         />
+                      </div>
+
+                      {/* WhatsApp notification toggle */}
+                      <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                        <Checkbox
+                          id="sendWhatsApp"
+                          checked={sendWhatsAppNotification}
+                          onCheckedChange={(checked) => setSendWhatsAppNotification(checked === true)}
+                        />
+                        <label htmlFor="sendWhatsApp" className="text-sm cursor-pointer">
+                          שלח הודעת WhatsApp לליד (דרך ManyChat)
+                        </label>
                       </div>
 
                       {meetingDate && (

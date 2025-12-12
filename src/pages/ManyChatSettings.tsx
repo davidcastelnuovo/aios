@@ -8,10 +8,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Save, Key, CheckCircle2, XCircle, MessageSquare } from "lucide-react";
+import { Save, Key, CheckCircle2, XCircle, MessageSquare, Calendar } from "lucide-react";
 import { SyncManyChatDialog } from "@/components/forms/SyncManyChatDialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 export default function ManyChatSettings() {
   const { tenantId } = useCurrentTenant();
@@ -19,6 +19,14 @@ export default function ManyChatSettings() {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const [apiKey, setApiKey] = useState("");
+  
+  // Meeting notification settings
+  const [meetingTriggerName, setMeetingTriggerName] = useState("meeting_scheduled");
+  const [meetingDateFieldId, setMeetingDateFieldId] = useState("");
+  const [meetingTimeFieldId, setMeetingTimeFieldId] = useState("");
+  const [meetingLocationFieldId, setMeetingLocationFieldId] = useState("");
+  const [contactNameFieldId, setContactNameFieldId] = useState("");
+  const [showMeetingSettings, setShowMeetingSettings] = useState(false);
 
   // Fetch existing integration
   const { data: integration, isLoading } = useQuery({
@@ -37,6 +45,14 @@ export default function ManyChatSettings() {
 
       if (data) {
         setApiKey(data.api_key || '');
+        // Load meeting settings
+        const settings = data.settings as Record<string, any> || {};
+        setMeetingTriggerName(settings.meeting_trigger_name || 'meeting_scheduled');
+        const customFields = settings.meeting_custom_fields || {};
+        setMeetingDateFieldId(customFields.meeting_date || '');
+        setMeetingTimeFieldId(customFields.meeting_time || '');
+        setMeetingLocationFieldId(customFields.meeting_location || '');
+        setContactNameFieldId(customFields.contact_name || '');
       }
 
       return data;
@@ -54,6 +70,15 @@ export default function ManyChatSettings() {
         integration_type: 'manychat',
         api_key: apiKey,
         auto_sync_enabled: false,
+        settings: {
+          meeting_trigger_name: meetingTriggerName,
+          meeting_custom_fields: {
+            meeting_date: meetingDateFieldId || undefined,
+            meeting_time: meetingTimeFieldId || undefined,
+            meeting_location: meetingLocationFieldId || undefined,
+            contact_name: contactNameFieldId || undefined,
+          }
+        }
       };
 
       if (integration) {
@@ -158,6 +183,88 @@ export default function ManyChatSettings() {
               </ol>
             </CardContent>
           </Card>
+
+          {/* Meeting Notification Settings */}
+          <Collapsible open={showMeetingSettings} onOpenChange={setShowMeetingSettings}>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" className="w-full justify-between">
+                <span className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  הגדרות הודעת פגישה
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {showMeetingSettings ? '▲' : '▼'}
+                </span>
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4 mt-4">
+              <Card className="p-4 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="triggerName">שם ה-Automation Trigger</Label>
+                  <Input
+                    id="triggerName"
+                    value={meetingTriggerName}
+                    onChange={(e) => setMeetingTriggerName(e.target.value)}
+                    placeholder="meeting_scheduled"
+                    dir="ltr"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    שם ה-Flow ב-ManyChat שיופעל בעת קביעת פגישה
+                  </p>
+                </div>
+
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-medium mb-3">Custom Field IDs (אופציונלי)</h4>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    הזן את ה-ID של כל Custom Field מ-ManyChat. ניתן למצוא ב-ManyChat → Settings → Custom Fields
+                  </p>
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">meeting_date Field ID</Label>
+                      <Input
+                        value={meetingDateFieldId}
+                        onChange={(e) => setMeetingDateFieldId(e.target.value)}
+                        placeholder="1234567"
+                        dir="ltr"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">meeting_time Field ID</Label>
+                      <Input
+                        value={meetingTimeFieldId}
+                        onChange={(e) => setMeetingTimeFieldId(e.target.value)}
+                        placeholder="1234568"
+                        dir="ltr"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">meeting_location Field ID</Label>
+                      <Input
+                        value={meetingLocationFieldId}
+                        onChange={(e) => setMeetingLocationFieldId(e.target.value)}
+                        placeholder="1234569"
+                        dir="ltr"
+                        className="h-9"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">contact_name Field ID</Label>
+                      <Input
+                        value={contactNameFieldId}
+                        onChange={(e) => setContactNameFieldId(e.target.value)}
+                        placeholder="1234570"
+                        dir="ltr"
+                        className="h-9"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            </CollapsibleContent>
+          </Collapsible>
 
           {/* Sync Button */}
           {integration?.is_active && (
