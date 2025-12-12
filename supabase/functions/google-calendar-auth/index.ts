@@ -63,6 +63,21 @@ serve(async (req) => {
         throw new Error('No user ID in state');
       }
 
+      // Fetch the Google user's email
+      let googleEmail = null;
+      try {
+        const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+          headers: { 'Authorization': `Bearer ${tokens.access_token}` }
+        });
+        if (userInfoResponse.ok) {
+          const userInfo = await userInfoResponse.json();
+          googleEmail = userInfo.email;
+          console.log('Google account email:', googleEmail);
+        }
+      } catch (e) {
+        console.error('Failed to fetch Google user info:', e);
+      }
+
       // Calculate expiration time
       const expiresAt = new Date(Date.now() + (tokens.expires_in * 1000));
 
@@ -75,6 +90,7 @@ serve(async (req) => {
           refresh_token: tokens.refresh_token,
           expires_at: expiresAt.toISOString(),
           updated_at: new Date().toISOString(),
+          google_email: googleEmail,
         });
 
       if (dbError) {
@@ -209,7 +225,10 @@ serve(async (req) => {
         .eq('user_id', user.id)
         .single();
 
-      return new Response(JSON.stringify({ connected: !!tokenData }), {
+      return new Response(JSON.stringify({ 
+        connected: !!tokenData,
+        google_email: tokenData?.google_email || null 
+      }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

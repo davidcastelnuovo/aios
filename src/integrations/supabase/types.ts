@@ -316,6 +316,7 @@ export type Database = {
           access_token: string
           created_at: string | null
           expires_at: string
+          google_email: string | null
           id: string
           refresh_token: string
           updated_at: string | null
@@ -325,6 +326,7 @@ export type Database = {
           access_token: string
           created_at?: string | null
           expires_at: string
+          google_email?: string | null
           id?: string
           refresh_token: string
           updated_at?: string | null
@@ -334,6 +336,7 @@ export type Database = {
           access_token?: string
           created_at?: string | null
           expires_at?: string
+          google_email?: string | null
           id?: string
           refresh_token?: string
           updated_at?: string | null
