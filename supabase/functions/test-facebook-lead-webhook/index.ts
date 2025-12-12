@@ -117,7 +117,7 @@ serve(async (req) => {
       contact_name: 'Test Contact',
       email: 'test@example.com',
       phone: '0501234567',
-      source: 'facebook',
+      source: 'paid_ads',
       status: 'new',
       tenant_id: integration.tenant_id,
       agency_id: specificFormMapping?.agency_id || null,
