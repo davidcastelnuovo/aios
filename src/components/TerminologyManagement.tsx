@@ -32,7 +32,37 @@ interface TerminologyItem {
   original_plural: string;
 }
 
-export default function TerminologyManagement() {
+type TerminologyCategory = 'modules' | 'roles' | 'tabs';
+
+interface TerminologyManagementProps {
+  category?: TerminologyCategory;
+}
+
+const CATEGORY_KEYS: Record<TerminologyCategory, string[]> = {
+  modules: ['agency', 'client', 'lead', 'task', 'campaigner', 'sales_person', 'supplier', 'product', 'onboarding'],
+  roles: ['role_owner', 'role_team_manager', 'role_campaigner', 'role_sales_person', 'role_seo', 'role_super_admin'],
+  tabs: ['task_tab_all', 'task_tab_seo', 'task_tab_campaign'],
+};
+
+const CATEGORY_TITLES: Record<TerminologyCategory, { title: string; description: string; columnHeader: string }> = {
+  modules: {
+    title: 'ניהול שמות מודולים',
+    description: 'התאם אישית את שמות המודולים במערכת. השינויים ישפיעו על כל המערכת.',
+    columnHeader: 'מודול',
+  },
+  roles: {
+    title: 'ניהול שמות תפקידים',
+    description: 'התאם אישית את שמות התפקידים במערכת. השינויים ישפיעו על תצוגת התפקידים בכל המערכת.',
+    columnHeader: 'תפקיד',
+  },
+  tabs: {
+    title: 'ניהול שמות טאבים',
+    description: 'התאם אישית את שמות הטאבים בעמוד המשימות.',
+    columnHeader: 'טאב',
+  },
+};
+
+export default function TerminologyManagement({ category = 'modules' }: TerminologyManagementProps) {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -54,7 +84,11 @@ export default function TerminologyManagement() {
     enabled: !!tenantId,
   });
 
-  const terms: TerminologyItem[] = Array.isArray(termsData) ? (termsData as any[]) : [];
+  const allTerms: TerminologyItem[] = Array.isArray(termsData) ? (termsData as any[]) : [];
+  
+  // Filter terms by category
+  const categoryKeys = CATEGORY_KEYS[category];
+  const terms = allTerms.filter(term => categoryKeys.includes(term.term_key));
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, singular, plural }: { id: string; singular: string; plural: string }) => {
@@ -117,29 +151,31 @@ export default function TerminologyManagement() {
   const getTermLabel = (key: string): string => {
     const labels: Record<string, string> = {
       // Module names
-      agency: 'מודול: סוכנות',
-      client: 'מודול: לקוח',
-      lead: 'מודול: ליד',
-      task: 'מודול: משימה',
-      campaigner: 'מודול: קמפיינר',
-      sales_person: 'מודול: איש מכירות',
-      supplier: 'מודול: ספק',
-      product: 'מודול: מוצר',
-      onboarding: 'מודול: קליטה',
+      agency: 'סוכנות',
+      client: 'לקוח',
+      lead: 'ליד',
+      task: 'משימה',
+      campaigner: 'קמפיינר',
+      sales_person: 'איש מכירות',
+      supplier: 'ספק',
+      product: 'מוצר',
+      onboarding: 'קליטה',
       // Role names
-      role_owner: 'תפקיד: בעלים',
-      role_team_manager: 'תפקיד: מנהל צוות',
-      role_campaigner: 'תפקיד: קמפיינר',
-      role_sales_person: 'תפקיד: איש מכירות',
-      role_seo: 'תפקיד: SEO',
-      role_super_admin: 'תפקיד: סופר אדמין',
+      role_owner: 'בעלים',
+      role_team_manager: 'מנהל צוות',
+      role_campaigner: 'קמפיינר',
+      role_sales_person: 'איש מכירות',
+      role_seo: 'SEO',
+      role_super_admin: 'סופר אדמין',
       // Task tab names
-      task_tab_all: 'טאב משימות: הכל',
-      task_tab_seo: 'טאב משימות: SEO',
-      task_tab_campaign: 'טאב משימות: קמפיינרים',
+      task_tab_all: 'כל המשימות',
+      task_tab_seo: 'משימות SEO',
+      task_tab_campaign: 'משימות קמפיין',
     };
     return labels[key] || key;
   };
+
+  const categoryConfig = CATEGORY_TITLES[category];
 
   if (isLoading) {
     return (
@@ -153,9 +189,9 @@ export default function TerminologyManagement() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>ניהול שמות מודולים</CardTitle>
+          <CardTitle>{categoryConfig.title}</CardTitle>
           <p className="text-sm text-muted-foreground">
-            התאם אישית את שמות המודולים והמסננים במערכת. השינויים ישפיעו על כל המערכת.
+            {categoryConfig.description}
           </p>
         </CardHeader>
         <CardContent>
@@ -167,7 +203,7 @@ export default function TerminologyManagement() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>מודול</TableHead>
+                  <TableHead>{categoryConfig.columnHeader}</TableHead>
                   <TableHead>יחיד</TableHead>
                   <TableHead>רבים</TableHead>
                   <TableHead>ברירת מחדל</TableHead>
