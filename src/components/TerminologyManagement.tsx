@@ -186,11 +186,11 @@ export default function TerminologyManagement({ category = 'modules' }: Terminol
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir="rtl">
       <Card>
         <CardHeader>
-          <CardTitle>{categoryConfig.title}</CardTitle>
-          <p className="text-sm text-muted-foreground">
+          <CardTitle className="text-right">{categoryConfig.title}</CardTitle>
+          <p className="text-sm text-muted-foreground text-right">
             {categoryConfig.description}
           </p>
         </CardHeader>
