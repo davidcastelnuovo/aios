@@ -153,7 +153,7 @@ serve(async (req) => {
     
     console.log('Authenticated user:', user.id, user.email);
 
-    // Handle disconnect separately (DELETE with no body)
+    // Handle disconnect (DELETE method or action: 'disconnect')
     if (req.method === 'DELETE') {
       console.log('Disconnecting calendar for user:', user.id);
       
@@ -184,6 +184,31 @@ serve(async (req) => {
 
     const requestBody = await req.json();
     const action = requestBody.action;
+
+    // Handle disconnect via action (for POST requests from supabase.functions.invoke)
+    if (action === 'disconnect') {
+      console.log('Disconnecting calendar for user (via action):', user.id);
+      
+      const serviceClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      );
+      
+      const { error: deleteError } = await serviceClient
+        .from('calendar_tokens')
+        .delete()
+        .eq('user_id', user.id);
+
+      if (deleteError) {
+        console.error('Delete error:', deleteError);
+        throw deleteError;
+      }
+
+      console.log('Calendar disconnected successfully for user:', user.id);
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
     const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
