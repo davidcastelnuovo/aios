@@ -103,10 +103,10 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   const graphExplorerUrl = `https://developers.facebook.com/tools/explorer/?permissions=pages_show_list%2Cpages_manage_metadata%2Cpages_manage_ads%2Cleads_retrieval%2Cpages_read_engagement`;
 
   // Fetch pages
-  const { data: pagesData, isLoading: loadingPages, isFetching: fetchingPages, refetch: refetchPages } = useQuery({
+  const { data: pagesData, isLoading: loadingPages, isFetching: fetchingPages, error: pagesError, refetch: refetchPages } = useQuery({
     queryKey: ['facebook-pages', tenantId, effectiveAccessToken],
     queryFn: async () => {
-      if (!effectiveAccessToken) return { pages: [], pageTokens: {} };
+      if (!effectiveAccessToken) return { pages: [], pageTokens: {}, tokenExpired: false };
       
       console.log('Fetching Facebook pages with token:', effectiveAccessToken?.substring(0, 20) + '...');
       
@@ -115,9 +115,19 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       });
 
       console.log('Facebook pages response:', data);
-      if (error) {
-        console.error('Facebook pages error:', error);
-        throw error;
+      
+      // Check for token expiration error
+      if (error || data?.error) {
+        const errorDetails = data?.details || {};
+        const errorMessage = data?.error || error?.message || '';
+        
+        // Check if it's a token expiration error (code 190, subcode 463)
+        if (errorDetails.code === 190 || errorMessage.includes('Session has expired') || errorMessage.includes('access token')) {
+          console.log('Facebook token has expired');
+          return { pages: [], pageTokens: {}, tokenExpired: true };
+        }
+        
+        throw new Error(errorMessage || 'Failed to fetch pages');
       }
       
       // Build page tokens map
@@ -130,10 +140,11 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
         });
       }
       
-      return { pages: data?.pages || [], pageTokens: tokens };
+      return { pages: data?.pages || [], pageTokens: tokens, tokenExpired: false };
     },
     enabled: !!effectiveAccessToken,
     staleTime: 0,
+    retry: false, // Don't retry on expired token errors
   });
 
   // Get page tokens from query data
@@ -328,6 +339,9 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   const hasPageToken = selectedPageId && !!effectivePageTokens[selectedPageId];
   const selectedForm = forms.find((f: FacebookForm) => f.id === selectedFormId);
 
+  // Check if token is expired
+  const tokenExpired = pagesData?.tokenExpired === true;
+
   if (!effectiveAccessToken) {
     return (
       <Card>
@@ -342,6 +356,31 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
               {sharedFromIntegrationId ? 'טוען נתוני חיבור משותף...' : 'יש להזין Access Token קודם כדי לטעון את הטפסים'}
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Show token expired message
+  if (tokenExpired) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ListTree className="h-5 w-5" />
+            מיפוי טפסי לידים
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert className="border-amber-200 bg-amber-50">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertTitle className="text-amber-800">הטוקן של פייסבוק פג תוקף</AlertTitle>
+            <AlertDescription className="text-amber-700">
+              {sharedFromIntegrationId 
+                ? 'יש להתחבר מחדש לפייסבוק מהארגון המקורי שממנו שותף החיבור.'
+                : 'לחץ על "התחבר מחדש" למעלה כדי לחדש את החיבור לפייסבוק.'}
             </AlertDescription>
           </Alert>
         </CardContent>
