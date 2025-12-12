@@ -54,6 +54,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import AddTaskForm from "@/components/forms/AddTaskForm";
+import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 
 // Helper functions for dynamic pipeline stages
 function hexToLightBg(hex: string): string {
@@ -150,7 +151,8 @@ function LeadCard({
   onResponseStatusChange,
   productsLookup = {},
   leadStatuses = [],
-  pipelineStages = []
+  pipelineStages = [],
+  isCompanyNameVisible = true
 }: { 
   lead: any; 
   onStatusChange: (leadId: string, newStatus: string) => void;
@@ -158,6 +160,7 @@ function LeadCard({
   productsLookup?: Record<string, { name: string; price: number }>;
   leadStatuses?: LeadStatus[];
   pipelineStages?: Array<{ id: string; label: string; color: string; bgClass: string; borderColor: string; hexColor?: string }>;
+  isCompanyNameVisible?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: lead.id,
@@ -218,10 +221,12 @@ function LeadCard({
             <GripVertical className="h-4 w-4 text-muted-foreground" />
           </div>
         </CardTitle>
-        <div className="flex items-center gap-2 mt-1">
-          <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
-          <span className="text-xs text-muted-foreground">{lead.company_name}</span>
-        </div>
+        {isCompanyNameVisible && lead.company_name && (
+          <div className="flex items-center gap-2 mt-1">
+            <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
+            <span className="text-xs text-muted-foreground">{lead.company_name}</span>
+          </div>
+        )}
       </CardHeader>
       
       <CardContent className="px-4 pb-4 pt-2 space-y-3">
@@ -466,6 +471,7 @@ export default function Leads() {
   const { tenantId } = useCurrentTenant();
   const { activeStatuses: leadStatuses } = useLeadStatuses();
   const { activeStages: pipelineStagesData } = useLeadPipelineStages();
+  const { isFieldVisible } = useCustomFieldLabels('lead');
   
   // Convert dynamic pipeline stages to format compatible with existing code
   const PIPELINE_STAGES = useMemo(() => {
@@ -1201,6 +1207,7 @@ export default function Leads() {
                             productsLookup={productsLookup}
                             leadStatuses={leadStatuses}
                             pipelineStages={PIPELINE_STAGES}
+                            isCompanyNameVisible={isFieldVisible('company_name')}
                             onStatusChange={(leadId, newStatus) => 
                               updateLeadStatus.mutate({ 
                                 leadId, 
@@ -1227,6 +1234,7 @@ export default function Leads() {
                     productsLookup={productsLookup}
                     leadStatuses={leadStatuses}
                     pipelineStages={PIPELINE_STAGES}
+                    isCompanyNameVisible={isFieldVisible('company_name')}
                     onStatusChange={() => {}}
                     onResponseStatusChange={() => {}}
                   />
@@ -1308,6 +1316,7 @@ export default function Leads() {
                             productsLookup={productsLookup}
                             leadStatuses={leadStatuses}
                             pipelineStages={PIPELINE_STAGES}
+                            isCompanyNameVisible={isFieldVisible('company_name')}
                             onStatusChange={(leadId, newStatus) => 
                               updateLeadStatus.mutate({ 
                                 leadId, 
@@ -1336,6 +1345,7 @@ export default function Leads() {
                   productsLookup={productsLookup}
                   leadStatuses={leadStatuses}
                   pipelineStages={PIPELINE_STAGES}
+                  isCompanyNameVisible={isFieldVisible('company_name')}
                   onStatusChange={() => {}}
                   onResponseStatusChange={() => {}}
                 />
