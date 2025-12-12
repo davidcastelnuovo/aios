@@ -212,22 +212,23 @@ serve(async (req) => {
       const finalToken = longLivedData.access_token || access_token;
       const finalExpiry = longLivedData.expires_in || expires_in;
 
-      // Get user's pages with pagination
+      // Get user's pages with pagination - Page tokens from long-lived user tokens are PERMANENT!
       let allPages: any[] = [];
-      let pagesUrl = `https://graph.facebook.com/v21.0/me/accounts?limit=100&access_token=${finalToken}`;
+      let pagesUrl = `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,access_token&limit=100&access_token=${finalToken}`;
       
       while (pagesUrl) {
         const pagesResponse = await fetch(pagesUrl);
         const pagesData = await pagesResponse.json();
         
         if (pagesData.data) {
+          // Page tokens obtained via long-lived user token are permanent (never expire)
           allPages = allPages.concat(pagesData.data);
         }
         
         pagesUrl = pagesData.paging?.next || null;
       }
 
-      console.log(`User pages fetched: ${allPages.length} total`);
+      console.log(`User pages fetched: ${allPages.length} total - Page tokens are permanent!`);
 
       // Check if integration already exists
       const { data: existingInt } = await supabase
