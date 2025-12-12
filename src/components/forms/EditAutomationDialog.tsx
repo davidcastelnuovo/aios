@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Info } from "lucide-react";
+import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם האוטומציה הוא שדה חובה"),
@@ -45,7 +46,7 @@ const formSchema = z.object({
     "onboarding_status_changed",
     "meeting_created",
   ]),
-  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp"]),
+  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber"]),
   webhook_url: z.string().optional(),
   webhook_method: z.enum(["POST", "GET", "PUT"]).optional(),
   body_template: z.string().optional(),
@@ -76,14 +77,7 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-const LEAD_STATUS_OPTIONS = [
-  { value: "new", label: "ליד חדש" },
-  { value: "contacted", label: "נוצר קשר" },
-  { value: "follow_up", label: "בתהליך" },
-  { value: "proposal_sent", label: "נשלחה הצעה" },
-  { value: "closed", label: "נסגר" },
-  { value: "transferred_to_onboarding", label: "הועבר לקליטה" },
-];
+// LEAD_STATUS_OPTIONS removed - now using dynamic statuses from useLeadStatuses hook
 
 const TASK_STATUS_OPTIONS = [
   { value: "open", label: "פתוח" },
@@ -110,6 +104,7 @@ interface EditAutomationDialogProps {
 
 export function EditAutomationDialog({ automation, open, onOpenChange }: EditAutomationDialogProps) {
   const queryClient = useQueryClient();
+  const { activeStatuses: leadStatuses } = useLeadStatuses();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -146,7 +141,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       if (error) throw error;
       return Array.isArray(data?.tags) ? data.tags : [];
     },
-    enabled: !!automation.tenant_id && form.watch("action_type") === "send_whatsapp",
+    enabled: !!automation.tenant_id && (form.watch("action_type") === "send_whatsapp" || form.watch("action_type") === "create_manychat_subscriber"),
   });
 
   const updateAutomationMutation = useMutation({
@@ -194,6 +189,10 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
             location: values.field_mapping_location,
             contact: values.field_mapping_contact,
           },
+        };
+      } else if (values.action_type === "create_manychat_subscriber") {
+        configuration = {
+          manychat_tag_id: values.manychat_tag_id || null,
         };
       }
 
@@ -310,9 +309,9 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                       </FormControl>
                       <SelectContent className="bg-background z-[100]">
                         <SelectItem value="any">כל סטטוס</SelectItem>
-                        {triggerType === "lead_status_changed" && LEAD_STATUS_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
+                        {triggerType === "lead_status_changed" && leadStatuses.map((status) => (
+                          <SelectItem key={status.status_key} value={status.status_key}>
+                            {status.label}
                           </SelectItem>
                         ))}
                         {triggerType === "task_status_changed" && TASK_STATUS_OPTIONS.map((option) => (
@@ -347,6 +346,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                       <SelectItem value="webhook">Webhook (Make.com, Zapier וכו')</SelectItem>
                       <SelectItem value="update_status">שינוי סטטוס</SelectItem>
                       <SelectItem value="send_whatsapp">שלח WhatsApp (ManyChat)</SelectItem>
+                      <SelectItem value="create_manychat_subscriber">צור subscriber ב-ManyChat</SelectItem>
                       <SelectItem value="email">אימייל (בקרוב)</SelectItem>
                       <SelectItem value="notification">התראה (בקרוב)</SelectItem>
                     </SelectContent>
@@ -463,9 +463,9 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="bg-background z-[100]">
-                          {statusEntity === "lead" && LEAD_STATUS_OPTIONS.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>
-                              {option.label}
+                          {statusEntity === "lead" && leadStatuses.map((status) => (
+                            <SelectItem key={status.status_key} value={status.status_key}>
+                              {status.label}
                             </SelectItem>
                           ))}
                           {statusEntity === "task" && TASK_STATUS_OPTIONS.map((option) => (
@@ -610,6 +610,51 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                       </FormItem>
                     )}
                   />
+                </div>
+              </>
+            )}
+
+            {actionType === "create_manychat_subscriber" && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="manychat_tag_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>טאג להוספה (אופציונלי)</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר טאג להוספה אחרי יצירת ה-subscriber" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          <SelectItem value="none">ללא טאג</SelectItem>
+                          {isLoadingTags ? (
+                            <SelectItem value="loading" disabled>טוען...</SelectItem>
+                          ) : manychatTags?.map((tag: any) => (
+                            <SelectItem key={tag.id} value={tag.id.toString()}>
+                              {tag.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-xs">
+                        הטאג ייושם אוטומטית אחרי יצירת ה-subscriber
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-sm">
+                  <p className="font-medium text-blue-600 dark:text-blue-400">כיצד זה עובד?</p>
+                  <ul className="text-muted-foreground text-xs mt-1 space-y-1">
+                    <li>• כשליד נוצר, המערכת יוצרת subscriber חדש ב-ManyChat</li>
+                    <li>• מספר הטלפון והשם של הליד יועברו ל-ManyChat</li>
+                    <li>• ה-Subscriber ID יישמר בליד לשימוש עתידי</li>
+                    <li>• אם נבחר טאג, הוא יתווסף אוטומטית ל-subscriber</li>
+                  </ul>
                 </div>
               </>
             )}

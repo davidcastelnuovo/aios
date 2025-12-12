@@ -645,6 +645,51 @@ export function AddAutomationForm() {
               </>
             )}
 
+            {actionType === "create_manychat_subscriber" && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="manychat_tag_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>טאג להוספה (אופציונלי)</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר טאג להוספה אחרי יצירת ה-subscriber" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          <SelectItem value="none">ללא טאג</SelectItem>
+                          {isLoadingTags ? (
+                            <SelectItem value="loading" disabled>טוען...</SelectItem>
+                          ) : manychatTags?.map((tag: any) => (
+                            <SelectItem key={tag.id} value={tag.id.toString()}>
+                              {tag.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-xs">
+                        הטאג ייושם אוטומטית אחרי יצירת ה-subscriber
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-sm">
+                  <p className="font-medium text-blue-600 dark:text-blue-400">כיצד זה עובד?</p>
+                  <ul className="text-muted-foreground text-xs mt-1 space-y-1">
+                    <li>• כשליד נוצר, המערכת יוצרת subscriber חדש ב-ManyChat</li>
+                    <li>• מספר הטלפון והשם של הליד יועברו ל-ManyChat</li>
+                    <li>• ה-Subscriber ID יישמר בליד לשימוש עתידי</li>
+                    <li>• אם נבחר טאג, הוא יתווסף אוטומטית ל-subscriber</li>
+                  </ul>
+                </div>
+              </>
+            )}
+
             <FormField
               control={form.control}
               name="conditions"

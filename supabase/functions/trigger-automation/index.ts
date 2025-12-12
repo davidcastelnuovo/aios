@@ -67,6 +67,8 @@ Deno.serve(async (req) => {
             response = await executeStatusUpdate(supabase, automation.configuration, payload.data)
           } else if (automation.action_type === 'send_whatsapp') {
             response = await executeSendWhatsapp(supabase, automation.configuration, payload.data, payload.tenant_id)
+          } else if (automation.action_type === 'create_manychat_subscriber') {
+            response = await executeCreateManychatSubscriber(supabase, automation.configuration, payload.data, payload.tenant_id)
           }
 
           const executionTime = Date.now() - startTime
@@ -516,5 +518,154 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     subscriber_id: subscriberId,
     fields_updated: customFieldUpdates.length,
     message: 'No tag configured'
+  }
+}
+
+// Execute create ManyChat subscriber action
+async function executeCreateManychatSubscriber(supabase: any, config: any, data: any, tenantId: string) {
+  console.log('Executing create ManyChat subscriber:', config)
+  console.log('Data:', data)
+  
+  const { manychat_tag_id } = config
+  
+  // Get ManyChat integration settings for this tenant
+  const { data: integration, error: integrationError } = await supabase
+    .from('tenant_integrations')
+    .select('api_key, settings')
+    .eq('tenant_id', tenantId)
+    .eq('integration_type', 'manychat')
+    .eq('is_active', true)
+    .maybeSingle()
+  
+  if (integrationError) {
+    console.error('Error fetching ManyChat integration:', integrationError)
+    throw new Error('שגיאה בטעינת הגדרות ManyChat')
+  }
+  
+  if (!integration?.api_key) {
+    throw new Error('לא נמצא חיבור ManyChat פעיל לארגון זה')
+  }
+  
+  const apiKey = integration.api_key
+  const baseUrl = 'https://api.manychat.com/fb'
+  
+  // Get lead data
+  let leadRecord: any = null
+  const leadId = data.id || data.lead_id
+  
+  if (leadId) {
+    const { data: lead } = await supabase
+      .from('leads')
+      .select('id, manychat_subscriber_id, contact_name, company_name, phone')
+      .eq('id', leadId)
+      .single()
+    leadRecord = lead
+  }
+  
+  if (!leadRecord) {
+    throw new Error('לא נמצא ליד עם נתונים')
+  }
+  
+  // If subscriber already exists, skip creation
+  if (leadRecord.manychat_subscriber_id) {
+    console.log(`Lead already has subscriber ID: ${leadRecord.manychat_subscriber_id}`)
+    
+    // Still add tag if configured
+    if (manychat_tag_id && manychat_tag_id !== 'none') {
+      console.log(`Adding tag ${manychat_tag_id} to existing subscriber`)
+      const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subscriber_id: leadRecord.manychat_subscriber_id,
+          tag_id: parseInt(manychat_tag_id),
+        }),
+      })
+      const tagResult = await tagResponse.json()
+      console.log('ManyChat addTag response:', tagResult)
+    }
+    
+    return {
+      success: true,
+      subscriber_id: leadRecord.manychat_subscriber_id,
+      message: 'Subscriber already exists, tag added if configured'
+    }
+  }
+  
+  // Create new subscriber
+  const contactPhone = leadRecord.phone
+  if (!contactPhone) {
+    throw new Error('לליד אין מספר טלפון')
+  }
+  
+  const cleanPhone = contactPhone.replace(/\D/g, '')
+  const last9Digits = cleanPhone.slice(-9)
+  const whatsappPhone = '+972' + last9Digits
+  const contactName = leadRecord.contact_name || leadRecord.company_name || 'Unknown'
+  
+  console.log(`Creating subscriber with whatsapp_phone: ${whatsappPhone}, name: ${contactName}`)
+  
+  const createResponse = await fetch(`${baseUrl}/subscriber/createSubscriber`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      first_name: contactName,
+      whatsapp_phone: whatsappPhone,
+      consent_phrase: 'Opted in via CRM automation'
+    }),
+  })
+  
+  const createResult = await createResponse.json()
+  console.log('ManyChat createSubscriber response:', createResult)
+  
+  if (createResult.status !== 'success' || !createResult.data?.id) {
+    throw new Error(`שגיאה ביצירת subscriber ב-ManyChat: ${JSON.stringify(createResult)}`)
+  }
+  
+  const subscriberId = createResult.data.id.toString()
+  console.log(`Created new subscriber: ${subscriberId}`)
+  
+  // Save subscriber ID to lead
+  await supabase.from('leads')
+    .update({ manychat_subscriber_id: subscriberId })
+    .eq('id', leadRecord.id)
+  console.log(`Updated lead ${leadRecord.id} with subscriber ID ${subscriberId}`)
+  
+  // Add tag if configured
+  if (manychat_tag_id && manychat_tag_id !== 'none') {
+    console.log(`Adding tag ${manychat_tag_id} to new subscriber`)
+    const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        subscriber_id: subscriberId,
+        tag_id: parseInt(manychat_tag_id),
+      }),
+    })
+    const tagResult = await tagResponse.json()
+    console.log('ManyChat addTag response:', tagResult)
+    
+    return {
+      success: true,
+      subscriber_id: subscriberId,
+      tag_id: manychat_tag_id,
+      tag_result: tagResult,
+      message: 'Subscriber created and tag added'
+    }
+  }
+  
+  return {
+    success: true,
+    subscriber_id: subscriberId,
+    message: 'Subscriber created successfully'
   }
 }

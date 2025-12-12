@@ -45,6 +45,7 @@ const ACTION_LABELS: Record<string, string> = {
   notification: "התראה",
   update_status: "שינוי סטטוס",
   send_whatsapp: "שלח WhatsApp (ManyChat)",
+  create_manychat_subscriber: "צור subscriber ב-ManyChat",
 };
 
 export default function Automations() {
