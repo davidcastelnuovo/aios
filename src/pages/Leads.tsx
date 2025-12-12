@@ -1274,6 +1274,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   const queryClient = useQueryClient();
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const { selectedAgency } = useAgency();
+  const { activeStatuses: leadStatuses } = useLeadStatuses();
 
   const updateLeadStatus = useMutation({
     mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" }) => {
@@ -1512,39 +1513,42 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
               id: "response_status", 
               label: "סטטוס", 
               width: 150,
-              render: (lead: any) => (
-                <Select
-                  value={lead.response_status || "none"}
-                  onValueChange={(value) => 
-                    updateLeadResponseStatus.mutate({ 
-                      leadId: lead.id, 
-                      responseStatus: value === "none" ? null : value as any
-                    })
-                  }
-                >
-                  <SelectTrigger 
-                    className="h-8 w-full border-2"
-                    style={{ 
-                      backgroundColor: getStatusColor(lead.response_status, leadStatuses) || undefined,
-                      color: lead.response_status ? '#fff' : undefined 
-                    }}
+              render: (lead: any) => {
+                const status = leadStatuses.find(s => s.status_key === lead.response_status);
+                return (
+                  <Select
+                    value={lead.response_status || "none"}
+                    onValueChange={(value) => 
+                      updateLeadResponseStatus.mutate({ 
+                        leadId: lead.id, 
+                        responseStatus: value === "none" ? null : value as any
+                      })
+                    }
                   >
-                    <SelectValue placeholder="בחר סטטוס" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-50">
-                    <SelectItem value="none">ללא סטטוס</SelectItem>
-                    {leadStatuses.map((status) => (
-                      <SelectItem 
-                        key={status.status_key} 
-                        value={status.status_key}
-                        style={{ backgroundColor: status.color, color: '#fff' }}
-                      >
-                        {status.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )
+                    <SelectTrigger 
+                      className="h-8 w-full border-2"
+                      style={{ 
+                        backgroundColor: status?.color || undefined,
+                        color: lead.response_status ? '#fff' : undefined 
+                      }}
+                    >
+                      <SelectValue placeholder="בחר סטטוס" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      <SelectItem value="none">ללא סטטוס</SelectItem>
+                      {leadStatuses.map((s) => (
+                        <SelectItem 
+                          key={s.status_key} 
+                          value={s.status_key}
+                          style={{ backgroundColor: s.color, color: '#fff' }}
+                        >
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                );
+              }
             },
             { 
               id: "actions", 

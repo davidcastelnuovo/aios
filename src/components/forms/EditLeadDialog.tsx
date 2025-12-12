@@ -513,30 +513,40 @@ const updateMutation = useMutation({
                   <FormField
                     control={form.control}
                     name="response_status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">סטטוס תגובה</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger className={`text-right rounded-lg border-2 h-11 ${
-                              field.value 
-                                ? RESPONSE_STATUS_OPTIONS.find(s => s.id === field.value)?.color || ""
-                                : ""
-                            }`}>
-                              <SelectValue placeholder="בחר סטטוס" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-background z-50 text-right" align="end">
-                            {RESPONSE_STATUS_OPTIONS.map((option) => (
-                              <SelectItem key={option.id} value={option.id} className={option.color}>
-                                {option.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+                    render={({ field }) => {
+                      const selectedStatus = leadStatuses.find(s => s.status_key === field.value);
+                      return (
+                        <FormItem>
+                          <FormLabel className="text-sm font-medium">סטטוס תגובה</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger 
+                                className="text-right rounded-lg border-2 h-11"
+                                style={{ 
+                                  backgroundColor: selectedStatus?.color || undefined,
+                                  color: field.value ? '#fff' : undefined 
+                                }}
+                              >
+                                <SelectValue placeholder="בחר סטטוס" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="bg-background z-50 text-right" align="end">
+                              <SelectItem value="">ללא סטטוס</SelectItem>
+                              {leadStatuses.map((status) => (
+                                <SelectItem 
+                                  key={status.status_key} 
+                                  value={status.status_key}
+                                  style={{ backgroundColor: status.color, color: '#fff' }}
+                                >
+                                  {status.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
                   />
 
                   <FormField
