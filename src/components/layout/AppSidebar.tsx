@@ -62,6 +62,12 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { useMenuItems, MenuItem } from "@/hooks/useMenuItems";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SimpleTableDialog } from "@/components/dynamic-tables/SimpleTableDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const iconMap: Record<string, any> = {
   LayoutDashboard,
@@ -308,9 +314,13 @@ export function AppSidebar() {
   });
   
   // Filter parent items: show only if user has access AND (it's not a group OR has accessible children)
+  // EXCLUDE 'management' group - it will be shown as a dropdown in the header
   const parentItems = allMenuItems.filter(item => {
     if (item.parent_menu_key || !item.is_visible) return false;
     if (!canAccessMenuItem(item)) return false;
+    
+    // Exclude management group - will be rendered in header dropdown
+    if (item.menu_key === 'management') return false;
     
     // If it's a group (has children), only show if it has accessible children
     const children = childItemsMap.get(item.menu_key) || [];
@@ -320,6 +330,9 @@ export function AppSidebar() {
     
     return true;
   });
+
+  // Get management menu items for the dropdown
+  const managementItems = childItemsMap.get('management') || [];
 
   const renderMenuItem = (item: MenuItem) => {
     const Icon = getIcon(item.icon);
@@ -477,6 +490,62 @@ export function AppSidebar() {
             ) : (
               <Building2 className="h-8 w-8" />
             )}
+            {/* Management dropdown in collapsed mode */}
+            {managementItems.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="p-2 hover:bg-sidebar-accent rounded-md transition-colors"
+                    title="ניהול"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent 
+                  align="end" 
+                  side="left"
+                  className="w-56 bg-popover z-50"
+                >
+                  {managementItems.map(item => {
+                    const Icon = getIcon(item.icon);
+                    const label = getMenuItemLabel(item);
+                    const badge = getMenuItemBadge(item);
+                    const isDisabled = badge === 'premium' || badge === 'coming_soon';
+                    
+                    return (
+                      <DropdownMenuItem
+                        key={item.menu_key}
+                        disabled={isDisabled}
+                        className={isDisabled ? "opacity-50" : ""}
+                        asChild={!isDisabled}
+                      >
+                        {isDisabled ? (
+                          <div className="flex items-center gap-2 w-full">
+                            <Icon className="h-4 w-4" />
+                            <span className="flex-1">{label}</span>
+                            {badge === 'premium' && (
+                              <Badge variant="secondary" className="text-[10px] px-1 py-0">Premium</Badge>
+                            )}
+                            {badge === 'coming_soon' && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0">בקרוב</Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <NavLink
+                            to={buildPath(item.route)}
+                            onClick={handleLinkClick}
+                            className="flex items-center gap-2 w-full"
+                          >
+                            <Icon className="h-4 w-4" />
+                            <span className="flex-1">{label}</span>
+                          </NavLink>
+                        )}
+                      </DropdownMenuItem>
+                    );
+                  })}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <button
               onClick={toggleSidebar}
               className="p-2 hover:bg-sidebar-accent rounded-md transition-colors"
@@ -486,12 +555,70 @@ export function AppSidebar() {
           </div>
         ) : (
           <div className="flex items-center justify-between px-2 py-2" dir="rtl">
-            <button
-              onClick={toggleSidebar}
-              className="flex-shrink-0 p-2 hover:bg-sidebar-accent rounded-md transition-colors"
-            >
-              <PanelRightClose className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={toggleSidebar}
+                className="flex-shrink-0 p-2 hover:bg-sidebar-accent rounded-md transition-colors"
+              >
+                <PanelRightClose className="h-4 w-4" />
+              </button>
+              {/* Management dropdown */}
+              {managementItems.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="flex-shrink-0 p-2 hover:bg-sidebar-accent rounded-md transition-colors"
+                      title="ניהול"
+                    >
+                      <Settings className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent 
+                    align="start" 
+                    side="bottom"
+                    className="w-56 bg-popover z-50"
+                  >
+                    {managementItems.map(item => {
+                      const Icon = getIcon(item.icon);
+                      const label = getMenuItemLabel(item);
+                      const badge = getMenuItemBadge(item);
+                      const isDisabled = badge === 'premium' || badge === 'coming_soon';
+                      
+                      return (
+                        <DropdownMenuItem
+                          key={item.menu_key}
+                          disabled={isDisabled}
+                          className={isDisabled ? "opacity-50" : ""}
+                          asChild={!isDisabled}
+                        >
+                          {isDisabled ? (
+                            <div className="flex items-center gap-2 w-full">
+                              <Icon className="h-4 w-4" />
+                              <span className="flex-1">{label}</span>
+                              {badge === 'premium' && (
+                                <Badge variant="secondary" className="text-[10px] px-1 py-0">Premium</Badge>
+                              )}
+                              {badge === 'coming_soon' && (
+                                <Badge variant="outline" className="text-[10px] px-1 py-0">בקרוב</Badge>
+                              )}
+                            </div>
+                          ) : (
+                            <NavLink
+                              to={buildPath(item.route)}
+                              onClick={handleLinkClick}
+                              className="flex items-center gap-2 w-full"
+                            >
+                              <Icon className="h-4 w-4" />
+                              <span className="flex-1">{label}</span>
+                            </NavLink>
+                          )}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
             <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
               {userTenants && userTenants.length > 1 && (
                 <Select value={currentTenantId || undefined} onValueChange={handleTenantChange}>
