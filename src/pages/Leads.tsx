@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar as CalendarIcon, Search, X } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar as CalendarIcon, Search, X, Settings2 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -24,11 +24,13 @@ import {
 import { AddLeadForm } from "@/components/forms/AddLeadForm";
 import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import { ImportLeadsWithMapping } from "@/components/forms/ImportLeadsWithMapping";
+import { ManageLeadStatusesDialog } from "@/components/forms/ManageLeadStatusesDialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useLeadStatuses, LeadStatus } from "@/hooks/useLeadStatuses";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
@@ -80,15 +82,19 @@ const PRODUCT_LABELS: Record<string, string> = {
   other: "אחר",
 };
 
-const RESPONSE_STATUS_OPTIONS = [
-  { id: "no_answer_1", label: "אין מענה 1", color: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 border-amber-300" },
-  { id: "no_answer_2", label: "אין מענה 2", color: "bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100 border-amber-400" },
-  { id: "no_answer_3", label: "אין מענה 3", color: "bg-orange-200 text-orange-900 dark:bg-orange-800 dark:text-orange-100 border-orange-400" },
-  { id: "no_answer_4", label: "אין מענה 4", color: "bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-100 border-red-400" },
-  { id: "in_progress", label: "בעבודה", color: "bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-100 border-cyan-300" },
-  { id: "denies_contact", label: "מכחיש פניה", color: "bg-gray-200 text-gray-900 dark:bg-gray-700 dark:text-gray-100 border-gray-400" },
-  { id: "not_relevant", label: "לא רלוונטי", color: "bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100 border-slate-400" },
-];
+// Helper function to get style for a status
+function getStatusStyle(statusKey: string | null, statuses: LeadStatus[]) {
+  if (!statusKey) return "";
+  const status = statuses.find(s => s.status_key === statusKey);
+  if (!status) return "";
+  return `border-2`;
+}
+
+function getStatusColor(statusKey: string | null, statuses: LeadStatus[]) {
+  if (!statusKey) return undefined;
+  const status = statuses.find(s => s.status_key === statusKey);
+  return status?.color;
+}
 
 function DroppableStage({ stage, children }: { stage: any; children: ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -138,12 +144,14 @@ function LeadCard({
   lead, 
   onStatusChange, 
   onResponseStatusChange,
-  productsLookup = {}
+  productsLookup = {},
+  leadStatuses = []
 }: { 
   lead: any; 
   onStatusChange: (leadId: string, newStatus: string) => void;
   onResponseStatusChange: (leadId: string, responseStatus: string | null) => void;
   productsLookup?: Record<string, { name: string; price: number }>;
+  leadStatuses?: LeadStatus[];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: lead.id,
@@ -252,17 +260,23 @@ function LeadCard({
             value={lead.response_status || "none"}
             onValueChange={(value) => onResponseStatusChange(lead.id, value === "none" ? null : value)}
           >
-            <SelectTrigger className={`h-9 text-sm border-2 font-medium ${
-              lead.response_status 
-                ? RESPONSE_STATUS_OPTIONS.find(s => s.id === lead.response_status)?.color || ""
-                : "bg-background"
-            }`}>
+            <SelectTrigger 
+              className="h-9 text-sm border-2 font-medium"
+              style={{ 
+                backgroundColor: getStatusColor(lead.response_status, leadStatuses) || undefined,
+                color: lead.response_status ? '#fff' : undefined 
+              }}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-background z-[100]">
               <SelectItem value="none">ללא סטטוס</SelectItem>
-              {RESPONSE_STATUS_OPTIONS.map((option) => (
-                <SelectItem key={option.id} value={option.id} className={option.color}>
+              {leadStatuses.map((option) => (
+                <SelectItem 
+                  key={option.status_key} 
+                  value={option.status_key}
+                  style={{ backgroundColor: option.color, color: '#fff' }}
+                >
                   {option.label}
                 </SelectItem>
               ))}
@@ -400,6 +414,7 @@ export default function Leads() {
   const { userAgencyIds } = useUserAgencies();
   const { isOwner } = useUserRole();
   const { tenantId } = useCurrentTenant();
+  const { activeStatuses: leadStatuses } = useLeadStatuses();
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
@@ -781,20 +796,26 @@ export default function Leads() {
             </SelectContent>
           </Select>
           <Select value={filterResponseStatus} onValueChange={setFilterResponseStatus}>
-            <SelectTrigger className={`flex-1 border-2 ${
-              filterResponseStatus !== "all" 
-                ? filterResponseStatus === "none"
-                  ? "bg-background"
-                  : RESPONSE_STATUS_OPTIONS.find(s => s.id === filterResponseStatus)?.color || "bg-background"
-                : "bg-background"
-            }`}>
+            <SelectTrigger 
+              className="flex-1 border-2"
+              style={{ 
+                backgroundColor: filterResponseStatus !== "all" && filterResponseStatus !== "none" 
+                  ? getStatusColor(filterResponseStatus, leadStatuses) || undefined 
+                  : undefined,
+                color: filterResponseStatus !== "all" && filterResponseStatus !== "none" ? '#fff' : undefined
+              }}
+            >
               <SelectValue placeholder="סטטוס" />
             </SelectTrigger>
             <SelectContent className="bg-background z-[100]">
               <SelectItem value="all">כל הסטטוסים</SelectItem>
               <SelectItem value="none">ללא סטטוס</SelectItem>
-              {RESPONSE_STATUS_OPTIONS.map((status) => (
-                <SelectItem key={status.id} value={status.id} className={status.color}>
+              {leadStatuses.map((status) => (
+                <SelectItem 
+                  key={status.status_key} 
+                  value={status.status_key}
+                  style={{ backgroundColor: status.color, color: '#fff' }}
+                >
                   {status.label}
                 </SelectItem>
               ))}
@@ -959,20 +980,26 @@ export default function Leads() {
             </SelectContent>
           </Select>
           <Select value={filterResponseStatus} onValueChange={setFilterResponseStatus}>
-            <SelectTrigger className={`w-[160px] border-2 ${
-              filterResponseStatus !== "all" 
-                ? filterResponseStatus === "none"
-                  ? "bg-background"
-                  : RESPONSE_STATUS_OPTIONS.find(s => s.id === filterResponseStatus)?.color || "bg-background"
-                : "bg-background"
-            }`}>
+            <SelectTrigger 
+              className="w-[160px] border-2"
+              style={{ 
+                backgroundColor: filterResponseStatus !== "all" && filterResponseStatus !== "none" 
+                  ? getStatusColor(filterResponseStatus, leadStatuses) || undefined 
+                  : undefined,
+                color: filterResponseStatus !== "all" && filterResponseStatus !== "none" ? '#fff' : undefined
+              }}
+            >
               <SelectValue placeholder="כל הסטטוסים" />
             </SelectTrigger>
             <SelectContent className="bg-background z-[100]">
               <SelectItem value="all">כל הסטטוסים</SelectItem>
               <SelectItem value="none">ללא סטטוס</SelectItem>
-              {RESPONSE_STATUS_OPTIONS.map((status) => (
-                <SelectItem key={status.id} value={status.id} className={status.color}>
+              {leadStatuses.map((status) => (
+                <SelectItem 
+                  key={status.status_key} 
+                  value={status.status_key}
+                  style={{ backgroundColor: status.color, color: '#fff' }}
+                >
                   {status.label}
                 </SelectItem>
               ))}
@@ -1491,24 +1518,26 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                   onValueChange={(value) => 
                     updateLeadResponseStatus.mutate({ 
                       leadId: lead.id, 
-                      responseStatus: value === "none" ? null : value as "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant"
+                      responseStatus: value === "none" ? null : value as any
                     })
                   }
                 >
-                  <SelectTrigger className={`h-8 w-full border-2 ${
-                    lead.response_status 
-                      ? RESPONSE_STATUS_OPTIONS.find(s => s.id === lead.response_status)?.color || ""
-                      : "bg-background"
-                  }`}>
+                  <SelectTrigger 
+                    className="h-8 w-full border-2"
+                    style={{ 
+                      backgroundColor: getStatusColor(lead.response_status, leadStatuses) || undefined,
+                      color: lead.response_status ? '#fff' : undefined 
+                    }}
+                  >
                     <SelectValue placeholder="בחר סטטוס" />
                   </SelectTrigger>
                   <SelectContent className="bg-background z-50">
                     <SelectItem value="none">ללא סטטוס</SelectItem>
-                    {RESPONSE_STATUS_OPTIONS.map((status) => (
+                    {leadStatuses.map((status) => (
                       <SelectItem 
-                        key={status.id} 
-                        value={status.id}
-                        className={status.color}
+                        key={status.status_key} 
+                        value={status.status_key}
+                        style={{ backgroundColor: status.color, color: '#fff' }}
                       >
                         {status.label}
                       </SelectItem>

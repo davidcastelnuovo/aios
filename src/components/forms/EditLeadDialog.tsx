@@ -24,6 +24,7 @@ import { Card } from "@/components/ui/card";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 
 const PIPELINE_STAGES = [
   { id: "new", label: "ליד חדש", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300" },
@@ -32,15 +33,6 @@ const PIPELINE_STAGES = [
   { id: "proposal_sent", label: "נשלחה הצעה", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300" },
   { id: "transferred_to_onboarding", label: "הועבר לקליטה", bgClass: "bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-100 border-teal-300" },
   { id: "closed", label: "נסגר", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300" },
-];
-
-const RESPONSE_STATUS_OPTIONS = [
-  { id: "no_answer_1", label: "אין מענה 1", color: "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100 border-amber-300" },
-  { id: "no_answer_2", label: "אין מענה 2", color: "bg-amber-200 text-amber-900 dark:bg-amber-800 dark:text-amber-100 border-amber-400" },
-  { id: "no_answer_3", label: "אין מענה 3", color: "bg-orange-200 text-orange-900 dark:bg-orange-800 dark:text-orange-100 border-orange-400" },
-  { id: "no_answer_4", label: "אין מענה 4", color: "bg-red-200 text-red-900 dark:bg-red-800 dark:text-red-100 border-red-400" },
-  { id: "denies_contact", label: "מכחיש פניה", color: "bg-gray-200 text-gray-900 dark:bg-gray-700 dark:text-gray-100 border-gray-400" },
-  { id: "not_relevant", label: "לא רלוונטי", color: "bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-slate-100 border-slate-400" },
 ];
 
 const formSchema = z.object({
@@ -88,6 +80,7 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
   const { userId } = useCurrentUser();
   const { getFieldLabel, isFieldVisible } = useCustomFieldLabels('lead');
   const { tenantId } = useCurrentTenant();
+  const { activeStatuses: leadStatuses } = useLeadStatuses();
 
 const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),

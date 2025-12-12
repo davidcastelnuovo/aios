@@ -1344,6 +1344,50 @@ export type Database = {
           },
         ]
       }
+      lead_statuses: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          sort_order: number
+          status_key: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+          status_key: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
+          status_key?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_statuses_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_updates: {
         Row: {
           content: string
@@ -2591,6 +2635,10 @@ export type Database = {
       }
       initialize_all_tenants_menu_items: { Args: never; Returns: undefined }
       initialize_default_custom_fields: {
+        Args: { _tenant_id: string }
+        Returns: undefined
+      }
+      initialize_tenant_lead_statuses: {
         Args: { _tenant_id: string }
         Returns: undefined
       }
