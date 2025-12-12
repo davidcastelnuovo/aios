@@ -111,6 +111,10 @@ serve(async (req) => {
     console.log('Specific form mapping for', form_id, ':', specificFormMapping);
 
     // Step 3: Create a fake lead record
+    // IMPORTANT: Use the tenant_id from the request, not from the integration
+    // This ensures test leads go to the correct tenant (e.g., Nexus Capital, not MarketingCaptain)
+    const targetTenantId = tenant_id || integration.tenant_id;
+    
     const fakeLeadgenId = `test_${Date.now()}`;
     const leadRecord: Record<string, any> = {
       company_name: `Test Lead ${new Date().toLocaleTimeString()}`,
@@ -119,10 +123,12 @@ serve(async (req) => {
       phone: '0501234567',
       source: 'paid_ads',
       status: 'new',
-      tenant_id: integration.tenant_id,
+      tenant_id: targetTenantId,
       agency_id: specificFormMapping?.agency_id || null,
       notes: `Test Facebook Lead\nFake Leadgen ID: ${fakeLeadgenId}\nForm ID: ${form_id || 'not specified'}`,
     };
+    
+    console.log('Creating lead record for tenant:', targetTenantId);
 
     console.log('Creating lead record:', leadRecord);
 
