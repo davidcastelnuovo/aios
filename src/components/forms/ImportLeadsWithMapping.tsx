@@ -468,13 +468,27 @@ export function ImportLeadsWithMapping() {
         return lead;
       });
 
-      // Filter valid leads
+      // Filter valid leads - must have company_name (or can generate one)
       const validLeads = mapped.filter(l => {
         const name = (l.company_name || '').trim();
         const contact = (l.contact_name || '').trim();
         const email = (l.email || '').trim();
         const phone = (l.phone || '').trim();
-        return name || contact || email || phone;
+        
+        // If no company_name, try to generate one from available fields
+        if (!name) {
+          if (contact) {
+            l.company_name = contact;
+          } else if (email) {
+            l.company_name = email.split('@')[0];
+          } else if (phone) {
+            l.company_name = `ליד ${phone}`;
+          } else {
+            return false; // No valid identifier at all
+          }
+        }
+        
+        return true;
       });
 
       if (validLeads.length === 0) {
