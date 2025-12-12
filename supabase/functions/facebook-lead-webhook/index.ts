@@ -92,29 +92,9 @@ serve(async (req) => {
                 return false;
               });
 
-              // Fallback: check by page_id in settings or in form_mappings
+              // Only process leads from explicitly mapped forms - no fallback to page_id
               if (!integration) {
-                integration = integrations?.find(i => {
-                  const settings = i.settings as any;
-                  // Check root page_id
-                  if (settings?.page_id === pageId?.toString()) {
-                    console.log('Found integration by root page_id:', pageId);
-                    return true;
-                  }
-                  // Check page_id inside form_mappings
-                  const formMappings = settings?.form_mappings || {};
-                  for (const [fId, mapping] of Object.entries(formMappings)) {
-                    if ((mapping as any)?.page_id === pageId?.toString()) {
-                      console.log('Found integration by form_mappings page_id:', pageId);
-                      return true;
-                    }
-                  }
-                  return false;
-                });
-              }
-
-              if (!integration) {
-                console.log('No matching integration found for page:', pageId, 'form:', formId);
+                console.log('Ignoring lead from unmapped form:', formId, 'page:', pageId, '- form must be explicitly mapped in form_mappings');
                 continue;
               }
               
