@@ -63,7 +63,7 @@ const App = () => (
             <AgencyProvider>
               <Routes>
             {/* Public routes */}
-            <Route path="/landing" element={<SuperAdminRoute><Landing /></SuperAdminRoute>} />
+            <Route path="/" element={<Landing />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/signup" element={<SignUp />} />
             <Route path="/setup" element={<Setup />} />
@@ -108,8 +108,7 @@ const App = () => (
             <Route path="/t/:tenantSlug/facebook-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><FacebookSettings /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/facebook-callback" element={<ProtectedRoute><AppLayout><FacebookCallback /></AppLayout></ProtectedRoute>} />
             
-            {/* Root path redirects to auth */}
-            <Route path="/" element={<Auth />} />
+            {/* Legacy route - redirect to root */}
             
             {/* Catch-all for 404 - must be last */}
             <Route path="*" element={<NotFound />} />
