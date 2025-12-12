@@ -310,6 +310,7 @@ export default function FieldsManagement() {
         <TabsList>
           <TabsTrigger value="fields">שדות מותאמים</TabsTrigger>
           <TabsTrigger value="terminology">שמות מודולים</TabsTrigger>
+          <TabsTrigger value="roles">שמות תפקידים</TabsTrigger>
         </TabsList>
 
         <TabsContent value="fields" className="mt-6">
@@ -397,7 +398,11 @@ export default function FieldsManagement() {
         </TabsContent>
 
         <TabsContent value="terminology" className="mt-6">
-          <TerminologyManagement />
+          <TerminologyManagement category="modules" />
+        </TabsContent>
+
+        <TabsContent value="roles" className="mt-6">
+          <TerminologyManagement category="roles" />
         </TabsContent>
       </Tabs>
 
