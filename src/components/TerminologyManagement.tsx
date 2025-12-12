@@ -54,7 +54,7 @@ export default function TerminologyManagement() {
     enabled: !!tenantId,
   });
 
-  const terms: TerminologyItem[] = Array.isArray(termsData) ? termsData : [];
+  const terms: TerminologyItem[] = Array.isArray(termsData) ? (termsData as any[]) : [];
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, singular, plural }: { id: string; singular: string; plural: string }) => {
