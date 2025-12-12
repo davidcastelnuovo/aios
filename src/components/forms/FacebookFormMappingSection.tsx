@@ -155,7 +155,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
         body: { 
           tenant_id: tenantId, 
           page_id: selectedPageId, 
-          access_token: accessToken,
+          access_token: effectiveAccessToken,
           page_access_token: pageAccessToken,
         },
       });
@@ -163,7 +163,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       if (error) throw error;
       return data;
     },
-    enabled: !!accessToken && !!selectedPageId && !!effectivePageTokens[selectedPageId],
+    enabled: !!effectiveAccessToken && !!selectedPageId && !!effectivePageTokens[selectedPageId],
   });
 
   // Fetch existing mappings from integration settings
@@ -258,7 +258,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   const hasPageToken = selectedPageId && !!effectivePageTokens[selectedPageId];
   const selectedForm = forms.find((f: FacebookForm) => f.id === selectedFormId);
 
-  if (!accessToken) {
+  if (!effectiveAccessToken) {
     return (
       <Card>
         <CardHeader>
@@ -271,7 +271,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
           <Alert>
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              יש להזין Access Token קודם כדי לטעון את הטפסים
+              {sharedFromIntegrationId ? 'טוען נתוני חיבור משותף...' : 'יש להזין Access Token קודם כדי לטעון את הטפסים'}
             </AlertDescription>
           </Alert>
         </CardContent>
