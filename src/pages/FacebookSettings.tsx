@@ -605,8 +605,24 @@ export default function FacebookSettings() {
                     </p>
                   </div>
 
-                  {/* Disconnect */}
-                  <div className="pt-4 border-t">
+                  {/* Reconnect & Disconnect */}
+                  <div className="pt-4 border-t flex gap-2 flex-wrap">
+                    <Button
+                      variant="outline"
+                      onClick={() => connectMutation.mutate('facebook_lead_ads')}
+                      disabled={connectMutation.isPending}
+                      className="gap-2"
+                    >
+                      <Facebook className="h-4 w-4" />
+                      {connectMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          מתחבר...
+                        </>
+                      ) : (
+                        'התחבר מחדש'
+                      )}
+                    </Button>
                     <Button
                       variant="destructive"
                       onClick={() => leadAdsIntegration?.id && disconnectMutation.mutate(leadAdsIntegration.id)}
