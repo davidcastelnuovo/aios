@@ -116,8 +116,9 @@ function DroppableStage({ stage, children }: { stage: any; children: ReactNode }
         }`}
       >
         <div 
-          className={`${stage.color} relative p-4 py-3 font-semibold text-center shadow-md overflow-hidden`}
+          className="relative p-4 py-3 font-semibold text-center shadow-md overflow-hidden text-white"
           style={{
+            backgroundColor: stage.hexColor || stage.color,
             clipPath: "polygon(20px 0, 100% 0, 100% 100%, 20px 100%, 0 50%)"
           }}
         >
