@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -734,6 +734,48 @@ export default function Leads() {
     },
   });
 
+  // Sync Facebook leads mutation
+  const syncFacebookLeadsMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('sync-facebook-leads', {
+        body: { tenant_id: tenantId },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data: any) => {
+      if (data?.success) {
+        if (data.synced > 0) {
+          toast({
+            title: `סונכרנו ${data.synced} לידים חדשים מפייסבוק!`,
+          });
+          queryClient.invalidateQueries({ queryKey: ["leads", tenantId, selectedAgency] });
+        } else if (data.skipped > 0) {
+          toast({
+            title: `לא נמצאו לידים חדשים (${data.skipped} כבר קיימים)`,
+          });
+        } else {
+          toast({
+            title: 'לא נמצאו לידים חדשים',
+          });
+        }
+      } else {
+        toast({
+          title: 'שגיאה בסנכרון',
+          description: data?.error || 'Unknown error',
+          variant: 'destructive',
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: 'שגיאה בסנכרון לידים מפייסבוק',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
   };
@@ -971,6 +1013,16 @@ export default function Leads() {
           )}
         </div>
         <div className="flex gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => syncFacebookLeadsMutation.mutate()}
+            disabled={syncFacebookLeadsMutation.isPending}
+            className="gap-1"
+          >
+            <Download className={`h-4 w-4 ${syncFacebookLeadsMutation.isPending ? 'animate-spin' : ''}`} />
+            {syncFacebookLeadsMutation.isPending ? 'מסנכרן...' : 'סנכרן מפייסבוק'}
+          </Button>
           <AddLeadForm />
           <ImportLeadsWithMapping />
         </div>
@@ -1004,6 +1056,15 @@ export default function Leads() {
               </Button>
             </div>
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => syncFacebookLeadsMutation.mutate()}
+                disabled={syncFacebookLeadsMutation.isPending}
+                className="gap-2"
+              >
+                <Download className={`h-4 w-4 ${syncFacebookLeadsMutation.isPending ? 'animate-spin' : ''}`} />
+                {syncFacebookLeadsMutation.isPending ? 'מסנכרן...' : 'סנכרן מפייסבוק'}
+              </Button>
               <ImportLeadsWithMapping />
               <AddLeadForm />
             </div>
