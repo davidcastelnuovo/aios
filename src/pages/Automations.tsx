@@ -35,6 +35,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   client_created: "לקוח נוצר",
   client_status_changed: "סטטוס לקוח השתנה",
   onboarding_status_changed: "סטטוס קליטה השתנה",
+  meeting_created: "נוצרה פגישה",
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -42,6 +43,7 @@ const ACTION_LABELS: Record<string, string> = {
   email: "אימייל",
   notification: "התראה",
   update_status: "שינוי סטטוס",
+  send_whatsapp: "שלח WhatsApp (ManyChat)",
 };
 
 export default function Automations() {

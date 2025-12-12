@@ -46,8 +46,9 @@ const formSchema = z.object({
     "client_created",
     "client_status_changed",
     "onboarding_status_changed",
+    "meeting_created",
   ]),
-  action_type: z.enum(["webhook", "email", "notification", "update_status"]),
+  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp"]),
   webhook_url: z.string().optional(),
   webhook_method: z.enum(["POST", "GET", "PUT"]).optional(),
   body_template: z.string().optional(),
@@ -57,6 +58,12 @@ const formSchema = z.object({
   trigger_status_value: z.string().optional(),
   update_field_name: z.string().optional(),
   update_field_value: z.string().optional(),
+  // ManyChat WhatsApp fields
+  manychat_trigger_name: z.string().optional(),
+  field_mapping_date: z.string().optional(),
+  field_mapping_time: z.string().optional(),
+  field_mapping_location: z.string().optional(),
+  field_mapping_contact: z.string().optional(),
 }).refine((data) => {
   if (data.action_type === "webhook" && !data.webhook_url) {
     return false;
@@ -80,6 +87,7 @@ const TRIGGER_OPTIONS = [
   { value: "client_created", label: "לקוח נוצר" },
   { value: "client_status_changed", label: "סטטוס לקוח השתנה" },
   { value: "onboarding_status_changed", label: "סטטוס קליטה השתנה" },
+  { value: "meeting_created", label: "נוצרה פגישה" },
 ];
 
 const LEAD_STATUS_OPTIONS = [
@@ -130,6 +138,11 @@ export function AddAutomationForm() {
       trigger_status_value: "any",
       update_field_name: "none",
       update_field_value: "today",
+      manychat_trigger_name: "meeting_scheduled",
+      field_mapping_date: "",
+      field_mapping_time: "",
+      field_mapping_location: "",
+      field_mapping_contact: "",
     },
   });
 
@@ -172,6 +185,16 @@ export function AddAutomationForm() {
           cfg.update_field_value = values.update_field_value || 'today';
         }
         configuration = cfg;
+      } else if (values.action_type === "send_whatsapp") {
+        configuration = {
+          manychat_trigger_name: values.manychat_trigger_name || "meeting_scheduled",
+          field_mapping: {
+            date: values.field_mapping_date,
+            time: values.field_mapping_time,
+            location: values.field_mapping_location,
+            contact: values.field_mapping_contact,
+          },
+        };
       }
 
       const { data, error } = await supabase
@@ -340,6 +363,7 @@ export function AddAutomationForm() {
                     <SelectContent className="bg-background z-[100]">
                       <SelectItem value="webhook">Webhook</SelectItem>
                       <SelectItem value="update_status">שינוי סטטוס</SelectItem>
+                      <SelectItem value="send_whatsapp">שלח WhatsApp (ManyChat)</SelectItem>
                       <SelectItem value="email" disabled>אימייל (בקרוב)</SelectItem>
                       <SelectItem value="notification" disabled>התראה (בקרוב)</SelectItem>
                     </SelectContent>
