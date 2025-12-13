@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import OptionsSelector from "@/components/OptionsSelector";
 import { 
   Target, 
   CheckCircle2, 
@@ -340,6 +341,11 @@ const Landing = () => {
             ))}
           </div>
         </div>
+      </section>
+
+      {/* Options Selector Demo */}
+      <section className="relative">
+        <OptionsSelector />
       </section>
 
       {/* CTA Section */}
