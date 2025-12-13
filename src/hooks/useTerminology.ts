@@ -21,10 +21,10 @@ const DEFAULT_TERMS: Record<string, { singular: string; plural: string }> = {
   role_sales_person: { singular: 'איש מכירות', plural: 'אנשי מכירות' },
   role_seo: { singular: 'SEO', plural: 'SEO' },
   role_super_admin: { singular: 'סופר אדמין', plural: 'סופר אדמינים' },
-  // Task tab names
+  // Task tab names - default to leads/clients
   task_tab_all: { singular: 'כל המשימות', plural: 'כל המשימות' },
-  task_tab_seo: { singular: 'משימות SEO', plural: 'משימות SEO' },
-  task_tab_campaign: { singular: 'משימות קמפיינרים', plural: 'משימות קמפיינרים' },
+  task_tab_seo: { singular: 'משימות ללקוחות', plural: 'משימות ללקוחות' },
+  task_tab_campaign: { singular: 'משימות ללידים', plural: 'משימות ללידים' },
 };
 
 export function useTerminology() {
