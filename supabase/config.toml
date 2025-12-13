@@ -77,3 +77,6 @@ verify_jwt = true
 
 [functions.cron-sync-facebook-leads]
 verify_jwt = false
+
+[functions.check-overdue-tasks]
+verify_jwt = false

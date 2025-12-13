@@ -2078,6 +2078,7 @@ export type Database = {
           id: string
           lead_id: string | null
           notes: string | null
+          overdue_notified_at: string | null
           priority: number
           status: Database["public"]["Enums"]["task_status"]
           task_type: Database["public"]["Enums"]["task_type"] | null
@@ -2094,6 +2095,7 @@ export type Database = {
           id?: string
           lead_id?: string | null
           notes?: string | null
+          overdue_notified_at?: string | null
           priority?: number
           status?: Database["public"]["Enums"]["task_status"]
           task_type?: Database["public"]["Enums"]["task_type"] | null
@@ -2110,6 +2112,7 @@ export type Database = {
           id?: string
           lead_id?: string | null
           notes?: string | null
+          overdue_notified_at?: string | null
           priority?: number
           status?: Database["public"]["Enums"]["task_status"]
           task_type?: Database["public"]["Enums"]["task_type"] | null
@@ -2816,6 +2819,7 @@ export type Database = {
         | "onboarding_status_changed"
         | "meeting_created"
         | "task_calendar_created"
+        | "task_overdue"
       chat_provider: "manychat" | "green_api" | "internal"
       client_mood_status: "happy" | "wavering" | "churn_risk"
       client_status: "active" | "paused" | "ended" | "onboarding"
@@ -3017,6 +3021,7 @@ export const Constants = {
         "onboarding_status_changed",
         "meeting_created",
         "task_calendar_created",
+        "task_overdue",
       ],
       chat_provider: ["manychat", "green_api", "internal"],
       client_mood_status: ["happy", "wavering", "churn_risk"],

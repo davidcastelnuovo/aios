@@ -37,6 +37,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   client_status_changed: "סטטוס לקוח השתנה",
   onboarding_status_changed: "סטטוס קליטה השתנה",
   meeting_created: "נוצרה פגישה",
+  task_overdue: "משימה לא הושלמה בזמן",
 };
 
 const ACTION_LABELS: Record<string, string> = {
