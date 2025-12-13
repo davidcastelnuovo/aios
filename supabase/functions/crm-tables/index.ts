@@ -40,29 +40,60 @@ serve(async (req) => {
         const { data: tenantId } = await supabase
           .rpc('get_user_tenant_id', { _user_id: user.id });
 
-        let query = supabase
+        // Get shared agency IDs for this tenant
+        const { data: sharedAgencies } = await supabase
+          .from('agency_tenant_access')
+          .select('agency_id')
+          .eq('accessing_tenant_id', tenantId);
+        
+        const sharedAgencyIds = sharedAgencies?.map(sa => sa.agency_id) || [];
+
+        // Build query to get:
+        // 1. Tables from user's tenant
+        // 2. Tables from shared agencies (regardless of their tenant)
+        let allTables: any[] = [];
+
+        // First, get tables from user's own tenant
+        let ownQuery = supabase
           .from('crm_tables')
           .select('*')
+          .eq('tenant_id', tenantId)
           .order('category', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: false });
 
-        // Always filter by tenant_id
-        if (tenantId) {
-          query = query.eq('tenant_id', tenantId);
-        }
-
-        // Filter by agency_id if provided
         if (agencyIdFilter && agencyIdFilter !== 'all') {
-          query = query.or(`agency_id.eq.${agencyIdFilter},agency_id.is.null`);
+          ownQuery = ownQuery.or(`agency_id.eq.${agencyIdFilter},agency_id.is.null`);
         }
 
-        const { data: tables, error } = await query;
+        const { data: ownTables, error: ownError } = await ownQuery;
+        if (ownError) throw ownError;
+        allTables = ownTables || [];
 
-        if (error) throw error;
+        // Then, get tables from shared agencies (that are NOT in user's tenant)
+        if (sharedAgencyIds.length > 0) {
+          let sharedQuery = supabase
+            .from('crm_tables')
+            .select('*')
+            .neq('tenant_id', tenantId)
+            .in('agency_id', sharedAgencyIds)
+            .order('category', { ascending: true, nullsFirst: false })
+            .order('created_at', { ascending: false });
 
-        console.log(`✅ Fetched ${tables?.length || 0} tables`);
+          if (agencyIdFilter && agencyIdFilter !== 'all') {
+            sharedQuery = sharedQuery.eq('agency_id', agencyIdFilter);
+          }
 
-        return new Response(JSON.stringify(tables || []), {
+          const { data: sharedTables, error: sharedError } = await sharedQuery;
+          if (sharedError) {
+            console.error('Error fetching shared tables:', sharedError);
+          } else if (sharedTables) {
+            allTables = [...allTables, ...sharedTables];
+          }
+        }
+
+        console.log(`✅ Fetched ${allTables.length} tables (own: ${ownTables?.length || 0}, shared: ${allTables.length - (ownTables?.length || 0)})`);
+
+        return new Response(JSON.stringify(allTables), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
