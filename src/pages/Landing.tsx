@@ -158,14 +158,7 @@ const Landing = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <img src={logoImage} alt="AfterLead" className="h-10 w-auto" />
-              <span className="text-xl font-bold text-white">AfterLead</span>
             </div>
-            
-            <nav className="hidden md:flex items-center gap-8">
-              <a href="#multi-tenant" className="text-white/70 hover:text-white transition-colors">לעסקים</a>
-              <a href="#modules" className="text-white/70 hover:text-white transition-colors">מודולים</a>
-              <Link to="/privacy" className="text-white/70 hover:text-white transition-colors">פרטיות</Link>
-            </nav>
 
             <div className="flex items-center gap-3">
               <Link to="/auth">
@@ -187,6 +180,12 @@ const Landing = () => {
       <section className="relative pt-20 pb-32">
         <div className="container mx-auto px-6">
           <div className="max-w-4xl mx-auto text-center">
+            {/* Logo & Brand */}
+            <div className="flex items-center justify-center gap-4 mb-8">
+              <img src={logoImage} alt="AfterLead" className="h-16 md:h-20 w-auto" />
+              <span className="text-4xl md:text-6xl font-bold text-white">AfterLead</span>
+            </div>
+
             {/* Badge */}
             <div className="inline-flex items-center gap-3 px-6 py-3 rounded-full bg-[#36d399]/10 border border-[#36d399]/30 mb-10">
               <Sparkles className="h-5 w-5 text-[#36d399]" />
