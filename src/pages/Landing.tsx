@@ -21,7 +21,6 @@ import {
 import logoImage from "@/assets/logo.png";
 
 interface ModuleCardProps {
-  i: number;
   title: string;
   description: string;
   icon: React.ElementType;
@@ -30,7 +29,6 @@ interface ModuleCardProps {
 }
 
 const ModuleCard: React.FC<ModuleCardProps> = ({
-  i,
   title,
   description,
   icon: Icon,
@@ -38,26 +36,25 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
   isNew,
 }) => {
   return (
-    <div className="h-[400px] sticky top-20">
-      <div
-        className="flex flex-col items-center text-center relative w-full max-w-4xl p-8 rounded-3xl bg-[#0d1a2d] border border-white/10 mx-auto"
-        style={{
-          top: `calc(${i * 30}px)`,
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-        }}
-      >
-        {isNew && (
-          <span className="absolute top-5 left-5 px-3 py-1.5 text-sm font-medium bg-[#36d399] text-[#0A1526] rounded-full">
-            חדש
-          </span>
-        )}
-        
-        <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${color} flex items-center justify-center mb-4`}>
+    <div className="group relative p-8 rounded-3xl bg-gradient-to-br from-white/10 to-white/5 border border-white/10 hover:border-[#36d399]/30 transition-all duration-300 overflow-hidden">
+      {/* Decorative circles */}
+      <div className="absolute -top-6 -right-6 w-24 h-24 border border-[#36d399]/20 rounded-full" />
+      <div className="absolute -top-3 -right-3 w-16 h-16 border border-[#36d399]/10 rounded-full" />
+      <div className="absolute -bottom-4 -left-4 w-20 h-20 border border-white/5 rounded-full" />
+      
+      {isNew && (
+        <span className="absolute top-5 left-5 px-3 py-1.5 text-sm font-medium bg-[#36d399] text-[#0A1526] rounded-full z-10">
+          חדש
+        </span>
+      )}
+      
+      <div className="relative z-10 flex flex-col items-center text-center">
+        <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${color} flex items-center justify-center mb-4 group-hover:scale-105 transition-transform`}>
           <Icon className="h-8 w-8 text-white" />
         </div>
         
-        <h3 className="text-2xl font-bold text-white mb-2">{title}</h3>
-        <p className="text-white/60 text-base leading-relaxed max-w-md">{description}</p>
+        <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
+        <p className="text-white/60 text-sm leading-relaxed">{description}</p>
       </div>
     </div>
   );
@@ -315,8 +312,8 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Modules Section - Stacked Cards with Framer Motion */}
-      <section id="modules" className="relative pt-24 pb-32 bg-[#0d1a2d]">
+      {/* Modules Section */}
+      <section id="modules" className="relative py-24 bg-[#0d1a2d]">
         <div className="container mx-auto px-6">
           {/* Section Header */}
           <div className="text-center mb-16">
@@ -329,45 +326,17 @@ const Landing = () => {
             <div className="w-20 h-1 bg-gradient-to-r from-transparent via-[#36d399] to-transparent mx-auto mt-6" />
           </div>
 
-          {/* Desktop: Stacked Cards */}
-          <div className="hidden md:block">
+          {/* Grid Layout */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
             {modules.map((module, i) => (
               <ModuleCard
                 key={i}
-                i={i}
                 title={module.title}
                 description={module.description}
                 icon={module.icon}
                 color={module.color}
                 isNew={module.isNew}
               />
-            ))}
-          </div>
-
-          {/* Mobile: Regular Grid */}
-          <div className="md:hidden grid grid-cols-1 gap-4">
-            {modules.map((module, index) => (
-              <div 
-                key={index}
-                className="group relative p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-[#36d399]/50 transition-all duration-300"
-              >
-                {module.isNew && (
-                  <span className="absolute top-4 left-4 px-2 py-1 text-xs font-medium bg-[#36d399] text-[#0A1526] rounded-full">
-                    חדש
-                  </span>
-                )}
-                
-                <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${module.color} flex items-center justify-center flex-shrink-0`}>
-                    <module.icon className="h-6 w-6 text-white" />
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-lg font-semibold text-white mb-1">{module.title}</h3>
-                    <p className="text-white/50 text-xs leading-relaxed">{module.description}</p>
-                  </div>
-                </div>
-              </div>
             ))}
           </div>
         </div>
