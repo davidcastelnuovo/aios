@@ -533,36 +533,36 @@ const updateMutation = useMutation({
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 bg-muted/50 p-1 rounded-lg shadow-sm">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1 bg-muted/50 p-1 rounded-lg shadow-sm">
             <TabsTrigger 
               value="details" 
-              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-sm"
+              className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
             >
-              <FileText className="h-4 w-4" />
+              <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
               פרטי ליד
             </TabsTrigger>
             <TabsTrigger 
               value="proposals" 
-              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-sm"
+              className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
             >
-              <DollarSign className="h-4 w-4" />
+              <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
               הצעות מחיר
             </TabsTrigger>
             <TabsTrigger 
               value="meeting" 
-              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-sm"
+              className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
             >
-              <Users className="h-4 w-4" />
+              <Users className="h-3 w-3 sm:h-4 sm:w-4" />
               קביעת פגישה
             </TabsTrigger>
             <TabsTrigger 
               value="updates" 
-              className="flex items-center gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-sm"
+              className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
             >
-              <MessageSquare className="h-4 w-4" />
+              <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />
               עדכונים
               {leadUpdates && leadUpdates.length > 0 && (
-                <span className="ml-1 rounded-full bg-primary text-primary-foreground px-2 py-0.5 text-xs">
+                <span className="mr-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-xs">
                   {leadUpdates.length}
                 </span>
               )}
