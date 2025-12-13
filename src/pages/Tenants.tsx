@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useUserTenants } from "@/hooks/useUserTenants";
 
 export default function Tenants() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [selectedTenant, setSelectedTenant] = useState<string | null>(null);
   const [subTenantParentId, setSubTenantParentId] = useState<string | null>(null);
@@ -99,10 +101,22 @@ export default function Tenants() {
         );
 
       if (error) throw error;
+      return tenantId;
     },
-    onSuccess: () => {
+    onSuccess: (tenantId: string) => {
+      // Find the slug of the new tenant
+      const selectedTenant = tenants?.find((t: any) => t.id === tenantId);
+      const newSlug = selectedTenant?.slug;
+      
       queryClient.invalidateQueries({ queryKey: ["current-tenant"] });
-      window.location.reload();
+      
+      if (newSlug) {
+        // Navigate to the new tenant's tenants page
+        navigate(`/t/${newSlug}/tenants`);
+      } else {
+        // Fallback if no slug found
+        window.location.reload();
+      }
     },
     onError: (error: any) => {
       toast({
