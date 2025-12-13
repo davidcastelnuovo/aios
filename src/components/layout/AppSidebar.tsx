@@ -213,7 +213,11 @@ export function AppSidebar() {
         .single();
 
       if (newTenant?.slug) {
-        window.location.href = `/t/${newTenant.slug}/dashboard`;
+        // Preserve current module when switching tenants
+        const currentPath = window.location.pathname;
+        const pathMatch = currentPath.match(/^\/t\/[^/]+\/(.+)$/);
+        const currentModule = pathMatch ? pathMatch[1] : 'dashboard';
+        window.location.href = `/t/${newTenant.slug}/${currentModule}`;
       }
     } catch (error) {
       console.error("Error changing tenant:", error);
