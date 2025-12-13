@@ -593,6 +593,36 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         toast.error("שגיאה ביצירת הפגישה ביומן");
       } else {
         toast.success("המשימה נוספה ליומן!");
+        
+        // Trigger automation for task_calendar_created
+        try {
+          const { data: taskData } = await supabase
+            .from('tasks')
+            .select('tenant_id')
+            .eq('id', task.id)
+            .single();
+          
+          if (taskData?.tenant_id) {
+            await supabase.functions.invoke('trigger-automation', {
+              body: {
+                trigger_type: 'task_calendar_created',
+                data: {
+                  id: task.id,
+                  title: task.title,
+                  client_id: task.client_id,
+                  client_name: clientName,
+                  meeting_date: format(meetingDate, 'yyyy-MM-dd'),
+                  meeting_time: meetingTime,
+                  meeting_subject: subject,
+                  meeting_location: meetingLocation,
+                },
+                tenant_id: taskData.tenant_id
+              }
+            });
+          }
+        } catch (automationError) {
+          console.error('Automation trigger error:', automationError);
+        }
       }
 
       // Reset form
