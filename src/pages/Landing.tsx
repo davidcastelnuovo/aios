@@ -56,28 +56,28 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
   return (
     <div
       ref={container}
-      className="h-[180px] flex items-center justify-center sticky top-20"
+      className="h-[220px] flex items-center justify-center sticky top-20"
     >
       <motion.div
         style={{
           scale,
-          top: `calc(80px + ${i * 30}px)`,
+          top: `calc(80px + ${i * 35}px)`,
         }}
-        className="flex items-start gap-5 relative w-full max-w-2xl p-6 rounded-2xl bg-[#0d1a2d] border border-white/10 shadow-2xl origin-top"
+        className="flex items-start gap-6 relative w-full max-w-4xl p-8 rounded-3xl bg-[#0d1a2d] border border-white/10 shadow-2xl origin-top"
       >
         {isNew && (
-          <span className="absolute top-4 left-4 px-2 py-1 text-xs font-medium bg-[#36d399] text-[#0A1526] rounded-full">
+          <span className="absolute top-5 left-5 px-3 py-1.5 text-sm font-medium bg-[#36d399] text-[#0A1526] rounded-full">
             חדש
           </span>
         )}
         
-        <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center flex-shrink-0`}>
-          <Icon className="h-8 w-8 text-white" />
+        <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${color} flex items-center justify-center flex-shrink-0`}>
+          <Icon className="h-10 w-10 text-white" />
         </div>
         
-        <div className="flex-1 pt-1">
-          <h3 className="text-xl font-semibold text-white mb-2">{title}</h3>
-          <p className="text-white/50 text-sm leading-relaxed">{description}</p>
+        <div className="flex-1 pt-2">
+          <h3 className="text-2xl font-bold text-white mb-3">{title}</h3>
+          <p className="text-white/60 text-base leading-relaxed">{description}</p>
         </div>
       </motion.div>
     </div>
