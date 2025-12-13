@@ -97,12 +97,12 @@ const OptionRow: React.FC<OptionRowProps> = ({ options, activeOption, onOptionCl
                 {/* Icon */}
                 <div 
                   className={`
-                    flex justify-center items-center rounded-full bg-white transition-all duration-500
+                    flex justify-center items-center rounded-full transition-all duration-500
+                    bg-white/10 backdrop-blur-md border border-white/20 shadow-lg
                     ${isActive ? 'w-16 h-16' : 'w-10 h-10'}
                   `}
-                  style={{ color: option.defaultColor }}
                 >
-                  <Icon className={isActive ? 'h-8 w-8' : 'h-5 w-5'} />
+                  <Icon className={`${isActive ? 'h-8 w-8' : 'h-5 w-5'} text-white`} />
                 </div>
                 
                 {/* Info */}
@@ -172,10 +172,9 @@ const OptionRow: React.FC<OptionRowProps> = ({ options, activeOption, onOptionCl
             {/* Label */}
             <div className="absolute bottom-6 left-0 right-0 flex flex-col items-center gap-2">
               <div 
-                className="flex justify-center items-center rounded-full bg-white w-14 h-14"
-                style={{ color: activeOptionData.defaultColor }}
+                className="flex justify-center items-center rounded-full w-14 h-14 bg-white/10 backdrop-blur-md border border-white/20 shadow-lg"
               >
-                <activeOptionData.icon className="h-7 w-7" />
+                <activeOptionData.icon className="h-7 w-7 text-white" />
               </div>
               <div className="text-white text-xl font-bold text-center">{activeOptionData.main}</div>
               <div className="text-white/70 text-sm text-center px-4">{activeOptionData.sub}</div>
