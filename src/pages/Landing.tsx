@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
+import { motion, useScroll, useTransform, MotionValue } from "framer-motion";
 import { 
   Target, 
   CheckCircle2, 
@@ -21,32 +22,74 @@ import {
 } from "lucide-react";
 import logoImage from "@/assets/logo.png";
 
+interface ModuleCardProps {
+  i: number;
+  title: string;
+  description: string;
+  icon: React.ElementType;
+  color: string;
+  isNew?: boolean;
+  progress: MotionValue<number>;
+  range: [number, number];
+  targetScale: number;
+}
+
+const ModuleCard: React.FC<ModuleCardProps> = ({
+  i,
+  title,
+  description,
+  icon: Icon,
+  color,
+  isNew,
+  progress,
+  range,
+  targetScale,
+}) => {
+  const container = useRef(null);
+  const { scrollYProgress } = useScroll({
+    target: container,
+    offset: ['start end', 'start start'],
+  });
+
+  const scale = useTransform(progress, range, [1, targetScale]);
+
+  return (
+    <div
+      ref={container}
+      className="h-[180px] flex items-center justify-center sticky top-20"
+    >
+      <motion.div
+        style={{
+          scale,
+          top: `calc(80px + ${i * 30}px)`,
+        }}
+        className="flex items-start gap-5 relative w-full max-w-2xl p-6 rounded-2xl bg-[#0d1a2d] border border-white/10 shadow-2xl origin-top"
+      >
+        {isNew && (
+          <span className="absolute top-4 left-4 px-2 py-1 text-xs font-medium bg-[#36d399] text-[#0A1526] rounded-full">
+            חדש
+          </span>
+        )}
+        
+        <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${color} flex items-center justify-center flex-shrink-0`}>
+          <Icon className="h-8 w-8 text-white" />
+        </div>
+        
+        <div className="flex-1 pt-1">
+          <h3 className="text-xl font-semibold text-white mb-2">{title}</h3>
+          <p className="text-white/50 text-sm leading-relaxed">{description}</p>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
 const Landing = () => {
-  const [scrollY, setScrollY] = useState(0);
-  const modulesRef = useRef<HTMLDivElement>(null);
-  const [modulesTop, setModulesTop] = useState(0);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrollY(window.scrollY);
-    };
-
-    const updateModulesTop = () => {
-      if (modulesRef.current) {
-        const rect = modulesRef.current.getBoundingClientRect();
-        setModulesTop(rect.top + window.scrollY);
-      }
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', updateModulesTop);
-    updateModulesTop();
-
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', updateModulesTop);
-    };
-  }, []);
+  const modulesContainerRef = useRef(null);
+  const { scrollYProgress } = useScroll({
+    target: modulesContainerRef,
+    offset: ['start start', 'end end'],
+  });
 
   const modules = [
     {
@@ -127,34 +170,8 @@ const Landing = () => {
     { icon: Users, text: "ניהול הרשאות מתקדם" }
   ];
 
-  // Calculate card animations based on scroll
-  const getCardStyle = (index: number) => {
-    const cardHeight = 180;
-    const stackOffset = 20;
-    const stickyStart = modulesTop - 100;
-    const scrollProgress = Math.max(0, scrollY - stickyStart);
-    const cardTrigger = index * (cardHeight * 0.6);
-    const cardProgress = Math.min(1, Math.max(0, (scrollProgress - cardTrigger) / cardHeight));
-    
-    // Only apply stacked effect on desktop
-    if (typeof window !== 'undefined' && window.innerWidth < 768) {
-      return {};
-    }
-
-    const translateY = (1 - cardProgress) * 100;
-    const scale = 0.95 + (cardProgress * 0.05);
-    const opacity = 0.3 + (cardProgress * 0.7);
-    
-    return {
-      transform: `translateY(${translateY}px) scale(${scale})`,
-      opacity,
-      zIndex: index + 1,
-      top: `${80 + (index * stackOffset)}px`,
-    };
-  };
-
   return (
-    <div className="min-h-screen bg-[#0A1526] text-white overflow-hidden">
+    <div className="min-h-screen bg-[#0A1526] text-white overflow-x-hidden">
       {/* Background Elements */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-[#36d399]/10 rounded-full blur-[150px] -translate-y-1/2 translate-x-1/3" />
@@ -254,7 +271,7 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Multi-Tenant Section - MOVED BEFORE MODULES */}
+      {/* Multi-Tenant Section */}
       <section id="multi-tenant" className="relative py-24 overflow-hidden">
         {/* Background Glow */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#36d399]/10 rounded-full blur-[150px]" />
@@ -325,8 +342,8 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Modules Section - Stacked Cards Effect */}
-      <section id="modules" ref={modulesRef} className="relative py-24 bg-[#0d1a2d]">
+      {/* Modules Section - Stacked Cards with Framer Motion */}
+      <section id="modules" className="relative py-24 bg-[#0d1a2d]">
         <div className="container mx-auto px-6">
           {/* Section Header */}
           <div className="text-center mb-16">
@@ -339,39 +356,25 @@ const Landing = () => {
             <div className="w-20 h-1 bg-gradient-to-r from-transparent via-[#36d399] to-transparent mx-auto mt-6" />
           </div>
 
-          {/* Desktop: Stacked Cards with Scroll Animation */}
-          <div className="hidden md:block relative" style={{ minHeight: `${modules.length * 120 + 600}px` }}>
-            <div className="sticky top-20">
-              <div className="max-w-3xl mx-auto relative" style={{ height: '500px' }}>
-                {modules.map((module, index) => (
-                  <div 
-                    key={index}
-                    className="absolute left-0 right-0 p-6 rounded-2xl bg-[#0d1a2d] border border-white/10 transition-all duration-300 ease-out shadow-xl"
-                    style={{
-                      ...getCardStyle(index),
-                      willChange: 'transform, opacity',
-                    }}
-                  >
-                    <div className="flex items-start gap-5">
-                      {module.isNew && (
-                        <span className="absolute top-4 left-4 px-2 py-1 text-xs font-medium bg-[#36d399] text-[#0A1526] rounded-full">
-                          חדש
-                        </span>
-                      )}
-                      
-                      <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${module.color} flex items-center justify-center flex-shrink-0`}>
-                        <module.icon className="h-8 w-8 text-white" />
-                      </div>
-                      
-                      <div className="flex-1 pt-1">
-                        <h3 className="text-xl font-semibold text-white mb-2">{module.title}</h3>
-                        <p className="text-white/50 text-sm leading-relaxed">{module.description}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          {/* Desktop: Stacked Cards with Framer Motion */}
+          <div className="hidden md:block" ref={modulesContainerRef}>
+            {modules.map((module, i) => {
+              const targetScale = 1 - (modules.length - i) * 0.03;
+              return (
+                <ModuleCard
+                  key={i}
+                  i={i}
+                  title={module.title}
+                  description={module.description}
+                  icon={module.icon}
+                  color={module.color}
+                  isNew={module.isNew}
+                  progress={scrollYProgress}
+                  range={[i * (1 / modules.length), 1]}
+                  targetScale={targetScale}
+                />
+              );
+            })}
           </div>
 
           {/* Mobile: Regular Grid */}
