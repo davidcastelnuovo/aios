@@ -43,7 +43,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       if (!userId) return [];
       const { data, error } = await supabase
         .from("tenant_users")
-        .select("tenant_id, tenants(id, name)")
+        .select("tenant_id, tenants(id, name, slug)")
         .eq("user_id", userId);
       
       if (error) throw error;
@@ -65,15 +65,29 @@ export function AppLayout({ children }: AppLayoutProps) {
           onConflict: "user_id"
         });
 
-      setCurrentTenantId(tenantId);
+      // Get the slug of the new tenant
+      const selectedTenant = userTenants?.find((t: any) => t.tenants?.id === tenantId);
+      const newSlug = selectedTenant?.tenants?.slug;
       
-      toast({
-        title: "עובר לארגון...",
-        description: "המערכת עוברת לארגון החדש",
-      });
+      if (newSlug) {
+        // Extract current module from URL
+        const pathParts = window.location.pathname.split('/');
+        const currentModule = pathParts.length > 3 ? pathParts.slice(3).join('/') : 'dashboard';
+        
+        setCurrentTenantId(tenantId);
+        
+        toast({
+          title: "עובר לארגון...",
+          description: "המערכת עוברת לארגון החדש",
+        });
 
-      // Reload to refresh all data
-      window.location.reload();
+        // Navigate to new tenant URL with current module
+        navigate(`/t/${newSlug}/${currentModule}`);
+      } else {
+        // Fallback if no slug found
+        setCurrentTenantId(tenantId);
+        window.location.reload();
+      }
     } catch (error) {
       console.error("Error switching tenant:", error);
       toast({
