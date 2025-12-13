@@ -661,15 +661,13 @@ export function AppSidebar() {
         </SidebarGroup>
 
         {/* Dynamic CRM Tables Section */}
-        {crmTables && crmTables.length > 0 && hasPermission('dynamic_tables') && (() => {
+        {hasPermission('dynamic_tables') && (() => {
           // Filter tables by selected agency
-          const filteredCrmTables = crmTables.filter((table: any) => {
+          const filteredCrmTables = (crmTables || []).filter((table: any) => {
             if (!selectedAgency || selectedAgency === 'all') return true;
             // Show general tables (no agency_id) and tables matching selected agency
             return table.agency_id === null || table.agency_id === selectedAgency;
           });
-          
-          if (filteredCrmTables.length === 0) return null;
           
           return (
             <Collapsible defaultOpen className="group/collapsible">
