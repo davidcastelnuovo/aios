@@ -1,7 +1,5 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { useRef } from "react";
-import { motion, useScroll, useTransform, MotionValue } from "framer-motion";
 import { 
   Target, 
   CheckCircle2, 
@@ -29,9 +27,6 @@ interface ModuleCardProps {
   icon: React.ElementType;
   color: string;
   isNew?: boolean;
-  progress: MotionValue<number>;
-  range: [number, number];
-  targetScale: number;
 }
 
 const ModuleCard: React.FC<ModuleCardProps> = ({
@@ -41,29 +36,15 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
   icon: Icon,
   color,
   isNew,
-  progress,
-  range,
-  targetScale,
 }) => {
-  const container = useRef(null);
-  const { scrollYProgress } = useScroll({
-    target: container,
-    offset: ['start end', 'start start'],
-  });
-
-  const scale = useTransform(progress, range, [1, targetScale]);
-
   return (
-    <div
-      ref={container}
-      className="h-[160px] flex items-center justify-center sticky top-20"
-    >
-      <motion.div
+    <div className="h-[400px] sticky top-20">
+      <div
+        className="flex flex-col items-center text-center relative w-full max-w-4xl p-8 rounded-3xl bg-[#0d1a2d] border border-white/10 mx-auto"
         style={{
-          scale,
-          top: `calc(80px + ${i * 25}px)`,
+          top: `calc(${i * 30}px)`,
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
         }}
-        className="flex flex-col items-center text-center relative w-full max-w-4xl p-8 rounded-3xl bg-[#0d1a2d] border border-white/10 shadow-2xl origin-top"
       >
         {isNew && (
           <span className="absolute top-5 left-5 px-3 py-1.5 text-sm font-medium bg-[#36d399] text-[#0A1526] rounded-full">
@@ -77,18 +58,12 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
         
         <h3 className="text-2xl font-bold text-white mb-2">{title}</h3>
         <p className="text-white/60 text-base leading-relaxed max-w-md">{description}</p>
-      </motion.div>
+      </div>
     </div>
   );
 };
 
 const Landing = () => {
-  const modulesContainerRef = useRef(null);
-  const { scrollYProgress } = useScroll({
-    target: modulesContainerRef,
-    offset: ['start start', 'end end'],
-  });
-
   const modules = [
     {
       title: "ניהול לידים",
@@ -341,7 +316,7 @@ const Landing = () => {
       </section>
 
       {/* Modules Section - Stacked Cards with Framer Motion */}
-      <section id="modules" className="relative pt-24 pb-96 bg-[#0d1a2d]">
+      <section id="modules" className="relative pt-24 pb-32 bg-[#0d1a2d]">
         <div className="container mx-auto px-6">
           {/* Section Header */}
           <div className="text-center mb-16">
@@ -354,25 +329,19 @@ const Landing = () => {
             <div className="w-20 h-1 bg-gradient-to-r from-transparent via-[#36d399] to-transparent mx-auto mt-6" />
           </div>
 
-          {/* Desktop: Stacked Cards with Framer Motion */}
-          <div className="hidden md:block" ref={modulesContainerRef}>
-            {modules.map((module, i) => {
-              const targetScale = 1 - (modules.length - i) * 0.03;
-              return (
-                <ModuleCard
-                  key={i}
-                  i={i}
-                  title={module.title}
-                  description={module.description}
-                  icon={module.icon}
-                  color={module.color}
-                  isNew={module.isNew}
-                  progress={scrollYProgress}
-                  range={[i * (1 / modules.length), 1]}
-                  targetScale={targetScale}
-                />
-              );
-            })}
+          {/* Desktop: Stacked Cards */}
+          <div className="hidden md:block">
+            {modules.map((module, i) => (
+              <ModuleCard
+                key={i}
+                i={i}
+                title={module.title}
+                description={module.description}
+                icon={module.icon}
+                color={module.color}
+                isNew={module.isNew}
+              />
+            ))}
           </div>
 
           {/* Mobile: Regular Grid */}
