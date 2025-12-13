@@ -32,7 +32,7 @@ interface OptionRowProps {
 
 const OptionRow: React.FC<OptionRowProps> = ({ options, activeOption, onOptionClick }) => {
   return (
-    <div className="flex flex-row items-stretch overflow-hidden w-full h-[300px] gap-2">
+    <div className="flex flex-row items-stretch overflow-hidden w-full h-[320px] gap-3">
       {options.map((option) => {
         const Icon = option.icon;
         const isActive = activeOption === option.id;
@@ -53,13 +53,25 @@ const OptionRow: React.FC<OptionRowProps> = ({ options, activeOption, onOptionCl
             {/* Shadow overlay */}
             <div 
               className={`
-                absolute left-0 right-0 h-[120px] transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
+                absolute left-0 right-0 h-[150px] transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
                 ${isActive 
-                  ? 'bottom-0 shadow-[inset_0_-120px_120px_-120px_black,inset_0_-120px_120px_-100px_black]' 
+                  ? 'bottom-0 shadow-[inset_0_-150px_150px_-150px_black,inset_0_-150px_150px_-120px_black]' 
                   : 'bottom-[-40px] shadow-[inset_0_-120px_0px_-120px_black,inset_0_-120px_0px_-100px_black]'
                 }
               `}
             />
+            
+            {/* Large centered icon when active */}
+            <div 
+              className={`
+                absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 
+                transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
+                ${isActive ? 'opacity-20 scale-100' : 'opacity-0 scale-50'}
+              `}
+              style={{ color: option.defaultColor }}
+            >
+              <Icon className="h-40 w-40" strokeWidth={1} />
+            </div>
             
             {/* New badge */}
             {option.isNew && isActive && (
@@ -68,35 +80,46 @@ const OptionRow: React.FC<OptionRowProps> = ({ options, activeOption, onOptionCl
               </span>
             )}
             
-            {/* Label */}
+            {/* Label - centered when active */}
             <div 
               className={`
-                flex absolute right-0 h-10 transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
-                ${isActive ? 'bottom-5 left-5' : 'bottom-2.5 left-2.5'}
+                flex absolute transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
+                ${isActive 
+                  ? 'bottom-8 left-0 right-0 justify-center items-center flex-col gap-3' 
+                  : 'bottom-3 left-3 right-0 h-10 flex-row'
+                }
               `}
             >
               {/* Icon */}
               <div 
-                className="flex justify-center items-center min-w-[40px] max-w-[40px] h-10 rounded-full bg-white"
+                className={`
+                  flex justify-center items-center rounded-full bg-white transition-all duration-500
+                  ${isActive ? 'w-16 h-16' : 'w-10 h-10'}
+                `}
                 style={{ color: option.defaultColor }}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className={isActive ? 'h-8 w-8' : 'h-5 w-5'} />
               </div>
               
               {/* Info */}
-              <div className="flex flex-col justify-center mr-2.5 text-white whitespace-pre">
+              <div 
+                className={`
+                  flex flex-col text-white transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
+                  ${isActive ? 'items-center text-center' : 'justify-center mr-2.5 whitespace-pre'}
+                `}
+              >
                 <div 
                   className={`
-                    relative font-bold text-lg transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
-                    ${isActive ? 'right-0 opacity-100' : 'right-5 opacity-0'}
+                    relative font-bold transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
+                    ${isActive ? 'text-2xl opacity-100' : 'text-lg right-5 opacity-0'}
                   `}
                 >
                   {option.main}
                 </div>
                 <div 
                   className={`
-                    relative text-sm text-white/70 transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)] delay-100
-                    ${isActive ? 'right-0 opacity-100' : 'right-5 opacity-0'}
+                    relative text-white/70 transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)] delay-100
+                    ${isActive ? 'text-base opacity-100' : 'text-sm right-5 opacity-0'}
                   `}
                 >
                   {option.sub}
@@ -105,9 +128,10 @@ const OptionRow: React.FC<OptionRowProps> = ({ options, activeOption, onOptionCl
             </div>
             
             {/* Decorative circles */}
-            <div className="absolute -top-6 -right-6 w-24 h-24 border border-white/10 rounded-full" />
-            <div className="absolute -top-3 -right-3 w-16 h-16 border border-white/5 rounded-full" />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 border border-white/5 rounded-full" />
+            <div className="absolute -top-8 -right-8 w-32 h-32 border border-white/10 rounded-full" />
+            <div className="absolute -top-4 -right-4 w-20 h-20 border border-white/5 rounded-full" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border border-white/5 rounded-full" />
+            <div className="absolute -bottom-6 -left-6 w-24 h-24 border border-white/5 rounded-full" />
           </div>
         );
       })}
@@ -163,7 +187,7 @@ const OptionsSelector: React.FC = () => {
       id: 5,
       icon: MessageSquare,
       main: 'אינטגרציית WhatsApp',
-      sub: 'Green API, ManyChat, צ\'אט מובנה',
+      sub: 'Green API, ManyChat, צאט מובנה',
       defaultColor: '#4ade80',
       bgColor: 'from-green-400/30 to-green-400/10'
     }
