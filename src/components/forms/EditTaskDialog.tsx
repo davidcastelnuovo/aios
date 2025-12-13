@@ -578,6 +578,24 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       const clientName = clients?.find(c => c.id === task.client_id)?.name || '';
       const subject = meetingSubject || `משימה: ${task.title}${clientName ? ` - ${clientName}` : ''}`;
 
+      // Get the campaigner's user email if different from logged-in user
+      let attendeeEmail: string | undefined;
+      const campaignerId = form.getValues('campaigner_id') || task.campaigner_id;
+      
+      if (campaignerId) {
+        // Find user associated with this campaigner
+        const { data: campaignerProfile } = await supabase
+          .from('profiles')
+          .select('id, email')
+          .eq('campaigner_id', campaignerId)
+          .maybeSingle();
+        
+        // If the campaigner is linked to a different user, add them as attendee
+        if (campaignerProfile && campaignerProfile.id !== userId) {
+          attendeeEmail = campaignerProfile.email;
+        }
+      }
+
       const { data: calendarData, error: calendarError } = await supabase.functions.invoke('add-calendar-event', {
         body: {
           summary: subject,
@@ -585,6 +603,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
           start: startDateTime.toISOString(),
           end: endDateTime.toISOString(),
           location: meetingLocation || undefined,
+          attendees: attendeeEmail ? [attendeeEmail] : undefined,
         }
       });
 
@@ -592,7 +611,10 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         console.error('Calendar error:', calendarError);
         toast.error("שגיאה ביצירת הפגישה ביומן");
       } else {
-        toast.success("המשימה נוספה ליומן!");
+        const successMessage = attendeeEmail 
+          ? "המשימה נוספה ליומן ונשלח זימון לקמפיינר!" 
+          : "המשימה נוספה ליומן!";
+        toast.success(successMessage);
         
         // Trigger automation for task_calendar_created
         try {
