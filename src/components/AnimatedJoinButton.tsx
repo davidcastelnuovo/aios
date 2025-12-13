@@ -18,12 +18,12 @@ const AnimatedJoinButton: React.FC<AnimatedJoinButtonProps> = ({
     <>
       <style>{`
         .animated-button {
-          --white: #ffe7ff;
-          --purple-100: #f4b1fd;
-          --purple-200: #d190ff;
-          --purple-300: #c389f2;
-          --purple-400: #8e26e2;
-          --purple-500: #5e2b83;
+          --white: #e7fff0;
+          --green-100: #a8f5c4;
+          --green-200: #6be89a;
+          --green-300: #4dd88a;
+          --green-400: #36d399;
+          --green-500: #1a7a4f;
           --radius: 18px;
 
           border-radius: var(--radius);
@@ -52,19 +52,19 @@ const AnimatedJoinButton: React.FC<AnimatedJoinButtonProps> = ({
           position: absolute;
           inset: 0;
           border-radius: calc(var(--radius) * 1.1);
-          background: var(--purple-500);
+          background: var(--green-500);
         }
         .animated-button .bg::before {
           filter: blur(5px);
           transition: all 0.3s ease;
           box-shadow:
-            -7px 6px 0 0 rgb(115 75 155 / 40%),
-            -14px 12px 0 0 rgb(115 75 155 / 30%),
-            -21px 18px 4px 0 rgb(115 75 155 / 25%),
-            -28px 24px 8px 0 rgb(115 75 155 / 15%),
-            -35px 30px 12px 0 rgb(115 75 155 / 12%),
-            -42px 36px 16px 0 rgb(115 75 155 / 8%),
-            -56px 42px 20px 0 rgb(115 75 155 / 5%);
+            -7px 6px 0 0 rgb(26 122 79 / 40%),
+            -14px 12px 0 0 rgb(26 122 79 / 30%),
+            -21px 18px 4px 0 rgb(26 122 79 / 25%),
+            -28px 24px 8px 0 rgb(26 122 79 / 15%),
+            -35px 30px 12px 0 rgb(26 122 79 / 12%),
+            -42px 36px 16px 0 rgb(26 122 79 / 8%),
+            -56px 42px 20px 0 rgb(26 122 79 / 5%);
         }
 
         .animated-button .wrap {
@@ -75,8 +75,8 @@ const AnimatedJoinButton: React.FC<AnimatedJoinButtonProps> = ({
           padding: 3px;
           background: linear-gradient(
             to bottom,
-            var(--purple-100) 0%,
-            var(--purple-400) 100%
+            var(--green-100) 0%,
+            var(--green-400) 100%
           );
           position: relative;
           transition: all 0.3s ease;
@@ -122,11 +122,11 @@ const AnimatedJoinButton: React.FC<AnimatedJoinButtonProps> = ({
           transition: all 0.3s ease;
           background: linear-gradient(
             to bottom,
-            var(--purple-300) 0%,
-            var(--purple-400) 100%
+            var(--green-300) 0%,
+            var(--green-400) 100%
           );
           box-shadow:
-            inset -2px 12px 11px -5px var(--purple-200),
+            inset -2px 12px 11px -5px var(--green-200),
             inset 1px -3px 11px 0px rgb(0 0 0 / 35%);
         }
         .animated-button .content::before {
@@ -139,7 +139,7 @@ const AnimatedJoinButton: React.FC<AnimatedJoinButtonProps> = ({
           bottom: 35%;
           opacity: 0.7;
           margin: auto;
-          background: linear-gradient(to bottom, transparent, var(--purple-400));
+          background: linear-gradient(to bottom, transparent, var(--green-400));
           filter: brightness(1.3) blur(5px);
         }
 
@@ -168,7 +168,7 @@ const AnimatedJoinButton: React.FC<AnimatedJoinButtonProps> = ({
           content: attr(data-label);
           position: absolute;
           color: var(--white);
-          text-shadow: -1px 1px 2px var(--purple-500);
+          text-shadow: -1px 1px 2px var(--green-500);
           left: 0;
         }
         .animated-button .char span::before {
@@ -208,24 +208,24 @@ const AnimatedJoinButton: React.FC<AnimatedJoinButtonProps> = ({
         .animated-button .icon div {
           position: relative;
           width: 20px;
-          box-shadow: -2px 2px 5px var(--purple-400);
+          box-shadow: -2px 2px 5px var(--green-400);
           transform: scale(0.9);
-          background: linear-gradient(to bottom, var(--white), var(--purple-100));
+          background: linear-gradient(to bottom, var(--white), var(--green-100));
           animation: swingArrow 1s ease-in-out infinite;
           animation-play-state: paused;
         }
         .animated-button .icon div::before {
           transform: rotate(44deg);
           top: 1px;
-          box-shadow: 1px -2px 3px -1px var(--purple-400);
+          box-shadow: 1px -2px 3px -1px var(--green-400);
           animation: rotateArrowLine 1s linear infinite;
           animation-play-state: paused;
         }
         .animated-button .icon div::after {
           bottom: 1px;
           transform: rotate(316deg);
-          box-shadow: -2px 2px 3px 0 var(--purple-400);
-          background: linear-gradient(200deg, var(--white), var(--purple-100));
+          box-shadow: -2px 2px 3px 0 var(--green-400);
+          background: linear-gradient(200deg, var(--white), var(--green-100));
           animation: rotateArrowLine2 1s linear infinite;
           animation-play-state: paused;
         }
@@ -249,7 +249,7 @@ const AnimatedJoinButton: React.FC<AnimatedJoinButtonProps> = ({
           stroke-dasharray: 60 60;
           stroke-dashoffset: 60;
           transform: translate(-17%, -31%);
-          stroke: var(--purple-300);
+          stroke: var(--green-300);
         }
 
         .animated-button:hover .char.state-1 span::before {
@@ -280,14 +280,14 @@ const AnimatedJoinButton: React.FC<AnimatedJoinButtonProps> = ({
           filter: blur(5px);
           opacity: 0.7;
           box-shadow:
-            -7px 6px 0 0 rgb(115 75 155 / 40%),
-            -14px 12px 0 0 rgb(115 75 155 / 25%),
-            -21px 18px 4px 0 rgb(115 75 155 / 15%);
+            -7px 6px 0 0 rgb(26 122 79 / 40%),
+            -14px 12px 0 0 rgb(26 122 79 / 25%),
+            -21px 18px 4px 0 rgb(26 122 79 / 15%);
         }
         .animated-button:active .content {
           box-shadow:
-            inset -1px 12px 8px -5px rgba(71, 0, 137, 0.4),
-            inset 0px -3px 8px 0px var(--purple-200);
+            inset -1px 12px 8px -5px rgba(26 122 79 / 0.4),
+            inset 0px -3px 8px 0px var(--green-200);
         }
 
         .animated-button:active .outline {
@@ -396,7 +396,7 @@ const AnimatedJoinButton: React.FC<AnimatedJoinButtonProps> = ({
           from { stroke: white; }
           to {
             stroke-dashoffset: -480;
-            stroke: #f9c6fe;
+            stroke: #a8f5c4;
           }
         }
 
