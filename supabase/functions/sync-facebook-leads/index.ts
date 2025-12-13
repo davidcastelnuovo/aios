@@ -207,8 +207,11 @@ serve(async (req) => {
             }
 
             // Fallback mappings for common fields
-            if (!leadRecord.contact_name && (fieldData.full_name || fieldData.first_name)) {
-              leadRecord.contact_name = fieldData.full_name || `${fieldData.first_name || ''} ${fieldData.last_name || ''}`.trim();
+            if (!leadRecord.contact_name) {
+              leadRecord.contact_name = fieldData.full_name 
+                || `${fieldData.first_name || ''} ${fieldData.last_name || ''}`.trim()
+                || fieldData.name
+                || null;
             }
             if (!leadRecord.email && fieldData.email) {
               leadRecord.email = fieldData.email;

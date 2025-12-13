@@ -166,6 +166,22 @@ serve(async (req) => {
                 }
               }
 
+              // Fallback for contact_name if not set by field mappings
+              if (!leadRecord.contact_name) {
+                leadRecord.contact_name = fieldData.full_name 
+                  || `${fieldData.first_name || ''} ${fieldData.last_name || ''}`.trim()
+                  || fieldData.name
+                  || null;
+              }
+              
+              // Fallback for email and phone
+              if (!leadRecord.email && fieldData.email) {
+                leadRecord.email = fieldData.email;
+              }
+              if (!leadRecord.phone && (fieldData.phone_number || fieldData.phone)) {
+                leadRecord.phone = fieldData.phone_number || fieldData.phone;
+              }
+
               // Insert lead
               const { data: newLead, error: insertError } = await supabase
                 .from('leads')
