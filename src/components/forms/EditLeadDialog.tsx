@@ -79,6 +79,9 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
   const [meetingLocation, setMeetingLocation] = useState("");
   const [sendWhatsAppNotification, setSendWhatsAppNotification] = useState(true);
   const [isSchedulingMeeting, setIsSchedulingMeeting] = useState(false);
+  const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
@@ -434,13 +437,88 @@ const updateMutation = useMutation({
 
   const showLostReason = form.watch("status") === "closed";
 
-  // Generate time options
-  const timeOptions = [];
+  // Fetch calendar events when date changes
+  const fetchCalendarEvents = async (selectedDate: Date) => {
+    setIsLoadingCalendar(true);
+    setCalendarError(null);
+    setCalendarEvents([]);
+    
+    try {
+      const startOfDay = new Date(selectedDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(selectedDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      const { data, error } = await supabase.functions.invoke('get-calendar-events', {
+        body: {
+          timeMin: startOfDay.toISOString(),
+          timeMax: endOfDay.toISOString(),
+        },
+      });
+      
+      if (error) throw error;
+      
+      if (data?.needsReconnect) {
+        setCalendarError('היומן לא מחובר. יש לחבר את יומן Google.');
+        return;
+      }
+      
+      if (data?.events) {
+        setCalendarEvents(data.events);
+      }
+    } catch (err: any) {
+      console.error('Error fetching calendar events:', err);
+      setCalendarError(err.message || 'שגיאה בטעינת היומן');
+    } finally {
+      setIsLoadingCalendar(false);
+    }
+  };
+
+  // Handle date selection
+  const handleDateSelect = (date: Date | undefined) => {
+    setMeetingDate(date);
+    if (date) {
+      fetchCalendarEvents(date);
+    } else {
+      setCalendarEvents([]);
+    }
+  };
+
+  // Generate time options - all possible slots
+  const allTimeOptions: string[] = [];
   for (let h = 7; h <= 21; h++) {
     for (let m = 0; m < 60; m += 30) {
-      timeOptions.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+      allTimeOptions.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
     }
   }
+
+  // Filter available time slots based on calendar events
+  const getAvailableTimeSlots = () => {
+    if (!meetingDate || calendarEvents.length === 0) {
+      return allTimeOptions.map(time => ({ time, available: true }));
+    }
+
+    return allTimeOptions.map(time => {
+      const [hours, minutes] = time.split(':').map(Number);
+      const slotStart = new Date(meetingDate);
+      slotStart.setHours(hours, minutes, 0, 0);
+      const slotEnd = new Date(slotStart);
+      slotEnd.setMinutes(slotEnd.getMinutes() + 30);
+
+      // Check if this slot overlaps with any event
+      const isOccupied = calendarEvents.some(event => {
+        const eventStart = new Date(event.start?.dateTime || event.start?.date);
+        const eventEnd = new Date(event.end?.dateTime || event.end?.date);
+        
+        // Check for overlap
+        return slotStart < eventEnd && slotEnd > eventStart;
+      });
+
+      return { time, available: !isOccupied };
+    });
+  };
+
+  const timeSlots = getAvailableTimeSlots();
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -1080,7 +1158,7 @@ const updateMutation = useMutation({
                         <Calendar
                           mode="single"
                           selected={meetingDate}
-                          onSelect={setMeetingDate}
+                          onSelect={handleDateSelect}
                           disabled={(date) => date < new Date()}
                           className="pointer-events-auto"
                           locale={he}
@@ -1100,11 +1178,22 @@ const updateMutation = useMutation({
                             <SelectValue placeholder="בחר שעה" />
                           </SelectTrigger>
                           <SelectContent className="bg-background z-50 max-h-[200px]">
-                            {timeOptions.map((time) => (
-                              <SelectItem key={time} value={time}>
-                                {time}
-                              </SelectItem>
-                            ))}
+                            {isLoadingCalendar ? (
+                              <div className="p-2 text-center text-sm text-muted-foreground">טוען יומן...</div>
+                            ) : calendarError ? (
+                              <div className="p-2 text-center text-sm text-destructive">{calendarError}</div>
+                            ) : (
+                              timeSlots.map(({ time, available }) => (
+                                <SelectItem 
+                                  key={time} 
+                                  value={time}
+                                  disabled={!available}
+                                  className={cn(!available && "text-muted-foreground line-through")}
+                                >
+                                  {time} {!available && "(תפוס)"}
+                                </SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
