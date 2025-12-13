@@ -49,6 +49,7 @@ const formSchema = z.object({
     "onboarding_status_changed",
     "meeting_created",
     "task_calendar_created",
+    "task_overdue",
   ]),
   action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber"]),
   webhook_url: z.string().optional(),
@@ -91,6 +92,7 @@ const TRIGGER_OPTIONS = [
   { value: "onboarding_status_changed", label: "סטטוס קליטה השתנה" },
   { value: "meeting_created", label: "נוצרה פגישה" },
   { value: "task_calendar_created", label: "משימה נוספה ליומן" },
+  { value: "task_overdue", label: "משימה לא הושלמה בזמן" },
 ];
 
 // LEAD_STATUS_OPTIONS removed - now using dynamic statuses from useLeadStatuses hook

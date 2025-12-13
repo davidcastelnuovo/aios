@@ -46,6 +46,7 @@ const formSchema = z.object({
     "onboarding_status_changed",
     "meeting_created",
     "task_calendar_created",
+    "task_overdue",
   ]),
   action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber"]),
   webhook_url: z.string().optional(),
@@ -289,6 +290,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                       <SelectItem value="onboarding_status_changed">סטטוס קליטה השתנה</SelectItem>
                       <SelectItem value="meeting_created">נוצרה פגישה</SelectItem>
                       <SelectItem value="task_calendar_created">משימה נוספה ליומן</SelectItem>
+                      <SelectItem value="task_overdue">משימה לא הושלמה בזמן</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
