@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
-import { Check, ChevronsUpDown, Send, FileText, MessageSquare, Settings, Pencil, Trash2, Upload, X, File, Image as ImageIcon } from "lucide-react";
+import { Check, ChevronsUpDown, Send, FileText, MessageSquare, Settings, Pencil, Trash2, Upload, X, File, Image as ImageIcon, Calendar as CalendarIcon, Clock, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Command,
@@ -52,6 +52,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Card } from "@/components/ui/card";
+import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -140,6 +141,17 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
   const [isDragging, setIsDragging] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [lightboxImage, setLightboxImage] = useState<{ url: string; name: string } | null>(null);
+  
+  // Calendar meeting state
+  const [meetingDate, setMeetingDate] = useState<Date | undefined>(undefined);
+  const [meetingTime, setMeetingTime] = useState("10:00");
+  const [meetingSubject, setMeetingSubject] = useState("");
+  const [meetingLocation, setMeetingLocation] = useState("");
+  const [isSchedulingMeeting, setIsSchedulingMeeting] = useState(false);
+  const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [calendarError, setCalendarError] = useState<string | null>(null);
+  
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
 
@@ -470,6 +482,133 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     }
   };
 
+  // Calendar functions
+  const fetchCalendarEvents = async (selectedDate: Date) => {
+    setIsLoadingCalendar(true);
+    setCalendarError(null);
+    setCalendarEvents([]);
+    
+    try {
+      const startOfDay = new Date(selectedDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(selectedDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      const { data, error } = await supabase.functions.invoke('get-calendar-events', {
+        body: {
+          timeMin: startOfDay.toISOString(),
+          timeMax: endOfDay.toISOString(),
+        },
+      });
+      
+      if (error) throw error;
+      
+      if (data?.needsReconnect) {
+        setCalendarError('היומן לא מחובר. יש לחבר את יומן Google.');
+        return;
+      }
+      
+      if (data?.events) {
+        setCalendarEvents(data.events);
+      }
+    } catch (err: any) {
+      console.error('Error fetching calendar events:', err);
+      setCalendarError(err.message || 'שגיאה בטעינת היומן');
+    } finally {
+      setIsLoadingCalendar(false);
+    }
+  };
+
+  const handleMeetingDateSelect = (date: Date | undefined) => {
+    setMeetingDate(date);
+    if (date) {
+      fetchCalendarEvents(date);
+    } else {
+      setCalendarEvents([]);
+    }
+  };
+
+  const allTimeOptions: string[] = [];
+  for (let h = 7; h <= 21; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      allTimeOptions.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+    }
+  }
+
+  const getAvailableTimeSlots = () => {
+    if (!meetingDate || calendarEvents.length === 0) {
+      return allTimeOptions.map(time => ({ time, available: true }));
+    }
+
+    return allTimeOptions.map(time => {
+      const [hours, minutes] = time.split(':').map(Number);
+      const slotStart = new Date(meetingDate);
+      slotStart.setHours(hours, minutes, 0, 0);
+      const slotEnd = new Date(slotStart);
+      slotEnd.setMinutes(slotEnd.getMinutes() + 30);
+
+      const isOccupied = calendarEvents.some(event => {
+        const eventStart = new Date(event.start?.dateTime || event.start?.date);
+        const eventEnd = new Date(event.end?.dateTime || event.end?.date);
+        return slotStart < eventEnd && slotEnd > eventStart;
+      });
+
+      return { time, available: !isOccupied };
+    });
+  };
+
+  const timeSlots = getAvailableTimeSlots();
+
+  const handleScheduleTaskMeeting = async () => {
+    if (!meetingDate || !meetingTime) {
+      toast.error("נא לבחור תאריך ושעה");
+      return;
+    }
+
+    setIsSchedulingMeeting(true);
+
+    try {
+      const [hours, minutes] = meetingTime.split(':').map(Number);
+      const startDateTime = new Date(meetingDate);
+      startDateTime.setHours(hours, minutes, 0, 0);
+      
+      const endDateTime = new Date(startDateTime);
+      endDateTime.setHours(startDateTime.getHours() + 1);
+
+      const clientName = clients?.find(c => c.id === task.client_id)?.name || '';
+      const subject = meetingSubject || `משימה: ${task.title}${clientName ? ` - ${clientName}` : ''}`;
+
+      const { data: calendarData, error: calendarError } = await supabase.functions.invoke('add-calendar-event', {
+        body: {
+          summary: subject,
+          description: `משימה: ${task.title}\n\n${task.notes || ''}`,
+          start: startDateTime.toISOString(),
+          end: endDateTime.toISOString(),
+          location: meetingLocation || undefined,
+        }
+      });
+
+      if (calendarError) {
+        console.error('Calendar error:', calendarError);
+        toast.error("שגיאה ביצירת הפגישה ביומן");
+      } else {
+        toast.success("המשימה נוספה ליומן!");
+      }
+
+      // Reset form
+      setMeetingDate(undefined);
+      setMeetingTime("10:00");
+      setMeetingSubject("");
+      setMeetingLocation("");
+
+    } catch (error: any) {
+      console.error('Meeting scheduling error:', error);
+      toast.error(`שגיאה בקביעת פגישה: ${error.message}`);
+    } finally {
+      setIsSchedulingMeeting(false);
+    }
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -479,22 +618,26 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
           </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="details" className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1 bg-muted/50 p-1 rounded-lg shadow-sm">
+            <TabsTrigger value="details" className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2">
+              <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
               פרטי משימה
             </TabsTrigger>
-            <TabsTrigger value="updates" className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4" />
+            <TabsTrigger value="calendar" className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2">
+              <CalendarIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+              הוסף ליומן
+            </TabsTrigger>
+            <TabsTrigger value="updates" className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2">
+              <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />
               עדכונים
               {taskUpdates && taskUpdates.length > 0 && (
-                <span className="ml-1 rounded-full bg-primary text-primary-foreground px-2 py-0.5 text-xs">
+                <span className="mr-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-xs">
                   {taskUpdates.length}
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="status" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
+            <TabsTrigger value="status" className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2">
+              <Settings className="h-3 w-3 sm:h-4 sm:w-4" />
               סטטוס
             </TabsTrigger>
           </TabsList>
@@ -618,7 +761,116 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                 </div>
               </TabsContent>
 
-              {/* Tab 2: Updates */}
+              {/* Tab 2: Calendar */}
+              <TabsContent value="calendar" className="space-y-4 mt-0">
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium flex items-center gap-2">
+                    <CalendarIcon className="h-4 w-4" />
+                    הוסף משימה ליומן
+                  </h4>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Calendar Side */}
+                    <div className="space-y-3">
+                      <label className="text-sm font-medium">בחר תאריך</label>
+                      <Card className="p-2">
+                        <Calendar
+                          mode="single"
+                          selected={meetingDate}
+                          onSelect={handleMeetingDateSelect}
+                          disabled={(date) => date < new Date()}
+                          className="pointer-events-auto"
+                          locale={he}
+                        />
+                      </Card>
+                    </div>
+
+                    {/* Details Side */}
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium flex items-center gap-2">
+                          <Clock className="h-4 w-4" />
+                          שעה
+                        </label>
+                        <Select value={meetingTime} onValueChange={setMeetingTime}>
+                          <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
+                            <SelectValue placeholder="בחר שעה" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background z-50 max-h-[200px]">
+                            {isLoadingCalendar ? (
+                              <div className="p-2 text-center text-sm text-muted-foreground">טוען יומן...</div>
+                            ) : calendarError ? (
+                              <div className="p-2 text-center text-sm text-destructive">{calendarError}</div>
+                            ) : (
+                              timeSlots.map(({ time, available }) => (
+                                <SelectItem 
+                                  key={time} 
+                                  value={time}
+                                  disabled={!available}
+                                  className={cn(!available && "text-muted-foreground line-through")}
+                                >
+                                  {time} {!available && "(תפוס)"}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">נושא (אופציונלי)</label>
+                        <Input
+                          value={meetingSubject}
+                          onChange={(e) => setMeetingSubject(e.target.value)}
+                          placeholder={`משימה: ${task.title}`}
+                          className="text-right rounded-lg border-2 h-11 px-4"
+                          dir="rtl"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">מיקום (אופציונלי)</label>
+                        <Input
+                          value={meetingLocation}
+                          onChange={(e) => setMeetingLocation(e.target.value)}
+                          placeholder="למשל: זום, משרד, כתובת..."
+                          className="text-right rounded-lg border-2 h-11 px-4"
+                          dir="rtl"
+                        />
+                      </div>
+
+                      {meetingDate && (
+                        <Card className="p-3 bg-primary/5 border-primary/20">
+                          <div className="flex items-center gap-2 text-sm">
+                            <CheckCircle2 className="h-4 w-4 text-primary" />
+                            <span className="font-medium">
+                              {format(meetingDate, "EEEE, d בMMMM yyyy", { locale: he })} בשעה {meetingTime}
+                            </span>
+                          </div>
+                        </Card>
+                      )}
+
+                      <Button
+                        type="button"
+                        onClick={handleScheduleTaskMeeting}
+                        disabled={!meetingDate || isSchedulingMeeting}
+                        className="w-full h-11"
+                      >
+                        {isSchedulingMeeting ? (
+                          "מוסיף ליומן..."
+                        ) : (
+                          <>
+                            <CalendarIcon className="h-4 w-4 ml-2" />
+                            הוסף ליומן
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Tab 3: Updates */}
               <TabsContent value="updates" className="space-y-4 mt-0">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
