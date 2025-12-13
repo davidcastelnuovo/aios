@@ -101,18 +101,22 @@ export default function Tenants() {
         );
 
       if (error) throw error;
-      return tenantId;
-    },
-    onSuccess: (tenantId: string) => {
-      // Find the slug of the new tenant
-      const selectedTenant = tenants?.find((t: any) => t.id === tenantId);
-      const newSlug = selectedTenant?.slug;
       
+      // Get the slug directly from database
+      const { data: tenantData } = await supabase
+        .from("tenants")
+        .select("slug")
+        .eq("id", tenantId)
+        .single();
+      
+      return { tenantId, slug: tenantData?.slug };
+    },
+    onSuccess: ({ tenantId, slug }) => {
       queryClient.invalidateQueries({ queryKey: ["current-tenant"] });
       
-      if (newSlug) {
+      if (slug) {
         // Navigate to the new tenant's tenants page
-        navigate(`/t/${newSlug}/tenants`);
+        navigate(`/t/${slug}/tenants`);
       } else {
         // Fallback if no slug found
         window.location.reload();

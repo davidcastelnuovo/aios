@@ -65,9 +65,14 @@ export function AppLayout({ children }: AppLayoutProps) {
           onConflict: "user_id"
         });
 
-      // Get the slug of the new tenant
-      const selectedTenant = userTenants?.find((t: any) => t.tenants?.id === tenantId);
-      const newSlug = selectedTenant?.tenants?.slug;
+      // Get the slug of the new tenant directly from database
+      const { data: tenantData } = await supabase
+        .from("tenants")
+        .select("slug")
+        .eq("id", tenantId)
+        .single();
+      
+      const newSlug = tenantData?.slug;
       
       if (newSlug) {
         // Extract current module from URL
