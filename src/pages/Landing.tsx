@@ -1,6 +1,7 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import OptionsSelector from "@/components/OptionsSelector";
+import AnimatedJoinButton from "@/components/AnimatedJoinButton";
 import { 
   Target, 
   CheckCircle2, 
@@ -62,6 +63,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
 };
 
 const Landing = () => {
+  const navigate = useNavigate();
   const modules = [
     {
       title: "ניהול לידים",
@@ -205,13 +207,12 @@ const Landing = () => {
             </p>
 
             {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link to="/signup">
-                <Button size="lg" className="bg-[#36d399] hover:bg-[#36d399]/90 text-[#0A1526] font-semibold text-lg px-8 py-6 rounded-xl shadow-[0_0_40px_rgba(54,211,153,0.3)] hover:shadow-[0_0_60px_rgba(54,211,153,0.4)] transition-all">
-                  התחל בחינם
-                  <ArrowLeft className="mr-2 h-5 w-5" />
-                </Button>
-              </Link>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
+              <AnimatedJoinButton 
+                text="התחל בחינם" 
+                hoverText="עכשיו!" 
+                onClick={() => navigate('/signup')} 
+              />
               <Link to="/auth">
                 <Button size="lg" variant="outline" className="border-white/40 bg-white/10 text-white font-semibold hover:bg-white/20 text-lg px-8 py-6 rounded-xl backdrop-blur-sm">
                   יש לי חשבון
@@ -363,12 +364,11 @@ const Landing = () => {
               <p className="text-white/60 text-lg mb-8">
                 הצטרפו לעשרות סוכנויות שכבר משתמשות ב-AfterLead
               </p>
-              <Link to="/signup">
-                <Button size="lg" className="bg-[#36d399] hover:bg-[#36d399]/90 text-[#0A1526] font-semibold text-lg px-10 py-6 rounded-xl shadow-[0_0_40px_rgba(54,211,153,0.3)] hover:shadow-[0_0_60px_rgba(54,211,153,0.4)] transition-all">
-                  התחל בחינם עכשיו
-                  <ArrowLeft className="mr-2 h-5 w-5" />
-                </Button>
-              </Link>
+              <AnimatedJoinButton 
+                text="התחל עכשיו" 
+                hoverText="בחינם!" 
+                onClick={() => navigate('/signup')} 
+              />
             </div>
           </div>
         </div>
