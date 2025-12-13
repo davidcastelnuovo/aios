@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useEffect, useRef, useState } from "react";
 import { 
   Target, 
   CheckCircle2, 
@@ -21,6 +22,32 @@ import {
 import logoImage from "@/assets/logo.png";
 
 const Landing = () => {
+  const [scrollY, setScrollY] = useState(0);
+  const modulesRef = useRef<HTMLDivElement>(null);
+  const [modulesTop, setModulesTop] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrollY(window.scrollY);
+    };
+
+    const updateModulesTop = () => {
+      if (modulesRef.current) {
+        const rect = modulesRef.current.getBoundingClientRect();
+        setModulesTop(rect.top + window.scrollY);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', updateModulesTop);
+    updateModulesTop();
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', updateModulesTop);
+    };
+  }, []);
+
   const modules = [
     {
       title: "ניהול לידים",
@@ -100,6 +127,32 @@ const Landing = () => {
     { icon: Users, text: "ניהול הרשאות מתקדם" }
   ];
 
+  // Calculate card animations based on scroll
+  const getCardStyle = (index: number) => {
+    const cardHeight = 180;
+    const stackOffset = 20;
+    const stickyStart = modulesTop - 100;
+    const scrollProgress = Math.max(0, scrollY - stickyStart);
+    const cardTrigger = index * (cardHeight * 0.6);
+    const cardProgress = Math.min(1, Math.max(0, (scrollProgress - cardTrigger) / cardHeight));
+    
+    // Only apply stacked effect on desktop
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      return {};
+    }
+
+    const translateY = (1 - cardProgress) * 100;
+    const scale = 0.95 + (cardProgress * 0.05);
+    const opacity = 0.3 + (cardProgress * 0.7);
+    
+    return {
+      transform: `translateY(${translateY}px) scale(${scale})`,
+      opacity,
+      zIndex: index + 1,
+      top: `${80 + (index * stackOffset)}px`,
+    };
+  };
+
   return (
     <div className="min-h-screen bg-[#0A1526] text-white overflow-hidden">
       {/* Background Elements */}
@@ -119,8 +172,8 @@ const Landing = () => {
             </div>
             
             <nav className="hidden md:flex items-center gap-8">
-              <a href="#modules" className="text-white/70 hover:text-white transition-colors">מודולים</a>
               <a href="#multi-tenant" className="text-white/70 hover:text-white transition-colors">לעסקים</a>
+              <a href="#modules" className="text-white/70 hover:text-white transition-colors">מודולים</a>
               <Link to="/privacy" className="text-white/70 hover:text-white transition-colors">פרטיות</Link>
             </nav>
 
@@ -201,46 +254,7 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Modules Section - Grid Layout */}
-      <section id="modules" className="relative py-24 bg-[#0d1a2d]">
-        <div className="container mx-auto px-6">
-          {/* Section Header */}
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-              כל מה שצריך, <span className="text-[#36d399]">במקום אחד</span>
-            </h2>
-            <p className="text-white/50 text-lg max-w-xl mx-auto">
-              מערכת מודולרית שמתאימה את עצמה לצרכים שלך
-            </p>
-            <div className="w-20 h-1 bg-gradient-to-r from-transparent via-[#36d399] to-transparent mx-auto mt-6" />
-          </div>
-
-          {/* Modules Grid */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-            {modules.map((module, index) => (
-              <div 
-                key={index}
-                className="group relative p-6 rounded-2xl bg-white/5 border border-white/10 hover:border-[#36d399]/50 transition-all duration-300 hover:bg-white/[0.07] hover:scale-[1.02] hover:shadow-[0_0_30px_rgba(54,211,153,0.15)]"
-              >
-                {module.isNew && (
-                  <span className="absolute top-4 left-4 px-2 py-1 text-xs font-medium bg-[#36d399] text-[#0A1526] rounded-full">
-                    חדש
-                  </span>
-                )}
-                
-                <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${module.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
-                  <module.icon className="h-7 w-7 text-white" />
-                </div>
-                
-                <h3 className="text-xl font-semibold text-white mb-2">{module.title}</h3>
-                <p className="text-white/50 text-sm leading-relaxed">{module.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Multi-Tenant Section */}
+      {/* Multi-Tenant Section - MOVED BEFORE MODULES */}
       <section id="multi-tenant" className="relative py-24 overflow-hidden">
         {/* Background Glow */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#36d399]/10 rounded-full blur-[150px]" />
@@ -307,6 +321,84 @@ const Landing = () => {
                 <div className="absolute -bottom-4 -left-4 w-16 h-16 border border-[#36d399]/10 rounded-full" />
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Modules Section - Stacked Cards Effect */}
+      <section id="modules" ref={modulesRef} className="relative py-24 bg-[#0d1a2d]">
+        <div className="container mx-auto px-6">
+          {/* Section Header */}
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              כל מה שצריך, <span className="text-[#36d399]">במקום אחד</span>
+            </h2>
+            <p className="text-white/50 text-lg max-w-xl mx-auto">
+              מערכת מודולרית שמתאימה את עצמה לצרכים שלך
+            </p>
+            <div className="w-20 h-1 bg-gradient-to-r from-transparent via-[#36d399] to-transparent mx-auto mt-6" />
+          </div>
+
+          {/* Desktop: Stacked Cards with Scroll Animation */}
+          <div className="hidden md:block relative" style={{ minHeight: `${modules.length * 120 + 600}px` }}>
+            <div className="sticky top-20">
+              <div className="max-w-3xl mx-auto relative" style={{ height: '500px' }}>
+                {modules.map((module, index) => (
+                  <div 
+                    key={index}
+                    className="absolute left-0 right-0 p-6 rounded-2xl bg-[#0d1a2d] border border-white/10 transition-all duration-300 ease-out shadow-xl"
+                    style={{
+                      ...getCardStyle(index),
+                      willChange: 'transform, opacity',
+                    }}
+                  >
+                    <div className="flex items-start gap-5">
+                      {module.isNew && (
+                        <span className="absolute top-4 left-4 px-2 py-1 text-xs font-medium bg-[#36d399] text-[#0A1526] rounded-full">
+                          חדש
+                        </span>
+                      )}
+                      
+                      <div className={`w-16 h-16 rounded-xl bg-gradient-to-br ${module.color} flex items-center justify-center flex-shrink-0`}>
+                        <module.icon className="h-8 w-8 text-white" />
+                      </div>
+                      
+                      <div className="flex-1 pt-1">
+                        <h3 className="text-xl font-semibold text-white mb-2">{module.title}</h3>
+                        <p className="text-white/50 text-sm leading-relaxed">{module.description}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile: Regular Grid */}
+          <div className="md:hidden grid grid-cols-1 gap-4">
+            {modules.map((module, index) => (
+              <div 
+                key={index}
+                className="group relative p-5 rounded-2xl bg-white/5 border border-white/10 hover:border-[#36d399]/50 transition-all duration-300"
+              >
+                {module.isNew && (
+                  <span className="absolute top-4 left-4 px-2 py-1 text-xs font-medium bg-[#36d399] text-[#0A1526] rounded-full">
+                    חדש
+                  </span>
+                )}
+                
+                <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${module.color} flex items-center justify-center flex-shrink-0`}>
+                    <module.icon className="h-6 w-6 text-white" />
+                  </div>
+                  
+                  <div>
+                    <h3 className="text-lg font-semibold text-white mb-1">{module.title}</h3>
+                    <p className="text-white/50 text-xs leading-relaxed">{module.description}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>
