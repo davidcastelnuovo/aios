@@ -55,16 +55,13 @@ const AnimatedJoinButton: React.FC<AnimatedJoinButtonProps> = ({
           background: var(--green-500);
         }
         .animated-button .bg::before {
-          filter: blur(5px);
+          filter: blur(3px);
           transition: all 0.3s ease;
           box-shadow:
-            -7px 6px 0 0 rgb(26 122 79 / 40%),
-            -14px 12px 0 0 rgb(26 122 79 / 30%),
-            -21px 18px 4px 0 rgb(26 122 79 / 25%),
-            -28px 24px 8px 0 rgb(26 122 79 / 15%),
-            -35px 30px 12px 0 rgb(26 122 79 / 12%),
-            -42px 36px 16px 0 rgb(26 122 79 / 8%),
-            -56px 42px 20px 0 rgb(26 122 79 / 5%);
+            -4px 4px 0 0 rgb(26 122 79 / 30%),
+            -8px 8px 0 0 rgb(26 122 79 / 20%),
+            -12px 12px 4px 0 rgb(26 122 79 / 12%),
+            -16px 16px 6px 0 rgb(26 122 79 / 8%);
         }
 
         .animated-button .wrap {
