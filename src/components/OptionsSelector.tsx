@@ -24,10 +24,101 @@ interface OptionData {
   isNew?: boolean;
 }
 
+interface OptionRowProps {
+  options: OptionData[];
+  activeOption: number | null;
+  onOptionClick: (id: number) => void;
+}
+
+const OptionRow: React.FC<OptionRowProps> = ({ options, activeOption, onOptionClick }) => {
+  return (
+    <div className="flex flex-row items-stretch overflow-hidden w-full h-[300px] gap-2">
+      {options.map((option) => {
+        const Icon = option.icon;
+        const isActive = activeOption === option.id;
+        
+        return (
+          <div
+            key={option.id}
+            className={`
+              relative overflow-hidden cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
+              bg-gradient-to-br ${option.bgColor} border border-white/10
+              ${isActive 
+                ? 'flex-[10000] max-w-[700px] rounded-[40px]' 
+                : 'flex-[1] min-w-[50px] rounded-[30px]'
+              }
+            `}
+            onClick={() => onOptionClick(option.id)}
+          >
+            {/* Shadow overlay */}
+            <div 
+              className={`
+                absolute left-0 right-0 h-[120px] transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
+                ${isActive 
+                  ? 'bottom-0 shadow-[inset_0_-120px_120px_-120px_black,inset_0_-120px_120px_-100px_black]' 
+                  : 'bottom-[-40px] shadow-[inset_0_-120px_0px_-120px_black,inset_0_-120px_0px_-100px_black]'
+                }
+              `}
+            />
+            
+            {/* New badge */}
+            {option.isNew && isActive && (
+              <span className="absolute top-5 left-5 px-3 py-1.5 text-sm font-medium bg-[#36d399] text-[#0A1526] rounded-full z-10">
+                חדש
+              </span>
+            )}
+            
+            {/* Label */}
+            <div 
+              className={`
+                flex absolute right-0 h-10 transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
+                ${isActive ? 'bottom-5 left-5' : 'bottom-2.5 left-2.5'}
+              `}
+            >
+              {/* Icon */}
+              <div 
+                className="flex justify-center items-center min-w-[40px] max-w-[40px] h-10 rounded-full bg-white"
+                style={{ color: option.defaultColor }}
+              >
+                <Icon className="h-5 w-5" />
+              </div>
+              
+              {/* Info */}
+              <div className="flex flex-col justify-center mr-2.5 text-white whitespace-pre">
+                <div 
+                  className={`
+                    relative font-bold text-lg transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
+                    ${isActive ? 'right-0 opacity-100' : 'right-5 opacity-0'}
+                  `}
+                >
+                  {option.main}
+                </div>
+                <div 
+                  className={`
+                    relative text-sm text-white/70 transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)] delay-100
+                    ${isActive ? 'right-0 opacity-100' : 'right-5 opacity-0'}
+                  `}
+                >
+                  {option.sub}
+                </div>
+              </div>
+            </div>
+            
+            {/* Decorative circles */}
+            <div className="absolute -top-6 -right-6 w-24 h-24 border border-white/10 rounded-full" />
+            <div className="absolute -top-3 -right-3 w-16 h-16 border border-white/5 rounded-full" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 border border-white/5 rounded-full" />
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const OptionsSelector: React.FC = () => {
   const [activeOption, setActiveOption] = useState<number>(0);
 
-  const optionsData: OptionData[] = [
+  const optionsDataRow1: OptionData[] = [
     {
       id: 0,
       icon: Target,
@@ -75,7 +166,10 @@ const OptionsSelector: React.FC = () => {
       sub: 'Green API, ManyChat, צ\'אט מובנה',
       defaultColor: '#4ade80',
       bgColor: 'from-green-400/30 to-green-400/10'
-    },
+    }
+  ];
+
+  const optionsDataRow2: OptionData[] = [
     {
       id: 6,
       icon: CalendarClock,
@@ -126,86 +220,20 @@ const OptionsSelector: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-row justify-center items-center py-24 bg-[#0A1526]">
-      <div className="flex flex-row items-stretch overflow-hidden min-w-[600px] max-w-[1100px] w-[calc(100%-100px)] h-[400px]">
-        {optionsData.map((option) => {
-          const Icon = option.icon;
-          const isActive = activeOption === option.id;
-          
-          return (
-            <div
-              key={option.id}
-              className={`
-                relative overflow-hidden cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
-                bg-gradient-to-br ${option.bgColor} border border-white/10
-                ${isActive 
-                  ? 'flex-[10000] max-w-[600px] mx-0 rounded-[40px]' 
-                  : 'flex-[1] min-w-[60px] mx-2.5 rounded-[30px]'
-                }
-              `}
-              onClick={() => handleOptionClick(option.id)}
-            >
-              {/* Shadow overlay */}
-              <div 
-                className={`
-                  absolute left-0 right-0 h-[120px] transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
-                  ${isActive 
-                    ? 'bottom-0 shadow-[inset_0_-120px_120px_-120px_black,inset_0_-120px_120px_-100px_black]' 
-                    : 'bottom-[-40px] shadow-[inset_0_-120px_0px_-120px_black,inset_0_-120px_0px_-100px_black]'
-                  }
-                `}
-              />
-              
-              {/* New badge */}
-              {option.isNew && isActive && (
-                <span className="absolute top-5 left-5 px-3 py-1.5 text-sm font-medium bg-[#36d399] text-[#0A1526] rounded-full z-10">
-                  חדש
-                </span>
-              )}
-              
-              {/* Label */}
-              <div 
-                className={`
-                  flex absolute right-0 h-10 transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
-                  ${isActive ? 'bottom-5 left-5' : 'bottom-2.5 left-2.5'}
-                `}
-              >
-                {/* Icon */}
-                <div 
-                  className="flex justify-center items-center min-w-[40px] max-w-[40px] h-10 rounded-full bg-white"
-                  style={{ color: option.defaultColor }}
-                >
-                  <Icon className="h-5 w-5" />
-                </div>
-                
-                {/* Info */}
-                <div className="flex flex-col justify-center mr-2.5 text-white whitespace-pre">
-                  <div 
-                    className={`
-                      relative font-bold text-lg transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)]
-                      ${isActive ? 'right-0 opacity-100' : 'right-5 opacity-0'}
-                    `}
-                  >
-                    {option.main}
-                  </div>
-                  <div 
-                    className={`
-                      relative text-sm text-white/70 transition-all duration-500 ease-[cubic-bezier(0.05,0.61,0.41,0.95)] delay-100
-                      ${isActive ? 'right-0 opacity-100' : 'right-5 opacity-0'}
-                    `}
-                  >
-                    {option.sub}
-                  </div>
-                </div>
-              </div>
-              
-              {/* Decorative circles */}
-              <div className="absolute -top-6 -right-6 w-24 h-24 border border-white/10 rounded-full" />
-              <div className="absolute -top-3 -right-3 w-16 h-16 border border-white/5 rounded-full" />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 border border-white/5 rounded-full" />
-            </div>
-          );
-        })}
+    <div className="flex flex-col justify-center items-center py-24 px-6 bg-[#0A1526] gap-6">
+      <div className="w-full max-w-6xl">
+        <OptionRow 
+          options={optionsDataRow1} 
+          activeOption={activeOption} 
+          onOptionClick={handleOptionClick} 
+        />
+      </div>
+      <div className="w-full max-w-6xl">
+        <OptionRow 
+          options={optionsDataRow2} 
+          activeOption={activeOption} 
+          onOptionClick={handleOptionClick} 
+        />
       </div>
     </div>
   );
