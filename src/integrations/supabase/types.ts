@@ -2815,6 +2815,7 @@ export type Database = {
         | "client_status_changed"
         | "onboarding_status_changed"
         | "meeting_created"
+        | "task_calendar_created"
       chat_provider: "manychat" | "green_api" | "internal"
       client_mood_status: "happy" | "wavering" | "churn_risk"
       client_status: "active" | "paused" | "ended" | "onboarding"
@@ -3015,6 +3016,7 @@ export const Constants = {
         "client_status_changed",
         "onboarding_status_changed",
         "meeting_created",
+        "task_calendar_created",
       ],
       chat_provider: ["manychat", "green_api", "internal"],
       client_mood_status: ["happy", "wavering", "churn_risk"],

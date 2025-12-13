@@ -202,7 +202,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
         .update({
           name: values.name,
           description: values.description,
-          trigger_type: values.trigger_type,
+          trigger_type: values.trigger_type as any,
           action_type: values.action_type,
           configuration: configuration,
           conditions: conditions,
