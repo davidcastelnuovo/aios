@@ -313,35 +313,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Modules Section */}
-      <section id="modules" className="relative py-24 bg-[#0d1a2d]">
-        <div className="container mx-auto px-6">
-          {/* Section Header */}
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-              כל מה שצריך, <span className="text-[#36d399]">במקום אחד</span>
-            </h2>
-            <p className="text-white/50 text-lg max-w-xl mx-auto">
-              מערכת מודולרית שמתאימה את עצמה לצרכים שלך
-            </p>
-            <div className="w-20 h-1 bg-gradient-to-r from-transparent via-[#36d399] to-transparent mx-auto mt-6" />
-          </div>
-
-          {/* Grid Layout */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
-            {modules.map((module, i) => (
-              <ModuleCard
-                key={i}
-                title={module.title}
-                description={module.description}
-                icon={module.icon}
-                color={module.color}
-                isNew={module.isNew}
-              />
-            ))}
-          </div>
-        </div>
-      </section>
 
       {/* Options Selector Demo */}
       <section className="relative">
