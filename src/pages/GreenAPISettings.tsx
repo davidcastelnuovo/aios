@@ -12,7 +12,23 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowRight, Webhook, Key, CheckCircle2, AlertCircle, Copy, ExternalLink } from "lucide-react";
+import { ArrowRight, Webhook, Key, CheckCircle2, AlertCircle, Copy, ExternalLink, UserPlus } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export default function GreenAPISettings() {
   const { tenantId } = useCurrentTenant();
@@ -24,6 +40,8 @@ export default function GreenAPISettings() {
 
   const [instanceId, setInstanceId] = useState("");
   const [apiToken, setApiToken] = useState("");
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
 
   // Fetch existing integration for current user
   const { data: integration, isLoading } = useQuery({
@@ -47,6 +65,38 @@ export default function GreenAPISettings() {
       }
 
       return data;
+    },
+    enabled: !!tenantId && !!userId,
+  });
+
+  // Fetch tenant users for assignment
+  const { data: tenantUsers = [] } = useQuery({
+    queryKey: ['tenant-users-for-assignment', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      
+      const { data, error } = await supabase
+        .from('tenant_users')
+        .select(`
+          user_id,
+          profiles!inner (
+            id,
+            full_name,
+            email
+          )
+        `)
+        .eq('tenant_id', tenantId);
+
+      if (error) throw error;
+      
+      // Filter out current user and format
+      return (data || [])
+        .filter((tu: any) => tu.user_id !== userId)
+        .map((tu: any) => ({
+          id: tu.user_id,
+          name: tu.profiles?.full_name || tu.profiles?.email || 'משתמש',
+          email: tu.profiles?.email,
+        }));
     },
     enabled: !!tenantId && !!userId,
   });
@@ -154,6 +204,51 @@ export default function GreenAPISettings() {
     },
   });
 
+  // Assign integration to another user mutation
+  const assignMutation = useMutation({
+    mutationFn: async () => {
+      if (!integration?.id || !selectedUserId || !tenantId || !userId) {
+        throw new Error("חסרים נתונים לביצוע השיוך");
+      }
+
+      // Update integration ownership
+      const { error: updateError } = await supabase
+        .from('tenant_integrations')
+        .update({ user_id: selectedUserId })
+        .eq('id', integration.id);
+
+      if (updateError) throw updateError;
+
+      // Update all chat messages to new owner
+      const { error: messagesError } = await supabase
+        .from('chat_messages')
+        .update({ connection_user_id: selectedUserId })
+        .eq('connection_user_id', userId)
+        .eq('tenant_id', tenantId);
+
+      if (messagesError) throw messagesError;
+    },
+    onSuccess: () => {
+      toast({
+        title: "האינטגרציה שויכה בהצלחה",
+        description: "המשתמש החדש יוכל לראות את הצ'אטים מעתה",
+      });
+      setAssignDialogOpen(false);
+      setSelectedUserId("");
+      queryClient.invalidateQueries({ queryKey: ['green-api-integration', tenantId, userId] });
+      queryClient.invalidateQueries({ queryKey: ['chat-integrations', tenantId] });
+      // Navigate back since user no longer owns this integration
+      navigate(buildPath('/chat-integrations'));
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "שגיאה בשיוך האינטגרציה",
+        description: error.message,
+      });
+    },
+  });
+
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/green-api-webhook`;
 
   const copyWebhookUrl = () => {
@@ -195,14 +290,26 @@ export default function GreenAPISettings() {
                 <CheckCircle2 className="h-5 w-5" />
                 <span className="font-semibold">האינטגרציה פעילה ומוכנה לשימוש</span>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => reconfigureMutation.mutate()}
-                disabled={reconfigureMutation.isPending}
-              >
-                {reconfigureMutation.isPending ? "מעדכן..." : "רענן הגדרות Webhook"}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => reconfigureMutation.mutate()}
+                  disabled={reconfigureMutation.isPending}
+                >
+                  {reconfigureMutation.isPending ? "מעדכן..." : "רענן הגדרות Webhook"}
+                </Button>
+                {tenantUsers.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAssignDialogOpen(true)}
+                  >
+                    <UserPlus className="h-4 w-4 ml-2" />
+                    שייך למשתמש אחר
+                  </Button>
+                )}
+              </div>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
               אם הודעות יוצאות לא מופיעות, לחץ על "רענן הגדרות" כדי לעדכן את ההגדרות ב-Green API
@@ -369,6 +476,61 @@ export default function GreenAPISettings() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Assign to User Dialog */}
+      <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle>שייך אינטגרציה למשתמש</DialogTitle>
+            <DialogDescription>
+              בחר משתמש שיהיה הבעלים של חיבור Green API זה
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>בחר משתמש</Label>
+              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="בחר משתמש..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {tenantUsers.map((user: any) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.name} {user.email && `(${user.email})`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>שים לב:</strong> לאחר השיוך, לא תוכל לראות את הצ'אטים של חיבור זה. המשתמש החדש יראה את כל הצ'אטים.
+              </AlertDescription>
+            </Alert>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setAssignDialogOpen(false);
+                setSelectedUserId("");
+              }}
+            >
+              ביטול
+            </Button>
+            <Button
+              onClick={() => assignMutation.mutate()}
+              disabled={!selectedUserId || assignMutation.isPending}
+            >
+              {assignMutation.isPending ? "משייך..." : "שייך למשתמש"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
