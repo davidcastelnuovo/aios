@@ -1,8 +1,7 @@
 import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useUserAgencies } from "@/hooks/useUserAgencies";
-import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTenant } from "@/contexts/TenantContext";
 
 interface AgencyContextType {
   selectedAgency: string;
@@ -15,17 +14,13 @@ const AgencyContext = createContext<AgencyContextType | undefined>(undefined);
 
 export function AgencyProvider({ children }: { children: ReactNode }) {
   const storageKey = "selectedAgencyId";
-  const getInitialSelectedAgency = () => {
-    try {
-      return localStorage.getItem(storageKey) || "all";
-    } catch {
-      return "all";
-    }
-  };
-  const [selectedAgency, setSelectedAgency] = useState<string>(getInitialSelectedAgency());
+  const [selectedAgency, setSelectedAgency] = useState<string>("all");
   const didSetDefault = useRef(false);
-  const { userAgencyIds } = useUserAgencies();
-  const { tenantId } = useCurrentTenant();
+  const queryClient = useQueryClient();
+  
+  // CRITICAL: Get tenant info including isActiveTenantSynced
+  const { currentTenantId, isActiveTenantSynced } = useTenant();
+  const prevTenantIdRef = useRef<string | null>(null);
 
   // Persist selection
   useEffect(() => {
@@ -34,17 +29,31 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, [selectedAgency]);
 
-  // Get all agencies for the filter - including shared agencies
+  // Reset selection and refetch when tenant changes
+  useEffect(() => {
+    if (currentTenantId && prevTenantIdRef.current && currentTenantId !== prevTenantIdRef.current) {
+      console.log("🔄 AgencyContext: Tenant changed, resetting to 'all'");
+      setSelectedAgency("all");
+      didSetDefault.current = false;
+      // Force refetch agencies for new tenant
+      queryClient.invalidateQueries({ queryKey: ["agencies-filter", currentTenantId] });
+    }
+    prevTenantIdRef.current = currentTenantId;
+  }, [currentTenantId, queryClient]);
+
+  // Get all agencies for the filter - ONLY when tenant is synced
   const { data: allAgencies, isLoading: isLoadingAgencies } = useQuery({
-    queryKey: ["agencies-filter", tenantId],
+    queryKey: ["agencies-filter", currentTenantId],
     queryFn: async () => {
-      if (!tenantId) return [] as any[];
+      if (!currentTenantId) return [] as any[];
+      
+      console.log("📋 Fetching agencies for tenant:", currentTenantId);
       
       // Get agencies owned by current tenant
       const { data: ownedAgencies, error: ownedError } = await supabase
         .from("agencies")
         .select("id, name")
-        .eq("tenant_id", tenantId)
+        .eq("tenant_id", currentTenantId)
         .order("name");
       
       if (ownedError) {
@@ -56,7 +65,7 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
       const { data: sharedAccess, error: sharedError } = await supabase
         .from("agency_tenant_access")
         .select("agency_id, agencies(id, name)")
-        .eq("accessing_tenant_id", tenantId);
+        .eq("accessing_tenant_id", currentTenantId);
       
       if (sharedError) {
         console.error("Error fetching shared agencies:", sharedError);
@@ -74,36 +83,27 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
         }
       });
       
-      return Array.from(uniqueMap.values()).sort((a, b) => 
+      const result = Array.from(uniqueMap.values()).sort((a, b) => 
         a.name.localeCompare(b.name)
       );
+      
+      console.log("✅ Loaded", result.length, "agencies for tenant:", currentTenantId);
+      return result;
     },
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
-    refetchOnWindowFocus: false, // Don't refetch when window regains focus
-    enabled: !!tenantId,
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+    // CRITICAL: Only enable query when tenant is synced to DB
+    enabled: !!currentTenantId && isActiveTenantSynced,
   });
 
-  // Agencies available (RLS-filtered)
   const agencies = allAgencies;
-
   const isLoading = isLoadingAgencies;
 
-  // Reset selection when tenant changes
-  const prevTenantIdRef = useRef(tenantId);
-  useEffect(() => {
-    if (tenantId && prevTenantIdRef.current && tenantId !== prevTenantIdRef.current) {
-      // Tenant changed - reset to "all"
-      setSelectedAgency("all");
-      didSetDefault.current = false;
-    }
-    prevTenantIdRef.current = tenantId;
-  }, [tenantId]);
-
-  // Ensure a valid selection and sensible defaults
+  // Ensure a valid selection
   useEffect(() => {
     if (!agencies || agencies.length === 0) return;
 
-    // If only ONE agency exists, always select it (not "all")
+    // If only ONE agency exists, always select it
     if (agencies.length === 1) {
       if (selectedAgency !== agencies[0].id) {
         setSelectedAgency(agencies[0].id);
@@ -121,7 +121,8 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
   }, [agencies, selectedAgency]);
 
   // Wait for initial loading before rendering children
-  if (isLoading && !agencies) {
+  // But only block if tenant is synced and we're still loading
+  if (isActiveTenantSynced && isLoading && !agencies) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -139,7 +140,6 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
 export function useAgency() {
   const context = useContext(AgencyContext);
   if (context === undefined) {
-    // Safe fallback to avoid crashes before AgencyProvider mounts
     return {
       selectedAgency: "all",
       setSelectedAgency: () => {},

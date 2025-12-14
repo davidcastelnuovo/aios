@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,13 +18,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { tenantSlug } = useParams();
   const navigate = useNavigate();
-  const [currentTenantId, setCurrentTenantId] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem("selectedTenantId");
-    } catch {
-      return null;
-    }
-  });
+  const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
+  const [isActiveTenantSynced, setIsActiveTenantSynced] = useState(false);
+  const previousTenantIdRef = useRef<string | null>(null);
 
   // Get tenant by slug from URL
   const { data: tenantFromSlug, isLoading: isLoadingSlug } = useQuery({
@@ -46,130 +42,136 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       return data;
     },
     enabled: !!tenantSlug,
+    staleTime: 1000 * 60 * 5,
   });
 
-  // State to track if the active tenant has been synced to DB
-  const [isActiveTenantSynced, setIsActiveTenantSynced] = useState(false);
-
-  // Update currentTenantId when URL slug changes - URL ALWAYS takes priority
+  // CRITICAL: When URL has tenant slug, use it immediately - no localStorage fallback
   useEffect(() => {
     if (tenantFromSlug?.id) {
-      if (tenantFromSlug.id !== currentTenantId) {
-        console.log("🔄 URL tenant differs from current, updating:", tenantFromSlug.id);
-        setIsActiveTenantSynced(false); // Mark as not synced when tenant changes
-        setCurrentTenantId(tenantFromSlug.id);
-      } else if (!isActiveTenantSynced) {
-        // Same tenant but not synced yet - trigger sync
+      const newTenantId = tenantFromSlug.id;
+      const isChange = previousTenantIdRef.current !== null && previousTenantIdRef.current !== newTenantId;
+      
+      if (isChange) {
+        console.log("🔄 Tenant changed from", previousTenantIdRef.current, "to", newTenantId);
+        // Mark as NOT synced - this will trigger sync effect
         setIsActiveTenantSynced(false);
       }
+      
+      if (currentTenantId !== newTenantId) {
+        setCurrentTenantId(newTenantId);
+      }
+      
+      previousTenantIdRef.current = newTenantId;
     }
-  }, [tenantFromSlug]);
+  }, [tenantFromSlug?.id]);
 
-  // Persist tenant selection and clear cache when tenant changes
-  // CRITICAL: This must complete BEFORE data is fetched
+  // Sync tenant to database and clear cache
   useEffect(() => {
-    const updateActiveTenant = async () => {
+    const syncTenantToDb = async () => {
+      if (!currentTenantId) {
+        setIsActiveTenantSynced(false);
+        return;
+      }
+
+      // Already synced for this tenant
+      if (isActiveTenantSynced) {
+        return;
+      }
+
       try {
-        if (currentTenantId) {
-          localStorage.setItem("selectedTenantId", currentTenantId);
+        console.log("🔄 Syncing tenant to DB:", currentTenantId);
+        
+        // CRITICAL: Cancel all queries and clear cache FIRST
+        await queryClient.cancelQueries();
+        
+        // Clear all tenant-specific data
+        const keysToRemove = [
+          "tasks", "clients", "agencies", "agencies-filter", "user-agency-ids",
+          "leads", "campaigners", "client-onboarding", "finance", "sales-people",
+          "suppliers", "products", "automations", "time-entries", "chat-contacts",
+          "crm-tables", "crm-records", "tenant-for-operations"
+        ];
+        
+        keysToRemove.forEach(key => {
+          queryClient.removeQueries({ queryKey: [key] });
+        });
+        
+        // Also invalidate to force refetch
+        await queryClient.invalidateQueries({ queryKey: ["agencies-filter"] });
+        await queryClient.invalidateQueries({ queryKey: ["tenant-for-operations"] });
+        
+        // Update localStorage
+        localStorage.setItem("selectedTenantId", currentTenantId);
+        
+        // Update user_active_tenant in database
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { error } = await (supabase as any)
+            .from("user_active_tenant")
+            .upsert({
+              user_id: user.id,
+              tenant_id: currentTenantId,
+              updated_at: new Date().toISOString(),
+            }, {
+              onConflict: "user_id"
+            });
           
-          // CRITICAL: Clear all cached data FIRST before updating DB
-          // This ensures old data is not shown while we update the tenant
-          console.log("🔄 Clearing cache before tenant sync:", currentTenantId);
-          await queryClient.cancelQueries();
-          queryClient.removeQueries({ queryKey: ["tasks"] });
-          queryClient.removeQueries({ queryKey: ["clients"] });
-          queryClient.removeQueries({ queryKey: ["agencies"] });
-          queryClient.removeQueries({ queryKey: ["agencies-filter"] });
-          queryClient.removeQueries({ queryKey: ["user-agency-ids"] });
-          queryClient.removeQueries({ queryKey: ["leads"] });
-          queryClient.removeQueries({ queryKey: ["campaigners"] });
-          queryClient.removeQueries({ queryKey: ["client-onboarding"] });
-          queryClient.removeQueries({ queryKey: ["finance"] });
-          queryClient.removeQueries({ queryKey: ["sales-people"] });
-          queryClient.removeQueries({ queryKey: ["suppliers"] });
-          queryClient.removeQueries({ queryKey: ["products"] });
-          queryClient.removeQueries({ queryKey: ["automations"] });
-          queryClient.removeQueries({ queryKey: ["time-entries"] });
-          
-          // Update user_active_tenant in the database - MUST complete for RLS to work correctly
-          const { data: { user } } = await supabase.auth.getUser();
-          if (user) {
-            const { error } = await (supabase as any)
-              .from("user_active_tenant")
-              .upsert({
-                user_id: user.id,
-                tenant_id: currentTenantId,
-                updated_at: new Date().toISOString(),
-              }, {
-                onConflict: "user_id"
-              });
-            
-            if (error) {
-              console.error("Error updating active tenant in DB:", error);
-            } else {
-              console.log("✅ Active tenant synced to DB:", currentTenantId);
-            }
-            
-            // Add a small delay to ensure DB has processed the update
-            await new Promise(resolve => setTimeout(resolve, 100));
+          if (error) {
+            console.error("Error updating active tenant in DB:", error);
+          } else {
+            console.log("✅ Active tenant synced to DB:", currentTenantId);
           }
           
-          // Mark as synced AFTER the DB update completes
-          setIsActiveTenantSynced(true);
-        } else {
-          localStorage.removeItem("selectedTenantId");
-          setIsActiveTenantSynced(false);
+          // Small delay to ensure DB processed the update
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
+        
+        // Mark as synced AFTER everything completes
+        setIsActiveTenantSynced(true);
+        
       } catch (error) {
-        console.error("Error updating active tenant:", error);
-        setIsActiveTenantSynced(true); // Still allow loading even if DB update fails
+        console.error("Error syncing tenant:", error);
+        // Still mark as synced to unblock UI
+        setIsActiveTenantSynced(true);
       }
     };
     
-    updateActiveTenant();
-  }, [currentTenantId, queryClient]);
+    syncTenantToDb();
+  }, [currentTenantId, isActiveTenantSynced, queryClient]);
 
-  // Get current user's active tenant (priority) or first tenant
+  // Get current user's tenant if not on tenant-scoped route
   const { data: userTenant, isLoading: isLoadingUserTenant } = useQuery({
     queryKey: ["user-tenant"],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return null;
 
-      // Get all user's tenants
       const { data: userTenants, error: tenantsError } = await supabase
         .from("tenant_users")
         .select("tenant_id, tenants(id, name, slug, status)")
         .eq("user_id", user.id);
 
       if (tenantsError || !userTenants || userTenants.length === 0) {
-        console.log("No tenants found for user");
         return null;
       }
 
-      // Try to get the active tenant from user_active_tenant
-      const { data: activeTenant, error: activeTenantError } = await (supabase as any)
+      const { data: activeTenant } = await (supabase as any)
         .from("user_active_tenant")
         .select("tenant_id")
         .eq("user_id", user.id)
         .maybeSingle();
 
-      // Check if active tenant is in user's available tenants
-      if (!activeTenantError && activeTenant) {
+      if (activeTenant) {
         const matchingTenant = userTenants.find((t: any) => t.tenant_id === activeTenant.tenant_id);
         if (matchingTenant) {
-          console.log("Found active tenant:", matchingTenant);
           return matchingTenant as any;
         }
       }
 
-      // Otherwise return first available tenant
-      console.log("Using first available tenant:", userTenants[0]);
       return userTenants[0] as any;
     },
     staleTime: 1000 * 60 * 5,
-    enabled: !tenantSlug, // Only fetch if not in tenant-scoped route
+    enabled: !tenantSlug,
   });
 
   // Get current tenant details
@@ -189,44 +191,35 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         return null;
       }
       
-      if (!data) {
-        console.warn("No tenant found for ID:", currentTenantId);
-        return null;
-      }
-      
       return data;
     },
     enabled: !!currentTenantId,
-    retry: 2,
-    retryDelay: 500,
   });
 
-  // Set default tenant from user's tenant if not already set (for non-tenant routes)
+  // Set default tenant from user's tenant if not on tenant route
   useEffect(() => {
     if (!tenantSlug && !currentTenantId && userTenant?.tenant_id) {
       setCurrentTenantId(userTenant.tenant_id);
+      previousTenantIdRef.current = userTenant.tenant_id;
     }
   }, [tenantSlug, currentTenantId, userTenant]);
 
-  // Redirect to tenant-scoped route if we have a tenant but no slug in URL
+  // Redirect to tenant-scoped route if needed
   useEffect(() => {
     const path = window.location.pathname;
     const isPublicRoute = ['/', '/auth', '/signup', '/landing', '/setup', '/privacy', '/terms'].includes(path);
     const isAlreadyTenantScoped = path.startsWith('/t/');
     
-    // Only redirect if not public, not already tenant-scoped, and we have a tenant slug
     if (!isPublicRoute && !isAlreadyTenantScoped && currentTenant?.slug) {
-      // Extract page from current path (remove leading slash) or default to dashboard
       const page = path.slice(1) || 'dashboard';
-      console.log("🔄 Redirecting to tenant-scoped route:", `/t/${currentTenant.slug}/${page}`);
       navigate(`/t/${currentTenant.slug}/${page}`, { replace: true });
     }
   }, [currentTenant?.slug, navigate]);
 
   const isLoading = isLoadingUserTenant || isLoadingTenant || isLoadingSlug;
 
-  // Wait for initial loading OR wait for active tenant to sync to DB
-  if ((isLoading && !currentTenant && !userTenant) || (currentTenantId && !isActiveTenantSynced)) {
+  // CRITICAL: Block rendering until tenant is synced to DB
+  if (currentTenantId && !isActiveTenantSynced) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -234,7 +227,15 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  // CRITICAL: When on tenant-scoped route, ALWAYS use tenant from URL
+  // Block while loading if no tenant yet
+  if (isLoading && !currentTenant && !userTenant) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   const effectiveTenantId = tenantFromSlug?.id || currentTenantId;
   const effectiveTenant = tenantFromSlug || currentTenant || userTenant?.tenants;
 
