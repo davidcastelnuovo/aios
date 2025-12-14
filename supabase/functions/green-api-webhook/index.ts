@@ -116,11 +116,16 @@ Deno.serve(async (req) => {
     // Handle group messages differently
     if (isGroup) {
       const groupChatId = senderData.chatId;
-      // chatName from Green API contains the actual group name for both incoming and outgoing
-      // senderName contains the person who sent the message
-      const groupNameFromApi = senderData.chatName || null;
+      // IMPORTANT: Green API sends different chatName for incoming vs outgoing messages!
+      // - For INCOMING messages: chatName = actual group name
+      // - For OUTGOING messages: chatName = sender's name (not the group name!)
+      // So we only trust chatName from incoming messages for group name updates
+      const groupNameFromApi = isIncoming ? (senderData.chatName || null) : null;
       
-      console.log('👥 Group message detected. ChatId:', groupChatId, 'Group name from API:', groupNameFromApi, 'Direction:', isOutgoing ? 'outgoing' : 'incoming');
+      console.log('👥 Group message detected. ChatId:', groupChatId, 
+        'chatName from API:', senderData.chatName,
+        'Using for group name:', groupNameFromApi,
+        'Direction:', isOutgoing ? 'outgoing' : 'incoming');
 
       // Check if group exists, if not create it
       const { data: existingGroup } = await supabaseClient
@@ -134,7 +139,7 @@ Deno.serve(async (req) => {
       let groupIsBlocked = existingGroup?.is_blocked || false;
 
       if (!groupId) {
-        // Create new group with the name from API, or placeholder if not available
+        // Create new group - only use chatName from incoming messages
         const newGroupName = groupNameFromApi || `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
         const { data: newGroup, error: groupError } = await supabaseClient
           .from('whatsapp_groups')
@@ -154,8 +159,8 @@ Deno.serve(async (req) => {
         groupId = newGroup.id;
         console.log('✅ Created new group:', newGroupName);
       } else if (existingGroup && groupNameFromApi) {
-        // Always update group name if the API provides a different name
-        // This ensures we fix incorrect names that were saved previously
+        // Update group name from incoming messages if it's different
+        // This fixes groups that got wrong names from outgoing messages
         if (groupNameFromApi !== existingGroup.group_name) {
           await supabaseClient
             .from('whatsapp_groups')
