@@ -157,19 +157,57 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
     enabled: !!automation.tenant_id && (form.watch("action_type") === "send_whatsapp" || form.watch("action_type") === "create_manychat_subscriber"),
   });
 
-  // Fetch Green API integrations
+  // Fetch Green API integrations - include both tenant integrations AND permitted integrations
   const { data: greenApiIntegrations } = useQuery({
-    queryKey: ['green-api-integrations', automation.tenant_id],
+    queryKey: ['green-api-integrations-for-automation', automation.tenant_id],
     queryFn: async () => {
       if (!automation.tenant_id) return [];
-      const { data, error } = await supabase
+      
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+      
+      // Get tenant integrations
+      const { data: tenantIntegrations, error: tenantError } = await supabase
         .from('tenant_integrations')
         .select('id, settings, user_id, profiles!tenant_integrations_user_id_fkey(full_name)')
         .eq('tenant_id', automation.tenant_id)
         .eq('integration_type', 'green_api')
         .eq('is_active', true);
-      if (error) throw error;
-      return data || [];
+      
+      if (tenantError) throw tenantError;
+      
+      // Get integrations the user has permission to use
+      const { data: permissions } = await supabase
+        .from('integration_user_permissions')
+        .select('integration_id')
+        .eq('user_id', user.id);
+      
+      const permittedIds = permissions?.map(p => p.integration_id) || [];
+      
+      if (permittedIds.length > 0) {
+        // Fetch permitted integrations from other tenants
+        const { data: permittedIntegrations } = await supabase
+          .from('tenant_integrations')
+          .select('id, settings, user_id, profiles!tenant_integrations_user_id_fkey(full_name)')
+          .in('id', permittedIds)
+          .eq('integration_type', 'green_api')
+          .eq('is_active', true);
+        
+        // Merge and deduplicate
+        const allIntegrations = [...(tenantIntegrations || [])];
+        const existingIds = new Set(allIntegrations.map(i => i.id));
+        
+        permittedIntegrations?.forEach(integration => {
+          if (!existingIds.has(integration.id)) {
+            allIntegrations.push(integration);
+          }
+        });
+        
+        return allIntegrations;
+      }
+      
+      return tenantIntegrations || [];
     },
     enabled: !!automation.tenant_id && (form.watch("action_type") === "send_greenapi_message" || form.watch("action_type") === "send_greenapi_to_campaigner"),
   });
