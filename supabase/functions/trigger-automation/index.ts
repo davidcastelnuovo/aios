@@ -703,10 +703,11 @@ function replaceTemplateVariables(template: string, data: any, tenantSlug?: stri
   const priorityValue = data.priority?.toString() || ''
   const formattedPriority = priorityMap[priorityValue.toLowerCase()] || priorityValue
   
-  // Base URL for links
+  // Base URL for links - use actual production URL
+  const appUrl = Deno.env.get('APP_URL') || 'https://marketing-captain.lovable.app'
   const baseUrl = tenantSlug 
-    ? `https://lovable.dev/t/${tenantSlug}` 
-    : 'https://lovable.dev'
+    ? `${appUrl}/t/${tenantSlug}` 
+    : appUrl
   
   const variables: Record<string, string> = {
     // Contact info
