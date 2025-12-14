@@ -362,7 +362,7 @@ export default function ChatMessageList({
                 {quotedMessage}
                 {reactionEmoji}
                 {mediaContent}
-                {message.message_text && !reactionEmoji && !quotedMessage && !isPlaceholder(message.message_text) && (
+                {message.message_text && !reactionEmoji && !isPlaceholder(message.message_text) && (
                   <div className="whitespace-pre-wrap break-words text-[14.2px] leading-[19px]" dir="rtl">
                     {renderTextWithLinks(message.message_text)}
                   </div>
