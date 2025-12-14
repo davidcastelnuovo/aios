@@ -35,6 +35,12 @@ interface Message {
   } | null;
 }
 
+interface ReplyToMessage {
+  id: string;
+  text: string;
+  senderName?: string;
+}
+
 interface ChatViewProps {
   contactId: string;
   contactType: "client" | "lead" | "group" | "unknown";
@@ -55,6 +61,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   const [linkPhoneDialogOpen, setLinkPhoneDialogOpen] = useState(false);
   const [linkCampaignerDialogOpen, setLinkCampaignerDialogOpen] = useState(false);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
+  const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null);
 
   // Fetch contact details
   const { data: contact, isLoading: isLoadingContact } = useQuery({
@@ -340,7 +347,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
     ? messagesData?.[firstUnreadIndex]?.id 
     : messagesData?.[messagesData.length - 1]?.id;
 
-  const handleSendMessage = async (message: string) => {
+  const handleSendMessage = async (message: string, quotedMessageId?: string) => {
     if (!contact) return;
 
     try {
@@ -389,6 +396,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           message,
           phoneNumber: senderPhone || contact.phone,
           provider: "green_api",
+          quotedMessageId,
         };
 
         // Only add IDs for known contact types
@@ -635,12 +643,23 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           contactType={contactType} 
           agencyId={contact?.agency_id}
           anchorMessageId={anchorMessageId}
+          onReplyToMessage={(msg) => setReplyToMessage({
+            id: msg.raw_provider_data?.idMessage || msg.id,
+            text: msg.message_text,
+            senderName: msg.sender_name || undefined,
+          })}
         />
       </div>
 
       {/* Input area - קבוע */}
       <div className="border-t bg-card shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
-        <ChatInput onSend={handleSendMessage} onSendFile={handleSendFile} isLoading={false} />
+        <ChatInput 
+          onSend={handleSendMessage} 
+          onSendFile={handleSendFile} 
+          isLoading={false}
+          replyToMessage={replyToMessage}
+          onClearReply={() => setReplyToMessage(null)}
+        />
       </div>
 
       {contactType === "unknown" && (

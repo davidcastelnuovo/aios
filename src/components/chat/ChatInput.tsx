@@ -1,28 +1,45 @@
 import { useState, useRef, KeyboardEvent } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Send, Paperclip, Mic, Square, X, Loader2 } from "lucide-react";
+import { Send, Paperclip, Mic, Square, X, Loader2, Smile } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import data from '@emoji-mart/data';
+import Picker from '@emoji-mart/react';
 
-interface ChatInputProps {
-  onSend: (message: string) => void;
-  onSendFile?: (file: File, caption?: string) => Promise<void>;
-  isLoading: boolean;
+interface ReplyToMessage {
+  id: string;
+  text: string;
+  senderName?: string;
 }
 
-export default function ChatInput({ onSend, onSendFile, isLoading }: ChatInputProps) {
+interface ChatInputProps {
+  onSend: (message: string, quotedMessageId?: string) => void;
+  onSendFile?: (file: File, caption?: string) => Promise<void>;
+  isLoading: boolean;
+  replyToMessage?: ReplyToMessage | null;
+  onClearReply?: () => void;
+}
+
+export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessage, onClearReply }: ChatInputProps) {
   const [message, setMessage] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const isMobile = useIsMobile();
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSend = async () => {
     if (selectedFile && onSendFile) {
@@ -31,6 +48,7 @@ export default function ChatInput({ onSend, onSendFile, isLoading }: ChatInputPr
         setSelectedFile(null);
         setFilePreview(null);
         setMessage("");
+        onClearReply?.();
       } catch (error) {
         console.error('Error sending file:', error);
       }
@@ -38,8 +56,9 @@ export default function ChatInput({ onSend, onSendFile, isLoading }: ChatInputPr
     }
     
     if (!message.trim() || isLoading) return;
-    onSend(message);
+    onSend(message, replyToMessage?.id);
     setMessage("");
+    onClearReply?.();
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -139,8 +158,31 @@ export default function ChatInput({ onSend, onSendFile, isLoading }: ChatInputPr
     }
   };
 
+  const handleEmojiSelect = (emoji: any) => {
+    setMessage(prev => prev + emoji.native);
+    setShowEmojiPicker(false);
+    textareaRef.current?.focus();
+  };
+
   return (
     <div className={`${isMobile ? 'p-2' : 'p-4'} space-y-2`}>
+      {/* Reply preview */}
+      {replyToMessage && (
+        <div className="flex items-center gap-2 p-2 bg-muted rounded-lg border-r-4 border-blue-500">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-blue-600">
+              מגיב ל{replyToMessage.senderName || 'הודעה'}
+            </p>
+            <p className="text-sm truncate text-muted-foreground">
+              {replyToMessage.text}
+            </p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClearReply} className="h-8 w-8">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
       {/* File preview */}
       {selectedFile && (
         <div className="flex items-center gap-2 p-2 bg-muted rounded-lg">
@@ -182,6 +224,35 @@ export default function ChatInput({ onSend, onSendFile, isLoading }: ChatInputPr
           <Paperclip className="h-4 w-4" />
         </Button>
 
+        {/* Emoji picker button */}
+        <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0 h-10 w-10"
+              disabled={isLoading || isRecording}
+            >
+              <Smile className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent 
+            className="w-auto p-0 border-none shadow-lg" 
+            side="top" 
+            align="start"
+            sideOffset={8}
+          >
+            <Picker 
+              data={data} 
+              onEmojiSelect={handleEmojiSelect}
+              locale="he"
+              theme="light"
+              previewPosition="none"
+              skinTonePosition="none"
+            />
+          </PopoverContent>
+        </Popover>
+
         {/* Voice recording button */}
         <Button
           variant={isRecording ? "destructive" : "ghost"}
@@ -200,6 +271,7 @@ export default function ChatInput({ onSend, onSendFile, isLoading }: ChatInputPr
         </Button>
 
         <Textarea
+          ref={textareaRef}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}

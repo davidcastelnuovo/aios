@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     
     console.log('✅ User authenticated:', user.id);
 
-    const { clientId, leadId, groupId, message, phoneNumber, tenantId: providedTenantId } = await req.json();
+    const { clientId, leadId, groupId, message, phoneNumber, tenantId: providedTenantId, quotedMessageId } = await req.json();
     
     if (!message) {
       return new Response(JSON.stringify({ error: 'Missing message' }), {
@@ -167,20 +167,27 @@ Deno.serve(async (req) => {
       chatId = `${e164Digits}@c.us`;
     }
 
-    console.log('📤 Sending message via Green API:', { instanceId, chatId, message });
+    console.log('📤 Sending message via Green API:', { instanceId, chatId, message, quotedMessageId });
 
     // Send message via Green API
     const greenApiUrl = `https://api.green-api.com/waInstance${instanceId}/sendMessage/${apiToken}`;
+    
+    const messageBody: any = {
+      chatId: chatId,
+      message: message,
+    };
+
+    // Add quoted message ID if replying to a message
+    if (quotedMessageId) {
+      messageBody.quotedMessageId = quotedMessageId;
+    }
     
     const response = await fetch(greenApiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        chatId: chatId,
-        message: message,
-      }),
+      body: JSON.stringify(messageBody),
     });
 
     const responseData = await response.json();

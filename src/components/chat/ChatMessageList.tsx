@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { Loader2, MoreVertical, Copy, CheckSquare } from "lucide-react";
+import { Loader2, MoreVertical, Copy, CheckSquare, Reply } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import CustomAudioPlayer from "./CustomAudioPlayer";
 import {
@@ -34,6 +34,7 @@ interface ChatMessageListProps {
   contactType?: 'client' | 'lead' | 'group' | 'unknown';
   agencyId?: string;
   anchorMessageId?: string;
+  onReplyToMessage?: (message: Message) => void;
 }
 
 // Color palette for group members - distinct colors for easy identification
@@ -71,6 +72,7 @@ export default function ChatMessageList({
   contactType,
   agencyId,
   anchorMessageId,
+  onReplyToMessage,
 }: ChatMessageListProps) {
   const isMobile = useIsMobile();
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
@@ -388,6 +390,10 @@ export default function ChatMessageList({
                         <DropdownMenuItem onClick={() => handleCopyMessage(message.message_text)}>
                           <Copy className="ml-2 h-4 w-4" />
                           העתק
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => onReplyToMessage?.(message)}>
+                          <Reply className="ml-2 h-4 w-4" />
+                          הגב
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => handleConvertToTask(message)}>
                           <CheckSquare className="ml-2 h-4 w-4" />
