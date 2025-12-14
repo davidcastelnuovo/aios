@@ -170,7 +170,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       // Get tenant integrations
       const { data: tenantIntegrations, error: tenantError } = await supabase
         .from('tenant_integrations')
-        .select('id, settings, user_id, profiles!tenant_integrations_user_id_fkey(full_name)')
+        .select('id, settings, user_id')
         .eq('tenant_id', automation.tenant_id)
         .eq('integration_type', 'green_api')
         .eq('is_active', true);
@@ -185,17 +185,18 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       
       const permittedIds = permissions?.map(p => p.integration_id) || [];
       
+      let allIntegrations = [...(tenantIntegrations || [])];
+      
       if (permittedIds.length > 0) {
         // Fetch permitted integrations from other tenants
         const { data: permittedIntegrations } = await supabase
           .from('tenant_integrations')
-          .select('id, settings, user_id, profiles!tenant_integrations_user_id_fkey(full_name)')
+          .select('id, settings, user_id')
           .in('id', permittedIds)
           .eq('integration_type', 'green_api')
           .eq('is_active', true);
         
         // Merge and deduplicate
-        const allIntegrations = [...(tenantIntegrations || [])];
         const existingIds = new Set(allIntegrations.map(i => i.id));
         
         permittedIntegrations?.forEach(integration => {
@@ -203,11 +204,26 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
             allIntegrations.push(integration);
           }
         });
-        
-        return allIntegrations;
       }
       
-      return tenantIntegrations || [];
+      // Fetch owner names for all integrations
+      if (allIntegrations.length > 0) {
+        const userIds = [...new Set(allIntegrations.map(i => i.user_id).filter(Boolean))];
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name')
+            .in('id', userIds);
+          
+          const profileMap = new Map(profiles?.map(p => [p.id, p.full_name]) || []);
+          allIntegrations = allIntegrations.map(i => ({
+            ...i,
+            owner_name: profileMap.get(i.user_id) || null
+          }));
+        }
+      }
+      
+      return allIntegrations;
     },
     enabled: !!automation.tenant_id && (form.watch("action_type") === "send_greenapi_message" || form.watch("action_type") === "send_greenapi_to_campaigner"),
   });
@@ -767,7 +783,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                             <SelectItem value="">ברירת מחדל (חיבור ראשון)</SelectItem>
                             {greenApiIntegrations.map((integration: any) => (
                               <SelectItem key={integration.id} value={integration.id}>
-                                {integration.profiles?.full_name || 'חיבור'} - {integration.settings?.idInstance}
+                                {integration.owner_name || 'חיבור'} ({integration.settings?.idInstance?.slice(-4) || 'לא ידוע'})
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -819,7 +835,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                             <SelectItem value="">ברירת מחדל (חיבור ראשון)</SelectItem>
                             {greenApiIntegrations.map((integration: any) => (
                               <SelectItem key={integration.id} value={integration.id}>
-                                {integration.profiles?.full_name || 'חיבור'} - {integration.settings?.idInstance}
+                                {integration.owner_name || 'חיבור'} ({integration.settings?.idInstance?.slice(-4) || 'לא ידוע'})
                               </SelectItem>
                             ))}
                           </SelectContent>
