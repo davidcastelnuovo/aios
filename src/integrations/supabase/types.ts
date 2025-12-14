@@ -2957,6 +2957,10 @@ export type Database = {
         Args: { p_integration_id: string; p_user_id: string }
         Returns: boolean
       }
+      user_is_tenant_member: {
+        Args: { check_tenant_id: string }
+        Returns: boolean
+      }
       user_manages_agency: {
         Args: { _agency_id: string; _user_id: string }
         Returns: boolean
