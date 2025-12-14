@@ -51,7 +51,10 @@ const formSchema = z.object({
     "task_calendar_created",
     "task_overdue",
   ]),
-  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber"]),
+  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber", "send_greenapi_message", "add_lead_update", "add_client_update"]),
+  // Green API / update template fields
+  message_template: z.string().optional(),
+  update_template: z.string().optional(),
   webhook_url: z.string().optional(),
   webhook_method: z.enum(["POST", "GET", "PUT"]).optional(),
   body_template: z.string().optional(),
@@ -142,6 +145,8 @@ export function AddAutomationForm() {
       field_mapping_time: "",
       field_mapping_location: "",
       field_mapping_contact: "",
+      message_template: "",
+      update_template: "אין מענה בתאריך {{date}} בשעה {{time}}",
     },
   });
 
@@ -213,6 +218,14 @@ export function AddAutomationForm() {
       } else if (values.action_type === "create_manychat_subscriber") {
         configuration = {
           manychat_tag_id: values.manychat_tag_id || null,
+        };
+      } else if (values.action_type === "send_greenapi_message") {
+        configuration = {
+          message_template: values.message_template || "",
+        };
+      } else if (values.action_type === "add_lead_update" || values.action_type === "add_client_update") {
+        configuration = {
+          update_template: values.update_template || "",
         };
       }
 
@@ -383,6 +396,9 @@ export function AddAutomationForm() {
                       <SelectItem value="update_status">שינוי סטטוס</SelectItem>
                       <SelectItem value="send_whatsapp">שלח WhatsApp (ManyChat)</SelectItem>
                       <SelectItem value="create_manychat_subscriber">צור subscriber ב-ManyChat</SelectItem>
+                      <SelectItem value="send_greenapi_message">שלח WhatsApp (Green API)</SelectItem>
+                      <SelectItem value="add_lead_update">הוסף עדכון לליד</SelectItem>
+                      <SelectItem value="add_client_update">הוסף עדכון ללקוח</SelectItem>
                       <SelectItem value="email" disabled>אימייל (בקרוב)</SelectItem>
                       <SelectItem value="notification" disabled>התראה (בקרוב)</SelectItem>
                     </SelectContent>
@@ -692,6 +708,52 @@ export function AddAutomationForm() {
                   </ul>
                 </div>
               </>
+            )}
+
+            {actionType === "send_greenapi_message" && (
+              <FormField
+                control={form.control}
+                name="message_template"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>תבנית הודעה *</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="שלום {{contact_name}}, תודה על פנייתך!"
+                        rows={4}
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormDescription className="text-xs">
+                      משתנים זמינים: {`{{contact_name}}, {{company_name}}, {{phone}}, {{status}}, {{date}}, {{time}}, {{day_of_week}}`}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {(actionType === "add_lead_update" || actionType === "add_client_update") && (
+              <FormField
+                control={form.control}
+                name="update_template"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>תבנית עדכון *</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder="אין מענה בתאריך {{date}} בשעה {{time}}"
+                        rows={3}
+                        {...field} 
+                      />
+                    </FormControl>
+                    <FormDescription className="text-xs">
+                      משתנים זמינים: {`{{contact_name}}, {{company_name}}, {{phone}}, {{status}}, {{date}}, {{time}}, {{day_of_week}}`}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             )}
 
             <FormField

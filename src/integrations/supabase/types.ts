@@ -2984,6 +2984,9 @@ export type Database = {
         | "update_status"
         | "send_whatsapp"
         | "create_manychat_subscriber"
+        | "send_greenapi_message"
+        | "add_lead_update"
+        | "add_client_update"
       automation_trigger:
         | "task_assigned"
         | "task_status_changed"
@@ -3187,6 +3190,9 @@ export const Constants = {
         "update_status",
         "send_whatsapp",
         "create_manychat_subscriber",
+        "send_greenapi_message",
+        "add_lead_update",
+        "add_client_update",
       ],
       automation_trigger: [
         "task_assigned",
