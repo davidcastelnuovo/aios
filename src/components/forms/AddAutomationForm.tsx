@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Info } from "lucide-react";
+import { MessageTemplateBuilder } from "./MessageTemplateBuilder";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 
@@ -778,17 +779,14 @@ export function AddAutomationForm() {
                   name="message_template"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>תבנית הודעה *</FormLabel>
                       <FormControl>
-                        <Textarea 
+                        <MessageTemplateBuilder 
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          label="תבנית הודעה *"
                           placeholder="שלום {{contact_name}}, תודה על פנייתך!"
-                          rows={4}
-                          {...field} 
                         />
                       </FormControl>
-                      <FormDescription className="text-xs">
-                        משתנים זמינים: {`{{contact_name}}, {{company_name}}, {{phone}}, {{status}}, {{date}}, {{time}}, {{day_of_week}}`}
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -857,17 +855,14 @@ export function AddAutomationForm() {
                   name="message_template"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>תבנית הודעה *</FormLabel>
                       <FormControl>
-                        <Textarea 
+                        <MessageTemplateBuilder 
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          label="תבנית הודעה *"
                           placeholder="משימה חדשה: {{task_title}}&#10;לקוח: {{client_name}}&#10;עדיפות: {{priority}}"
-                          rows={4}
-                          {...field} 
                         />
                       </FormControl>
-                      <FormDescription className="text-xs">
-                        משתנים זמינים: {`{{task_title}}, {{client_name}}, {{campaigner_name}}, {{priority}}, {{due_date}}, {{date}}, {{time}}`}
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -889,17 +884,14 @@ export function AddAutomationForm() {
                 name="update_template"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>תבנית עדכון *</FormLabel>
                     <FormControl>
-                      <Textarea 
+                      <MessageTemplateBuilder 
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        label="תבנית עדכון *"
                         placeholder="אין מענה בתאריך {{date}} בשעה {{time}}"
-                        rows={3}
-                        {...field} 
                       />
                     </FormControl>
-                    <FormDescription className="text-xs">
-                      משתנים זמינים: {`{{contact_name}}, {{company_name}}, {{phone}}, {{status}}, {{date}}, {{time}}, {{day_of_week}}`}
-                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

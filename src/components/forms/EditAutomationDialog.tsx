@@ -32,6 +32,7 @@ import {
 import { toast } from "sonner";
 import { Info } from "lucide-react";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
+import { MessageTemplateBuilder } from "./MessageTemplateBuilder";
 
 const formSchema = z.object({
   name: z.string().min(1, "שם האוטומציה הוא שדה חובה"),
@@ -746,17 +747,14 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   name="message_template"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>תבנית הודעה *</FormLabel>
                       <FormControl>
-                        <Textarea 
+                        <MessageTemplateBuilder 
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          label="תבנית הודעה *"
                           placeholder="שלום {{contact_name}}, תודה על פנייתך!"
-                          rows={4}
-                          {...field} 
                         />
                       </FormControl>
-                      <FormDescription className="text-xs">
-                        משתנים זמינים: {`{{contact_name}}, {{company_name}}, {{phone}}, {{status}}, {{date}}, {{time}}, {{day_of_week}}`}
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -825,17 +823,14 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   name="message_template"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>תבנית הודעה *</FormLabel>
                       <FormControl>
-                        <Textarea 
+                        <MessageTemplateBuilder 
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          label="תבנית הודעה *"
                           placeholder="משימה חדשה: {{task_title}}&#10;לקוח: {{client_name}}&#10;עדיפות: {{priority}}"
-                          rows={4}
-                          {...field} 
                         />
                       </FormControl>
-                      <FormDescription className="text-xs">
-                        משתנים זמינים: {`{{task_title}}, {{client_name}}, {{campaigner_name}}, {{priority}}, {{due_date}}, {{date}}, {{time}}`}
-                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -849,17 +844,14 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                 name="update_template"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>תבנית עדכון *</FormLabel>
                     <FormControl>
-                      <Textarea 
+                      <MessageTemplateBuilder 
+                        value={field.value || ""}
+                        onChange={field.onChange}
+                        label="תבנית עדכון *"
                         placeholder="אין מענה בתאריך {{date}} בשעה {{time}}"
-                        rows={3}
-                        {...field} 
                       />
                     </FormControl>
-                    <FormDescription className="text-xs">
-                      משתנים זמינים: {`{{contact_name}}, {{company_name}}, {{phone}}, {{status}}, {{date}}, {{time}}, {{day_of_week}}`}
-                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
