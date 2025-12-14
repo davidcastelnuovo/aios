@@ -799,36 +799,37 @@ export function AddAutomationForm() {
 
             {actionType === "send_greenapi_message" && (
               <>
-                {greenApiIntegrations && greenApiIntegrations.length >= 1 && (
-                  <FormField
-                    control={form.control}
-                    name="green_api_integration_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>בחר חיבור Green API</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="בחר חיבור (ברירת מחדל: הראשון הזמין)" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-background z-[100]">
-                            <SelectItem value="">ברירת מחדל (חיבור ראשון)</SelectItem>
-                            {greenApiIntegrations.map((integration: any) => (
+                <FormField
+                  control={form.control}
+                  name="green_api_integration_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>בחר חיבור Green API *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר חיבור" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          {greenApiIntegrations && greenApiIntegrations.length > 0 ? (
+                            greenApiIntegrations.map((integration: any) => (
                               <SelectItem key={integration.id} value={integration.id}>
                                 {integration.owner_name || 'חיבור'} ({integration.settings?.idInstance?.slice(-4) || 'לא ידוע'})
                               </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription className="text-xs">
-                          בחר איזה חיבור Green API להשתמש לשליחת ההודעה
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
+                            ))
+                          ) : (
+                            <SelectItem value="" disabled>לא נמצאו חיבורי Green API</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-xs">
+                        בחר איזה חיבור Green API להשתמש לשליחת ההודעה
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="message_template"
@@ -851,36 +852,37 @@ export function AddAutomationForm() {
 
             {actionType === "send_greenapi_to_campaigner" && (
               <>
-                {greenApiIntegrations && greenApiIntegrations.length >= 1 && (
-                  <FormField
-                    control={form.control}
-                    name="green_api_integration_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>בחר חיבור Green API</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="בחר חיבור (ברירת מחדל: הראשון הזמין)" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-background z-[100]">
-                            <SelectItem value="">ברירת מחדל (חיבור ראשון)</SelectItem>
-                            {greenApiIntegrations.map((integration: any) => (
+                <FormField
+                  control={form.control}
+                  name="green_api_integration_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>בחר חיבור Green API *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר חיבור" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          {greenApiIntegrations && greenApiIntegrations.length > 0 ? (
+                            greenApiIntegrations.map((integration: any) => (
                               <SelectItem key={integration.id} value={integration.id}>
                                 {integration.owner_name || 'חיבור'} ({integration.settings?.idInstance?.slice(-4) || 'לא ידוע'})
                               </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormDescription className="text-xs">
-                          בחר איזה חיבור Green API להשתמש לשליחת ההודעה
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
+                            ))
+                          ) : (
+                            <SelectItem value="" disabled>לא נמצאו חיבורי Green API</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-xs">
+                        בחר איזה חיבור Green API להשתמש לשליחת ההודעה
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <FormField
                   control={form.control}
                   name="campaigner_send_target"
