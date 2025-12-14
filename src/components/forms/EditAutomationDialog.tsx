@@ -49,6 +49,8 @@ const formSchema = z.object({
     "task_overdue",
   ]),
   action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber", "send_greenapi_message", "send_greenapi_to_campaigner", "add_lead_update", "add_client_update"]),
+  // Green API connection selection
+  green_api_integration_id: z.string().optional(),
   campaigner_send_target: z.enum(["phone", "group"]).optional(),
   // Green API / update template fields
   message_template: z.string().optional(),
@@ -136,6 +138,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       message_template: automation.configuration?.message_template || "",
       update_template: automation.configuration?.update_template || "אין מענה בתאריך {{date}} בשעה {{time}}",
       campaigner_send_target: automation.configuration?.send_target || "phone",
+      green_api_integration_id: automation.configuration?.integration_id || "",
     },
   });
 
@@ -151,6 +154,23 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       return Array.isArray(data?.tags) ? data.tags : [];
     },
     enabled: !!automation.tenant_id && (form.watch("action_type") === "send_whatsapp" || form.watch("action_type") === "create_manychat_subscriber"),
+  });
+
+  // Fetch Green API integrations
+  const { data: greenApiIntegrations } = useQuery({
+    queryKey: ['green-api-integrations', automation.tenant_id],
+    queryFn: async () => {
+      if (!automation.tenant_id) return [];
+      const { data, error } = await supabase
+        .from('tenant_integrations')
+        .select('id, settings, user_id, profiles!tenant_integrations_user_id_fkey(full_name)')
+        .eq('tenant_id', automation.tenant_id)
+        .eq('integration_type', 'green_api')
+        .eq('is_active', true);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!automation.tenant_id && (form.watch("action_type") === "send_greenapi_message" || form.watch("action_type") === "send_greenapi_to_campaigner"),
   });
 
   const updateAutomationMutation = useMutation({
@@ -206,11 +226,13 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       } else if (values.action_type === "send_greenapi_message") {
         configuration = {
           message_template: values.message_template || "",
+          integration_id: values.green_api_integration_id || null,
         };
       } else if (values.action_type === "send_greenapi_to_campaigner") {
         configuration = {
           message_template: values.message_template || "",
           send_target: values.campaigner_send_target || "phone",
+          integration_id: values.green_api_integration_id || null,
         };
       } else if (values.action_type === "add_lead_update" || values.action_type === "add_client_update") {
         configuration = {
@@ -688,30 +710,92 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
             )}
 
             {actionType === "send_greenapi_message" && (
-              <FormField
-                control={form.control}
-                name="message_template"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>תבנית הודעה *</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="שלום {{contact_name}}, תודה על פנייתך!"
-                        rows={4}
-                        {...field} 
-                      />
-                    </FormControl>
-                    <FormDescription className="text-xs">
-                      משתנים זמינים: {`{{contact_name}}, {{company_name}}, {{phone}}, {{status}}, {{date}}, {{time}}, {{day_of_week}}`}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
+              <>
+                {greenApiIntegrations && greenApiIntegrations.length > 1 && (
+                  <FormField
+                    control={form.control}
+                    name="green_api_integration_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>בחר חיבור Green API</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="בחר חיבור (ברירת מחדל: הראשון הזמין)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-background z-[100]">
+                            <SelectItem value="">ברירת מחדל (חיבור ראשון)</SelectItem>
+                            {greenApiIntegrations.map((integration: any) => (
+                              <SelectItem key={integration.id} value={integration.id}>
+                                {integration.profiles?.full_name || 'חיבור'} - {integration.settings?.idInstance}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription className="text-xs">
+                          בחר איזה חיבור Green API להשתמש לשליחת ההודעה
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 )}
-              />
+                <FormField
+                  control={form.control}
+                  name="message_template"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>תבנית הודעה *</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          placeholder="שלום {{contact_name}}, תודה על פנייתך!"
+                          rows={4}
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormDescription className="text-xs">
+                        משתנים זמינים: {`{{contact_name}}, {{company_name}}, {{phone}}, {{status}}, {{date}}, {{time}}, {{day_of_week}}`}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
             )}
 
             {actionType === "send_greenapi_to_campaigner" && (
               <>
+                {greenApiIntegrations && greenApiIntegrations.length > 1 && (
+                  <FormField
+                    control={form.control}
+                    name="green_api_integration_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>בחר חיבור Green API</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="בחר חיבור (ברירת מחדל: הראשון הזמין)" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-background z-[100]">
+                            <SelectItem value="">ברירת מחדל (חיבור ראשון)</SelectItem>
+                            {greenApiIntegrations.map((integration: any) => (
+                              <SelectItem key={integration.id} value={integration.id}>
+                                {integration.profiles?.full_name || 'חיבור'} - {integration.settings?.idInstance}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormDescription className="text-xs">
+                          בחר איזה חיבור Green API להשתמש לשליחת ההודעה
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <FormField
                   control={form.control}
                   name="campaigner_send_target"

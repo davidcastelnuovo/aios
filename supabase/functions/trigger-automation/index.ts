@@ -712,7 +712,7 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   console.log('Executing Green API message:', config)
   console.log('Data:', data)
   
-  const { message_template } = config
+  const { message_template, integration_id } = config
   
   if (!message_template) {
     throw new Error('תבנית הודעה לא הוגדרה')
@@ -745,18 +745,40 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     throw new Error('לא נמצא מספר טלפון לשליחה')
   }
   
-  // Find user's Green API integration
-  const { data: integration, error: integrationError } = await supabase
-    .from('tenant_integrations')
-    .select('id, api_key, settings, user_id')
-    .eq('tenant_id', tenantId)
-    .eq('integration_type', 'green_api')
-    .eq('is_active', true)
-    .limit(1)
-    .maybeSingle()
+  // Find Green API integration - use specified ID or fall back to first active
+  let integration: any = null
   
-  if (integrationError || !integration) {
-    throw new Error('לא נמצא חיבור Green API פעיל')
+  if (integration_id) {
+    console.log(`Looking for specific integration: ${integration_id}`)
+    const { data: specificIntegration, error } = await supabase
+      .from('tenant_integrations')
+      .select('id, api_key, settings, user_id')
+      .eq('id', integration_id)
+      .eq('is_active', true)
+      .maybeSingle()
+    
+    if (!error && specificIntegration) {
+      integration = specificIntegration
+      console.log(`Using specified integration: ${integration.id}`)
+    }
+  }
+  
+  // Fallback to first active integration
+  if (!integration) {
+    const { data: fallbackIntegration, error: integrationError } = await supabase
+      .from('tenant_integrations')
+      .select('id, api_key, settings, user_id')
+      .eq('tenant_id', tenantId)
+      .eq('integration_type', 'green_api')
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle()
+    
+    if (integrationError || !fallbackIntegration) {
+      throw new Error('לא נמצא חיבור Green API פעיל')
+    }
+    integration = fallbackIntegration
+    console.log(`Using fallback integration: ${integration.id}`)
   }
   
   const { idInstance, apiTokenInstance } = integration.settings || {}
@@ -808,7 +830,7 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
   console.log('Executing Green API message to campaigner:', config)
   console.log('Data:', data)
   
-  const { message_template, send_target } = config
+  const { message_template, send_target, integration_id } = config
   
   if (!message_template) {
     throw new Error('תבנית הודעה לא הוגדרה')
@@ -837,11 +859,9 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
   let chatId: string | null = null
   
   if (send_target === 'group' && campaignerGroupId) {
-    // Use the group ID directly
     chatId = campaignerGroupId.includes('@g.us') ? campaignerGroupId : `${campaignerGroupId}@g.us`
     console.log(`Sending to group: ${chatId}`)
   } else if (campaignerPhone) {
-    // Format phone for Green API
     const cleanPhone = campaignerPhone.replace(/\D/g, '')
     const last9 = cleanPhone.slice(-9)
     chatId = `972${last9}@c.us`
@@ -855,18 +875,40 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
     throw new Error('לא נמצא מספר טלפון לקמפיינר')
   }
   
-  // Find user's Green API integration
-  const { data: integration, error: integrationError } = await supabase
-    .from('tenant_integrations')
-    .select('id, api_key, settings, user_id')
-    .eq('tenant_id', tenantId)
-    .eq('integration_type', 'green_api')
-    .eq('is_active', true)
-    .limit(1)
-    .maybeSingle()
+  // Find Green API integration - use specified ID or fall back to first active
+  let integration: any = null
   
-  if (integrationError || !integration) {
-    throw new Error('לא נמצא חיבור Green API פעיל')
+  if (integration_id) {
+    console.log(`Looking for specific integration: ${integration_id}`)
+    const { data: specificIntegration, error } = await supabase
+      .from('tenant_integrations')
+      .select('id, api_key, settings, user_id')
+      .eq('id', integration_id)
+      .eq('is_active', true)
+      .maybeSingle()
+    
+    if (!error && specificIntegration) {
+      integration = specificIntegration
+      console.log(`Using specified integration: ${integration.id}`)
+    }
+  }
+  
+  // Fallback to first active integration
+  if (!integration) {
+    const { data: fallbackIntegration, error: integrationError } = await supabase
+      .from('tenant_integrations')
+      .select('id, api_key, settings, user_id')
+      .eq('tenant_id', tenantId)
+      .eq('integration_type', 'green_api')
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle()
+    
+    if (integrationError || !fallbackIntegration) {
+      throw new Error('לא נמצא חיבור Green API פעיל')
+    }
+    integration = fallbackIntegration
+    console.log(`Using fallback integration: ${integration.id}`)
   }
   
   const { idInstance, apiTokenInstance } = integration.settings || {}
