@@ -830,7 +830,8 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   }
   
   // Support both naming conventions: idInstance/apiTokenInstance and instance_id/api_key
-  const idInstance = integration.settings?.idInstance || integration.settings?.instance_id
+  // Also check both settings object AND direct columns
+  const idInstance = integration.settings?.idInstance || integration.settings?.instance_id || integration.instance_id
   const apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
   
   if (!idInstance || !apiTokenInstance) {
