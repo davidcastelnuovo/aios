@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
     // Find the specific tenant and user for this instance
     const { data: integration, error: integrationError } = await supabaseClient
       .from('tenant_integrations')
-      .select('tenant_id, user_id, settings')
+      .select('tenant_id, user_id, settings, instance_id, api_key')
       .eq('integration_type', 'green_api')
       .eq('is_active', true)
       .eq('instance_id', instanceId)
@@ -142,15 +142,9 @@ Deno.serve(async (req) => {
     // Handle group messages differently
     if (isGroup) {
       const groupChatId = senderData.chatId;
-      // IMPORTANT: Green API sends different chatName for incoming vs outgoing messages!
-      // - For INCOMING messages: chatName = actual group name
-      // - For OUTGOING messages: chatName = sender's name (not the group name!)
-      // So we only trust chatName from incoming messages for group name updates
-      const groupNameFromApi = isIncoming ? (senderData.chatName || null) : null;
       
       console.log('👥 Group message detected. ChatId:', groupChatId, 
-        'chatName from API:', senderData.chatName,
-        'Using for group name:', groupNameFromApi,
+        'chatName from API (unreliable):', senderData.chatName,
         'Direction:', isOutgoing ? 'outgoing' : 'incoming');
 
       // Check if group exists, if not create it
@@ -164,9 +158,48 @@ Deno.serve(async (req) => {
       let groupId = existingGroup?.id;
       let groupIsBlocked = existingGroup?.is_blocked || false;
 
+      // Helper function to fetch REAL group name from Green API
+      async function fetchRealGroupName(chatId: string): Promise<string | null> {
+        try {
+          const apiToken = integration?.api_key;
+          if (!instanceId || !apiToken) {
+            console.log('⚠️ Missing credentials for Green API call');
+            return null;
+          }
+          
+          console.log('🔍 Fetching real group name from Green API for:', chatId);
+          
+          const response = await fetch(
+            `https://api.green-api.com/waInstance${instanceId}/getContactInfo/${apiToken}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chatId })
+            }
+          );
+          
+          if (response.ok) {
+            const contactInfo = await response.json();
+            console.log('📋 Green API getContactInfo response:', JSON.stringify(contactInfo));
+            // For groups, the name is in 'name' field
+            const realName = contactInfo.name || contactInfo.chatName || null;
+            console.log('✅ Real group name from API:', realName);
+            return realName;
+          } else {
+            console.error('❌ Failed to fetch group info:', response.status, await response.text());
+            return null;
+          }
+        } catch (e) {
+          console.error('❌ Error fetching group name:', e);
+          return null;
+        }
+      }
+
       if (!groupId) {
-        // Create new group - only use chatName from incoming messages
-        const newGroupName = groupNameFromApi || `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
+        // Create new group - fetch real name from Green API
+        let realGroupName = await fetchRealGroupName(groupChatId);
+        const newGroupName = realGroupName || `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
+        
         const { data: newGroup, error: groupError } = await supabaseClient
           .from('whatsapp_groups')
           .insert({
@@ -183,16 +216,25 @@ Deno.serve(async (req) => {
         }
 
         groupId = newGroup.id;
-        console.log('✅ Created new group:', newGroupName);
-      } else if (existingGroup && groupNameFromApi) {
-        // Update group name from incoming messages if it's different
-        // This fixes groups that got wrong names from outgoing messages
-        if (groupNameFromApi !== existingGroup.group_name) {
-          await supabaseClient
-            .from('whatsapp_groups')
-            .update({ group_name: groupNameFromApi })
-            .eq('id', groupId);
-          console.log('📝 Updated group name from:', existingGroup.group_name, 'to:', groupNameFromApi);
+        console.log('✅ Created new group with real name:', newGroupName);
+      } else if (existingGroup) {
+        // Check if name looks like a placeholder or sender name (not a real group name)
+        // Indicators: name starts with "קבוצה" OR contains emoji (likely sender name) OR doesn't look like group name
+        const currentName = existingGroup.group_name || '';
+        const looksLikePlaceholder = currentName.startsWith('קבוצה ');
+        const looksLikeSenderName = /🌴|📱|👤/.test(currentName) || currentName.split(' ').length <= 2;
+        
+        if (looksLikePlaceholder || looksLikeSenderName) {
+          console.log('🔄 Current group name might be incorrect, fetching real name...');
+          const realGroupName = await fetchRealGroupName(groupChatId);
+          
+          if (realGroupName && realGroupName !== currentName) {
+            await supabaseClient
+              .from('whatsapp_groups')
+              .update({ group_name: realGroupName })
+              .eq('id', groupId);
+            console.log('📝 Updated group name from:', currentName, 'to:', realGroupName);
+          }
         }
       }
       
