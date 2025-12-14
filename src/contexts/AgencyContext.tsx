@@ -92,17 +92,20 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!agencies || agencies.length === 0) return;
 
-    const exists = selectedAgency === "all" || agencies.some((a) => a.id === selectedAgency);
-
-    if (!exists) {
-      // If current selection is invalid, prefer "all" when multiple agencies exist
-      if (agencies.length > 1) {
-        setSelectedAgency("all");
-      } else {
+    // If only ONE agency exists, always select it (not "all")
+    if (agencies.length === 1) {
+      if (selectedAgency !== agencies[0].id) {
         setSelectedAgency(agencies[0].id);
+        didSetDefault.current = true;
       }
-      didSetDefault.current = true;
       return;
+    }
+
+    // Multiple agencies: validate current selection
+    const exists = selectedAgency === "all" || agencies.some((a) => a.id === selectedAgency);
+    if (!exists) {
+      setSelectedAgency("all");
+      didSetDefault.current = true;
     }
   }, [agencies, selectedAgency]);
 
