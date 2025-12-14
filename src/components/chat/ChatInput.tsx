@@ -10,9 +10,9 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import data from '@emoji-mart/data';
-import Picker from '@emoji-mart/react';
 
+// Simple emoji list for quick selection
+const COMMON_EMOJIS = ['😊', '😂', '❤️', '👍', '🙏', '😍', '🔥', '💪', '✅', '👏', '🎉', '😁', '🤔', '💯', '⭐', '🙌', '😎', '💬', '📞', '✨'];
 interface ReplyToMessage {
   id: string;
   text: string;
@@ -237,19 +237,22 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
             </Button>
           </PopoverTrigger>
           <PopoverContent 
-            className="w-auto p-0 border-none shadow-lg" 
+            className="w-64 p-2 shadow-lg" 
             side="top" 
             align="start"
             sideOffset={8}
           >
-            <Picker 
-              data={data} 
-              onEmojiSelect={handleEmojiSelect}
-              locale="he"
-              theme="light"
-              previewPosition="none"
-              skinTonePosition="none"
-            />
+            <div className="grid grid-cols-5 gap-1">
+              {COMMON_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  onClick={() => handleEmojiSelect({ native: emoji })}
+                  className="text-xl p-2 hover:bg-muted rounded transition-colors"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
           </PopoverContent>
         </Popover>
 
