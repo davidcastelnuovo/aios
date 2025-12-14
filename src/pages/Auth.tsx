@@ -79,30 +79,24 @@ useEffect(() => {
     }
 
     // Check if user is already authenticated (only if not in recovery mode)
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (session?.user) {
-      const slug = await resolveTenantSlug(session.user.id);
-      if (slug) {
-        // Check user role to determine landing page
-        const { data: roleData } = await (supabase as any)
-          .from("user_roles")
-          .select("role")
-          .eq("user_id", session.user.id)
-          .in("role", ["owner", "admin"])
-          .maybeSingle();
-        
-        // Owners and admins go to dashboard, others go to my-profile
-        const landingPage = roleData ? "dashboard" : "my-profile";
-        navigate(buildTenantPath(slug, landingPage));
-      } else {
-        toast({
-          title: "שגיאה",
-          description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
-          variant: "destructive",
-        });
+    // Skip navigation if there's a code param - onAuthStateChange will handle it
+    if (!code) {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        const slug = await resolveTenantSlug(session.user.id);
+        if (slug) {
+          // Navigate to tasks page (consistent with onAuthStateChange)
+          navigate(buildTenantPath(slug, "tasks"), { replace: true });
+        } else {
+          toast({
+            title: "שגיאה",
+            description: "לא נמצא tenant עבור המשתמש. נא לפנות לתמיכה.",
+            variant: "destructive",
+          });
+        }
+        return;
       }
-      return;
     }
   };
 
