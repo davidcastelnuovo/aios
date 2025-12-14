@@ -3023,6 +3023,8 @@ export type Database = {
         | "proposal_sent"
         | "closed"
         | "transferred_to_onboarding"
+        | "meeting_scheduled"
+        | "negotiation"
       onboarding_status:
         | "research_meeting"
         | "receiving_access"
@@ -3228,6 +3230,8 @@ export const Constants = {
         "proposal_sent",
         "closed",
         "transferred_to_onboarding",
+        "meeting_scheduled",
+        "negotiation",
       ],
       onboarding_status: [
         "research_meeting",
