@@ -39,10 +39,11 @@ interface ChatViewProps {
   contactId: string;
   contactType: "client" | "lead" | "group" | "unknown";
   senderPhone?: string;
+  contactName?: string;
   onBack?: () => void;
 }
 
-export default function ChatView({ contactId, contactType, senderPhone, onBack }: ChatViewProps) {
+export default function ChatView({ contactId, contactType, senderPhone, contactName, onBack }: ChatViewProps) {
   const queryClient = useQueryClient();
   const { tenant: currentTenant, tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
@@ -60,10 +61,10 @@ export default function ChatView({ contactId, contactType, senderPhone, onBack }
     queryKey: ["contact", contactId, contactType, senderPhone],
     queryFn: async () => {
       if (contactType === "unknown") {
-        // For unknown contacts, return mock data
+        // For unknown contacts, use the passed name or fallback to phone
         return {
           id: contactId,
-          name: senderPhone || contactId,
+          name: contactName || senderPhone || contactId,
           phone: senderPhone,
           email: null,
           agency_id: null,
