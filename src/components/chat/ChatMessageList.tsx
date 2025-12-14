@@ -204,20 +204,42 @@ export default function ChatMessageList({
     if (!reactionText) return null;
 
     // Get stanzaId to find the original message
-    const quotedStanzaId = messageData?.quotedMessage?.stanzaId;
+    const quotedMessage = messageData?.quotedMessage;
+    const quotedStanzaId = quotedMessage?.stanzaId;
     
     // Look for the original message in our messages array by idMessage
     const originalMessage = quotedStanzaId 
       ? messages.find(m => m.raw_provider_data?.idMessage === quotedStanzaId)
       : null;
 
+    // Try to get text from the quotedMessage itself if we can't find the original
+    const quotedText = originalMessage?.message_text || 
+                       quotedMessage?.textMessage || 
+                       quotedMessage?.caption || 
+                       quotedMessage?.extendedTextMessageData?.text ||
+                       null;
+    
+    // Check for media in quoted message
+    const hasImage = quotedMessage?.typeMessage === 'imageMessage' || quotedMessage?.downloadUrl;
+    const hasVideo = quotedMessage?.typeMessage === 'videoMessage';
+    const hasAudio = quotedMessage?.typeMessage === 'audioMessage';
+    const hasDocument = quotedMessage?.typeMessage === 'documentMessage';
+
+    let mediaIndicator = null;
+    if (hasImage) mediaIndicator = '📷 תמונה';
+    else if (hasVideo) mediaIndicator = '🎬 סרטון';
+    else if (hasAudio) mediaIndicator = '🎤 הודעה קולית';
+    else if (hasDocument) mediaIndicator = '📄 מסמך';
+
+    const displayText = quotedText || mediaIndicator;
+
     return (
       <div className="mb-1">
         {/* Show what message is being reacted to */}
-        {originalMessage ? (
+        {displayText ? (
           <div className="bg-black/5 border-r-4 border-purple-400 pr-2 py-1 mb-2 text-[12px] rounded-sm">
             <div className="font-medium text-xs text-purple-600 mb-0.5">תגובה להודעה:</div>
-            <div className="line-clamp-2 text-gray-600">{originalMessage.message_text}</div>
+            <div className="line-clamp-2 text-gray-600">{displayText}</div>
           </div>
         ) : quotedStanzaId ? (
           <div className="text-xs text-gray-400 mb-1">
