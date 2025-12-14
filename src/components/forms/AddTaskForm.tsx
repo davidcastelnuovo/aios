@@ -239,21 +239,18 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
           throw new Error("לא נמצאה סוכנות לשיוך המשימה");
         }
       } else {
-        // For quick tasks - auto-assign to current user's campaigner
+        // For quick tasks - auto-assign to current user's campaigner if available
         if (!finalCampaignerId && userCampaignerId) {
           finalCampaignerId = userCampaignerId;
         }
-        // If still no campaigner, use the first available one
+        // If still no campaigner, use the first available one (optional for quick tasks)
         if (!finalCampaignerId && campaigners && campaigners.length > 0) {
           finalCampaignerId = campaigners[0].id;
         }
-        if (!finalCampaignerId) {
-          throw new Error("לא נמצא קמפיינר לשיוך המשימה");
-        }
-        // For quick tasks - get agency from the selected campaigner
-        const selectedCampaignerForAgency = campaigners?.find(c => c.id === finalCampaignerId);
-        if (selectedCampaignerForAgency) {
-          // Get agency from campaigner_agencies
+        // Quick tasks don't require a campaigner - can proceed without one
+        
+        // For quick tasks - get agency from the selected campaigner if available
+        if (finalCampaignerId) {
           const { data: campaignerAgencies } = await supabase
             .from("campaigner_agencies")
             .select("agency_id")
@@ -262,11 +259,9 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
           
           if (campaignerAgencies && campaignerAgencies.length > 0) {
             finalAgencyId = campaignerAgencies[0].agency_id;
-          } else if (agencies && agencies.length > 0) {
-            // Fallback to first available agency
-            finalAgencyId = agencies[0].id;
           }
         }
+        // Fallback to first available agency if none found
         if (!finalAgencyId && agencies && agencies.length > 0) {
           finalAgencyId = agencies[0].id;
         }
