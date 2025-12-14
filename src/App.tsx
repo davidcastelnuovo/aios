@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { useSessionRefresh } from "@/hooks/useSessionRefresh";
 import { AppLayout } from "./components/layout/AppLayout";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AgencyProvider } from "./contexts/AgencyContext";
@@ -52,8 +53,15 @@ import { SuperAdminRoute } from "./components/SuperAdminRoute";
 
 const queryClient = new QueryClient();
 
+// Component to initialize session refresh
+function SessionRefreshInitializer() {
+  useSessionRefresh();
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <SessionRefreshInitializer />
     <BrowserRouter>
       <TooltipProvider delayDuration={0} skipDelayDuration={0}>
         <Toaster />
