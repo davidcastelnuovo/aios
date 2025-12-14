@@ -484,6 +484,7 @@ export default function Leads() {
   const { activeStatuses: leadStatuses } = useLeadStatuses();
   const { activeStages: pipelineStagesData } = useLeadPipelineStages();
   const { isFieldVisible } = useCustomFieldLabels('lead');
+  const [filterSalesPerson, setFilterSalesPerson] = useState<string>("all");
   
   // Convert dynamic pipeline stages to format compatible with existing code
   const PIPELINE_STAGES = useMemo(() => {
@@ -598,6 +599,23 @@ export default function Leads() {
       return false;
     });
   }, [leads, tenantId, userAgencyIds, isOwner]);
+
+  // Fetch sales people for filter
+  const { data: salesPeople } = useQuery({
+    queryKey: ["sales-people-filter", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [] as any[];
+      const { data, error } = await supabase
+        .from("sales_people")
+        .select("id, full_name")
+        .eq("tenant_id", tenantId)
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId,
+  });
 
   // Fetch products for lookup
   const { data: allProducts } = useQuery({
@@ -836,6 +854,15 @@ export default function Leads() {
         if (!matchesSearch) return false;
       }
       
+      // Sales person filter
+      if (filterSalesPerson !== "all") {
+        if (filterSalesPerson === "none" && lead.sales_person_id !== null) {
+          return false;
+        } else if (filterSalesPerson !== "none" && lead.sales_person_id !== filterSalesPerson) {
+          return false;
+        }
+      }
+      
       // Stage filter
       if (filterStage !== "all" && lead.status !== filterStage) {
         return false;
@@ -869,7 +896,7 @@ export default function Leads() {
       
       return true;
     });
-  }, [leads, searchQuery, filterStage, filterResponseStatus, startDate, endDate]);
+  }, [leads, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, startDate, endDate]);
 
   const getLeadsByStage = (stageId: string) => {
     return filteredLeads?.filter((lead: any) => lead.status === stageId) || [];
@@ -902,15 +929,16 @@ export default function Leads() {
           />
         </div>
         <div className="flex gap-2">
-          <Select value={selectedAgency || "all"} onValueChange={setSelectedAgency}>
+          <Select value={filterSalesPerson} onValueChange={setFilterSalesPerson}>
             <SelectTrigger className="flex-1">
-              <SelectValue placeholder="סוכנות" />
+              <SelectValue placeholder="איש מכירות" />
             </SelectTrigger>
             <SelectContent className="bg-background z-[100]">
-              <SelectItem value="all">כל הסוכנויות</SelectItem>
-              {agencies?.map((agency) => (
-                <SelectItem key={agency.id} value={agency.id}>
-                  {agency.name}
+              <SelectItem value="all">כל אנשי המכירות</SelectItem>
+              <SelectItem value="none">ללא שיוך</SelectItem>
+              {salesPeople?.map((sp) => (
+                <SelectItem key={sp.id} value={sp.id}>
+                  {sp.full_name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1105,15 +1133,16 @@ export default function Leads() {
               </Button>
             )}
           </div>
-          <Select value={selectedAgency || "all"} onValueChange={setSelectedAgency}>
+          <Select value={filterSalesPerson} onValueChange={setFilterSalesPerson}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="כל הסוכנויות" />
+              <SelectValue placeholder="איש מכירות" />
             </SelectTrigger>
             <SelectContent className="bg-background z-[100]">
-              <SelectItem value="all">כל הסוכנויות</SelectItem>
-              {agencies?.map((agency) => (
-                <SelectItem key={agency.id} value={agency.id}>
-                  {agency.name}
+              <SelectItem value="all">כל אנשי המכירות</SelectItem>
+              <SelectItem value="none">ללא שיוך</SelectItem>
+              {salesPeople?.map((sp) => (
+                <SelectItem key={sp.id} value={sp.id}>
+                  {sp.full_name}
                 </SelectItem>
               ))}
             </SelectContent>
