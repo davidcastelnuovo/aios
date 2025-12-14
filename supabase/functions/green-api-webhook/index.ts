@@ -261,14 +261,21 @@ Deno.serve(async (req) => {
     let clientId: string | null = null;
     let leadId: string | null = null;
     
+    // For outgoing messages, search by phone only (no provider check)
+    // For incoming messages, require active_chat_provider = 'green_api'
     // Search for client with matching phone in THIS tenant only
-    const { data: client } = await supabaseClient
+    let clientQuery = supabaseClient
       .from('clients')
       .select('id')
       .eq('tenant_id', tenantId)
-      .eq('active_chat_provider', 'green_api')
-      .ilike('phone', `%${phoneNumber}%`)
-      .maybeSingle();
+      .ilike('phone', `%${phoneNumber}%`);
+    
+    // Only filter by provider for incoming messages
+    if (isIncoming) {
+      clientQuery = clientQuery.eq('active_chat_provider', 'green_api');
+    }
+    
+    const { data: client } = await clientQuery.maybeSingle();
 
     if (client) {
       clientId = client.id;
@@ -295,13 +302,18 @@ Deno.serve(async (req) => {
       }
     } else {
       // Search for lead with matching phone in THIS tenant only
-      const { data: lead } = await supabaseClient
+      let leadQuery = supabaseClient
         .from('leads')
         .select('id')
         .eq('tenant_id', tenantId)
-        .eq('active_chat_provider', 'green_api')
-        .ilike('phone', `%${phoneNumber}%`)
-        .maybeSingle();
+        .ilike('phone', `%${phoneNumber}%`);
+      
+      // Only filter by provider for incoming messages
+      if (isIncoming) {
+        leadQuery = leadQuery.eq('active_chat_provider', 'green_api');
+      }
+      
+      const { data: lead } = await leadQuery.maybeSingle();
 
       if (lead) {
         leadId = lead.id;
@@ -327,7 +339,7 @@ Deno.serve(async (req) => {
           });
         }
       } else {
-        console.log(`⚠️ No contact found with Green API provider in tenant ${tenantId}`);
+        console.log(`⚠️ No contact found in tenant ${tenantId} for phone ${phoneNumber}`);
       }
     }
 
