@@ -149,14 +149,8 @@ useEffect(() => {
         
         const roles = rolesData?.map((r: any) => r.role) || [];
         
-        let landingPage = "my-profile";
-        if (roles.includes("owner") || roles.includes("admin")) {
-          landingPage = "dashboard";
-        } else if (roles.includes("sales_person")) {
-          landingPage = "sales-dashboard";
-        } else if (roles.includes("campaigner")) {
-          landingPage = "tasks";
-        }
+        // All users go to tasks page by default
+        const landingPage = "tasks";
         
         console.log("✅ Navigating to:", landingPage, "for tenant:", slug, "with roles:", roles);
         navigate(`/t/${slug}/${landingPage}`, { replace: true });
