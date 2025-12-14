@@ -1,23 +1,37 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, Phone, Mail, Calendar, Link as LinkIcon, Pencil } from "lucide-react";
+import { Building2, Phone, Mail, Calendar, Link as LinkIcon, Pencil, Trash2 } from "lucide-react";
 import { AddAgencyForm } from "@/components/forms/AddAgencyForm";
 import { EditAgencyDialog } from "@/components/forms/EditAgencyDialog";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTerminology } from "@/hooks/useTerminology";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function Agencies() {
   const { userId, isOwner } = useUserRole();
   const { userAgencyIds } = useUserAgencies();
   const { tenantId } = useCurrentTenant();
   const { t } = useTerminology();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [editingAgency, setEditingAgency] = useState<any | null>(null);
+  const [deletingAgency, setDeletingAgency] = useState<any | null>(null);
   
   const { data: agencies, isLoading } = useQuery({
     queryKey: ["agencies-list", tenantId, userId, userAgencyIds],
@@ -77,6 +91,47 @@ export default function Agencies() {
       );
     },
     enabled: !!tenantId,
+  });
+
+  const deleteAgencyMutation = useMutation({
+    mutationFn: async (agencyId: string) => {
+      // First check if agency has any linked data
+      const { count: clientsCount } = await supabase
+        .from("clients")
+        .select("*", { count: "exact", head: true })
+        .eq("agency_id", agencyId);
+
+      const { count: leadsCount } = await supabase
+        .from("leads")
+        .select("*", { count: "exact", head: true })
+        .eq("agency_id", agencyId);
+
+      if ((clientsCount || 0) > 0 || (leadsCount || 0) > 0) {
+        throw new Error(`לא ניתן למחוק סוכנות עם ${clientsCount || 0} לקוחות ו-${leadsCount || 0} לידים משויכים`);
+      }
+
+      const { error } = await supabase
+        .from("agencies")
+        .delete()
+        .eq("id", agencyId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agencies-list"] });
+      queryClient.invalidateQueries({ queryKey: ["agencies"] });
+      toast({
+        title: "הסוכנות נמחקה בהצלחה",
+      });
+      setDeletingAgency(null);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "שגיאה במחיקת הסוכנות",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
   });
 
   const getStatusColor = (status: string) => {
@@ -142,15 +197,25 @@ export default function Agencies() {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
                   {agency.is_owned && isOwner && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setEditingAgency(agency)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setEditingAgency(agency)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setDeletingAgency(agency)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </>
                   )}
                   <Badge variant="outline" className={getStatusColor(agency.status)}>
                     {getStatusText(agency.status)}
@@ -204,6 +269,29 @@ export default function Agencies() {
           onOpenChange={(open) => !open && setEditingAgency(null)}
         />
       )}
+
+      <AlertDialog open={!!deletingAgency} onOpenChange={(open) => !open && setDeletingAgency(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת סוכנות</AlertDialogTitle>
+            <AlertDialogDescription>
+              האם אתה בטוח שברצונך למחוק את הסוכנות "{deletingAgency?.name}"?
+              <br />
+              פעולה זו אינה הפיכה.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deletingAgency && deleteAgencyMutation.mutate(deletingAgency.id)}
+              disabled={deleteAgencyMutation.isPending}
+            >
+              {deleteAgencyMutation.isPending ? "מוחק..." : "מחק"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
