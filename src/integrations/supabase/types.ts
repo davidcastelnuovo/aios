@@ -430,6 +430,78 @@ export type Database = {
           },
         ]
       }
+      chat_contact_tags: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          group_id: string | null
+          id: string
+          lead_id: string | null
+          sender_phone: string | null
+          tag_id: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          lead_id?: string | null
+          sender_phone?: string | null
+          tag_id: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          group_id?: string | null
+          id?: string
+          lead_id?: string | null
+          sender_phone?: string | null
+          tag_id?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_contact_tags_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_contact_tags_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_contact_tags_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_contact_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "chat_tags"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_contact_tags_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_messages: {
         Row: {
           blocked_at: string | null
@@ -521,6 +593,44 @@ export type Database = {
           },
           {
             foreignKeyName: "chat_messages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_tags: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_tags_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1211,6 +1321,71 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      hidden_chats: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          group_id: string | null
+          hidden_at: string
+          id: string
+          lead_id: string | null
+          sender_phone: string | null
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          group_id?: string | null
+          hidden_at?: string
+          id?: string
+          lead_id?: string | null
+          sender_phone?: string | null
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          group_id?: string | null
+          hidden_at?: string
+          id?: string
+          lead_id?: string | null
+          sender_phone?: string | null
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hidden_chats_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hidden_chats_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hidden_chats_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hidden_chats_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       import_history: {
         Row: {
