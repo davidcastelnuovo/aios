@@ -75,28 +75,30 @@ export default function GreenAPISettings() {
     queryFn: async () => {
       if (!tenantId) return [];
       
-      const { data, error } = await supabase
+      // First get tenant_users, then fetch profiles separately to avoid RLS issues
+      const { data: tuData, error: tuError } = await supabase
         .from('tenant_users')
-        .select(`
-          user_id,
-          profiles!inner (
-            id,
-            full_name,
-            email
-          )
-        `)
+        .select('user_id')
         .eq('tenant_id', tenantId);
 
-      if (error) throw error;
+      if (tuError) throw tuError;
+      if (!tuData || tuData.length === 0) return [];
       
-      // Filter out current user and format
-      return (data || [])
-        .filter((tu: any) => tu.user_id !== userId)
-        .map((tu: any) => ({
-          id: tu.user_id,
-          name: tu.profiles?.full_name || tu.profiles?.email || 'משתמש',
-          email: tu.profiles?.email,
-        }));
+      const userIds = tuData.map(tu => tu.user_id).filter(id => id !== userId);
+      if (userIds.length === 0) return [];
+      
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', userIds);
+
+      if (profilesError) throw profilesError;
+      
+      return (profilesData || []).map((p: any) => ({
+        id: p.id,
+        name: p.full_name || p.email || 'משתמש',
+        email: p.email,
+      }));
     },
     enabled: !!tenantId && !!userId,
   });
