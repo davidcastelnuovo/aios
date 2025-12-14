@@ -51,13 +51,19 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   // State to track if the active tenant has been synced to DB
   const [isActiveTenantSynced, setIsActiveTenantSynced] = useState(false);
 
-  // Update currentTenantId when URL slug changes
+  // Update currentTenantId when URL slug changes - URL ALWAYS takes priority
   useEffect(() => {
-    if (tenantFromSlug?.id && tenantFromSlug.id !== currentTenantId) {
-      setIsActiveTenantSynced(false); // Mark as not synced when tenant changes
-      setCurrentTenantId(tenantFromSlug.id);
+    if (tenantFromSlug?.id) {
+      if (tenantFromSlug.id !== currentTenantId) {
+        console.log("🔄 URL tenant differs from current, updating:", tenantFromSlug.id);
+        setIsActiveTenantSynced(false); // Mark as not synced when tenant changes
+        setCurrentTenantId(tenantFromSlug.id);
+      } else if (!isActiveTenantSynced) {
+        // Same tenant but not synced yet - trigger sync
+        setIsActiveTenantSynced(false);
+      }
     }
-  }, [tenantFromSlug, currentTenantId]);
+  }, [tenantFromSlug]);
 
   // Persist tenant selection and clear cache when tenant changes
   // CRITICAL: This must complete BEFORE data is fetched
