@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useTenant } from "@/contexts/TenantContext";
 import {
   Dialog,
   DialogContent,
@@ -27,13 +28,16 @@ export function EditUserAgenciesDialog({
   userEmail,
 }: EditUserAgenciesDialogProps) {
   const { isOwner, userId: currentUserId } = useUserRole();
+  const { currentTenant } = useTenant();
   const queryClient = useQueryClient();
   const [selectedAgencies, setSelectedAgencies] = useState<string[]>([]);
 
-  // Fetch available agencies
+  // Fetch available agencies - filtered by current tenant
   const { data: agencies } = useQuery({
-    queryKey: ["agencies-for-edit", currentUserId],
+    queryKey: ["agencies-for-edit", currentUserId, currentTenant?.id],
     queryFn: async () => {
+      if (!currentTenant?.id) return [];
+      
       const { data: userRoles } = await supabase
         .from("user_roles")
         .select("role")
@@ -46,13 +50,14 @@ export function EditUserAgenciesDialog({
         const { data, error } = await supabase
           .from("agencies")
           .select("id, name")
+          .eq("tenant_id", currentTenant.id)
           .order("name");
         if (error) throw error;
         return data;
       }
       return [];
     },
-    enabled: open,
+    enabled: open && !!currentTenant?.id,
   });
 
   // Fetch current user's agencies
