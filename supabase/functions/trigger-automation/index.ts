@@ -801,9 +801,13 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
       .eq('is_active', true)
       .maybeSingle()
     
+    console.log('Specific integration query result:', { data: specificIntegration, error })
+    
     if (!error && specificIntegration) {
       integration = specificIntegration
-      console.log(`Using specified integration: ${integration.id}`)
+      console.log(`Using specified integration: ${integration.id}, has api_key: ${!!integration.api_key}`)
+    } else {
+      console.log(`Specified integration not found or error: ${JSON.stringify(error)}`)
     }
   }
   
