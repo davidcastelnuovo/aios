@@ -288,6 +288,30 @@ export default function ChatMessageList({
     return null;
   };
 
+  // Render text with clickable links
+  const renderTextWithLinks = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    
+    return parts.map((part, index) => {
+      if (part.match(urlRegex)) {
+        return (
+          <a 
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 underline hover:text-blue-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+          </a>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
+
   // Get sender color for group messages
   const getSenderDisplayColor = (message: Message): string => {
     if (contactType !== 'group' || message.direction !== 'inbound') {
@@ -338,7 +362,7 @@ export default function ChatMessageList({
                 {mediaContent}
                 {message.message_text && !reactionEmoji && !quotedMessage && !isPlaceholder(message.message_text) && (
                   <div className="whitespace-pre-wrap break-words text-[14.2px] leading-[19px]" dir="rtl">
-                    {message.message_text}
+                    {renderTextWithLinks(message.message_text)}
                   </div>
                 )}
                 <div
