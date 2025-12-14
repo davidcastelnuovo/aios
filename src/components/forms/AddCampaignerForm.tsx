@@ -41,6 +41,7 @@ const formSchema = z.object({
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   folder_link: z.string().url("קישור לא תקין").optional().or(z.literal("")),
   notes: z.string().optional(),
+  whatsapp_group_id: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -117,6 +118,7 @@ export function AddCampaignerForm() {
       email: "",
       folder_link: "",
       notes: "",
+      whatsapp_group_id: "",
     },
   });
 
@@ -134,6 +136,7 @@ export function AddCampaignerForm() {
           email: values.email || null,
           folder_link: values.folder_link || null,
           notes: values.notes || null,
+          whatsapp_group_id: values.whatsapp_group_id || null,
           active: true,
           tenant_id: tenantId,
         })
@@ -300,6 +303,20 @@ export function AddCampaignerForm() {
                   <FormLabel>קישור לתיקיה</FormLabel>
                   <FormControl>
                     <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="whatsapp_group_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>מזהה קבוצת WhatsApp</FormLabel>
+                  <FormControl>
+                    <Input placeholder="לדוגמה: 972501234567-1234567890@g.us" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

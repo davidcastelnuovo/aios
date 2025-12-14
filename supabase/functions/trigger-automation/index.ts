@@ -71,6 +71,8 @@ Deno.serve(async (req) => {
             response = await executeCreateManychatSubscriber(supabase, automation.configuration, payload.data, payload.tenant_id)
           } else if (automation.action_type === 'send_greenapi_message') {
             response = await executeGreenApiMessage(supabase, automation.configuration, payload.data, payload.tenant_id)
+          } else if (automation.action_type === 'send_greenapi_to_campaigner') {
+            response = await executeGreenApiToCampaigner(supabase, automation.configuration, payload.data, payload.tenant_id)
           } else if (automation.action_type === 'add_lead_update') {
             response = await executeAddLeadUpdate(supabase, automation.configuration, payload.data, payload.tenant_id)
           } else if (automation.action_type === 'add_client_update') {
@@ -689,6 +691,12 @@ function replaceTemplateVariables(template: string, data: any): string {
     date: now.toLocaleDateString('he-IL'),
     time: now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }),
     day_of_week: hebrewDays[now.getDay()],
+    // Task-specific variables
+    task_title: data.task_title || '',
+    client_name: data.client_name || '',
+    campaigner_name: data.campaigner_name || '',
+    priority: data.priority?.toString() || '',
+    due_date: data.due_date || '',
   }
   
   let result = template
@@ -791,6 +799,109 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     success: true,
     message_sent: message,
     chat_id: chatId,
+    result: sendResult,
+  }
+}
+
+// Execute Green API message to campaigner action
+async function executeGreenApiToCampaigner(supabase: any, config: any, data: any, tenantId: string) {
+  console.log('Executing Green API message to campaigner:', config)
+  console.log('Data:', data)
+  
+  const { message_template, send_target } = config
+  
+  if (!message_template) {
+    throw new Error('תבנית הודעה לא הוגדרה')
+  }
+  
+  // Get campaigner data from the trigger data
+  let campaignerPhone = data.campaigner_phone
+  let campaignerGroupId = data.campaigner_whatsapp_group_id
+  let campaignerId = data.campaigner_id
+  
+  // If no data from trigger, try to fetch from database
+  if (campaignerId && (!campaignerPhone || !campaignerGroupId)) {
+    const { data: campaigner } = await supabase
+      .from('campaigners')
+      .select('phone, whatsapp_group_id, full_name')
+      .eq('id', campaignerId)
+      .single()
+    
+    if (campaigner) {
+      campaignerPhone = campaigner.phone || campaignerPhone
+      campaignerGroupId = campaigner.whatsapp_group_id || campaignerGroupId
+    }
+  }
+  
+  // Determine chat ID based on send target
+  let chatId: string | null = null
+  
+  if (send_target === 'group' && campaignerGroupId) {
+    // Use the group ID directly
+    chatId = campaignerGroupId.includes('@g.us') ? campaignerGroupId : `${campaignerGroupId}@g.us`
+    console.log(`Sending to group: ${chatId}`)
+  } else if (campaignerPhone) {
+    // Format phone for Green API
+    const cleanPhone = campaignerPhone.replace(/\D/g, '')
+    const last9 = cleanPhone.slice(-9)
+    chatId = `972${last9}@c.us`
+    console.log(`Sending to phone: ${chatId}`)
+  }
+  
+  if (!chatId) {
+    if (send_target === 'group') {
+      throw new Error('לא נמצא מזהה קבוצת WhatsApp לקמפיינר. יש להגדיר מזהה קבוצה בכרטיס הקמפיינר')
+    }
+    throw new Error('לא נמצא מספר טלפון לקמפיינר')
+  }
+  
+  // Find user's Green API integration
+  const { data: integration, error: integrationError } = await supabase
+    .from('tenant_integrations')
+    .select('id, api_key, settings, user_id')
+    .eq('tenant_id', tenantId)
+    .eq('integration_type', 'green_api')
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle()
+  
+  if (integrationError || !integration) {
+    throw new Error('לא נמצא חיבור Green API פעיל')
+  }
+  
+  const { idInstance, apiTokenInstance } = integration.settings || {}
+  
+  if (!idInstance || !apiTokenInstance) {
+    throw new Error('הגדרות Green API חסרות')
+  }
+  
+  // Replace template variables
+  const message = replaceTemplateVariables(message_template, data)
+  
+  // Send message via Green API
+  const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
+  
+  const sendResponse = await fetch(greenApiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chatId,
+      message,
+    }),
+  })
+  
+  const sendResult = await sendResponse.json()
+  console.log('Green API send response:', sendResult)
+  
+  if (!sendResponse.ok) {
+    throw new Error(`שגיאה בשליחת הודעה: ${JSON.stringify(sendResult)}`)
+  }
+  
+  return {
+    success: true,
+    message_sent: message,
+    chat_id: chatId,
+    send_target: send_target,
     result: sendResult,
   }
 }

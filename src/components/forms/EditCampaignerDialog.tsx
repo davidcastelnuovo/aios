@@ -29,6 +29,7 @@ interface EditCampaignerDialogProps {
     folder_link: string | null;
     notes: string | null;
     active: boolean;
+    whatsapp_group_id?: string | null;
   };
 }
 
@@ -42,6 +43,7 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
     email: campaigner.email || "",
     folder_link: campaigner.folder_link || "",
     notes: campaigner.notes || "",
+    whatsapp_group_id: campaigner.whatsapp_group_id || "",
     active: campaigner.active,
   });
 
@@ -270,6 +272,16 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
               id="folder_link"
               value={formData.folder_link}
               onChange={(e) => setFormData({ ...formData, folder_link: e.target.value })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="whatsapp_group_id">מזהה קבוצת WhatsApp</Label>
+            <Input
+              id="whatsapp_group_id"
+              value={formData.whatsapp_group_id}
+              onChange={(e) => setFormData({ ...formData, whatsapp_group_id: e.target.value })}
+              placeholder="לדוגמה: 972501234567-1234567890@g.us"
             />
           </div>
 
