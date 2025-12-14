@@ -64,18 +64,18 @@ export function LinkCampaignerDialog({
     enabled: !!tenantId && open,
   });
 
-  // Link mutation - update all messages with this sender_phone to the selected campaigner
+  // Link mutation - update the campaigner's phone number with this sender_phone
   const linkMutation = useMutation({
     mutationFn: async () => {
       if (!selectedCampaignerId || !tenantId) {
         throw new Error("Missing campaigner ID or tenant ID");
       }
 
-      // Update all chat messages with this sender_phone to link to the campaigner
+      // Update the campaigner's phone number
       const { error } = await supabase
-        .from("chat_messages")
-        .update({ campaigner_id: selectedCampaignerId } as any)
-        .eq("sender_phone", senderPhone)
+        .from("campaigners")
+        .update({ phone: senderPhone })
+        .eq("id", selectedCampaignerId)
         .eq("tenant_id", tenantId);
 
       if (error) throw error;
@@ -83,11 +83,12 @@ export function LinkCampaignerDialog({
       return selectedCampaignerId;
     },
     onSuccess: (campaignerId) => {
-      toast.success("שויך בהצלחה לקמפיינר");
+      toast.success("מספר הטלפון עודכן בהצלחה לקמפיינר");
       queryClient.invalidateQueries({ queryKey: ["active-chats"] });
       queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
       queryClient.invalidateQueries({ queryKey: ["chat-messages"] });
       queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigners"] });
       onSuccess(campaignerId);
       onOpenChange(false);
       setSelectedCampaignerId("");
