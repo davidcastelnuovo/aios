@@ -83,3 +83,9 @@ verify_jwt = false
 
 [functions.cron-sync-facebook-insights]
 verify_jwt = false
+
+[functions.transcribe-voice]
+verify_jwt = true
+
+[functions.send-green-api-file]
+verify_jwt = true

@@ -418,6 +418,62 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
     }
   };
 
+  const handleSendFile = async (file: File, caption?: string) => {
+    try {
+      if (!contact) {
+        toast.error("איש קשר לא נמצא");
+        return;
+      }
+
+      if (!userId) {
+        toast.error("נא להתחבר מחדש למערכת");
+        return;
+      }
+
+      if (activeProvider !== 'green_api') {
+        toast.error("שליחת קבצים נתמכת רק ב-Green API");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', file, file.name);
+      if (caption) formData.append('caption', caption);
+      if (tenantId) formData.append('tenantId', tenantId);
+      formData.append('phoneNumber', senderPhone || contact.phone || '');
+      
+      if (contactType === "client") {
+        formData.append('clientId', contactId);
+      } else if (contactType === "lead") {
+        formData.append('leadId', contactId);
+      } else if (contactType === "group") {
+        formData.append('groupId', contactId);
+      }
+
+      // Determine file type
+      if (file.type.startsWith('audio/')) {
+        formData.append('fileType', 'voice');
+      } else if (file.type.startsWith('image/')) {
+        formData.append('fileType', 'image');
+      } else if (file.type.startsWith('video/')) {
+        formData.append('fileType', 'video');
+      } else {
+        formData.append('fileType', 'document');
+      }
+
+      const { error } = await supabase.functions.invoke("send-green-api-file", {
+        body: formData,
+      });
+
+      if (error) throw error;
+
+      queryClient.invalidateQueries({ queryKey: ["chat-messages", contactId] });
+      toast.success("הקובץ נשלח בהצלחה");
+    } catch (error) {
+      console.error("Error sending file:", error);
+      toast.error("שגיאה בשליחת הקובץ");
+    }
+  };
+
   if (isLoadingContact) {
     return <div className="p-4">טוען...</div>;
   }
@@ -584,7 +640,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
       {/* Input area - קבוע */}
       <div className="border-t bg-card shadow-[0_-2px_10px_rgba(0,0,0,0.1)]">
-        <ChatInput onSend={handleSendMessage} isLoading={false} />
+        <ChatInput onSend={handleSendMessage} onSendFile={handleSendFile} isLoading={false} />
       </div>
 
       {contactType === "unknown" && (
