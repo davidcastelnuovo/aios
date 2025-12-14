@@ -176,13 +176,18 @@ export function AddAutomationForm() {
   // Fetch Green API integrations when action type requires Green API
   // Include both tenant integrations AND integrations the user has permission to use
   const { data: greenApiIntegrations } = useQuery({
-    queryKey: ['green-api-integrations-for-automation', tenantId],
+    queryKey: ['green-api-integrations-for-automation', tenantId, actionType],
     queryFn: async () => {
       if (!tenantId) return [];
       
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return [];
+      if (!user) {
+        console.log('[GreenAPI] No user found');
+        return [];
+      }
+      
+      console.log('[GreenAPI] Fetching integrations for user:', user.id, 'tenant:', tenantId);
       
       // Get tenant integrations
       const { data: tenantIntegrations, error: tenantError } = await supabase
@@ -192,13 +197,17 @@ export function AddAutomationForm() {
         .eq('integration_type', 'green_api')
         .eq('is_active', true);
       
+      console.log('[GreenAPI] Tenant integrations:', tenantIntegrations, 'error:', tenantError);
+      
       if (tenantError) throw tenantError;
       
       // Get integrations the user has permission to use
-      const { data: permissions } = await supabase
+      const { data: permissions, error: permError } = await supabase
         .from('integration_user_permissions')
         .select('integration_id')
         .eq('user_id', user.id);
+      
+      console.log('[GreenAPI] User permissions:', permissions, 'error:', permError);
       
       const permittedIds = permissions?.map(p => p.integration_id) || [];
       
@@ -206,12 +215,14 @@ export function AddAutomationForm() {
       
       if (permittedIds.length > 0) {
         // Fetch permitted integrations from other tenants
-        const { data: permittedIntegrations } = await supabase
+        const { data: permittedIntegrations, error: permIntError } = await supabase
           .from('tenant_integrations')
           .select('id, settings, user_id')
           .in('id', permittedIds)
           .eq('integration_type', 'green_api')
           .eq('is_active', true);
+        
+        console.log('[GreenAPI] Permitted integrations:', permittedIntegrations, 'error:', permIntError);
         
         // Merge and deduplicate
         const existingIds = new Set(allIntegrations.map(i => i.id));
@@ -239,6 +250,8 @@ export function AddAutomationForm() {
           }));
         }
       }
+      
+      console.log('[GreenAPI] Final integrations:', allIntegrations);
       
       return allIntegrations;
     },
