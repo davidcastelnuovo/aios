@@ -135,7 +135,8 @@ const playBubbleAnimation = () => {
 
 export default function Tasks() {
   const [editingTask, setEditingTask] = useState<any>(null);
-  const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
+  const [selectedCampaigner, setSelectedCampaigner] = useState<string | null>(null);
+  const [hasInitializedCampaignerFilter, setHasInitializedCampaignerFilter] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string>("all");
   const [clientSearchQuery, setClientSearchQuery] = useState<string>("");
   const [activeTask, setActiveTask] = useState<any>(null);
@@ -151,6 +152,21 @@ export default function Tasks() {
   const { tenantId } = useCurrentTenant();
   const { getFieldLabel } = useCustomFieldLabels('task');
   const { t } = useTerminology();
+
+  // Set default campaigner filter to current user's campaigner
+  useEffect(() => {
+    if (!hasInitializedCampaignerFilter) {
+      if (campaignerId) {
+        // If user is a campaigner, default to their own tasks
+        setSelectedCampaigner(campaignerId);
+        setHasInitializedCampaignerFilter(true);
+      } else if (!isCampaigner) {
+        // If user is not a campaigner (owner/team_manager), show all tasks
+        setSelectedCampaigner("all");
+        setHasInitializedCampaignerFilter(true);
+      }
+    }
+  }, [campaignerId, isCampaigner, hasInitializedCampaignerFilter]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -395,7 +411,7 @@ export default function Tasks() {
 
   // Then filter by campaigner, tab (leads/clients), and client search
   let filteredTasks = accessibleTasks?.filter(t => {
-    const matchesCampaigner = selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
+    const matchesCampaigner = !selectedCampaigner || selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
     const matchesClientSearch = !clientSearchQuery || 
       t.clients?.name?.toLowerCase().includes(clientSearchQuery.toLowerCase());
     
@@ -838,7 +854,7 @@ export default function Tasks() {
           {/* Hide campaigner filter for pure campaigners */}
           {!(isCampaigner && !isTeamManager && !isOwner) && (
             <div className="w-40">
-              <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
+              <Select value={selectedCampaigner || "all"} onValueChange={setSelectedCampaigner}>
                 <SelectTrigger className="w-full h-9">
                   <SelectValue placeholder="כל הקמפיינרים" />
                 </SelectTrigger>
