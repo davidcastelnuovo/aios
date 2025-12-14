@@ -679,24 +679,35 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
 }
 
 // Helper function to replace template variables
-function replaceTemplateVariables(template: string, data: any): string {
+function replaceTemplateVariables(template: string, data: any, tenantSlug?: string): string {
   const now = new Date()
   const hebrewDays = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+  
+  // Build base URL for links
+  const baseUrl = tenantSlug ? `https://after-lead.lovable.app/t/${tenantSlug}` : 'https://after-lead.lovable.app'
   
   const variables: Record<string, string> = {
     contact_name: data.contact_name || data.name || '',
     company_name: data.company_name || data.name || '',
     phone: data.phone || '',
     status: data.status || data.new_status || '',
+    old_status: data.old_status || '',
+    new_status: data.new_status || '',
     date: now.toLocaleDateString('he-IL'),
     time: now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }),
     day_of_week: hebrewDays[now.getDay()],
     // Task-specific variables
     task_title: data.task_title || '',
+    task_status: data.task_status || '',
     client_name: data.client_name || '',
     campaigner_name: data.campaigner_name || '',
+    agency_name: data.agency_name || '',
     priority: data.priority?.toString() || '',
     due_date: data.due_date || '',
+    // Link variables
+    tasks_link: `${baseUrl}/tasks`,
+    leads_link: `${baseUrl}/leads`,
+    clients_link: `${baseUrl}/clients`,
   }
   
   let result = template
@@ -717,6 +728,14 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   if (!message_template) {
     throw new Error('תבנית הודעה לא הוגדרה')
   }
+  
+  // Get tenant slug for links
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('slug')
+    .eq('id', tenantId)
+    .single()
+  const tenantSlug = tenant?.slug
   
   // Get contact phone from lead or client
   let contactPhone: string | null = null
@@ -791,7 +810,7 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   const message = replaceTemplateVariables(message_template, {
     ...data,
     ...contactRecord,
-  })
+  }, tenantSlug)
   
   // Format phone for Green API
   const cleanPhone = contactPhone.replace(/\D/g, '')
@@ -835,6 +854,14 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
   if (!message_template) {
     throw new Error('תבנית הודעה לא הוגדרה')
   }
+  
+  // Get tenant slug for links
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('slug')
+    .eq('id', tenantId)
+    .single()
+  const tenantSlug = tenant?.slug
   
   // Get campaigner data from the trigger data
   let campaignerPhone = data.campaigner_phone
@@ -918,7 +945,7 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
   }
   
   // Replace template variables
-  const message = replaceTemplateVariables(message_template, data)
+  const message = replaceTemplateVariables(message_template, data, tenantSlug)
   
   // Send message via Green API
   const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
@@ -959,6 +986,14 @@ async function executeAddLeadUpdate(supabase: any, config: any, data: any, tenan
     throw new Error('תבנית עדכון לא הוגדרה')
   }
   
+  // Get tenant slug for links
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('slug')
+    .eq('id', tenantId)
+    .single()
+  const tenantSlug = tenant?.slug
+  
   const leadId = data.lead_id || data.id
   
   if (!leadId) {
@@ -980,7 +1015,7 @@ async function executeAddLeadUpdate(supabase: any, config: any, data: any, tenan
   const updateContent = replaceTemplateVariables(update_template, {
     ...data,
     ...lead,
-  })
+  }, tenantSlug)
   
   // Get a system user ID for the update (we'll use the first owner in the tenant)
   const { data: ownerRole } = await supabase
@@ -1033,6 +1068,14 @@ async function executeAddClientUpdate(supabase: any, config: any, data: any, ten
     throw new Error('תבנית עדכון לא הוגדרה')
   }
   
+  // Get tenant slug for links
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('slug')
+    .eq('id', tenantId)
+    .single()
+  const tenantSlug = tenant?.slug
+  
   const clientId = data.client_id
   
   if (!clientId) {
@@ -1054,7 +1097,7 @@ async function executeAddClientUpdate(supabase: any, config: any, data: any, ten
   const updateContent = replaceTemplateVariables(update_template, {
     ...data,
     ...client,
-  })
+  }, tenantSlug)
   
   // Get a system user ID for the update
   const { data: ownerRole } = await supabase

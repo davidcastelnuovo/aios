@@ -21,6 +21,11 @@ const AVAILABLE_VARIABLES = [
   { key: "due_date", label: "תאריך יעד", example: "20.12.2025" },
   { key: "old_status", label: "סטטוס קודם", example: "חדש" },
   { key: "new_status", label: "סטטוס חדש", example: "בטיפול" },
+  { key: "task_status", label: "סטטוס משימה", example: "פתוח" },
+  { key: "agency_name", label: "שם סוכנות", example: "סוכנות מרקטינג" },
+  { key: "tasks_link", label: "קישור למשימות", example: "https://app.example.com/tasks" },
+  { key: "leads_link", label: "קישור ללידים", example: "https://app.example.com/leads" },
+  { key: "clients_link", label: "קישור ללקוחות", example: "https://app.example.com/clients" },
 ];
 
 interface MessageTemplateBuilderProps {
