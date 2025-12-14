@@ -217,7 +217,11 @@ export function AppSidebar() {
         const currentPath = window.location.pathname;
         const pathMatch = currentPath.match(/^\/t\/[^/]+\/(.+)$/);
         const currentModule = pathMatch ? pathMatch[1] : 'dashboard';
-        window.location.href = `/t/${newTenant.slug}/${currentModule}`;
+        // Force full page reload to ensure URL updates correctly
+        window.location.replace(`/t/${newTenant.slug}/${currentModule}`);
+      } else {
+        // Fallback if no slug found
+        window.location.reload();
       }
     } catch (error) {
       console.error("Error changing tenant:", error);
