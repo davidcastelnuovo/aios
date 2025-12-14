@@ -192,25 +192,38 @@ export default function ChatMessageList({
   };
 
   const getReactionEmoji = (message: Message) => {
-    const reactionMessage = message.raw_provider_data?.messageData?.reactionMessageData;
-    if (!reactionMessage?.reactionText) return null;
+    const messageData = message.raw_provider_data?.messageData;
+    
+    // Check if this is a reaction message
+    if (messageData?.typeMessage !== 'reactionMessage') return null;
+    
+    // Get the emoji from extendedTextMessageData.text
+    const reactionText = messageData?.extendedTextMessageData?.text;
+    if (!reactionText) return null;
 
-    // Get info about the message being reacted to
-    const quotedMessageText = reactionMessage.quotedMessage?.textMessage ||
-                              reactionMessage.quotedMessage?.caption ||
-                              null;
+    // Get stanzaId to find the original message
+    const quotedStanzaId = messageData?.quotedMessage?.stanzaId;
+    
+    // Look for the original message in our messages array by idMessage
+    const originalMessage = quotedStanzaId 
+      ? messages.find(m => m.raw_provider_data?.idMessage === quotedStanzaId)
+      : null;
 
     return (
       <div className="mb-1">
         {/* Show what message is being reacted to */}
-        {quotedMessageText && (
+        {originalMessage ? (
           <div className="bg-black/5 border-r-4 border-purple-400 pr-2 py-1 mb-2 text-[12px] rounded-sm">
             <div className="font-medium text-xs text-purple-600 mb-0.5">תגובה להודעה:</div>
-            <div className="line-clamp-2 text-gray-600">{quotedMessageText}</div>
+            <div className="line-clamp-2 text-gray-600">{originalMessage.message_text}</div>
           </div>
-        )}
+        ) : quotedStanzaId ? (
+          <div className="text-xs text-gray-400 mb-1">
+            תגובה להודעה קודמת
+          </div>
+        ) : null}
         <div className="text-2xl">
-          {reactionMessage.reactionText}
+          {reactionText}
         </div>
       </div>
     );
