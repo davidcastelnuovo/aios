@@ -88,6 +88,17 @@ export function AgencyProvider({ children }: { children: ReactNode }) {
 
   const isLoading = isLoadingAgencies;
 
+  // Reset selection when tenant changes
+  const prevTenantIdRef = useRef(tenantId);
+  useEffect(() => {
+    if (tenantId && prevTenantIdRef.current && tenantId !== prevTenantIdRef.current) {
+      // Tenant changed - reset to "all"
+      setSelectedAgency("all");
+      didSetDefault.current = false;
+    }
+    prevTenantIdRef.current = tenantId;
+  }, [tenantId]);
+
   // Ensure a valid selection and sensible defaults
   useEffect(() => {
     if (!agencies || agencies.length === 0) return;
