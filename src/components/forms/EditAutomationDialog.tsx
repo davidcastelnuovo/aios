@@ -786,7 +786,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                               </SelectItem>
                             ))
                           ) : (
-                            <SelectItem value="" disabled>לא נמצאו חיבורי Green API</SelectItem>
+                            <div className="py-2 px-3 text-sm text-muted-foreground">לא נמצאו חיבורי Green API</div>
                           )}
                         </SelectContent>
                       </Select>
@@ -839,7 +839,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                               </SelectItem>
                             ))
                           ) : (
-                            <SelectItem value="" disabled>לא נמצאו חיבורי Green API</SelectItem>
+                            <div className="py-2 px-3 text-sm text-muted-foreground">לא נמצאו חיבורי Green API</div>
                           )}
                         </SelectContent>
                       </Select>
