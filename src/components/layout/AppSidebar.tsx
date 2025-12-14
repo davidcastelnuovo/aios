@@ -165,6 +165,14 @@ export function AppSidebar() {
     if (!userId) return;
 
     try {
+      // First, get the new tenant slug before any state changes
+      const { data: newTenant } = await supabase
+        .from("tenants")
+        .select("slug")
+        .eq("id", newTenantId)
+        .single();
+
+      // Ensure user has a role in the new tenant
       const { data: tenantUser } = await supabase
         .from("tenant_users")
         .select("role")
@@ -189,6 +197,7 @@ export function AppSidebar() {
         }
       }
 
+      // Update user_active_tenant in DB BEFORE redirect
       const { error } = await supabase
         .from("user_active_tenant")
         .upsert(
@@ -204,24 +213,18 @@ export function AppSidebar() {
 
       if (error) throw error;
 
-      setCurrentTenantId(newTenantId);
-
-      const { data: newTenant } = await supabase
-        .from("tenants")
-        .select("slug")
-        .eq("id", newTenantId)
-        .single();
-
+      // CRITICAL: Redirect BEFORE updating React state
+      // This ensures URL changes happen via full page reload,
+      // preventing React from re-rendering with new tenant but old URL
       if (newTenant?.slug) {
-        // Preserve current module when switching tenants
         const currentPath = window.location.pathname;
         const pathMatch = currentPath.match(/^\/t\/[^/]+\/(.+)$/);
         const currentModule = pathMatch ? pathMatch[1] : 'dashboard';
-        // Force full page reload to ensure URL updates correctly
         window.location.replace(`/t/${newTenant.slug}/${currentModule}`);
+        return; // Exit early - page will reload anyway
       } else {
-        // Fallback if no slug found
         window.location.reload();
+        return;
       }
     } catch (error) {
       console.error("Error changing tenant:", error);
