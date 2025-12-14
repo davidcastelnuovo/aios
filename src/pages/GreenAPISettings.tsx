@@ -299,16 +299,14 @@ export default function GreenAPISettings() {
                 >
                   {reconfigureMutation.isPending ? "מעדכן..." : "רענן הגדרות Webhook"}
                 </Button>
-                {tenantUsers.length > 0 && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAssignDialogOpen(true)}
-                  >
-                    <UserPlus className="h-4 w-4 ml-2" />
-                    שייך למשתמש אחר
-                  </Button>
-                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAssignDialogOpen(true)}
+                >
+                  <UserPlus className="h-4 w-4 ml-2" />
+                  שייך למשתמש אחר
+                </Button>
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
@@ -488,28 +486,39 @@ export default function GreenAPISettings() {
           </DialogHeader>
 
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>בחר משתמש</Label>
-              <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="בחר משתמש..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {tenantUsers.map((user: any) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.name} {user.email && `(${user.email})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {tenantUsers.length === 0 ? (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  אין משתמשים אחרים בארגון. יש להוסיף משתמשים דרך עמוד ניהול משתמשים כדי לשייך את האינטגרציה.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label>בחר משתמש</Label>
+                  <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר משתמש..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tenantUsers.map((user: any) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.name} {user.email && `(${user.email})`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>שים לב:</strong> לאחר השיוך, לא תוכל לראות את הצ'אטים של חיבור זה. המשתמש החדש יראה את כל הצ'אטים.
-              </AlertDescription>
-            </Alert>
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    <strong>שים לב:</strong> לאחר השיוך, לא תוכל לראות את הצ'אטים של חיבור זה. המשתמש החדש יראה את כל הצ'אטים.
+                  </AlertDescription>
+                </Alert>
+              </>
+            )}
           </div>
 
           <DialogFooter className="gap-2">
