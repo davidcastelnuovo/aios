@@ -972,9 +972,14 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
     console.log(`Using fallback integration: ${integration.id}`)
   }
   
-  const { idInstance, apiTokenInstance } = integration.settings || {}
+  // Support both naming conventions: idInstance/apiTokenInstance and instance_id/api_key
+  // Also check both settings object AND direct columns (fixed Dec 14, 2025)
+  const idInstance = integration.settings?.idInstance || integration.settings?.instance_id || integration.instance_id
+  const apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
   
   if (!idInstance || !apiTokenInstance) {
+    console.log('Integration settings:', JSON.stringify(integration.settings))
+    console.log('api_key field:', integration.api_key ? 'exists' : 'missing')
     throw new Error('הגדרות Green API חסרות')
   }
   
@@ -998,6 +1003,66 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
   
   if (!sendResponse.ok) {
     throw new Error(`שגיאה בשליחת הודעה: ${JSON.stringify(sendResult)}`)
+  }
+  
+  // Save message to chat_messages for chat history
+  try {
+    // Determine lead_id or client_id from the chatId (phone number)
+    const phoneFromChat = chatId.replace('@c.us', '').replace('@g.us', '')
+    const last9Digits = phoneFromChat.slice(-9)
+    
+    // Try to find matching lead or client by phone
+    let leadId = null
+    let clientId = null
+    
+    const { data: matchingLead } = await supabase
+      .from('leads')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .ilike('phone', `%${last9Digits}`)
+      .limit(1)
+      .maybeSingle()
+    
+    if (matchingLead) {
+      leadId = matchingLead.id
+    } else {
+      const { data: matchingClient } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .ilike('phone', `%${last9Digits}`)
+        .limit(1)
+        .maybeSingle()
+      
+      if (matchingClient) {
+        clientId = matchingClient.id
+      }
+    }
+    
+    // Save to chat_messages
+    const { error: chatError } = await supabase
+      .from('chat_messages')
+      .insert({
+        tenant_id: tenantId,
+        connection_user_id: integration.user_id,
+        lead_id: leadId,
+        client_id: clientId,
+        sender_phone: phoneFromChat,
+        message_text: message,
+        direction: 'outbound',
+        channel: 'whatsapp',
+        provider: 'green_api',
+        raw_provider_data: { automation: true, send_target, sendResult },
+      })
+    
+    if (chatError) {
+      console.error('Error saving message to chat_messages:', chatError)
+    } else {
+      console.log('Message saved to chat_messages successfully')
+    }
+  } catch (saveError) {
+    console.error('Error saving to chat_messages:', saveError)
+    // Don't throw - message was sent successfully, just logging failed
   }
   
   return {
