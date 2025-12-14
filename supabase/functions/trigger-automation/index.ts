@@ -680,30 +680,55 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
 
 // Helper function to replace template variables
 function replaceTemplateVariables(template: string, data: any, tenantSlug?: string): string {
+  // Current date/time info
   const now = new Date()
-  const hebrewDays = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+  const days = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+  const dayOfWeek = days[now.getDay()]
+  const formattedDate = `${now.getDate().toString().padStart(2, '0')}.${(now.getMonth() + 1).toString().padStart(2, '0')}.${now.getFullYear()}`
+  const formattedTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
   
-  // Build base URL for links
-  const baseUrl = tenantSlug ? `https://after-lead.lovable.app/t/${tenantSlug}` : 'https://after-lead.lovable.app'
+  // Format due_date if provided
+  let formattedDueDate = ''
+  if (data.due_date) {
+    const dueDate = new Date(data.due_date)
+    formattedDueDate = `${dueDate.getDate().toString().padStart(2, '0')}.${(dueDate.getMonth() + 1).toString().padStart(2, '0')}.${dueDate.getFullYear()}`
+  }
+  
+  // Priority translation
+  const priorityMap: Record<string, string> = {
+    'high': 'גבוהה',
+    'medium': 'בינונית', 
+    'low': 'נמוכה'
+  }
+  const priorityValue = data.priority?.toString() || ''
+  const formattedPriority = priorityMap[priorityValue.toLowerCase()] || priorityValue
+  
+  // Base URL for links
+  const baseUrl = tenantSlug 
+    ? `https://lovable.dev/t/${tenantSlug}` 
+    : 'https://lovable.dev'
   
   const variables: Record<string, string> = {
-    contact_name: data.contact_name || data.name || '',
+    // Contact info
+    contact_name: data.contact_name || '',
     company_name: data.company_name || data.name || '',
     phone: data.phone || '',
+    email: data.email || '',
     status: data.status || data.new_status || '',
     old_status: data.old_status || '',
-    new_status: data.new_status || '',
-    date: now.toLocaleDateString('he-IL'),
-    time: now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }),
-    day_of_week: hebrewDays[now.getDay()],
-    // Task-specific variables
+    new_status: data.new_status || data.status || '',
+    // Date/time
+    date: formattedDate,
+    time: formattedTime,
+    day_of_week: dayOfWeek,
+    // Task info
     task_title: data.task_title || '',
     task_status: data.task_status || '',
     client_name: data.client_name || '',
     campaigner_name: data.campaigner_name || '',
     agency_name: data.agency_name || '',
-    priority: data.priority?.toString() || '',
-    due_date: data.due_date || '',
+    priority: formattedPriority,
+    due_date: formattedDueDate,
     // Link variables
     tasks_link: `${baseUrl}/tasks`,
     leads_link: `${baseUrl}/leads`,
