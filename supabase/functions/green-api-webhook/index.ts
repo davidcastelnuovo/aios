@@ -107,6 +107,32 @@ Deno.serve(async (req) => {
       messageText = messageData.buttonsMessage?.contentText || '[הודעת כפתורים]';
     } else if (messageType === 'listMessage') {
       messageText = messageData.listMessage?.description || messageData.listMessage?.title || '[הודעת רשימה]';
+    } else if (messageType === 'contactMessage') {
+      // Handle contact card (vCard)
+      const contactData = messageData.contactMessageData;
+      if (contactData) {
+        const displayName = contactData.displayName || 'איש קשר';
+        const vcard = contactData.vcard || '';
+        // Extract phone number from vCard if available
+        const phoneMatch = vcard.match(/TEL[^:]*:([+\d\s-]+)/i);
+        const phoneFromVcard = phoneMatch ? phoneMatch[1].replace(/\s/g, '') : '';
+        messageText = `[איש קשר: ${displayName}${phoneFromVcard ? ` - ${phoneFromVcard}` : ''}]`;
+      } else {
+        messageText = '[איש קשר]';
+      }
+    } else if (messageType === 'contactsArrayMessage') {
+      // Handle multiple contacts
+      const contacts = messageData.contactsArrayMessageData?.contacts || [];
+      const contactNames = contacts.map((c: any) => c.displayName || 'איש קשר').join(', ');
+      messageText = `[אנשי קשר: ${contactNames || 'מספר אנשי קשר'}]`;
+    } else if (messageType === 'locationMessage') {
+      const locData = messageData.locationMessageData;
+      messageText = `[מיקום${locData?.nameLocation ? ': ' + locData.nameLocation : ''}]`;
+    } else if (messageType === 'stickerMessage') {
+      messageText = '[סטיקר]';
+    } else if (messageType === 'reactionMessage') {
+      const reaction = messageData.reactionMessage?.reaction || messageData.extendedTextMessageData?.text || '👍';
+      messageText = `[תגובה: ${reaction}]`;
     } else {
       messageText = `[${messageType}]`;
     }
