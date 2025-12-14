@@ -201,8 +201,8 @@ Deno.serve(async (req) => {
       let groupId = existingGroup?.id;
       let groupIsBlocked = existingGroup?.is_blocked || false;
 
-      // Helper function to fetch REAL group name from Green API
-      async function fetchRealGroupName(chatId: string): Promise<string | null> {
+      // Helper function to fetch REAL group name from Green API using getGroupData
+      async function fetchRealGroupName(groupChatId: string): Promise<string | null> {
         try {
           const apiToken = integration?.api_key;
           if (!instanceId || !apiToken) {
@@ -210,26 +210,27 @@ Deno.serve(async (req) => {
             return null;
           }
           
-          console.log('🔍 Fetching real group name from Green API for:', chatId);
+          console.log('🔍 Fetching real group name using getGroupData for:', groupChatId);
           
+          // Use getGroupData endpoint - NOT getContactInfo which doesn't support groups
           const response = await fetch(
-            `https://api.green-api.com/waInstance${instanceId}/getContactInfo/${apiToken}`,
+            `https://api.green-api.com/waInstance${instanceId}/getGroupData/${apiToken}`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chatId })
+              body: JSON.stringify({ groupId: groupChatId }) // Note: groupId, not chatId
             }
           );
           
           if (response.ok) {
-            const contactInfo = await response.json();
-            console.log('📋 Green API getContactInfo response:', JSON.stringify(contactInfo));
-            // For groups, the name is in 'name' field
-            const realName = contactInfo.name || contactInfo.chatName || null;
-            console.log('✅ Real group name from API:', realName);
+            const groupData = await response.json();
+            console.log('📋 Green API getGroupData response:', JSON.stringify(groupData));
+            // Group name is in 'subject' field, NOT 'name' or 'chatName'
+            const realName = groupData.subject || null;
+            console.log('✅ Real group name from API (subject):', realName);
             return realName;
           } else {
-            console.error('❌ Failed to fetch group info:', response.status, await response.text());
+            console.error('❌ Failed to fetch group data:', response.status, await response.text());
             return null;
           }
         } catch (e) {
