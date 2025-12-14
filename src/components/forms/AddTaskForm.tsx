@@ -308,7 +308,10 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
           data: {
             task_title: values.title,
             task_notes: values.notes || '',
+            campaigner_id: finalCampaignerId || '',
             campaigner_name: selectedCampaigner?.full_name || '',
+            campaigner_phone: selectedCampaigner?.phone || '',
+            campaigner_whatsapp_group_id: selectedCampaigner?.whatsapp_group_id || '',
             client_name: entityName,
             priority: values.priority,
             status: values.status,

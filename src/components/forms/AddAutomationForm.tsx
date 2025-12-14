@@ -51,7 +51,9 @@ const formSchema = z.object({
     "task_calendar_created",
     "task_overdue",
   ]),
-  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber", "send_greenapi_message", "add_lead_update", "add_client_update"]),
+  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber", "send_greenapi_message", "send_greenapi_to_campaigner", "add_lead_update", "add_client_update"]),
+  // Green API to campaigner fields
+  campaigner_send_target: z.enum(["phone", "group"]).optional(),
   // Green API / update template fields
   message_template: z.string().optional(),
   update_template: z.string().optional(),
@@ -147,6 +149,7 @@ export function AddAutomationForm() {
       field_mapping_contact: "",
       message_template: "",
       update_template: "אין מענה בתאריך {{date}} בשעה {{time}}",
+      campaigner_send_target: "phone",
     },
   });
 
@@ -222,6 +225,11 @@ export function AddAutomationForm() {
       } else if (values.action_type === "send_greenapi_message") {
         configuration = {
           message_template: values.message_template || "",
+        };
+      } else if (values.action_type === "send_greenapi_to_campaigner") {
+        configuration = {
+          message_template: values.message_template || "",
+          send_target: values.campaigner_send_target || "phone",
         };
       } else if (values.action_type === "add_lead_update" || values.action_type === "add_client_update") {
         configuration = {
@@ -397,6 +405,7 @@ export function AddAutomationForm() {
                       <SelectItem value="send_whatsapp">שלח WhatsApp (ManyChat)</SelectItem>
                       <SelectItem value="create_manychat_subscriber">צור subscriber ב-ManyChat</SelectItem>
                       <SelectItem value="send_greenapi_message">שלח WhatsApp (Green API)</SelectItem>
+                      <SelectItem value="send_greenapi_to_campaigner">שלח WhatsApp לקמפיינר (Green API)</SelectItem>
                       <SelectItem value="add_lead_update">הוסף עדכון לליד</SelectItem>
                       <SelectItem value="add_client_update">הוסף עדכון ללקוח</SelectItem>
                       <SelectItem value="email" disabled>אימייל (בקרוב)</SelectItem>
@@ -731,6 +740,63 @@ export function AddAutomationForm() {
                   </FormItem>
                 )}
               />
+            )}
+
+            {actionType === "send_greenapi_to_campaigner" && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="campaigner_send_target"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>שלח ל *</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value || "phone"}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר יעד" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          <SelectItem value="phone">טלפון הקמפיינר</SelectItem>
+                          <SelectItem value="group">קבוצת WhatsApp של הקמפיינר</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-xs">
+                        בחר אם לשלוח לטלפון האישי או לקבוצה המשויכת לקמפיינר
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="message_template"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>תבנית הודעה *</FormLabel>
+                      <FormControl>
+                        <Textarea 
+                          placeholder="משימה חדשה: {{task_title}}&#10;לקוח: {{client_name}}&#10;עדיפות: {{priority}}"
+                          rows={4}
+                          {...field} 
+                        />
+                      </FormControl>
+                      <FormDescription className="text-xs">
+                        משתנים זמינים: {`{{task_title}}, {{client_name}}, {{campaigner_name}}, {{priority}}, {{due_date}}, {{date}}, {{time}}`}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-sm">
+                  <p className="font-medium text-blue-600 dark:text-blue-400">הסבר:</p>
+                  <ul className="text-muted-foreground text-xs mt-1 space-y-1">
+                    <li>• שליחה לטלפון: ההודעה תישלח לטלפון האישי של הקמפיינר</li>
+                    <li>• שליחה לקבוצה: ההודעה תישלח לקבוצת WhatsApp ששויכה לקמפיינר</li>
+                    <li>• וודא שהגדרת מזהה קבוצה בכרטיס הקמפיינר אם בוחר שליחה לקבוצה</li>
+                  </ul>
+                </div>
+              </>
             )}
 
             {(actionType === "add_lead_update" || actionType === "add_client_update") && (

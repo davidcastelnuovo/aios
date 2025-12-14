@@ -393,6 +393,7 @@ export type Database = {
           role: string[] | null
           tenant_id: string
           updated_at: string
+          whatsapp_group_id: string | null
         }
         Insert: {
           active?: boolean
@@ -406,6 +407,7 @@ export type Database = {
           role?: string[] | null
           tenant_id: string
           updated_at?: string
+          whatsapp_group_id?: string | null
         }
         Update: {
           active?: boolean
@@ -419,6 +421,7 @@ export type Database = {
           role?: string[] | null
           tenant_id?: string
           updated_at?: string
+          whatsapp_group_id?: string | null
         }
         Relationships: [
           {
