@@ -96,7 +96,50 @@ Deno.serve(async (req) => {
     } else if (messageType === 'videoMessage') {
       messageText = messageData.fileMessageData?.caption || '[וידאו]';
     } else if (messageType === 'audioMessage') {
-      messageText = '[הודעת קול]';
+      // Try to transcribe voice messages
+      const downloadUrl = messageData.fileMessageData?.downloadUrl;
+      let transcription = '';
+      
+      if (downloadUrl && isIncoming) {
+        try {
+          console.log('🎤 Attempting to transcribe voice message from:', downloadUrl);
+          
+          // Download the audio file
+          const audioResponse = await fetch(downloadUrl);
+          if (audioResponse.ok) {
+            const audioBlob = await audioResponse.blob();
+            
+            // Send to OpenAI Whisper for transcription
+            const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+            if (openaiApiKey) {
+              const formData = new FormData();
+              formData.append('file', audioBlob, 'audio.ogg');
+              formData.append('model', 'whisper-1');
+              formData.append('language', 'he');
+              
+              const transcribeResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${openaiApiKey}`,
+                },
+                body: formData,
+              });
+              
+              if (transcribeResponse.ok) {
+                const result = await transcribeResponse.json();
+                transcription = result.text || '';
+                console.log('✅ Transcription successful:', transcription.substring(0, 100));
+              } else {
+                console.error('❌ Transcription failed:', await transcribeResponse.text());
+              }
+            }
+          }
+        } catch (transcribeError) {
+          console.error('❌ Error transcribing voice message:', transcribeError);
+        }
+      }
+      
+      messageText = transcription ? `🎤 ${transcription}` : '[הודעת קול]';
     } else if (messageType === 'documentMessage') {
       messageText = messageData.fileMessageData?.caption || `[מסמך: ${messageData.fileMessageData?.fileName || 'קובץ'}]`;
     } else if (messageType === 'templateMessage') {
