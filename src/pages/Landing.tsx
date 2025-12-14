@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import OptionsSelector from "@/components/OptionsSelector";
 import AnimatedJoinButton from "@/components/AnimatedJoinButton";
+import DemoRequestDialog from "@/components/DemoRequestDialog";
 import { 
-  Target, 
+  Target,
   CheckCircle2, 
   Zap, 
   Users, 
@@ -64,6 +66,7 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
 
 const Landing = () => {
   const navigate = useNavigate();
+  const [demoDialogOpen, setDemoDialogOpen] = useState(false);
   const modules = [
     {
       title: "ניהול לידים",
@@ -166,11 +169,12 @@ const Landing = () => {
                   התחברות
                 </Button>
               </Link>
-              <Link to="/signup">
-                <Button className="bg-[#36d399] hover:bg-[#36d399]/90 text-[#0A1526] font-semibold">
-                  התחל בחינם
-                </Button>
-              </Link>
+              <Button 
+                onClick={() => setDemoDialogOpen(true)}
+                className="bg-[#36d399] hover:bg-[#36d399]/90 text-[#0A1526] font-semibold"
+              >
+                הזמן דמו
+              </Button>
             </div>
           </div>
         </div>
@@ -208,9 +212,9 @@ const Landing = () => {
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
               <AnimatedJoinButton 
-                text="התחל בחינם" 
+                text="הזמן דמו" 
                 hoverText="עכשיו!" 
-                onClick={() => navigate('/signup')} 
+                onClick={() => setDemoDialogOpen(true)} 
               />
               <Link to="/auth">
                 <Button size="lg" variant="outline" className="border-white/40 bg-white/10 text-white font-semibold hover:bg-white/20 text-lg px-8 py-6 rounded-xl backdrop-blur-sm">
@@ -335,9 +339,9 @@ const Landing = () => {
                 הצטרפו לעשרות סוכנויות שכבר משתמשות ב-AfterLead
               </p>
               <AnimatedJoinButton 
-                text="התחל עכשיו" 
-                hoverText="בחינם!" 
-                onClick={() => navigate('/signup')} 
+                text="הזמן דמו" 
+                hoverText="חינם!" 
+                onClick={() => setDemoDialogOpen(true)} 
               />
             </div>
           </div>
@@ -365,6 +369,9 @@ const Landing = () => {
           </div>
         </div>
       </footer>
+
+      {/* Demo Request Dialog */}
+      <DemoRequestDialog open={demoDialogOpen} onOpenChange={setDemoDialogOpen} />
     </div>
   );
 };
