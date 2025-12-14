@@ -79,7 +79,7 @@ export default function Chat() {
   const [contactFilter, setContactFilter] = useState<"all" | "clients" | "leads" | "groups" | "unknown">("all");
   const [showTodayOnly, setShowTodayOnly] = useState(false);
   const [showUnreadOnly, setShowUnreadOnly] = useState(false);
-  const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown'; senderPhone?: string } | null>(
+  const [selectedContact, setSelectedContact] = useState<{ id: string; type: 'client' | 'lead' | 'group' | 'unknown'; senderPhone?: string; name?: string } | null>(
     clientId ? { id: clientId, type: 'client' } : null
   );
   const [editingContact, setEditingContact] = useState<{ id: string; type: 'client' | 'lead'; data: any } | null>(null);
@@ -873,7 +873,8 @@ export default function Chat() {
                           setSelectedContact({
                             id: contact.id,
                             type: contact.contact_type,
-                            senderPhone: contact.sender_phone
+                            senderPhone: contact.sender_phone,
+                            name: contact.name
                           });
                         }
                       }}
@@ -1006,6 +1007,7 @@ export default function Chat() {
             contactId={selectedContact.id}
             contactType={selectedContact.type}
             senderPhone={selectedContact.senderPhone}
+            contactName={selectedContact.name}
             onBack={isMobile ? () => setSelectedContact(null) : undefined}
           />
         ) : (
