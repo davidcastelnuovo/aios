@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -216,7 +216,34 @@ export default function Chat() {
     refetchInterval: 30000,
   });
 
-  // Search contacts
+  // Realtime subscription for whatsapp_groups updates (name changes)
+  useEffect(() => {
+    if (!tenantId) return;
+
+    const channel = supabase
+      .channel('whatsapp-groups-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'whatsapp_groups',
+        },
+        (payload) => {
+          console.log('📝 Group updated:', payload);
+          // Invalidate queries to refresh the list with new group name
+          queryClient.invalidateQueries({ queryKey: ['active-chats'] });
+          queryClient.invalidateQueries({ queryKey: ['contact'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tenantId, queryClient]);
+
+
   const { data: searchResults, isLoading: searchLoading } = useQuery({
     queryKey: ['search-contacts', tenantId, debouncedSearch],
     queryFn: async () => {
