@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
@@ -36,6 +36,34 @@ interface ChatMessageListProps {
   anchorMessageId?: string;
 }
 
+// Color palette for group members - distinct colors for easy identification
+const MEMBER_COLORS = [
+  '#0088CC', // Blue
+  '#E91E63', // Pink
+  '#9C27B0', // Purple
+  '#673AB7', // Deep Purple
+  '#3F51B5', // Indigo
+  '#00BCD4', // Cyan
+  '#009688', // Teal
+  '#4CAF50', // Green
+  '#FF9800', // Orange
+  '#795548', // Brown
+  '#607D8B', // Blue Grey
+  '#F44336', // Red
+];
+
+// Generate consistent color for a sender based on their phone/name
+const getSenderColor = (senderPhone: string | null | undefined, senderName: string | null | undefined, colorMap: Map<string, string>): string => {
+  const key = senderPhone || senderName || 'unknown';
+  
+  if (!colorMap.has(key)) {
+    const colorIndex = colorMap.size % MEMBER_COLORS.length;
+    colorMap.set(key, MEMBER_COLORS[colorIndex]);
+  }
+  
+  return colorMap.get(key) || MEMBER_COLORS[0];
+};
+
 export default function ChatMessageList({ 
   messages, 
   isLoading,
@@ -50,6 +78,21 @@ export default function ChatMessageList({
   const msgRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasScrolledToAnchor = useRef(false);
+
+  // Build a color map for group members
+  const senderColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    if (contactType === 'group') {
+      messages.forEach((msg) => {
+        if (msg.direction === 'inbound') {
+          const senderPhone = msg.raw_provider_data?.senderData?.sender;
+          const senderName = msg.sender_name;
+          getSenderColor(senderPhone, senderName, map);
+        }
+      });
+    }
+    return map;
+  }, [messages, contactType]);
 
   const handleCopyMessage = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -118,25 +161,57 @@ export default function ChatMessageList({
       message.raw_provider_data?.messageData?.extendedTextMessageData?.quotedMessage;
     if (!quotedMessage) return null;
 
+    // Get quoted message text content
+    const quotedText = quotedMessage.textMessage || 
+                       quotedMessage.caption || 
+                       quotedMessage.extendedTextMessageData?.text ||
+                       null;
+    
+    // Check for media in quoted message
+    const hasImage = quotedMessage.typeMessage === 'imageMessage' || quotedMessage.downloadUrl;
+    const hasVideo = quotedMessage.typeMessage === 'videoMessage';
+    const hasAudio = quotedMessage.typeMessage === 'audioMessage';
+    const hasDocument = quotedMessage.typeMessage === 'documentMessage';
+
+    let mediaIndicator = null;
+    if (hasImage) mediaIndicator = '📷 תמונה';
+    else if (hasVideo) mediaIndicator = '🎬 סרטון';
+    else if (hasAudio) mediaIndicator = '🎤 הודעה קולית';
+    else if (hasDocument) mediaIndicator = '📄 מסמך';
+
     return (
-      <div className="bg-black/5 border-r-4 border-blue-500 pr-2 mb-1 text-[13px]">
-        <div className="font-semibold text-xs mb-1">
-          {quotedMessage.chatName || 'הודעה מצוטטת'}
+      <div className="bg-black/5 border-r-4 border-blue-500 pr-2 py-1 mb-2 text-[13px] rounded-sm">
+        <div className="font-semibold text-xs mb-0.5 text-blue-600">
+          {quotedMessage.participant || quotedMessage.chatName || 'הודעה מצוטטת'}
         </div>
-        <div className="line-clamp-2">
-          {quotedMessage.textMessage || quotedMessage.caption || '[מדיה]'}
+        <div className="line-clamp-2 text-gray-600">
+          {quotedText || mediaIndicator || '[מדיה]'}
         </div>
       </div>
     );
   };
 
   const getReactionEmoji = (message: Message) => {
-    const reactionText = message.raw_provider_data?.messageData?.reactionMessageData?.reactionText;
-    if (!reactionText) return null;
+    const reactionMessage = message.raw_provider_data?.messageData?.reactionMessageData;
+    if (!reactionMessage?.reactionText) return null;
+
+    // Get info about the message being reacted to
+    const quotedMessageText = reactionMessage.quotedMessage?.textMessage ||
+                              reactionMessage.quotedMessage?.caption ||
+                              null;
 
     return (
-      <div className="text-2xl mb-1">
-        {reactionText}
+      <div className="mb-1">
+        {/* Show what message is being reacted to */}
+        {quotedMessageText && (
+          <div className="bg-black/5 border-r-4 border-purple-400 pr-2 py-1 mb-2 text-[12px] rounded-sm">
+            <div className="font-medium text-xs text-purple-600 mb-0.5">תגובה להודעה:</div>
+            <div className="line-clamp-2 text-gray-600">{quotedMessageText}</div>
+          </div>
+        )}
+        <div className="text-2xl">
+          {reactionMessage.reactionText}
+        </div>
       </div>
     );
   };
@@ -200,6 +275,15 @@ export default function ChatMessageList({
     return null;
   };
 
+  // Get sender color for group messages
+  const getSenderDisplayColor = (message: Message): string => {
+    if (contactType !== 'group' || message.direction !== 'inbound') {
+      return '#0088CC'; // Default blue
+    }
+    const senderPhone = message.raw_provider_data?.senderData?.sender;
+    return getSenderColor(senderPhone, message.sender_name, senderColorMap);
+  };
+
   return (
     <div className={`flex flex-col h-full`}>
       <div className={`flex flex-col gap-2 ${isMobile ? 'p-2' : 'p-4'}`}>
@@ -208,6 +292,7 @@ export default function ChatMessageList({
           const mediaContent = getMediaContent(message);
           const quotedMessage = getQuotedMessage(message);
           const reactionEmoji = getReactionEmoji(message);
+          const senderColor = getSenderDisplayColor(message);
           
           return (
             <div
@@ -223,7 +308,10 @@ export default function ChatMessageList({
                   relative`}
               >
                 {!isOutbound && message.sender_name && message.sender_name !== "אני" && (
-                  <div className="font-semibold text-[12.8px] mb-0.5 text-blue-600">
+                  <div 
+                    className="font-semibold text-[12.8px] mb-0.5"
+                    style={{ color: senderColor }}
+                  >
                     {message.sender_name}
                   </div>
                 )}
