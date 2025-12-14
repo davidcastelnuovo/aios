@@ -56,6 +56,7 @@ import { useUserTenants } from "@/hooks/useUserTenants";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenant } from "@/contexts/TenantContext";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -116,8 +117,12 @@ export function AppSidebar() {
 
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId } = useTenant();
+  const { tenantId: urlTenantId } = useCurrentTenant(); // Get tenant from URL
   const { selectedAgency } = useAgency();
   const tenantPath = useTenantPath();
+  
+  // Use URL tenant ID for display, context tenant for operations
+  const displayTenantId = urlTenantId || currentTenantId;
   
   const { data: userTenants, isLoading: isLoadingTenants } = useQuery({
     queryKey: ["user-tenants", userId],
@@ -632,7 +637,7 @@ export function AppSidebar() {
             </div>
             <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
               {userTenants && userTenants.length > 1 && (
-                <Select value={currentTenantId || undefined} onValueChange={handleTenantChange}>
+                <Select value={displayTenantId || undefined} onValueChange={handleTenantChange}>
                   <SelectTrigger className="h-8 border-0 shadow-none focus:ring-0 min-w-0 bg-sidebar-background">
                     <SelectValue placeholder="בחר ארגון" />
                   </SelectTrigger>
