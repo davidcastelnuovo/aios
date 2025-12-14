@@ -637,10 +637,11 @@ export function AppSidebar() {
                     <SelectValue placeholder="בחר ארגון" />
                   </SelectTrigger>
                   <SelectContent 
-                    className="bg-popover z-[9999]" 
+                    className="bg-popover border border-border shadow-lg z-[9999]" 
                     position="popper" 
                     sideOffset={4}
-                    align="end"
+                    align="start"
+                    side="bottom"
                   >
                     {userTenants.filter(tenant => tenant.id).map((tenant) => (
                       <SelectItem key={tenant.id} value={tenant.id}>
