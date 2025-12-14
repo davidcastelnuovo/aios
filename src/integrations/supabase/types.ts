@@ -2990,6 +2990,7 @@ export type Database = {
         | "send_greenapi_message"
         | "add_lead_update"
         | "add_client_update"
+        | "send_greenapi_to_campaigner"
       automation_trigger:
         | "task_assigned"
         | "task_status_changed"
@@ -3196,6 +3197,7 @@ export const Constants = {
         "send_greenapi_message",
         "add_lead_update",
         "add_client_update",
+        "send_greenapi_to_campaigner",
       ],
       automation_trigger: [
         "task_assigned",
