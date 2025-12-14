@@ -783,7 +783,7 @@ export function AddAutomationForm() {
 
             {actionType === "send_greenapi_message" && (
               <>
-                {greenApiIntegrations && greenApiIntegrations.length > 1 && (
+                {greenApiIntegrations && greenApiIntegrations.length >= 1 && (
                   <FormField
                     control={form.control}
                     name="green_api_integration_id"
@@ -835,7 +835,7 @@ export function AddAutomationForm() {
 
             {actionType === "send_greenapi_to_campaigner" && (
               <>
-                {greenApiIntegrations && greenApiIntegrations.length > 1 && (
+                {greenApiIntegrations && greenApiIntegrations.length >= 1 && (
                   <FormField
                     control={form.control}
                     name="green_api_integration_id"
