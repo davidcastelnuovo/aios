@@ -116,11 +116,11 @@ Deno.serve(async (req) => {
     // Handle group messages differently
     if (isGroup) {
       const groupChatId = senderData.chatId;
-      // For outgoing messages, chatName is the sender's name, not the group name
-      // Only use chatName for group name on INCOMING messages
-      const potentialGroupName = isIncoming ? (senderData.chatName || null) : null;
+      // chatName from Green API contains the actual group name for both incoming and outgoing
+      // senderName contains the person who sent the message
+      const groupNameFromApi = senderData.chatName || null;
       
-      console.log('👥 Group message detected. ChatId:', groupChatId, 'Potential name:', potentialGroupName, 'Direction:', isOutgoing ? 'outgoing' : 'incoming');
+      console.log('👥 Group message detected. ChatId:', groupChatId, 'Group name from API:', groupNameFromApi, 'Direction:', isOutgoing ? 'outgoing' : 'incoming');
 
       // Check if group exists, if not create it
       const { data: existingGroup } = await supabaseClient
@@ -134,11 +134,8 @@ Deno.serve(async (req) => {
       let groupIsBlocked = existingGroup?.is_blocked || false;
 
       if (!groupId) {
-        // Create new group - NEVER use chatName from outgoing messages as it contains sender name, not group name
-        // For outgoing messages, use a placeholder until we get an incoming message with the real group name
-        const newGroupName = (isIncoming && potentialGroupName) 
-          ? potentialGroupName 
-          : `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
+        // Create new group with the name from API, or placeholder if not available
+        const newGroupName = groupNameFromApi || `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
         const { data: newGroup, error: groupError } = await supabaseClient
           .from('whatsapp_groups')
           .insert({
@@ -156,19 +153,15 @@ Deno.serve(async (req) => {
 
         groupId = newGroup.id;
         console.log('✅ Created new group:', newGroupName);
-      } else if (existingGroup && isIncoming && potentialGroupName) {
-        // Only update group name from incoming messages if:
-        // 1. Current name is a placeholder (starts with "קבוצה ")
-        // 2. OR the new name looks like a real group name (not a person's name)
-        // Skip update if the existing name already looks good (not a placeholder)
-        const currentNameIsPlaceholder = existingGroup.group_name?.startsWith('קבוצה ');
-        
-        if (currentNameIsPlaceholder && potentialGroupName !== existingGroup.group_name) {
+      } else if (existingGroup && groupNameFromApi) {
+        // Always update group name if the API provides a different name
+        // This ensures we fix incorrect names that were saved previously
+        if (groupNameFromApi !== existingGroup.group_name) {
           await supabaseClient
             .from('whatsapp_groups')
-            .update({ group_name: potentialGroupName })
+            .update({ group_name: groupNameFromApi })
             .eq('id', groupId);
-          console.log('📝 Updated group name from placeholder to:', potentialGroupName);
+          console.log('📝 Updated group name from:', existingGroup.group_name, 'to:', groupNameFromApi);
         }
       }
       
