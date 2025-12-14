@@ -69,6 +69,12 @@ Deno.serve(async (req) => {
             response = await executeSendWhatsapp(supabase, automation.configuration, payload.data, payload.tenant_id)
           } else if (automation.action_type === 'create_manychat_subscriber') {
             response = await executeCreateManychatSubscriber(supabase, automation.configuration, payload.data, payload.tenant_id)
+          } else if (automation.action_type === 'send_greenapi_message') {
+            response = await executeGreenApiMessage(supabase, automation.configuration, payload.data, payload.tenant_id)
+          } else if (automation.action_type === 'add_lead_update') {
+            response = await executeAddLeadUpdate(supabase, automation.configuration, payload.data, payload.tenant_id)
+          } else if (automation.action_type === 'add_client_update') {
+            response = await executeAddClientUpdate(supabase, automation.configuration, payload.data, payload.tenant_id)
           }
 
           const executionTime = Date.now() - startTime
@@ -667,5 +673,273 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
     success: true,
     subscriber_id: subscriberId,
     message: 'Subscriber created successfully'
+  }
+}
+
+// Helper function to replace template variables
+function replaceTemplateVariables(template: string, data: any): string {
+  const now = new Date()
+  const hebrewDays = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+  
+  const variables: Record<string, string> = {
+    contact_name: data.contact_name || data.name || '',
+    company_name: data.company_name || data.name || '',
+    phone: data.phone || '',
+    status: data.status || data.new_status || '',
+    date: now.toLocaleDateString('he-IL'),
+    time: now.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }),
+    day_of_week: hebrewDays[now.getDay()],
+  }
+  
+  let result = template
+  for (const [key, value] of Object.entries(variables)) {
+    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value)
+  }
+  
+  return result
+}
+
+// Execute Green API message action
+async function executeGreenApiMessage(supabase: any, config: any, data: any, tenantId: string) {
+  console.log('Executing Green API message:', config)
+  console.log('Data:', data)
+  
+  const { message_template } = config
+  
+  if (!message_template) {
+    throw new Error('תבנית הודעה לא הוגדרה')
+  }
+  
+  // Get contact phone from lead or client
+  let contactPhone: string | null = null
+  let contactRecord: any = null
+  
+  if (data.lead_id || data.id) {
+    const leadId = data.lead_id || data.id
+    const { data: lead } = await supabase
+      .from('leads')
+      .select('id, phone, contact_name, company_name')
+      .eq('id', leadId)
+      .single()
+    contactRecord = lead
+    contactPhone = lead?.phone
+  } else if (data.client_id) {
+    const { data: client } = await supabase
+      .from('clients')
+      .select('id, phone, contact_name, name')
+      .eq('id', data.client_id)
+      .single()
+    contactRecord = client
+    contactPhone = client?.phone
+  }
+  
+  if (!contactPhone) {
+    throw new Error('לא נמצא מספר טלפון לשליחה')
+  }
+  
+  // Find user's Green API integration
+  const { data: integration, error: integrationError } = await supabase
+    .from('tenant_integrations')
+    .select('id, api_key, settings, user_id')
+    .eq('tenant_id', tenantId)
+    .eq('integration_type', 'green_api')
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle()
+  
+  if (integrationError || !integration) {
+    throw new Error('לא נמצא חיבור Green API פעיל')
+  }
+  
+  const { idInstance, apiTokenInstance } = integration.settings || {}
+  
+  if (!idInstance || !apiTokenInstance) {
+    throw new Error('הגדרות Green API חסרות')
+  }
+  
+  // Replace template variables
+  const message = replaceTemplateVariables(message_template, {
+    ...data,
+    ...contactRecord,
+  })
+  
+  // Format phone for Green API
+  const cleanPhone = contactPhone.replace(/\D/g, '')
+  const last9 = cleanPhone.slice(-9)
+  const chatId = `972${last9}@c.us`
+  
+  // Send message via Green API
+  const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
+  
+  const sendResponse = await fetch(greenApiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chatId,
+      message,
+    }),
+  })
+  
+  const sendResult = await sendResponse.json()
+  console.log('Green API send response:', sendResult)
+  
+  if (!sendResponse.ok) {
+    throw new Error(`שגיאה בשליחת הודעה: ${JSON.stringify(sendResult)}`)
+  }
+  
+  return {
+    success: true,
+    message_sent: message,
+    chat_id: chatId,
+    result: sendResult,
+  }
+}
+
+// Execute add lead update action
+async function executeAddLeadUpdate(supabase: any, config: any, data: any, tenantId: string) {
+  console.log('Executing add lead update:', config)
+  console.log('Data:', data)
+  
+  const { update_template } = config
+  
+  if (!update_template) {
+    throw new Error('תבנית עדכון לא הוגדרה')
+  }
+  
+  const leadId = data.lead_id || data.id
+  
+  if (!leadId) {
+    throw new Error('לא נמצא ליד לעדכון')
+  }
+  
+  // Get lead data for template
+  const { data: lead } = await supabase
+    .from('leads')
+    .select('*')
+    .eq('id', leadId)
+    .single()
+  
+  if (!lead) {
+    throw new Error('ליד לא נמצא')
+  }
+  
+  // Replace template variables
+  const updateContent = replaceTemplateVariables(update_template, {
+    ...data,
+    ...lead,
+  })
+  
+  // Get a system user ID for the update (we'll use the first owner in the tenant)
+  const { data: ownerRole } = await supabase
+    .from('user_roles')
+    .select('user_id')
+    .eq('tenant_id', tenantId)
+    .eq('role', 'owner')
+    .limit(1)
+    .maybeSingle()
+  
+  const userId = ownerRole?.user_id || data.user_id
+  
+  if (!userId) {
+    throw new Error('לא נמצא משתמש לשמירת העדכון')
+  }
+  
+  // Insert update into lead_updates table
+  const { data: insertedUpdate, error: insertError } = await supabase
+    .from('lead_updates')
+    .insert({
+      lead_id: leadId,
+      user_id: userId,
+      content: updateContent,
+    })
+    .select()
+    .single()
+  
+  if (insertError) {
+    console.error('Error inserting lead update:', insertError)
+    throw new Error(`שגיאה בשמירת עדכון: ${insertError.message}`)
+  }
+  
+  console.log('Lead update inserted:', insertedUpdate)
+  
+  return {
+    success: true,
+    update_id: insertedUpdate.id,
+    content: updateContent,
+  }
+}
+
+// Execute add client update action
+async function executeAddClientUpdate(supabase: any, config: any, data: any, tenantId: string) {
+  console.log('Executing add client update:', config)
+  console.log('Data:', data)
+  
+  const { update_template } = config
+  
+  if (!update_template) {
+    throw new Error('תבנית עדכון לא הוגדרה')
+  }
+  
+  const clientId = data.client_id
+  
+  if (!clientId) {
+    throw new Error('לא נמצא לקוח לעדכון')
+  }
+  
+  // Get client data for template
+  const { data: client } = await supabase
+    .from('clients')
+    .select('*')
+    .eq('id', clientId)
+    .single()
+  
+  if (!client) {
+    throw new Error('לקוח לא נמצא')
+  }
+  
+  // Replace template variables
+  const updateContent = replaceTemplateVariables(update_template, {
+    ...data,
+    ...client,
+  })
+  
+  // Get a system user ID for the update
+  const { data: ownerRole } = await supabase
+    .from('user_roles')
+    .select('user_id')
+    .eq('tenant_id', tenantId)
+    .eq('role', 'owner')
+    .limit(1)
+    .maybeSingle()
+  
+  const userId = ownerRole?.user_id || data.user_id
+  
+  if (!userId) {
+    throw new Error('לא נמצא משתמש לשמירת העדכון')
+  }
+  
+  // Insert update into client_updates table
+  const { data: insertedUpdate, error: insertError } = await supabase
+    .from('client_updates')
+    .insert({
+      client_id: clientId,
+      tenant_id: tenantId,
+      user_id: userId,
+      content: updateContent,
+    })
+    .select()
+    .single()
+  
+  if (insertError) {
+    console.error('Error inserting client update:', insertError)
+    throw new Error(`שגיאה בשמירת עדכון: ${insertError.message}`)
+  }
+  
+  console.log('Client update inserted:', insertedUpdate)
+  
+  return {
+    success: true,
+    update_id: insertedUpdate.id,
+    content: updateContent,
   }
 }
