@@ -131,6 +131,29 @@ export default function GreenAPISettings() {
     },
   });
 
+  // Reconfigure webhooks mutation (for existing integrations)
+  const reconfigureMutation = useMutation({
+    mutationFn: async () => {
+      if (!integration?.instance_id || !integration?.api_key) {
+        throw new Error("אין פרטי חיבור שמורים");
+      }
+      await configureWebhooks(integration.instance_id, integration.api_key);
+    },
+    onSuccess: () => {
+      toast({
+        title: "הגדרות עודכנו",
+        description: "הגדרות ה-Webhook הוגדרו מחדש - כעת תקבל גם הודעות שאתה שולח מהוואטסאפ",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "שגיאה בעדכון הגדרות",
+        description: error.message,
+      });
+    },
+  });
+
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/green-api-webhook`;
 
   const copyWebhookUrl = () => {
@@ -167,10 +190,23 @@ export default function GreenAPISettings() {
       {integration?.is_active && (
         <Card className="mb-6 border-green-500/20 bg-green-500/5">
           <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-              <CheckCircle2 className="h-5 w-5" />
-              <span className="font-semibold">האינטגרציה פעילה ומוכנה לשימוש</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                <CheckCircle2 className="h-5 w-5" />
+                <span className="font-semibold">האינטגרציה פעילה ומוכנה לשימוש</span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => reconfigureMutation.mutate()}
+                disabled={reconfigureMutation.isPending}
+              >
+                {reconfigureMutation.isPending ? "מעדכן..." : "רענן הגדרות Webhook"}
+              </Button>
             </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              אם הודעות יוצאות לא מופיעות, לחץ על "רענן הגדרות" כדי לעדכן את ההגדרות ב-Green API
+            </p>
           </CardContent>
         </Card>
       )}
