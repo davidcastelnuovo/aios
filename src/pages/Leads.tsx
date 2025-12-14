@@ -742,12 +742,39 @@ export default function Leads() {
 
   const updateLeadResponseStatus = useMutation({
     mutationFn: async ({ leadId, responseStatus }: { leadId: string; responseStatus: "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "in_progress" | "denies_contact" | "not_relevant" | null }) => {
+      // Get lead data before update for automation
+      const { data: leadData } = await supabase
+        .from("leads")
+        .select("*, agency:agencies(name)")
+        .eq("id", leadId)
+        .single();
+
       const { error } = await supabase
         .from("leads")
         .update({ response_status: responseStatus })
         .eq("id", leadId);
 
       if (error) throw error;
+
+      // Trigger automation for lead_status_changed
+      if (responseStatus && tenantId && leadData) {
+        await supabase.functions.invoke('trigger-automation', {
+          body: {
+            trigger_type: 'lead_status_changed',
+            tenant_id: tenantId,
+            data: {
+              lead_id: leadId,
+              contact_name: leadData.contact_name || '',
+              company_name: leadData.company_name || '',
+              phone: leadData.phone || '',
+              email: leadData.email || '',
+              status: responseStatus,
+              old_status: leadData.response_status || '',
+              agency_name: leadData.agency?.name || '',
+            }
+          }
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads", tenantId, selectedAgency] });
@@ -1483,6 +1510,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   const { activeStatuses: leadStatuses } = useLeadStatuses();
   const { activeStages: pipelineStagesData } = useLeadPipelineStages();
   const { isFieldVisible } = useCustomFieldLabels('lead');
+  const { tenantId } = useCurrentTenant();
   
   // Convert dynamic pipeline stages to format compatible with existing code
   const PIPELINE_STAGES = useMemo(() => {
@@ -1533,12 +1561,39 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
 
   const updateLeadResponseStatus = useMutation({
     mutationFn: async ({ leadId, responseStatus }: { leadId: string; responseStatus: "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "in_progress" | "denies_contact" | "not_relevant" | null }) => {
+      // Get lead data before update for automation
+      const { data: leadData } = await supabase
+        .from("leads")
+        .select("*, agency:agencies(name)")
+        .eq("id", leadId)
+        .single();
+
       const { error } = await supabase
         .from("leads")
         .update({ response_status: responseStatus })
         .eq("id", leadId);
 
       if (error) throw error;
+
+      // Trigger automation for lead_status_changed
+      if (responseStatus && tenantId && leadData) {
+        await supabase.functions.invoke('trigger-automation', {
+          body: {
+            trigger_type: 'lead_status_changed',
+            tenant_id: tenantId,
+            data: {
+              lead_id: leadId,
+              contact_name: leadData.contact_name || '',
+              company_name: leadData.company_name || '',
+              phone: leadData.phone || '',
+              email: leadData.email || '',
+              status: responseStatus,
+              old_status: leadData.response_status || '',
+              agency_name: leadData.agency?.name || '',
+            }
+          }
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
