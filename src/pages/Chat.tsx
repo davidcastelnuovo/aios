@@ -353,13 +353,15 @@ export default function Chat() {
     // Filter out blocked contacts
     allContacts = allContacts.filter(contact => !contact.is_blocked);
 
-    // Filter hidden/visible based on toggle
-    if (showHiddenChats) {
-      // Show only hidden chats
-      allContacts = allContacts.filter(contact => isContactHidden(contact));
-    } else {
-      // Hide hidden chats
-      allContacts = allContacts.filter(contact => !isContactHidden(contact));
+    // Filter hidden/visible based on toggle - BUT NOT during search (search shows all including hidden)
+    if (!debouncedSearch) {
+      if (showHiddenChats) {
+        // Show only hidden chats
+        allContacts = allContacts.filter(contact => isContactHidden(contact));
+      } else {
+        // Hide hidden chats
+        allContacts = allContacts.filter(contact => !isContactHidden(contact));
+      }
     }
 
     // Apply contact type filter
@@ -390,7 +392,7 @@ export default function Chat() {
     }
 
     return allContacts;
-  }, [allContactsBeforeTypeFilter, contactFilter, showTodayOnly, showUnreadOnly, todayParts, isManuallyMarkedRead, isContactHidden, showHiddenChats, selectedTagFilter, getContactTagIds]);
+  }, [allContactsBeforeTypeFilter, contactFilter, showTodayOnly, showUnreadOnly, todayParts, isManuallyMarkedRead, isContactHidden, showHiddenChats, selectedTagFilter, getContactTagIds, debouncedSearch]);
 
   const clientsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'client' && !isContactHidden(c)).length;
   const leadsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'lead' && !isContactHidden(c)).length;
@@ -858,8 +860,14 @@ export default function Chat() {
                         <div className="flex-1 min-w-0 text-right">
                           <div className="flex items-center justify-between gap-2 mb-1">
                             <div className="flex-1 min-w-0">
-                              <div className="block text-sm font-medium leading-tight truncate" dir="auto">
-                                {contact.contact_type === 'group' ? contact.name : (contact.contact_name || contact.name)}
+                              <div className="flex items-center gap-1">
+                                <span className="block text-sm font-medium leading-tight truncate" dir="auto">
+                                  {contact.contact_type === 'group' ? contact.name : (contact.contact_name || contact.name)}
+                                </span>
+                                {/* Show hidden indicator during search */}
+                                {debouncedSearch && isHidden && (
+                                  <EyeOff className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                                )}
                               </div>
                             </div>
                             <div className="flex items-center gap-1 flex-shrink-0">

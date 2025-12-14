@@ -190,6 +190,16 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Auto-unhide: if incoming message and group is hidden, remove from hidden_chats
+      if (isIncoming) {
+        await supabaseClient
+          .from('hidden_chats')
+          .delete()
+          .eq('tenant_id', tenantId)
+          .eq('group_id', groupId);
+        console.log('👁️ Auto-unhiding group chat if hidden');
+      }
+
       // Save group message
       const { error: insertError } = await supabaseClient
         .from('chat_messages')
@@ -318,6 +328,33 @@ Deno.serve(async (req) => {
         }
       } else {
         console.log(`⚠️ No contact found with Green API provider in tenant ${tenantId}`);
+      }
+    }
+
+    // Auto-unhide: if incoming message and contact is hidden, remove from hidden_chats
+    if (isIncoming) {
+      if (clientId) {
+        await supabaseClient
+          .from('hidden_chats')
+          .delete()
+          .eq('tenant_id', tenantId)
+          .eq('client_id', clientId);
+        console.log('👁️ Auto-unhiding client chat if hidden');
+      } else if (leadId) {
+        await supabaseClient
+          .from('hidden_chats')
+          .delete()
+          .eq('tenant_id', tenantId)
+          .eq('lead_id', leadId);
+        console.log('👁️ Auto-unhiding lead chat if hidden');
+      } else {
+        // Unknown contact - unhide by phone
+        await supabaseClient
+          .from('hidden_chats')
+          .delete()
+          .eq('tenant_id', tenantId)
+          .eq('sender_phone', phoneNumber);
+        console.log('👁️ Auto-unhiding unknown chat if hidden');
       }
     }
 
