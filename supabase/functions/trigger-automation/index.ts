@@ -825,9 +825,13 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     console.log(`Using fallback integration: ${integration.id}`)
   }
   
-  const { idInstance, apiTokenInstance } = integration.settings || {}
+  // Support both naming conventions: idInstance/apiTokenInstance and instance_id/api_key
+  const idInstance = integration.settings?.idInstance || integration.settings?.instance_id
+  const apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
   
   if (!idInstance || !apiTokenInstance) {
+    console.log('Integration settings:', JSON.stringify(integration.settings))
+    console.log('api_key field:', integration.api_key ? 'exists' : 'missing')
     throw new Error('הגדרות Green API חסרות')
   }
   
