@@ -79,18 +79,15 @@ export function AppLayout({ children }: AppLayoutProps) {
         const pathParts = window.location.pathname.split('/');
         const currentModule = pathParts.length > 3 ? pathParts.slice(3).join('/') : 'dashboard';
         
-        setCurrentTenantId(tenantId);
-        
         toast({
           title: "עובר לארגון...",
           description: "המערכת עוברת לארגון החדש",
         });
 
-        // Navigate to new tenant URL with current module
-        navigate(`/t/${newSlug}/${currentModule}`);
+        // Force full page reload to ensure URL and all queries update correctly
+        window.location.replace(`/t/${newSlug}/${currentModule}`);
       } else {
         // Fallback if no slug found
-        setCurrentTenantId(tenantId);
         window.location.reload();
       }
     } catch (error) {
