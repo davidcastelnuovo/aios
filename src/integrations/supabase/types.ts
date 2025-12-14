@@ -2953,6 +2953,10 @@ export type Database = {
         Args: { _agency_id: string; _user_id: string }
         Returns: boolean
       }
+      user_has_integration_access: {
+        Args: { p_integration_id: string }
+        Returns: boolean
+      }
       user_has_integration_permission: {
         Args: { p_integration_id: string; p_user_id: string }
         Returns: boolean
@@ -2967,6 +2971,10 @@ export type Database = {
       }
       user_owns_agency: {
         Args: { _agency_id: string; _user_id: string }
+        Returns: boolean
+      }
+      user_owns_integration: {
+        Args: { p_integration_id: string }
         Returns: boolean
       }
       validate_crm_record: {
