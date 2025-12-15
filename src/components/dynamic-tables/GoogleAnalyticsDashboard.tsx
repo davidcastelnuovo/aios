@@ -573,23 +573,28 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
         <CardContent>
           <div className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={trafficSources.slice(0, 10)} layout="vertical" margin={{ left: 20 }}>
+              <BarChart data={trafficSources.slice(0, 10)} layout="vertical" margin={{ left: 150, right: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                 <XAxis type="number" fontSize={12} />
                 <YAxis 
                   dataKey="name" 
                   type="category" 
-                  width={200} 
+                  width={140} 
                   fontSize={11}
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: 'currentColor' }}
+                  orientation="right"
+                  tick={{ fill: 'currentColor', textAnchor: 'start' }}
                 />
                 <Tooltip 
                   formatter={(value: number) => formatNumber(value)}
                   contentStyle={{ direction: 'rtl', textAlign: 'right' }}
                 />
-                <Bar dataKey="sessions" name="סשנים" fill="#3B82F6" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="sessions" name="סשנים" radius={[0, 4, 4, 0]}>
+                  {trafficSources.slice(0, 10).map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
