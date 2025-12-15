@@ -75,7 +75,22 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Syncing Ahrefs data for table ${tableId}, type: ${config.dataType}, target: ${config.target}`);
+    const normalizeTarget = (raw: string) => {
+      // Accept domain or full URL; send only hostname/domain to Ahrefs
+      try {
+        if (raw.startsWith('http://') || raw.startsWith('https://')) {
+          return new URL(raw).hostname;
+        }
+      } catch {
+        // ignore
+      }
+      return raw.replace(/^https?:\/\//, '').split('/')[0];
+    };
+
+    const date = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const target = normalizeTarget(config.target);
+
+    console.log(`Syncing Ahrefs data for table ${tableId}, type: ${config.dataType}, target: ${target}, date: ${date}`);
 
     let apiUrl = '';
     let selectFields: string[] = [];
@@ -83,27 +98,27 @@ serve(async (req) => {
     // Build API request based on data type (Site Explorer endpoints - available on standard plans)
     switch (config.dataType) {
       case 'organic_traffic':
-        // Organic Keywords report
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(config.target)}&country=${config.country || 'il'}&limit=${config.limit || 1000}&select=keyword,volume,keyword_difficulty,cpc,traffic,traffic_percentage,position,url,serp_features`;
+        // Organic Keywords report (requires date)
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&country=${config.country || 'il'}&limit=${config.limit || 1000}&select=keyword,volume,keyword_difficulty,cpc,traffic,traffic_percentage,position,url,serp_features`;
         selectFields = ['keyword', 'volume', 'keyword_difficulty', 'cpc', 'traffic', 'traffic_percentage', 'position', 'url', 'serp_features'];
         break;
       
       case 'backlinks':
-        // Backlinks report
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/backlinks?target=${encodeURIComponent(config.target)}&limit=${config.limit || 1000}&select=url_from,url_to,anchor,domain_rating_source,url_rating_source,traffic,first_seen,last_seen,nofollow,is_dofollow`;
+        // Backlinks report (requires date)
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/backlinks?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&limit=${config.limit || 1000}&select=url_from,url_to,anchor,domain_rating_source,url_rating_source,traffic,first_seen,last_seen,nofollow,is_dofollow`;
         selectFields = ['url_from', 'url_to', 'anchor', 'domain_rating_source', 'url_rating_source', 'traffic', 'first_seen', 'last_seen', 'nofollow', 'is_dofollow'];
         break;
       
       case 'referring_domains':
-        // Referring Domains report
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/refdomains?target=${encodeURIComponent(config.target)}&limit=${config.limit || 1000}&select=domain,domain_rating,backlinks,first_seen,last_seen,linked_domains`;
+        // Referring Domains report (requires date)
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/refdomains?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&limit=${config.limit || 1000}&select=domain,domain_rating,backlinks,first_seen,last_seen,linked_domains`;
         selectFields = ['domain', 'domain_rating', 'backlinks', 'first_seen', 'last_seen', 'linked_domains'];
         break;
       
       case 'site_explorer':
       default:
-        // Domain overview (default)
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/overview?target=${encodeURIComponent(config.target)}&select=domain_rating,ahrefs_rank,organic_traffic,organic_keywords,backlinks,referring_domains,organic_value`;
+        // Domain overview (default) (requires date)
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/overview?target=${encodeURIComponent(target)}&date=${encodeURIComponent(date)}&select=domain_rating,ahrefs_rank,organic_traffic,organic_keywords,backlinks,referring_domains,organic_value`;
         selectFields = ['domain_rating', 'ahrefs_rank', 'organic_traffic', 'organic_keywords', 'backlinks', 'referring_domains', 'organic_value'];
         break;
     }
