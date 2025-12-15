@@ -1115,6 +1115,8 @@ export type Database = {
           id: string
           integration_settings: Json | null
           integration_type: string | null
+          integrations: Json | null
+          last_sync_at: string | null
           name: string
           slug: string
           tenant_id: string
@@ -1131,6 +1133,8 @@ export type Database = {
           id?: string
           integration_settings?: Json | null
           integration_type?: string | null
+          integrations?: Json | null
+          last_sync_at?: string | null
           name: string
           slug: string
           tenant_id: string
@@ -1147,6 +1151,8 @@ export type Database = {
           id?: string
           integration_settings?: Json | null
           integration_type?: string | null
+          integrations?: Json | null
+          last_sync_at?: string | null
           name?: string
           slug?: string
           tenant_id?: string
