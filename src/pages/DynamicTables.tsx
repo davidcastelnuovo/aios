@@ -88,7 +88,7 @@ export default function DynamicTables() {
   const [editAgencyId, setEditAgencyId] = useState<string>("");
   const [editClientId, setEditClientId] = useState<string>("");
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['ללא קבוצה', 'Facebook Insights']));
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   // Fetch agencies and clients for displaying names
   const { data: agencies = [] } = useQuery({
@@ -249,18 +249,6 @@ export default function DynamicTables() {
     });
   };
 
-  const toggleCategory = (category: string) => {
-    setExpandedCategories(prev => {
-      const next = new Set(prev);
-      if (next.has(category)) {
-        next.delete(category);
-      } else {
-        next.add(category);
-      }
-      return next;
-    });
-  };
-
   const getAgencyName = (agencyId: string | null) => {
     if (!agencyId) return null;
     const agency = agencies.find(a => a.id === agencyId);
@@ -287,6 +275,18 @@ export default function DynamicTables() {
     
     return groups;
   }, [filteredTables]);
+
+  // Get categories list for tabs
+  const categories = useMemo(() => {
+    return Object.keys(groupedTables);
+  }, [groupedTables]);
+
+  // Auto-select first category if none selected
+  useMemo(() => {
+    if (!selectedCategory && categories.length > 0) {
+      setSelectedCategory(categories[0]);
+    }
+  }, [categories, selectedCategory]);
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -362,115 +362,110 @@ export default function DynamicTables() {
         </Card>
       ) : (
         <div className="space-y-6">
-          {Object.entries(groupedTables).map(([category, categoryTables]) => (
-            <Collapsible 
-              key={category}
-              open={expandedCategories.has(category)}
-              onOpenChange={() => toggleCategory(category)}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" size="sm" className="gap-2">
-                    {expandedCategories.has(category) ? (
-                      <ChevronDown className="h-4 w-4" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4" />
-                    )}
-                    <span className="font-semibold text-lg">{category}</span>
-                    <span className="text-muted-foreground">({categoryTables.length})</span>
-                  </Button>
-                </CollapsibleTrigger>
-              </div>
-              
-              <CollapsibleContent>
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mr-6">
-                  {categoryTables.map((table) => (
-                    <Card
-                      key={table.id}
-                      className="cursor-pointer hover:shadow-lg transition-shadow relative"
-                      onClick={() => navigate(buildPath(`/table/${table.slug}`))}
-                    >
-                      <CardHeader>
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="flex items-center gap-2">
-                            {table.integration_type === 'facebook_insights' ? (
-                              <Facebook className="h-5 w-5 text-blue-600" />
-                            ) : table.integration_type === 'google_ads' ? (
-                              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
-                                <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="#4285F4"/>
-                              </svg>
-                            ) : (
-                              <FileSpreadsheet className="h-5 w-5" />
-                            )}
-                            {table.name}
-                          </CardTitle>
-                          <div className="flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => handleEdit(table, e)}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => handleDelete(table, e)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                        {/* Agency & Client Badges */}
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {table.agency_id && (
-                            <Badge variant="outline" className="text-xs">
-                              <Building2 className="h-3 w-3 ml-1" />
-                              {getAgencyName(table.agency_id)}
-                            </Badge>
-                          )}
-                          {table.client_id && (
-                            <Badge variant="secondary" className="text-xs">
-                              <User className="h-3 w-3 ml-1" />
-                              {getClientName(table.client_id)}
-                            </Badge>
-                          )}
-                        </div>
-                        {table.description && (
-                          <CardDescription>{table.description}</CardDescription>
+          {/* Horizontal Tabs */}
+          <div className="flex flex-wrap gap-2 border-b pb-3">
+            {Object.entries(groupedTables).map(([category, categoryTables]) => (
+              <Button
+                key={category}
+                variant={selectedCategory === category ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedCategory(category)}
+                className="gap-2"
+              >
+                <span>({categoryTables.length})</span>
+                <span>{category}</span>
+              </Button>
+            ))}
+          </div>
+
+          {/* Tables Grid */}
+          {selectedCategory && groupedTables[selectedCategory] && (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {groupedTables[selectedCategory].map((table) => (
+                <Card
+                  key={table.id}
+                  className="cursor-pointer hover:shadow-lg transition-shadow relative"
+                  onClick={() => navigate(buildPath(`/table/${table.slug}`))}
+                >
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2">
+                        {table.integration_type === 'facebook_insights' ? (
+                          <Facebook className="h-5 w-5 text-blue-600" />
+                        ) : table.integration_type === 'google_ads' ? (
+                          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+                            <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="#4285F4"/>
+                          </svg>
+                        ) : (
+                          <FileSpreadsheet className="h-5 w-5" />
                         )}
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground">
-                          {table.integration_type === 'facebook_insights' ? (
-                            <>
-                              <span className="text-blue-600">Facebook Insights</span>
-                              {table.integration_settings?.last_sync_at && (
-                                <span className="mr-2">
-                                  • עודכן {new Date(table.integration_settings.last_sync_at).toLocaleDateString('he-IL')}
-                                </span>
-                              )}
-                            </>
-                          ) : table.integration_type === 'google_ads' ? (
-                            <>
-                              <span className="text-green-600">Google Ads</span>
-                              {table.integration_settings?.last_sync_at && (
-                                <span className="mr-2">
-                                  • עודכן {new Date(table.integration_settings.last_sync_at).toLocaleDateString('he-IL')}
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            'לחץ לצפייה וניהול'
+                        {table.name}
+                      </CardTitle>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => handleEdit(table, e)}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => handleDelete(table, e)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    {/* Agency & Client Badges */}
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {table.agency_id && (
+                        <Badge variant="outline" className="text-xs">
+                          <Building2 className="h-3 w-3 ml-1" />
+                          {getAgencyName(table.agency_id)}
+                        </Badge>
+                      )}
+                      {table.client_id && (
+                        <Badge variant="secondary" className="text-xs">
+                          <User className="h-3 w-3 ml-1" />
+                          {getClientName(table.client_id)}
+                        </Badge>
+                      )}
+                    </div>
+                    {table.description && (
+                      <CardDescription>{table.description}</CardDescription>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      {table.integration_type === 'facebook_insights' ? (
+                        <>
+                          <span className="text-blue-600">Facebook Insights</span>
+                          {table.integration_settings?.last_sync_at && (
+                            <span className="mr-2">
+                              • עודכן {new Date(table.integration_settings.last_sync_at).toLocaleDateString('he-IL')}
+                            </span>
                           )}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          ))}
+                        </>
+                      ) : table.integration_type === 'google_ads' ? (
+                        <>
+                          <span className="text-green-600">Google Ads</span>
+                          {table.integration_settings?.last_sync_at && (
+                            <span className="mr-2">
+                              • עודכן {new Date(table.integration_settings.last_sync_at).toLocaleDateString('he-IL')}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        'לחץ לצפייה וניהול'
+                      )}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
