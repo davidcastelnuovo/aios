@@ -114,6 +114,8 @@ export default function DynamicTableView() {
     { value: "last_90_days", label: "3 חודשים" },
     { value: "last_180_days", label: "6 חודשים" },
     { value: "last_365_days", label: "שנה" },
+    { value: "last_730_days", label: "שנתיים" },
+    { value: "all_history", label: "כל ההיסטוריה" },
   ];
 
   const { data: tables, isLoading: tablesLoading } = useQuery({
@@ -461,9 +463,44 @@ export default function DynamicTableView() {
   const syncGoogleAnalyticsMutation = useMutation({
     mutationFn: async () => {
       if (!table?.id) throw new Error('No table');
+      
+      // Calculate date range based on selected option
+      const endDate = new Date().toISOString().split('T')[0];
+      let startDate: string;
+      
+      switch (selectedSyncDateRange) {
+        case 'last_7_days':
+          startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          break;
+        case 'last_14_days':
+          startDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          break;
+        case 'last_30_days':
+          startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          break;
+        case 'last_90_days':
+          startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          break;
+        case 'last_180_days':
+          startDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          break;
+        case 'last_365_days':
+          startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          break;
+        case 'last_730_days':
+          startDate = new Date(Date.now() - 730 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          break;
+        case 'all_history':
+          // GA4 supports data from July 2020 onwards, use a safe early date
+          startDate = '2020-01-01';
+          break;
+        default:
+          startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      }
+      
       const response = await supabase.functions.invoke('sync-google-analytics-data', {
         method: 'POST',
-        body: { tableId: table.id },
+        body: { tableId: table.id, startDate, endDate },
       });
       if (response.error) throw response.error;
       return response.data;
@@ -763,6 +800,18 @@ export default function DynamicTableView() {
           {/* Google Analytics Sync Controls */}
           {hasGoogleAnalytics && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+              <Select value={selectedSyncDateRange} onValueChange={setSelectedSyncDateRange}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="תקופת סנכרון" />
+                </SelectTrigger>
+                <SelectContent>
+                  {syncDateRangeOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button 
                 variant="outline" 
                 onClick={() => syncGoogleAnalyticsMutation.mutate()}
