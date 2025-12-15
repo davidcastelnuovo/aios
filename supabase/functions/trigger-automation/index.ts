@@ -985,7 +985,14 @@ async function executeGreenApiToCampaigner(supabase: any, config: any, data: any
   }
   
   // Replace template variables
+  console.log('Template variables before replacement:', {
+    task_title: data.task_title,
+    client_name: data.client_name,
+    priority: data.priority,
+    due_date: data.due_date,
+  })
   const message = replaceTemplateVariables(message_template, data, tenantSlug)
+  console.log('Final message after replacement:', message)
   
   // Send message via Green API
   const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
