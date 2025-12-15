@@ -1022,6 +1022,11 @@ export default function DynamicTableView() {
         </Card>
       )}
 
+      {/* Google Analytics Dashboard */}
+      {hasGoogleAnalytics && records && records.length > 0 && (
+        <GoogleAnalyticsDashboard records={records} />
+      )}
+
       {isLoading ? (
         <Skeleton className="h-96 w-full" />
       ) : (
