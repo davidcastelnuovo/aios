@@ -116,7 +116,9 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-        apiUrl = `https://api.ahrefs.com/v3/rank-tracker/overview?project_id=${encodeURIComponent(config.projectId)}&device=${encodeURIComponent(config.device || 'desktop')}&select=keyword,volume,position,position_diff,traffic,traffic_diff,url,keyword_difficulty,serp_features,serp_updated`;
+        // date parameter is required - use today's date in YYYY-MM-DD format
+        const today = new Date().toISOString().split('T')[0];
+        apiUrl = `https://api.ahrefs.com/v3/rank-tracker/overview?project_id=${encodeURIComponent(config.projectId)}&device=${encodeURIComponent(config.device || 'desktop')}&date=${today}&select=keyword,volume,position,position_diff,traffic,traffic_diff,url,keyword_difficulty,serp_features,serp_updated`;
         selectFields = ['keyword', 'volume', 'position', 'position_diff', 'traffic', 'traffic_diff', 'url', 'keyword_difficulty', 'serp_features', 'serp_updated'];
         break;
       
