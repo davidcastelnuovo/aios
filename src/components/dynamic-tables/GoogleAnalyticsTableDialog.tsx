@@ -236,12 +236,12 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
 
             <div className="space-y-2">
               <Label>סוכנות (אופציונלי)</Label>
-              <Select value={selectedAgency} onValueChange={(v) => { setSelectedAgency(v); setSelectedClient(""); }}>
+              <Select value={selectedAgency || "all"} onValueChange={(v) => { setSelectedAgency(v === "all" ? "" : v); setSelectedClient(""); }}>
                 <SelectTrigger>
                   <SelectValue placeholder="כל הסוכנויות" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">כל הסוכנויות</SelectItem>
+                  <SelectItem value="all">כל הסוכנויות</SelectItem>
                   {agencies?.map((agency) => (
                     <SelectItem key={agency.id} value={agency.id}>
                       {agency.name}
@@ -254,12 +254,12 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
             {selectedAgency && (
               <div className="space-y-2">
                 <Label>לקוח (אופציונלי)</Label>
-                <Select value={selectedClient} onValueChange={setSelectedClient}>
+                <Select value={selectedClient || "all"} onValueChange={(v) => setSelectedClient(v === "all" ? "" : v)}>
                   <SelectTrigger>
                     <SelectValue placeholder="כל הלקוחות" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">כל הלקוחות</SelectItem>
+                    <SelectItem value="all">כל הלקוחות</SelectItem>
                     {clients?.map((client) => (
                       <SelectItem key={client.id} value={client.id}>
                         {client.name}
