@@ -7,7 +7,8 @@ const corsHeaders = {
 };
 
 interface AhrefsConfig {
-  target: string; // Domain to analyze
+  target?: string; // Domain to analyze
+  projectId?: string; // Rank Tracker project ID
   dataType: 'site_explorer' | 'keywords' | 'backlinks' | 'organic_traffic' | 'rank_tracker';
   country?: string;
   limit?: number;
@@ -68,14 +69,14 @@ serve(async (req) => {
     const body = await req.json();
     const { tableId, config } = body as { tableId: string; config: AhrefsConfig };
 
-    if (!tableId || !config || !config.target) {
+    if (!tableId || !config || (!config.target && !config.projectId)) {
       return new Response(
-        JSON.stringify({ error: 'Missing tableId or config' }),
+        JSON.stringify({ error: 'Missing tableId or config (target or projectId required)' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Syncing Ahrefs data for table ${tableId}, type: ${config.dataType}, target: ${config.target}`);
+    console.log(`Syncing Ahrefs data for table ${tableId}, type: ${config.dataType}, target: ${config.target || config.projectId}`);
 
     let apiUrl = '';
     let selectFields: string[] = [];
@@ -84,26 +85,38 @@ serve(async (req) => {
     switch (config.dataType) {
       case 'organic_traffic':
         // Organic Keywords report
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(config.target)}&country=${config.country || 'il'}&limit=${config.limit || 1000}&select=keyword,volume,keyword_difficulty,cpc,traffic,traffic_percentage,position,url,serp_features`;
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/organic-keywords?target=${encodeURIComponent(config.target || '')}&country=${config.country || 'il'}&limit=${config.limit || 1000}&select=keyword,volume,keyword_difficulty,cpc,traffic,traffic_percentage,position,url,serp_features`;
         selectFields = ['keyword', 'volume', 'keyword_difficulty', 'cpc', 'traffic', 'traffic_percentage', 'position', 'url', 'serp_features'];
         break;
       
       case 'backlinks':
         // Backlinks report
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/backlinks?target=${encodeURIComponent(config.target)}&limit=${config.limit || 1000}&select=url_from,url_to,anchor,domain_rating_source,url_rating_source,traffic,first_seen,last_seen,nofollow,is_dofollow`;
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/backlinks?target=${encodeURIComponent(config.target || '')}&limit=${config.limit || 1000}&select=url_from,url_to,anchor,domain_rating_source,url_rating_source,traffic,first_seen,last_seen,nofollow,is_dofollow`;
         selectFields = ['url_from', 'url_to', 'anchor', 'domain_rating_source', 'url_rating_source', 'traffic', 'first_seen', 'last_seen', 'nofollow', 'is_dofollow'];
         break;
       
       case 'site_explorer':
         // Domain overview
-        apiUrl = `https://api.ahrefs.com/v3/site-explorer/overview?target=${encodeURIComponent(config.target)}&select=domain_rating,ahrefs_rank,organic_traffic,organic_keywords,backlinks,referring_domains,organic_value`;
+        apiUrl = `https://api.ahrefs.com/v3/site-explorer/overview?target=${encodeURIComponent(config.target || '')}&select=domain_rating,ahrefs_rank,organic_traffic,organic_keywords,backlinks,referring_domains,organic_value`;
         selectFields = ['domain_rating', 'ahrefs_rank', 'organic_traffic', 'organic_keywords', 'backlinks', 'referring_domains', 'organic_value'];
         break;
       
       case 'keywords':
         // Keywords Explorer - single keyword or list
-        apiUrl = `https://api.ahrefs.com/v3/keywords-explorer/overview?country=${config.country || 'il'}&keywords=${encodeURIComponent(config.target)}&select=keyword,volume,keyword_difficulty,cpc,clicks,clicks_percentage,global_volume,cpc_usd`;
+        apiUrl = `https://api.ahrefs.com/v3/keywords-explorer/overview?country=${config.country || 'il'}&keywords=${encodeURIComponent(config.target || '')}&select=keyword,volume,keyword_difficulty,cpc,clicks,clicks_percentage,global_volume,cpc_usd`;
         selectFields = ['keyword', 'volume', 'keyword_difficulty', 'cpc', 'clicks', 'clicks_percentage', 'global_volume', 'cpc_usd'];
+        break;
+      
+      case 'rank_tracker':
+        // Rank Tracker - requires project ID
+        if (!config.projectId) {
+          return new Response(
+            JSON.stringify({ error: 'Rank Tracker requires a projectId' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        apiUrl = `https://api.ahrefs.com/v3/rank-tracker/overview?target=${encodeURIComponent(config.projectId)}&select=keyword,volume,position,position_diff,traffic,traffic_diff,url,keyword_difficulty,serp_features,serp_updated`;
+        selectFields = ['keyword', 'volume', 'position', 'position_diff', 'traffic', 'traffic_diff', 'url', 'keyword_difficulty', 'serp_features', 'serp_updated'];
         break;
       
       default:
@@ -132,11 +145,14 @@ serve(async (req) => {
     }
 
     const apiData = await response.json();
-    console.log(`Received ${Array.isArray(apiData.keywords) ? apiData.keywords.length : (Array.isArray(apiData.backlinks) ? apiData.backlinks.length : 1)} records`);
+    console.log('Ahrefs API response keys:', Object.keys(apiData));
 
     // Determine the data array from response
     let records: any[] = [];
-    if (apiData.keywords) {
+    if (apiData.overviews) {
+      // Rank Tracker response
+      records = apiData.overviews;
+    } else if (apiData.keywords) {
       records = apiData.keywords;
     } else if (apiData.backlinks) {
       records = apiData.backlinks;
@@ -146,6 +162,8 @@ serve(async (req) => {
     } else {
       records = [apiData];
     }
+    
+    console.log(`Received ${records.length} records`);
 
     // Ensure fields exist for this table
     const { data: existingFields } = await supabase
@@ -164,6 +182,9 @@ serve(async (req) => {
       traffic: 'תנועה',
       traffic_percentage: 'אחוז תנועה',
       position: 'מיקום',
+      position_diff: 'שינוי מיקום',
+      traffic_diff: 'שינוי תנועה',
+      serp_updated: 'עדכון אחרון',
       url: 'כתובת',
       url_from: 'קישור מ-',
       url_to: 'קישור ל-',
@@ -196,6 +217,9 @@ serve(async (req) => {
       traffic: 'number',
       traffic_percentage: 'number',
       position: 'number',
+      position_diff: 'number',
+      traffic_diff: 'number',
+      serp_updated: 'date',
       url: 'url',
       url_from: 'url',
       url_to: 'url',
