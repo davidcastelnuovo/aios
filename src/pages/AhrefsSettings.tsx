@@ -18,12 +18,6 @@ export default function AhrefsSettings() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return { connected: false };
 
-      const response = await supabase.functions.invoke('ahrefs-auth', {
-        body: {},
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      });
-
-      // Use URL params for action
       const statusResponse = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ahrefs-auth?action=status`,
         {
