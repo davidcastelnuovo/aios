@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, TrendingUp, ExternalLink } from "lucide-react";
+import { Loader2, TrendingUp, ExternalLink, Link, Globe } from "lucide-react";
 
 interface AhrefsTableDialogProps {
   open: boolean;
@@ -20,9 +21,11 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
   const queryClient = useQueryClient();
   const { currentTenant, currentTenantId: activeTenantId } = useTenant();
   
+  const [mode, setMode] = useState<"domain" | "report">("domain");
   const [tableName, setTableName] = useState("");
   const [category, setCategory] = useState("seo");
   const [targetDomain, setTargetDomain] = useState("");
+  const [reportUrl, setReportUrl] = useState("");
   const [reportType, setReportType] = useState("domain_rating");
   const [selectedAgency, setSelectedAgency] = useState("");
   const [selectedClient, setSelectedClient] = useState("");
@@ -78,15 +81,52 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
     enabled: !!selectedAgency,
   });
 
+  const parseReportUrl = (url: string) => {
+    // Parse Ahrefs report URL to extract report type and target
+    // Example: https://app.ahrefs.com/site-explorer/organic-keywords/v2/subdomains/live?select=...&target=example.com
+    try {
+      const urlObj = new URL(url);
+      const target = urlObj.searchParams.get('target') || '';
+      const path = urlObj.pathname;
+      
+      let detectedType = 'custom_report';
+      if (path.includes('organic-keywords')) detectedType = 'organic_keywords';
+      else if (path.includes('backlinks')) detectedType = 'backlinks';
+      else if (path.includes('referring-domains')) detectedType = 'referring_domains';
+      else if (path.includes('domain-rating')) detectedType = 'domain_rating';
+      else if (path.includes('site-explorer')) detectedType = 'site_explorer';
+      
+      return { target, reportType: detectedType };
+    } catch {
+      return { target: '', reportType: 'custom_report' };
+    }
+  };
+
   const handleCreate = async () => {
-    if (!tableName.trim() || !targetDomain || !integration) {
+    const isReportMode = mode === "report";
+    
+    if (!tableName.trim() || !integration) {
       toast({ title: "נא למלא את כל השדות הנדרשים", variant: "destructive" });
+      return;
+    }
+    
+    if (isReportMode && !reportUrl) {
+      toast({ title: "נא להזין כתובת דוח Ahrefs", variant: "destructive" });
+      return;
+    }
+    
+    if (!isReportMode && !targetDomain) {
+      toast({ title: "נא להזין דומיין לניתוח", variant: "destructive" });
       return;
     }
 
     setIsCreating(true);
     try {
       const slug = tableName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      
+      const parsedReport = isReportMode ? parseReportUrl(reportUrl) : null;
+      const finalTarget = isReportMode ? (parsedReport?.target || reportUrl) : targetDomain;
+      const finalReportType = isReportMode ? (parsedReport?.reportType || 'custom_report') : reportType;
 
       const { data, error } = await supabase.functions.invoke('crm-tables', {
         body: {
@@ -94,7 +134,7 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
           tenantId: activeTenantId,
           name: tableName,
           slug: `ahrefs-${slug}-${Date.now()}`,
-          description: `Ahrefs - ${targetDomain}`,
+          description: isReportMode ? `Ahrefs Report - ${finalTarget}` : `Ahrefs - ${targetDomain}`,
           category,
           icon: 'TrendingUp',
           agencyId: selectedAgency || null,
@@ -102,14 +142,18 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
           integration_type: 'ahrefs',
           integration_settings: {
             integrationId: integration.id,
-            targetDomain,
-            reportType,
+            targetDomain: finalTarget,
+            reportType: finalReportType,
+            reportUrl: isReportMode ? reportUrl : null,
+            isExistingReport: isReportMode,
           },
           integrations: [{
             type: 'ahrefs',
             integrationId: integration.id,
-            targetDomain,
-            reportType,
+            targetDomain: finalTarget,
+            reportType: finalReportType,
+            reportUrl: isReportMode ? reportUrl : null,
+            isExistingReport: isReportMode,
           }]
         }
       });
@@ -128,9 +172,11 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
   };
 
   const resetForm = () => {
+    setMode("domain");
     setTableName("");
     setCategory("seo");
     setTargetDomain("");
+    setReportUrl("");
     setReportType("domain_rating");
     setSelectedAgency("");
     setSelectedClient("");
@@ -145,7 +191,7 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
             טבלת Ahrefs חדשה
           </DialogTitle>
           <DialogDescription>
-            הזן דומיין לניתוח וקבל נתוני SEO מ-Ahrefs
+            התחבר לדוח קיים או צור ניתוח חדש מ-Ahrefs
           </DialogDescription>
         </DialogHeader>
 
@@ -167,39 +213,79 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>שם הטבלה *</Label>
-              <Input
-                value={tableName}
-                onChange={(e) => setTableName(e.target.value)}
-                placeholder="לדוגמה: ניתוח SEO - אתר ראשי"
-              />
-            </div>
+            <Tabs value={mode} onValueChange={(v) => setMode(v as "domain" | "report")}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="domain" className="flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  דומיין חדש
+                </TabsTrigger>
+                <TabsTrigger value="report" className="flex items-center gap-2">
+                  <Link className="h-4 w-4" />
+                  דוח קיים
+                </TabsTrigger>
+              </TabsList>
 
-            <div className="space-y-2">
-              <Label>דומיין לניתוח *</Label>
-              <Input
-                value={targetDomain}
-                onChange={(e) => setTargetDomain(e.target.value)}
-                placeholder="example.com"
-                dir="ltr"
-              />
-            </div>
+              <TabsContent value="domain" className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label>שם הטבלה *</Label>
+                  <Input
+                    value={tableName}
+                    onChange={(e) => setTableName(e.target.value)}
+                    placeholder="לדוגמה: ניתוח SEO - אתר ראשי"
+                  />
+                </div>
 
-            <div className="space-y-2">
-              <Label>סוג דוח</Label>
-              <Select value={reportType} onValueChange={setReportType}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="domain_rating">Domain Rating</SelectItem>
-                  <SelectItem value="backlinks">Backlinks</SelectItem>
-                  <SelectItem value="organic_keywords">Organic Keywords</SelectItem>
-                  <SelectItem value="referring_domains">Referring Domains</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="space-y-2">
+                  <Label>דומיין לניתוח *</Label>
+                  <Input
+                    value={targetDomain}
+                    onChange={(e) => setTargetDomain(e.target.value)}
+                    placeholder="example.com"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>סוג דוח</Label>
+                  <Select value={reportType} onValueChange={setReportType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="domain_rating">Domain Rating</SelectItem>
+                      <SelectItem value="backlinks">Backlinks</SelectItem>
+                      <SelectItem value="organic_keywords">Organic Keywords</SelectItem>
+                      <SelectItem value="referring_domains">Referring Domains</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="report" className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label>שם הטבלה *</Label>
+                  <Input
+                    value={tableName}
+                    onChange={(e) => setTableName(e.target.value)}
+                    placeholder="לדוגמה: דוח בקלינקים - אתר ראשי"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>כתובת הדוח ב-Ahrefs *</Label>
+                  <Input
+                    value={reportUrl}
+                    onChange={(e) => setReportUrl(e.target.value)}
+                    placeholder="https://app.ahrefs.com/site-explorer/..."
+                    dir="ltr"
+                    className="text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    העתק את כתובת הדוח מהדפדפן כאשר אתה צופה בו ב-Ahrefs
+                  </p>
+                </div>
+              </TabsContent>
+            </Tabs>
 
             <div className="space-y-2">
               <Label>קטגוריה</Label>
