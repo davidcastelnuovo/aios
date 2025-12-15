@@ -792,21 +792,24 @@ export default function DynamicTableView() {
             </div>
           )}
           
-          <div className="flex items-center gap-2 w-full md:w-auto justify-center">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-            <Select value={dateFilter} onValueChange={setDateFilter}>
-              <SelectTrigger className="w-full md:w-[160px]">
-                <SelectValue placeholder="סנן לפי תאריך" />
-              </SelectTrigger>
-              <SelectContent>
-                {dateFilterOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Hide date filter for Analytics and Search Console - they have internal filtering */}
+          {!hasGoogleAnalytics && !hasGoogleSearchConsole && (
+            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <Select value={dateFilter} onValueChange={setDateFilter}>
+                <SelectTrigger className="w-full md:w-[160px]">
+                  <SelectValue placeholder="סנן לפי תאריך" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dateFilterOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           
           <Dialog open={showWebhookDialog} onOpenChange={setShowWebhookDialog}>
             <DialogContent>

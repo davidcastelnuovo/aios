@@ -123,12 +123,25 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
 
   const previousRange = getPreviousRange(currentRange.start, currentRange.end);
 
-  // Filter records by date range
+  // Filter records by date range - only filter records that have a date field
   const filterRecordsByDate = (records: CrmRecord[], startDate: Date, endDate: Date) => {
     return records.filter(r => {
-      const recordDate = r.data.date ? parseISO(r.data.date) : null;
-      if (!recordDate) return false;
-      return isWithinInterval(recordDate, { start: startDate, end: endDate });
+      // If record has no date field, include it (aggregated data)
+      if (!r.data.date) return true;
+      
+      // Try to parse the date
+      try {
+        const recordDate = parseISO(r.data.date);
+        // Set time boundaries properly
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        return isWithinInterval(recordDate, { start, end });
+      } catch {
+        // If date parsing fails, include the record
+        return true;
+      }
     });
   };
 
