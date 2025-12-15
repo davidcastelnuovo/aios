@@ -115,7 +115,7 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-        apiUrl = `https://api.ahrefs.com/v3/rank-tracker/overview?target=${encodeURIComponent(config.projectId)}&select=keyword,volume,position,position_diff,traffic,traffic_diff,url,keyword_difficulty,serp_features,serp_updated`;
+        apiUrl = `https://api.ahrefs.com/v3/rank-tracker/overview?project_id=${encodeURIComponent(config.projectId)}&select=keyword,volume,position,position_diff,traffic,traffic_diff,url,keyword_difficulty,serp_features,serp_updated`;
         selectFields = ['keyword', 'volume', 'position', 'position_diff', 'traffic', 'traffic_diff', 'url', 'keyword_difficulty', 'serp_features', 'serp_updated'];
         break;
       
