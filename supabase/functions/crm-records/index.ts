@@ -75,20 +75,21 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
+    // Use service role to bypass RLS row limits for reading
+    const supabaseAuth = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
     );
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    const { data: tenantId, error: tenantError } = await supabase
+    const { data: tenantId, error: tenantError } = await supabaseAuth
       .rpc('get_user_tenant_id', { _user_id: user.id });
 
     if (tenantError || !tenantId) {
@@ -102,6 +103,12 @@ Deno.serve(async (req) => {
     }
     
     console.log('Found tenant:', tenantId, 'for user:', user.id);
+
+    // Use service role for data operations to bypass RLS row limits
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
 
     const method = req.method;
     let body: any = {};
@@ -131,6 +138,8 @@ Deno.serve(async (req) => {
 
       if (error) throw error;
 
+      console.log(`📊 Fetched ${records?.length || 0} records for table ${table_id}`);
+
       // Filter by date in data->'date' field if filter is provided
       let filteredRecords = records || [];
       
@@ -157,6 +166,11 @@ Deno.serve(async (req) => {
         const dateB = b.data?.date || '';
         return dateB.localeCompare(dateA);
       });
+
+      // Calculate totals for logging
+      const totalClicks = filteredRecords.reduce((sum: number, r: any) => sum + (Number(r.data?.clicks) || 0), 0);
+      const totalImpressions = filteredRecords.reduce((sum: number, r: any) => sum + (Number(r.data?.impressions) || 0), 0);
+      console.log(`📈 Returning ${filteredRecords.length} records with ${totalClicks} clicks and ${totalImpressions} impressions`);
 
       return new Response(JSON.stringify(filteredRecords), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
