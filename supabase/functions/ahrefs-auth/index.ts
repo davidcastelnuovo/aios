@@ -61,11 +61,16 @@ serve(async (req) => {
     const url = new URL(req.url);
     const action = url.searchParams.get('action');
 
-    // Test the API key by fetching subscription info
+    // Test the API key by making a simple Site Explorer request
     if (action === 'test' || action === 'connect') {
       console.log('Testing Ahrefs API connection...');
       
-      const testResponse = await fetch('https://api.ahrefs.com/v3/subscription-info', {
+      // Use Site Explorer overview with a sample domain to test API key validity
+      const testUrl = new URL('https://api.ahrefs.com/v3/site-explorer/overview');
+      testUrl.searchParams.set('target', 'ahrefs.com');
+      testUrl.searchParams.set('select', 'domain_rating');
+      
+      const testResponse = await fetch(testUrl.toString(), {
         headers: {
           'Authorization': `Bearer ${ahrefsApiKey}`,
           'Accept': 'application/json',
@@ -81,8 +86,8 @@ serve(async (req) => {
         );
       }
 
-      const subscriptionInfo = await testResponse.json();
-      console.log('Ahrefs subscription info:', subscriptionInfo);
+      const testResult = await testResponse.json();
+      console.log('Ahrefs API test successful:', testResult);
 
       // Save/update integration
       const { data: existingIntegration } = await supabase
@@ -100,7 +105,7 @@ serve(async (req) => {
         is_active: true,
         settings: {
           connected_at: new Date().toISOString(),
-          subscription: subscriptionInfo,
+          test_result: testResult,
           api_key_configured: true,
         },
       };
@@ -119,7 +124,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          subscription: subscriptionInfo,
+          test_result: testResult,
           message: 'Ahrefs connected successfully'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
