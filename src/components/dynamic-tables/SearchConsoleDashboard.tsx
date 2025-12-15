@@ -1,8 +1,11 @@
-import { useMemo, useState, useRef } from "react";
+import { useState, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -14,174 +17,80 @@ import { Search, TrendingUp, TrendingDown, MousePointerClick, Eye, Target, Arrow
 import Papa from "papaparse";
 import { toast } from "sonner";
 
-interface CrmRecord {
-  id: string;
-  data: Record<string, any>;
-}
-
 interface SearchConsoleDashboardProps {
-  records: CrmRecord[];
+  tableId: string;
 }
 
-export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps) {
-  const [comparisonMode, setComparisonMode] = useState<string>("none");
-  const [sortBy, setSortBy] = useState<string>("position");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+interface AggregatedData {
+  queries: Array<{
+    query: string;
+    clicks: number;
+    impressions: number;
+    ctr: number;
+    position: number;
+  }>;
+  totals: {
+    clicks: number;
+    impressions: number;
+    avgCtr: number;
+    firstPageQueries: number;
+    totalQueries: number;
+  };
+  totalRecords: number;
+}
+
+export function SearchConsoleDashboard({ tableId }: SearchConsoleDashboardProps) {
+  const [sortBy, setSortBy] = useState<string>("impressions");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [trackedKeywords, setTrackedKeywords] = useState<string[]>([]);
   const [newKeyword, setNewKeyword] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { queryData, totals, comparison, firstPageQueries, trackedKeywordsData } = useMemo(() => {
-    // Get date range from records
-    const dates = records.map(r => r.data.date).filter(Boolean).sort();
-    const minDate = dates[0];
-    const maxDate = dates[dates.length - 1];
-    
-    // Calculate period length
-    const periodStart = new Date(minDate);
-    const periodEnd = new Date(maxDate);
-    const periodLength = Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-
-    // Split data for comparison if needed
-    let currentRecords = records;
-    let previousRecords: CrmRecord[] = [];
-    
-    if (comparisonMode === "previous_period" && dates.length > 0) {
-      const midPoint = new Date(periodStart.getTime() + (periodLength / 2) * 24 * 60 * 60 * 1000);
-      const midDateStr = midPoint.toISOString().split('T')[0];
+  // Fetch aggregated data from the server
+  const { data: aggregatedData, isLoading } = useQuery({
+    queryKey: ['search-console-aggregated', tableId],
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
       
-      currentRecords = records.filter(r => r.data.date >= midDateStr);
-      previousRecords = records.filter(r => r.data.date < midDateStr);
-    }
-
-    // Aggregate by query
-    const queryMap = new Map<string, { clicks: number; impressions: number; ctr: number; position: number; count: number }>();
-    
-    currentRecords.forEach(r => {
-      const query = r.data.query || '';
-      const existing = queryMap.get(query) || { clicks: 0, impressions: 0, ctr: 0, position: 0, count: 0 };
-      
-      queryMap.set(query, {
-        clicks: existing.clicks + (Number(r.data.clicks) || 0),
-        impressions: existing.impressions + (Number(r.data.impressions) || 0),
-        ctr: existing.ctr + (Number(r.data.ctr) || 0),
-        position: existing.position + (Number(r.data.position) || 0),
-        count: existing.count + 1,
+      const params = new URLSearchParams({ 
+        table_id: tableId,
+        aggregated: 'search_console'
       });
-    });
-
-    // Previous period aggregation for comparison
-    const previousQueryMap = new Map<string, { clicks: number; impressions: number; ctr: number; position: number; count: number }>();
-    
-    previousRecords.forEach(r => {
-      const query = r.data.query || '';
-      const existing = previousQueryMap.get(query) || { clicks: 0, impressions: 0, ctr: 0, position: 0, count: 0 };
       
-      previousQueryMap.set(query, {
-        clicks: existing.clicks + (Number(r.data.clicks) || 0),
-        impressions: existing.impressions + (Number(r.data.impressions) || 0),
-        ctr: existing.ctr + (Number(r.data.ctr) || 0),
-        position: existing.position + (Number(r.data.position) || 0),
-        count: existing.count + 1,
+      const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
+        method: 'GET',
       });
-    });
-
-    const queryData = Array.from(queryMap.entries()).map(([query, data]) => {
-      const prev = previousQueryMap.get(query);
-      const avgCtr = data.count > 0 ? data.ctr / data.count : 0;
-      const avgPosition = data.count > 0 ? data.position / data.count : 0;
-      const prevAvgCtr = prev && prev.count > 0 ? prev.ctr / prev.count : 0;
-      const prevAvgPosition = prev && prev.count > 0 ? prev.position / prev.count : 0;
       
-      return {
-        query: query.length > 40 ? query.substring(0, 40) + '...' : query,
-        fullQuery: query,
-        clicks: data.clicks,
-        impressions: data.impressions,
-        ctr: avgCtr,
-        position: avgPosition,
-        prevClicks: prev?.clicks || 0,
-        prevImpressions: prev?.impressions || 0,
-        prevCtr: prevAvgCtr,
-        prevPosition: prevAvgPosition,
-        clicksChange: prev ? data.clicks - prev.clicks : 0,
-        impressionsChange: prev ? data.impressions - prev.impressions : 0,
-        ctrChange: prev ? avgCtr - prevAvgCtr : 0,
-        positionChange: prev ? prevAvgPosition - avgPosition : 0, // Lower is better
-      };
-    });
-
-    // Sort
-    queryData.sort((a, b) => {
-      const aVal = a[sortBy as keyof typeof a] as number;
-      const bVal = b[sortBy as keyof typeof b] as number;
-      return sortOrder === "desc" ? bVal - aVal : aVal - bVal;
-    });
-
-    // Count queries on first page (position <= 10)
-    const firstPageQueries = queryData.filter(q => q.position <= 10 && q.position > 0).length;
-    const prevFirstPageQueries = comparisonMode !== "none" 
-      ? Array.from(previousQueryMap.entries()).filter(([_, data]) => {
-          const avgPos = data.count > 0 ? data.position / data.count : 0;
-          return avgPos <= 10 && avgPos > 0;
-        }).length
-      : 0;
-
-    // Totals
-    const totals = {
-      clicks: queryData.reduce((sum, q) => sum + q.clicks, 0),
-      impressions: queryData.reduce((sum, q) => sum + q.impressions, 0),
-      avgCtr: queryData.length > 0 ? queryData.reduce((sum, q) => sum + q.ctr, 0) / queryData.length : 0,
-      firstPageQueries,
-    };
-
-    const prevTotals = {
-      clicks: queryData.reduce((sum, q) => sum + q.prevClicks, 0),
-      impressions: queryData.reduce((sum, q) => sum + q.prevImpressions, 0),
-      avgCtr: queryData.length > 0 ? queryData.reduce((sum, q) => sum + q.prevCtr, 0) / queryData.length : 0,
-      firstPageQueries: prevFirstPageQueries,
-    };
-
-    const comparison = {
-      clicksChange: totals.clicks - prevTotals.clicks,
-      impressionsChange: totals.impressions - prevTotals.impressions,
-      ctrChange: totals.avgCtr - prevTotals.avgCtr,
-      firstPageChange: totals.firstPageQueries - prevTotals.firstPageQueries,
-    };
-
-    // Find tracked keywords in the data
-    const trackedKeywordsData = trackedKeywords.map(keyword => {
-      const normalizedKeyword = keyword.toLowerCase().trim();
-      // Find exact or partial match
-      const matchingQuery = queryData.find(q => 
-        q.fullQuery.toLowerCase() === normalizedKeyword ||
-        q.fullQuery.toLowerCase().includes(normalizedKeyword)
-      );
-      
-      return {
-        keyword,
-        found: !!matchingQuery,
-        data: matchingQuery || null,
-      };
-    });
-
-    return { queryData: queryData.slice(0, 50), totals, comparison, firstPageQueries, trackedKeywordsData };
-  }, [records, comparisonMode, sortBy, sortOrder, trackedKeywords]);
+      if (response.error) throw response.error;
+      return response.data as AggregatedData;
+    },
+    enabled: !!tableId,
+  });
 
   const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
-  
-  const renderChangeIndicator = (value: number, inverted = false) => {
-    const isPositive = inverted ? value < 0 : value > 0;
-    const isNegative = inverted ? value > 0 : value < 0;
+
+  // Sort queries
+  const sortedQueries = aggregatedData?.queries?.slice().sort((a, b) => {
+    const aVal = a[sortBy as keyof typeof a] as number;
+    const bVal = b[sortBy as keyof typeof b] as number;
+    return sortOrder === "desc" ? bVal - aVal : aVal - bVal;
+  }) || [];
+
+  // Find tracked keywords in the data
+  const trackedKeywordsData = trackedKeywords.map(keyword => {
+    const normalizedKeyword = keyword.toLowerCase().trim();
+    const matchingQuery = sortedQueries.find(q => 
+      q.query.toLowerCase() === normalizedKeyword ||
+      q.query.toLowerCase().includes(normalizedKeyword)
+    );
     
-    if (Math.abs(value) < 0.01) return <Minus className="h-3 w-3 text-muted-foreground" />;
-    
-    return isPositive ? (
-      <TrendingUp className="h-3 w-3 text-green-500" />
-    ) : isNegative ? (
-      <TrendingDown className="h-3 w-3 text-red-500" />
-    ) : null;
-  };
+    return {
+      keyword,
+      found: !!matchingQuery,
+      data: matchingQuery || null,
+    };
+  });
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -191,7 +100,6 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
       complete: (results) => {
         const keywords: string[] = [];
         results.data.forEach((row: any) => {
-          // Support various column names
           const keyword = row['keyword'] || row['ביטוי'] || row['query'] || row['מילת מפתח'] || 
                          (Array.isArray(row) ? row[0] : Object.values(row)[0]);
           if (keyword && typeof keyword === 'string' && keyword.trim()) {
@@ -213,7 +121,6 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
       skipEmptyLines: true,
     });
 
-    // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -234,7 +141,45 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
     setTrackedKeywords([]);
   };
 
-  if (records.length === 0) {
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="space-y-6" dir="rtl">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardContent className="pt-4">
+                <Skeleton className="h-4 w-20 mb-2" />
+                <Skeleton className="h-8 w-24" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-32" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-48 w-full" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-32" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {[...Array(10)].map((_, i) => (
+                <Skeleton key={i} className="h-10 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!aggregatedData || aggregatedData.totalRecords === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
         <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -243,92 +188,47 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
     );
   }
 
+  const { totals } = aggregatedData;
+
   return (
     <div className="space-y-6" dir="rtl">
-      {/* Controls */}
-      <div className="flex flex-wrap gap-4 items-center">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">השוואה:</span>
-          <Select value={comparisonMode} onValueChange={setComparisonMode}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">ללא השוואה</SelectItem>
-              <SelectItem value="previous_period">תקופה קודמת</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MousePointerClick className="h-4 w-4 text-primary" />
-                <span className="text-sm text-muted-foreground">קליקים</span>
-              </div>
-              {comparisonMode !== "none" && renderChangeIndicator(comparison.clicksChange)}
+            <div className="flex items-center gap-2">
+              <MousePointerClick className="h-4 w-4 text-primary" />
+              <span className="text-sm text-muted-foreground">קליקים</span>
             </div>
             <p className="text-2xl font-bold mt-1">{formatNumber(totals.clicks)}</p>
-            {comparisonMode !== "none" && (
-              <p className={`text-xs ${comparison.clicksChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {comparison.clicksChange >= 0 ? '+' : ''}{formatNumber(comparison.clicksChange)}
-              </p>
-            )}
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Eye className="h-4 w-4 text-blue-500" />
-                <span className="text-sm text-muted-foreground">חשיפות</span>
-              </div>
-              {comparisonMode !== "none" && renderChangeIndicator(comparison.impressionsChange)}
+            <div className="flex items-center gap-2">
+              <Eye className="h-4 w-4 text-blue-500" />
+              <span className="text-sm text-muted-foreground">חשיפות</span>
             </div>
             <p className="text-2xl font-bold mt-1">{formatNumber(totals.impressions)}</p>
-            {comparisonMode !== "none" && (
-              <p className={`text-xs ${comparison.impressionsChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {comparison.impressionsChange >= 0 ? '+' : ''}{formatNumber(comparison.impressionsChange)}
-              </p>
-            )}
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Target className="h-4 w-4 text-green-500" />
-                <span className="text-sm text-muted-foreground">CTR ממוצע</span>
-              </div>
-              {comparisonMode !== "none" && renderChangeIndicator(comparison.ctrChange)}
+            <div className="flex items-center gap-2">
+              <Target className="h-4 w-4 text-green-500" />
+              <span className="text-sm text-muted-foreground">CTR ממוצע</span>
             </div>
             <p className="text-2xl font-bold mt-1">{totals.avgCtr.toFixed(2)}%</p>
-            {comparisonMode !== "none" && (
-              <p className={`text-xs ${comparison.ctrChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {comparison.ctrChange >= 0 ? '+' : ''}{comparison.ctrChange.toFixed(2)}%
-              </p>
-            )}
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Award className="h-4 w-4 text-amber-500" />
-                <span className="text-sm text-muted-foreground">ביטויים בעמוד הראשון</span>
-              </div>
-              {comparisonMode !== "none" && renderChangeIndicator(comparison.firstPageChange)}
+            <div className="flex items-center gap-2">
+              <Award className="h-4 w-4 text-amber-500" />
+              <span className="text-sm text-muted-foreground">ביטויים בעמוד הראשון</span>
             </div>
             <p className="text-2xl font-bold mt-1">{formatNumber(totals.firstPageQueries)}</p>
-            {comparisonMode !== "none" && (
-              <p className={`text-xs ${comparison.firstPageChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {comparison.firstPageChange >= 0 ? '+' : ''}{formatNumber(comparison.firstPageChange)}
-              </p>
-            )}
+            <p className="text-xs text-muted-foreground">מתוך {formatNumber(totals.totalQueries)} ביטויים</p>
           </CardContent>
         </Card>
       </div>
@@ -455,7 +355,7 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center justify-between">
-            <span>ביטויי חיפוש</span>
+            <span>ביטויי חיפוש (טופ 100)</span>
             <div className="flex gap-2">
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-[120px] h-8 text-sm">
@@ -488,16 +388,13 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
                   <th className="text-center py-2 px-3 font-medium">חשיפות</th>
                   <th className="text-center py-2 px-3 font-medium">CTR</th>
                   <th className="text-center py-2 px-3 font-medium">מיקום</th>
-                  {comparisonMode !== "none" && (
-                    <th className="text-center py-2 px-3 font-medium">שינוי</th>
-                  )}
                 </tr>
               </thead>
               <tbody>
-                {queryData.map((query, index) => (
+                {sortedQueries.map((query, index) => (
                   <tr key={index} className="border-b hover:bg-muted/50">
-                    <td className="py-2 px-3 font-medium max-w-[250px] truncate" title={query.fullQuery}>
-                      {query.query}
+                    <td className="py-2 px-3 font-medium max-w-[300px] truncate" title={query.query}>
+                      {query.query.length > 50 ? query.query.substring(0, 50) + '...' : query.query}
                     </td>
                     <td className="text-center py-2 px-3">{formatNumber(query.clicks)}</td>
                     <td className="text-center py-2 px-3">{formatNumber(query.impressions)}</td>
@@ -507,16 +404,6 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
                         {query.position.toFixed(1)}
                       </Badge>
                     </td>
-                    {comparisonMode !== "none" && (
-                      <td className="text-center py-2 px-3">
-                        <div className="flex items-center justify-center gap-1">
-                          {renderChangeIndicator(query.clicksChange)}
-                          <span className={`text-xs ${query.clicksChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                            {query.clicksChange >= 0 ? '+' : ''}{query.clicksChange}
-                          </span>
-                        </div>
-                      </td>
-                    )}
                   </tr>
                 ))}
               </tbody>
