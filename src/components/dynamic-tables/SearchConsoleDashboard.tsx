@@ -25,8 +25,8 @@ interface SearchConsoleDashboardProps {
 
 export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps) {
   const [comparisonMode, setComparisonMode] = useState<string>("none");
-  const [sortBy, setSortBy] = useState<string>("clicks");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sortBy, setSortBy] = useState<string>("position");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [trackedKeywords, setTrackedKeywords] = useState<string[]>([]);
   const [newKeyword, setNewKeyword] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
