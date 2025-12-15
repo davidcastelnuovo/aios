@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar, RefreshCw, Facebook, Settings, Link, BarChart3 } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar, RefreshCw, Facebook, Settings, Link, BarChart3, Search } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -35,6 +35,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
+import { SearchConsoleDashboard } from "@/components/dynamic-tables/SearchConsoleDashboard";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -477,6 +478,31 @@ export default function DynamicTableView() {
     },
   });
 
+  // Google Search Console sync mutation
+  const syncGoogleSearchConsoleMutation = useMutation({
+    mutationFn: async () => {
+      if (!table?.id) throw new Error('No table');
+      // Calculate date range - last 90 days
+      const endDate = new Date().toISOString().split('T')[0];
+      const startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
+      const response = await supabase.functions.invoke('sync-google-search-console-data', {
+        method: 'POST',
+        body: { tableId: table.id, startDate, endDate },
+      });
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      toast.success(`נתוני Search Console סונכרנו בהצלחה (${data?.records_synced || 0} שורות)`);
+    },
+    onError: (error: any) => {
+      toast.error('שגיאה בסנכרון מ-Search Console: ' + error.message);
+    },
+  });
+
   // Fetch Google Ads accounts for settings dialog
   const { data: googleAdsAccounts, isLoading: googleAccountsLoading } = useQuery({
     queryKey: ['google-ads-accounts'],
@@ -621,6 +647,7 @@ export default function DynamicTableView() {
   const hasFacebook = table?.integration_type === 'facebook_insights';
   const hasGoogleAds = table?.integration_type === 'google_ads';
   const hasGoogleAnalytics = table?.integration_type === 'google_analytics';
+  const hasGoogleSearchConsole = table?.integration_type === 'google_search_console';
   const hasMultipleIntegrations = hasFacebook && hasGoogleAds;
 
   return (
@@ -646,6 +673,12 @@ export default function DynamicTableView() {
               <Badge variant="secondary" className="gap-1">
                 <BarChart3 className="h-3 w-3 text-orange-500" />
                 Google Analytics
+              </Badge>
+          )}
+          {hasGoogleSearchConsole && (
+              <Badge variant="secondary" className="gap-1">
+                <Search className="h-3 w-3 text-green-600" />
+                Search Console
               </Badge>
           )}
           {hasGoogleAnalytics && table.integration_settings?.last_sync_at && (
@@ -739,6 +772,22 @@ export default function DynamicTableView() {
                 <BarChart3 className="h-4 w-4 text-orange-500" />
                 <RefreshCw className={`h-4 w-4 ${syncGoogleAnalyticsMutation.isPending ? 'animate-spin' : ''}`} />
                 {syncGoogleAnalyticsMutation.isPending ? 'מסנכרן Analytics...' : 'סנכרן Analytics'}
+              </Button>
+            </div>
+          )}
+          
+          {/* Google Search Console Sync Controls */}
+          {hasGoogleSearchConsole && (
+            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+              <Button 
+                variant="outline" 
+                onClick={() => syncGoogleSearchConsoleMutation.mutate()}
+                disabled={syncGoogleSearchConsoleMutation.isPending}
+                className="flex-1 md:flex-none gap-2"
+              >
+                <Search className="h-4 w-4 text-green-600" />
+                <RefreshCw className={`h-4 w-4 ${syncGoogleSearchConsoleMutation.isPending ? 'animate-spin' : ''}`} />
+                {syncGoogleSearchConsoleMutation.isPending ? 'מסנכרן...' : 'סנכרן Search Console'}
               </Button>
             </div>
           )}
@@ -1025,6 +1074,11 @@ export default function DynamicTableView() {
       {/* Google Analytics Dashboard */}
       {hasGoogleAnalytics && records && records.length > 0 && (
         <GoogleAnalyticsDashboard records={records} />
+      )}
+
+      {/* Google Search Console Dashboard */}
+      {hasGoogleSearchConsole && records && records.length > 0 && (
+        <SearchConsoleDashboard records={records} />
       )}
 
       {isLoading ? (
