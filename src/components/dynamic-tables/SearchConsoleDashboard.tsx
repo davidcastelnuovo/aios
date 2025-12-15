@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -9,7 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, TrendingUp, TrendingDown, MousePointerClick, Eye, Target, ArrowUpDown, Minus, Award } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, MousePointerClick, Eye, Target, ArrowUpDown, Minus, Award, Upload, X, FileText } from "lucide-react";
+import Papa from "papaparse";
+import { toast } from "sonner";
 
 interface CrmRecord {
   id: string;
@@ -24,8 +27,11 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
   const [comparisonMode, setComparisonMode] = useState<string>("none");
   const [sortBy, setSortBy] = useState<string>("clicks");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [trackedKeywords, setTrackedKeywords] = useState<string[]>([]);
+  const [newKeyword, setNewKeyword] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { queryData, totals, comparison, firstPageQueries } = useMemo(() => {
+  const { queryData, totals, comparison, firstPageQueries, trackedKeywordsData } = useMemo(() => {
     // Get date range from records
     const dates = records.map(r => r.data.date).filter(Boolean).sort();
     const minDate = dates[0];
@@ -143,8 +149,24 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
       firstPageChange: totals.firstPageQueries - prevTotals.firstPageQueries,
     };
 
-    return { queryData: queryData.slice(0, 50), totals, comparison, firstPageQueries };
-  }, [records, comparisonMode, sortBy, sortOrder]);
+    // Find tracked keywords in the data
+    const trackedKeywordsData = trackedKeywords.map(keyword => {
+      const normalizedKeyword = keyword.toLowerCase().trim();
+      // Find exact or partial match
+      const matchingQuery = queryData.find(q => 
+        q.fullQuery.toLowerCase() === normalizedKeyword ||
+        q.fullQuery.toLowerCase().includes(normalizedKeyword)
+      );
+      
+      return {
+        keyword,
+        found: !!matchingQuery,
+        data: matchingQuery || null,
+      };
+    });
+
+    return { queryData: queryData.slice(0, 50), totals, comparison, firstPageQueries, trackedKeywordsData };
+  }, [records, comparisonMode, sortBy, sortOrder, trackedKeywords]);
 
   const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
   
@@ -161,12 +183,56 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
     ) : null;
   };
 
-  // Get top 25 queries sorted by impressions for the sidebar list
-  const top25Queries = useMemo(() => {
-    return [...queryData]
-      .sort((a, b) => b.impressions - a.impressions)
-      .slice(0, 25);
-  }, [queryData]);
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      complete: (results) => {
+        const keywords: string[] = [];
+        results.data.forEach((row: any) => {
+          // Support various column names
+          const keyword = row['keyword'] || row['ביטוי'] || row['query'] || row['מילת מפתח'] || 
+                         (Array.isArray(row) ? row[0] : Object.values(row)[0]);
+          if (keyword && typeof keyword === 'string' && keyword.trim()) {
+            keywords.push(keyword.trim());
+          }
+        });
+        
+        if (keywords.length > 0) {
+          setTrackedKeywords(prev => {
+            const newKeywords = [...new Set([...prev, ...keywords])];
+            return newKeywords;
+          });
+          toast.success(`נטענו ${keywords.length} ביטויים מהקובץ`);
+        } else {
+          toast.error('לא נמצאו ביטויים בקובץ');
+        }
+      },
+      header: true,
+      skipEmptyLines: true,
+    });
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const addKeyword = () => {
+    if (newKeyword.trim() && !trackedKeywords.includes(newKeyword.trim())) {
+      setTrackedKeywords(prev => [...prev, newKeyword.trim()]);
+      setNewKeyword("");
+    }
+  };
+
+  const removeKeyword = (keyword: string) => {
+    setTrackedKeywords(prev => prev.filter(k => k !== keyword));
+  };
+
+  const clearAllKeywords = () => {
+    setTrackedKeywords([]);
+  };
 
   if (records.length === 0) {
     return (
@@ -267,46 +333,121 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
         </Card>
       </div>
 
-      {/* Top 25 Queries List */}
+      {/* Tracked Keywords Section */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">25 ביטויים מובילים</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Target className="h-5 w-5" />
+            מעקב ביטויים
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid gap-2">
-            {top25Queries.map((query, index) => (
-              <div 
-                key={index} 
-                className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <span className="text-sm font-medium text-muted-foreground w-6 text-center">
-                    {index + 1}
-                  </span>
-                  <span className="text-sm truncate flex-1" title={query.fullQuery}>
-                    {query.fullQuery}
-                  </span>
-                </div>
-                <div className="flex items-center gap-4 text-sm shrink-0">
-                  <div className="text-center min-w-[60px]">
-                    <span className="text-muted-foreground text-xs">חשיפות</span>
-                    <p className="font-medium">{formatNumber(query.impressions)}</p>
-                  </div>
-                  <div className="text-center min-w-[50px]">
-                    <span className="text-muted-foreground text-xs">קליקים</span>
-                    <p className="font-medium">{formatNumber(query.clicks)}</p>
-                  </div>
-                  <div className="text-center min-w-[50px]">
-                    <span className="text-muted-foreground text-xs">CTR</span>
-                    <p className="font-medium">{query.ctr.toFixed(2)}%</p>
-                  </div>
-                  <Badge variant={query.position <= 10 ? "default" : query.position <= 20 ? "secondary" : "outline"}>
-                    {query.position.toFixed(1)}
-                  </Badge>
-                </div>
-              </div>
-            ))}
+        <CardContent className="space-y-4">
+          {/* Upload and Add Controls */}
+          <div className="flex flex-wrap gap-3 items-center">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Button
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              className="gap-2"
+            >
+              <Upload className="h-4 w-4" />
+              טען ביטויים מ-CSV
+            </Button>
+            
+            <div className="flex gap-2 flex-1 min-w-[200px]">
+              <Input
+                placeholder="הוסף ביטוי..."
+                value={newKeyword}
+                onChange={(e) => setNewKeyword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addKeyword()}
+                className="max-w-[300px]"
+              />
+              <Button onClick={addKeyword} variant="secondary">
+                הוסף
+              </Button>
+            </div>
+            
+            {trackedKeywords.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearAllKeywords} className="text-destructive">
+                נקה הכל
+              </Button>
+            )}
           </div>
+
+          {/* CSV Format Hint */}
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            <FileText className="h-3 w-3" />
+            פורמט CSV: עמודה עם הכותרת "keyword", "ביטוי", "query" או "מילת מפתח"
+          </p>
+
+          {/* Tracked Keywords List */}
+          {trackedKeywords.length > 0 ? (
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground mb-2">
+                {trackedKeywordsData.filter(k => k.found).length} מתוך {trackedKeywords.length} ביטויים נמצאו בנתונים
+              </div>
+              
+              <div className="grid gap-2">
+                {trackedKeywordsData.map((item, index) => (
+                  <div 
+                    key={index} 
+                    className={`flex items-center justify-between p-3 rounded-lg transition-colors ${
+                      item.found ? 'bg-muted/30 hover:bg-muted/50' : 'bg-destructive/10 hover:bg-destructive/20'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 hover:bg-destructive/20"
+                        onClick={() => removeKeyword(item.keyword)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                      <span className="text-sm truncate flex-1" title={item.keyword}>
+                        {item.keyword}
+                      </span>
+                    </div>
+                    
+                    {item.found && item.data ? (
+                      <div className="flex items-center gap-4 text-sm shrink-0">
+                        <div className="text-center min-w-[60px]">
+                          <span className="text-muted-foreground text-xs">חשיפות</span>
+                          <p className="font-medium">{formatNumber(item.data.impressions)}</p>
+                        </div>
+                        <div className="text-center min-w-[50px]">
+                          <span className="text-muted-foreground text-xs">קליקים</span>
+                          <p className="font-medium">{formatNumber(item.data.clicks)}</p>
+                        </div>
+                        <div className="text-center min-w-[50px]">
+                          <span className="text-muted-foreground text-xs">CTR</span>
+                          <p className="font-medium">{item.data.ctr.toFixed(2)}%</p>
+                        </div>
+                        <Badge variant={item.data.position <= 10 ? "default" : item.data.position <= 20 ? "secondary" : "outline"}>
+                          {item.data.position.toFixed(1)}
+                        </Badge>
+                      </div>
+                    ) : (
+                      <Badge variant="outline" className="text-destructive border-destructive">
+                        לא נמצא
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-6 text-muted-foreground">
+              <Target className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p className="text-sm">הוסף ביטויים למעקב או טען קובץ CSV</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
