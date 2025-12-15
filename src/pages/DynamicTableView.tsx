@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar, RefreshCw, Facebook, Settings, Link } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar, RefreshCw, Facebook, Settings, Link, BarChart3 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -34,6 +34,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -455,6 +456,27 @@ export default function DynamicTableView() {
     },
   });
 
+  // Google Analytics sync mutation
+  const syncGoogleAnalyticsMutation = useMutation({
+    mutationFn: async () => {
+      if (!table?.id) throw new Error('No table');
+      const response = await supabase.functions.invoke('sync-google-analytics-data', {
+        method: 'POST',
+        body: { tableId: table.id },
+      });
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      toast.success(`נתוני Google Analytics סונכרנו בהצלחה (${data?.records_synced || 0} שורות)`);
+    },
+    onError: (error: any) => {
+      toast.error('שגיאה בסנכרון מ-Google Analytics: ' + error.message);
+    },
+  });
+
   // Fetch Google Ads accounts for settings dialog
   const { data: googleAdsAccounts, isLoading: googleAccountsLoading } = useQuery({
     queryKey: ['google-ads-accounts'],
@@ -598,6 +620,7 @@ export default function DynamicTableView() {
   // Determine which integrations are connected
   const hasFacebook = table?.integration_type === 'facebook_insights';
   const hasGoogleAds = table?.integration_type === 'google_ads';
+  const hasGoogleAnalytics = table?.integration_type === 'google_analytics';
   const hasMultipleIntegrations = hasFacebook && hasGoogleAds;
 
   return (
@@ -619,7 +642,18 @@ export default function DynamicTableView() {
                 Google Ads
               </Badge>
             )}
-          </div>
+            {hasGoogleAnalytics && (
+              <Badge variant="secondary" className="gap-1">
+                <BarChart3 className="h-3 w-3 text-orange-500" />
+                Google Analytics
+              </Badge>
+          )}
+          {hasGoogleAnalytics && table.integration_settings?.last_sync_at && (
+            <p className="text-xs text-muted-foreground">
+              Google Analytics עודכן: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
+            </p>
+          )}
+        </div>
           {table.description && <p className="text-muted-foreground mt-1">{table.description}</p>}
           {hasFacebook && table.integration_settings?.last_sync_at && (
             <p className="text-xs text-muted-foreground">
@@ -689,6 +723,22 @@ export default function DynamicTableView() {
                 }}
               >
                 <Settings className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          
+          {/* Google Analytics Sync Controls */}
+          {hasGoogleAnalytics && (
+            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+              <Button 
+                variant="outline" 
+                onClick={() => syncGoogleAnalyticsMutation.mutate()}
+                disabled={syncGoogleAnalyticsMutation.isPending}
+                className="flex-1 md:flex-none gap-2"
+              >
+                <BarChart3 className="h-4 w-4 text-orange-500" />
+                <RefreshCw className={`h-4 w-4 ${syncGoogleAnalyticsMutation.isPending ? 'animate-spin' : ''}`} />
+                {syncGoogleAnalyticsMutation.isPending ? 'מסנכרן Analytics...' : 'סנכרן Analytics'}
               </Button>
             </div>
           )}
