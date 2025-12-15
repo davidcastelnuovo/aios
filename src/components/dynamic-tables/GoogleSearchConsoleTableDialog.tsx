@@ -59,9 +59,8 @@ export function GoogleSearchConsoleTableDialog({ open, onOpenChange }: GoogleSea
     queryFn: async () => {
       if (!integration) return [];
       
-      const { data, error } = await supabase.functions.invoke('google-search-console-auth', {
+      const { data, error } = await supabase.functions.invoke('google-search-console-auth?action=get_sites', {
         body: { 
-          action: 'get_sites',
           integrationId: integration.id
         }
       });
