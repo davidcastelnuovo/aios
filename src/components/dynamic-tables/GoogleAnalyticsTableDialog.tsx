@@ -16,9 +16,9 @@ interface GoogleAnalyticsTableDialogProps {
 }
 
 interface GAProperty {
-  propertyId: string;
-  displayName: string;
-  accountDisplayName: string;
+  id: string;
+  name: string;
+  accountName: string;
 }
 
 export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyticsTableDialogProps) {
@@ -60,9 +60,8 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
     queryFn: async () => {
       if (!integration) return [];
       
-      const { data, error } = await supabase.functions.invoke('google-analytics-auth', {
+      const { data, error } = await supabase.functions.invoke('google-analytics-auth?action=get_properties', {
         body: { 
-          action: 'get_properties',
           integrationId: integration.id
         }
       });
@@ -110,7 +109,7 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
 
     setIsCreating(true);
     try {
-      const selectedProp = properties?.find(p => p.propertyId === selectedProperty);
+      const selectedProp = properties?.find(p => p.id === selectedProperty);
       const slug = tableName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
       const { data, error } = await supabase.functions.invoke('crm-tables', {
@@ -119,7 +118,7 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
           tenantId: activeTenantId,
           name: tableName,
           slug: `ga-${slug}-${Date.now()}`,
-          description: `Google Analytics - ${selectedProp?.displayName}`,
+          description: `Google Analytics - ${selectedProp?.name}`,
           category,
           icon: 'BarChart3',
           agencyId: selectedAgency || null,
@@ -128,15 +127,15 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
           integration_settings: {
             integrationId: integration.id,
             propertyId: selectedProperty,
-            propertyName: selectedProp?.displayName,
-            accountName: selectedProp?.accountDisplayName,
+            propertyName: selectedProp?.name,
+            accountName: selectedProp?.accountName,
           },
           integrations: [{
             type: 'google_analytics',
             integrationId: integration.id,
             propertyId: selectedProperty,
-            propertyName: selectedProp?.displayName,
-            accountName: selectedProp?.accountDisplayName,
+            propertyName: selectedProp?.name,
+            accountName: selectedProp?.accountName,
           }]
         }
       });
@@ -212,8 +211,8 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
                 </SelectTrigger>
                 <SelectContent>
                   {properties?.map((prop) => (
-                    <SelectItem key={prop.propertyId} value={prop.propertyId}>
-                      {prop.displayName} ({prop.accountDisplayName})
+                    <SelectItem key={prop.id} value={prop.id}>
+                      {prop.name} ({prop.accountName})
                     </SelectItem>
                   ))}
                 </SelectContent>
