@@ -82,23 +82,38 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
   });
 
   const parseReportUrl = (url: string) => {
-    // Parse Ahrefs report URL to extract report type and target
-    // Example: https://app.ahrefs.com/site-explorer/organic-keywords/v2/subdomains/live?select=...&target=example.com
+    // Parse Ahrefs report URL to extract report type and target/project
+    // Site Explorer: https://app.ahrefs.com/site-explorer/organic-keywords/v2/...?target=example.com
+    // Rank Tracker: https://app.ahrefs.com/rank-tracker/overview/4174622?...
     try {
       const urlObj = new URL(url);
-      const target = urlObj.searchParams.get('target') || '';
       const path = urlObj.pathname;
       
       let detectedType = 'custom_report';
-      if (path.includes('organic-keywords')) detectedType = 'organic_keywords';
-      else if (path.includes('backlinks')) detectedType = 'backlinks';
-      else if (path.includes('referring-domains')) detectedType = 'referring_domains';
-      else if (path.includes('domain-rating')) detectedType = 'domain_rating';
-      else if (path.includes('site-explorer')) detectedType = 'site_explorer';
+      let target = '';
+      let projectId = '';
       
-      return { target, reportType: detectedType };
+      // Check for Rank Tracker URLs (have project ID in path, no target param)
+      if (path.includes('rank-tracker')) {
+        detectedType = 'rank_tracker';
+        // Extract project ID from path like /rank-tracker/overview/4174622
+        const matches = path.match(/rank-tracker\/\w+\/(\d+)/);
+        if (matches) {
+          projectId = matches[1];
+        }
+      } else {
+        // Site Explorer and other types use target param
+        target = urlObj.searchParams.get('target') || '';
+        if (path.includes('organic-keywords')) detectedType = 'organic_keywords';
+        else if (path.includes('backlinks')) detectedType = 'backlinks';
+        else if (path.includes('referring-domains')) detectedType = 'referring_domains';
+        else if (path.includes('domain-rating')) detectedType = 'domain_rating';
+        else if (path.includes('site-explorer')) detectedType = 'site_explorer';
+      }
+      
+      return { target, projectId, reportType: detectedType };
     } catch {
-      return { target: '', reportType: 'custom_report' };
+      return { target: '', projectId: '', reportType: 'custom_report' };
     }
   };
 
@@ -125,10 +140,21 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
       const slug = tableName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       
       const parsedReport = isReportMode ? parseReportUrl(reportUrl) : null;
-      if (isReportMode && !parsedReport?.target) {
+      const isRankTracker = parsedReport?.reportType === 'rank_tracker';
+      
+      if (isReportMode && !isRankTracker && !parsedReport?.target) {
         toast({
           title: "לא זוהה דומיין בכתובת הדוח",
           description: "ודא שאתה מדביק את ה-URL המלא מהדפדפן ושמופיע בו target=example.com",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (isReportMode && isRankTracker && !parsedReport?.projectId) {
+        toast({
+          title: "לא זוהה מזהה פרויקט",
+          description: "ודא שאתה מדביק URL של דוח Rank Tracker תקין",
           variant: "destructive",
         });
         return;
@@ -140,7 +166,7 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
         return t;
       };
 
-      const finalTarget = isReportMode ? (parsedReport?.target || '') : targetDomain;
+      const finalTarget = isReportMode ? (parsedReport?.target || `Project #${parsedReport?.projectId}`) : targetDomain;
       const finalReportType = isReportMode ? normalizeReportType(parsedReport?.reportType || 'site_explorer') : reportType;
 
       const { data, error } = await supabase.functions.invoke('crm-tables', {
@@ -157,7 +183,8 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
           integration_type: 'ahrefs',
           integration_settings: {
             integrationId: integration.id,
-            targetDomain: finalTarget,
+            targetDomain: isRankTracker ? null : finalTarget,
+            projectId: isRankTracker ? parsedReport?.projectId : null,
             reportType: finalReportType,
             reportUrl: isReportMode ? reportUrl : null,
             isExistingReport: isReportMode,
@@ -165,7 +192,8 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
           integrations: [{
             type: 'ahrefs',
             integrationId: integration.id,
-            targetDomain: finalTarget,
+            targetDomain: isRankTracker ? null : finalTarget,
+            projectId: isRankTracker ? parsedReport?.projectId : null,
             reportType: finalReportType,
             reportUrl: isReportMode ? reportUrl : null,
             isExistingReport: isReportMode,
