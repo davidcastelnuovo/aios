@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { SimpleTableDialog } from "@/components/dynamic-tables/SimpleTableDialog";
 import { FacebookTableDialog } from "@/components/dynamic-tables/FacebookTableDialog";
+import { GoogleAdsTableDialog } from "@/components/dynamic-tables/GoogleAdsTableDialog";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -76,6 +77,7 @@ export default function DynamicTables() {
   const { tenantId } = useCurrentTenant();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showFacebookDialog, setShowFacebookDialog] = useState(false);
+  const [showGoogleAdsDialog, setShowGoogleAdsDialog] = useState(false);
   const [editingTable, setEditingTable] = useState<CrmTable | null>(null);
   const [deletingTable, setDeletingTable] = useState<CrmTable | null>(null);
   const [editName, setEditName] = useState("");
@@ -307,6 +309,12 @@ export default function DynamicTables() {
               <Facebook className="ml-2 h-4 w-4 text-blue-600" />
               טבלת Facebook Insights
             </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowGoogleAdsDialog(true)}>
+              <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="#4285F4"/>
+              </svg>
+              טבלת Google Ads
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -369,6 +377,10 @@ export default function DynamicTables() {
                           <CardTitle className="flex items-center gap-2">
                             {table.integration_type === 'facebook_insights' ? (
                               <Facebook className="h-5 w-5 text-blue-600" />
+                            ) : table.integration_type === 'google_ads' ? (
+                              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+                                <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="#4285F4"/>
+                              </svg>
                             ) : (
                               <FileSpreadsheet className="h-5 w-5" />
                             )}
@@ -414,7 +426,16 @@ export default function DynamicTables() {
                         <p className="text-sm text-muted-foreground">
                           {table.integration_type === 'facebook_insights' ? (
                             <>
-                              <span className="text-blue-600">סנכרון אוטומטי</span>
+                              <span className="text-blue-600">Facebook Insights</span>
+                              {table.integration_settings?.last_sync_at && (
+                                <span className="mr-2">
+                                  • עודכן {new Date(table.integration_settings.last_sync_at).toLocaleDateString('he-IL')}
+                                </span>
+                              )}
+                            </>
+                          ) : table.integration_type === 'google_ads' ? (
+                            <>
+                              <span className="text-green-600">Google Ads</span>
                               {table.integration_settings?.last_sync_at && (
                                 <span className="mr-2">
                                   • עודכן {new Date(table.integration_settings.last_sync_at).toLocaleDateString('he-IL')}
@@ -443,6 +464,11 @@ export default function DynamicTables() {
       <FacebookTableDialog
         open={showFacebookDialog}
         onOpenChange={setShowFacebookDialog}
+      />
+
+      <GoogleAdsTableDialog
+        open={showGoogleAdsDialog}
+        onOpenChange={setShowGoogleAdsDialog}
       />
 
       {/* Edit Dialog */}

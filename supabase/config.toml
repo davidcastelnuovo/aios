@@ -89,3 +89,9 @@ verify_jwt = true
 
 [functions.send-green-api-file]
 verify_jwt = true
+
+[functions.google-ads-auth]
+verify_jwt = false
+
+[functions.sync-google-ads-data]
+verify_jwt = true
