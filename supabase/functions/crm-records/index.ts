@@ -104,10 +104,19 @@ Deno.serve(async (req) => {
     
     console.log('Found tenant:', tenantId, 'for user:', user.id);
 
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    console.log('🔑 Service role key available:', !!serviceRoleKey);
+    if (!serviceRoleKey) {
+      return new Response(JSON.stringify({ error: 'Server misconfiguration: missing service role key' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     // Use service role for data operations to bypass RLS row limits
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      serviceRoleKey
     );
 
     const method = req.method;
@@ -128,13 +137,14 @@ Deno.serve(async (req) => {
         });
       }
 
-      // First get all records - use range to override default 1000 limit
-      const { data: records, error } = await supabase.from('crm_records')
+      // Fetch up to 100k records (avoid the implicit 1000 default limit)
+      const { data: records, error } = await supabase
+        .from('crm_records')
         .select('*')
         .eq('table_id', table_id)
         .eq('tenant_id', tenantId)
-        .range(0, 100000)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100000);
 
       if (error) throw error;
 
