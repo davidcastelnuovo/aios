@@ -51,7 +51,7 @@ export default function GoogleAnalyticsSettings() {
         throw new Error("No session found");
       }
 
-      const response = await supabase.functions.invoke('google-analytics-auth', {
+      const response = await supabase.functions.invoke('google-analytics-auth?action=authorize', {
         body: { tenantId: currentTenantId, userId },
         headers: { Authorization: `Bearer ${session.session.access_token}` },
         method: 'POST',
