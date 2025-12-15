@@ -145,39 +145,81 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
     });
   };
 
-  // Replace "(not set)" with "דיירקט"
+  // Normalize source names - provide meaningful Hebrew labels
   const normalizeSourceName = (name: string): string => {
-    if (!name || name === '(not set)' || name.toLowerCase() === 'not set' || name === '(direct) / (none)') {
-      return 'דיירקט';
+    if (!name) return 'מקור לא ידוע';
+    
+    const lowerName = name.toLowerCase();
+    
+    // Direct/none cases
+    if (lowerName === '(not set)' || lowerName === 'not set' || lowerName === '(direct) / (none)') {
+      return 'תנועה ישירה (Direct)';
     }
+    
+    // Null/null - likely untagged traffic
+    if (lowerName === 'null / null' || lowerName === '(not set) / (not set)') {
+      return 'מקור לא ידוע';
+    }
+    
+    // Data not available
+    if (lowerName.includes('data not available')) {
+      return 'מידע לא זמין';
+    }
+    
     return name;
   };
 
   const { trafficSources, dailyData, topPages, totals, prevTotals } = useMemo(() => {
-    const currentRecords = filterRecordsByDate(records, currentRange.start, currentRange.end);
-    const previousRecords = showComparison ? filterRecordsByDate(records, previousRange.start, previousRange.end) : [];
+    // Filter daily records by selected date range
+    const currentDailyRecords = records.filter(r => {
+      if (r.data.report_type !== 'daily') return false;
+      if (!r.data.date) return false;
+      
+      try {
+        const recordDate = parseISO(r.data.date);
+        const start = new Date(currentRange.start);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(currentRange.end);
+        end.setHours(23, 59, 59, 999);
+        return isWithinInterval(recordDate, { start, end });
+      } catch {
+        return false;
+      }
+    });
 
-    const processTrafficSources = (recs: CrmRecord[]) => {
-      return recs
-        .filter(r => r.data.report_type === 'traffic_source')
-        .map(r => ({
-          name: normalizeSourceName(r.data.source_medium || 'Unknown'),
-          sessions: Number(r.data.sessions) || 0,
-          users: Number(r.data.users) || 0,
-          newUsers: Number(r.data.new_users) || 0,
-          pageviews: Number(r.data.pageviews) || 0,
-          bounceRate: Number(r.data.bounce_rate) || 0,
-          avgDuration: Number(r.data.avg_session_duration) || 0,
-          conversions: Number(r.data.conversions) || 0,
-        }))
-        .sort((a, b) => b.sessions - a.sessions);
-    };
+    const previousDailyRecords = showComparison ? records.filter(r => {
+      if (r.data.report_type !== 'daily') return false;
+      if (!r.data.date) return false;
+      
+      try {
+        const recordDate = parseISO(r.data.date);
+        const start = new Date(previousRange.start);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(previousRange.end);
+        end.setHours(23, 59, 59, 999);
+        return isWithinInterval(recordDate, { start, end });
+      } catch {
+        return false;
+      }
+    }) : [];
 
-    const trafficSources = processTrafficSources(currentRecords);
-    const prevTrafficSources = processTrafficSources(previousRecords);
+    // Traffic sources - use all (they're aggregated without dates)
+    const trafficSources = records
+      .filter(r => r.data.report_type === 'traffic_source')
+      .map(r => ({
+        name: normalizeSourceName(r.data.source_medium || 'Unknown'),
+        sessions: Number(r.data.sessions) || 0,
+        users: Number(r.data.users) || 0,
+        newUsers: Number(r.data.new_users) || 0,
+        pageviews: Number(r.data.pageviews) || 0,
+        bounceRate: Number(r.data.bounce_rate) || 0,
+        avgDuration: Number(r.data.avg_session_duration) || 0,
+        conversions: Number(r.data.conversions) || 0,
+      }))
+      .sort((a, b) => b.sessions - a.sessions);
 
-    const dailyData = currentRecords
-      .filter(r => r.data.report_type === 'daily')
+    // Daily data for chart - filtered by selected date range
+    const dailyData = currentDailyRecords
       .map(r => ({
         date: r.data.date,
         displayDate: r.data.date ? new Date(r.data.date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }) : '',
@@ -188,7 +230,16 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
       }))
       .sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
-    const topPages = currentRecords
+    // Previous period daily data
+    const prevDailyData = previousDailyRecords
+      .map(r => ({
+        sessions: Number(r.data.sessions) || 0,
+        users: Number(r.data.users) || 0,
+        pageviews: Number(r.data.pageviews) || 0,
+        conversions: Number(r.data.conversions) || 0,
+      }));
+
+    const topPages = records
       .filter(r => r.data.report_type === 'top_pages')
       .map(r => ({
         path: r.data.page_path || '/',
@@ -199,19 +250,35 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
       .sort((a, b) => b.pageviews - a.pageviews)
       .slice(0, 10);
 
-    const calculateTotals = (sources: typeof trafficSources) => ({
-      sessions: sources.reduce((sum, s) => sum + s.sessions, 0),
-      users: sources.reduce((sum, s) => sum + s.users, 0),
-      newUsers: sources.reduce((sum, s) => sum + s.newUsers, 0),
-      pageviews: sources.reduce((sum, s) => sum + s.pageviews, 0),
-      conversions: sources.reduce((sum, s) => sum + s.conversions, 0),
-      avgBounceRate: sources.length > 0 
-        ? (sources.reduce((sum, s) => sum + s.bounceRate, 0) / sources.length).toFixed(1)
-        : '0',
+    // Calculate totals from DAILY data (which has dates and can be filtered)
+    const calculateTotalsFromDaily = (data: typeof dailyData) => ({
+      sessions: data.reduce((sum, d) => sum + d.sessions, 0),
+      users: data.reduce((sum, d) => sum + d.users, 0),
+      newUsers: 0, // Not available in daily data
+      pageviews: data.reduce((sum, d) => sum + d.pageviews, 0),
+      conversions: data.reduce((sum, d) => sum + d.conversions, 0),
+      avgBounceRate: '0', // Not available in daily data
     });
 
-    const totals = calculateTotals(trafficSources);
-    const prevTotals = showComparison ? calculateTotals(prevTrafficSources) : null;
+    // If we have filtered daily data, use it for totals. Otherwise fall back to traffic sources
+    const totals = dailyData.length > 0 
+      ? calculateTotalsFromDaily(dailyData)
+      : {
+          sessions: trafficSources.reduce((sum, s) => sum + s.sessions, 0),
+          users: trafficSources.reduce((sum, s) => sum + s.users, 0),
+          newUsers: trafficSources.reduce((sum, s) => sum + s.newUsers, 0),
+          pageviews: trafficSources.reduce((sum, s) => sum + s.pageviews, 0),
+          conversions: trafficSources.reduce((sum, s) => sum + s.conversions, 0),
+          avgBounceRate: trafficSources.length > 0 
+            ? (trafficSources.reduce((sum, s) => sum + s.bounceRate, 0) / trafficSources.length).toFixed(1)
+            : '0',
+        };
+
+    const prevTotals = showComparison && prevDailyData.length > 0
+      ? calculateTotalsFromDaily(prevDailyData as any)
+      : null;
+
+    return { trafficSources, dailyData, topPages, totals, prevTotals };
 
     return { trafficSources, dailyData, topPages, totals, prevTotals };
   }, [records, currentRange.start, currentRange.end, previousRange.start, previousRange.end, showComparison]);
@@ -506,15 +573,17 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
         <CardContent>
           <div className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={trafficSources.slice(0, 10)} layout="vertical">
+              <BarChart data={trafficSources.slice(0, 10)} layout="vertical" margin={{ left: 20 }}>
                 <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                 <XAxis type="number" fontSize={12} />
                 <YAxis 
                   dataKey="name" 
                   type="category" 
-                  width={150} 
+                  width={200} 
                   fontSize={11}
-                  tick={{ textAnchor: 'end' }}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fill: 'currentColor' }}
                 />
                 <Tooltip 
                   formatter={(value: number) => formatNumber(value)}
