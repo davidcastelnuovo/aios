@@ -137,16 +137,30 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Fetch up to 100k records (avoid the implicit 1000 default limit)
-      const { data: records, error } = await supabase
-        .from('crm_records')
-        .select('*')
-        .eq('table_id', table_id)
-        .eq('tenant_id', tenantId)
-        .order('created_at', { ascending: false })
-        .limit(100000);
+      // Fetch records with pagination (PostgREST enforces a 1000-row cap per request)
+      const pageSize = 1000;
+      const maxRows = 100000;
+      const allRecords: any[] = [];
 
-      if (error) throw error;
+      for (let from = 0; from < maxRows; from += pageSize) {
+        const to = from + pageSize - 1;
+
+        const { data: page, error } = await supabase
+          .from('crm_records')
+          .select('*')
+          .eq('table_id', table_id)
+          .eq('tenant_id', tenantId)
+          .order('created_at', { ascending: false })
+          .range(from, to);
+
+        if (error) throw error;
+        if (!page || page.length === 0) break;
+
+        allRecords.push(...page);
+        if (page.length < pageSize) break;
+      }
+
+      const records = allRecords;
 
       console.log(`📊 Fetched ${records?.length || 0} records for table ${table_id}`);
 
