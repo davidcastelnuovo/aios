@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook, Building2, User, X, Check, ChevronsUpDown } from "lucide-react";
+import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook, Building2, User, X, Check, ChevronsUpDown, TrendingUp } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -19,6 +19,7 @@ import { FacebookTableDialog } from "@/components/dynamic-tables/FacebookTableDi
 import { GoogleAdsTableDialog } from "@/components/dynamic-tables/GoogleAdsTableDialog";
 import { GoogleAnalyticsTableDialog } from "@/components/dynamic-tables/GoogleAnalyticsTableDialog";
 import { GoogleSearchConsoleTableDialog } from "@/components/dynamic-tables/GoogleSearchConsoleTableDialog";
+import { AhrefsTableDialog } from "@/components/dynamic-tables/AhrefsTableDialog";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -82,6 +83,7 @@ export default function DynamicTables() {
   const [showGoogleAdsDialog, setShowGoogleAdsDialog] = useState(false);
   const [showGADialog, setShowGADialog] = useState(false);
   const [showGSCDialog, setShowGSCDialog] = useState(false);
+  const [showAhrefsDialog, setShowAhrefsDialog] = useState(false);
   const [editingTable, setEditingTable] = useState<CrmTable | null>(null);
   const [deletingTable, setDeletingTable] = useState<CrmTable | null>(null);
   const [editName, setEditName] = useState("");
@@ -332,6 +334,10 @@ export default function DynamicTables() {
                 <path d="M12 6v6l4 2" stroke="#4285F4" strokeWidth="2" strokeLinecap="round"/>
               </svg>
               טבלת Search Console
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowAhrefsDialog(true)}>
+              <TrendingUp className="ml-2 h-4 w-4 text-orange-500" />
+              טבלת Ahrefs
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -654,6 +660,11 @@ export default function DynamicTables() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AhrefsTableDialog 
+        open={showAhrefsDialog} 
+        onOpenChange={setShowAhrefsDialog} 
+      />
     </div>
   );
 }
