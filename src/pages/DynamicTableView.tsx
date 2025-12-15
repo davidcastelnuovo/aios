@@ -578,10 +578,14 @@ export default function DynamicTableView() {
 
       const settings = table.integration_settings || {};
       const target = settings.targetDomain;
-      if (!target) throw new Error('Missing Ahrefs target domain');
+      const projectId = settings.projectId;
+      
+      if (!target && !projectId) throw new Error('Missing Ahrefs target domain or project ID');
 
-      const mapDataType = (reportType: string): 'site_explorer' | 'keywords' | 'backlinks' | 'organic_traffic' => {
+      const mapDataType = (reportType: string): 'site_explorer' | 'keywords' | 'backlinks' | 'organic_traffic' | 'rank_tracker' => {
         switch (reportType) {
+          case 'rank_tracker':
+            return 'rank_tracker';
           case 'backlinks':
             return 'backlinks';
           case 'organic_keywords':
@@ -603,7 +607,8 @@ export default function DynamicTableView() {
         body: {
           tableId: table.id,
           config: {
-            target,
+            target: target || undefined,
+            projectId: projectId || undefined,
             dataType: mapDataType(settings.reportType || 'site_explorer'),
             country: 'il',
             limit: 1000,
