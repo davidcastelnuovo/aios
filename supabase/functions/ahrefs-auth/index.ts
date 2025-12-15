@@ -61,14 +61,20 @@ serve(async (req) => {
     const url = new URL(req.url);
     const action = url.searchParams.get('action');
 
-    // Test the API key by making a simple Site Explorer request
+    // Test the API key by making a simple Domain Rating request
     if (action === 'test' || action === 'connect') {
       console.log('Testing Ahrefs API connection...');
       
-      // Use Site Explorer overview with a sample domain to test API key validity
-      const testUrl = new URL('https://api.ahrefs.com/v3/site-explorer/overview');
+      // Get current date formatted as YYYY-MM-DD
+      const today = new Date();
+      const dateStr = today.toISOString().split('T')[0];
+      
+      // Use Site Explorer domain-rating endpoint with a sample domain
+      const testUrl = new URL('https://api.ahrefs.com/v3/site-explorer/domain-rating');
       testUrl.searchParams.set('target', 'ahrefs.com');
-      testUrl.searchParams.set('select', 'domain_rating');
+      testUrl.searchParams.set('date', dateStr);
+      
+      console.log('Testing URL:', testUrl.toString());
       
       const testResponse = await fetch(testUrl.toString(), {
         headers: {
