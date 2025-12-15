@@ -9,19 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  Legend,
-} from "recharts";
-import { Search, TrendingUp, TrendingDown, MousePointerClick, Eye, Target, ArrowUpDown, Minus } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, MousePointerClick, Eye, Target, ArrowUpDown, Minus, Award } from "lucide-react";
 
 interface CrmRecord {
   id: string;
@@ -37,7 +25,7 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
   const [sortBy, setSortBy] = useState<string>("clicks");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
-  const { queryData, dailyData, totals, comparison } = useMemo(() => {
+  const { queryData, totals, comparison, firstPageQueries } = useMemo(() => {
     // Get date range from records
     const dates = records.map(r => r.data.date).filter(Boolean).sort();
     const minDate = dates[0];
@@ -124,56 +112,38 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
       return sortOrder === "desc" ? bVal - aVal : aVal - bVal;
     });
 
-    // Daily trends
-    const dailyMap = new Map<string, { clicks: number; impressions: number; ctr: number; position: number; count: number }>();
-    
-    currentRecords.forEach(r => {
-      const date = r.data.date || '';
-      const existing = dailyMap.get(date) || { clicks: 0, impressions: 0, ctr: 0, position: 0, count: 0 };
-      
-      dailyMap.set(date, {
-        clicks: existing.clicks + (Number(r.data.clicks) || 0),
-        impressions: existing.impressions + (Number(r.data.impressions) || 0),
-        ctr: existing.ctr + (Number(r.data.ctr) || 0),
-        position: existing.position + (Number(r.data.position) || 0),
-        count: existing.count + 1,
-      });
-    });
-
-    const dailyData = Array.from(dailyMap.entries())
-      .map(([date, data]) => ({
-        date,
-        displayDate: new Date(date).toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' }),
-        clicks: data.clicks,
-        impressions: data.impressions,
-        ctr: data.count > 0 ? (data.ctr / data.count) : 0,
-        position: data.count > 0 ? (data.position / data.count) : 0,
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+    // Count queries on first page (position <= 10)
+    const firstPageQueries = queryData.filter(q => q.position <= 10 && q.position > 0).length;
+    const prevFirstPageQueries = comparisonMode !== "none" 
+      ? Array.from(previousQueryMap.entries()).filter(([_, data]) => {
+          const avgPos = data.count > 0 ? data.position / data.count : 0;
+          return avgPos <= 10 && avgPos > 0;
+        }).length
+      : 0;
 
     // Totals
     const totals = {
       clicks: queryData.reduce((sum, q) => sum + q.clicks, 0),
       impressions: queryData.reduce((sum, q) => sum + q.impressions, 0),
       avgCtr: queryData.length > 0 ? queryData.reduce((sum, q) => sum + q.ctr, 0) / queryData.length : 0,
-      avgPosition: queryData.length > 0 ? queryData.reduce((sum, q) => sum + q.position, 0) / queryData.length : 0,
+      firstPageQueries,
     };
 
     const prevTotals = {
       clicks: queryData.reduce((sum, q) => sum + q.prevClicks, 0),
       impressions: queryData.reduce((sum, q) => sum + q.prevImpressions, 0),
       avgCtr: queryData.length > 0 ? queryData.reduce((sum, q) => sum + q.prevCtr, 0) / queryData.length : 0,
-      avgPosition: queryData.length > 0 ? queryData.reduce((sum, q) => sum + q.prevPosition, 0) / queryData.length : 0,
+      firstPageQueries: prevFirstPageQueries,
     };
 
     const comparison = {
       clicksChange: totals.clicks - prevTotals.clicks,
       impressionsChange: totals.impressions - prevTotals.impressions,
       ctrChange: totals.avgCtr - prevTotals.avgCtr,
-      positionChange: prevTotals.avgPosition - totals.avgPosition, // Lower is better
+      firstPageChange: totals.firstPageQueries - prevTotals.firstPageQueries,
     };
 
-    return { queryData: queryData.slice(0, 50), dailyData, totals, comparison };
+    return { queryData: queryData.slice(0, 50), totals, comparison, firstPageQueries };
   }, [records, comparisonMode, sortBy, sortOrder]);
 
   const formatNumber = (num: number) => new Intl.NumberFormat('he-IL').format(num);
@@ -190,6 +160,13 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
       <TrendingDown className="h-3 w-3 text-red-500" />
     ) : null;
   };
+
+  // Get top 25 queries sorted by impressions for the sidebar list
+  const top25Queries = useMemo(() => {
+    return [...queryData]
+      .sort((a, b) => b.impressions - a.impressions)
+      .slice(0, 25);
+  }, [queryData]);
 
   if (records.length === 0) {
     return (
@@ -275,91 +252,63 @@ export function SearchConsoleDashboard({ records }: SearchConsoleDashboardProps)
           <CardContent className="pt-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <ArrowUpDown className="h-4 w-4 text-purple-500" />
-                <span className="text-sm text-muted-foreground">מיקום ממוצע</span>
+                <Award className="h-4 w-4 text-amber-500" />
+                <span className="text-sm text-muted-foreground">ביטויים בעמוד הראשון</span>
               </div>
-              {comparisonMode !== "none" && renderChangeIndicator(comparison.positionChange)}
+              {comparisonMode !== "none" && renderChangeIndicator(comparison.firstPageChange)}
             </div>
-            <p className="text-2xl font-bold mt-1">{totals.avgPosition.toFixed(1)}</p>
+            <p className="text-2xl font-bold mt-1">{formatNumber(totals.firstPageQueries)}</p>
             {comparisonMode !== "none" && (
-              <p className={`text-xs ${comparison.positionChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                {comparison.positionChange >= 0 ? '↑' : '↓'}{Math.abs(comparison.positionChange).toFixed(1)}
+              <p className={`text-xs ${comparison.firstPageChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                {comparison.firstPageChange >= 0 ? '+' : ''}{formatNumber(comparison.firstPageChange)}
               </p>
             )}
           </CardContent>
         </Card>
       </div>
 
-      {/* Charts */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Daily Trend */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">מגמות יומיות</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={dailyData}>
-                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                  <XAxis dataKey="displayDate" fontSize={12} />
-                  <YAxis yAxisId="left" fontSize={12} />
-                  <YAxis yAxisId="right" orientation="right" fontSize={12} />
-                  <Tooltip contentStyle={{ direction: 'rtl', textAlign: 'right' }} />
-                  <Legend />
-                  <Line 
-                    yAxisId="left"
-                    type="monotone" 
-                    dataKey="clicks" 
-                    name="קליקים"
-                    stroke="hsl(var(--primary))" 
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line 
-                    yAxisId="right"
-                    type="monotone" 
-                    dataKey="impressions" 
-                    name="חשיפות"
-                    stroke="hsl(var(--chart-2))" 
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Top Queries Bar Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">טופ 10 ביטויים</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={queryData.slice(0, 10)} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                  <XAxis type="number" fontSize={12} />
-                  <YAxis 
-                    dataKey="query" 
-                    type="category" 
-                    width={120} 
-                    fontSize={10}
-                    tick={{ textAnchor: 'end' }}
-                  />
-                  <Tooltip 
-                    formatter={(value: number) => formatNumber(value)}
-                    contentStyle={{ direction: 'rtl', textAlign: 'right' }}
-                  />
-                  <Bar dataKey="clicks" name="קליקים" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Top 25 Queries List */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">25 ביטויים מובילים</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-2">
+            {top25Queries.map((query, index) => (
+              <div 
+                key={index} 
+                className="flex items-center justify-between p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <span className="text-sm font-medium text-muted-foreground w-6 text-center">
+                    {index + 1}
+                  </span>
+                  <span className="text-sm truncate flex-1" title={query.fullQuery}>
+                    {query.fullQuery}
+                  </span>
+                </div>
+                <div className="flex items-center gap-4 text-sm shrink-0">
+                  <div className="text-center min-w-[60px]">
+                    <span className="text-muted-foreground text-xs">חשיפות</span>
+                    <p className="font-medium">{formatNumber(query.impressions)}</p>
+                  </div>
+                  <div className="text-center min-w-[50px]">
+                    <span className="text-muted-foreground text-xs">קליקים</span>
+                    <p className="font-medium">{formatNumber(query.clicks)}</p>
+                  </div>
+                  <div className="text-center min-w-[50px]">
+                    <span className="text-muted-foreground text-xs">CTR</span>
+                    <p className="font-medium">{query.ctr.toFixed(2)}%</p>
+                  </div>
+                  <Badge variant={query.position <= 10 ? "default" : query.position <= 20 ? "secondary" : "outline"}>
+                    {query.position.toFixed(1)}
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Queries Table */}
       <Card>
