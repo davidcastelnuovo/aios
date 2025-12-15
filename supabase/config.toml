@@ -95,3 +95,15 @@ verify_jwt = false
 
 [functions.sync-google-ads-data]
 verify_jwt = true
+
+[functions.google-analytics-auth]
+verify_jwt = false
+
+[functions.sync-google-analytics-data]
+verify_jwt = true
+
+[functions.google-search-console-auth]
+verify_jwt = false
+
+[functions.sync-google-search-console-data]
+verify_jwt = true
