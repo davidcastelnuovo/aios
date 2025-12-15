@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings } from "lucide-react";
+import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -163,6 +163,23 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
+  // Check Ahrefs integration status
+  const { data: ahrefsIntegration } = useQuery({
+    queryKey: ['ahrefs-integration', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .eq('integration_type', 'ahrefs')
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   const integrations: IntegrationCardProps[] = [
     {
       icon: <Webhook className="h-6 w-6" />,
@@ -269,6 +286,19 @@ export default function Integrations() {
       isConnected: !!manychatIntegration,
       route: "manychat-settings",
       gradient: "bg-gradient-to-r from-blue-500 to-indigo-600",
+    },
+    {
+      icon: <TrendingUp className="h-6 w-6" />,
+      title: "Ahrefs",
+      description: "נתוני SEO מתקדמים - דירוגים, בקלינקים ומילות מפתח",
+      features: [
+        "מעקב דירוגים יומי",
+        "ניתוח בקלינקים ודומיינים",
+        "מחקר מילות מפתח",
+      ],
+      isConnected: !!ahrefsIntegration,
+      route: "ahrefs-settings",
+      gradient: "bg-gradient-to-r from-orange-500 to-red-600",
     },
   ];
 

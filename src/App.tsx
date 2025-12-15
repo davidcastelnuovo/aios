@@ -48,6 +48,7 @@ import FacebookCallback from "./pages/FacebookCallback";
 import GoogleAdsSettings from "./pages/GoogleAdsSettings";
 import GoogleAnalyticsSettings from "./pages/GoogleAnalyticsSettings";
 import GoogleSearchConsoleSettings from "./pages/GoogleSearchConsoleSettings";
+import AhrefsSettings from "./pages/AhrefsSettings";
 import Integrations from "./pages/Integrations";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
@@ -121,6 +122,7 @@ const App = () => (
             <Route path="/t/:tenantSlug/google-ads-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><GoogleAdsSettings /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/google-analytics-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><GoogleAnalyticsSettings /></AppLayout></ProtectedRoute>} />
             <Route path="/t/:tenantSlug/google-search-console-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><GoogleSearchConsoleSettings /></AppLayout></ProtectedRoute>} />
+            <Route path="/t/:tenantSlug/ahrefs-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><AhrefsSettings /></AppLayout></ProtectedRoute>} />
             
             {/* Legacy route - redirect to root */}
             

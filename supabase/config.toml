@@ -107,3 +107,9 @@ verify_jwt = false
 
 [functions.sync-google-search-console-data]
 verify_jwt = true
+
+[functions.ahrefs-auth]
+verify_jwt = true
+
+[functions.sync-ahrefs-data]
+verify_jwt = true
