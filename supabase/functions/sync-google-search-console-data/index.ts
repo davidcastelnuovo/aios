@@ -34,15 +34,18 @@ serve(async (req) => {
     }
 
     const settings = table.integration_settings as any;
-    if (!settings?.integration_id || !settings?.site_url) {
+    // Support both camelCase and snake_case keys
+    const integrationId = settings?.integration_id || settings?.integrationId;
+    const siteUrl = settings?.site_url || settings?.siteUrl;
+    
+    if (!integrationId || !siteUrl) {
       throw new Error('Missing integration settings');
     }
 
-    // Get integration
     const { data: integration, error: integrationError } = await supabase
       .from('tenant_integrations')
       .select('*')
-      .eq('id', settings.integration_id)
+      .eq('id', integrationId)
       .single();
 
     if (integrationError || !integration) {
@@ -94,7 +97,7 @@ serve(async (req) => {
     };
 
     const searchResponse = await fetch(
-      `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(settings.site_url)}/searchAnalytics/query`,
+      `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`,
       {
         method: 'POST',
         headers: {
