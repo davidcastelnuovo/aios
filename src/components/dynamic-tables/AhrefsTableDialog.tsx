@@ -125,8 +125,23 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
       const slug = tableName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
       
       const parsedReport = isReportMode ? parseReportUrl(reportUrl) : null;
-      const finalTarget = isReportMode ? (parsedReport?.target || reportUrl) : targetDomain;
-      const finalReportType = isReportMode ? (parsedReport?.reportType || 'custom_report') : reportType;
+      if (isReportMode && !parsedReport?.target) {
+        toast({
+          title: "לא זוהה דומיין בכתובת הדוח",
+          description: "ודא שאתה מדביק את ה-URL המלא מהדפדפן ושמופיע בו target=example.com",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const normalizeReportType = (t: string) => {
+        if (t === 'organic_keywords') return 'organic_traffic';
+        if (t === 'referring_domains') return 'site_explorer';
+        return t;
+      };
+
+      const finalTarget = isReportMode ? (parsedReport?.target || '') : targetDomain;
+      const finalReportType = isReportMode ? normalizeReportType(parsedReport?.reportType || 'site_explorer') : reportType;
 
       const { data, error } = await supabase.functions.invoke('crm-tables', {
         body: {
@@ -281,7 +296,7 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
                     className="text-sm"
                   />
                   <p className="text-xs text-muted-foreground">
-                    העתק את כתובת הדוח מהדפדפן כאשר אתה צופה בו ב-Ahrefs
+                    טיפ: ודא שבכתובת יש פרמטר target=example.com
                   </p>
                 </div>
               </TabsContent>

@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar, RefreshCw, Facebook, Settings, Link, BarChart3, Search } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -571,6 +571,58 @@ export default function DynamicTableView() {
     },
   });
 
+  // Ahrefs sync mutation
+  const syncAhrefsMutation = useMutation({
+    mutationFn: async () => {
+      if (!table?.id) throw new Error('No table');
+
+      const settings = table.integration_settings || {};
+      const target = settings.targetDomain;
+      if (!target) throw new Error('Missing Ahrefs target domain');
+
+      const mapDataType = (reportType: string): 'site_explorer' | 'keywords' | 'backlinks' | 'organic_traffic' => {
+        switch (reportType) {
+          case 'backlinks':
+            return 'backlinks';
+          case 'organic_keywords':
+          case 'organic_traffic':
+            return 'organic_traffic';
+          case 'keywords':
+            return 'keywords';
+          case 'domain_rating':
+          case 'site_explorer':
+          case 'referring_domains':
+          case 'custom_report':
+          default:
+            return 'site_explorer';
+        }
+      };
+
+      const response = await supabase.functions.invoke('sync-ahrefs-data', {
+        method: 'POST',
+        body: {
+          tableId: table.id,
+          config: {
+            target,
+            dataType: mapDataType(settings.reportType || 'site_explorer'),
+            country: 'il',
+            limit: 1000,
+          },
+        },
+      });
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      toast.success(`נתוני Ahrefs סונכרנו בהצלחה (${data?.recordsCount || 0} שורות)`);
+    },
+    onError: (error: any) => {
+      toast.error('שגיאה בסנכרון מ-Ahrefs: ' + (error?.message || 'Unknown error'));
+    },
+  });
+
   // Fetch Google Ads accounts for settings dialog
   const { data: googleAdsAccounts, isLoading: googleAccountsLoading } = useQuery({
     queryKey: ['google-ads-accounts'],
@@ -716,6 +768,7 @@ export default function DynamicTableView() {
   const hasGoogleAds = table?.integration_type === 'google_ads';
   const hasGoogleAnalytics = table?.integration_type === 'google_analytics';
   const hasGoogleSearchConsole = table?.integration_type === 'google_search_console';
+  const hasAhrefs = table?.integration_type === 'ahrefs';
   const hasMultipleIntegrations = hasFacebook && hasGoogleAds;
 
   return (
@@ -749,6 +802,12 @@ export default function DynamicTableView() {
                 Search Console
               </Badge>
           )}
+          {hasAhrefs && (
+            <Badge variant="secondary" className="gap-1">
+              <TrendingUp className="h-3 w-3" />
+              Ahrefs
+            </Badge>
+          )}
           {hasGoogleAnalytics && table.integration_settings?.last_sync_at && (
             <p className="text-xs text-muted-foreground">
               Google Analytics עודכן: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
@@ -764,6 +823,11 @@ export default function DynamicTableView() {
           {hasGoogleAds && table.integration_settings?.last_sync_at && (
             <p className="text-xs text-muted-foreground">
               Google Ads עודכן: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
+            </p>
+          )}
+          {hasAhrefs && table.integration_settings?.last_sync_at && (
+            <p className="text-xs text-muted-foreground">
+              Ahrefs עודכן: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
             </p>
           )}
         </div>
@@ -880,6 +944,20 @@ export default function DynamicTableView() {
                 <Search className="h-4 w-4 text-green-600" />
                 <RefreshCw className={`h-4 w-4 ${syncGoogleSearchConsoleMutation.isPending ? 'animate-spin' : ''}`} />
                 {syncGoogleSearchConsoleMutation.isPending ? 'מסנכרן...' : 'סנכרן Search Console'}
+              </Button>
+            </div>
+          )}
+          {hasAhrefs && (
+            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+              <Button
+                variant="outline"
+                onClick={() => syncAhrefsMutation.mutate()}
+                disabled={syncAhrefsMutation.isPending}
+                className="flex-1 md:flex-none gap-2"
+              >
+                <TrendingUp className="h-4 w-4" />
+                <RefreshCw className={`h-4 w-4 ${syncAhrefsMutation.isPending ? 'animate-spin' : ''}`} />
+                {syncAhrefsMutation.isPending ? 'מסנכרן Ahrefs...' : 'סנכרן Ahrefs'}
               </Button>
             </div>
           )}
