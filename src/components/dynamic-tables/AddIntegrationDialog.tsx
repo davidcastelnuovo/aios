@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, Facebook, BarChart3, Search, ExternalLink, Plus, Check } from "lucide-react";
+import { Loader2, Facebook, BarChart3, Search, ExternalLink, Plus, Check, TrendingUp } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 
@@ -25,7 +25,7 @@ interface AddIntegrationDialogProps {
   onIntegrationAdded: () => void;
 }
 
-type IntegrationType = 'facebook_insights' | 'google_ads' | 'google_analytics' | 'google_search_console';
+type IntegrationType = 'facebook_insights' | 'google_ads' | 'google_analytics' | 'google_search_console' | 'ahrefs';
 
 interface PlatformConfig {
   type: IntegrationType;
@@ -65,8 +65,16 @@ const PLATFORMS: PlatformConfig[] = [
     type: 'google_search_console',
     name: 'Search Console',
     icon: <Search className="h-5 w-5" />,
-    color: 'bg-green-500',
+    color: 'bg-indigo-500',
     integrationType: 'google_search_console',
+    settingsRoute: 'google-search-console-settings',
+  },
+  {
+    type: 'ahrefs',
+    name: 'Ahrefs',
+    icon: <TrendingUp className="h-5 w-5" />,
+    color: 'bg-orange-600',
+    integrationType: 'ahrefs',
     settingsRoute: 'google-search-console-settings',
   },
 ];
@@ -146,6 +154,10 @@ export function AddIntegrationDialog({
             body: { action: 'get_sites', integrationId: integration.id }
           });
           return data?.sites?.map((s: any) => ({ id: s.siteUrl, name: s.siteUrl })) || [];
+        }
+        case 'ahrefs': {
+          // Ahrefs doesn't have multiple accounts - just return a placeholder
+          return [{ id: 'ahrefs_default', name: 'Ahrefs SEO Data' }];
         }
         default:
           return [];
