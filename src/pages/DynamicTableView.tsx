@@ -519,9 +519,40 @@ export default function DynamicTableView() {
   const syncGoogleSearchConsoleMutation = useMutation({
     mutationFn: async () => {
       if (!table?.id) throw new Error('No table');
-      // Calculate date range - last 90 days
+      
+      // Calculate date range based on selectedSyncDateRange
       const endDate = new Date().toISOString().split('T')[0];
-      const startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      let startDate: string;
+      
+      switch (selectedSyncDateRange) {
+        case 'last_7_days':
+          startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          break;
+        case 'last_14_days':
+          startDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          break;
+        case 'last_30_days':
+          startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          break;
+        case 'last_90_days':
+          startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          break;
+        case 'last_180_days':
+          startDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          break;
+        case 'last_365_days':
+          startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          break;
+        case 'last_730_days':
+          startDate = new Date(Date.now() - 730 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+          break;
+        case 'all_history':
+          // Search Console API limits to ~16 months of data
+          startDate = '2020-01-01';
+          break;
+        default:
+          startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      }
       
       const response = await supabase.functions.invoke('sync-google-search-console-data', {
         method: 'POST',
@@ -827,7 +858,19 @@ export default function DynamicTableView() {
           
           {/* Google Search Console Sync Controls */}
           {hasGoogleSearchConsole && (
-            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+            <div className="flex items-center gap-2 w-full md:w-auto justify-center flex-wrap">
+              <Select value={selectedSyncDateRange} onValueChange={setSelectedSyncDateRange}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="בחר תקופה לסנכרון" />
+                </SelectTrigger>
+                <SelectContent>
+                  {syncDateRangeOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button 
                 variant="outline" 
                 onClick={() => syncGoogleSearchConsoleMutation.mutate()}
