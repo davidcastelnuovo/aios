@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, BarChart3, ExternalLink } from "lucide-react";
+import { Loader2, BarChart3, ExternalLink, Search } from "lucide-react";
 
 interface GoogleAnalyticsTableDialogProps {
   open: boolean;
@@ -32,6 +32,7 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
   const [selectedAgency, setSelectedAgency] = useState("");
   const [selectedClient, setSelectedClient] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [propertySearch, setPropertySearch] = useState("");
 
   // Fetch GA integration
   const { data: integration, isLoading: integrationLoading } = useQuery({
@@ -159,7 +160,18 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
     setSelectedProperty("");
     setSelectedAgency("");
     setSelectedClient("");
+    setPropertySearch("");
   };
+
+  const filteredProperties = useMemo(() => {
+    if (!properties) return [];
+    if (!propertySearch.trim()) return properties;
+    const search = propertySearch.toLowerCase();
+    return properties.filter(prop => 
+      prop.name?.toLowerCase().includes(search) || 
+      prop.accountName?.toLowerCase().includes(search)
+    );
+  }, [properties, propertySearch]);
 
   const isLoading = integrationLoading || propertiesLoading;
 
@@ -210,11 +222,30 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
                   <SelectValue placeholder="בחר נכס" />
                 </SelectTrigger>
                 <SelectContent>
-                  {properties?.map((prop) => (
-                    <SelectItem key={prop.id} value={prop.id}>
-                      {prop.name} ({prop.accountName})
-                    </SelectItem>
-                  ))}
+                  <div className="p-2 sticky top-0 bg-popover">
+                    <div className="relative">
+                      <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="חפש נכס..."
+                        value={propertySearch}
+                        onChange={(e) => setPropertySearch(e.target.value)}
+                        className="pr-8"
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  </div>
+                  {filteredProperties.length === 0 ? (
+                    <div className="text-center py-4 text-muted-foreground text-sm">
+                      לא נמצאו תוצאות
+                    </div>
+                  ) : (
+                    filteredProperties.map((prop) => (
+                      <SelectItem key={prop.id} value={prop.id}>
+                        {prop.name} ({prop.accountName})
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
