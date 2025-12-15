@@ -121,11 +121,12 @@ Deno.serve(async (req) => {
         });
       }
 
-      // First get all records
+      // First get all records - use range to override default 1000 limit
       const { data: records, error } = await supabase.from('crm_records')
         .select('*')
         .eq('table_id', table_id)
         .eq('tenant_id', tenantId)
+        .range(0, 100000)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
