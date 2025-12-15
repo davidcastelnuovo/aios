@@ -149,7 +149,7 @@ export function AhrefsTableDialog({ open, onOpenChange }: AhrefsTableDialogProps
           tenantId: activeTenantId,
           name: tableName,
           slug: `ahrefs-${slug}-${Date.now()}`,
-          description: isReportMode ? `Ahrefs Report - ${finalTarget}` : `Ahrefs - ${targetDomain}`,
+          description: `Ahrefs - ${finalTarget}`,
           category,
           icon: 'TrendingUp',
           agencyId: selectedAgency || null,
