@@ -571,28 +571,24 @@ export default function DynamicTableView() {
     },
   });
 
-  // Ahrefs sync mutation
+  // Ahrefs sync mutation (Site Explorer endpoints only - standard plans)
   const syncAhrefsMutation = useMutation({
     mutationFn: async () => {
       if (!table?.id) throw new Error('No table');
 
       const settings = table.integration_settings || {};
 
-      const mapDataType = (reportType: string): 'site_explorer' | 'keywords' | 'backlinks' | 'organic_traffic' | 'rank_tracker' => {
+      const mapDataType = (reportType: string): 'site_explorer' | 'backlinks' | 'organic_traffic' | 'referring_domains' => {
         switch (reportType) {
-          case 'rank_tracker':
-            return 'rank_tracker';
           case 'backlinks':
             return 'backlinks';
           case 'organic_keywords':
           case 'organic_traffic':
             return 'organic_traffic';
-          case 'keywords':
-            return 'keywords';
+          case 'referring_domains':
+            return 'referring_domains';
           case 'domain_rating':
           case 'site_explorer':
-          case 'referring_domains':
-          case 'custom_report':
           default:
             return 'site_explorer';
         }
@@ -600,13 +596,8 @@ export default function DynamicTableView() {
 
       const dataType = mapDataType(settings.reportType || 'site_explorer');
       const targetDomain = settings.targetDomain as string | undefined;
-      const projectId = settings.projectId as string | undefined;
 
-      if (dataType === 'rank_tracker') {
-        if (!projectId) throw new Error('Missing Ahrefs Rank Tracker project ID');
-      } else {
-        if (!targetDomain) throw new Error('Missing Ahrefs target domain');
-      }
+      if (!targetDomain) throw new Error('Missing Ahrefs target domain');
 
       const response = await supabase.functions.invoke('sync-ahrefs-data', {
         method: 'POST',
@@ -614,11 +605,9 @@ export default function DynamicTableView() {
           tableId: table.id,
           config: {
             dataType,
+            target: targetDomain,
             country: 'il',
             limit: 1000,
-            ...(dataType === 'rank_tracker'
-              ? { projectId, device: 'desktop' as const }
-              : { target: targetDomain }),
           },
         },
       });
