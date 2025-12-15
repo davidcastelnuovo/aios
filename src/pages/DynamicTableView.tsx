@@ -577,10 +577,6 @@ export default function DynamicTableView() {
       if (!table?.id) throw new Error('No table');
 
       const settings = table.integration_settings || {};
-      const target = settings.targetDomain;
-      const projectId = settings.projectId;
-      
-      if (!target && !projectId) throw new Error('Missing Ahrefs target domain or project ID');
 
       const mapDataType = (reportType: string): 'site_explorer' | 'keywords' | 'backlinks' | 'organic_traffic' | 'rank_tracker' => {
         switch (reportType) {
@@ -602,16 +598,27 @@ export default function DynamicTableView() {
         }
       };
 
+      const dataType = mapDataType(settings.reportType || 'site_explorer');
+      const targetDomain = settings.targetDomain as string | undefined;
+      const projectId = settings.projectId as string | undefined;
+
+      if (dataType === 'rank_tracker') {
+        if (!projectId) throw new Error('Missing Ahrefs Rank Tracker project ID');
+      } else {
+        if (!targetDomain) throw new Error('Missing Ahrefs target domain');
+      }
+
       const response = await supabase.functions.invoke('sync-ahrefs-data', {
         method: 'POST',
         body: {
           tableId: table.id,
           config: {
-            target: target || undefined,
-            projectId: projectId || undefined,
-            dataType: mapDataType(settings.reportType || 'site_explorer'),
+            dataType,
             country: 'il',
             limit: 1000,
+            ...(dataType === 'rank_tracker'
+              ? { projectId, device: 'desktop' as const }
+              : { target: targetDomain }),
           },
         },
       });

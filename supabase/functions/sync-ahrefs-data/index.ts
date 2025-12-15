@@ -9,6 +9,7 @@ const corsHeaders = {
 interface AhrefsConfig {
   target?: string; // Domain to analyze
   projectId?: string; // Rank Tracker project ID
+  device?: 'desktop' | 'mobile'; // Rank Tracker device
   dataType: 'site_explorer' | 'keywords' | 'backlinks' | 'organic_traffic' | 'rank_tracker';
   country?: string;
   limit?: number;
@@ -115,7 +116,7 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
-        apiUrl = `https://api.ahrefs.com/v3/rank-tracker/overview?project_id=${encodeURIComponent(config.projectId)}&select=keyword,volume,position,position_diff,traffic,traffic_diff,url,keyword_difficulty,serp_features,serp_updated`;
+        apiUrl = `https://api.ahrefs.com/v3/rank-tracker/overview?project_id=${encodeURIComponent(config.projectId)}&device=${encodeURIComponent(config.device || 'desktop')}&select=keyword,volume,position,position_diff,traffic,traffic_diff,url,keyword_difficulty,serp_features,serp_updated`;
         selectFields = ['keyword', 'volume', 'position', 'position_diff', 'traffic', 'traffic_diff', 'url', 'keyword_difficulty', 'serp_features', 'serp_updated'];
         break;
       
