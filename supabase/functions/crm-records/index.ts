@@ -130,10 +130,83 @@ Deno.serve(async (req) => {
       const url = new URL(req.url);
       const table_id = url.searchParams.get('table_id');
       const date_filter = url.searchParams.get('date_filter');
+      const aggregated = url.searchParams.get('aggregated');
       
       if (!table_id) {
         return new Response(JSON.stringify({ error: 'table_id required' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check if aggregated data is requested (for dashboards like Search Console)
+      if (aggregated === 'search_console') {
+        console.log(`📊 Fetching aggregated Search Console data for table ${table_id}`);
+        
+        const pageSize = 1000;
+        const allRecords: any[] = [];
+        
+        for (let from = 0; ; from += pageSize) {
+          const { data: page, error } = await supabase
+            .from('crm_records')
+            .select('id, data')
+            .eq('table_id', table_id)
+            .eq('tenant_id', tenantId)
+            .range(from, from + pageSize - 1);
+
+          if (error) throw error;
+          if (!page || page.length === 0) break;
+          allRecords.push(...page);
+          if (page.length < pageSize) break;
+        }
+
+        console.log(`📊 Total records fetched: ${allRecords.length}`);
+
+        // Aggregate by query
+        const queryMap = new Map<string, { clicks: number; impressions: number; ctr: number; position: number; count: number }>();
+        
+        allRecords.forEach((r: any) => {
+          const query = r.data?.query || '';
+          const existing = queryMap.get(query) || { clicks: 0, impressions: 0, ctr: 0, position: 0, count: 0 };
+          
+          queryMap.set(query, {
+            clicks: existing.clicks + (Number(r.data?.clicks) || 0),
+            impressions: existing.impressions + (Number(r.data?.impressions) || 0),
+            ctr: existing.ctr + (Number(r.data?.ctr) || 0),
+            position: existing.position + (Number(r.data?.position) || 0),
+            count: existing.count + 1,
+          });
+        });
+
+        // Convert to array and calculate averages
+        const queryData = Array.from(queryMap.entries()).map(([query, data]) => ({
+          query,
+          clicks: data.clicks,
+          impressions: data.impressions,
+          ctr: data.count > 0 ? data.ctr / data.count : 0,
+          position: data.count > 0 ? data.position / data.count : 0,
+        }));
+
+        // Sort by impressions desc and take top 100
+        queryData.sort((a, b) => b.impressions - a.impressions);
+        const topQueries = queryData.slice(0, 100);
+
+        // Calculate totals
+        const totals = {
+          clicks: queryData.reduce((sum, q) => sum + q.clicks, 0),
+          impressions: queryData.reduce((sum, q) => sum + q.impressions, 0),
+          avgCtr: queryData.length > 0 ? queryData.reduce((sum, q) => sum + q.ctr, 0) / queryData.length : 0,
+          firstPageQueries: queryData.filter(q => q.position <= 10 && q.position > 0).length,
+          totalQueries: queryData.length,
+        };
+
+        console.log(`📊 Aggregated ${queryData.length} unique queries, returning top 100. Totals: ${totals.clicks} clicks, ${totals.impressions} impressions`);
+
+        return new Response(JSON.stringify({
+          queries: topQueries,
+          totals,
+          totalRecords: allRecords.length,
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 

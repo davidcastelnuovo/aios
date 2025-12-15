@@ -1172,8 +1172,8 @@ export default function DynamicTableView() {
       )}
 
       {/* Google Search Console Dashboard */}
-      {hasGoogleSearchConsole && records && records.length > 0 && (
-        <SearchConsoleDashboard records={records} />
+      {hasGoogleSearchConsole && table?.id && (
+        <SearchConsoleDashboard tableId={table.id} />
       )}
 
       {isLoading ? (
