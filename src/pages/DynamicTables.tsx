@@ -489,6 +489,16 @@ export default function DynamicTables() {
         onOpenChange={setShowGoogleAdsDialog}
       />
 
+      <GoogleAnalyticsTableDialog
+        open={showGADialog}
+        onOpenChange={setShowGADialog}
+      />
+
+      <GoogleSearchConsoleTableDialog
+        open={showGSCDialog}
+        onOpenChange={setShowGSCDialog}
+      />
+
       {/* Edit Dialog */}
       <Dialog open={!!editingTable} onOpenChange={(open) => !open && setEditingTable(null)}>
         <DialogContent>
