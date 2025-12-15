@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar, RefreshCw, Facebook, Settings } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar, RefreshCw, Facebook, Settings, Link } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -34,6 +35,13 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
+// Google Ads icon component
+const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z"/>
+  </svg>
+);
+
 interface CrmTable {
   id: string;
   name: string;
@@ -41,6 +49,8 @@ interface CrmTable {
   description: string | null;
   integration_type: string | null;
   integration_settings: any;
+  secondary_integration_type?: string | null;
+  secondary_integration_settings?: any;
 }
 
 interface CrmField {
@@ -49,6 +59,7 @@ interface CrmField {
   name: string;
   type: string;
   position: number;
+  source?: string; // 'facebook' | 'google_ads' | null
 }
 
 interface CrmRecord {
@@ -74,6 +85,9 @@ export default function DynamicTableView() {
   const [cellValues, setCellValues] = useState<Record<string, string>>({});
   const [dateFilter, setDateFilter] = useState<string>("all");
   const [selectedSyncDateRange, setSelectedSyncDateRange] = useState<string>("last_30_days");
+  const [activeTab, setActiveTab] = useState<string>("main"); // 'main' | 'facebook' | 'google_ads' | 'combined'
+  const [showGoogleSettingsDialog, setShowGoogleSettingsDialog] = useState(false);
+  const [selectedGoogleAccount, setSelectedGoogleAccount] = useState<string>("");
   const cellInputRef = useRef<HTMLInputElement>(null);
 
   const dateFilterOptions = [
@@ -420,6 +434,42 @@ export default function DynamicTableView() {
     },
   });
 
+  // Google Ads sync mutation
+  const syncGoogleAdsMutation = useMutation({
+    mutationFn: async () => {
+      if (!table?.id) throw new Error('No table');
+      const response = await supabase.functions.invoke('sync-google-ads-data', {
+        method: 'POST',
+        body: { table_id: table.id },
+      });
+      if (response.error) throw response.error;
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      toast.success(`נתוני Google Ads סונכרנו בהצלחה (${data?.records_synced || 0} שורות)`);
+    },
+    onError: (error: any) => {
+      toast.error('שגיאה בסנכרון מ-Google Ads: ' + error.message);
+    },
+  });
+
+  // Fetch Google Ads accounts for settings dialog
+  const { data: googleAdsAccounts, isLoading: googleAccountsLoading } = useQuery({
+    queryKey: ['google-ads-accounts'],
+    queryFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      const response = await supabase.functions.invoke('google-ads-auth?action=get_accounts', {
+        method: 'POST',
+      });
+      if (response.error) throw response.error;
+      return Array.isArray(response.data?.accounts) ? response.data.accounts : [];
+    },
+    enabled: showGoogleSettingsDialog && (table?.integration_type === 'google_ads' || !!table?.secondary_integration_type),
+  });
+
   const updateTableSettingsMutation = useMutation({
     mutationFn: async (adAccountId: string) => {
       if (!table?.id) throw new Error('No table');
@@ -544,25 +594,41 @@ export default function DynamicTableView() {
   }
 
   const isLoading = fieldsLoading || recordsLoading;
+  
+  // Determine which integrations are connected
+  const hasFacebook = table?.integration_type === 'facebook_insights';
+  const hasGoogleAds = table?.integration_type === 'google_ads';
+  const hasMultipleIntegrations = hasFacebook && hasGoogleAds;
 
   return (
     <div className="container mx-auto py-8 px-4">
       <div className="flex flex-col gap-4 mb-6">
         {/* Title Row */}
         <div className="text-center md:text-right">
-          <div className="flex items-center justify-center md:justify-start gap-2">
+          <div className="flex items-center justify-center md:justify-start gap-2 flex-wrap">
             <h1 className="text-2xl md:text-3xl font-bold">{table.name}</h1>
-            {table.integration_type === 'facebook_insights' && (
+            {hasFacebook && (
               <Badge variant="secondary" className="gap-1">
                 <Facebook className="h-3 w-3 text-blue-600" />
                 Facebook
               </Badge>
             )}
+            {hasGoogleAds && (
+              <Badge variant="secondary" className="gap-1">
+                <GoogleAdsIcon className="h-3 w-3" />
+                Google Ads
+              </Badge>
+            )}
           </div>
           {table.description && <p className="text-muted-foreground mt-1">{table.description}</p>}
-          {table.integration_type === 'facebook_insights' && table.integration_settings?.last_sync_at && (
+          {hasFacebook && table.integration_settings?.last_sync_at && (
             <p className="text-xs text-muted-foreground">
-              עודכן לאחרונה: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
+              Facebook עודכן: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
+            </p>
+          )}
+          {hasGoogleAds && table.integration_settings?.last_sync_at && (
+            <p className="text-xs text-muted-foreground">
+              Google Ads עודכן: {new Date(table.integration_settings.last_sync_at).toLocaleString('he-IL')}
             </p>
           )}
         </div>
@@ -574,16 +640,18 @@ export default function DynamicTableView() {
             חזור
           </Button>
         
-          {table.integration_type === 'facebook_insights' && (
+          {/* Facebook Sync Controls */}
+          {hasFacebook && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center">
               <Button 
                 variant="outline" 
                 onClick={() => syncFacebookMutation.mutate()}
                 disabled={syncFacebookMutation.isPending}
-                className="flex-1 md:flex-none"
+                className="flex-1 md:flex-none gap-2"
               >
-                <RefreshCw className={`ml-2 h-4 w-4 ${syncFacebookMutation.isPending ? 'animate-spin' : ''}`} />
-                {syncFacebookMutation.isPending ? 'מסנכרן...' : 'סנכרן עכשיו'}
+                <Facebook className="h-4 w-4 text-blue-600" />
+                <RefreshCw className={`h-4 w-4 ${syncFacebookMutation.isPending ? 'animate-spin' : ''}`} />
+                {syncFacebookMutation.isPending ? 'מסנכרן Facebook...' : 'סנכרן Facebook'}
               </Button>
               <Button 
                 variant="outline" 
@@ -592,6 +660,32 @@ export default function DynamicTableView() {
                   setSelectedAdAccount(table.integration_settings?.ad_account_id || '');
                   setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
                   setShowSettingsDialog(true);
+                }}
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+          
+          {/* Google Ads Sync Controls */}
+          {hasGoogleAds && (
+            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+              <Button 
+                variant="outline" 
+                onClick={() => syncGoogleAdsMutation.mutate()}
+                disabled={syncGoogleAdsMutation.isPending}
+                className="flex-1 md:flex-none gap-2"
+              >
+                <GoogleAdsIcon className="h-4 w-4" />
+                <RefreshCw className={`h-4 w-4 ${syncGoogleAdsMutation.isPending ? 'animate-spin' : ''}`} />
+                {syncGoogleAdsMutation.isPending ? 'מסנכרן Google Ads...' : 'סנכרן Google Ads'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => {
+                  setSelectedGoogleAccount(table.integration_settings?.customer_id || '');
+                  setShowGoogleSettingsDialog(true);
                 }}
               >
                 <Settings className="h-4 w-4" />
@@ -734,7 +828,7 @@ export default function DynamicTableView() {
       </div>
 
       {/* Summary Stats for Facebook Insights */}
-      {table.integration_type === 'facebook_insights' && records && records.length > 0 && (
+      {hasFacebook && records && records.length > 0 && (
         <Card className="mb-4 overflow-hidden">
           {(() => {
             // Group records by campaign_name
@@ -802,6 +896,74 @@ export default function DynamicTableView() {
                         </tr>
                       );
                     })()}
+                  </tfoot>
+                </table>
+              </div>
+            );
+          })()}
+        </Card>
+      )}
+
+      {/* Summary Stats for Google Ads */}
+      {hasGoogleAds && records && records.length > 0 && (
+        <Card className="mb-4 overflow-hidden">
+          {(() => {
+            const campaignGroups = records.reduce((acc, record) => {
+              const campaignName = String(record.data?.campaign_name || 'ללא קמפיין');
+              if (!acc[campaignName]) {
+                acc[campaignName] = { impressions: 0, clicks: 0, conversions: 0, cost: 0 };
+              }
+              acc[campaignName].impressions += Number(record.data?.impressions) || 0;
+              acc[campaignName].clicks += Number(record.data?.clicks) || 0;
+              acc[campaignName].conversions += Number(record.data?.conversions) || 0;
+              acc[campaignName].cost += Number(record.data?.cost) || 0;
+              return acc;
+            }, {} as Record<string, { impressions: number; clicks: number; conversions: number; cost: number }>);
+
+            const totals = Object.values(campaignGroups).reduce((acc, campaign) => ({
+              impressions: acc.impressions + campaign.impressions,
+              clicks: acc.clicks + campaign.clicks,
+              conversions: acc.conversions + campaign.conversions,
+              cost: acc.cost + campaign.cost,
+            }), { impressions: 0, clicks: 0, conversions: 0, cost: 0 });
+
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" dir="rtl">
+                  <thead className="bg-muted/50 border-b">
+                    <tr>
+                      <th className="p-2 text-right font-medium">קמפיין</th>
+                      <th className="p-2 text-center font-medium">חשיפות</th>
+                      <th className="p-2 text-center font-medium">קליקים</th>
+                      <th className="p-2 text-center font-medium">המרות</th>
+                      <th className="p-2 text-center font-medium">עלות</th>
+                      <th className="p-2 text-center font-medium">עלות להמרה</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(campaignGroups).map(([campaignName, data]) => {
+                      const costPerConversion = data.conversions > 0 ? data.cost / data.conversions : 0;
+                      return (
+                        <tr key={campaignName} className="border-b hover:bg-muted/30">
+                          <td className="p-2 text-right font-medium">{campaignName}</td>
+                          <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center text-green-600 font-medium">{data.conversions.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center">₪{data.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                          <td className="p-2 text-center text-blue-600 font-medium">₪{costPerConversion.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot className="bg-primary/10 font-bold">
+                    <tr>
+                      <td className="p-2 text-right">סה״כ</td>
+                      <td className="p-2 text-center">{totals.impressions.toLocaleString('he-IL')}</td>
+                      <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
+                      <td className="p-2 text-center text-green-600">{totals.conversions.toLocaleString('he-IL')}</td>
+                      <td className="p-2 text-center">₪{totals.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                      <td className="p-2 text-center text-blue-600">₪{(totals.conversions > 0 ? totals.cost / totals.conversions : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                    </tr>
                   </tfoot>
                 </table>
               </div>

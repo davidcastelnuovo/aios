@@ -170,7 +170,7 @@ export default function Integrations() {
         "סנכרון אוטומטי לטבלאות",
       ],
       isConnected: !!googleAdsIntegration,
-      route: "integrations",
+      route: "google-ads-settings",
       gradient: "bg-gradient-to-r from-yellow-500 to-red-500",
     },
     {
