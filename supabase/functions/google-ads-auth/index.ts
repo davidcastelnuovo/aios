@@ -108,6 +108,22 @@ async function handleOAuthCallback(url: URL) {
   const state = url.searchParams.get('state');
   const error = url.searchParams.get('error');
 
+  // Create supabase client for database operations
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+
+  // Helper function to get tenant slug for redirect
+  async function getTenantSlug(tenantId: string): Promise<string> {
+    const { data: tenant } = await supabase
+      .from('tenants')
+      .select('slug')
+      .eq('id', tenantId)
+      .single();
+    return tenant?.slug || 'app';
+  }
+
   if (error) {
     const redirectUrl = `${Deno.env.get('APP_URL') || 'https://lovable.dev'}/integrations?error=${error}`;
     return new Response(null, {
@@ -122,6 +138,7 @@ async function handleOAuthCallback(url: URL) {
 
   try {
     const { tenantId, userId } = JSON.parse(atob(state));
+    const tenantSlug = await getTenantSlug(tenantId);
 
     // Exchange code for tokens
     const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
@@ -142,40 +159,57 @@ async function handleOAuthCallback(url: URL) {
       throw new Error(tokens.error_description || tokens.error);
     }
 
-    // Save tokens to database
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
-
     // Calculate token expiry
     const expiresAt = new Date(Date.now() + (tokens.expires_in * 1000)).toISOString();
 
-    // Upsert integration
-    const { error: upsertError } = await supabase
+    // Check if integration already exists
+    const { data: existing } = await supabase
       .from('tenant_integrations')
-      .upsert({
-        tenant_id: tenantId,
-        user_id: userId,
-        integration_type: 'google_ads',
-        is_active: true,
-        api_key: tokens.access_token,
-        settings: {
-          refresh_token: tokens.refresh_token,
-          expires_at: expiresAt,
-          connected_at: new Date().toISOString(),
-        },
-      }, {
-        onConflict: 'tenant_id,integration_type,user_id'
-      });
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('integration_type', 'google_ads')
+      .eq('user_id', userId)
+      .maybeSingle();
 
-    if (upsertError) {
-      console.error('Error saving tokens:', upsertError);
-      throw upsertError;
+    const integrationData = {
+      is_active: true,
+      api_key: tokens.access_token,
+      settings: {
+        refresh_token: tokens.refresh_token,
+        expires_at: expiresAt,
+        connected_at: new Date().toISOString(),
+      },
+      updated_at: new Date().toISOString(),
+    };
+
+    let saveError;
+    if (existing) {
+      // Update existing integration
+      const { error } = await supabase
+        .from('tenant_integrations')
+        .update(integrationData)
+        .eq('id', existing.id);
+      saveError = error;
+    } else {
+      // Insert new integration
+      const { error } = await supabase
+        .from('tenant_integrations')
+        .insert({
+          tenant_id: tenantId,
+          user_id: userId,
+          integration_type: 'google_ads',
+          ...integrationData,
+        });
+      saveError = error;
     }
 
-    // Redirect back to integrations page
-    const redirectUrl = `${Deno.env.get('APP_URL') || 'https://lovable.dev'}/integrations?google_ads=connected`;
+    if (saveError) {
+      console.error('Error saving tokens:', saveError);
+      throw saveError;
+    }
+
+    // Redirect back to integrations page with tenant slug
+    const redirectUrl = `${Deno.env.get('APP_URL') || 'https://lovable.dev'}/t/${tenantSlug}/integrations?google_ads=connected`;
     return new Response(null, {
       status: 302,
       headers: { Location: redirectUrl }
