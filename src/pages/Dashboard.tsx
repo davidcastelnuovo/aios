@@ -172,7 +172,7 @@ export default function Dashboard() {
       let clientQuery = supabase.from("clients").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
       let campaignerQuery = supabase.from("campaigners").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
       let taskQuery = supabase.from("tasks").select("*").eq("tenant_id", tenantId).eq("status", "open");
-      let activeClientsQuery = supabase.from("clients").select("id, agency_id").eq("tenant_id", tenantId).in("status", ["active", "onboarding"]);
+      let activeClientsQuery = supabase.from("clients").select("id, agency_id, retainer").eq("tenant_id", tenantId).in("status", ["active", "onboarding"]);
       let leadsQuery = supabase.from("leads").select("estimated_deal_value, monthly_budget, three_month_budget, status").eq("tenant_id", tenantId);
       
       // אם בחרנו ספק, נמצא את הקמפיינר הקשור אליו
@@ -255,20 +255,33 @@ export default function Dashboard() {
 
       const financeIncome = financeData?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
       
-      // Fetch retainers from client_tenant_financial_data - only for active clients
-      const activeClientIds = activeClients.data?.map(c => c.id) || [];
+      // Retainers: prefer client_tenant_financial_data when exists, otherwise fallback to legacy clients.retainer
+      const activeClientsList = Array.isArray(activeClients.data) ? activeClients.data : [];
+      const activeClientIds = activeClientsList.map((c) => c.id);
       let retainers = 0;
-      
+
       if (activeClientIds.length > 0) {
         const { data: retainersData } = await supabase
           .from("client_tenant_financial_data")
           .select("client_id, retainer")
           .eq("tenant_id", tenantId)
           .in("client_id", activeClientIds);
-        
-        retainers = retainersData?.reduce((sum, item) => sum + Number(item.retainer || 0), 0) || 0;
+
+        const hasFinancialRow = new Set<string>();
+        const retainerByClient = new Map<string, number>();
+
+        (retainersData || []).forEach((row) => {
+          hasFinancialRow.add(row.client_id);
+          retainerByClient.set(row.client_id, Number(row.retainer || 0));
+        });
+
+        retainers = activeClientsList.reduce((sum, client) => {
+          if (hasFinancialRow.has(client.id)) {
+            return sum + (retainerByClient.get(client.id) || 0);
+          }
+          return sum + Number(client.retainer || 0);
+        }, 0);
       }
-      
       const totalIncome = financeIncome + retainers;
       
       const financeExpense = financeData?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
