@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -485,6 +486,9 @@ export default function Leads() {
   const { activeStages: pipelineStagesData } = useLeadPipelineStages();
   const { isFieldVisible } = useCustomFieldLabels('lead');
   const [filterSalesPerson, setFilterSalesPerson] = useState<string>("all");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const leadIdFromUrl = searchParams.get('leadId');
+  const [autoOpenLeadId, setAutoOpenLeadId] = useState<string | null>(null);
   
   // Convert dynamic pipeline stages to format compatible with existing code
   const PIPELINE_STAGES = useMemo(() => {
@@ -521,6 +525,32 @@ export default function Leads() {
   const [openTables, setOpenTables] = useState<Record<string, boolean>>({});
   const [selectedMobileStage, setSelectedMobileStage] = useState<string>("");
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+
+  // Fetch lead data for auto-open from URL
+  const { data: autoOpenLead } = useQuery({
+    queryKey: ["lead-auto-open", autoOpenLeadId],
+    queryFn: async () => {
+      if (!autoOpenLeadId) return null;
+      const { data, error } = await supabase
+        .from("leads")
+        .select("*")
+        .eq("id", autoOpenLeadId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!autoOpenLeadId,
+  });
+
+  // Auto-open lead dialog from URL parameter
+  useEffect(() => {
+    if (leadIdFromUrl) {
+      setAutoOpenLeadId(leadIdFromUrl);
+      // Clear the URL parameter
+      searchParams.delete('leadId');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [leadIdFromUrl]);
 
   // Set default selected mobile stage when stages load
   useEffect(() => {
@@ -1497,6 +1527,15 @@ export default function Leads() {
             );
           })}
         </div>
+      )}
+
+      {/* Auto-open lead dialog from URL parameter */}
+      {autoOpenLead && (
+        <EditLeadDialog 
+          lead={autoOpenLead}
+          open={!!autoOpenLeadId}
+          onOpenChange={(open) => !open && setAutoOpenLeadId(null)}
+        />
       )}
     </div>
   );

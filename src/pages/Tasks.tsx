@@ -3,8 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckSquare, Calendar as CalendarIcon, Building2, Users, Megaphone, AlertCircle, GripVertical, LayoutGrid, Table as TableIcon, MessageSquare, Search, Check, ChevronsUpDown, CalendarDays, Settings2, Target, ExternalLink } from "lucide-react";
-import { Link } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 import {
   Dialog,
   DialogContent,
@@ -155,6 +155,23 @@ export default function Tasks() {
   const { buildPath } = useTenantPath();
   const { getFieldLabel } = useCustomFieldLabels('task');
   const { t } = useTerminology();
+  const [openLeadId, setOpenLeadId] = useState<string | null>(null);
+
+  // Fetch full lead data when opening dialog
+  const { data: leadForDialog } = useQuery({
+    queryKey: ["lead-for-dialog", openLeadId],
+    queryFn: async () => {
+      if (!openLeadId) return null;
+      const { data, error } = await supabase
+        .from("leads")
+        .select("*")
+        .eq("id", openLeadId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!openLeadId,
+  });
 
   // Set default team member filter to current user's campaigner
   useEffect(() => {
@@ -701,14 +718,16 @@ export default function Tasks() {
             {task.leads && (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
                 <Target className="h-3 w-3 flex-shrink-0" />
-                <Link 
-                  to={buildPath(`leads?leadId=${task.lead_id}`)}
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenLeadId(task.lead_id);
+                  }}
                   className="truncate font-medium hover:text-primary hover:underline flex items-center gap-1"
-                  onClick={(e) => e.stopPropagation()}
                 >
                   {task.leads.company_name || task.leads.contact_name || 'ליד'}
                   <ExternalLink className="h-3 w-3" />
-                </Link>
+                </button>
               </div>
             )}
             
@@ -1133,13 +1152,13 @@ export default function Tasks() {
                           ) : task.leads ? (
                             <div className="flex items-center gap-2">
                               <Target className="h-4 w-4 text-muted-foreground" />
-                              <Link 
-                                to={buildPath(`leads?leadId=${task.lead_id}`)}
+                              <button 
+                                onClick={() => setOpenLeadId(task.lead_id)}
                                 className="font-medium hover:text-primary hover:underline flex items-center gap-1"
                               >
                                 {task.leads.company_name || task.leads.contact_name || 'ליד'}
                                 <ExternalLink className="h-3 w-3" />
-                              </Link>
+                              </button>
                             </div>
                           ) : (
                             <span className="text-muted-foreground">-</span>
@@ -1261,13 +1280,13 @@ export default function Tasks() {
                           ) : task.leads ? (
                             <div className="flex items-center gap-2">
                               <Target className="h-4 w-4 text-muted-foreground" />
-                              <Link 
-                                to={buildPath(`leads?leadId=${task.lead_id}`)}
+                              <button 
+                                onClick={() => setOpenLeadId(task.lead_id)}
                                 className="font-medium hover:text-primary hover:underline flex items-center gap-1"
                               >
                                 {task.leads.company_name || task.leads.contact_name || 'ליד'}
                                 <ExternalLink className="h-3 w-3" />
-                              </Link>
+                              </button>
                             </div>
                           ) : (
                             <span className="text-muted-foreground">-</span>
@@ -1389,13 +1408,13 @@ export default function Tasks() {
                           ) : task.leads ? (
                             <div className="flex items-center gap-2">
                               <Target className="h-4 w-4 text-muted-foreground" />
-                              <Link 
-                                to={buildPath(`leads?leadId=${task.lead_id}`)}
+                              <button 
+                                onClick={() => setOpenLeadId(task.lead_id)}
                                 className="font-medium hover:text-primary hover:underline flex items-center gap-1"
                               >
                                 {task.leads.company_name || task.leads.contact_name || 'ליד'}
                                 <ExternalLink className="h-3 w-3" />
-                              </Link>
+                              </button>
                             </div>
                           ) : (
                             <span className="text-muted-foreground">-</span>
@@ -1493,6 +1512,15 @@ export default function Tasks() {
             </Card>
           ) : null}
         </DragOverlay>
+
+        {/* Lead Dialog - opens when clicking on lead name */}
+        {leadForDialog && (
+          <EditLeadDialog 
+            lead={leadForDialog}
+            open={!!openLeadId}
+            onOpenChange={(open) => !open && setOpenLeadId(null)}
+          />
+        )}
       </div>
     </DndContext>
   );
