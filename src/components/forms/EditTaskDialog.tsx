@@ -745,61 +745,70 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                   )}
                 />
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="campaigner_id"
-                    render={({ field }) => (
+                {/* Combined Team Member selector */}
+                <FormField
+                  control={form.control}
+                  name="campaigner_id"
+                  render={({ field }) => {
+                    // Find current value in combined format
+                    const currentValue = field.value 
+                      ? `campaigner:${field.value}` 
+                      : form.getValues('sales_person_id') 
+                        ? `sales:${form.getValues('sales_person_id')}` 
+                        : "";
+                    
+                    return (
                       <FormItem>
-                        <FormLabel className="text-right block">{t('campaigner')} אחראי</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger className="text-right">
-                              <SelectValue placeholder={`בחר ${t('campaigner')}`} />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-background z-50" align="end">
-                            {campaigners?.map((campaigner) => (
-                              <SelectItem key={campaigner.id} value={campaigner.id} className="text-right">
-                                {campaigner.full_name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="sales_person_id"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-right block">{t('sales_person')}</FormLabel>
+                        <FormLabel className="text-right block">איש צוות אחראי</FormLabel>
                         <Select 
-                          onValueChange={(value) => field.onChange(value === "none" ? "" : value)} 
-                          value={field.value || "none"}
+                          onValueChange={(value) => {
+                            if (value.startsWith('campaigner:')) {
+                              field.onChange(value.replace('campaigner:', ''));
+                              form.setValue('sales_person_id', '');
+                            } else if (value.startsWith('sales:')) {
+                              field.onChange('');
+                              form.setValue('sales_person_id', value.replace('sales:', ''));
+                            }
+                          }} 
+                          value={currentValue}
                         >
                           <FormControl>
                             <SelectTrigger className="text-right">
-                              <SelectValue placeholder={`בחר ${t('sales_person')}`} />
+                              <SelectValue placeholder="בחר איש צוות" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent className="bg-background z-50" align="end">
-                            <SelectItem value="none" className="text-right">ללא</SelectItem>
-                            {salesPeople?.map((salesPerson) => (
-                              <SelectItem key={salesPerson.id} value={salesPerson.id} className="text-right">
-                                {salesPerson.full_name}
-                              </SelectItem>
-                            ))}
+                            {campaigners && campaigners.length > 0 && (
+                              <>
+                                <SelectItem value="__label_campaigners" disabled className="font-semibold text-muted-foreground text-right">
+                                  {t('campaigner', true)}
+                                </SelectItem>
+                                {campaigners.map((campaigner) => (
+                                  <SelectItem key={`campaigner:${campaigner.id}`} value={`campaigner:${campaigner.id}`} className="text-right">
+                                    {campaigner.full_name}
+                                  </SelectItem>
+                                ))}
+                              </>
+                            )}
+                            {salesPeople && salesPeople.length > 0 && (
+                              <>
+                                <SelectItem value="__label_sales" disabled className="font-semibold text-muted-foreground text-right">
+                                  {t('sales_person', true)}
+                                </SelectItem>
+                                {salesPeople.map((salesPerson) => (
+                                  <SelectItem key={`sales:${salesPerson.id}`} value={`sales:${salesPerson.id}`} className="text-right">
+                                    {salesPerson.full_name}
+                                  </SelectItem>
+                                ))}
+                              </>
+                            )}
                           </SelectContent>
                         </Select>
                         <FormMessage />
                       </FormItem>
-                    )}
-                  />
-                </div>
+                    );
+                  }}
+                />
 
                 <FormField
                   control={form.control}

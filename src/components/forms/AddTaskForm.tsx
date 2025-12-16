@@ -428,64 +428,76 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
               )}
             />
 
-            {/* Campaigner selector - shown for all task types */}
+            {/* Combined Team Member selector - includes both campaigners and sales people */}
             <FormField
               control={form.control}
               name="campaigner_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('campaigner')}</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    value={field.value || ""}
-                    disabled={isCampaigner && !canSelectAnyCampaigner}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={`בחר ${t('campaigner')}`} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent className="bg-background z-50">
-                      {visibleCampaigners?.map((campaigner) => (
-                        <SelectItem key={campaigner.id} value={campaigner.id}>
-                          {campaigner.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Sales Person selector */}
-            <FormField
-              control={form.control}
-              name="sales_person_id"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{t('sales_person')}</FormLabel>
-                  <Select 
-                    onValueChange={(value) => field.onChange(value === "none" ? "" : value)} 
-                    value={field.value || "none"}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={`בחר ${t('sales_person')}`} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent className="bg-background z-50">
-                      <SelectItem value="none">ללא</SelectItem>
-                      {salesPeople?.map((salesPerson) => (
-                        <SelectItem key={salesPerson.id} value={salesPerson.id}>
-                          {salesPerson.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
+              render={({ field }) => {
+                // Combine campaigners and sales people into one list
+                const allTeamMembers = [
+                  ...(visibleCampaigners?.map(c => ({ id: `campaigner:${c.id}`, name: c.full_name, type: 'campaigner' as const })) || []),
+                  ...(salesPeople?.map(s => ({ id: `sales:${s.id}`, name: s.full_name, type: 'sales' as const })) || []),
+                ];
+                
+                // Find the current value in combined format
+                const currentValue = field.value 
+                  ? `campaigner:${field.value}` 
+                  : form.getValues('sales_person_id') 
+                    ? `sales:${form.getValues('sales_person_id')}` 
+                    : "";
+                
+                return (
+                  <FormItem>
+                    <FormLabel>איש צוות אחראי</FormLabel>
+                    <Select 
+                      onValueChange={(value) => {
+                        if (value.startsWith('campaigner:')) {
+                          field.onChange(value.replace('campaigner:', ''));
+                          form.setValue('sales_person_id', '');
+                        } else if (value.startsWith('sales:')) {
+                          field.onChange('');
+                          form.setValue('sales_person_id', value.replace('sales:', ''));
+                        }
+                      }} 
+                      value={currentValue}
+                      disabled={isCampaigner && !canSelectAnyCampaigner}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="בחר איש צוות" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent className="bg-background z-50">
+                        {visibleCampaigners && visibleCampaigners.length > 0 && (
+                          <>
+                            <SelectItem value="__label_campaigners" disabled className="font-semibold text-muted-foreground">
+                              {t('campaigner', true)}
+                            </SelectItem>
+                            {visibleCampaigners.map((campaigner) => (
+                              <SelectItem key={`campaigner:${campaigner.id}`} value={`campaigner:${campaigner.id}`}>
+                                {campaigner.full_name}
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
+                        {salesPeople && salesPeople.length > 0 && (
+                          <>
+                            <SelectItem value="__label_sales" disabled className="font-semibold text-muted-foreground">
+                              {t('sales_person', true)}
+                            </SelectItem>
+                            {salesPeople.map((salesPerson) => (
+                              <SelectItem key={`sales:${salesPerson.id}`} value={`sales:${salesPerson.id}`}>
+                                {salesPerson.full_name}
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                );
+              }}
             />
 
             {/* Show additional fields only for client tasks */}
