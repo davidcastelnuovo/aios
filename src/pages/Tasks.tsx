@@ -2,7 +2,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckSquare, Calendar as CalendarIcon, Building2, Users, Megaphone, AlertCircle, GripVertical, LayoutGrid, Table as TableIcon, MessageSquare, Search, Check, ChevronsUpDown, CalendarDays, Settings2 } from "lucide-react";
+import { CheckSquare, Calendar as CalendarIcon, Building2, Users, Megaphone, AlertCircle, GripVertical, LayoutGrid, Table as TableIcon, MessageSquare, Search, Check, ChevronsUpDown, CalendarDays, Settings2, Target, ExternalLink } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useTenantPath } from "@/hooks/useTenantPath";
 import {
   Dialog,
   DialogContent,
@@ -150,6 +152,7 @@ export default function Tasks() {
   const { campaignerId, isCampaigner, isTeamManager, isOwner, isSeo } = useUserRole();
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { buildPath } = useTenantPath();
   const { getFieldLabel } = useCustomFieldLabels('task');
   const { t } = useTerminology();
 
@@ -193,6 +196,7 @@ export default function Tasks() {
           *,
           agencies (name),
           clients (agency_id, name, is_seo_client),
+          leads (id, company_name, contact_name),
           campaigners (full_name, role),
           task_updates (id)
         `)
@@ -693,6 +697,21 @@ export default function Tasks() {
               </div>
             )}
             
+            {/* Lead name with link */}
+            {task.leads && (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-2">
+                <Target className="h-3 w-3 flex-shrink-0" />
+                <Link 
+                  to={buildPath(`leads?leadId=${task.lead_id}`)}
+                  className="truncate font-medium hover:text-primary hover:underline flex items-center gap-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {task.leads.company_name || task.leads.contact_name || 'ליד'}
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              </div>
+            )}
+            
             <div className="flex items-start justify-between gap-2 mb-3">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing flex-shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -1106,10 +1125,25 @@ export default function Tasks() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{task.clients?.name}</span>
-                          </div>
+                          {task.clients ? (
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium">{task.clients.name}</span>
+                            </div>
+                          ) : task.leads ? (
+                            <div className="flex items-center gap-2">
+                              <Target className="h-4 w-4 text-muted-foreground" />
+                              <Link 
+                                to={buildPath(`leads?leadId=${task.lead_id}`)}
+                                className="font-medium hover:text-primary hover:underline flex items-center gap-1"
+                              >
+                                {task.leads.company_name || task.leads.contact_name || 'ליד'}
+                                <ExternalLink className="h-3 w-3" />
+                              </Link>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <span className="font-medium">{task.title}</span>
@@ -1219,10 +1253,25 @@ export default function Tasks() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{task.clients?.name}</span>
-                          </div>
+                          {task.clients ? (
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium">{task.clients.name}</span>
+                            </div>
+                          ) : task.leads ? (
+                            <div className="flex items-center gap-2">
+                              <Target className="h-4 w-4 text-muted-foreground" />
+                              <Link 
+                                to={buildPath(`leads?leadId=${task.lead_id}`)}
+                                className="font-medium hover:text-primary hover:underline flex items-center gap-1"
+                              >
+                                {task.leads.company_name || task.leads.contact_name || 'ליד'}
+                                <ExternalLink className="h-3 w-3" />
+                              </Link>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <span className="font-medium">{task.title}</span>
@@ -1332,10 +1381,25 @@ export default function Tasks() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Users className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{task.clients?.name}</span>
-                          </div>
+                          {task.clients ? (
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-medium">{task.clients.name}</span>
+                            </div>
+                          ) : task.leads ? (
+                            <div className="flex items-center gap-2">
+                              <Target className="h-4 w-4 text-muted-foreground" />
+                              <Link 
+                                to={buildPath(`leads?leadId=${task.lead_id}`)}
+                                className="font-medium hover:text-primary hover:underline flex items-center gap-1"
+                              >
+                                {task.leads.company_name || task.leads.contact_name || 'ליד'}
+                                <ExternalLink className="h-3 w-3" />
+                              </Link>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <span className="font-medium">{task.title}</span>
