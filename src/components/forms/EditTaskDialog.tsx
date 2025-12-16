@@ -781,16 +781,16 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                                 variant="outline"
                                 role="combobox"
                                 className={cn(
-                                  "justify-between text-right",
+                                  "w-full justify-between",
                                   !selectedMember && "text-muted-foreground"
                                 )}
                               >
-                                {selectedMember ? selectedMember.name : "בחר איש צוות"}
-                                <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                                <span className="text-right flex-1">{selectedMember ? selectedMember.name : "בחר איש צוות"}</span>
+                                <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
-                          <PopoverContent className="w-[300px] p-0 bg-background" align="start">
+                          <PopoverContent className="w-[300px] p-0 bg-background" align="end" dir="rtl">
                             <Command>
                               <CommandInput placeholder="חפש איש צוות..." />
                               <CommandList>
