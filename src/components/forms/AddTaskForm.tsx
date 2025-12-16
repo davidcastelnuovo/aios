@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 import { useUserRole } from "@/hooks/useUserRole";
+import { useTerminology } from "@/hooks/useTerminology";
 import {
   Form,
   FormControl,
@@ -54,6 +55,7 @@ const formSchema = z.object({
   title: z.string().min(1, "שם המשימה הוא שדה חובה"),
   notes: z.string().optional(),
   campaigner_id: z.string().optional(), // Optional for quick tasks - will be auto-filled
+  sales_person_id: z.string().optional(),
   task_category: z.enum(["client", "lead", "quick"]),
   client_id: z.string().optional(),
   lead_id: z.string().optional(),
@@ -109,6 +111,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
   const { tenantId: currentTenantId } = useCurrentTenant();
   const { getFieldLabel } = useCustomFieldLabels('task');
   const { isCampaigner, isTeamManager, isOwner, isSuperAdmin, campaignerId: userCampaignerId } = useUserRole();
+  const { t } = useTerminology();
 
   // Determine default campaigner - any user with a linked campaigner_id gets themselves as default
   const effectiveCampaignerId = defaultCampaignerId || userCampaignerId || "";
@@ -119,6 +122,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       title: "",
       notes: "",
       campaigner_id: effectiveCampaignerId,
+      sales_person_id: "",
       task_category: leadId ? "lead" : clientId ? "client" : "client",
       client_id: clientId || "",
       lead_id: leadId || "",
@@ -209,6 +213,19 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
     },
   });
 
+  const { data: salesPeople } = useQuery({
+    queryKey: ["sales-people"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sales_people")
+        .select("*")
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof formSchema>) => {
       let selectedClient = null;
@@ -289,6 +306,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         title: values.title,
         notes: values.notes || null,
         campaigner_id: finalCampaignerId,
+        sales_person_id: values.sales_person_id || null,
         client_id: values.task_category === "client" ? values.client_id : null,
         lead_id: values.task_category === "lead" ? values.lead_id : null,
         agency_id: finalAgencyId,
@@ -416,7 +434,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
               name="campaigner_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>קמפיינר</FormLabel>
+                  <FormLabel>{t('campaigner')}</FormLabel>
                   <Select 
                     onValueChange={field.onChange} 
                     value={field.value || ""}
@@ -424,13 +442,43 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="בחר קמפיינר" />
+                        <SelectValue placeholder={`בחר ${t('campaigner')}`} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="bg-background z-50">
                       {visibleCampaigners?.map((campaigner) => (
                         <SelectItem key={campaigner.id} value={campaigner.id}>
                           {campaigner.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Sales Person selector */}
+            <FormField
+              control={form.control}
+              name="sales_person_id"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('sales_person')}</FormLabel>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    value={field.value || ""}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder={`בחר ${t('sales_person')}`} />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent className="bg-background z-50">
+                      <SelectItem value="">ללא</SelectItem>
+                      {salesPeople?.map((salesPerson) => (
+                        <SelectItem key={salesPerson.id} value={salesPerson.id}>
+                          {salesPerson.full_name}
                         </SelectItem>
                       ))}
                     </SelectContent>

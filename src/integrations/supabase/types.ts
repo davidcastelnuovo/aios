@@ -2264,6 +2264,7 @@ export type Database = {
           notes: string | null
           overdue_notified_at: string | null
           priority: number
+          sales_person_id: string | null
           status: Database["public"]["Enums"]["task_status"]
           task_type: Database["public"]["Enums"]["task_type"] | null
           tenant_id: string
@@ -2281,6 +2282,7 @@ export type Database = {
           notes?: string | null
           overdue_notified_at?: string | null
           priority?: number
+          sales_person_id?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           task_type?: Database["public"]["Enums"]["task_type"] | null
           tenant_id: string
@@ -2298,6 +2300,7 @@ export type Database = {
           notes?: string | null
           overdue_notified_at?: string | null
           priority?: number
+          sales_person_id?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           task_type?: Database["public"]["Enums"]["task_type"] | null
           tenant_id?: string
@@ -2331,6 +2334,13 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_sales_person_id_fkey"
+            columns: ["sales_person_id"]
+            isOneToOne: false
+            referencedRelation: "sales_people"
             referencedColumns: ["id"]
           },
           {
