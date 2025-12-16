@@ -237,22 +237,23 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     mutationFn: async (values: z.infer<typeof formSchema>) => {
       console.log('EditTask: Starting update mutation', { taskId: task.id, values });
       
-      // Get agency_id from the selected client
+      // Get agency_id from the selected client if client is specified
       const selectedClient = clients?.find(c => c.id === values.client_id);
       console.log('EditTask: Selected client', { selectedClient, allClients: clients?.length });
       
-      if (!selectedClient?.agency_id) {
-        console.error('EditTask: No agency_id found for client', { clientId: values.client_id });
-        throw new Error("הלקוח שנבחר לא משויך לסוכנות");
+      // Only require agency_id if a client is selected
+      let agencyId = task.agency_id; // Keep existing agency_id as default
+      if (values.client_id && selectedClient?.agency_id) {
+        agencyId = selectedClient.agency_id;
       }
 
       const updateData = {
         title: values.title,
         notes: values.notes || null,
-        campaigner_id: values.campaigner_id,
+        campaigner_id: values.campaigner_id || null,
         sales_person_id: values.sales_person_id || null,
-        client_id: values.client_id,
-        agency_id: selectedClient.agency_id,
+        client_id: values.client_id || null,
+        agency_id: agencyId,
         due_date: values.due_date || null,
         status: values.status,
         priority: values.priority,

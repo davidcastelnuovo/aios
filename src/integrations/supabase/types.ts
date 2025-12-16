@@ -2255,7 +2255,7 @@ export type Database = {
       tasks: {
         Row: {
           agency_id: string
-          campaigner_id: string
+          campaigner_id: string | null
           client_id: string | null
           created_at: string
           due_date: string | null
@@ -2273,7 +2273,7 @@ export type Database = {
         }
         Insert: {
           agency_id: string
-          campaigner_id: string
+          campaigner_id?: string | null
           client_id?: string | null
           created_at?: string
           due_date?: string | null
@@ -2291,7 +2291,7 @@ export type Database = {
         }
         Update: {
           agency_id?: string
-          campaigner_id?: string
+          campaigner_id?: string | null
           client_id?: string | null
           created_at?: string
           due_date?: string | null
