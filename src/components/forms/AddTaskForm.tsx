@@ -466,8 +466,8 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                 <FormItem>
                   <FormLabel>{t('sales_person')}</FormLabel>
                   <Select 
-                    onValueChange={field.onChange} 
-                    value={field.value || ""}
+                    onValueChange={(value) => field.onChange(value === "none" ? "" : value)} 
+                    value={field.value || "none"}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -475,7 +475,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent className="bg-background z-50">
-                      <SelectItem value="">ללא</SelectItem>
+                      <SelectItem value="none">ללא</SelectItem>
                       {salesPeople?.map((salesPerson) => (
                         <SelectItem key={salesPerson.id} value={salesPerson.id}>
                           {salesPerson.full_name}

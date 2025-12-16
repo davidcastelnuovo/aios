@@ -777,14 +777,17 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className="text-right block">{t('sales_person')}</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <Select 
+                          onValueChange={(value) => field.onChange(value === "none" ? "" : value)} 
+                          value={field.value || "none"}
+                        >
                           <FormControl>
                             <SelectTrigger className="text-right">
                               <SelectValue placeholder={`בחר ${t('sales_person')}`} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent className="bg-background z-50" align="end">
-                            <SelectItem value="" className="text-right">ללא</SelectItem>
+                            <SelectItem value="none" className="text-right">ללא</SelectItem>
                             {salesPeople?.map((salesPerson) => (
                               <SelectItem key={salesPerson.id} value={salesPerson.id} className="text-right">
                                 {salesPerson.full_name}
