@@ -135,7 +135,7 @@ const playBubbleAnimation = () => {
 
 export default function Tasks() {
   const [editingTask, setEditingTask] = useState<any>(null);
-  const [selectedCampaigner, setSelectedCampaigner] = useState<string | null>(null);
+  const [selectedTeamMember, setSelectedTeamMember] = useState<string | null>(null);
   const [hasInitializedCampaignerFilter, setHasInitializedCampaignerFilter] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string>("all");
   const [clientSearchQuery, setClientSearchQuery] = useState<string>("");
@@ -153,16 +153,16 @@ export default function Tasks() {
   const { getFieldLabel } = useCustomFieldLabels('task');
   const { t } = useTerminology();
 
-  // Set default campaigner filter to current user's campaigner
+  // Set default team member filter to current user's campaigner
   useEffect(() => {
     if (!hasInitializedCampaignerFilter) {
       if (campaignerId) {
         // If user is a campaigner, default to their own tasks
-        setSelectedCampaigner(campaignerId);
+        setSelectedTeamMember(`campaigner:${campaignerId}`);
         setHasInitializedCampaignerFilter(true);
       } else if (!isCampaigner) {
         // If user is not a campaigner (owner/team_manager), show all tasks
-        setSelectedCampaigner("all");
+        setSelectedTeamMember("all");
         setHasInitializedCampaignerFilter(true);
       }
     }
@@ -246,6 +246,24 @@ export default function Tasks() {
       if (!tenantId) return [] as any[];
       const { data, error } = await supabase
         .from("campaigners")
+        .select("*")
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    enabled: !!tenantId,
+  });
+
+  const { data: salesPeople } = useQuery({
+    queryKey: ["sales-people", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [] as any[];
+      const { data, error } = await supabase
+        .from("sales_people")
         .select("*")
         .eq("active", true)
         .order("full_name");
@@ -409,10 +427,20 @@ export default function Tasks() {
     })));
   }
 
-  // Then filter by campaigner, tab (leads/clients), and client search
+  // Then filter by team member, tab (leads/clients), and client search
   let filteredTasks = accessibleTasks?.filter(t => {
-    const matchesCampaigner = !selectedCampaigner || selectedCampaigner === "all" || t.campaigner_id === selectedCampaigner;
-    const matchesClientSearch = !clientSearchQuery || 
+    // Parse selectedTeamMember: can be "all", "campaigner:id", or "sales:id"
+    let matchesTeamMember = true;
+    if (selectedTeamMember && selectedTeamMember !== "all") {
+      if (selectedTeamMember.startsWith("campaigner:")) {
+        const campId = selectedTeamMember.replace("campaigner:", "");
+        matchesTeamMember = t.campaigner_id === campId;
+      } else if (selectedTeamMember.startsWith("sales:")) {
+        const salesId = selectedTeamMember.replace("sales:", "");
+        matchesTeamMember = t.sales_person_id === salesId;
+      }
+    }
+    const matchesClientSearch = !clientSearchQuery ||
       t.clients?.name?.toLowerCase().includes(clientSearchQuery.toLowerCase());
     
     // Filter by tab: all, leads (tasks with lead_id), clients (tasks with client_id)
@@ -429,7 +457,7 @@ export default function Tasks() {
       matchesTab = true;
     }
     
-    return matchesCampaigner && matchesTab && matchesClientSearch;
+    return matchesTeamMember && matchesTab && matchesClientSearch;
   }) || [];
 
   // Apply hide completed filter
@@ -851,32 +879,47 @@ export default function Tasks() {
             />
           </div>
           
-          {/* Hide campaigner filter for pure campaigners */}
+          {/* Hide team member filter for pure campaigners */}
           {!(isCampaigner && !isTeamManager && !isOwner) && (
-            <div className="w-40">
-              <Select value={selectedCampaigner || "all"} onValueChange={setSelectedCampaigner}>
+            <div className="w-44">
+              <Select value={selectedTeamMember || "all"} onValueChange={setSelectedTeamMember}>
                 <SelectTrigger className="w-full h-9">
-                  <SelectValue placeholder="כל הקמפיינרים" />
+                  <SelectValue placeholder="כל אנשי הצוות" />
                 </SelectTrigger>
                 <SelectContent className="bg-background z-50">
-                  <SelectItem value="all">כל הקמפיינרים</SelectItem>
-                  {campaigners
-                    ?.filter((campaigner) => {
-                      if (selectedRole !== "all" && campaigner.role) {
-                        if (!campaigner.role.includes(selectedRole)) {
-                          return false;
-                        }
-                      }
-                      if (isCampaigner && currentUserRole && currentUserRole.length > 0 && campaigner.role) {
-                        return currentUserRole.some(userRole => campaigner.role?.includes(userRole));
-                      }
-                      return true;
-                    })
-                    .map((campaigner) => (
-                      <SelectItem key={campaigner.id} value={campaigner.id}>
-                        {campaigner.full_name}
-                      </SelectItem>
-                    ))}
+                  <SelectItem value="all">כל אנשי הצוות</SelectItem>
+                  {campaigners && campaigners.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">קמפיינרים</div>
+                      {campaigners
+                        ?.filter((campaigner) => {
+                          if (selectedRole !== "all" && campaigner.role) {
+                            if (!campaigner.role.includes(selectedRole)) {
+                              return false;
+                            }
+                          }
+                          if (isCampaigner && currentUserRole && currentUserRole.length > 0 && campaigner.role) {
+                            return currentUserRole.some(userRole => campaigner.role?.includes(userRole));
+                          }
+                          return true;
+                        })
+                        .map((campaigner) => (
+                          <SelectItem key={`campaigner:${campaigner.id}`} value={`campaigner:${campaigner.id}`}>
+                            {campaigner.full_name}
+                          </SelectItem>
+                        ))}
+                    </>
+                  )}
+                  {salesPeople && salesPeople.length > 0 && (
+                    <>
+                      <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">אנשי מכירות</div>
+                      {salesPeople.map((salesPerson) => (
+                        <SelectItem key={`sales:${salesPerson.id}`} value={`sales:${salesPerson.id}`}>
+                          {salesPerson.full_name}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>
