@@ -98,6 +98,18 @@ export default function Dashboard() {
           queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'client_tenant_financial_data',
+          filter: `tenant_id=eq.${tenantId}`
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["dashboard-stats", tenantId] });
+        }
+      )
       .subscribe();
 
     return () => {
@@ -160,7 +172,7 @@ export default function Dashboard() {
       let clientQuery = supabase.from("clients").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
       let campaignerQuery = supabase.from("campaigners").select("*", { count: "exact", head: true }).eq("tenant_id", tenantId);
       let taskQuery = supabase.from("tasks").select("*").eq("tenant_id", tenantId).eq("status", "open");
-      let activeClientsQuery = supabase.from("clients").select("id, retainer, agency_id").eq("tenant_id", tenantId).in("status", ["active", "onboarding"]);
+      let activeClientsQuery = supabase.from("clients").select("id, agency_id").eq("tenant_id", tenantId).in("status", ["active", "onboarding"]);
       let leadsQuery = supabase.from("leads").select("estimated_deal_value, monthly_budget, three_month_budget, status").eq("tenant_id", tenantId);
       
       // אם בחרנו ספק, נמצא את הקמפיינר הקשור אליו
@@ -242,11 +254,24 @@ export default function Dashboard() {
       const { data: financeData } = await financeQuery;
 
       const financeIncome = financeData?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
-      const retainers = activeClients.data?.reduce((sum, client) => sum + Number(client.retainer || 0), 0) || 0;
+      
+      // Fetch retainers from client_tenant_financial_data
+      let retainersQuery = supabase
+        .from("client_tenant_financial_data")
+        .select("client_id, retainer")
+        .eq("tenant_id", tenantId);
+      
+      // Filter by active clients
+      const activeClientIds = activeClients.data?.map(c => c.id) || [];
+      if (activeClientIds.length > 0) {
+        retainersQuery = retainersQuery.in("client_id", activeClientIds);
+      }
+      
+      const { data: retainersData } = await retainersQuery;
+      const retainers = retainersData?.reduce((sum, item) => sum + Number(item.retainer || 0), 0) || 0;
       const totalIncome = financeIncome + retainers;
       
       const financeExpense = financeData?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
-      
       
       // משיכת תשלומים ידניים מספקים
       let suppliersQuery = supabase
