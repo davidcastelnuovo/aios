@@ -61,12 +61,18 @@ import { useTerminology } from "@/hooks/useTerminology";
 const formSchema = z.object({
   title: z.string().min(1, "שם המשימה הוא שדה חובה"),
   notes: z.string().optional(),
-  campaigner_id: z.string().min(1, "יש לבחור איש צוות"),
+  campaigner_id: z.string().optional(),
   sales_person_id: z.string().optional(),
   client_id: z.string().optional(),
   due_date: z.string().optional(),
   status: z.enum(["open", "in_progress", "done"]),
   priority: z.number().min(1).max(10),
+}).refine((data) => {
+  // Require either campaigner OR sales person
+  return !!(data.campaigner_id || data.sales_person_id);
+}, {
+  message: "יש לבחור איש צוות אחראי",
+  path: ["campaigner_id"],
 });
 
 // Component to handle async signed URL loading

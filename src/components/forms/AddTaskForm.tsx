@@ -82,13 +82,13 @@ const formSchema = z.object({
   message: "יש לבחור ליד למשימת ליד",
   path: ["lead_id"],
 }).refine((data) => {
-  // For client/lead tasks, require campaigner
-  if ((data.task_category === "client" || data.task_category === "lead") && !data.campaigner_id) {
+  // For client/lead tasks, require either campaigner OR sales person
+  if ((data.task_category === "client" || data.task_category === "lead") && !data.campaigner_id && !data.sales_person_id) {
     return false;
   }
   return true;
 }, {
-  message: "יש לבחור קמפיינר",
+  message: "יש לבחור איש צוות אחראי",
   path: ["campaigner_id"],
 });
 
