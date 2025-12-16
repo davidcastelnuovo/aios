@@ -11,6 +11,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Tabs,
   TabsContent,
   TabsList,
@@ -280,6 +291,24 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
     onError: (error: Error) => {
       console.error('EditTask: Update failed', error);
       toast.error(`שגיאה בעדכון משימה: ${error.message}`);
+    },
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("tasks")
+        .delete()
+        .eq("id", task.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.success("המשימה נמחקה בהצלחה");
+      onOpenChange(false);
+    },
+    onError: (error: Error) => {
+      toast.error(`שגיאה במחיקת משימה: ${error.message}`);
     },
   });
 
@@ -1305,21 +1334,53 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
           </Form>
 
           {/* Buttons outside tabs but visible always */}
-          <div className="flex justify-start gap-2 mt-6 pt-4 border-t">
-            <Button 
-              type="button"
-              onClick={() => form.handleSubmit(onSubmit)()}
-              disabled={mutation.isPending}
-            >
-              {mutation.isPending ? "מעדכן..." : "עדכן משימה"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-            >
-              ביטול
-            </Button>
+          <div className="flex justify-between items-center mt-6 pt-4 border-t">
+            <div className="flex gap-2">
+              <Button 
+                type="button"
+                onClick={() => form.handleSubmit(onSubmit)()}
+                disabled={mutation.isPending}
+              >
+                {mutation.isPending ? "מעדכן..." : "עדכן משימה"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
+                ביטול
+              </Button>
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={deleteTaskMutation.isPending}
+                >
+                  <Trash2 className="h-4 w-4 ml-2" />
+                  {deleteTaskMutation.isPending ? "מוחק..." : "מחק משימה"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent dir="rtl">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>האם אתה בטוח?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    פעולה זו תמחק את המשימה לצמיתות. לא ניתן לבטל פעולה זו.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="flex-row-reverse gap-2">
+                  <AlertDialogCancel>ביטול</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={() => deleteTaskMutation.mutate()}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    מחק
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </Tabs>
       </DialogContent>
