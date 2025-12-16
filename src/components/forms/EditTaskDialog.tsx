@@ -56,11 +56,13 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useTerminology } from "@/hooks/useTerminology";
 
 const formSchema = z.object({
   title: z.string().min(1, "שם המשימה הוא שדה חובה"),
   notes: z.string().optional(),
-  campaigner_id: z.string().min(1, "יש לבחור קמפיינר"),
+  campaigner_id: z.string().min(1, "יש לבחור איש צוות"),
+  sales_person_id: z.string().optional(),
   client_id: z.string().optional(),
   due_date: z.string().optional(),
   status: z.enum(["open", "in_progress", "done"]),
@@ -154,6 +156,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
   
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
+  const { t } = useTerminology();
 
   const { data: campaigners } = useQuery({
     queryKey: ["campaigners"],
@@ -175,6 +178,19 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         .from("clients")
         .select("*")
         .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: salesPeople } = useQuery({
+    queryKey: ["sales-people"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("sales_people")
+        .select("*")
+        .eq("active", true)
+        .order("full_name");
       if (error) throw error;
       return data;
     },
@@ -203,6 +219,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       title: task.title || "",
       notes: task.notes || "",
       campaigner_id: task.campaigner_id || "",
+      sales_person_id: task.sales_person_id || "",
       client_id: task.client_id || "",
       due_date: task.due_date || "",
       status: task.status || "open",
@@ -227,6 +244,7 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
         title: values.title,
         notes: values.notes || null,
         campaigner_id: values.campaigner_id,
+        sales_person_id: values.sales_person_id || null,
         client_id: values.client_id,
         agency_id: selectedClient.agency_id,
         due_date: values.due_date || null,
@@ -733,11 +751,11 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
                     name="campaigner_id"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-right block">קמפיינר אחראי</FormLabel>
+                        <FormLabel className="text-right block">{t('campaigner')} אחראי</FormLabel>
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger className="text-right">
-                              <SelectValue placeholder="בחר קמפיינר" />
+                              <SelectValue placeholder={`בחר ${t('campaigner')}`} />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent className="bg-background z-50" align="end">
@@ -755,62 +773,88 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
 
                   <FormField
                     control={form.control}
-                    name="client_id"
+                    name="sales_person_id"
                     render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel className="text-right block">לקוח</FormLabel>
-                        <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant="outline"
-                                role="combobox"
-                                className={cn(
-                                  "justify-between text-right",
-                                  !field.value && "text-muted-foreground"
-                                )}
-                              >
-                                 {field.value
-                                   ? clients?.find((client) => client.id === field.value)?.name
-                                   : "בחר לקוח"}
-                                 <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-[300px] p-0 bg-background" align="start">
-                            <Command>
-                              <CommandInput placeholder="חפש לקוח..." />
-                              <CommandList>
-                                <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
-                                <CommandGroup>
-                                  {clients?.map((client) => (
-                                    <CommandItem
-                                      key={client.id}
-                                      value={client.name}
-                                      onSelect={() => {
-                                        form.setValue("client_id", client.id);
-                                        setClientPopoverOpen(false);
-                                      }}
-                                    >
-                                      <Check
-                                        className={cn(
-                                          "mr-2 h-4 w-4",
-                                          field.value === client.id ? "opacity-100" : "opacity-0"
-                                        )}
-                                      />
-                                      {client.name}
-                                    </CommandItem>
-                                  ))}
-                                </CommandGroup>
-                              </CommandList>
-                            </Command>
-                          </PopoverContent>
-                        </Popover>
+                      <FormItem>
+                        <FormLabel className="text-right block">{t('sales_person')}</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                          <FormControl>
+                            <SelectTrigger className="text-right">
+                              <SelectValue placeholder={`בחר ${t('sales_person')}`} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent className="bg-background z-50" align="end">
+                            <SelectItem value="" className="text-right">ללא</SelectItem>
+                            {salesPeople?.map((salesPerson) => (
+                              <SelectItem key={salesPerson.id} value={salesPerson.id} className="text-right">
+                                {salesPerson.full_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="client_id"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel className="text-right block">לקוח</FormLabel>
+                      <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              className={cn(
+                                "justify-between text-right",
+                                !field.value && "text-muted-foreground"
+                              )}
+                            >
+                               {field.value
+                                 ? clients?.find((client) => client.id === field.value)?.name
+                                 : "בחר לקוח"}
+                               <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[300px] p-0 bg-background" align="start">
+                          <Command>
+                            <CommandInput placeholder="חפש לקוח..." />
+                            <CommandList>
+                              <CommandEmpty>לא נמצאו לקוחות</CommandEmpty>
+                              <CommandGroup>
+                                {clients?.map((client) => (
+                                  <CommandItem
+                                    key={client.id}
+                                    value={client.name}
+                                    onSelect={() => {
+                                      form.setValue("client_id", client.id);
+                                      setClientPopoverOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        field.value === client.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {client.name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </TabsContent>
 
               {/* Tab 2: Calendar */}
