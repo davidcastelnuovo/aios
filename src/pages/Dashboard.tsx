@@ -255,20 +255,20 @@ export default function Dashboard() {
 
       const financeIncome = financeData?.filter(f => f.type === "income").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
       
-      // Fetch retainers from client_tenant_financial_data
-      let retainersQuery = supabase
-        .from("client_tenant_financial_data")
-        .select("client_id, retainer")
-        .eq("tenant_id", tenantId);
-      
-      // Filter by active clients
+      // Fetch retainers from client_tenant_financial_data - only for active clients
       const activeClientIds = activeClients.data?.map(c => c.id) || [];
+      let retainers = 0;
+      
       if (activeClientIds.length > 0) {
-        retainersQuery = retainersQuery.in("client_id", activeClientIds);
+        const { data: retainersData } = await supabase
+          .from("client_tenant_financial_data")
+          .select("client_id, retainer")
+          .eq("tenant_id", tenantId)
+          .in("client_id", activeClientIds);
+        
+        retainers = retainersData?.reduce((sum, item) => sum + Number(item.retainer || 0), 0) || 0;
       }
       
-      const { data: retainersData } = await retainersQuery;
-      const retainers = retainersData?.reduce((sum, item) => sum + Number(item.retainer || 0), 0) || 0;
       const totalIncome = financeIncome + retainers;
       
       const financeExpense = financeData?.filter(f => f.type === "expense").reduce((sum, f) => sum + Number(f.amount), 0) || 0;
