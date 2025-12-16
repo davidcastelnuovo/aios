@@ -345,12 +345,14 @@ export function ImportLeadsWithMapping() {
 
   const mapStatus = (val: string) => {
     const v = val.toLowerCase().replace(/[\s_\-]/g, '');
-    if (v.includes("closed") || v.includes("נסגר") || v.includes("won")) return "closed";
-    if (v.includes("lost") || v.includes("הפסד") || v.includes("לארלוונטי")) return "lost";
+    // lead_status enum values: new/contacted/follow_up/proposal_sent/meeting_scheduled/negotiation/closed/transferred_to_onboarding
+    if (v.includes("closed") || v.includes("נסגר") || v.includes("won") || v.includes("lost") || v.includes("הפסד") || v.includes("לארלוונטי")) return "closed";
     if (v.includes("proposal") || v.includes("הצעה")) return "proposal_sent";
+    if (v.includes("meeting") || v.includes("פגישה")) return "meeting_scheduled";
+    if (v.includes("negotiation") || v.includes("משאומתן") || v.includes("משא ומתן")) return "negotiation";
     if (v.includes("contact") || v.includes("פניה")) return "contacted";
     if (v.includes("follow") || v.includes("פולואפ")) return "follow_up";
-    if (v.includes("qualified")) return "qualified";
+    if (v.includes("qualified")) return "contacted";
     return "new";
   };
 
