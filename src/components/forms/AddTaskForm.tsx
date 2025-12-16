@@ -243,15 +243,27 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         finalAgencyId = selectedClient.agency_id;
         entityName = selectedClient.name;
       } else if (values.task_category === "lead") {
-        // Get agency_id from the selected lead
-        selectedLead = leads?.find(l => l.id === values.lead_id);
-        if (selectedLead?.agency_id) {
+        // Get lead from DB (avoid stale UI state) to ensure FK exists
+        const { data: leadRow, error: leadError } = await supabase
+          .from("leads")
+          .select("id, tenant_id, agency_id, company_name, contact_name")
+          .eq("id", values.lead_id)
+          .maybeSingle();
+
+        if (leadError) throw leadError;
+        if (!leadRow?.id) {
+          throw new Error("הליד לא נמצא (כנראה נמחק/הומר ללקוח). רענן את הדף ונסה שוב.");
+        }
+
+        selectedLead = leadRow;
+
+        if (selectedLead.agency_id) {
           finalAgencyId = selectedLead.agency_id;
         } else if (agencies && agencies.length > 0) {
           // Fallback to first available agency
           finalAgencyId = agencies[0].id;
         }
-        entityName = selectedLead?.company_name || selectedLead?.contact_name || 'ליד';
+        entityName = selectedLead.company_name || selectedLead.contact_name || 'ליד';
         if (!finalAgencyId) {
           throw new Error("לא נמצאה סוכנות לשיוך המשימה");
         }
@@ -295,12 +307,13 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       if (values.task_category === "client" && selectedClient) {
         tenantId = selectedClient.tenant_id;
       } else if (values.task_category === "lead" && selectedLead) {
-        tenantId = selectedLead.tenant_id;
+        tenantId = selectedLead.tenant_id || currentTenantId;
       } else {
         // For quick tasks, use current tenant
         if (!currentTenantId) throw new Error("לא נמצא טנט פעיל");
         tenantId = currentTenantId;
       }
+      if (!tenantId) throw new Error("לא נמצא טנט פעיל");
       
       const { error } = await supabase.from("tasks").insert([{
         title: values.title,
