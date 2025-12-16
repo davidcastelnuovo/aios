@@ -305,7 +305,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       const { error } = await supabase.from("tasks").insert([{
         title: values.title,
         notes: values.notes || null,
-        campaigner_id: finalCampaignerId,
+        campaigner_id: finalCampaignerId || null,
         sales_person_id: values.sales_person_id || null,
         client_id: values.task_category === "client" ? values.client_id : null,
         lead_id: values.task_category === "lead" ? values.lead_id : null,
