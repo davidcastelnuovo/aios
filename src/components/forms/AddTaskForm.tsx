@@ -428,72 +428,100 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
               )}
             />
 
-            {/* Combined Team Member selector - includes both campaigners and sales people */}
+            {/* Combined Team Member selector with search */}
             <FormField
               control={form.control}
               name="campaigner_id"
               render={({ field }) => {
+                const [teamMemberPopoverOpen, setTeamMemberPopoverOpen] = useState(false);
+                
                 // Combine campaigners and sales people into one list
                 const allTeamMembers = [
-                  ...(visibleCampaigners?.map(c => ({ id: `campaigner:${c.id}`, name: c.full_name, type: 'campaigner' as const })) || []),
-                  ...(salesPeople?.map(s => ({ id: `sales:${s.id}`, name: s.full_name, type: 'sales' as const })) || []),
+                  ...(visibleCampaigners?.map(c => ({ id: c.id, prefixedId: `campaigner:${c.id}`, name: c.full_name, type: 'campaigner' as const })) || []),
+                  ...(salesPeople?.map(s => ({ id: s.id, prefixedId: `sales:${s.id}`, name: s.full_name, type: 'sales' as const })) || []),
                 ];
                 
-                // Find the current value in combined format
-                const currentValue = field.value 
-                  ? `campaigner:${field.value}` 
-                  : form.getValues('sales_person_id') 
-                    ? `sales:${form.getValues('sales_person_id')}` 
-                    : "";
+                // Find selected member
+                const selectedMember = allTeamMembers.find(m => 
+                  (m.type === 'campaigner' && m.id === field.value) ||
+                  (m.type === 'sales' && m.id === form.getValues('sales_person_id'))
+                );
                 
                 return (
-                  <FormItem>
+                  <FormItem className="flex flex-col">
                     <FormLabel>איש צוות אחראי</FormLabel>
-                    <Select 
-                      onValueChange={(value) => {
-                        if (value.startsWith('campaigner:')) {
-                          field.onChange(value.replace('campaigner:', ''));
-                          form.setValue('sales_person_id', '');
-                        } else if (value.startsWith('sales:')) {
-                          field.onChange('');
-                          form.setValue('sales_person_id', value.replace('sales:', ''));
-                        }
-                      }} 
-                      value={currentValue}
-                      disabled={isCampaigner && !canSelectAnyCampaigner}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="בחר איש צוות" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-background z-50">
-                        {visibleCampaigners && visibleCampaigners.length > 0 && (
-                          <>
-                            <SelectItem value="__label_campaigners" disabled className="font-semibold text-muted-foreground">
-                              {t('campaigner', true)}
-                            </SelectItem>
-                            {visibleCampaigners.map((campaigner) => (
-                              <SelectItem key={`campaigner:${campaigner.id}`} value={`campaigner:${campaigner.id}`}>
-                                {campaigner.full_name}
-                              </SelectItem>
-                            ))}
-                          </>
-                        )}
-                        {salesPeople && salesPeople.length > 0 && (
-                          <>
-                            <SelectItem value="__label_sales" disabled className="font-semibold text-muted-foreground">
-                              {t('sales_person', true)}
-                            </SelectItem>
-                            {salesPeople.map((salesPerson) => (
-                              <SelectItem key={`sales:${salesPerson.id}`} value={`sales:${salesPerson.id}`}>
-                                {salesPerson.full_name}
-                              </SelectItem>
-                            ))}
-                          </>
-                        )}
-                      </SelectContent>
-                    </Select>
+                    <Popover open={teamMemberPopoverOpen} onOpenChange={setTeamMemberPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className={cn(
+                              "justify-between",
+                              !selectedMember && "text-muted-foreground"
+                            )}
+                            disabled={isCampaigner && !canSelectAnyCampaigner}
+                          >
+                            {selectedMember ? selectedMember.name : "בחר איש צוות"}
+                            <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[300px] p-0 bg-background" align="start">
+                        <Command>
+                          <CommandInput placeholder="חפש איש צוות..." />
+                          <CommandList>
+                            <CommandEmpty>לא נמצאו אנשי צוות</CommandEmpty>
+                            {visibleCampaigners && visibleCampaigners.length > 0 && (
+                              <CommandGroup heading={t('campaigner', true)}>
+                                {visibleCampaigners.map((campaigner) => (
+                                  <CommandItem
+                                    key={`campaigner:${campaigner.id}`}
+                                    value={campaigner.full_name}
+                                    onSelect={() => {
+                                      field.onChange(campaigner.id);
+                                      form.setValue('sales_person_id', '');
+                                      setTeamMemberPopoverOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        field.value === campaigner.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {campaigner.full_name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
+                            {salesPeople && salesPeople.length > 0 && (
+                              <CommandGroup heading={t('sales_person', true)}>
+                                {salesPeople.map((salesPerson) => (
+                                  <CommandItem
+                                    key={`sales:${salesPerson.id}`}
+                                    value={salesPerson.full_name}
+                                    onSelect={() => {
+                                      field.onChange('');
+                                      form.setValue('sales_person_id', salesPerson.id);
+                                      setTeamMemberPopoverOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        form.getValues('sales_person_id') === salesPerson.id ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {salesPerson.full_name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 );
