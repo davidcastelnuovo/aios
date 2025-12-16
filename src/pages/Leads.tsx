@@ -494,15 +494,14 @@ export default function Leads() {
   const PIPELINE_STAGES = useMemo(() => {
     if (!pipelineStagesData || pipelineStagesData.length === 0) {
       // Fallback to defaults while loading
-      return [
-        { id: "new", label: "חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500" },
-        { id: "contacted", label: "יצרנו קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300", borderColor: "border-purple-500" },
-        { id: "meeting_scheduled", label: "נקבעה פגישה", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300", borderColor: "border-yellow-500" },
-        { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300", borderColor: "border-orange-500" },
-        { id: "negotiation", label: "משא ומתן", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300", borderColor: "border-green-500" },
-        { id: "won", label: "נסגר בהצלחה", color: "bg-emerald-100 dark:bg-emerald-900", bgClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 border-emerald-300", borderColor: "border-emerald-500" },
-        { id: "lost", label: "אבוד", color: "bg-red-100 dark:bg-red-900", bgClass: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100 border-red-300", borderColor: "border-red-500" },
-      ];
+       return [
+         { id: "new", label: "חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500" },
+         { id: "contacted", label: "יצרנו קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300", borderColor: "border-purple-500" },
+         { id: "meeting_scheduled", label: "נקבעה פגישה", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300", borderColor: "border-yellow-500" },
+         { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300", borderColor: "border-orange-500" },
+         { id: "negotiation", label: "משא ומתן", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300", borderColor: "border-green-500" },
+         { id: "closed", label: "נסגר", color: "bg-emerald-100 dark:bg-emerald-900", bgClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 border-emerald-300", borderColor: "border-emerald-500" },
+       ];
     }
     return pipelineStagesData.map(stage => ({
       id: stage.stage_key,
@@ -682,7 +681,7 @@ export default function Leads() {
   }, [leads]);
 
   const updateLeadStatus = useMutation({
-    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" }) => {
+    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "meeting_scheduled" | "negotiation" | "transferred_to_onboarding" | "closed" }) => {
       // Get lead data before update to know old status
       const { data: leadBefore } = await supabase
         .from("leads")
@@ -1553,17 +1552,16 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   
   // Convert dynamic pipeline stages to format compatible with existing code
   const PIPELINE_STAGES = useMemo(() => {
-    if (!pipelineStagesData || pipelineStagesData.length === 0) {
-      return [
-        { id: "new", label: "חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500" },
-        { id: "contacted", label: "יצרנו קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300", borderColor: "border-purple-500" },
-        { id: "meeting_scheduled", label: "נקבעה פגישה", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300", borderColor: "border-yellow-500" },
-        { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300", borderColor: "border-orange-500" },
-        { id: "negotiation", label: "משא ומתן", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300", borderColor: "border-green-500" },
-        { id: "won", label: "נסגר בהצלחה", color: "bg-emerald-100 dark:bg-emerald-900", bgClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 border-emerald-300", borderColor: "border-emerald-500" },
-        { id: "lost", label: "אבוד", color: "bg-red-100 dark:bg-red-900", bgClass: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100 border-red-300", borderColor: "border-red-500" },
-      ];
-    }
+     if (!pipelineStagesData || pipelineStagesData.length === 0) {
+       return [
+         { id: "new", label: "חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500" },
+         { id: "contacted", label: "יצרנו קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300", borderColor: "border-purple-500" },
+         { id: "meeting_scheduled", label: "נקבעה פגישה", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300", borderColor: "border-yellow-500" },
+         { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300", borderColor: "border-orange-500" },
+         { id: "negotiation", label: "משא ומתן", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300", borderColor: "border-green-500" },
+         { id: "closed", label: "נסגר", color: "bg-emerald-100 dark:bg-emerald-900", bgClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 border-emerald-300", borderColor: "border-emerald-500" },
+       ];
+     }
     return pipelineStagesData.map(stage => ({
       id: stage.stage_key,
       label: stage.label,
@@ -1575,7 +1573,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   }, [pipelineStagesData]);
 
   const updateLeadStatus = useMutation({
-    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" }) => {
+    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "meeting_scheduled" | "negotiation" | "transferred_to_onboarding" | "closed" }) => {
       const { error } = await supabase
         .from("leads")
         .update({ status: newStatus })
@@ -1650,7 +1648,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   });
 
   const bulkUpdateStatus = useMutation({
-    mutationFn: async ({ leadIds, status }: { leadIds: string[]; status: "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" }) => {
+    mutationFn: async ({ leadIds, status }: { leadIds: string[]; status: "new" | "contacted" | "follow_up" | "proposal_sent" | "meeting_scheduled" | "negotiation" | "transferred_to_onboarding" | "closed" }) => {
       const { error } = await supabase
         .from("leads")
         .update({ status })
