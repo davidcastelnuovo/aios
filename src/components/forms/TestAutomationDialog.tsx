@@ -148,6 +148,13 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
           testData.company_name = selectedClient?.name;
           testData.phone = selectedClient?.phone;
         }
+        
+        // For lead_status_changed automations, include the new_status from conditions
+        // so the automation's conditions will be met during test
+        if (automation.trigger_type === "lead_status_changed" && automation.conditions?.new_status) {
+          testData.new_status = automation.conditions.new_status;
+          testData.status = automation.conditions.new_status;
+        }
       } else if (testMode === "task") {
         if (!selectedTaskId) {
           throw new Error("יש לבחור משימה לבדיקה");
