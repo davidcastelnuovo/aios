@@ -105,20 +105,24 @@ export function ManagePipelineStagesDialog({ trigger, onDialogOpen }: { trigger?
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
     if (isOpen && onDialogOpen) {
-      onDialogOpen();
+      setTimeout(() => {
+        onDialogOpen();
+      }, 0);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        {trigger || (
-          <Button variant="outline" size="sm">
-            <Settings2 className="w-4 h-4 ml-2" />
-            ניהול שלבי משפך
-          </Button>
-        )}
-      </DialogTrigger>
+      <div onPointerDown={(e) => e.stopPropagation()}>
+        <DialogTrigger asChild onClick={(e) => e.stopPropagation()}>
+          {trigger || (
+            <Button variant="outline" size="sm">
+              <Settings2 className="w-4 h-4 ml-2" />
+              ניהול שלבי משפך
+            </Button>
+          )}
+        </DialogTrigger>
+      </div>
       <DialogContent className="max-w-md" dir="rtl">
         <DialogHeader>
           <DialogTitle>ניהול שלבי משפך</DialogTitle>

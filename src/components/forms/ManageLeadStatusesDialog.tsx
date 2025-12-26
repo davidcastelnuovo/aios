@@ -160,20 +160,24 @@ export function ManageLeadStatusesDialog({ trigger, onDialogOpen }: ManageLeadSt
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
     if (isOpen && onDialogOpen) {
-      onDialogOpen();
+      setTimeout(() => {
+        onDialogOpen();
+      }, 0);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        {trigger || (
-          <Button variant="outline" size="sm" className="gap-2">
-            <Settings2 className="h-4 w-4" />
-            ניהול סטטוסים
-          </Button>
-        )}
-      </DialogTrigger>
+      <div onPointerDown={(e) => e.stopPropagation()}>
+        <DialogTrigger asChild onClick={(e) => e.stopPropagation()}>
+          {trigger || (
+            <Button variant="outline" size="sm" className="gap-2">
+              <Settings2 className="h-4 w-4" />
+              ניהול סטטוסים
+            </Button>
+          )}
+        </DialogTrigger>
+      </div>
       <DialogContent className="max-w-md" dir="rtl">
         <DialogHeader>
           <DialogTitle>ניהול סטטוסי תגובה</DialogTitle>
