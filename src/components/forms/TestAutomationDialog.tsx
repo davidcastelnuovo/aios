@@ -597,15 +597,15 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                   </div>
                 ) : (
                   <>
-                    {testResult.results?.map((result: any, idx: number) => (
+                    {testResult.results?.filter((result: any) => result !== null).map((result: any, idx: number) => (
                       <div key={idx} className="flex items-center gap-2">
-                        {result.success ? (
+                        {result?.success ? (
                           <CheckCircle className="h-4 w-4 text-green-500" />
                         ) : (
                           <XCircle className="h-4 w-4 text-destructive" />
                         )}
-                        <span>{result.automation_name}</span>
-                        {result.error && (
+                        <span>{result?.automation_name || 'אוטומציה'}</span>
+                        {result?.error && (
                           <span className="text-xs text-destructive">({result.error})</span>
                         )}
                       </div>
@@ -616,7 +616,7 @@ export function TestAutomationDialog({ automation, open, onOpenChange }: TestAut
                         <span>נמצאו {testResult.automations_found} אוטומציות מתאימות</span>
                       </div>
                     )}
-                    {testResult.results?.length > 0 && testResult.results.every((r: any) => r.success) && (
+                    {testResult.results?.length > 0 && testResult.results.filter((r: any) => r !== null).every((r: any) => r?.success) && (
                       <div className="flex items-center gap-2 text-green-600 font-medium pt-2 border-t">
                         <CheckCircle className="h-5 w-5" />
                         <span>האוטומציה הופעלה בהצלחה!</span>
