@@ -49,6 +49,8 @@ const formSchema = z.object({
     "client_status_changed",
     "onboarding_status_changed",
     "meeting_created",
+    "meeting_day_after",
+    "meeting_same_day",
     "task_calendar_created",
     "task_overdue",
   ]),
@@ -99,6 +101,8 @@ const TRIGGER_OPTIONS = [
   { value: "client_status_changed", label: "סטטוס לקוח השתנה" },
   { value: "onboarding_status_changed", label: "סטטוס קליטה השתנה" },
   { value: "meeting_created", label: "נוצרה פגישה" },
+  { value: "meeting_day_after", label: "יום לאחר קביעת פגישה" },
+  { value: "meeting_same_day", label: "ביום הפגישה" },
   { value: "task_calendar_created", label: "משימה נוספה ליומן" },
   { value: "task_overdue", label: "משימה לא הושלמה בזמן" },
 ];
