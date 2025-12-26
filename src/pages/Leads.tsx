@@ -178,6 +178,8 @@ function LeadCard({
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [stageSelectOpen, setStageSelectOpen] = useState(false);
   const [responseSelectOpen, setResponseSelectOpen] = useState(false);
+  const [manageStagesOpen, setManageStagesOpen] = useState(false);
+  const [manageStatusesOpen, setManageStatusesOpen] = useState(false);
   const isMobile = useIsMobile();
 
   const handleDelete = async (id: string) => {
@@ -283,18 +285,17 @@ function LeadCard({
                 </SelectItem>
               ))}
               <div className="border-t mt-1 pt-1">
-                <ManagePipelineStagesDialog 
-                  trigger={
-                    <button 
-                      type="button"
-                      className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
-                    >
-                      <Settings2 className="h-4 w-4" />
-                      ניהול שלבי משפך
-                    </button>
-                  }
-                  onDialogOpen={() => setStageSelectOpen(false)}
-                />
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
+                  onClick={() => {
+                    setStageSelectOpen(false);
+                    setManageStagesOpen(true);
+                  }}
+                >
+                  <Settings2 className="h-4 w-4" />
+                  ניהול שלבי משפך
+                </button>
               </div>
             </SelectContent>
           </Select>
@@ -329,18 +330,17 @@ function LeadCard({
                 </SelectItem>
               ))}
               <div className="border-t mt-1 pt-1">
-                <ManageLeadStatusesDialog 
-                  trigger={
-                    <button 
-                      type="button"
-                      className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
-                    >
-                      <Settings2 className="h-4 w-4" />
-                      ניהול סטטוסים
-                    </button>
-                  }
-                  onDialogOpen={() => setResponseSelectOpen(false)}
-                />
+                <button
+                  type="button"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
+                  onClick={() => {
+                    setResponseSelectOpen(false);
+                    setManageStatusesOpen(true);
+                  }}
+                >
+                  <Settings2 className="h-4 w-4" />
+                  ניהול סטטוסים
+                </button>
               </div>
             </SelectContent>
           </Select>
@@ -379,6 +379,18 @@ function LeadCard({
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
+
+        {/* Management dialogs (rendered outside the SelectContent so they don't unmount when the Select closes) */}
+        <ManagePipelineStagesDialog
+          open={manageStagesOpen}
+          onOpenChange={setManageStagesOpen}
+          showTrigger={false}
+        />
+        <ManageLeadStatusesDialog
+          open={manageStatusesOpen}
+          onOpenChange={setManageStatusesOpen}
+          showTrigger={false}
+        />
       </CardContent>
     </Card>
   );

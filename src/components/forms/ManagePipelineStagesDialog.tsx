@@ -87,11 +87,34 @@ function StageRow({
   );
 }
 
-export function ManagePipelineStagesDialog({ trigger, onDialogOpen }: { trigger?: React.ReactNode; onDialogOpen?: () => void }) {
-  const [open, setOpen] = useState(false);
+interface ManagePipelineStagesDialogProps {
+  trigger?: React.ReactNode;
+  /**
+   * Optional: called when the dialog is opened. Useful when the trigger lives inside another overlay (e.g. Select).
+   */
+  onDialogOpen?: () => void;
+  /** Controlled open state */
+  open?: boolean;
+  /** Controlled open handler */
+  onOpenChange?: (open: boolean) => void;
+  /** Hide the default trigger button (useful when controlling open externally) */
+  showTrigger?: boolean;
+}
+
+export function ManagePipelineStagesDialog({
+  trigger,
+  onDialogOpen,
+  open: controlledOpen,
+  onOpenChange: onControlledOpenChange,
+  showTrigger = true,
+}: ManagePipelineStagesDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onControlledOpenChange ?? setInternalOpen;
+
   const [newLabel, setNewLabel] = useState("");
   const [newColor, setNewColor] = useState("#3b82f6");
-  
+
   const { stages, isLoading } = useLeadPipelineStages();
   const { updateStage, createStage, deleteStage } = useLeadPipelineStageMutations();
 
@@ -104,17 +127,13 @@ export function ManagePipelineStagesDialog({ trigger, onDialogOpen }: { trigger?
 
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
-    if (isOpen && onDialogOpen) {
-      setTimeout(() => {
-        onDialogOpen();
-      }, 0);
-    }
+    if (isOpen && onDialogOpen) onDialogOpen();
   };
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <div onPointerDown={(e) => e.stopPropagation()}>
-        <DialogTrigger asChild onClick={(e) => e.stopPropagation()}>
+      {showTrigger && (
+        <DialogTrigger asChild>
           {trigger || (
             <Button variant="outline" size="sm">
               <Settings2 className="w-4 h-4 ml-2" />
@@ -122,7 +141,7 @@ export function ManagePipelineStagesDialog({ trigger, onDialogOpen }: { trigger?
             </Button>
           )}
         </DialogTrigger>
-      </div>
+      )}
       <DialogContent className="max-w-md" dir="rtl">
         <DialogHeader>
           <DialogTitle>ניהול שלבי משפך</DialogTitle>
