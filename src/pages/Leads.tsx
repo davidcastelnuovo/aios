@@ -1570,16 +1570,20 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   const { isFieldVisible } = useCustomFieldLabels('lead');
   const { tenantId } = useCurrentTenant();
   
+  // State for management dialogs
+  const [manageStagesOpen, setManageStagesOpen] = useState(false);
+  const [manageStatusesOpen, setManageStatusesOpen] = useState(false);
+  
   // Convert dynamic pipeline stages to format compatible with existing code
   const PIPELINE_STAGES = useMemo(() => {
      if (!pipelineStagesData || pipelineStagesData.length === 0) {
        return [
-         { id: "new", label: "חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500" },
-         { id: "contacted", label: "יצרנו קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300", borderColor: "border-purple-500" },
-         { id: "meeting_scheduled", label: "נקבעה פגישה", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300", borderColor: "border-yellow-500" },
-         { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300", borderColor: "border-orange-500" },
-         { id: "negotiation", label: "משא ומתן", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300", borderColor: "border-green-500" },
-         { id: "closed", label: "נסגר", color: "bg-emerald-100 dark:bg-emerald-900", bgClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 border-emerald-300", borderColor: "border-emerald-500" },
+         { id: "new", label: "חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500", hexColor: "#3b82f6" },
+         { id: "contacted", label: "יצרנו קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300", borderColor: "border-purple-500", hexColor: "#a855f7" },
+         { id: "meeting_scheduled", label: "נקבעה פגישה", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300", borderColor: "border-yellow-500", hexColor: "#eab308" },
+         { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300", borderColor: "border-orange-500", hexColor: "#f97316" },
+         { id: "negotiation", label: "משא ומתן", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300", borderColor: "border-green-500", hexColor: "#22c55e" },
+         { id: "closed", label: "נסגר", color: "bg-emerald-100 dark:bg-emerald-900", bgClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 border-emerald-300", borderColor: "border-emerald-500", hexColor: "#10b981" },
        ];
      }
     return pipelineStagesData.map(stage => ({
@@ -1823,34 +1827,54 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
               id: "status", 
               label: "שלב במשפך", 
               width: 150,
-              render: (lead: any) => (
-                <Select
-                  value={lead.status}
-                  onValueChange={(value) => 
-                    updateLeadStatus.mutate({ 
-                      leadId: lead.id, 
-                      newStatus: value as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
-                    })
-                  }
-                >
-                  <SelectTrigger className={`h-8 w-full border-2 ${
-                    PIPELINE_STAGES.find(s => s.id === lead.status)?.bgClass || ""
-                  }`}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background z-50">
-                    {PIPELINE_STAGES.map((s) => (
-                      <SelectItem 
-                        key={s.id} 
-                        value={s.id}
-                        className={s.bgClass}
-                      >
-                        {s.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )
+              render: (lead: any) => {
+                const stage = PIPELINE_STAGES.find(s => s.id === lead.status);
+                return (
+                  <Select
+                    value={lead.status}
+                    onValueChange={(value) => 
+                      updateLeadStatus.mutate({ 
+                        leadId: lead.id, 
+                        newStatus: value as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
+                      })
+                    }
+                  >
+                    <SelectTrigger 
+                      className="h-8 w-full border-2"
+                      style={{ 
+                        backgroundColor: stage?.hexColor || undefined,
+                        color: lead.status && stage?.hexColor ? '#fff' : undefined 
+                      }}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="bg-background z-50">
+                      {PIPELINE_STAGES.map((s) => (
+                        <SelectItem 
+                          key={s.id} 
+                          value={s.id}
+                          style={{ backgroundColor: s.hexColor, color: s.hexColor ? '#fff' : undefined }}
+                        >
+                          {s.label}
+                        </SelectItem>
+                      ))}
+                      <div className="border-t mt-1 pt-1">
+                        <button
+                          type="button"
+                          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setManageStagesOpen(true);
+                          }}
+                        >
+                          <Settings2 className="h-4 w-4" />
+                          ניהול שלבי משפך
+                        </button>
+                      </div>
+                    </SelectContent>
+                  </Select>
+                );
+              }
             },
             { 
               id: "response_status", 
@@ -1888,6 +1912,19 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                           {s.label}
                         </SelectItem>
                       ))}
+                      <div className="border-t mt-1 pt-1">
+                        <button
+                          type="button"
+                          className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setManageStatusesOpen(true);
+                          }}
+                        >
+                          <Settings2 className="h-4 w-4" />
+                          ניהול סטטוסים
+                        </button>
+                      </div>
                     </SelectContent>
                   </Select>
                 );
@@ -1917,6 +1954,18 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
           }}
         />
       </div>
+      
+      {/* Management dialogs */}
+      <ManagePipelineStagesDialog
+        open={manageStagesOpen}
+        onOpenChange={setManageStagesOpen}
+        showTrigger={false}
+      />
+      <ManageLeadStatusesDialog
+        open={manageStatusesOpen}
+        onOpenChange={setManageStatusesOpen}
+        showTrigger={false}
+      />
      </div>
    );
  }
