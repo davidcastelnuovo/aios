@@ -132,9 +132,10 @@ function StatusRow({ status, onUpdate, onDelete }: StatusRowProps) {
 
 interface ManageLeadStatusesDialogProps {
   trigger?: React.ReactNode;
+  onDialogOpen?: () => void;
 }
 
-export function ManageLeadStatusesDialog({ trigger }: ManageLeadStatusesDialogProps) {
+export function ManageLeadStatusesDialog({ trigger, onDialogOpen }: ManageLeadStatusesDialogProps) {
   const [open, setOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [newColor, setNewColor] = useState("#3b82f6");
@@ -156,8 +157,15 @@ export function ManageLeadStatusesDialog({ trigger }: ManageLeadStatusesDialogPr
     setNewColor("#3b82f6");
   };
 
+  const handleOpenChange = (isOpen: boolean) => {
+    setOpen(isOpen);
+    if (isOpen && onDialogOpen) {
+      onDialogOpen();
+    }
+  };
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger || (
           <Button variant="outline" size="sm" className="gap-2">
