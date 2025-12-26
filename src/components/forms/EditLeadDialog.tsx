@@ -71,6 +71,8 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
   const [newUpdate, setNewUpdate] = useState("");
   const [editingUpdateId, setEditingUpdateId] = useState<string | null>(null);
   const [editingUpdateContent, setEditingUpdateContent] = useState("");
+  const [responseSelectOpen, setResponseSelectOpen] = useState(false);
+  const [stageSelectOpen, setStageSelectOpen] = useState(false);
   
   // Meeting scheduling state
   const [meetingDate, setMeetingDate] = useState<Date | undefined>(undefined);
@@ -696,7 +698,12 @@ const updateMutation = useMutation({
                       return (
                         <FormItem>
                           <FormLabel className="text-sm font-medium">סטטוס תגובה</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select 
+                            onValueChange={field.onChange} 
+                            defaultValue={field.value}
+                            open={responseSelectOpen}
+                            onOpenChange={setResponseSelectOpen}
+                          >
                             <FormControl>
                               <SelectTrigger 
                                 className="text-right rounded-lg border-2 h-11"
@@ -730,6 +737,7 @@ const updateMutation = useMutation({
                                       ניהול סטטוסים
                                     </button>
                                   }
+                                  onDialogOpen={() => setResponseSelectOpen(false)}
                                 />
                               </div>
                             </SelectContent>
@@ -748,7 +756,12 @@ const updateMutation = useMutation({
                       return (
                         <FormItem>
                           <FormLabel className="text-sm font-medium">שלב במשפך *</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select 
+                            onValueChange={field.onChange} 
+                            defaultValue={field.value}
+                            open={stageSelectOpen}
+                            onOpenChange={setStageSelectOpen}
+                          >
                             <FormControl>
                               <SelectTrigger 
                                 className="text-right rounded-lg border-2 h-11"
@@ -781,6 +794,7 @@ const updateMutation = useMutation({
                                       ניהול שלבי משפך
                                     </button>
                                   }
+                                  onDialogOpen={() => setStageSelectOpen(false)}
                                 />
                               </div>
                             </SelectContent>

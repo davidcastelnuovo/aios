@@ -176,6 +176,8 @@ function LeadCard({
   const { toast } = useToast();
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [stageSelectOpen, setStageSelectOpen] = useState(false);
+  const [responseSelectOpen, setResponseSelectOpen] = useState(false);
   const isMobile = useIsMobile();
 
   const handleDelete = async (id: string) => {
@@ -258,6 +260,8 @@ function LeadCard({
           <Select
             value={lead.status}
             onValueChange={(value) => onStatusChange(lead.id, value)}
+            open={stageSelectOpen}
+            onOpenChange={setStageSelectOpen}
           >
             <SelectTrigger 
               className="h-9 text-sm border-2 font-medium"
@@ -289,6 +293,7 @@ function LeadCard({
                       ניהול שלבי משפך
                     </button>
                   }
+                  onDialogOpen={() => setStageSelectOpen(false)}
                 />
               </div>
             </SelectContent>
@@ -300,6 +305,8 @@ function LeadCard({
           <Select
             value={lead.response_status || "none"}
             onValueChange={(value) => onResponseStatusChange(lead.id, value === "none" ? null : value)}
+            open={responseSelectOpen}
+            onOpenChange={setResponseSelectOpen}
           >
             <SelectTrigger 
               className="h-9 text-sm border-2 font-medium"
@@ -332,6 +339,7 @@ function LeadCard({
                       ניהול סטטוסים
                     </button>
                   }
+                  onDialogOpen={() => setResponseSelectOpen(false)}
                 />
               </div>
             </SelectContent>
