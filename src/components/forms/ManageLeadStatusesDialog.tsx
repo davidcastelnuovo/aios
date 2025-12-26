@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -205,6 +205,14 @@ export function ManageLeadStatusesDialog({
   const { statuses } = useLeadStatuses();
   const { updateStatus, createStatus, deleteStatus, updateSortOrders } = useLeadStatusMutations();
 
+  // Local state for immediate UI updates during drag
+  const [localStatuses, setLocalStatuses] = useState<LeadStatus[]>([]);
+
+  // Sync local state with server data
+  useEffect(() => {
+    setLocalStatuses(statuses);
+  }, [statuses]);
+
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -216,11 +224,14 @@ export function ManageLeadStatusesDialog({
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      const oldIndex = statuses.findIndex((s) => s.id === active.id);
-      const newIndex = statuses.findIndex((s) => s.id === over.id);
+      const oldIndex = localStatuses.findIndex((s) => s.id === active.id);
+      const newIndex = localStatuses.findIndex((s) => s.id === over.id);
       
-      const newOrder = arrayMove(statuses, oldIndex, newIndex);
+      // Update local state immediately for smooth UI
+      const newOrder = arrayMove(localStatuses, oldIndex, newIndex);
+      setLocalStatuses(newOrder);
       
+      // Sync with server
       const updates = newOrder.map((status, index) => ({
         id: status.id,
         sort_order: index,
@@ -274,10 +285,10 @@ export function ManageLeadStatusesDialog({
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={statuses.map((s) => s.id)}
+              items={localStatuses.map((s) => s.id)}
               strategy={verticalListSortingStrategy}
             >
-              {statuses.map((status) => (
+              {localStatuses.map((status) => (
                 <SortableStatusRow
                   key={status.id}
                   status={status}
