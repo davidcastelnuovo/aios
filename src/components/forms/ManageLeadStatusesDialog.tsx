@@ -132,11 +132,29 @@ function StatusRow({ status, onUpdate, onDelete }: StatusRowProps) {
 
 interface ManageLeadStatusesDialogProps {
   trigger?: React.ReactNode;
+  /**
+   * Optional: called when the dialog is opened. Useful when the trigger lives inside another overlay (e.g. Select).
+   */
   onDialogOpen?: () => void;
+  /** Controlled open state */
+  open?: boolean;
+  /** Controlled open handler */
+  onOpenChange?: (open: boolean) => void;
+  /** Hide the default trigger button (useful when controlling open externally) */
+  showTrigger?: boolean;
 }
 
-export function ManageLeadStatusesDialog({ trigger, onDialogOpen }: ManageLeadStatusesDialogProps) {
-  const [open, setOpen] = useState(false);
+export function ManageLeadStatusesDialog({
+  trigger,
+  onDialogOpen,
+  open: controlledOpen,
+  onOpenChange: onControlledOpenChange,
+  showTrigger = true,
+}: ManageLeadStatusesDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onControlledOpenChange ?? setInternalOpen;
+
   const [newLabel, setNewLabel] = useState("");
   const [newColor, setNewColor] = useState("#3b82f6");
   const { statuses } = useLeadStatuses();
@@ -159,17 +177,13 @@ export function ManageLeadStatusesDialog({ trigger, onDialogOpen }: ManageLeadSt
 
   const handleOpenChange = (isOpen: boolean) => {
     setOpen(isOpen);
-    if (isOpen && onDialogOpen) {
-      setTimeout(() => {
-        onDialogOpen();
-      }, 0);
-    }
+    if (isOpen && onDialogOpen) onDialogOpen();
   };
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <div onPointerDown={(e) => e.stopPropagation()}>
-        <DialogTrigger asChild onClick={(e) => e.stopPropagation()}>
+      {showTrigger && (
+        <DialogTrigger asChild>
           {trigger || (
             <Button variant="outline" size="sm" className="gap-2">
               <Settings2 className="h-4 w-4" />
@@ -177,7 +191,7 @@ export function ManageLeadStatusesDialog({ trigger, onDialogOpen }: ManageLeadSt
             </Button>
           )}
         </DialogTrigger>
-      </div>
+      )}
       <DialogContent className="max-w-md" dir="rtl">
         <DialogHeader>
           <DialogTitle>ניהול סטטוסי תגובה</DialogTitle>
