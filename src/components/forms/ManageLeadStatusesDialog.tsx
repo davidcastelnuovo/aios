@@ -2,10 +2,27 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Settings2, Plus, Trash2, GripVertical, Check } from "lucide-react";
+import { Settings2, Plus, Trash2, GripVertical } from "lucide-react";
 import { useLeadStatuses, useLeadStatusMutations, LeadStatus } from "@/hooks/useLeadStatuses";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const PRESET_COLORS = [
   "#9ca3af", // gray
@@ -69,16 +86,31 @@ function ColorPicker({ color, onChange }: ColorPickerProps) {
   );
 }
 
-interface StatusRowProps {
+interface SortableStatusRowProps {
   status: LeadStatus;
   onUpdate: (id: string, label: string, color: string) => void;
   onDelete: (id: string) => void;
 }
 
-function StatusRow({ status, onUpdate, onDelete }: StatusRowProps) {
+function SortableStatusRow({ status, onUpdate, onDelete }: SortableStatusRowProps) {
   const [label, setLabel] = useState(status.label);
   const [color, setColor] = useState(status.color);
   const [isEditing, setIsEditing] = useState(false);
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: status.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
 
   const handleSave = () => {
     if (label !== status.label || color !== status.color) {
@@ -93,8 +125,21 @@ function StatusRow({ status, onUpdate, onDelete }: StatusRowProps) {
   };
 
   return (
-    <div className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-muted/50 group">
-      <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-muted/50 group bg-background",
+        isDragging && "shadow-lg ring-2 ring-primary/20"
+      )}
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing touch-none"
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </button>
       
       <ColorPicker color={color} onChange={handleColorChange} />
       
@@ -158,7 +203,32 @@ export function ManageLeadStatusesDialog({
   const [newLabel, setNewLabel] = useState("");
   const [newColor, setNewColor] = useState("#3b82f6");
   const { statuses } = useLeadStatuses();
-  const { updateStatus, createStatus, deleteStatus } = useLeadStatusMutations();
+  const { updateStatus, createStatus, deleteStatus, updateSortOrders } = useLeadStatusMutations();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = statuses.findIndex((s) => s.id === active.id);
+      const newIndex = statuses.findIndex((s) => s.id === over.id);
+      
+      const newOrder = arrayMove(statuses, oldIndex, newIndex);
+      
+      const updates = newOrder.map((status, index) => ({
+        id: status.id,
+        sort_order: index,
+      }));
+      
+      updateSortOrders.mutate(updates);
+    }
+  };
 
   const handleUpdate = (id: string, label: string, color: string) => {
     updateStatus.mutate({ id, label, color });
@@ -198,14 +268,25 @@ export function ManageLeadStatusesDialog({
         </DialogHeader>
         
         <div className="space-y-1 max-h-[400px] overflow-y-auto">
-          {statuses.map((status) => (
-            <StatusRow
-              key={status.id}
-              status={status}
-              onUpdate={handleUpdate}
-              onDelete={handleDelete}
-            />
-          ))}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={statuses.map((s) => s.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {statuses.map((status) => (
+                <SortableStatusRow
+                  key={status.id}
+                  status={status}
+                  onUpdate={handleUpdate}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         </div>
 
         <div className="flex items-center gap-3 pt-4 border-t">
