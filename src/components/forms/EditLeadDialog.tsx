@@ -395,6 +395,25 @@ const updateMutation = useMutation({
         console.error('Calendar error:', calendarError);
         sonnerToast.error("שגיאה ביצירת הפגישה ביומן");
       } else {
+        // Save meeting details to lead for reminder tracking
+        const meetingDateFormatted = format(meetingDate, "yyyy-MM-dd");
+        const { error: updateError } = await supabase
+          .from("leads")
+          .update({
+            meeting_set_date: new Date().toISOString(),
+            meeting_date: meetingDateFormatted,
+            meeting_time: meetingTime,
+            meeting_location: meetingLocation || subject,
+            // Reset reminder flags when new meeting is set
+            meeting_reminder_day_after_sent_at: null,
+            meeting_reminder_same_day_sent_at: null,
+          })
+          .eq("id", lead.id);
+
+        if (updateError) {
+          console.error('Error saving meeting details:', updateError);
+        }
+
         // Trigger meeting_created automations
         try {
           const formattedDate = format(meetingDate, "dd/MM/yyyy");
@@ -420,6 +439,9 @@ const updateMutation = useMutation({
         } else {
           sonnerToast.success("הפגישה נוספה ליומן!");
         }
+
+        // Invalidate leads query to refresh data
+        queryClient.invalidateQueries({ queryKey: ["leads"] });
       }
 
       // Reset form

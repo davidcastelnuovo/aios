@@ -1681,6 +1681,12 @@ export type Database = {
           itai_meeting_date: string | null
           lost_reason: string | null
           manychat_subscriber_id: string | null
+          meeting_date: string | null
+          meeting_location: string | null
+          meeting_reminder_day_after_sent_at: string | null
+          meeting_reminder_same_day_sent_at: string | null
+          meeting_set_date: string | null
+          meeting_time: string | null
           monthly_budget: number | null
           notes: string | null
           phone: string | null
@@ -1718,6 +1724,12 @@ export type Database = {
           itai_meeting_date?: string | null
           lost_reason?: string | null
           manychat_subscriber_id?: string | null
+          meeting_date?: string | null
+          meeting_location?: string | null
+          meeting_reminder_day_after_sent_at?: string | null
+          meeting_reminder_same_day_sent_at?: string | null
+          meeting_set_date?: string | null
+          meeting_time?: string | null
           monthly_budget?: number | null
           notes?: string | null
           phone?: string | null
@@ -1755,6 +1767,12 @@ export type Database = {
           itai_meeting_date?: string | null
           lost_reason?: string | null
           manychat_subscriber_id?: string | null
+          meeting_date?: string | null
+          meeting_location?: string | null
+          meeting_reminder_day_after_sent_at?: string | null
+          meeting_reminder_same_day_sent_at?: string | null
+          meeting_set_date?: string | null
+          meeting_time?: string | null
           monthly_budget?: number | null
           notes?: string | null
           phone?: string | null
@@ -3030,6 +3048,8 @@ export type Database = {
         | "meeting_created"
         | "task_calendar_created"
         | "task_overdue"
+        | "meeting_day_after"
+        | "meeting_same_day"
       chat_provider: "manychat" | "green_api" | "internal"
       client_mood_status: "happy" | "wavering" | "churn_risk"
       client_status: "active" | "paused" | "ended" | "onboarding"
@@ -3238,6 +3258,8 @@ export const Constants = {
         "meeting_created",
         "task_calendar_created",
         "task_overdue",
+        "meeting_day_after",
+        "meeting_same_day",
       ],
       chat_provider: ["manychat", "green_api", "internal"],
       client_mood_status: ["happy", "wavering", "churn_risk"],
