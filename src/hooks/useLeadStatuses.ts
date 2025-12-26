@@ -124,7 +124,33 @@ export function useLeadStatusMutations() {
         if (error) throw error;
       }
     },
-    onSuccess: () => {
+    onMutate: async (updates) => {
+      // Cancel active queries to prevent overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: ["lead-statuses", tenantId] });
+      
+      // Save previous state for rollback
+      const previousStatuses = queryClient.getQueryData<LeadStatus[]>(["lead-statuses", tenantId]);
+      
+      // Optimistically update the cache
+      if (previousStatuses) {
+        const newStatuses = [...previousStatuses].map(status => {
+          const update = updates.find(u => u.id === status.id);
+          return update ? { ...status, sort_order: update.sort_order } : status;
+        }).sort((a, b) => a.sort_order - b.sort_order);
+        
+        queryClient.setQueryData(["lead-statuses", tenantId], newStatuses);
+      }
+      
+      return { previousStatuses };
+    },
+    onError: (err, updates, context) => {
+      // Rollback on error
+      if (context?.previousStatuses) {
+        queryClient.setQueryData(["lead-statuses", tenantId], context.previousStatuses);
+      }
+      toast.error("שגיאה בעדכון סדר הסטטוסים");
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["lead-statuses"] });
     },
   });
