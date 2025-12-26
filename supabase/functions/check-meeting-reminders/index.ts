@@ -37,6 +37,7 @@ Deno.serve(async (req) => {
 
     // Part 1: Day after meeting set reminders
     // Find leads where meeting was set yesterday and reminder not sent
+    // IMPORTANT: Don't send day-after reminder if meeting is today (to avoid double reminders)
     console.log('Checking for day-after reminders...');
     console.log('Yesterday range:', yesterdayStart.toISOString(), 'to', yesterdayEnd.toISOString());
     
@@ -45,7 +46,8 @@ Deno.serve(async (req) => {
       .select('id, company_name, contact_name, phone, tenant_id, meeting_date, meeting_time, meeting_location')
       .gte('meeting_set_date', yesterdayStart.toISOString())
       .lte('meeting_set_date', yesterdayEnd.toISOString())
-      .is('meeting_reminder_day_after_sent_at', null);
+      .is('meeting_reminder_day_after_sent_at', null)
+      .neq('meeting_date', today);
 
     if (dayAfterError) {
       console.error('Error fetching day-after leads:', dayAfterError);
