@@ -530,10 +530,14 @@ const updateMutation = useMutation({
       const slotEnd = new Date(slotStart);
       slotEnd.setMinutes(slotEnd.getMinutes() + 30);
 
-      // Check if this slot overlaps with any event
+      // Check if this slot overlaps with any event (skip all-day events)
       const isOccupied = calendarEvents.some(event => {
-        const eventStart = new Date(event.start?.dateTime || event.start?.date);
-        const eventEnd = new Date(event.end?.dateTime || event.end?.date);
+        // Skip all-day events - they have date instead of dateTime
+        if (!event.start?.dateTime || !event.end?.dateTime) {
+          return false;
+        }
+        const eventStart = new Date(event.start.dateTime);
+        const eventEnd = new Date(event.end.dateTime);
         
         // Check for overlap
         return slotStart < eventEnd && slotEnd > eventStart;
