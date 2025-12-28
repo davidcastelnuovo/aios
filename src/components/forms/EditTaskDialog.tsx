@@ -601,9 +601,13 @@ export default function EditTaskDialog({ task, open, onOpenChange }: EditTaskDia
       const slotEnd = new Date(slotStart);
       slotEnd.setMinutes(slotEnd.getMinutes() + 30);
 
+      // Skip all-day events - they have date instead of dateTime
       const isOccupied = calendarEvents.some(event => {
-        const eventStart = new Date(event.start?.dateTime || event.start?.date);
-        const eventEnd = new Date(event.end?.dateTime || event.end?.date);
+        if (!event.start?.dateTime || !event.end?.dateTime) {
+          return false;
+        }
+        const eventStart = new Date(event.start.dateTime);
+        const eventEnd = new Date(event.end.dateTime);
         return slotStart < eventEnd && slotEnd > eventStart;
       });
 
