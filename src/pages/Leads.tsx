@@ -1631,7 +1631,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
 
       const { error } = await supabase
         .from("leads")
-        .update({ response_status: responseStatus as any })
+        .update({ response_status: responseStatus })
         .eq("id", leadId);
 
       if (error) throw error;

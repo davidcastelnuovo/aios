@@ -1693,9 +1693,7 @@ export type Database = {
           products: string | null
           proposal_date: string | null
           proposal_sent_date: string | null
-          response_status:
-            | Database["public"]["Enums"]["lead_response_status"]
-            | null
+          response_status: string | null
           sale_date: string | null
           sales_person_id: string | null
           source: Database["public"]["Enums"]["lead_source"]
@@ -1736,9 +1734,7 @@ export type Database = {
           products?: string | null
           proposal_date?: string | null
           proposal_sent_date?: string | null
-          response_status?:
-            | Database["public"]["Enums"]["lead_response_status"]
-            | null
+          response_status?: string | null
           sale_date?: string | null
           sales_person_id?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
@@ -1779,9 +1775,7 @@ export type Database = {
           products?: string | null
           proposal_date?: string | null
           proposal_sent_date?: string | null
-          response_status?:
-            | Database["public"]["Enums"]["lead_response_status"]
-            | null
+          response_status?: string | null
           sale_date?: string | null
           sales_person_id?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
