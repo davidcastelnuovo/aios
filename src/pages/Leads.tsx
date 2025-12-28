@@ -1621,7 +1621,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   });
 
   const updateLeadResponseStatus = useMutation({
-    mutationFn: async ({ leadId, responseStatus }: { leadId: string; responseStatus: "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "in_progress" | "denies_contact" | "not_relevant" | null }) => {
+    mutationFn: async ({ leadId, responseStatus }: { leadId: string; responseStatus: string | null }) => {
       // Get lead data before update for automation
       const { data: leadData } = await supabase
         .from("leads")
@@ -1631,7 +1631,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
 
       const { error } = await supabase
         .from("leads")
-        .update({ response_status: responseStatus })
+        .update({ response_status: responseStatus as any })
         .eq("id", leadId);
 
       if (error) throw error;
