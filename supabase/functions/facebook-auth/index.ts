@@ -549,11 +549,13 @@ serve(async (req) => {
       }
 
       // Update integration settings with selected page
+      // IMPORTANT: Use the current integration's settings, not the source settings
+      const currentSettings = integration.settings as any || {};
       await supabase
         .from('tenant_integrations')
         .update({
           settings: {
-            ...settings,
+            ...currentSettings,
             page_id,
             page_name: page?.name,
           },
