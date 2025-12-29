@@ -2887,14 +2887,14 @@ export type Database = {
             }[]
           }
         | {
-            Args: { p_tenant_id?: string }
+            Args: { p_tenant_id: string }
             Returns: {
-              connection_user_id: string
+              avatar_url: string
+              last_message: string
               last_message_at: string
               sender_name: string
               sender_phone: string
               unread_count: number
-              whatsapp_avatar_url: string
             }[]
           }
       get_user_agency_ids: { Args: { _user_id: string }; Returns: string[] }
