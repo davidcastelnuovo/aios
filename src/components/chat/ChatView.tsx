@@ -180,12 +180,12 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           .maybeSingle();
         
         if (unreadTag) {
-          // Delete the tag association for this contact
+          // Delete the tag association for this contact (for ANY user in this tenant)
           let deleteQuery = supabase
             .from("chat_contact_tags")
             .delete()
             .eq("tag_id", unreadTag.id)
-            .eq("user_id", userData.user.id);
+            .eq("tenant_id", tenantId);
           
           if (contactType === "client") {
             deleteQuery = deleteQuery.eq("client_id", contactId);
