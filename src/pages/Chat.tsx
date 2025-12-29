@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -54,6 +54,7 @@ interface Contact {
   sender_phone?: string;
   is_blocked?: boolean;
   has_messages?: boolean;
+  whatsapp_avatar_url?: string | null;
 }
 
 const normalizePhone = (phone?: string | null) => {
