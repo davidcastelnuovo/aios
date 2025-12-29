@@ -138,9 +138,13 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   });
 
 
-  // Mark messages as read mutation
+  // Mark messages as read mutation + remove "unread" tag
   const markAsReadMutation = useMutation({
     mutationFn: async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return;
+      
+      // Mark messages as read
       if (contactType === "unknown") {
         // For unknown contacts, mark by sender_phone
         const { error } = await supabase
@@ -163,6 +167,38 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           .eq("direction", "inbound")
           .is("read_at", null);
         if (error) throw error;
+      }
+      
+      // Remove "unread" tag (by name matching)
+      if (tenantId) {
+        // Find the "unread" tag by name patterns
+        const { data: unreadTag } = await supabase
+          .from("chat_tags")
+          .select("id")
+          .eq("tenant_id", tenantId)
+          .or("name.ilike.%לא נקרא%,name.ilike.%unread%")
+          .maybeSingle();
+        
+        if (unreadTag) {
+          // Delete the tag association for this contact
+          let deleteQuery = supabase
+            .from("chat_contact_tags")
+            .delete()
+            .eq("tag_id", unreadTag.id)
+            .eq("user_id", userData.user.id);
+          
+          if (contactType === "client") {
+            deleteQuery = deleteQuery.eq("client_id", contactId);
+          } else if (contactType === "lead") {
+            deleteQuery = deleteQuery.eq("lead_id", contactId);
+          } else if (contactType === "group") {
+            deleteQuery = deleteQuery.eq("group_id", contactId);
+          } else if (contactType === "unknown" && senderPhone) {
+            deleteQuery = deleteQuery.eq("sender_phone", senderPhone);
+          }
+          
+          await deleteQuery;
+        }
       }
     },
     onMutate: async () => {
@@ -188,6 +224,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
       queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-contact-tags"] });
     },
   });
 
