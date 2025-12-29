@@ -930,6 +930,7 @@ export type Database = {
           tenant_id: string | null
           updated_at: string
           website: string | null
+          whatsapp_avatar_url: string | null
         }
         Insert: {
           active_chat_provider?:
@@ -955,6 +956,7 @@ export type Database = {
           tenant_id?: string | null
           updated_at?: string
           website?: string | null
+          whatsapp_avatar_url?: string | null
         }
         Update: {
           active_chat_provider?:
@@ -980,6 +982,7 @@ export type Database = {
           tenant_id?: string | null
           updated_at?: string
           website?: string | null
+          whatsapp_avatar_url?: string | null
         }
         Relationships: [
           {
@@ -1701,6 +1704,7 @@ export type Database = {
           tenant_id: string | null
           three_month_budget: number | null
           updated_at: string
+          whatsapp_avatar_url: string | null
           won_date: string | null
         }
         Insert: {
@@ -1742,6 +1746,7 @@ export type Database = {
           tenant_id?: string | null
           three_month_budget?: number | null
           updated_at?: string
+          whatsapp_avatar_url?: string | null
           won_date?: string | null
         }
         Update: {
@@ -1783,6 +1788,7 @@ export type Database = {
           tenant_id?: string | null
           three_month_budget?: number | null
           updated_at?: string
+          whatsapp_avatar_url?: string | null
           won_date?: string | null
         }
         Relationships: [
@@ -2770,6 +2776,7 @@ export type Database = {
           is_blocked: boolean
           tenant_id: string
           updated_at: string
+          whatsapp_avatar_url: string | null
         }
         Insert: {
           agency_id?: string | null
@@ -2781,6 +2788,7 @@ export type Database = {
           is_blocked?: boolean
           tenant_id: string
           updated_at?: string
+          whatsapp_avatar_url?: string | null
         }
         Update: {
           agency_id?: string | null
@@ -2792,6 +2800,7 @@ export type Database = {
           is_blocked?: boolean
           tenant_id?: string
           updated_at?: string
+          whatsapp_avatar_url?: string | null
         }
         Relationships: [
           {

@@ -5,6 +5,39 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper function to fetch WhatsApp avatar using Green API's getContactInfo
+async function fetchWhatsAppAvatar(
+  instanceId: string,
+  apiToken: string,
+  chatId: string
+): Promise<string | null> {
+  try {
+    console.log('📸 Fetching WhatsApp avatar for:', chatId);
+    
+    const response = await fetch(
+      `https://api.green-api.com/waInstance${instanceId}/getContactInfo/${apiToken}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId })
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      const avatarUrl = data.avatar || null;
+      console.log('✅ Avatar URL:', avatarUrl ? 'Found' : 'Not found');
+      return avatarUrl;
+    } else {
+      console.error('❌ Failed to fetch contact info:', response.status);
+      return null;
+    }
+  } catch (e) {
+    console.error('❌ Error fetching avatar:', e);
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -412,6 +445,24 @@ Deno.serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
+      
+      // Fetch and update avatar if not already set
+      const { data: clientData } = await supabaseClient
+        .from('clients')
+        .select('whatsapp_avatar_url')
+        .eq('id', clientId)
+        .single();
+      
+      if (!clientData?.whatsapp_avatar_url && integration?.api_key) {
+        const avatarUrl = await fetchWhatsAppAvatar(instanceId, integration.api_key, senderData.chatId);
+        if (avatarUrl) {
+          await supabaseClient
+            .from('clients')
+            .update({ whatsapp_avatar_url: avatarUrl })
+            .eq('id', clientId);
+          console.log('📸 Updated client avatar');
+        }
+      }
     } else {
       // Search for lead with matching phone in THIS tenant only
       let leadQuery = supabaseClient
@@ -449,6 +500,24 @@ Deno.serve(async (req) => {
           }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });
+        }
+        
+        // Fetch and update avatar if not already set
+        const { data: leadData } = await supabaseClient
+          .from('leads')
+          .select('whatsapp_avatar_url')
+          .eq('id', leadId)
+          .single();
+        
+        if (!leadData?.whatsapp_avatar_url && integration?.api_key) {
+          const avatarUrl = await fetchWhatsAppAvatar(instanceId, integration.api_key, senderData.chatId);
+          if (avatarUrl) {
+            await supabaseClient
+              .from('leads')
+              .update({ whatsapp_avatar_url: avatarUrl })
+              .eq('id', leadId);
+            console.log('📸 Updated lead avatar');
+          }
         }
       } else {
         console.log(`⚠️ No contact found in tenant ${tenantId} for phone ${phoneNumber}`);
