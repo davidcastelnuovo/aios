@@ -5,6 +5,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper function to normalize phone number - extract last 9 digits
+function normalizePhone(phone: string): string {
+  const digitsOnly = phone.replace(/\D/g, '');
+  return digitsOnly.slice(-9);
+}
+
 // Helper function to fetch WhatsApp avatar using Green API's getContactInfo
 async function fetchWhatsAppAvatar(
   instanceId: string,
@@ -35,6 +41,87 @@ async function fetchWhatsAppAvatar(
   } catch (e) {
     console.error('❌ Error fetching avatar:', e);
     return null;
+  }
+}
+
+// Helper function to fetch message content using Green API's getMessage
+async function fetchMessageContent(
+  instanceId: string,
+  apiToken: string,
+  chatId: string,
+  idMessage: string
+): Promise<any | null> {
+  try {
+    console.log('📩 Fetching message content for idMessage:', idMessage);
+    
+    const response = await fetch(
+      `https://api.green-api.com/waInstance${instanceId}/getMessage/${apiToken}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId, idMessage })
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ Message content fetched:', JSON.stringify(data).substring(0, 200));
+      return data;
+    } else {
+      console.error('❌ Failed to fetch message content:', response.status, await response.text());
+      return null;
+    }
+  } catch (e) {
+    console.error('❌ Error fetching message content:', e);
+    return null;
+  }
+}
+
+// Helper function to extract message text from various message types
+function extractMessageText(messageData: any, typeMessage: string): string {
+  if (typeMessage === 'textMessage') {
+    return messageData?.textMessageData?.textMessage || messageData?.textMessage || '';
+  } else if (typeMessage === 'extendedTextMessage') {
+    return messageData?.extendedTextMessageData?.text || messageData?.extendedTextMessage?.text || '';
+  } else if (typeMessage === 'imageMessage') {
+    return messageData?.fileMessageData?.caption || messageData?.caption || '[תמונה]';
+  } else if (typeMessage === 'videoMessage') {
+    return messageData?.fileMessageData?.caption || messageData?.caption || '[וידאו]';
+  } else if (typeMessage === 'audioMessage') {
+    return '[הודעת קול]';
+  } else if (typeMessage === 'documentMessage') {
+    return messageData?.fileMessageData?.caption || `[מסמך: ${messageData?.fileMessageData?.fileName || messageData?.fileName || 'קובץ'}]`;
+  } else if (typeMessage === 'templateMessage') {
+    const templateData = messageData?.templateMessage;
+    return templateData?.contentText || templateData?.titleText || '[הודעת תבנית]';
+  } else if (typeMessage === 'buttonsMessage') {
+    return messageData?.buttonsMessage?.contentText || '[הודעת כפתורים]';
+  } else if (typeMessage === 'listMessage') {
+    return messageData?.listMessage?.description || messageData?.listMessage?.title || '[הודעת רשימה]';
+  } else if (typeMessage === 'contactMessage') {
+    const contactData = messageData?.contactMessageData;
+    if (contactData) {
+      const displayName = contactData.displayName || 'איש קשר';
+      const vcard = contactData.vcard || '';
+      const phoneMatch = vcard.match(/TEL[^:]*:([+\d\s-]+)/i);
+      const phoneFromVcard = phoneMatch ? phoneMatch[1].replace(/\s/g, '') : '';
+      return `[איש קשר: ${displayName}${phoneFromVcard ? ` - ${phoneFromVcard}` : ''}]`;
+    }
+    return '[איש קשר]';
+  } else if (typeMessage === 'contactsArrayMessage') {
+    const contacts = messageData?.contactsArrayMessageData?.contacts || [];
+    const contactNames = contacts.map((c: any) => c.displayName || 'איש קשר').join(', ');
+    return `[אנשי קשר: ${contactNames || 'מספר אנשי קשר'}]`;
+  } else if (typeMessage === 'locationMessage') {
+    const locData = messageData?.locationMessageData;
+    return `[מיקום${locData?.nameLocation ? ': ' + locData.nameLocation : ''}]`;
+  } else if (typeMessage === 'stickerMessage') {
+    return '[סטיקר]';
+  } else if (typeMessage === 'reactionMessage') {
+    const reaction = messageData?.reactionMessage?.reaction || messageData?.extendedTextMessageData?.text || '👍';
+    return `[תגובה: ${reaction}]`;
+  } else {
+    return `[${typeMessage}]`;
   }
 }
 
@@ -91,17 +178,272 @@ Deno.serve(async (req) => {
 
     const tenantId = integration.tenant_id;
     const connectionUserId = integration.user_id;
+    const apiToken = integration.api_key;
     console.log('✅ Identified tenant:', tenantId);
     console.log('✅ Connection owner (user_id):', connectionUserId);
 
     // Green API sends different types of webhooks
-    // We're interested in incoming AND outgoing messages
-    const isIncoming = webhookData.typeWebhook === 'incomingMessageReceived';
-    const isOutgoing = webhookData.typeWebhook === 'outgoingMessageReceived' || 
-                       webhookData.typeWebhook === 'outgoingAPIMessageReceived';
+    const typeWebhook = webhookData.typeWebhook;
+    const isIncoming = typeWebhook === 'incomingMessageReceived';
+    const isOutgoing = typeWebhook === 'outgoingMessageReceived' || 
+                       typeWebhook === 'outgoingAPIMessageReceived';
+    const isOutgoingStatus = typeWebhook === 'outgoingMessageStatus';
     
+    // Handle outgoingMessageStatus for messages sent from WhatsApp directly
+    if (isOutgoingStatus) {
+      const sendByApi = webhookData.sendByApi;
+      const idMessage = webhookData.idMessage;
+      const chatId = webhookData.chatId;
+      
+      console.log('📤 Outgoing message status - sendByApi:', sendByApi, 'idMessage:', idMessage);
+      
+      // Only process if NOT sent by API (i.e., sent directly from WhatsApp)
+      if (sendByApi === true) {
+        console.log('⏭️ Message was sent via API, already processed');
+        return new Response(JSON.stringify({ received: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      if (!idMessage || !chatId) {
+        console.log('⏭️ Missing idMessage or chatId in status webhook');
+        return new Response(JSON.stringify({ received: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Check if we already have this message (prevent duplicates from multiple status updates)
+      const { data: existingMessage } = await supabaseClient
+        .from('chat_messages')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('connection_user_id', connectionUserId)
+        .eq('raw_provider_data->>idMessage', idMessage)
+        .maybeSingle();
+      
+      if (existingMessage) {
+        console.log('⏭️ Message already exists, skipping duplicate');
+        return new Response(JSON.stringify({ received: true, duplicate: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Fetch the actual message content using getMessage API
+      if (!apiToken) {
+        console.error('❌ No API token available to fetch message content');
+        return new Response(JSON.stringify({ error: 'No API token' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          status: 500
+        });
+      }
+      
+      const messageContent = await fetchMessageContent(instanceId, apiToken, chatId, idMessage);
+      
+      if (!messageContent) {
+        console.log('⚠️ Could not fetch message content, saving with minimal info');
+        // Still save the message with minimal info
+      }
+      
+      // Extract message text from fetched content
+      const typeMessage = messageContent?.typeMessage || 'unknown';
+      const messageText = messageContent 
+        ? extractMessageText(messageContent, typeMessage)
+        : '[הודעה]';
+      
+      // Extract phone number and normalize
+      const phoneNumber = chatId.split('@')[0];
+      const normalizedPhone = normalizePhone(phoneNumber);
+      const isGroup = chatId.endsWith('@g.us');
+      
+      console.log('📱 Processing WhatsApp-sent message to:', phoneNumber, '(normalized:', normalizedPhone, ')');
+      
+      // Store combined webhook data
+      const combinedRawData = {
+        ...webhookData,
+        fetchedMessageContent: messageContent,
+        idMessage: idMessage,
+      };
+      
+      // Handle group messages
+      if (isGroup) {
+        const groupChatId = chatId;
+        
+        const { data: existingGroup } = await supabaseClient
+          .from('whatsapp_groups')
+          .select('id, is_blocked')
+          .eq('tenant_id', tenantId)
+          .eq('group_chat_id', groupChatId)
+          .maybeSingle();
+        
+        if (!existingGroup) {
+          console.log('⚠️ Group not found for status message, skipping');
+          return new Response(JSON.stringify({ received: true }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
+        const groupId = existingGroup.id;
+        
+        // Check if blocked
+        const { data: blockedContact } = await supabaseClient
+          .from('blocked_contacts')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('connection_user_id', connectionUserId)
+          .eq('group_id', groupId)
+          .maybeSingle();
+        
+        if (blockedContact || existingGroup.is_blocked) {
+          console.log('🚫 Group is blocked, ignoring');
+          return new Response(JSON.stringify({ success: true, blocked: true }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        
+        // Save group message
+        const { error: insertError } = await supabaseClient
+          .from('chat_messages')
+          .insert({
+            group_id: groupId,
+            tenant_id: tenantId,
+            connection_user_id: connectionUserId,
+            message_text: messageText,
+            direction: 'outbound',
+            channel: 'whatsapp',
+            provider: 'green_api',
+            sender_phone: phoneNumber,
+            is_blocked: false,
+            raw_provider_data: combinedRawData,
+          });
+        
+        if (insertError) {
+          console.error('❌ Failed to save group message from WhatsApp:', insertError);
+          throw insertError;
+        }
+        
+        console.log('✅ WhatsApp-sent group message saved successfully');
+        return new Response(JSON.stringify({ success: true, contactType: 'group' }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // For individual messages - find contact using normalized phone
+      let clientId: string | null = null;
+      let leadId: string | null = null;
+      
+      // Search for client with normalized phone
+      const { data: client } = await supabaseClient
+        .from('clients')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .or(`phone.ilike.%${normalizedPhone}%,phone.ilike.%${phoneNumber}%`)
+        .maybeSingle();
+      
+      if (client) {
+        clientId = client.id;
+        console.log(`✅ Found client ${clientId} by normalized phone`);
+        
+        // Check if blocked
+        const { data: blockedClient } = await supabaseClient
+          .from('blocked_contacts')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('connection_user_id', connectionUserId)
+          .eq('client_id', clientId)
+          .maybeSingle();
+        
+        if (blockedClient) {
+          console.log('🚫 Client is blocked, ignoring');
+          return new Response(JSON.stringify({ success: true, blocked: true }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      } else {
+        // Search for lead with normalized phone
+        const { data: lead } = await supabaseClient
+          .from('leads')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .or(`phone.ilike.%${normalizedPhone}%,phone.ilike.%${phoneNumber}%`)
+          .maybeSingle();
+        
+        if (lead) {
+          leadId = lead.id;
+          console.log(`✅ Found lead ${leadId} by normalized phone`);
+          
+          // Check if blocked
+          const { data: blockedLead } = await supabaseClient
+            .from('blocked_contacts')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('connection_user_id', connectionUserId)
+            .eq('lead_id', leadId)
+            .maybeSingle();
+          
+          if (blockedLead) {
+            console.log('🚫 Lead is blocked, ignoring');
+            return new Response(JSON.stringify({ success: true, blocked: true }), {
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+          }
+        } else {
+          console.log(`⚠️ No contact found for phone ${phoneNumber} (normalized: ${normalizedPhone}), saving as unknown`);
+        }
+      }
+      
+      // Check if unknown phone is blocked
+      if (!clientId && !leadId) {
+        const { data: blockedByPhone } = await supabaseClient
+          .from('blocked_contacts')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('connection_user_id', connectionUserId)
+          .eq('sender_phone', phoneNumber)
+          .maybeSingle();
+        
+        if (blockedByPhone) {
+          console.log('🚫 Phone is blocked, ignoring');
+          return new Response(JSON.stringify({ success: true, blocked: true }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+      }
+      
+      // Save the message
+      const { error: insertError } = await supabaseClient
+        .from('chat_messages')
+        .insert({
+          client_id: clientId,
+          lead_id: leadId,
+          tenant_id: tenantId,
+          message_text: messageText,
+          direction: 'outbound',
+          channel: 'whatsapp',
+          provider: 'green_api',
+          sender_phone: phoneNumber,
+          is_blocked: false,
+          connection_user_id: connectionUserId,
+          raw_provider_data: combinedRawData,
+        });
+      
+      if (insertError) {
+        console.error('❌ Failed to save WhatsApp-sent message:', insertError);
+        throw insertError;
+      }
+      
+      console.log('✅ WhatsApp-sent message saved successfully');
+      return new Response(JSON.stringify({ 
+        success: true,
+        contactType: clientId ? 'client' : (leadId ? 'lead' : 'unknown'),
+        contactId: clientId || leadId || null,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
+    // For non-message webhooks, ignore
     if (!isIncoming && !isOutgoing) {
-      console.log('⏭️ Ignoring non-message webhook');
+      console.log('⏭️ Ignoring non-message webhook:', typeWebhook);
       return new Response(JSON.stringify({ received: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -115,6 +457,7 @@ Deno.serve(async (req) => {
     
     // Extract phone number from chatId (format: 972501234567@c.us or group ID)
     const phoneNumber = senderData.chatId.split('@')[0];
+    const normalizedPhone = normalizePhone(phoneNumber);
     
     // Extract message text based on message type
     let messageText = '';
@@ -176,7 +519,6 @@ Deno.serve(async (req) => {
     } else if (messageType === 'documentMessage') {
       messageText = messageData.fileMessageData?.caption || `[מסמך: ${messageData.fileMessageData?.fileName || 'קובץ'}]`;
     } else if (messageType === 'templateMessage') {
-      // Template messages have content in templateMessage object
       const templateData = messageData.templateMessage;
       messageText = templateData?.contentText || templateData?.titleText || '[הודעת תבנית]';
     } else if (messageType === 'buttonsMessage') {
@@ -184,12 +526,10 @@ Deno.serve(async (req) => {
     } else if (messageType === 'listMessage') {
       messageText = messageData.listMessage?.description || messageData.listMessage?.title || '[הודעת רשימה]';
     } else if (messageType === 'contactMessage') {
-      // Handle contact card (vCard)
       const contactData = messageData.contactMessageData;
       if (contactData) {
         const displayName = contactData.displayName || 'איש קשר';
         const vcard = contactData.vcard || '';
-        // Extract phone number from vCard if available
         const phoneMatch = vcard.match(/TEL[^:]*:([+\d\s-]+)/i);
         const phoneFromVcard = phoneMatch ? phoneMatch[1].replace(/\s/g, '') : '';
         messageText = `[איש קשר: ${displayName}${phoneFromVcard ? ` - ${phoneFromVcard}` : ''}]`;
@@ -197,7 +537,6 @@ Deno.serve(async (req) => {
         messageText = '[איש קשר]';
       }
     } else if (messageType === 'contactsArrayMessage') {
-      // Handle multiple contacts
       const contacts = messageData.contactsArrayMessageData?.contacts || [];
       const contactNames = contacts.map((c: any) => c.displayName || 'איש קשר').join(', ');
       messageText = `[אנשי קשר: ${contactNames || 'מספר אנשי קשר'}]`;
@@ -213,7 +552,7 @@ Deno.serve(async (req) => {
       messageText = `[${messageType}]`;
     }
 
-    console.log('📱 Processing message from:', isGroup ? 'Group ' + phoneNumber : phoneNumber);
+    console.log('📱 Processing message from:', isGroup ? 'Group ' + phoneNumber : phoneNumber, '(normalized:', normalizedPhone, ')');
 
     // Handle group messages differently
     if (isGroup) {
@@ -237,7 +576,6 @@ Deno.serve(async (req) => {
       // Helper function to fetch REAL group name from Green API using getGroupData
       async function fetchRealGroupName(groupChatId: string): Promise<string | null> {
         try {
-          const apiToken = integration?.api_key;
           if (!instanceId || !apiToken) {
             console.log('⚠️ Missing credentials for Green API call');
             return null;
@@ -245,20 +583,18 @@ Deno.serve(async (req) => {
           
           console.log('🔍 Fetching real group name using getGroupData for:', groupChatId);
           
-          // Use getGroupData endpoint - NOT getContactInfo which doesn't support groups
           const response = await fetch(
             `https://api.green-api.com/waInstance${instanceId}/getGroupData/${apiToken}`,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ groupId: groupChatId }) // Note: groupId, not chatId
+              body: JSON.stringify({ groupId: groupChatId })
             }
           );
           
           if (response.ok) {
             const groupData = await response.json();
             console.log('📋 Green API getGroupData response:', JSON.stringify(groupData));
-            // Group name is in 'subject' field, NOT 'name' or 'chatName'
             const realName = groupData.subject || null;
             console.log('✅ Real group name from API (subject):', realName);
             return realName;
@@ -295,8 +631,6 @@ Deno.serve(async (req) => {
         groupId = newGroup.id;
         console.log('✅ Created new group with real name:', newGroupName);
       } else if (existingGroup) {
-        // Check if name looks like a placeholder or sender name (not a real group name)
-        // Indicators: name starts with "קבוצה" OR contains emoji (likely sender name) OR doesn't look like group name
         const currentName = existingGroup.group_name || '';
         const looksLikePlaceholder = currentName.startsWith('קבוצה ');
         const looksLikeSenderName = /🌴|📱|👤/.test(currentName) || currentName.split(' ').length <= 2;
@@ -400,20 +734,18 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Search for client or lead in THIS tenant only
-    console.log('👤 Individual message, searching for contact in tenant:', tenantId);
+    // Search for client or lead in THIS tenant only using normalized phone
+    console.log('👤 Individual message, searching for contact in tenant:', tenantId, 'with normalized phone:', normalizedPhone);
     
     let clientId: string | null = null;
     let leadId: string | null = null;
     
-    // For outgoing messages, search by phone only (no provider check)
-    // For incoming messages, require active_chat_provider = 'green_api'
-    // Search for client with matching phone in THIS tenant only
+    // Search for client with normalized phone (matches both 05... and 972...)
     let clientQuery = supabaseClient
       .from('clients')
       .select('id')
       .eq('tenant_id', tenantId)
-      .ilike('phone', `%${phoneNumber}%`);
+      .or(`phone.ilike.%${normalizedPhone}%,phone.ilike.%${phoneNumber}%`);
     
     // Only filter by provider for incoming messages
     if (isIncoming) {
@@ -424,7 +756,7 @@ Deno.serve(async (req) => {
 
     if (client) {
       clientId = client.id;
-      console.log(`✅ Found client ${clientId} in tenant ${tenantId}`);
+      console.log(`✅ Found client ${clientId} in tenant ${tenantId} by normalized phone`);
       
       // Check if client is in blocked_contacts
       const { data: blockedClient } = await supabaseClient
@@ -453,8 +785,8 @@ Deno.serve(async (req) => {
         .eq('id', clientId)
         .single();
       
-      if (!clientData?.whatsapp_avatar_url && integration?.api_key) {
-        const avatarUrl = await fetchWhatsAppAvatar(instanceId, integration.api_key, senderData.chatId);
+      if (!clientData?.whatsapp_avatar_url && apiToken) {
+        const avatarUrl = await fetchWhatsAppAvatar(instanceId, apiToken, senderData.chatId);
         if (avatarUrl) {
           await supabaseClient
             .from('clients')
@@ -464,12 +796,12 @@ Deno.serve(async (req) => {
         }
       }
     } else {
-      // Search for lead with matching phone in THIS tenant only
+      // Search for lead with normalized phone
       let leadQuery = supabaseClient
         .from('leads')
         .select('id')
         .eq('tenant_id', tenantId)
-        .ilike('phone', `%${phoneNumber}%`);
+        .or(`phone.ilike.%${normalizedPhone}%,phone.ilike.%${phoneNumber}%`);
       
       // Only filter by provider for incoming messages
       if (isIncoming) {
@@ -480,7 +812,7 @@ Deno.serve(async (req) => {
 
       if (lead) {
         leadId = lead.id;
-        console.log(`✅ Found lead ${leadId} in tenant ${tenantId}`);
+        console.log(`✅ Found lead ${leadId} in tenant ${tenantId} by normalized phone`);
         
         // Check if lead is in blocked_contacts
         const { data: blockedLead } = await supabaseClient
@@ -509,8 +841,8 @@ Deno.serve(async (req) => {
           .eq('id', leadId)
           .single();
         
-        if (!leadData?.whatsapp_avatar_url && integration?.api_key) {
-          const avatarUrl = await fetchWhatsAppAvatar(instanceId, integration.api_key, senderData.chatId);
+        if (!leadData?.whatsapp_avatar_url && apiToken) {
+          const avatarUrl = await fetchWhatsAppAvatar(instanceId, apiToken, senderData.chatId);
           if (avatarUrl) {
             await supabaseClient
               .from('leads')
@@ -520,7 +852,7 @@ Deno.serve(async (req) => {
           }
         }
       } else {
-        console.log(`⚠️ No contact found in tenant ${tenantId} for phone ${phoneNumber}`);
+        console.log(`⚠️ No contact found in tenant ${tenantId} for phone ${phoneNumber} (normalized: ${normalizedPhone})`);
       }
     }
 
