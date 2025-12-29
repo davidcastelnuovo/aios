@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MessageCircle, Search, Settings, Pencil, Trash2, Check, EyeOff, Tags, SquareCheck, Eye } from "lucide-react";
+import { MessageCircle, Search, Settings, Pencil, Trash2, Check, Tags, SquareCheck } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,7 +30,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import ChatView from "@/components/chat/ChatView";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
@@ -84,7 +83,6 @@ export default function Chat() {
   );
   const [editingContact, setEditingContact] = useState<{ id: string; type: 'client' | 'lead'; data: any } | null>(null);
   const [showClearHistoryDialog, setShowClearHistoryDialog] = useState(false);
-  const [clearHistoryMode, setClearHistoryMode] = useState<'hide' | 'delete'>('hide');
   
   // Multi-select state
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
@@ -92,31 +90,6 @@ export default function Chat() {
   
   // Tag filter state
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
-  
-  // Show hidden chats toggle
-  const [showHiddenChats, setShowHiddenChats] = useState(false);
-
-  // Fetch hidden chats
-  const { data: hiddenChats = [] } = useQuery({
-    queryKey: ['hidden-chats', tenantId],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !tenantId) return [];
-
-      const { data, error } = await supabase
-        .from('hidden_chats')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('tenant_id', tenantId);
-
-      if (error) {
-        console.error('Error fetching hidden chats:', error);
-        return [];
-      }
-      return data || [];
-    },
-    enabled: !!tenantId,
-  });
 
   // Fetch all tags for display
   const { data: allTags = [] } = useQuery({
@@ -157,16 +130,6 @@ export default function Chat() {
     enabled: !!tenantId,
   });
 
-  // Check if contact is hidden
-  const isContactHidden = useCallback((contact: Contact) => {
-    return hiddenChats.some(hc => {
-      if (contact.contact_type === 'client' && hc.client_id === contact.id) return true;
-      if (contact.contact_type === 'lead' && hc.lead_id === contact.id) return true;
-      if (contact.contact_type === 'group' && hc.group_id === contact.id) return true;
-      if (contact.contact_type === 'unknown' && contact.sender_phone && hc.sender_phone === contact.sender_phone) return true;
-      return false;
-    });
-  }, [hiddenChats]);
 
   // Get tags for a specific contact
   const getContactTagIds = useCallback((contact: Contact): string[] => {
@@ -380,17 +343,6 @@ export default function Chat() {
     // Filter out blocked contacts
     allContacts = allContacts.filter(contact => !contact.is_blocked);
 
-    // Filter hidden/visible based on toggle - BUT NOT during search (search shows all including hidden)
-    if (!debouncedSearch) {
-      if (showHiddenChats) {
-        // Show only hidden chats
-        allContacts = allContacts.filter(contact => isContactHidden(contact));
-      } else {
-        // Hide hidden chats
-        allContacts = allContacts.filter(contact => !isContactHidden(contact));
-      }
-    }
-
     // Apply contact type filter
     if (contactFilter !== "all") {
       const typeToMatch = contactFilter === 'groups' ? 'group' : 
@@ -419,83 +371,12 @@ export default function Chat() {
     }
 
     return allContacts;
-  }, [allContactsBeforeTypeFilter, contactFilter, showTodayOnly, showUnreadOnly, todayParts, isManuallyMarkedRead, isContactHidden, showHiddenChats, selectedTagFilter, getContactTagIds, debouncedSearch]);
+  }, [allContactsBeforeTypeFilter, contactFilter, showTodayOnly, showUnreadOnly, todayParts, isManuallyMarkedRead, selectedTagFilter, getContactTagIds, debouncedSearch]);
 
-  const clientsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'client' && !isContactHidden(c)).length;
-  const leadsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'lead' && !isContactHidden(c)).length;
-  const groupsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'group' && !isContactHidden(c)).length;
-  const unknownCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'unknown' && !isContactHidden(c)).length;
-  const hiddenCount = allContactsBeforeTypeFilter.filter(c => isContactHidden(c)).length;
-
-  // Hide single chat mutation
-  const hideContactMutation = useMutation({
-    mutationFn: async (contact: Contact) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !tenantId) throw new Error('No user or tenant');
-
-      const insertData: any = {
-        user_id: user.id,
-        tenant_id: tenantId,
-      };
-
-      if (contact.contact_type === 'client') {
-        insertData.client_id = contact.id;
-      } else if (contact.contact_type === 'lead') {
-        insertData.lead_id = contact.id;
-      } else if (contact.contact_type === 'group') {
-        insertData.group_id = contact.id;
-      } else if (contact.contact_type === 'unknown' && contact.sender_phone) {
-        insertData.sender_phone = contact.sender_phone;
-      }
-
-      const { error } = await supabase
-        .from('hidden_chats')
-        .insert(insertData);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['hidden-chats'] });
-      toast.success('הצ\'אט הוסתר מהתצוגה');
-    },
-    onError: () => {
-      toast.error('שגיאה בהסתרת הצ\'אט');
-    },
-  });
-
-  // Unhide single chat mutation
-  const unhideContactMutation = useMutation({
-    mutationFn: async (contact: Contact) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !tenantId) throw new Error('No user or tenant');
-
-      let query = supabase
-        .from('hidden_chats')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('tenant_id', tenantId);
-
-      if (contact.contact_type === 'client') {
-        query = query.eq('client_id', contact.id);
-      } else if (contact.contact_type === 'lead') {
-        query = query.eq('lead_id', contact.id);
-      } else if (contact.contact_type === 'group') {
-        query = query.eq('group_id', contact.id);
-      } else if (contact.contact_type === 'unknown' && contact.sender_phone) {
-        query = query.eq('sender_phone', contact.sender_phone);
-      }
-
-      const { error } = await query;
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['hidden-chats'] });
-      toast.success('הצ\'אט הוחזר לתצוגה');
-    },
-    onError: () => {
-      toast.error('שגיאה בהחזרת הצ\'אט');
-    },
-  });
+  const clientsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'client').length;
+  const leadsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'lead').length;
+  const groupsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'group').length;
+  const unknownCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'unknown').length;
 
   // Mark as read mutation
   const markAsReadMutation = useMutation({
@@ -590,52 +471,17 @@ export default function Chat() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user || !tenantId) throw new Error('No user found');
 
-      if (clearHistoryMode === 'hide') {
-        // Hide all visible chats instead of deleting
-        const visibleChats = allContactsBeforeTypeFilter.filter(c => !isContactHidden(c));
-        
-        const inserts = visibleChats.map(contact => {
-          const base: any = {
-            user_id: user.id,
-            tenant_id: tenantId,
-          };
+      // Delete messages permanently
+      const { error } = await supabase
+        .from('chat_messages')
+        .delete()
+        .eq('connection_user_id', user.id);
 
-          if (contact.contact_type === 'client') {
-            base.client_id = contact.id;
-          } else if (contact.contact_type === 'lead') {
-            base.lead_id = contact.id;
-          } else if (contact.contact_type === 'group') {
-            base.group_id = contact.id;
-          } else if (contact.contact_type === 'unknown' && contact.sender_phone) {
-            base.sender_phone = contact.sender_phone;
-          }
-
-          return base;
-        }).filter(item => item.client_id || item.lead_id || item.group_id || item.sender_phone);
-
-        if (inserts.length > 0) {
-          const { error } = await supabase
-            .from('hidden_chats')
-            .insert(inserts);
-
-          if (error) throw error;
-        }
-
-        toast.success('כל הצ\'אטים הוסתרו מהתצוגה');
-        queryClient.invalidateQueries({ queryKey: ['hidden-chats'] });
-      } else {
-        // Delete messages permanently
-        const { error } = await supabase
-          .from('chat_messages')
-          .delete()
-          .eq('connection_user_id', user.id);
-
-        if (error) throw error;
-        
-        toast.success('ההיסטוריה נמחקה לצמיתות');
-        queryClient.invalidateQueries({ queryKey: ['active-chats'] });
-        queryClient.invalidateQueries({ queryKey: ['unknown-contacts'] });
-      }
+      if (error) throw error;
+      
+      toast.success('ההיסטוריה נמחקה לצמיתות');
+      queryClient.invalidateQueries({ queryKey: ['active-chats'] });
+      queryClient.invalidateQueries({ queryKey: ['unknown-contacts'] });
 
       setShowClearHistoryDialog(false);
       setSelectedContact(null);
@@ -702,33 +548,16 @@ export default function Chat() {
                   </Button>
                 }
               />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" title="פעולות">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => {
-                    setClearHistoryMode('hide');
-                    setShowClearHistoryDialog(true);
-                  }}>
-                    <EyeOff className="h-4 w-4 ml-2" />
-                    הסתר את כל הצ'אטים
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    onClick={() => {
-                      setClearHistoryMode('delete');
-                      setShowClearHistoryDialog(true);
-                    }}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="h-4 w-4 ml-2" />
-                    מחק היסטוריה לצמיתות
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                title="מחק היסטוריה"
+                onClick={() => {
+                  setShowClearHistoryDialog(true);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
               <Link to={buildPath('/chat-integrations')}>
                 <Button variant="ghost" size="icon">
                   <Settings className="h-4 w-4" />
@@ -811,24 +640,12 @@ export default function Chat() {
                   הצג רק שיחות לא נקראות
                 </Label>
               </div>
-              <div className="flex items-center gap-2 px-2">
-                <Switch
-                  id="hidden-filter"
-                  checked={showHiddenChats}
-                  onCheckedChange={setShowHiddenChats}
-                />
-                <Label htmlFor="hidden-filter" className="text-sm cursor-pointer">
-                  הצג צ'אטים מוסתרים ({hiddenCount})
-                </Label>
-              </div>
             </div>
           </div>
 
           <div className="text-muted-foreground text-sm px-2">
             {debouncedSearch ? (
               <span>תוצאות חיפוש עבור "{debouncedSearch}"</span>
-            ) : showHiddenChats ? (
-              <span>צ'אטים מוסתרים</span>
             ) : (
               <span>שיחות פעילות</span>
             )}
@@ -845,14 +662,13 @@ export default function Chat() {
               ))
             ) : filteredContacts.length === 0 ? (
               <div className="text-center p-8 text-muted-foreground">
-                {debouncedSearch ? 'לא נמצאו תוצאות' : showHiddenChats ? 'אין צ\'אטים מוסתרים' : 'אין שיחות פעילות'}
+                {debouncedSearch ? 'לא נמצאו תוצאות' : 'אין שיחות פעילות'}
               </div>
             ) : (
               filteredContacts.map((contact) => {
                 const isSelected = selectedContact?.id === contact.id;
                 const isChecked = selectedChatIds.has(contact.id);
                 const contactTagIds = getContactTagIds(contact);
-                const isHidden = isContactHidden(contact);
 
                 return (
                   <div key={contact.id} className="flex items-center gap-2">
@@ -892,10 +708,6 @@ export default function Chat() {
                                 <span className="block text-sm font-medium leading-tight truncate" dir="auto">
                                   {contact.contact_type === 'group' ? contact.name : (contact.contact_name || contact.name)}
                                 </span>
-                                {/* Show hidden indicator during search */}
-                                {debouncedSearch && isHidden && (
-                                  <EyeOff className="h-3 w-3 text-muted-foreground flex-shrink-0" />
-                                )}
                               </div>
                             </div>
                             <div className="flex items-center gap-1 flex-shrink-0">
@@ -906,26 +718,6 @@ export default function Chat() {
                                   contactType={contact.contact_type}
                                   senderPhone={contact.sender_phone}
                                 />
-                              )}
-                              
-                              {/* Hide/Unhide button */}
-                              {!isMultiSelectMode && (
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-5 w-5 p-0 hover:bg-primary/10"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (isHidden) {
-                                      unhideContactMutation.mutate(contact);
-                                    } else {
-                                      hideContactMutation.mutate(contact);
-                                    }
-                                  }}
-                                  title={isHidden ? "החזר לתצוגה" : "הסתר מהתצוגה"}
-                                >
-                                  {isHidden ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-                                </Button>
                               )}
 
                               {/* Mark as read */}
@@ -1044,22 +836,18 @@ export default function Chat() {
       <AlertDialog open={showClearHistoryDialog} onOpenChange={setShowClearHistoryDialog}>
         <AlertDialogContent dir="rtl">
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {clearHistoryMode === 'hide' ? 'הסתר את כל הצ\'אטים?' : 'מחק היסטוריה לצמיתות?'}
-            </AlertDialogTitle>
+            <AlertDialogTitle>מחק היסטוריה לצמיתות?</AlertDialogTitle>
             <AlertDialogDescription>
-              {clearHistoryMode === 'hide' 
-                ? 'הצ\'אטים יוסתרו מהתצוגה אבל ההיסטוריה תישמר. תוכל לראות אותם שוב דרך הפילטר "הצג צ\'אטים מוסתרים".'
-                : 'פעולה זו תמחק לצמיתות את כל היסטוריית הצ\'אטים שלך. לא ניתן יהיה לשחזר את המידע לאחר המחיקה.'}
+              פעולה זו תמחק לצמיתות את כל היסטוריית הצ'אטים שלך. לא ניתן יהיה לשחזר את המידע לאחר המחיקה.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>ביטול</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleClearHistory}
-              className={clearHistoryMode === 'delete' ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {clearHistoryMode === 'hide' ? 'הסתר הכל' : 'מחק הכל'}
+              מחק הכל
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
