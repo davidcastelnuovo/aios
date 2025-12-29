@@ -2882,6 +2882,7 @@ export type Database = {
               name: string
               sender_phone: string
               unread_count: number
+              whatsapp_avatar_url: string
               wid: string
             }[]
           }
