@@ -20,15 +20,17 @@ interface ChatTagSelectorProps {
   contactId: string;
   contactType: 'client' | 'lead' | 'group' | 'unknown';
   senderPhone?: string;
+  /** Pre-fetched tag IDs to avoid N+1 queries - pass this from parent when available */
+  initialTagIds?: string[];
 }
 
-export function ChatTagSelector({ contactId, contactType, senderPhone }: ChatTagSelectorProps) {
+export function ChatTagSelector({ contactId, contactType, senderPhone, initialTagIds }: ChatTagSelectorProps) {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [isManagerOpen, setIsManagerOpen] = useState(false);
 
-  // Fetch all available tags
+  // Fetch all available tags (this is cached globally, so it's efficient)
   const { data: allTags = [] } = useQuery({
     queryKey: ['chat-tags', tenantId],
     queryFn: async () => {
@@ -43,10 +45,11 @@ export function ChatTagSelector({ contactId, contactType, senderPhone }: ChatTag
       return data as ChatTag[];
     },
     enabled: !!tenantId,
+    staleTime: 60000, // Cache for 1 minute
   });
 
-  // Fetch tags assigned to this contact
-  const { data: contactTags = [] } = useQuery({
+  // Use pre-fetched tags if available, otherwise fetch individually (for backwards compatibility)
+  const { data: fetchedContactTags = [] } = useQuery({
     queryKey: ['chat-contact-tags', contactId, contactType, senderPhone],
     queryFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -72,8 +75,13 @@ export function ChatTagSelector({ contactId, contactType, senderPhone }: ChatTag
       if (error) throw error;
       return data.map(ct => ct.tag_id);
     },
-    enabled: !!tenantId,
+    // Only fetch if initialTagIds not provided
+    enabled: !!tenantId && initialTagIds === undefined,
+    staleTime: 30000, // Cache for 30 seconds
   });
+
+  // Use initialTagIds if provided, otherwise use fetched data
+  const contactTags = initialTagIds ?? fetchedContactTags;
 
   const toggleTagMutation = useMutation({
     mutationFn: async ({ tagId, isAssigned }: { tagId: string; isAssigned: boolean }) => {
