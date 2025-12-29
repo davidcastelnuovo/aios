@@ -506,12 +506,28 @@ serve(async (req) => {
         );
       }
 
-      const settings = integration.settings as any;
+      // If this is a shared integration, get pages from the source integration
+      let pagesSource = integration;
+      if (integration.shared_from_integration_id) {
+        const { data: sourceIntegration } = await supabase
+          .from('tenant_integrations')
+          .select('*')
+          .eq('id', integration.shared_from_integration_id)
+          .single();
+        
+        if (sourceIntegration) {
+          pagesSource = sourceIntegration;
+          console.log('Using source integration for page access token:', sourceIntegration.id);
+        }
+      }
+
+      const settings = pagesSource.settings as any;
       const pages = settings?.pages || [];
       const page = pages.find((p: any) => p.id === page_id);
       const pageAccessToken = page?.access_token;
 
       if (!pageAccessToken) {
+        console.error('Page access token not found. Page ID:', page_id, 'Available pages:', pages.map((p: any) => p.id));
         return new Response(
           JSON.stringify({ error: 'Page access token not found' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
