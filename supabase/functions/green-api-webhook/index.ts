@@ -942,6 +942,52 @@ Deno.serve(async (req) => {
 
     console.log('✅ Message saved successfully');
 
+    // For incoming messages, add "unread" tag automatically
+    if (!isOutgoing) {
+      console.log('🏷️ Adding unread tag for incoming message...');
+      
+      // Find the "unread" tag by name patterns
+      const { data: unreadTag } = await supabaseClient
+        .from('chat_tags')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .or('name.ilike.%לא נקרא%,name.ilike.%unread%')
+        .maybeSingle();
+      
+      if (unreadTag) {
+        // Prepare the tag association data
+        const tagData: any = {
+          tag_id: unreadTag.id,
+          user_id: connectionUserId,
+          tenant_id: tenantId,
+        };
+        
+        if (clientId) {
+          tagData.client_id = clientId;
+        } else if (leadId) {
+          tagData.lead_id = leadId;
+        } else {
+          tagData.sender_phone = phoneNumber;
+        }
+        
+        // Upsert to avoid duplicates
+        const { error: tagError } = await supabaseClient
+          .from('chat_contact_tags')
+          .upsert(tagData, { 
+            onConflict: 'tag_id,user_id,client_id,lead_id,group_id,sender_phone',
+            ignoreDuplicates: true 
+          });
+        
+        if (tagError) {
+          console.log('⚠️ Could not add unread tag (may already exist):', tagError.message);
+        } else {
+          console.log('✅ Unread tag added successfully');
+        }
+      } else {
+        console.log('ℹ️ No unread tag found in tenant');
+      }
+    }
+
     return new Response(JSON.stringify({ 
       success: true,
       contactType: clientId ? 'client' : (leadId ? 'lead' : 'unknown'),
