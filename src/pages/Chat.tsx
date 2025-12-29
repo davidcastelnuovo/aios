@@ -269,6 +269,7 @@ export default function Chat() {
       }));
     },
     enabled: !!tenantId && !debouncedSearch,
+    refetchInterval: 30000,
   });
 
   // Combine all contacts
@@ -295,7 +296,13 @@ export default function Chat() {
         whatsapp_avatar_url: uc.whatsapp_avatar_url || null,
       }));
       
-      return [...base, ...normalizedUnknown];
+      const combined = [...base, ...normalizedUnknown];
+      // Sort combined list by last_message_at descending (newest first)
+      return combined.sort((a, b) => {
+        const aTime = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+        const bTime = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+        return bTime - aTime;
+      });
     }
     
     return base;
