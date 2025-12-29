@@ -80,6 +80,10 @@ export default function ChatMessageList({
   const msgRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const bottomRef = useRef<HTMLDivElement>(null);
   const hasScrolledToAnchor = useRef(false);
+  const lastContactId = useRef<string | undefined>(undefined);
+  const lastMessageCount = useRef<number>(0);
+  const isUserScrolling = useRef(false);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Build a color map for group members
   const senderColorMap = useMemo(() => {
@@ -106,34 +110,54 @@ export default function ChatMessageList({
     setShowTaskDialog(true);
   };
 
-  // Scroll to anchor message or bottom
+  // Reset scroll flag only when contact actually changes
+  useEffect(() => {
+    if (lastContactId.current !== contactId) {
+      hasScrolledToAnchor.current = false;
+      lastMessageCount.current = 0;
+      lastContactId.current = contactId;
+    }
+  }, [contactId]);
+
+  // Scroll to anchor message or bottom - only on initial load or contact change
   useEffect(() => {
     if (!messages.length) return;
     
-    // Only scroll to anchor once when component mounts or anchorMessageId changes
-    if (!hasScrolledToAnchor.current && anchorMessageId) {
+    const isContactChange = lastMessageCount.current === 0;
+    const isNewMessages = messages.length > lastMessageCount.current;
+    
+    // Update message count
+    lastMessageCount.current = messages.length;
+    
+    // Only scroll on contact change, not on refetch
+    if (!hasScrolledToAnchor.current && isContactChange) {
+      // Use a small delay to ensure DOM is ready
       requestAnimationFrame(() => {
-        const anchorElement = msgRefs.current[anchorMessageId];
-        if (anchorElement) {
-          anchorElement.scrollIntoView({ behavior: 'auto', block: 'center' });
-          hasScrolledToAnchor.current = true;
+        if (anchorMessageId) {
+          const anchorElement = msgRefs.current[anchorMessageId];
+          if (anchorElement) {
+            anchorElement.scrollIntoView({ behavior: 'instant', block: 'center' });
+          } else if (bottomRef.current) {
+            bottomRef.current.scrollIntoView({ behavior: 'instant' });
+          }
         } else if (bottomRef.current) {
-          bottomRef.current.scrollIntoView({ behavior: 'auto' });
-          hasScrolledToAnchor.current = true;
+          bottomRef.current.scrollIntoView({ behavior: 'instant' });
         }
+        hasScrolledToAnchor.current = true;
       });
-    } else if (!anchorMessageId && bottomRef.current) {
-      // If no anchor (all messages read), scroll to bottom
-      requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'auto' });
-      });
+    } else if (isNewMessages && !isUserScrolling.current) {
+      // New messages arrived via refetch - only scroll if user is near bottom
+      const container = bottomRef.current?.parentElement?.parentElement;
+      if (container) {
+        const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 150;
+        if (isNearBottom) {
+          requestAnimationFrame(() => {
+            bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+          });
+        }
+      }
     }
   }, [messages, anchorMessageId]);
-
-  // Reset scroll flag when contact changes (anchorMessageId will change)
-  useEffect(() => {
-    hasScrolledToAnchor.current = false;
-  }, [anchorMessageId]);
 
   if (isLoading) {
     return (
