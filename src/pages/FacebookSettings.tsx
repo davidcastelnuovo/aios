@@ -90,6 +90,22 @@ export default function FacebookSettings() {
     enabled: !!currentTenant?.id,
   });
 
+  // Fetch sales people for form mapping
+  const { data: salesPeople } = useQuery({
+    queryKey: ['sales-people', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant?.id) return [];
+      const { data, error } = await supabase
+        .from('sales_people')
+        .select('id, full_name')
+        .eq('tenant_id', currentTenant.id)
+        .eq('active', true);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenant?.id,
+  });
+
   // Initialize pixel ID from existing integration
   useEffect(() => {
     if (capiIntegration?.settings) {
@@ -654,6 +670,7 @@ export default function FacebookSettings() {
               integrationId={leadAdsIntegration?.id || null}
               accessToken={leadAdsIntegration?.api_key || null}
               agencies={agencies || []}
+              salesPeople={salesPeople || []}
               sharedFromIntegrationId={(leadAdsIntegration as any)?.shared_from_integration_id}
             />
           )}

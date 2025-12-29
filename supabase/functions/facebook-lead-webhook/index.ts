@@ -156,6 +156,7 @@ serve(async (req) => {
                 status: 'new',
                 tenant_id: integration.tenant_id,
                 agency_id: formMappings.agency_id || null,
+                sales_person_id: formMappings.sales_person_id || null,
                 notes: `Facebook Lead ID: ${leadgenId}\nForm ID: ${formId}\nSource: Facebook Lead Ads`,
               };
 
