@@ -636,11 +636,12 @@ export default function Chat() {
                             </div>
                             <div className="flex items-center gap-1 flex-shrink-0">
                               {/* Tag selector */}
-                              {!isMultiSelectMode && (
+{!isMultiSelectMode && (
                                 <ChatTagSelector
                                   contactId={contact.id}
                                   contactType={contact.contact_type}
                                   senderPhone={contact.sender_phone}
+                                  initialTagIds={contactTagIds}
                                 />
                               )}
 
