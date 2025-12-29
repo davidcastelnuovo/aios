@@ -10,6 +10,7 @@ interface FormMapping {
   form_id: string;
   form_name: string;
   agency_id: string;
+  sales_person_id?: string | null;
   field_mappings: Record<string, string>;
 }
 
@@ -144,6 +145,7 @@ serve(async (req) => {
             const leadRecord: Record<string, any> = {
               tenant_id: integration.tenant_id,
               agency_id: mapping.agency_id,
+              sales_person_id: mapping.sales_person_id || null,
               source: 'paid_ads',
               status: 'new',
               notes: `leadgen_id: ${leadgenId}\nFacebook Form: ${mapping.form_name || formId}\nCreated: ${fbLead.created_time || 'unknown'}`,
@@ -254,6 +256,7 @@ serve(async (req) => {
               const leadRecord: Record<string, any> = {
                 tenant_id: integration.tenant_id,
                 agency_id: mapping.agency_id,
+                sales_person_id: mapping.sales_person_id || null,
                 source: 'paid_ads',
                 status: 'new',
                 notes: `leadgen_id: ${leadgenId}\nFacebook Form: ${mapping.form_name || formId}\nCreated: ${fbLead.created_time || 'unknown'}`,
