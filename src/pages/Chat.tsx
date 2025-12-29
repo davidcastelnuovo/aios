@@ -174,6 +174,7 @@ export default function Chat() {
         sender_phone: contact.sender_phone,
         is_blocked: contact.is_blocked || false,
         has_messages: true,
+        whatsapp_avatar_url: contact.whatsapp_avatar_url,
       }));
     },
     enabled: !!tenantId && !agenciesLoading && !debouncedSearch,
@@ -236,6 +237,7 @@ export default function Chat() {
         sender_phone: contact.phone,
         is_blocked: contact.is_blocked || false,
         has_messages: contact.has_messages || false,
+        whatsapp_avatar_url: contact.whatsapp_avatar_url,
       }));
     },
     enabled: !!tenantId && !!debouncedSearch,
@@ -289,6 +291,7 @@ export default function Chat() {
         sender_phone: uc.sender_phone,
         is_blocked: uc.is_blocked || false,
         has_messages: true,
+        whatsapp_avatar_url: null as string | null,
       }));
       
       return [...base, ...normalizedUnknown];
@@ -611,6 +614,12 @@ export default function Chat() {
                     >
                       <div className="flex flex-row-reverse items-center gap-3 w-full min-w-0 overflow-hidden">
                         <Avatar className="h-10 w-10 flex-shrink-0">
+                          {contact.whatsapp_avatar_url && (
+                            <AvatarImage 
+                              src={contact.whatsapp_avatar_url} 
+                              alt={contact.name}
+                            />
+                          )}
                           <AvatarFallback>
                             {(contact.contact_type === 'group' ? contact.name : (contact.contact_name || contact.name))?.charAt(0) || '?'}
                           </AvatarFallback>

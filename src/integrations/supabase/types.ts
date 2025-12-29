@@ -2840,43 +2840,25 @@ export type Database = {
         Args: { _source_tenant_id: string; _target_tenant_id: string }
         Returns: undefined
       }
-      get_chat_contacts:
-        | {
-            Args: never
-            Returns: {
-              active_chat_provider: Database["public"]["Enums"]["chat_provider"]
-              agency_id: string
-              agency_name: string
-              contact_id: string
-              contact_name: string
-              contact_type: string
-              email: string
-              is_blocked: boolean
-              last_message_at: string
-              manychat_subscriber_id: string
-              name: string
-              phone: string
-              unread_count: number
-            }[]
-          }
-        | {
-            Args: { p_tenant_id?: string }
-            Returns: {
-              active_chat_provider: Database["public"]["Enums"]["chat_provider"]
-              agency_id: string
-              agency_name: string
-              contact_id: string
-              contact_name: string
-              contact_type: string
-              email: string
-              is_blocked: boolean
-              last_message_at: string
-              manychat_subscriber_id: string
-              name: string
-              phone: string
-              unread_count: number
-            }[]
-          }
+      get_chat_contacts: {
+        Args: { p_tenant_id?: string }
+        Returns: {
+          active_chat_provider: Database["public"]["Enums"]["chat_provider"]
+          agency_id: string
+          agency_name: string
+          contact_id: string
+          contact_name: string
+          contact_type: string
+          email: string
+          is_blocked: boolean
+          last_message_at: string
+          manychat_subscriber_id: string
+          name: string
+          phone: string
+          unread_count: number
+          whatsapp_avatar_url: string
+        }[]
+      }
       get_client_tenant_id: { Args: { _client_id: string }; Returns: string }
       get_cross_tenant_campaigner_ids: {
         Args: { p_user_id: string }
