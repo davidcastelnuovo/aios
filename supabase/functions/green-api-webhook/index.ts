@@ -11,7 +11,7 @@ function normalizePhone(phone: string): string {
   return digitsOnly.slice(-9);
 }
 
-// Helper function to fetch WhatsApp avatar using Green API's getContactInfo
+// Helper function to fetch WhatsApp avatar using Green API's getAvatar (works for contacts and groups)
 async function fetchWhatsAppAvatar(
   instanceId: string,
   apiToken: string,
@@ -20,8 +20,9 @@ async function fetchWhatsAppAvatar(
   try {
     console.log('📸 Fetching WhatsApp avatar for:', chatId);
     
+    // Use getAvatar endpoint which works for both contacts and groups
     const response = await fetch(
-      `https://api.green-api.com/waInstance${instanceId}/getContactInfo/${apiToken}`,
+      `https://api.green-api.com/waInstance${instanceId}/getAvatar/${apiToken}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -31,11 +32,11 @@ async function fetchWhatsAppAvatar(
     
     if (response.ok) {
       const data = await response.json();
-      const avatarUrl = data.avatar || null;
+      const avatarUrl = data.urlAvatar || data.avatar || null;
       console.log('✅ Avatar URL:', avatarUrl ? 'Found' : 'Not found');
       return avatarUrl;
     } else {
-      console.error('❌ Failed to fetch contact info:', response.status);
+      console.error('❌ Failed to fetch avatar:', response.status);
       return null;
     }
   } catch (e) {
@@ -679,6 +680,24 @@ Deno.serve(async (req) => {
         console.log('👁️ Auto-unhiding group chat if hidden');
       }
 
+      // Fetch and update group avatar if not already set
+      const { data: groupData } = await supabaseClient
+        .from('whatsapp_groups')
+        .select('whatsapp_avatar_url')
+        .eq('id', groupId)
+        .single();
+      
+      if (!groupData?.whatsapp_avatar_url && apiToken) {
+        const groupAvatarUrl = await fetchWhatsAppAvatar(instanceId, apiToken, groupChatId);
+        if (groupAvatarUrl) {
+          await supabaseClient
+            .from('whatsapp_groups')
+            .update({ whatsapp_avatar_url: groupAvatarUrl })
+            .eq('id', groupId);
+          console.log('📸 Updated group avatar');
+        }
+      }
+
       // Save group message
       const { error: insertError } = await supabaseClient
         .from('chat_messages')
@@ -883,9 +902,22 @@ Deno.serve(async (req) => {
       }
     }
 
+    // For unknown contacts, fetch and store avatar in raw_provider_data
+    let senderProfileImage: string | null = null;
+    if (!clientId && !leadId && apiToken) {
+      senderProfileImage = await fetchWhatsAppAvatar(instanceId, apiToken, senderData.chatId);
+      if (senderProfileImage) {
+        console.log('📸 Fetched avatar for unknown contact');
+      }
+    }
+
     console.log('💾 Saving message...');
 
     // Save the message to THIS tenant only
+    const rawDataWithAvatar = senderProfileImage 
+      ? { ...webhookData, senderProfileImage } 
+      : webhookData;
+      
     const { error: insertError } = await supabaseClient
       .from('chat_messages')
       .insert({
@@ -900,7 +932,7 @@ Deno.serve(async (req) => {
         sender_name: senderData.senderName || null,
         is_blocked: false,
         connection_user_id: connectionUserId,
-        raw_provider_data: webhookData,
+        raw_provider_data: rawDataWithAvatar,
       });
 
     if (insertError) {

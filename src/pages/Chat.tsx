@@ -265,6 +265,7 @@ export default function Chat() {
         contact_type: contact.contact_type as 'unknown',
         agency_id: contact.agency_id,
         agency_name: contact.agency_name,
+        whatsapp_avatar_url: contact.whatsapp_avatar_url,
       }));
     },
     enabled: !!tenantId && !debouncedSearch,
@@ -291,7 +292,7 @@ export default function Chat() {
         sender_phone: uc.sender_phone,
         is_blocked: uc.is_blocked || false,
         has_messages: true,
-        whatsapp_avatar_url: null as string | null,
+        whatsapp_avatar_url: uc.whatsapp_avatar_url || null,
       }));
       
       return [...base, ...normalizedUnknown];
