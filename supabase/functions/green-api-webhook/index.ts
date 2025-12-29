@@ -276,14 +276,54 @@ Deno.serve(async (req) => {
           .eq('group_chat_id', groupChatId)
           .maybeSingle();
         
-        if (!existingGroup) {
-          console.log('⚠️ Group not found for status message, skipping');
-          return new Response(JSON.stringify({ received: true }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
+        let groupId = existingGroup?.id;
         
-        const groupId = existingGroup.id;
+        // If group doesn't exist, create it with a temporary name
+        if (!groupId) {
+          console.log('📝 Group not found, creating new group record for:', groupChatId);
+          
+          // Fetch real group name from Green API
+          let realGroupName: string | null = null;
+          try {
+            if (instanceId && apiToken) {
+              const response = await fetch(
+                `https://api.green-api.com/waInstance${instanceId}/getGroupData/${apiToken}`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ groupId: groupChatId })
+                }
+              );
+              if (response.ok) {
+                const groupData = await response.json();
+                realGroupName = groupData.subject || null;
+                console.log('✅ Fetched real group name:', realGroupName);
+              }
+            }
+          } catch (e) {
+            console.log('⚠️ Could not fetch group name:', e);
+          }
+          
+          const newGroupName = realGroupName || `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
+          
+          const { data: newGroup, error: groupError } = await supabaseClient
+            .from('whatsapp_groups')
+            .insert({
+              tenant_id: tenantId,
+              group_chat_id: groupChatId,
+              group_name: newGroupName,
+            })
+            .select('id')
+            .single();
+          
+          if (groupError) {
+            console.error('❌ Failed to create group:', groupError);
+            throw groupError;
+          }
+          
+          groupId = newGroup.id;
+          console.log('✅ Created new group:', newGroupName, 'with ID:', groupId);
+        }
         
         // Check if blocked
         const { data: blockedContact } = await supabaseClient
@@ -294,7 +334,7 @@ Deno.serve(async (req) => {
           .eq('group_id', groupId)
           .maybeSingle();
         
-        if (blockedContact || existingGroup.is_blocked) {
+        if (blockedContact || existingGroup?.is_blocked) {
           console.log('🚫 Group is blocked, ignoring');
           return new Response(JSON.stringify({ success: true, blocked: true }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
