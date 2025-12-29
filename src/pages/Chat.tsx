@@ -650,11 +650,6 @@ export default function Chat() {
                                   {contact.unread_count}
                                 </Badge>
                               )}
-                              {contact.contact_type === 'unknown' && (
-                                <Badge variant="outline" className="text-xs">
-                                  לא מזוהה
-                                </Badge>
-                              )}
                             </div>
                           </div>
                           
