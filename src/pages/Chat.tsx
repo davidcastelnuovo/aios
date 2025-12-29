@@ -251,7 +251,7 @@ export default function Chat() {
     queryKey: ['unknown-contacts', tenantId],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase.rpc('get_unknown_chat_contacts');
+      const { data, error } = await supabase.rpc('get_unknown_chat_contacts', { p_tenant_id: tenantId });
       if (error) return [];
 
       return (data || []).map((contact: any) => ({
