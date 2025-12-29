@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -5,8 +6,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tag, Plus } from "lucide-react";
+import { Tag, Settings } from "lucide-react";
 import { toast } from "sonner";
+import { ChatTagsManager } from "./ChatTagsManager";
 
 interface ChatTag {
   id: string;
@@ -23,6 +25,8 @@ interface ChatTagSelectorProps {
 export function ChatTagSelector({ contactId, contactType, senderPhone }: ChatTagSelectorProps) {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
+  const [isOpen, setIsOpen] = useState(false);
+  const [isManagerOpen, setIsManagerOpen] = useState(false);
 
   // Fetch all available tags
   const { data: allTags = [] } = useQuery({
@@ -130,43 +134,66 @@ export function ChatTagSelector({ contactId, contactType, senderPhone }: ChatTag
     },
   });
 
-  const assignedTags = allTags.filter(tag => contactTags.includes(tag.id));
+  const handleOpenManager = () => {
+    setIsOpen(false);
+    setIsManagerOpen(true);
+  };
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-6 w-6 p-0">
-          <Tag className="h-3.5 w-3.5" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-56 p-2" align="start" dir="rtl">
-        <div className="space-y-1">
-          {allTags.length === 0 ? (
-            <div className="text-center text-muted-foreground text-sm py-2">
-              אין תגיות זמינות
-            </div>
-          ) : (
-            allTags.map((tag) => {
-              const isAssigned = contactTags.includes(tag.id);
-              return (
-                <div
-                  key={tag.id}
-                  className="flex items-center gap-2 p-2 rounded-md hover:bg-muted cursor-pointer"
-                  onClick={() => toggleTagMutation.mutate({ tagId: tag.id, isAssigned })}
-                >
-                  <Checkbox checked={isAssigned} />
+    <>
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-6 w-6 p-0">
+            <Tag className="h-3.5 w-3.5" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-56 p-2" align="start" dir="rtl">
+          <div className="space-y-1">
+            {allTags.length === 0 ? (
+              <div className="text-center text-muted-foreground text-sm py-2">
+                אין תגיות זמינות
+              </div>
+            ) : (
+              allTags.map((tag) => {
+                const isAssigned = contactTags.includes(tag.id);
+                return (
                   <div
-                    className="w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: tag.color }}
-                  />
-                  <span className="text-sm flex-1">{tag.name}</span>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
+                    key={tag.id}
+                    className="flex items-center gap-2 p-2 rounded-md hover:bg-muted cursor-pointer"
+                    onClick={() => toggleTagMutation.mutate({ tagId: tag.id, isAssigned })}
+                  >
+                    <Checkbox checked={isAssigned} />
+                    <div
+                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: tag.color }}
+                    />
+                    <span className="text-sm flex-1">{tag.name}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="border-t border-border mt-2 pt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start text-muted-foreground hover:text-foreground"
+              onClick={handleOpenManager}
+            >
+              <Settings className="h-4 w-4 ml-2" />
+              ניהול תגיות
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      <ChatTagsManager
+        open={isManagerOpen}
+        onOpenChange={setIsManagerOpen}
+        showTrigger={false}
+      />
+    </>
   );
 }
 
