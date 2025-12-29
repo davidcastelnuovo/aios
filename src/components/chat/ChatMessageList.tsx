@@ -182,22 +182,28 @@ export default function ChatMessageList({
   const isPlaceholder = (text?: string) => !!text && /^\s*\[[^\]]+\]\s*$/.test(text);
 
   const getQuotedMessage = (message: Message) => {
-    const quotedMessage =
-      message.raw_provider_data?.messageData?.quotedMessage ||
-      message.raw_provider_data?.messageData?.extendedTextMessageData?.quotedMessage;
-    if (!quotedMessage) return null;
+    const messageData = message.raw_provider_data?.messageData;
+    const quotedMessage = messageData?.quotedMessage ||
+                          messageData?.extendedTextMessageData?.quotedMessage;
+    
+    // If no quoted message structure, check if we have a quotedMessage type with main text
+    if (!quotedMessage && messageData?.typeMessage !== 'quotedMessage') return null;
 
-    // Get quoted message text content
-    const quotedText = quotedMessage.textMessage || 
-                       quotedMessage.caption || 
-                       quotedMessage.extendedTextMessageData?.text ||
+    // Get the MAIN message text (what the user typed as a reply)
+    const mainMessageText = messageData?.extendedTextMessageData?.text ||
+                            message.raw_provider_data?.fetchedMessageContent?.extendedTextMessage?.text;
+
+    // Get quoted message text content (the message being replied to)
+    const quotedText = quotedMessage?.textMessage || 
+                       quotedMessage?.caption || 
+                       quotedMessage?.extendedTextMessageData?.text ||
                        null;
     
     // Check for media in quoted message
-    const hasImage = quotedMessage.typeMessage === 'imageMessage' || quotedMessage.downloadUrl;
-    const hasVideo = quotedMessage.typeMessage === 'videoMessage';
-    const hasAudio = quotedMessage.typeMessage === 'audioMessage';
-    const hasDocument = quotedMessage.typeMessage === 'documentMessage';
+    const hasImage = quotedMessage?.typeMessage === 'imageMessage' || quotedMessage?.downloadUrl;
+    const hasVideo = quotedMessage?.typeMessage === 'videoMessage';
+    const hasAudio = quotedMessage?.typeMessage === 'audioMessage';
+    const hasDocument = quotedMessage?.typeMessage === 'documentMessage';
 
     let mediaIndicator = null;
     if (hasImage) mediaIndicator = '📷 תמונה';
@@ -205,16 +211,25 @@ export default function ChatMessageList({
     else if (hasAudio) mediaIndicator = '🎤 הודעה קולית';
     else if (hasDocument) mediaIndicator = '📄 מסמך';
 
-    return (
-      <div className="bg-black/5 border-r-4 border-blue-500 pr-2 py-1 mb-2 text-[13px] rounded-sm">
-        <div className="font-semibold text-xs mb-0.5 text-blue-600">
-          {quotedMessage.participant || quotedMessage.chatName || 'הודעה מצוטטת'}
+    // Format participant for display - remove @c.us and show just the number
+    const participant = quotedMessage?.participant;
+    const participantDisplay = participant ? participant.replace(/@c\.us$/, '').replace(/^(\d{3})(\d+)$/, '+$1 $2') : null;
+
+    return {
+      quotedElement: (
+        <div className="bg-black/5 border-r-4 border-blue-500 pr-2 py-1 mb-2 text-[13px] rounded-sm">
+          {participantDisplay && (
+            <div className="font-semibold text-xs mb-0.5 text-blue-600">
+              {participantDisplay}
+            </div>
+          )}
+          <div className="line-clamp-2 text-gray-600">
+            {quotedText || mediaIndicator || '[מדיה]'}
+          </div>
         </div>
-        <div className="line-clamp-2 text-gray-600">
-          {quotedText || mediaIndicator || '[מדיה]'}
-        </div>
-      </div>
-    );
+      ),
+      mainMessageText,
+    };
   };
 
   const getReactionEmoji = (message: Message) => {
@@ -375,9 +390,12 @@ export default function ChatMessageList({
         {messages.map((message) => {
           const isOutbound = message.direction === 'outbound';
           const mediaContent = getMediaContent(message);
-          const quotedMessage = getQuotedMessage(message);
+          const quotedMessageData = getQuotedMessage(message);
           const reactionEmoji = getReactionEmoji(message);
           const senderColor = getSenderDisplayColor(message);
+          
+          // For quoted messages, show the main message text (reply), not the placeholder
+          const displayText = quotedMessageData?.mainMessageText || message.message_text;
           
           return (
             <div
@@ -405,12 +423,12 @@ export default function ChatMessageList({
                     {message.profiles.full_name}
                   </div>
                 )}
-                {quotedMessage}
+                {quotedMessageData?.quotedElement}
                 {reactionEmoji}
                 {mediaContent}
-                {message.message_text && !reactionEmoji && !isPlaceholder(message.message_text) && (
+                {displayText && !reactionEmoji && !isPlaceholder(displayText) && (
                   <div className="whitespace-pre-wrap break-words text-[14.2px] leading-[19px]" dir="rtl">
-                    {renderTextWithLinks(message.message_text)}
+                    {renderTextWithLinks(displayText)}
                   </div>
                 )}
                 <div
