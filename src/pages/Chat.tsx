@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MessageCircle, Search, Settings, Pencil, Trash2, Check, Tags, SquareCheck } from "lucide-react";
+import { MessageCircle, Search, Settings, Pencil, Trash2, Tags, SquareCheck } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -307,34 +307,6 @@ export default function Chat() {
     return d.getFullYear() === todayParts.y && d.getMonth() === todayParts.m && d.getDate() === todayParts.d;
   };
 
-  // Fetch manually marked read contacts
-  const { data: manuallyReadContacts = [] } = useQuery({
-    queryKey: ['manually-read-contacts', tenantId],
-    queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !tenantId) return [];
-
-      const { data, error } = await supabase
-        .from('manually_read_contacts')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('tenant_id', tenantId);
-
-      if (error) return [];
-      return data || [];
-    },
-    enabled: !!tenantId,
-  });
-
-  const isManuallyMarkedRead = useCallback((contact: Contact) => {
-    return manuallyReadContacts.some(mrc => {
-      if (contact.contact_type === 'client' && mrc.client_id === contact.id) return true;
-      if (contact.contact_type === 'lead' && mrc.lead_id === contact.id) return true;
-      if (contact.contact_type === 'group' && mrc.group_id === contact.id) return true;
-      if (contact.contact_type === 'unknown' && contact.sender_phone && mrc.sender_phone === contact.sender_phone) return true;
-      return false;
-    });
-  }, [manuallyReadContacts]);
 
   // Filter contacts
   const filteredContacts = useMemo(() => {
@@ -359,7 +331,7 @@ export default function Chat() {
 
     // Apply unread only filter
     if (showUnreadOnly) {
-      allContacts = allContacts.filter(contact => !isManuallyMarkedRead(contact));
+      allContacts = allContacts.filter(contact => contact.unread_count > 0);
     }
 
     // Apply tag filter
@@ -371,72 +343,13 @@ export default function Chat() {
     }
 
     return allContacts;
-  }, [allContactsBeforeTypeFilter, contactFilter, showTodayOnly, showUnreadOnly, todayParts, isManuallyMarkedRead, selectedTagFilter, getContactTagIds, debouncedSearch]);
+  }, [allContactsBeforeTypeFilter, contactFilter, showTodayOnly, showUnreadOnly, todayParts, selectedTagFilter, getContactTagIds, debouncedSearch]);
 
   const clientsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'client').length;
   const leadsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'lead').length;
   const groupsCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'group').length;
   const unknownCount = allContactsBeforeTypeFilter.filter(c => c.contact_type === 'unknown').length;
 
-  // Mark as read mutation
-  const markAsReadMutation = useMutation({
-    mutationFn: async (contact: Contact) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || !tenantId) throw new Error('No user or tenant found');
-
-      let query = supabase
-        .from('chat_messages')
-        .update({ read_at: new Date().toISOString() })
-        .eq('connection_user_id', user.id)
-        .eq('direction', 'incoming')
-        .is('read_at', null);
-
-      if (contact.contact_type === 'client') {
-        query = query.eq('client_id', contact.id);
-      } else if (contact.contact_type === 'lead') {
-        query = query.eq('lead_id', contact.id);
-      } else if (contact.contact_type === 'group') {
-        query = query.eq('group_id', contact.id);
-      } else if (contact.contact_type === 'unknown' && contact.sender_phone) {
-        query = query.eq('sender_phone', contact.sender_phone);
-      }
-
-      const { error: msgError } = await query;
-      if (msgError) throw msgError;
-
-      const insertData: any = {
-        user_id: user.id,
-        tenant_id: tenantId,
-      };
-
-      if (contact.contact_type === 'client') {
-        insertData.client_id = contact.id;
-      } else if (contact.contact_type === 'lead') {
-        insertData.lead_id = contact.id;
-      } else if (contact.contact_type === 'group') {
-        insertData.group_id = contact.id;
-      } else if (contact.contact_type === 'unknown' && contact.sender_phone) {
-        insertData.sender_phone = contact.sender_phone;
-      }
-
-      const { error: insertError } = await supabase
-        .from('manually_read_contacts')
-        .insert(insertData);
-
-      if (insertError && !insertError.message.includes('duplicate')) {
-        throw insertError;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['active-chats'] });
-      queryClient.invalidateQueries({ queryKey: ['unknown-contacts'] });
-      queryClient.invalidateQueries({ queryKey: ['manually-read-contacts'] });
-      toast.success('השיחה סומנה כנקראה');
-    },
-    onError: () => {
-      toast.error('שגיאה בסימון כנקרא');
-    },
-  });
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
@@ -720,21 +633,6 @@ export default function Chat() {
                                 />
                               )}
 
-                              {/* Mark as read */}
-                              {!isManuallyMarkedRead(contact) && !isMultiSelectMode && (
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-5 w-5 p-0 hover:bg-primary/10"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    markAsReadMutation.mutate(contact);
-                                  }}
-                                  title="סמן כנקרא"
-                                >
-                                  <Check className="h-3 w-3" />
-                                </Button>
-                              )}
                               
                               {contact.unread_count > 0 && (
                                 <Badge variant="destructive" className="h-5 min-w-5 flex items-center justify-center px-1">
