@@ -125,12 +125,47 @@ export function ChatTagSelector({ contactId, contactType, senderPhone }: ChatTag
         if (error) throw error;
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chat-contact-tags'] });
-      queryClient.invalidateQueries({ queryKey: ['contact-tags-for-list'] });
+    // Optimistic update - update UI immediately before server response
+    onMutate: async ({ tagId, isAssigned }) => {
+      // Cancel any outgoing refetches to prevent overwrites
+      await queryClient.cancelQueries({ queryKey: ['chat-contact-tags', contactId, contactType, senderPhone] });
+      await queryClient.cancelQueries({ queryKey: ['contact-tags-for-list', tenantId] });
+
+      // Snapshot previous values for rollback
+      const previousContactTags = queryClient.getQueryData<string[]>(['chat-contact-tags', contactId, contactType, senderPhone]);
+      const previousListTags = queryClient.getQueryData(['contact-tags-for-list', tenantId]);
+
+      // Optimistically update contact tags
+      queryClient.setQueryData<string[]>(['chat-contact-tags', contactId, contactType, senderPhone], (old = []) => {
+        if (isAssigned) {
+          return old.filter(id => id !== tagId);
+        } else {
+          return [...old, tagId];
+        }
+      });
+
+      return { previousContactTags, previousListTags };
     },
-    onError: () => {
+    onError: (_err, _variables, context) => {
+      // Rollback on error
+      if (context?.previousContactTags !== undefined) {
+        queryClient.setQueryData(
+          ['chat-contact-tags', contactId, contactType, senderPhone],
+          context.previousContactTags
+        );
+      }
+      if (context?.previousListTags !== undefined) {
+        queryClient.setQueryData(
+          ['contact-tags-for-list', tenantId],
+          context.previousListTags
+        );
+      }
       toast.error('שגיאה בעדכון התגיות');
+    },
+    onSettled: () => {
+      // Sync with server after mutation completes
+      queryClient.invalidateQueries({ queryKey: ['chat-contact-tags', contactId, contactType, senderPhone] });
+      queryClient.invalidateQueries({ queryKey: ['contact-tags-for-list', tenantId] });
     },
   });
 
