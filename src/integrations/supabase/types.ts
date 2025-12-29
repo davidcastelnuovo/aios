@@ -2951,6 +2951,7 @@ export type Database = {
               contact_name: string
               contact_type: string
               email: string
+              has_messages: boolean
               is_blocked: boolean
               last_message_at: string
               manychat_subscriber_id: string
@@ -2958,6 +2959,7 @@ export type Database = {
               phone: string
               sender_phone: string
               unread_count: number
+              whatsapp_avatar_url: string
             }[]
           }
       user_can_view_campaigner: {
