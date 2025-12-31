@@ -45,6 +45,38 @@ async function fetchWhatsAppAvatar(
   }
 }
 
+// Helper function to fetch contact name from WhatsApp using Green API
+async function fetchContactName(
+  instanceId: string,
+  apiToken: string,
+  chatId: string
+): Promise<string | null> {
+  try {
+    console.log('📇 Fetching contact name for:', chatId);
+    
+    const response = await fetch(
+      `https://api.green-api.com/waInstance${instanceId}/getContactInfo/${apiToken}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId })
+      }
+    );
+    
+    if (response.ok) {
+      const data = await response.json();
+      const contactName = data.name || data.pushname || null;
+      console.log('✅ Contact name from API:', contactName);
+      return contactName;
+    }
+    console.log('⚠️ Could not fetch contact name, status:', response.status);
+    return null;
+  } catch (e) {
+    console.error('❌ Error fetching contact name:', e);
+    return null;
+  }
+}
+
 // Helper function to fetch message content using Green API's getMessage
 async function fetchMessageContent(
   instanceId: string,
@@ -450,6 +482,13 @@ Deno.serve(async (req) => {
         }
       }
       
+      // Fetch contact name for outgoing messages to unknown contacts
+      let contactName: string | null = null;
+      if (!clientId && !leadId && apiToken) {
+        const chatIdForContact = `${phoneNumber}@c.us`;
+        contactName = await fetchContactName(instanceId, apiToken, chatIdForContact);
+      }
+      
       // Save the message
       const { error: insertError } = await supabaseClient
         .from('chat_messages')
@@ -462,6 +501,7 @@ Deno.serve(async (req) => {
           channel: 'whatsapp',
           provider: 'green_api',
           sender_phone: phoneNumber,
+          sender_name: contactName,
           is_blocked: false,
           connection_user_id: connectionUserId,
           raw_provider_data: combinedRawData,
