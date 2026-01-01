@@ -54,7 +54,7 @@ const formSchema = z.object({
   website: z.string().url("כתובת אתר לא תקינה").optional().or(z.literal("")),
   notes: z.string().optional(),
   status: z.enum(["active", "paused", "ended", "onboarding"]),
-  mood_status: z.enum(["happy", "wavering", "churn_risk"]).optional(),
+  mood_status: z.enum(["happy", "wavering", "churn_risk", "not_progressing"]).optional(),
   is_seo_client: z.boolean().default(false),
 });
 
@@ -663,6 +663,12 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                           <span className="flex items-center gap-2">
                             <span>😟</span>
                             <span className="text-red-600">סכנת נטישה</span>
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="not_progressing">
+                          <span className="flex items-center gap-2">
+                            <span>😔</span>
+                            <span className="text-orange-600">לא מתקדם</span>
                           </span>
                         </SelectItem>
                       </SelectContent>

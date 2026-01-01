@@ -266,7 +266,7 @@ export default function Clients() {
   });
 
   const updateMoodStatusMutation = useMutation({
-    mutationFn: async ({ clientId, moodStatus }: { clientId: string; moodStatus: "happy" | "wavering" | "churn_risk" }) => {
+    mutationFn: async ({ clientId, moodStatus }: { clientId: string; moodStatus: "happy" | "wavering" | "churn_risk" | "not_progressing" }) => {
       const { error } = await supabase
         .from("clients")
         .update({ mood_status: moodStatus })
@@ -439,6 +439,8 @@ export default function Clients() {
         return { emoji: "😐", text: "לקוח מתנדנד", color: "text-yellow-600 bg-yellow-50 border-yellow-200" };
       case "churn_risk":
         return { emoji: "😟", text: "סכנת נטישה", color: "text-red-600 bg-red-50 border-red-200" };
+      case "not_progressing":
+        return { emoji: "😔", text: "לא מתקדם", color: "text-orange-600 bg-orange-50 border-orange-200" };
       default:
         return { emoji: "😊", text: "לקוח מבסוט", color: "text-green-600 bg-green-50 border-green-200" };
     }
@@ -659,7 +661,7 @@ export default function Clients() {
                 <p className="text-sm text-muted-foreground">מצב לקוח:</p>
                 <Select
                   value={client.mood_status || "happy"}
-                  onValueChange={(value: "happy" | "wavering" | "churn_risk") => 
+                  onValueChange={(value: "happy" | "wavering" | "churn_risk" | "not_progressing") => 
                     updateMoodStatusMutation.mutate({ clientId: client.id, moodStatus: value })
                   }
                 >
@@ -688,6 +690,12 @@ export default function Clients() {
                       <div className="flex items-center gap-2">
                         <span>😟</span>
                         <span className="text-red-600">סכנת נטישה</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="not_progressing">
+                      <div className="flex items-center gap-2">
+                        <span>😔</span>
+                        <span className="text-orange-600">לא מתקדם</span>
                       </div>
                     </SelectItem>
                   </SelectContent>
