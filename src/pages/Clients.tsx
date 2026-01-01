@@ -56,6 +56,7 @@ export default function Clients() {
   const [hideInactive, setHideInactive] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("all");
+  const [selectedMoodStatus, setSelectedMoodStatus] = useState<string>("all");
   const [deletingClient, setDeletingClient] = useState<any>(null);
   const [editingFolderLink, setEditingFolderLink] = useState<{ clientId: string; link: string } | null>(null);
   const queryClient = useQueryClient();
@@ -391,11 +392,16 @@ export default function Clients() {
       })
     : filteredClients;
 
+  // Filter by mood status
+  const moodFilteredClients = selectedMoodStatus && selectedMoodStatus !== "all"
+    ? campaignerFilteredClients?.filter(client => client.mood_status === selectedMoodStatus)
+    : campaignerFilteredClients;
+
   const searchedClients = searchTerm 
-    ? campaignerFilteredClients?.filter(client => 
+    ? moodFilteredClients?.filter(client => 
         client.name.toLowerCase().includes(searchTerm.toLowerCase())
       )
-    : campaignerFilteredClients;
+    : moodFilteredClients;
 
   const visibleClients = hideInactive 
     ? searchedClients?.filter(client => client.status === "active" || client.status === "onboarding")
@@ -487,6 +493,41 @@ export default function Clients() {
               </Select>
             </>
           )}
+          
+          {/* Mood Status Filter */}
+          <div className="h-8 w-px bg-border"></div>
+          <Select value={selectedMoodStatus} onValueChange={setSelectedMoodStatus}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="כל המצבים" />
+            </SelectTrigger>
+            <SelectContent className="bg-background">
+              <SelectItem value="all">כל המצבים</SelectItem>
+              <SelectItem value="happy">
+                <span className="flex items-center gap-2">
+                  <span>😊</span>
+                  <span>לקוח מבסוט</span>
+                </span>
+              </SelectItem>
+              <SelectItem value="wavering">
+                <span className="flex items-center gap-2">
+                  <span>😐</span>
+                  <span>לקוח מתנדנד</span>
+                </span>
+              </SelectItem>
+              <SelectItem value="churn_risk">
+                <span className="flex items-center gap-2">
+                  <span>😟</span>
+                  <span>סכנת נטישה</span>
+                </span>
+              </SelectItem>
+              <SelectItem value="not_progressing">
+                <span className="flex items-center gap-2">
+                  <span>😔</span>
+                  <span>לא מתקדם</span>
+                </span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
           
           <div className="h-8 w-px bg-border"></div>
           <div className="flex gap-1 border rounded-md p-1">
