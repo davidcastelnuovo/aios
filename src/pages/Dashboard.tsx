@@ -309,7 +309,19 @@ export default function Dashboard() {
         }
       });
       
-      const totalExpense = financeExpense + manualSupplierPayments;
+      // תשלומים לקמפיינרים מ-client_team
+      let campaignerPayments = 0;
+      if (activeClientIds.length > 0) {
+        let clientTeamQuery = supabase
+          .from("client_team")
+          .select("campaigner_payment, client_id")
+          .in("client_id", activeClientIds);
+        
+        const { data: clientTeamPayments } = await clientTeamQuery;
+        campaignerPayments = clientTeamPayments?.reduce((sum, ct) => sum + Number(ct.campaigner_payment || 0), 0) || 0;
+      }
+      
+      const totalExpense = financeExpense + manualSupplierPayments + campaignerPayments;
 
       return {
         agenciesCount: agenciesData.count || 0,
