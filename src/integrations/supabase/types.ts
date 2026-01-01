@@ -3056,7 +3056,11 @@ export type Database = {
         | "meeting_day_after"
         | "meeting_same_day"
       chat_provider: "manychat" | "green_api" | "internal"
-      client_mood_status: "happy" | "wavering" | "churn_risk"
+      client_mood_status:
+        | "happy"
+        | "wavering"
+        | "churn_risk"
+        | "not_progressing"
       client_status: "active" | "paused" | "ended" | "onboarding"
       finance_type: "income" | "expense"
       lead_response_status:
@@ -3267,7 +3271,12 @@ export const Constants = {
         "meeting_same_day",
       ],
       chat_provider: ["manychat", "green_api", "internal"],
-      client_mood_status: ["happy", "wavering", "churn_risk"],
+      client_mood_status: [
+        "happy",
+        "wavering",
+        "churn_risk",
+        "not_progressing",
+      ],
       client_status: ["active", "paused", "ended", "onboarding"],
       finance_type: ["income", "expense"],
       lead_response_status: [
