@@ -202,10 +202,15 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       }
     },
     onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: ["chat-contacts"] });
-      const previousContacts = queryClient.getQueryData(["chat-contacts"]);
+      // Cancel and update both active-chats and unknown-contacts queries for instant UI update
+      await queryClient.cancelQueries({ queryKey: ["active-chats"] });
+      await queryClient.cancelQueries({ queryKey: ["unknown-contacts"] });
+      
+      const previousActiveChats = queryClient.getQueryData(["active-chats"]);
+      const previousUnknownContacts = queryClient.getQueryData(["unknown-contacts"]);
 
-      queryClient.setQueryData(["chat-contacts"], (old: any) => {
+      // Optimistically update active-chats
+      queryClient.setQueryData(["active-chats"], (old: any) => {
         if (!old) return old;
         return old.map((contact: any) =>
           contact.id === contactId && contact.contact_type === contactType
@@ -214,17 +219,30 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         );
       });
 
-      return { previousContacts };
+      // Optimistically update unknown-contacts
+      queryClient.setQueryData(["unknown-contacts"], (old: any) => {
+        if (!old) return old;
+        return old.map((contact: any) =>
+          (contact.id === contactId || contact.sender_phone === senderPhone)
+            ? { ...contact, unread_count: 0 }
+            : contact
+        );
+      });
+
+      return { previousActiveChats, previousUnknownContacts };
     },
     onError: (err, variables, context: any) => {
-      if (context?.previousContacts) {
-        queryClient.setQueryData(["chat-contacts"], context.previousContacts);
+      if (context?.previousActiveChats) {
+        queryClient.setQueryData(["active-chats"], context.previousActiveChats);
+      }
+      if (context?.previousUnknownContacts) {
+        queryClient.setQueryData(["unknown-contacts"], context.previousUnknownContacts);
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["chat-contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["active-chats"] });
       queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["chat-contact-tags"] });
+      queryClient.invalidateQueries({ queryKey: ["contact-tags-for-list"] });
     },
   });
 
