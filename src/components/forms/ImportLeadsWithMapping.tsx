@@ -682,10 +682,12 @@ export function ImportLeadsWithMapping() {
         }
       }
       
-      // Add existing tags to the map
+      // Add existing tags to the map FIRST (before new tags, so new tags don't accidentally overwrite)
       existingTags.forEach(t => {
         tagIdMap[t.name.toLowerCase()] = t.id;
       });
+      
+      console.log("[Import Debug] tagIdMap populated with", Object.keys(tagIdMap).length, "tags:", Object.keys(tagIdMap).slice(0, 10));
 
       // Build field map
       const fieldMap: Record<string, string> = {};
@@ -841,6 +843,10 @@ export function ImportLeadsWithMapping() {
       if (validLeads.length === 0) {
         throw new Error("לא נמצאו לידים תקינים בקובץ");
       }
+      
+      // Debug: How many leads have tags
+      const leadsWithTags = validLeads.filter(v => v.tags?.length > 0);
+      console.log("[Import Debug] validLeads:", validLeads.length, "with tags:", leadsWithTags.length, "sample tags:", leadsWithTags.slice(0, 3).map(l => l.tags));
 
       // Save backup
       await supabase.from("import_history").insert({
@@ -955,14 +961,24 @@ export function ImportLeadsWithMapping() {
         }
       });
 
+      // Deduplicate tag records before inserting (use lead_id|tag_id as key)
+      const uniqueTagRecords = Array.from(
+        new Map(tagRecords.map(r => [`${r.lead_id}|${r.tag_id}`, r])).values()
+      );
+      
+      console.log("[Import Debug] Tag records: original=", tagRecords.length, "deduplicated=", uniqueTagRecords.length, "sample:", uniqueTagRecords.slice(0, 3));
+      
       // Insert tag records
-      if (tagRecords.length > 0) {
-        // Use ignoreDuplicates instead of onConflict for simpler handling
-        const { error: tagError } = await supabase
+      if (uniqueTagRecords.length > 0) {
+        const { error: tagError, data: insertedTags } = await supabase
           .from("chat_contact_tags")
-          .upsert(tagRecords, { onConflict: 'tag_id,lead_id', ignoreDuplicates: true });
+          .upsert(uniqueTagRecords, { onConflict: 'tag_id,lead_id', ignoreDuplicates: true })
+          .select();
+        
         if (tagError) {
-          console.error("Error inserting tags:", tagError);
+          console.error("[Import Debug] Error inserting tags:", tagError.message, tagError.details, tagError.hint);
+        } else {
+          console.log("[Import Debug] Successfully inserted/upserted tags:", insertedTags?.length || 0);
         }
       }
 
@@ -1008,6 +1024,9 @@ export function ImportLeadsWithMapping() {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       queryClient.invalidateQueries({ queryKey: ["lead-statuses"] });
       queryClient.invalidateQueries({ queryKey: ["chat-tags"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-tags", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["leads-tags-bulk"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-tags-bulk", tenantId] });
       queryClient.invalidateQueries({ queryKey: ["lead-updates"] });
       
       toast({
