@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useRef, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -145,6 +145,8 @@ const AUTO_DETECT_MAPPINGS: Record<string, string> = {
 };
 
 export function ImportLeadsWithMapping() {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("upload");
   const [isLoading, setIsLoading] = useState(false);
@@ -965,6 +967,7 @@ export function ImportLeadsWithMapping() {
             בחר קובץ CSV או Excel להעלאה
           </p>
           <input
+            ref={fileInputRef}
             type="file"
             accept=".csv,.xlsx,.xls"
             onChange={handleFileUpload}
@@ -972,13 +975,13 @@ export function ImportLeadsWithMapping() {
             id="leads-upload"
             disabled={isLoading}
           />
-          <label htmlFor="leads-upload">
-            <Button asChild disabled={isLoading}>
-              <span className="cursor-pointer">
-                {isLoading ? "טוען..." : "בחר קובץ"}
-              </span>
-            </Button>
-          </label>
+          <Button
+            type="button"
+            disabled={isLoading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {isLoading ? "טוען..." : "בחר קובץ"}
+          </Button>
         </div>
       </div>
     </div>
