@@ -897,16 +897,23 @@ export default function Leads() {
     staleTime: 60000,
   });
 
-  // Fetch lead tags in bulk for filtering
+  // Get visible lead IDs for tag fetching (to avoid 1000 row limit)
+  const visibleLeadIds = useMemo(() => {
+    if (!secureFilteredLeads || secureFilteredLeads.length === 0) return [];
+    return secureFilteredLeads.map((lead: any) => lead.id);
+  }, [secureFilteredLeads]);
+
+  // Fetch lead tags in bulk for visible leads only (avoids 1000 row limit)
   const { data: leadsTagsMap = {} } = useQuery({
-    queryKey: ['leads-tags-bulk', tenantId],
+    queryKey: ['leads-tags-visible', tenantId, visibleLeadIds],
     queryFn: async () => {
-      if (!tenantId) return {};
+      if (!tenantId || visibleLeadIds.length === 0) return {};
+      
       const { data, error } = await supabase
         .from('chat_contact_tags')
         .select('lead_id, tag_id')
         .eq('tenant_id', tenantId)
-        .not('lead_id', 'is', null);
+        .in('lead_id', visibleLeadIds);
       
       if (error) throw error;
       
@@ -918,10 +925,17 @@ export default function Leads() {
           map[item.lead_id].push(item.tag_id);
         }
       });
+      
+      console.info('[LeadsTags] Fetched tags for visible leads:', { 
+        visibleLeads: visibleLeadIds.length, 
+        tagRecords: data.length,
+        uniqueLeadsWithTags: Object.keys(map).length
+      });
+      
       return map;
     },
-    enabled: !!tenantId,
-    staleTime: 1000 * 60 * 2, // 2 minutes - tags might change more frequently
+    enabled: !!tenantId && visibleLeadIds.length > 0,
+    staleTime: 1000 * 30, // 30 seconds - refresh more often since it's a smaller query
   });
 
   // Debug: log how many leads are missing phone/email to verify visibility
@@ -1928,16 +1942,23 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
     staleTime: 60000,
   });
 
-  // Fetch lead tags in bulk
+  // Get visible lead IDs from stageLeads prop
+  const visibleLeadIds = useMemo(() => {
+    if (!stageLeads || stageLeads.length === 0) return [];
+    return stageLeads.map((lead: any) => lead.id);
+  }, [stageLeads]);
+
+  // Fetch lead tags in bulk for visible leads only (avoids 1000 row limit)
   const { data: leadsTagsMap = {} } = useQuery({
-    queryKey: ['leads-tags-bulk', tenantId],
+    queryKey: ['leads-tags-table', tenantId, visibleLeadIds],
     queryFn: async () => {
-      if (!tenantId) return {};
+      if (!tenantId || visibleLeadIds.length === 0) return {};
+      
       const { data, error } = await supabase
         .from('chat_contact_tags')
         .select('lead_id, tag_id')
         .eq('tenant_id', tenantId)
-        .not('lead_id', 'is', null);
+        .in('lead_id', visibleLeadIds);
       
       if (error) throw error;
       
@@ -1951,8 +1972,8 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
       });
       return map;
     },
-    enabled: !!tenantId,
-    staleTime: 1000 * 60 * 2,
+    enabled: !!tenantId && visibleLeadIds.length > 0,
+    staleTime: 1000 * 30, // 30 seconds
   });
   
   // State for management dialogs
