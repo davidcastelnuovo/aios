@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo } from "react";
+import { useCallback, useRef, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -146,6 +146,10 @@ const AUTO_DETECT_MAPPINGS: Record<string, string> = {
 
 export function ImportLeadsWithMapping() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectPortalContainer, setSelectPortalContainer] = useState<HTMLDivElement | null>(null);
+  const selectPortalRef = useCallback((node: HTMLDivElement | null) => {
+    if (node) setSelectPortalContainer(node);
+  }, []);
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("upload");
@@ -1002,7 +1006,7 @@ export function ImportLeadsWithMapping() {
             <SelectTrigger>
               <SelectValue placeholder="בחר סוכנות" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent container={selectPortalContainer ?? undefined}>
               {agencies.map(agency => (
                 <SelectItem key={agency.id} value={agency.id}>
                   {agency.name}
@@ -1021,7 +1025,7 @@ export function ImportLeadsWithMapping() {
             <SelectTrigger>
               <SelectValue placeholder={defaultAgencyId ? "בחר איש מכירות" : "בחר סוכנות קודם"} />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent container={selectPortalContainer ?? undefined}>
               <SelectItem value="none">ללא</SelectItem>
               {salesPeople.map(sp => (
                 <SelectItem key={sp.id} value={sp.id}>
@@ -1059,7 +1063,7 @@ export function ImportLeadsWithMapping() {
                   <SelectTrigger className="w-[180px] shrink-0">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent container={selectPortalContainer ?? undefined}>
                     <SelectItem value="skip">
                       <span className="text-muted-foreground">דלג על שדה זה</span>
                     </SelectItem>
@@ -1266,7 +1270,7 @@ export function ImportLeadsWithMapping() {
             {step === "importing" && "מייבא..."}
           </DialogTitle>
         </DialogHeader>
-        <div className="overflow-y-auto">
+        <div ref={selectPortalRef} className="overflow-y-auto">
           {step === "upload" && renderUploadStep()}
           {step === "mapping" && renderMappingStep()}
           {step === "preview" && renderPreviewStep()}
