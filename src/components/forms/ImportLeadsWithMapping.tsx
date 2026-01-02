@@ -875,18 +875,36 @@ export function ImportLeadsWithMapping() {
         }
       }
 
-      // Execute updates
-      if (leadUpdates.length > 0) {
-        const { error } = await supabase.from("leads").upsert(leadUpdates.map(u => u.lead));
+      // Remove duplicates from leadUpdates - keep only the last entry for each existingId
+      const uniqueUpdatesMap = new Map<string, typeof leadUpdates[0]>();
+      for (const update of leadUpdates) {
+        uniqueUpdatesMap.set(update.existingId, update);
+      }
+      const uniqueLeadUpdates = Array.from(uniqueUpdatesMap.values());
+      
+      // Remove duplicates from leadInserts based on normalized company_name + email/phone
+      const uniqueInsertsMap = new Map<string, typeof leadInserts[0]>();
+      for (const insert of leadInserts) {
+        const name = normalizeStr(insert.lead.company_name);
+        const email = normalizeStr(insert.lead.email);
+        const phone = (insert.lead.phone || "").toString().replace(/[\s-]/g, "");
+        const key = `${name}|${email || phone}`;
+        uniqueInsertsMap.set(key, insert);
+      }
+      const uniqueLeadInserts = Array.from(uniqueInsertsMap.values());
+
+      // Execute updates (deduplicated)
+      if (uniqueLeadUpdates.length > 0) {
+        const { error } = await supabase.from("leads").upsert(uniqueLeadUpdates.map(u => u.lead));
         if (error) throw error;
       }
 
-      // Execute inserts and get new IDs
+      // Execute inserts and get new IDs (deduplicated)
       const insertedIds: string[] = [];
-      if (leadInserts.length > 0) {
+      if (uniqueLeadInserts.length > 0) {
         const { data: insertedData, error } = await supabase
           .from("leads")
-          .insert(leadInserts.map(i => i.lead))
+          .insert(uniqueLeadInserts.map(i => i.lead))
           .select("id");
         if (error) throw error;
         if (insertedData) {
@@ -897,8 +915,8 @@ export function ImportLeadsWithMapping() {
       // Create chat_contact_tags for tags
       const tagRecords: { tag_id: string; lead_id: string; tenant_id: string; user_id: string }[] = [];
       
-      // For updates
-      for (const { tags, existingId } of leadUpdates) {
+      // For updates (use deduplicated list)
+      for (const { tags, existingId } of uniqueLeadUpdates) {
         for (const tagName of tags) {
           const tagId = tagIdMap[tagName.toLowerCase()];
           if (tagId) {
@@ -912,8 +930,8 @@ export function ImportLeadsWithMapping() {
         }
       }
       
-      // For inserts
-      leadInserts.forEach(({ tags }, idx) => {
+      // For inserts (use deduplicated list)
+      uniqueLeadInserts.forEach(({ tags }, idx) => {
         const leadId = insertedIds[idx];
         if (leadId) {
           for (const tagName of tags) {
@@ -943,8 +961,8 @@ export function ImportLeadsWithMapping() {
       // Create lead_updates records from update columns
       const leadUpdateRecords: { lead_id: string; user_id: string; content: string }[] = [];
       
-      // For updated leads
-      for (const { updates: rowUpdates, existingId } of leadUpdates) {
+      // For updated leads (use deduplicated list)
+      for (const { updates: rowUpdates, existingId } of uniqueLeadUpdates) {
         for (const content of rowUpdates) {
           leadUpdateRecords.push({
             lead_id: existingId,
@@ -954,8 +972,8 @@ export function ImportLeadsWithMapping() {
         }
       }
       
-      // For inserted leads
-      leadInserts.forEach(({ updates: rowUpdates }, idx) => {
+      // For inserted leads (use deduplicated list)
+      uniqueLeadInserts.forEach(({ updates: rowUpdates }, idx) => {
         const leadId = insertedIds[idx];
         if (leadId) {
           for (const content of rowUpdates) {
@@ -978,7 +996,7 @@ export function ImportLeadsWithMapping() {
         }
       }
 
-      setImportResult({ updates: leadUpdates.length, inserts: leadInserts.length, leadUpdates: leadUpdateRecords.length });
+      setImportResult({ updates: uniqueLeadUpdates.length, inserts: uniqueLeadInserts.length, leadUpdates: leadUpdateRecords.length });
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       queryClient.invalidateQueries({ queryKey: ["lead-statuses"] });
       queryClient.invalidateQueries({ queryKey: ["chat-tags"] });
@@ -986,7 +1004,7 @@ export function ImportLeadsWithMapping() {
       
       toast({
         title: "הצלחה!",
-        description: `${leadUpdates.length} לידים עודכנו, ${leadInserts.length} לידים חדשים נוספו${leadUpdateRecords.length > 0 ? `, ${leadUpdateRecords.length} עדכונים נוספו` : ''}`,
+        description: `${uniqueLeadUpdates.length} לידים עודכנו, ${uniqueLeadInserts.length} לידים חדשים נוספו${leadUpdateRecords.length > 0 ? `, ${leadUpdateRecords.length} עדכונים נוספו` : ''}`,
       });
 
     } catch (error: any) {
