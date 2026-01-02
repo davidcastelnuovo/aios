@@ -155,7 +155,9 @@ function LeadCard({
   productsLookup = {},
   leadStatuses = [],
   pipelineStages = [],
-  isCompanyNameVisible = true
+  isCompanyNameVisible = true,
+  allTags = [],
+  leadTagIds = []
 }: { 
   lead: any; 
   onStatusChange: (leadId: string, newStatus: string) => void;
@@ -164,6 +166,8 @@ function LeadCard({
   leadStatuses?: LeadStatus[];
   pipelineStages?: Array<{ id: string; label: string; color: string; bgClass: string; borderColor: string; hexColor?: string }>;
   isCompanyNameVisible?: boolean;
+  allTags?: Array<{ id: string; name: string; color: string }>;
+  leadTagIds?: string[];
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: lead.id,
@@ -232,6 +236,12 @@ function LeadCard({
           <div className="flex items-center gap-2 mt-1">
             <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
             <span className="text-xs text-muted-foreground">{lead.company_name}</span>
+          </div>
+        )}
+        {/* Tag Badges */}
+        {leadTagIds.length > 0 && (
+          <div className="mt-2">
+            <LeadTagBadges allTags={allTags} tagIds={leadTagIds} />
           </div>
         )}
       </CardHeader>
@@ -1508,6 +1518,8 @@ export default function Leads() {
                             leadStatuses={leadStatuses}
                             pipelineStages={PIPELINE_STAGES}
                             isCompanyNameVisible={isFieldVisible('company_name')}
+                            allTags={allTags}
+                            leadTagIds={leadsTagsMap[lead.id] || []}
                             onStatusChange={(leadId, newStatus) => 
                               updateLeadStatus.mutate({ 
                                 leadId, 
@@ -1535,6 +1547,8 @@ export default function Leads() {
                     leadStatuses={leadStatuses}
                     pipelineStages={PIPELINE_STAGES}
                     isCompanyNameVisible={isFieldVisible('company_name')}
+                    allTags={allTags}
+                    leadTagIds={leadsTagsMap[activeLead.id] || []}
                     onStatusChange={() => {}}
                     onResponseStatusChange={() => {}}
                   />
@@ -1617,6 +1631,8 @@ export default function Leads() {
                             leadStatuses={leadStatuses}
                             pipelineStages={PIPELINE_STAGES}
                             isCompanyNameVisible={isFieldVisible('company_name')}
+                            allTags={allTags}
+                            leadTagIds={leadsTagsMap[lead.id] || []}
                             onStatusChange={(leadId, newStatus) => 
                               updateLeadStatus.mutate({ 
                                 leadId, 
@@ -1646,6 +1662,8 @@ export default function Leads() {
                   leadStatuses={leadStatuses}
                   pipelineStages={PIPELINE_STAGES}
                   isCompanyNameVisible={isFieldVisible('company_name')}
+                  allTags={allTags}
+                  leadTagIds={leadsTagsMap[activeLead.id] || []}
                   onStatusChange={() => {}}
                   onResponseStatusChange={() => {}}
                 />
