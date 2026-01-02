@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Upload, FileSpreadsheet, ArrowRight, ArrowLeft, Check, X } from "lucide-react";
+import { Upload, FileSpreadsheet, ArrowRight, ArrowLeft, Check, X, Plus, Tag } from "lucide-react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import Papa from "papaparse";
@@ -13,6 +13,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 type Step = "upload" | "mapping" | "preview" | "importing";
 
@@ -21,13 +22,32 @@ interface FieldMapping {
   systemField: string | null;
 }
 
+interface NewValueItem {
+  value: string;
+  color: string;
+  type: 'status' | 'tag';
+}
+
+const DEFAULT_COLORS = [
+  '#3B82F6', // blue
+  '#10B981', // green
+  '#F59E0B', // amber
+  '#EF4444', // red
+  '#8B5CF6', // purple
+  '#EC4899', // pink
+  '#6B7280', // gray
+  '#14B8A6', // teal
+];
+
 const BASE_SYSTEM_FIELDS = [
   { key: "company_name", label: "שם העסק" },
   { key: "contact_name", label: "שם איש קשר" },
   { key: "email", label: "אימייל" },
   { key: "phone", label: "טלפון" },
   { key: "source", label: "מקור הגעה" },
-  { key: "status", label: "סטטוס" },
+  { key: "status", label: "סטטוס (פייפליין)" },
+  { key: "response_status", label: "סטטוס תגובה" },
+  { key: "tags", label: "תגיות" },
   { key: "notes", label: "הערות" },
   { key: "products", label: "מוצרים" },
   { key: "campaign_name", label: "שם קמפיין" },
@@ -59,6 +79,9 @@ const AUTO_DETECT_MAPPINGS: Record<string, string> = {
   'מקור': 'source',
   'מקור הגעה': 'source',
   'סטטוס': 'status',
+  'סטטוס תגובה': 'response_status',
+  'תגיות': 'tags',
+  'תג': 'tags',
   'הערות': 'notes',
   'תקציב': 'monthly_budget',
   'הצעה חד"פ': 'monthly_budget',
@@ -93,6 +116,9 @@ const AUTO_DETECT_MAPPINGS: Record<string, string> = {
   'source': 'source',
   'lead source': 'source',
   'status': 'status',
+  'response_status': 'response_status',
+  'tags': 'tags',
+  'tag': 'tags',
   'notes': 'notes',
   'budget': 'monthly_budget',
   'monthly_budget': 'monthly_budget',
@@ -119,6 +145,7 @@ export function ImportLeadsWithMapping() {
   const [defaultAgencyId, setDefaultAgencyId] = useState<string>("");
   const [defaultSalesPersonId, setDefaultSalesPersonId] = useState<string>("");
   const [importResult, setImportResult] = useState<{ updates: number; inserts: number } | null>(null);
+  const [newValues, setNewValues] = useState<NewValueItem[]>([]);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -134,6 +161,36 @@ export function ImportLeadsWithMapping() {
         .select("field_key, is_required, is_visible")
         .eq("tenant_id", tenantId)
         .eq("entity_type", "lead");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId && open,
+  });
+
+  // Fetch existing lead statuses
+  const { data: existingStatuses = [] } = useQuery({
+    queryKey: ["lead-statuses", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("lead_statuses")
+        .select("id, status_key, label, color")
+        .eq("tenant_id", tenantId);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId && open,
+  });
+
+  // Fetch existing chat tags
+  const { data: existingTags = [] } = useQuery({
+    queryKey: ["chat-tags", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("chat_tags")
+        .select("id, name, color")
+        .eq("tenant_id", tenantId);
       if (error) throw error;
       return data || [];
     },
@@ -194,6 +251,7 @@ export function ImportLeadsWithMapping() {
     setDefaultAgencyId("");
     setDefaultSalesPersonId("");
     setImportResult(null);
+    setNewValues([]);
   };
 
   const handleClose = () => {
@@ -301,6 +359,91 @@ export function ImportLeadsWithMapping() {
     return requiredFields.filter(rf => !mappings.some(m => m.systemField === rf.key));
   }, [mappings, systemFields]);
 
+  // Detect new statuses and tags that need to be created
+  const detectNewValues = useMemo(() => {
+    const newItems: NewValueItem[] = [];
+    
+    // Check for response_status column
+    const statusMapping = mappings.find(m => m.systemField === 'response_status');
+    if (statusMapping) {
+      const existingStatusLabels = existingStatuses.map(s => s.label.toLowerCase().trim());
+      const existingStatusKeys = existingStatuses.map(s => s.status_key.toLowerCase().trim());
+      const uniqueValues = new Set<string>();
+      
+      rawData.forEach(row => {
+        const val = row[statusMapping.csvColumn];
+        if (val && String(val).trim()) {
+          uniqueValues.add(String(val).trim());
+        }
+      });
+      
+      let statusColorIdx = 0;
+      uniqueValues.forEach((val) => {
+        const normalizedVal = val.toLowerCase().trim();
+        if (!existingStatusLabels.includes(normalizedVal) && !existingStatusKeys.includes(normalizedVal)) {
+          // Check if already in newItems
+          if (!newItems.some(item => item.value.toLowerCase() === normalizedVal && item.type === 'status')) {
+            newItems.push({
+              value: val,
+              color: DEFAULT_COLORS[statusColorIdx % DEFAULT_COLORS.length],
+              type: 'status'
+            });
+            statusColorIdx++;
+          }
+        }
+      });
+    }
+    
+    // Check for tags column
+    const tagsMapping = mappings.find(m => m.systemField === 'tags');
+    if (tagsMapping) {
+      const existingTagNames = existingTags.map(t => t.name.toLowerCase().trim());
+      const uniqueTags = new Set<string>();
+      
+      rawData.forEach(row => {
+        const val = row[tagsMapping.csvColumn];
+        if (val && String(val).trim()) {
+          // Split by comma in case multiple tags
+          const tags = String(val).split(',').map(t => t.trim()).filter(t => t);
+          tags.forEach(tag => uniqueTags.add(tag));
+        }
+      });
+      
+      let colorIdx = 0;
+      uniqueTags.forEach(tag => {
+        const normalizedTag = tag.toLowerCase().trim();
+        if (!existingTagNames.includes(normalizedTag)) {
+          if (!newItems.some(item => item.value.toLowerCase() === normalizedTag && item.type === 'tag')) {
+            newItems.push({
+              value: tag,
+              color: DEFAULT_COLORS[colorIdx % DEFAULT_COLORS.length],
+              type: 'tag'
+            });
+            colorIdx++;
+          }
+        }
+      });
+    }
+    
+    return newItems;
+  }, [mappings, rawData, existingStatuses, existingTags]);
+
+  // Update newValues when detectNewValues changes
+  const handleProceedToPreview = () => {
+    setNewValues(detectNewValues);
+    setStep("preview");
+  };
+
+  const updateNewValueColor = (value: string, type: 'status' | 'tag', color: string) => {
+    setNewValues(prev => 
+      prev.map(item => 
+        item.value === value && item.type === type
+          ? { ...item, color }
+          : item
+      )
+    );
+  };
+
   const previewData = useMemo(() => {
     if (rawData.length === 0) return [];
     
@@ -383,6 +526,89 @@ export function ImportLeadsWithMapping() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("משתמש לא מחובר");
 
+      // Create new statuses
+      const newStatuses = newValues.filter(v => v.type === 'status');
+      const statusKeyMap: Record<string, string> = {};
+      
+      if (newStatuses.length > 0) {
+        // Get max sort_order for statuses
+        const { data: maxSortData } = await supabase
+          .from("lead_statuses")
+          .select("sort_order")
+          .eq("tenant_id", tenantId)
+          .order("sort_order", { ascending: false })
+          .limit(1);
+        
+        let nextSortOrder = (typeof maxSortData?.[0]?.sort_order === 'number' ? maxSortData[0].sort_order : 0) + 1;
+        
+        for (const status of newStatuses) {
+          const statusKey = status.value.toLowerCase().replace(/[^a-z0-9א-ת]/g, '_');
+          const { data, error } = await supabase
+            .from("lead_statuses")
+            .insert({
+              tenant_id: tenantId,
+              status_key: statusKey,
+              label: status.value,
+              color: status.color,
+              sort_order: nextSortOrder++,
+              is_active: true
+            })
+            .select("status_key")
+            .single();
+          
+          if (error) {
+            console.error("Error creating status:", error);
+          } else if (data) {
+            statusKeyMap[status.value.toLowerCase()] = data.status_key;
+          }
+        }
+      }
+      
+      // Add existing statuses to the map
+      existingStatuses.forEach(s => {
+        statusKeyMap[s.label.toLowerCase()] = s.status_key;
+      });
+
+      // Create new tags
+      const newTagsList = newValues.filter(v => v.type === 'tag');
+      const tagIdMap: Record<string, string> = {};
+      
+      if (newTagsList.length > 0) {
+        // Get max sort_order for tags
+        const { data: maxTagSortData } = await supabase
+          .from("chat_tags")
+          .select("sort_order")
+          .eq("tenant_id", tenantId)
+          .order("sort_order", { ascending: false })
+          .limit(1);
+        
+        let nextTagSortOrder = (typeof maxTagSortData?.[0]?.sort_order === 'number' ? maxTagSortData[0].sort_order : 0) + 1;
+        
+        for (const tag of newTagsList) {
+          const { data, error } = await supabase
+            .from("chat_tags")
+            .insert({
+              tenant_id: tenantId,
+              name: tag.value,
+              color: tag.color,
+              sort_order: nextTagSortOrder++
+            })
+            .select("id, name")
+            .single();
+          
+          if (error) {
+            console.error("Error creating tag:", error);
+          } else if (data) {
+            tagIdMap[tag.value.toLowerCase()] = data.id;
+          }
+        }
+      }
+      
+      // Add existing tags to the map
+      existingTags.forEach(t => {
+        tagIdMap[t.name.toLowerCase()] = t.id;
+      });
+
       // Build field map
       const fieldMap: Record<string, string> = {};
       mappings.forEach(m => {
@@ -390,6 +616,9 @@ export function ImportLeadsWithMapping() {
           fieldMap[m.csvColumn] = m.systemField;
         }
       });
+
+      // Find tags column for later processing
+      const tagsColumnName = Object.entries(fieldMap).find(([_, v]) => v === 'tags')?.[0];
 
       const mapped = rawData.map(row => {
         const lead: any = {
@@ -400,6 +629,9 @@ export function ImportLeadsWithMapping() {
         if (defaultSalesPersonId) {
           lead.sales_person_id = defaultSalesPersonId;
         }
+
+        // Store tags for later processing (not a lead field)
+        let rowTags: string[] = [];
 
         // Map each field
         Object.entries(fieldMap).forEach(([csvCol, sysField]) => {
@@ -429,6 +661,17 @@ export function ImportLeadsWithMapping() {
               break;
             case 'status':
               lead.status = mapStatus(strValue);
+              break;
+            case 'response_status':
+              // Map to status_key from lead_statuses
+              const statusKey = statusKeyMap[strValue.toLowerCase()];
+              if (statusKey) {
+                lead.response_status = statusKey;
+              }
+              break;
+            case 'tags':
+              // Parse tags and store for later
+              rowTags = strValue.split(',').map(t => t.trim()).filter(t => t);
               break;
             case 'monthly_budget':
             case 'three_month_budget':
@@ -467,24 +710,24 @@ export function ImportLeadsWithMapping() {
         if (!lead.status) lead.status = 'new';
         if (!lead.created_at) lead.created_at = new Date().toISOString();
 
-        return lead;
+        return { lead, tags: rowTags };
       });
 
       // Filter valid leads - must have company_name (or can generate one)
-      const validLeads = mapped.filter(l => {
-        const name = (l.company_name || '').trim();
-        const contact = (l.contact_name || '').trim();
-        const email = (l.email || '').trim();
-        const phone = (l.phone || '').trim();
+      const validLeads = mapped.filter(({ lead }) => {
+        const name = (lead.company_name || '').trim();
+        const contact = (lead.contact_name || '').trim();
+        const email = (lead.email || '').trim();
+        const phone = (lead.phone || '').trim();
         
         // If no company_name, try to generate one from available fields
         if (!name) {
           if (contact) {
-            l.company_name = contact;
+            lead.company_name = contact;
           } else if (email) {
-            l.company_name = email.split('@')[0];
+            lead.company_name = email.split('@')[0];
           } else if (phone) {
-            l.company_name = `ליד ${phone}`;
+            lead.company_name = `ליד ${phone}`;
           } else {
             return false; // No valid identifier at all
           }
@@ -514,10 +757,10 @@ export function ImportLeadsWithMapping() {
         .eq("agency_id", defaultAgencyId);
 
       const normalizeStr = (s: string | null | undefined) => (s || "").toString().trim().toLowerCase();
-      const updates: any[] = [];
-      const inserts: any[] = [];
+      const updates: { lead: any; tags: string[]; existingId: string }[] = [];
+      const inserts: { lead: any; tags: string[] }[] = [];
 
-      for (const lead of validLeads) {
+      for (const { lead, tags } of validLeads) {
         const name = normalizeStr(lead.company_name);
         const email = normalizeStr(lead.email);
         const phone = (lead.phone || "").toString().replace(/[\s-]/g, "");
@@ -531,26 +774,81 @@ export function ImportLeadsWithMapping() {
         );
 
         if (existing) {
-          updates.push({ ...lead, id: existing.id });
+          updates.push({ lead: { ...lead, id: existing.id }, tags, existingId: existing.id });
         } else {
-          inserts.push(lead);
+          inserts.push({ lead, tags });
         }
       }
 
       // Execute updates
       if (updates.length > 0) {
-        const { error } = await supabase.from("leads").upsert(updates);
+        const { error } = await supabase.from("leads").upsert(updates.map(u => u.lead));
         if (error) throw error;
       }
 
-      // Execute inserts
+      // Execute inserts and get new IDs
+      const insertedIds: string[] = [];
       if (inserts.length > 0) {
-        const { error } = await supabase.from("leads").insert(inserts);
+        const { data: insertedData, error } = await supabase
+          .from("leads")
+          .insert(inserts.map(i => i.lead))
+          .select("id");
         if (error) throw error;
+        if (insertedData) {
+          insertedIds.push(...insertedData.map(d => d.id));
+        }
+      }
+
+      // Create chat_contact_tags for tags
+      const tagRecords: { tag_id: string; lead_id: string; tenant_id: string; user_id: string }[] = [];
+      
+      // For updates
+      for (const { tags, existingId } of updates) {
+        for (const tagName of tags) {
+          const tagId = tagIdMap[tagName.toLowerCase()];
+          if (tagId) {
+            tagRecords.push({
+              tag_id: tagId,
+              lead_id: existingId,
+              tenant_id: tenantId,
+              user_id: user.id
+            });
+          }
+        }
+      }
+      
+      // For inserts
+      inserts.forEach(({ tags }, idx) => {
+        const leadId = insertedIds[idx];
+        if (leadId) {
+          for (const tagName of tags) {
+            const tagId = tagIdMap[tagName.toLowerCase()];
+            if (tagId) {
+              tagRecords.push({
+                tag_id: tagId,
+                lead_id: leadId,
+                tenant_id: tenantId,
+                user_id: user.id
+              });
+            }
+          }
+        }
+      });
+
+      // Insert tag records
+      if (tagRecords.length > 0) {
+        const { error: tagError } = await supabase
+          .from("chat_contact_tags")
+          .upsert(tagRecords, { onConflict: 'tag_id,lead_id,tenant_id,user_id' });
+        if (tagError) {
+          console.error("Error inserting tags:", tagError);
+        }
       }
 
       setImportResult({ updates: updates.length, inserts: inserts.length });
       queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-statuses"] });
+      queryClient.invalidateQueries({ queryKey: ["chat-tags"] });
       
       toast({
         title: "הצלחה!",
@@ -697,7 +995,7 @@ export function ImportLeadsWithMapping() {
           חזור
         </Button>
         <Button 
-          onClick={() => setStep("preview")} 
+          onClick={handleProceedToPreview} 
           disabled={missingRequiredFields.length > 0 || !defaultAgencyId}
         >
           המשך לתצוגה מקדימה
@@ -716,8 +1014,61 @@ export function ImportLeadsWithMapping() {
         </Badge>
       </div>
 
+      {/* New values to be created */}
+      {newValues.length > 0 && (
+        <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Plus className="h-4 w-4 text-green-600" />
+            <span>ערכים חדשים שייווצרו:</span>
+          </div>
+          
+          {/* New Statuses */}
+          {newValues.filter(v => v.type === 'status').length > 0 && (
+            <div className="space-y-2">
+              <div className="text-xs text-muted-foreground">סטטוסים חדשים:</div>
+              <div className="flex flex-wrap gap-2">
+                {newValues.filter(v => v.type === 'status').map(status => (
+                  <div key={status.value} className="flex items-center gap-2 bg-background p-2 rounded border">
+                    <input
+                      type="color"
+                      value={status.color}
+                      onChange={(e) => updateNewValueColor(status.value, 'status', e.target.value)}
+                      className="w-6 h-6 rounded cursor-pointer border-0"
+                    />
+                    <span className="text-sm">{status.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* New Tags */}
+          {newValues.filter(v => v.type === 'tag').length > 0 && (
+            <div className="space-y-2">
+              <div className="text-xs text-muted-foreground flex items-center gap-1">
+                <Tag className="h-3 w-3" />
+                תגיות חדשות:
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {newValues.filter(v => v.type === 'tag').map(tag => (
+                  <div key={tag.value} className="flex items-center gap-2 bg-background p-2 rounded border">
+                    <input
+                      type="color"
+                      value={tag.color}
+                      onChange={(e) => updateNewValueColor(tag.value, 'tag', e.target.value)}
+                      className="w-6 h-6 rounded cursor-pointer border-0"
+                    />
+                    <span className="text-sm">{tag.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="text-sm font-medium">תצוגה מקדימה (5 שורות ראשונות):</div>
-      <ScrollArea className="h-[250px] border rounded-lg">
+      <ScrollArea className="h-[200px] border rounded-lg">
         <Table>
           <TableHeader>
             <TableRow>
@@ -772,6 +1123,11 @@ export function ImportLeadsWithMapping() {
             <p className="text-sm text-muted-foreground">
               {importResult.updates} לידים עודכנו, {importResult.inserts} לידים חדשים נוספו
             </p>
+            {newValues.length > 0 && (
+              <p className="text-sm text-green-600 mt-1">
+                נוצרו {newValues.filter(v => v.type === 'status').length} סטטוסים ו-{newValues.filter(v => v.type === 'tag').length} תגיות חדשות
+              </p>
+            )}
           </div>
           <Button onClick={handleClose}>סגור</Button>
         </>
