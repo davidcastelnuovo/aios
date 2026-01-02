@@ -58,6 +58,7 @@ import AddTaskForm from "@/components/forms/AddTaskForm";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 import { LeadTagSelector, LeadTagBadges } from "@/components/leads/LeadTagSelector";
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
+import { ImportLeadsSheet } from "@/components/forms/ImportLeadsSheet";
 
 // Helper functions for dynamic pipeline stages
 function hexToLightBg(hex: string): string {
@@ -1236,6 +1237,7 @@ export default function Leads() {
           </Button>
           <AddLeadForm />
           <ImportLeadsWithMapping />
+          <ImportLeadsSheet />
         </div>
       </div>
 
@@ -1277,6 +1279,7 @@ export default function Leads() {
                 {syncFacebookLeadsMutation.isPending ? 'מסנכרן...' : 'סנכרן מפייסבוק'}
               </Button>
               <ImportLeadsWithMapping />
+              <ImportLeadsSheet />
               <AddLeadForm />
             </div>
           </div>
