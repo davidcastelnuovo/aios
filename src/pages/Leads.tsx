@@ -559,6 +559,14 @@ export default function Leads() {
   const [openTables, setOpenTables] = useState<Record<string, boolean>>({});
   const [selectedMobileStage, setSelectedMobileStage] = useState<string>("");
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
+  
+  // Pagination state
+  const [page, setPage] = useState(1);
+  const LEADS_PER_PAGE = 100;
+  
+  // Kanban limiting state - how many leads to show per stage
+  const KANBAN_LEADS_PER_STAGE = 30;
+  const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({});
 
   // Fetch lead data for auto-open from URL
   const { data: autoOpenLead } = useQuery({
@@ -593,10 +601,39 @@ export default function Leads() {
     }
   }, [PIPELINE_STAGES, selectedMobileStage]);
 
-  const { data: leads, isLoading, refetch } = useQuery({
-    queryKey: ["leads", tenantId, selectedAgency],
+  // Fetch total count for pagination
+  const { data: totalLeadsCount = 0 } = useQuery({
+    queryKey: ["leads-count", tenantId, selectedAgency],
+    queryFn: async () => {
+      if (!tenantId) return 0;
+      let query = supabase
+        .from("leads")
+        .select("id", { count: 'exact', head: true });
+
+      if (selectedAgency && selectedAgency !== "all") {
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
+      } else if (agencies && agencies.length > 0) {
+        const agencyIds = agencies.map((a) => a.id);
+        query = query.or(`tenant_id.eq.${tenantId},agency_id.in.(${agencyIds.join(',')})`);
+      } else {
+        query = query.eq("tenant_id", tenantId);
+      }
+
+      const { count, error } = await query;
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!tenantId,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: leads, isLoading, refetch, isFetching } = useQuery({
+    queryKey: ["leads", tenantId, selectedAgency, page],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
+      const from = (page - 1) * LEADS_PER_PAGE;
+      const to = from + LEADS_PER_PAGE - 1;
+      
       let query = supabase
         .from("leads")
         .select(`
@@ -623,7 +660,8 @@ export default function Leads() {
           agencies (name),
           sales_people (full_name)
         `)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
       // 🔒 CRITICAL SECURITY: Filter by tenant_id OR accessible agencies
       if (selectedAgency && selectedAgency !== "all") {
@@ -643,6 +681,9 @@ export default function Leads() {
     staleTime: 1000 * 60 * 5, // 5 minutes - leads data considered fresh
     placeholderData: (previousData) => previousData, // Keep showing previous data while refetching
   });
+
+  const totalPages = Math.ceil(totalLeadsCount / LEADS_PER_PAGE);
+  const hasMorePages = page < totalPages;
 
   // 🔒 SECURITY GUARD: Filter leads by current tenant and accessible agencies
   const secureFilteredLeads = useMemo(() => {
@@ -815,13 +856,13 @@ export default function Leads() {
     },
     onMutate: async ({ leadId, newStatus }) => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ["leads", tenantId, selectedAgency] });
+      await queryClient.cancelQueries({ queryKey: ["leads", tenantId, selectedAgency, page] });
 
       // Snapshot the previous value
-      const previousLeads = queryClient.getQueryData(["leads", tenantId, selectedAgency]);
+      const previousLeads = queryClient.getQueryData(["leads", tenantId, selectedAgency, page]);
 
       // Optimistically update to the new value
-      queryClient.setQueryData(["leads", tenantId, selectedAgency], (old: any) => {
+      queryClient.setQueryData(["leads", tenantId, selectedAgency, page], (old: any) => {
         if (!old) return old;
         return old.map((lead: any) => 
           lead.id === leadId ? { ...lead, status: newStatus } : lead
@@ -834,7 +875,7 @@ export default function Leads() {
     onError: (error: any, variables, context) => {
       // Rollback to the previous value if error
       if (context?.previousLeads) {
-        queryClient.setQueryData(["leads", tenantId, selectedAgency], context.previousLeads);
+        queryClient.setQueryData(["leads", tenantId, selectedAgency, page], context.previousLeads);
       }
       toast({
         title: "שגיאה בעדכון סטטוס",
@@ -848,8 +889,9 @@ export default function Leads() {
       });
     },
     onSettled: () => {
-      // Always refetch after error or success
+      // Always refetch after error or success - invalidate all pages
       queryClient.invalidateQueries({ queryKey: ["leads", tenantId, selectedAgency] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId, selectedAgency] });
     },
   });
 
@@ -891,6 +933,7 @@ export default function Leads() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads", tenantId, selectedAgency] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId, selectedAgency] });
       toast({
         title: "סטטוס תגובה עודכן בהצלחה",
       });
@@ -920,6 +963,7 @@ export default function Leads() {
             title: `סונכרנו ${data.synced} לידים חדשים מפייסבוק!`,
           });
           queryClient.invalidateQueries({ queryKey: ["leads", tenantId, selectedAgency] });
+          queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId, selectedAgency] });
         } else if (data.skipped > 0) {
           toast({
             title: `לא נמצאו לידים חדשים (${data.skipped} כבר קיימים)`,
@@ -1048,8 +1092,16 @@ export default function Leads() {
     });
   }, [leads, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, startDate, endDate, filterTag, leadsTagsMap]);
 
-  const getLeadsByStage = (stageId: string) => {
-    return filteredLeads?.filter((lead: any) => lead.status === stageId) || [];
+  const getLeadsByStage = (stageId: string, limit?: number) => {
+    const stageLeads = filteredLeads?.filter((lead: any) => lead.status === stageId) || [];
+    if (limit && !expandedStages[stageId]) {
+      return stageLeads.slice(0, limit);
+    }
+    return stageLeads;
+  };
+  
+  const getLeadsCountByStage = (stageId: string) => {
+    return filteredLeads?.filter((lead: any) => lead.status === stageId)?.length || 0;
   };
 
   const activeLead = filteredLeads?.find((lead: any) => lead.id === activeId);
@@ -1065,7 +1117,7 @@ export default function Leads() {
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-bold">לידים - Pipeline</h1>
           <Badge variant="secondary" className="text-sm px-2 py-0.5">
-            {filteredLeads?.length || 0}
+            {isFetching ? '...' : filteredLeads?.length || 0}
           </Badge>
         </div>
         <div className="relative">
@@ -1251,7 +1303,11 @@ export default function Leads() {
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold">לידים - Pipeline</h1>
             <Badge variant="secondary" className="text-base px-3 py-1">
-              סה"כ: {filteredLeads?.length || 0}
+              {isFetching ? (
+                <span className="animate-pulse">טוען...</span>
+              ) : (
+                <>מציג: {filteredLeads?.length || 0} {totalPages > 1 && `(מתוך ${totalLeadsCount})`}</>
+              )}
             </Badge>
           </div>
           <div className="flex gap-3 items-center">
@@ -1615,7 +1671,11 @@ export default function Leads() {
           >
             <div className="hidden md:grid grid-cols-5 gap-0">
               {PIPELINE_STAGES.map((stage, index) => {
-                const stageLeads = getLeadsByStage(stage.id);
+                const stageLeads = getLeadsByStage(stage.id, KANBAN_LEADS_PER_STAGE);
+                const totalInStage = getLeadsCountByStage(stage.id);
+                const isExpanded = expandedStages[stage.id];
+                const hasMore = !isExpanded && totalInStage > KANBAN_LEADS_PER_STAGE;
+                
                 return (
                   <div 
                     key={stage.id}
@@ -1654,6 +1714,26 @@ export default function Leads() {
                             }
                           />
                         ))}
+                        {hasMore && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full mt-2"
+                            onClick={() => setExpandedStages(prev => ({ ...prev, [stage.id]: true }))}
+                          >
+                            הצג עוד {totalInStage - KANBAN_LEADS_PER_STAGE} לידים
+                          </Button>
+                        )}
+                        {isExpanded && totalInStage > KANBAN_LEADS_PER_STAGE && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full mt-2"
+                            onClick={() => setExpandedStages(prev => ({ ...prev, [stage.id]: false }))}
+                          >
+                            הצג פחות
+                          </Button>
+                        )}
                       </SortableContext>
                     </DroppableStage>
                   </div>
@@ -1692,6 +1772,46 @@ export default function Leads() {
               />
             );
           })}
+        </div>
+      )}
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex justify-center items-center gap-4 py-4 border-t">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1 || isFetching}
+          >
+            הקודם
+          </Button>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>עמוד {page} מתוך {totalPages}</span>
+            {isFetching && <span className="animate-pulse">טוען...</span>}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages || isFetching}
+          >
+            הבא
+          </Button>
+        </div>
+      )}
+
+      {/* Load All Button - for users who want all data */}
+      {hasMorePages && !isFetching && (
+        <div className="flex justify-center pb-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setPage(totalPages)}
+            className="text-muted-foreground"
+          >
+            טען את כל {totalLeadsCount} הלידים (עמוד אחרון)
+          </Button>
         </div>
       )}
 
