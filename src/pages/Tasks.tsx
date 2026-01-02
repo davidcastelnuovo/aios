@@ -206,7 +206,7 @@ export default function Tasks() {
         availableAgencyIds: agencies?.map(a => a.id)
       });
       
-      // Build query
+      // Build query - CRITICAL: Always filter by tenant_id first
       let query = supabase
         .from("tasks")
         .select(`
@@ -217,15 +217,12 @@ export default function Tasks() {
           campaigners (full_name, role),
           task_updates (id)
         `)
+        .eq("tenant_id", tenantId)
         .order("due_date", { ascending: true });
 
-      // Filter by selected agency or by all available agencies for current tenant
+      // Filter by selected agency if specified
       if (selectedAgency && selectedAgency !== "all") {
         query = query.eq("agency_id", selectedAgency);
-      } else if (agencies && agencies.length > 0) {
-        // CRITICAL: Filter to only agencies available for current tenant
-        const agencyIds = agencies.map(a => a.id);
-        query = query.in("agency_id", agencyIds);
       }
 
       const { data, error } = await query;
