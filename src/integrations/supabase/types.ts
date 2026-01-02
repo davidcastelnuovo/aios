@@ -2467,6 +2467,47 @@ export type Database = {
           },
         ]
       }
+      tenant_templates: {
+        Row: {
+          created_at: string | null
+          created_by: string
+          description: string | null
+          id: string
+          is_public: boolean | null
+          name: string
+          source_tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by: string
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          name: string
+          source_tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          name?: string
+          source_tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_templates_source_tenant_id_fkey"
+            columns: ["source_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_terminology: {
         Row: {
           created_at: string
@@ -2837,6 +2878,10 @@ export type Database = {
         Returns: boolean
       }
       copy_custom_fields_to_tenant: {
+        Args: { _source_tenant_id: string; _target_tenant_id: string }
+        Returns: undefined
+      }
+      copy_tenant_template: {
         Args: { _source_tenant_id: string; _target_tenant_id: string }
         Returns: undefined
       }

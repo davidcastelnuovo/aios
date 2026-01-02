@@ -13,6 +13,7 @@ interface CreateTenantRequest {
   notes?: string;
   parent_tenant_id?: string;
   allow_super_admin_access?: boolean;
+  template_id?: string; // source_tenant_id to copy from
 }
 
 serve(async (req: Request) => {
@@ -169,27 +170,42 @@ serve(async (req: Request) => {
 
     console.log("✅ Tenant created:", newTenant.id);
 
-    // Step 1.5: Initialize default menu items and custom fields for the new tenant
-    const { error: menuItemsError } = await supabase.rpc("initialize_tenant_menu_items", {
-      _tenant_id: newTenant.id
-    });
+    // Step 1.5: Initialize configuration based on template or defaults
+    if (payload.template_id) {
+      // Use template - copy configuration from source tenant
+      console.log("📋 Applying template from tenant:", payload.template_id);
+      const { error: templateError } = await supabase.rpc("copy_tenant_template", {
+        _source_tenant_id: payload.template_id,
+        _target_tenant_id: newTenant.id
+      });
 
-    if (menuItemsError) {
-      console.error("Error initializing menu items:", menuItemsError);
-      // Continue anyway - menu items can be added later
+      if (templateError) {
+        console.error("Error applying template:", templateError);
+        // Continue anyway - we can still create the tenant with defaults
+      } else {
+        console.log("✅ Template applied successfully");
+      }
     } else {
-      console.log("✅ Menu items initialized");
-    }
+      // No template - use default initialization
+      const { error: menuItemsError } = await supabase.rpc("initialize_tenant_menu_items", {
+        _tenant_id: newTenant.id
+      });
 
-    const { error: customFieldsError } = await supabase.rpc("initialize_default_custom_fields", {
-      _tenant_id: newTenant.id
-    });
+      if (menuItemsError) {
+        console.error("Error initializing menu items:", menuItemsError);
+      } else {
+        console.log("✅ Menu items initialized");
+      }
 
-    if (customFieldsError) {
-      console.error("Error initializing custom fields:", customFieldsError);
-      // Continue anyway - custom fields can be added later
-    } else {
-      console.log("✅ Custom fields initialized");
+      const { error: customFieldsError } = await supabase.rpc("initialize_default_custom_fields", {
+        _tenant_id: newTenant.id
+      });
+
+      if (customFieldsError) {
+        console.error("Error initializing custom fields:", customFieldsError);
+      } else {
+        console.log("✅ Custom fields initialized");
+      }
     }
 
     // Step 2: Add creating user to tenant_users so they can access the new tenant
