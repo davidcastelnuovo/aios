@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState, useMemo } from "react";
+import { useRef, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,7 +9,6 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -146,10 +145,6 @@ const AUTO_DETECT_MAPPINGS: Record<string, string> = {
 
 export function ImportLeadsWithMapping() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [selectPortalContainer, setSelectPortalContainer] = useState<HTMLDivElement | null>(null);
-  const selectPortalRef = useCallback((node: HTMLDivElement | null) => {
-    if (node) setSelectPortalContainer(node);
-  }, []);
 
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("upload");
@@ -1006,7 +1001,7 @@ export function ImportLeadsWithMapping() {
             <SelectTrigger>
               <SelectValue placeholder="בחר סוכנות" />
             </SelectTrigger>
-            <SelectContent container={selectPortalContainer ?? undefined}>
+            <SelectContent>
               {agencies.map(agency => (
                 <SelectItem key={agency.id} value={agency.id}>
                   {agency.name}
@@ -1025,7 +1020,7 @@ export function ImportLeadsWithMapping() {
             <SelectTrigger>
               <SelectValue placeholder={defaultAgencyId ? "בחר איש מכירות" : "בחר סוכנות קודם"} />
             </SelectTrigger>
-            <SelectContent container={selectPortalContainer ?? undefined}>
+            <SelectContent>
               <SelectItem value="none">ללא</SelectItem>
               {salesPeople.map(sp => (
                 <SelectItem key={sp.id} value={sp.id}>
@@ -1038,7 +1033,7 @@ export function ImportLeadsWithMapping() {
       </div>
 
       <div className="text-sm font-medium mb-2">מיפוי שדות:</div>
-      <ScrollArea className="h-[350px] border rounded-lg p-3">
+      <div className="h-[350px] overflow-auto border rounded-lg p-3">
         <div className="space-y-2 pe-4">
           {mappings.map((mapping, idx) => {
             const sampleValue = rawData[0]?.[mapping.csvColumn];
@@ -1063,7 +1058,7 @@ export function ImportLeadsWithMapping() {
                   <SelectTrigger className="w-[180px] shrink-0">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent container={selectPortalContainer ?? undefined}>
+                  <SelectContent>
                     <SelectItem value="skip">
                       <span className="text-muted-foreground">דלג על שדה זה</span>
                     </SelectItem>
@@ -1078,7 +1073,7 @@ export function ImportLeadsWithMapping() {
             );
           })}
         </div>
-      </ScrollArea>
+      </div>
 
       {missingRequiredFields.length > 0 && (
         <p className="text-sm text-destructive">* חובה למפות: {missingRequiredFields.map(f => f.label).join(', ')}</p>
@@ -1178,7 +1173,7 @@ export function ImportLeadsWithMapping() {
       )}
 
       <div className="text-sm font-medium">תצוגה מקדימה (5 שורות ראשונות):</div>
-      <ScrollArea className="h-[200px] border rounded-lg">
+      <div className="h-[200px] overflow-auto border rounded-lg">
         <Table>
           <TableHeader>
             <TableRow>
@@ -1201,7 +1196,7 @@ export function ImportLeadsWithMapping() {
             ))}
           </TableBody>
         </Table>
-      </ScrollArea>
+      </div>
 
       <div className="flex justify-between pt-4">
         <Button variant="outline" onClick={() => setStep("mapping")}>
@@ -1269,8 +1264,11 @@ export function ImportLeadsWithMapping() {
             {step === "preview" && "תצוגה מקדימה"}
             {step === "importing" && "מייבא..."}
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            ייבוא לידים מקובץ CSV או Excel
+          </DialogDescription>
         </DialogHeader>
-        <div ref={selectPortalRef} className="overflow-y-auto">
+        <div className="overflow-y-auto">
           {step === "upload" && renderUploadStep()}
           {step === "mapping" && renderMappingStep()}
           {step === "preview" && renderPreviewStep()}
