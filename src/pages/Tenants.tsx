@@ -6,12 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Building2, Building, Users, Settings, Link as LinkIcon, RefreshCw, Trash2, ArrowRightLeft, ChevronDown, ChevronLeft } from "lucide-react";
+import { Plus, Building2, Building, Users, Settings, Link as LinkIcon, RefreshCw, Trash2, ArrowRightLeft, ChevronDown, ChevronLeft, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
 import EditTenantAgenciesDialog from "@/components/forms/EditTenantAgenciesDialog";
 import { DeleteTenantDialog } from "@/components/forms/DeleteTenantDialog";
 import { ConvertTenantTypeDialog } from "@/components/forms/ConvertTenantTypeDialog";
+import { SaveAsTemplateDialog } from "@/components/forms/SaveAsTemplateDialog";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTenant } from "@/contexts/TenantContext";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -30,6 +31,7 @@ export default function Tenants() {
   } | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [convertDialogOpen, setConvertDialogOpen] = useState(false);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [selectedTenantForDelete, setSelectedTenantForDelete] = useState<{
     id: string;
     name: string;
@@ -38,6 +40,10 @@ export default function Tenants() {
     id: string;
     name: string;
     org_type: string;
+  } | null>(null);
+  const [selectedTenantForTemplate, setSelectedTenantForTemplate] = useState<{
+    id: string;
+    name: string;
   } | null>(null);
   const { isSuperAdmin, isOwner } = useUserRole();
   const canManageTenants = isSuperAdmin || isOwner;
@@ -204,7 +210,24 @@ export default function Tenants() {
           </Button>
         )}
         
-        {/* תת-ארגון (sub_organization) - אין כפתור יצירה */}
+        {/* שמירה כטמפלייט */}
+        {canManageTenants && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedTenantForTemplate({
+                id: org.id,
+                name: org.name,
+              });
+              setTemplateDialogOpen(true);
+            }}
+            title="שמור כטמפלייט"
+          >
+            <Copy className="h-4 w-4" />
+          </Button>
+        )}
         
         {canManageTenants && (
           <Button
@@ -517,6 +540,14 @@ export default function Tenants() {
           onOpenChange={setConvertDialogOpen}
           tenant={selectedTenantForConvert}
           availableParents={organizations}
+        />
+      )}
+
+      {selectedTenantForTemplate && (
+        <SaveAsTemplateDialog
+          open={templateDialogOpen}
+          onOpenChange={setTemplateDialogOpen}
+          tenant={selectedTenantForTemplate}
         />
       )}
     </div>

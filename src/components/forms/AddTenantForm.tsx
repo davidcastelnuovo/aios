@@ -63,6 +63,7 @@ export function AddTenantForm({
     notes: "",
     allow_super_admin_access: true,
   });
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
 
   // Use controlled or internal state
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -86,10 +87,23 @@ export function AddTenantForm({
     },
   });
 
+  // Fetch available templates
+  const { data: templates } = useQuery({
+    queryKey: ["tenant-templates"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tenant_templates")
+        .select("id, name, description, source_tenant_id, is_public")
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const [selectedParentTenant, setSelectedParentTenant] = useState<string>(parentTenantId || "");
 
   const addTenantMutation = useMutation({
-    mutationFn: async (data: typeof formData & { parent_tenant_id?: string }) => {
+    mutationFn: async (data: typeof formData & { parent_tenant_id?: string; template_id?: string }) => {
       // Call edge function to create tenant with owner invitation
       const { data: result, error } = await supabase.functions.invoke(
         "create-tenant-with-owner",
@@ -101,6 +115,7 @@ export function AddTenantForm({
             notes: data.notes,
             parent_tenant_id: data.parent_tenant_id || null,
             allow_super_admin_access: data.allow_super_admin_access,
+            template_id: data.template_id || null,
           },
         }
       );
@@ -146,6 +161,7 @@ export function AddTenantForm({
         allow_super_admin_access: true,
       });
       setSelectedParentTenant("");
+      setSelectedTemplateId("");
       setOpen(false);
       
       // Show switch dialog
@@ -182,9 +198,16 @@ export function AddTenantForm({
     e.preventDefault();
     // Use parentTenantId prop if provided, otherwise use selectedParentTenant (if not empty)
     const finalParentId = parentTenantId || (selectedParentTenant && selectedParentTenant !== "" ? selectedParentTenant : undefined);
+    // Get template_id from selected template (if valid)
+    const templateId = selectedTemplateId && selectedTemplateId !== "__none__" ? selectedTemplateId : undefined;
+    
+    // If template is selected, get its source_tenant_id
+    const template = templates?.find(t => t.id === templateId);
+    
     addTenantMutation.mutate({
       ...formData,
       parent_tenant_id: finalParentId,
+      template_id: template?.source_tenant_id || undefined,
     });
   };
 
@@ -245,6 +268,30 @@ export function AddTenantForm({
           </Select>
           <p className="text-xs text-muted-foreground">
             תת-ארגון יקבל העתק של כל המבנה והטבלאות של הארגון האב
+          </p>
+        </div>
+      )}
+
+      {/* Template selection */}
+      {templates && templates.length > 0 && (
+        <div className="space-y-2">
+          <Label htmlFor="template">טמפלייט (אופציונלי)</Label>
+          <Select value={selectedTemplateId || "__none__"} onValueChange={setSelectedTemplateId}>
+            <SelectTrigger id="template">
+              <SelectValue placeholder="בחר טמפלייט" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">ברירת מחדל (ללא טמפלייט)</SelectItem>
+              {templates.map((template) => (
+                <SelectItem key={template.id} value={template.id}>
+                  {template.name}
+                  {template.is_public && " (ציבורי)"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            טמפלייט מעתיק הגדרות: שדות מותאמים, תפריטים, טרמינולוגיה, אוטומציות ועוד
           </p>
         </div>
       )}
