@@ -1164,20 +1164,21 @@ export default function Leads() {
   };
 
   // Filters are now applied server-side, but we still need to handle "none" tag filter client-side
+  // IMPORTANT: always start from secureFilteredLeads to avoid cross-tenant/agency leakage
   const filteredLeads = useMemo(() => {
-    if (!leads) return [];
-    
+    if (!secureFilteredLeads) return [];
+
     // Only client-side filter needed: "none" tag filter (leads without any tags)
     if (filterTag === "none") {
-      return leads.filter((lead: any) => {
+      return secureFilteredLeads.filter((lead: any) => {
         const leadTags = leadsTagsMap[lead.id] || [];
         return leadTags.length === 0;
       });
     }
-    
+
     // All other filters are already applied server-side
-    return leads;
-  }, [leads, filterTag, leadsTagsMap]);
+    return secureFilteredLeads;
+  }, [secureFilteredLeads, filterTag, leadsTagsMap]);
 
   const getLeadsByStage = (stageId: string, limit?: number) => {
     const stageLeads = filteredLeads?.filter((lead: any) => lead.status === stageId) || [];
