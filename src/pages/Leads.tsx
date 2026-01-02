@@ -640,6 +640,8 @@ export default function Leads() {
       return data;
     },
     enabled: !!tenantId,
+    staleTime: 1000 * 60 * 5, // 5 minutes - leads data considered fresh
+    placeholderData: (previousData) => previousData, // Keep showing previous data while refetching
   });
 
   // 🔒 SECURITY GUARD: Filter leads by current tenant and accessible agencies
@@ -679,6 +681,7 @@ export default function Leads() {
       return data;
     },
     enabled: !!tenantId,
+    staleTime: 1000 * 60 * 10, // 10 minutes - sales people rarely change
   });
 
   // Fetch products for lookup
@@ -694,6 +697,7 @@ export default function Leads() {
       return data;
     },
     enabled: !!tenantId,
+    staleTime: 1000 * 60 * 10, // 10 minutes - products rarely change
   });
 
   // Create products lookup map
@@ -747,7 +751,7 @@ export default function Leads() {
       return map;
     },
     enabled: !!tenantId,
-    staleTime: 30000,
+    staleTime: 1000 * 60 * 2, // 2 minutes - tags might change more frequently
   });
 
   // Debug: log how many leads are missing phone/email to verify visibility

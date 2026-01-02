@@ -9,53 +9,84 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AgencyProvider } from "./contexts/AgencyContext";
 import { TenantProvider } from "./contexts/TenantContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { Suspense, lazy } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// Eagerly loaded pages (frequently accessed)
 import Dashboard from "./pages/Dashboard";
-import Branding from "./pages/Branding";
 import Auth from "./pages/Auth";
 import SignUp from "./pages/SignUp";
 import Setup from "./pages/Setup";
 import Landing from "./pages/Landing";
-import Agencies from "./pages/Agencies";
-import Clients from "./pages/Clients";
-import Campaigners from "./pages/Campaigners";
-import Suppliers from "./pages/Suppliers";
-import Finance from "./pages/Finance";
-import Tasks from "./pages/Tasks";
-import ClientOnboarding from "./pages/ClientOnboarding";
-import TimeTracking from "./pages/TimeTracking";
-import Reports from "./pages/Reports";
-import MyProfile from "./pages/MyProfile";
-import Users from "./pages/Users";
-import SalesPeople from "./pages/SalesPeople";
-import Leads from "./pages/Leads";
-import SalesDashboard from "./pages/SalesDashboard";
-import LeadIntegrations from "./pages/LeadIntegrations";
-import Tenants from "./pages/Tenants";
-import Automations from "./pages/Automations";
-import Products from "./pages/Products";
-import AccountingIntegrations from "./pages/AccountingIntegrations";
-import AISupport from "./pages/AISupport";
-import MenuManagement from "./pages/MenuManagement";
-import FieldsManagement from "./pages/FieldsManagement";
-import DynamicTables from "./pages/DynamicTables";
-import DynamicTableView from "./pages/DynamicTableView";
-import Chat from "./pages/Chat";
-import ManyChatSettings from "./pages/ManyChatSettings";
-import ChatIntegrations from "./pages/ChatIntegrations";
-import GreenAPISettings from "./pages/GreenAPISettings";
-import FacebookSettings from "./pages/FacebookSettings";
-import FacebookCallback from "./pages/FacebookCallback";
-import GoogleAdsSettings from "./pages/GoogleAdsSettings";
-import GoogleAnalyticsSettings from "./pages/GoogleAnalyticsSettings";
-import GoogleSearchConsoleSettings from "./pages/GoogleSearchConsoleSettings";
-import AhrefsSettings from "./pages/AhrefsSettings";
-import Integrations from "./pages/Integrations";
-import Privacy from "./pages/Privacy";
-import Terms from "./pages/Terms";
 import NotFound from "./pages/NotFound";
-import { SuperAdminRoute } from "./components/SuperAdminRoute";
 
-const queryClient = new QueryClient();
+// Lazily loaded pages
+const Branding = lazy(() => import("./pages/Branding"));
+const Agencies = lazy(() => import("./pages/Agencies"));
+const Clients = lazy(() => import("./pages/Clients"));
+const Campaigners = lazy(() => import("./pages/Campaigners"));
+const Suppliers = lazy(() => import("./pages/Suppliers"));
+const Finance = lazy(() => import("./pages/Finance"));
+const Tasks = lazy(() => import("./pages/Tasks"));
+const ClientOnboarding = lazy(() => import("./pages/ClientOnboarding"));
+const TimeTracking = lazy(() => import("./pages/TimeTracking"));
+const Reports = lazy(() => import("./pages/Reports"));
+const MyProfile = lazy(() => import("./pages/MyProfile"));
+const Users = lazy(() => import("./pages/Users"));
+const SalesPeople = lazy(() => import("./pages/SalesPeople"));
+const Leads = lazy(() => import("./pages/Leads"));
+const SalesDashboard = lazy(() => import("./pages/SalesDashboard"));
+const LeadIntegrations = lazy(() => import("./pages/LeadIntegrations"));
+const Tenants = lazy(() => import("./pages/Tenants"));
+const Automations = lazy(() => import("./pages/Automations"));
+const Products = lazy(() => import("./pages/Products"));
+const AccountingIntegrations = lazy(() => import("./pages/AccountingIntegrations"));
+const AISupport = lazy(() => import("./pages/AISupport"));
+const MenuManagement = lazy(() => import("./pages/MenuManagement"));
+const FieldsManagement = lazy(() => import("./pages/FieldsManagement"));
+const DynamicTables = lazy(() => import("./pages/DynamicTables"));
+const DynamicTableView = lazy(() => import("./pages/DynamicTableView"));
+const Chat = lazy(() => import("./pages/Chat"));
+const ManyChatSettings = lazy(() => import("./pages/ManyChatSettings"));
+const ChatIntegrations = lazy(() => import("./pages/ChatIntegrations"));
+const GreenAPISettings = lazy(() => import("./pages/GreenAPISettings"));
+const FacebookSettings = lazy(() => import("./pages/FacebookSettings"));
+const FacebookCallback = lazy(() => import("./pages/FacebookCallback"));
+const GoogleAdsSettings = lazy(() => import("./pages/GoogleAdsSettings"));
+const GoogleAnalyticsSettings = lazy(() => import("./pages/GoogleAnalyticsSettings"));
+const GoogleSearchConsoleSettings = lazy(() => import("./pages/GoogleSearchConsoleSettings"));
+const AhrefsSettings = lazy(() => import("./pages/AhrefsSettings"));
+const Integrations = lazy(() => import("./pages/Integrations"));
+const Privacy = lazy(() => import("./pages/Privacy"));
+const Terms = lazy(() => import("./pages/Terms"));
+
+// QueryClient with optimized defaults for better caching
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes - data considered fresh
+      gcTime: 1000 * 60 * 10, // 10 minutes - cache garbage collection
+      refetchOnWindowFocus: false, // Don't refetch when tab regains focus
+      refetchOnMount: false, // Don't refetch when component mounts if data is fresh
+      retry: 1, // Only retry failed requests once
+    },
+  },
+});
+
+// Loading fallback for lazy-loaded pages
+function PageLoader() {
+  return (
+    <div className="flex flex-col gap-4 p-8">
+      <Skeleton className="h-8 w-48" />
+      <Skeleton className="h-4 w-96" />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mt-4">
+        <Skeleton className="h-32" />
+        <Skeleton className="h-32" />
+        <Skeleton className="h-32" />
+      </div>
+    </div>
+  );
+}
 
 // Component to initialize session refresh
 function SessionRefreshInitializer() {
@@ -73,62 +104,64 @@ const App = () => (
         <TenantProvider>
           <ThemeProvider>
             <AgencyProvider>
-              <Routes>
-            {/* Public routes */}
-            <Route path="/" element={<Landing />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/signup" element={<SignUp />} />
-            <Route path="/setup" element={<Setup />} />
-            <Route path="/privacy" element={<Privacy />} />
-            <Route path="/terms" element={<Terms />} />
-            
-            {/* Tenant-scoped routes */}
-            <Route path="/t/:tenantSlug" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/dashboard" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/agencies" element={<ProtectedRoute requiredPermission="agencies"><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/clients" element={<ProtectedRoute requiredPermission="clients"><AppLayout><Clients /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/campaigners" element={<ProtectedRoute requiredPermission="campaigners"><AppLayout><Campaigners /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/suppliers" element={<ProtectedRoute requiredPermission="suppliers"><AppLayout><Suppliers /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/finance" element={<ProtectedRoute requiredPermission="finance"><AppLayout><Finance /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/tasks" element={<ProtectedRoute requiredPermission="tasks"><AppLayout><Tasks /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/client-onboarding" element={<ProtectedRoute requiredPermission="client_onboarding"><AppLayout><ClientOnboarding /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/time-tracking" element={<ProtectedRoute requiredPermission="time_tracking"><AppLayout><TimeTracking /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/reports" element={<ProtectedRoute requiredPermission="reports"><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/my-profile" element={<ProtectedRoute><AppLayout><MyProfile /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/users" element={<ProtectedRoute requiredPermission="users"><AppLayout><Users /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/sales-dashboard" element={<ProtectedRoute requiredPermission="sales_dashboard"><AppLayout><SalesDashboard /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/sales-people" element={<ProtectedRoute requiredPermission="sales_people"><AppLayout><SalesPeople /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/leads" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Leads /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/lead-integrations" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><LeadIntegrations /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/tenants" element={<ProtectedRoute requiredPermission="tenants"><AppLayout><Tenants /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/automations" element={<ProtectedRoute requiredPermission="automations"><AppLayout><Automations /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/products" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Products /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/branding" element={<ProtectedRoute requiredPermission="branding"><AppLayout><Branding /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/accounting-integrations" element={<ProtectedRoute requiredPermission="accounting"><AppLayout><AccountingIntegrations /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/ai-support" element={<ProtectedRoute requiredPermission="ai_support"><AppLayout><AISupport /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/menu-management" element={<ProtectedRoute requiredPermission="menu_management"><AppLayout><MenuManagement /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/fields-management" element={<ProtectedRoute requiredPermission="fields_management"><AppLayout><FieldsManagement /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/dynamic-tables" element={<ProtectedRoute requiredPermission="branding"><AppLayout><DynamicTables /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/table/:tableSlug" element={<ProtectedRoute><AppLayout><DynamicTableView /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/chat" element={<ProtectedRoute requiredPermission="chat"><AppLayout><Chat /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/chat/:clientId" element={<ProtectedRoute requiredPermission="chat"><AppLayout><Chat /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/chat-integrations" element={<ProtectedRoute requiredPermission="chat_integrations"><AppLayout><ChatIntegrations /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/manychat-settings" element={<ProtectedRoute requiredPermission="manychat_settings"><AppLayout><ManyChatSettings /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/green-api-settings" element={<ProtectedRoute requiredPermission="green_api_settings"><AppLayout><GreenAPISettings /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/integrations" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><Integrations /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/integrations/facebook" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><FacebookSettings /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/facebook-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><FacebookSettings /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/facebook-callback" element={<ProtectedRoute><AppLayout><FacebookCallback /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/google-ads-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><GoogleAdsSettings /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/google-analytics-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><GoogleAnalyticsSettings /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/google-search-console-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><GoogleSearchConsoleSettings /></AppLayout></ProtectedRoute>} />
-            <Route path="/t/:tenantSlug/ahrefs-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><AhrefsSettings /></AppLayout></ProtectedRoute>} />
-            
-            {/* Legacy route - redirect to root */}
-            
-            {/* Catch-all for 404 - must be last */}
-            <Route path="*" element={<NotFound />} />
-            </Routes>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  {/* Public routes */}
+                  <Route path="/" element={<Landing />} />
+                  <Route path="/auth" element={<Auth />} />
+                  <Route path="/signup" element={<SignUp />} />
+                  <Route path="/setup" element={<Setup />} />
+                  <Route path="/privacy" element={<Privacy />} />
+                  <Route path="/terms" element={<Terms />} />
+                  
+                  {/* Tenant-scoped routes */}
+                  <Route path="/t/:tenantSlug" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/dashboard" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/agencies" element={<ProtectedRoute requiredPermission="agencies"><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/clients" element={<ProtectedRoute requiredPermission="clients"><AppLayout><Clients /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/campaigners" element={<ProtectedRoute requiredPermission="campaigners"><AppLayout><Campaigners /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/suppliers" element={<ProtectedRoute requiredPermission="suppliers"><AppLayout><Suppliers /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/finance" element={<ProtectedRoute requiredPermission="finance"><AppLayout><Finance /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/tasks" element={<ProtectedRoute requiredPermission="tasks"><AppLayout><Tasks /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/client-onboarding" element={<ProtectedRoute requiredPermission="client_onboarding"><AppLayout><ClientOnboarding /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/time-tracking" element={<ProtectedRoute requiredPermission="time_tracking"><AppLayout><TimeTracking /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/reports" element={<ProtectedRoute requiredPermission="reports"><AppLayout><Reports /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/my-profile" element={<ProtectedRoute><AppLayout><MyProfile /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/users" element={<ProtectedRoute requiredPermission="users"><AppLayout><Users /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/sales-dashboard" element={<ProtectedRoute requiredPermission="sales_dashboard"><AppLayout><SalesDashboard /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/sales-people" element={<ProtectedRoute requiredPermission="sales_people"><AppLayout><SalesPeople /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/leads" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Leads /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/lead-integrations" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><LeadIntegrations /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/tenants" element={<ProtectedRoute requiredPermission="tenants"><AppLayout><Tenants /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/automations" element={<ProtectedRoute requiredPermission="automations"><AppLayout><Automations /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/products" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Products /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/branding" element={<ProtectedRoute requiredPermission="branding"><AppLayout><Branding /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/accounting-integrations" element={<ProtectedRoute requiredPermission="accounting"><AppLayout><AccountingIntegrations /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/ai-support" element={<ProtectedRoute requiredPermission="ai_support"><AppLayout><AISupport /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/menu-management" element={<ProtectedRoute requiredPermission="menu_management"><AppLayout><MenuManagement /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/fields-management" element={<ProtectedRoute requiredPermission="fields_management"><AppLayout><FieldsManagement /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/dynamic-tables" element={<ProtectedRoute requiredPermission="branding"><AppLayout><DynamicTables /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/table/:tableSlug" element={<ProtectedRoute><AppLayout><DynamicTableView /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/chat" element={<ProtectedRoute requiredPermission="chat"><AppLayout><Chat /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/chat/:clientId" element={<ProtectedRoute requiredPermission="chat"><AppLayout><Chat /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/chat-integrations" element={<ProtectedRoute requiredPermission="chat_integrations"><AppLayout><ChatIntegrations /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/manychat-settings" element={<ProtectedRoute requiredPermission="manychat_settings"><AppLayout><ManyChatSettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/green-api-settings" element={<ProtectedRoute requiredPermission="green_api_settings"><AppLayout><GreenAPISettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/integrations" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><Integrations /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/integrations/facebook" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><FacebookSettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/facebook-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><FacebookSettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/facebook-callback" element={<ProtectedRoute><AppLayout><FacebookCallback /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/google-ads-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><GoogleAdsSettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/google-analytics-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><GoogleAnalyticsSettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/google-search-console-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><GoogleSearchConsoleSettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/ahrefs-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><AhrefsSettings /></AppLayout></ProtectedRoute>} />
+                  
+                  {/* Legacy route - redirect to root */}
+                  
+                  {/* Catch-all for 404 - must be last */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
             </AgencyProvider>
           </ThemeProvider>
         </TenantProvider>
