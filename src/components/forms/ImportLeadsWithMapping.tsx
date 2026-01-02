@@ -1033,7 +1033,7 @@ export function ImportLeadsWithMapping() {
       </div>
 
       <div className="text-sm font-medium mb-2">מיפוי שדות:</div>
-      <div className="h-[350px] overflow-auto border rounded-lg p-3">
+      <div className="flex-1 min-h-[200px] max-h-[300px] overflow-auto border rounded-lg p-3">
         <div className="space-y-2 pe-4">
           {mappings.map((mapping, idx) => {
             const sampleValue = rawData[0]?.[mapping.csvColumn];
@@ -1079,7 +1079,11 @@ export function ImportLeadsWithMapping() {
         <p className="text-sm text-destructive">* חובה למפות: {missingRequiredFields.map(f => f.label).join(', ')}</p>
       )}
 
-      <div className="flex justify-between pt-4">
+      {!defaultAgencyId && (
+        <p className="text-sm text-amber-600">⚠️ יש לבחור סוכנות ברירת מחדל כדי להמשיך</p>
+      )}
+
+      <div className="flex justify-between pt-4 border-t mt-4 sticky bottom-0 bg-background pb-1">
         <Button variant="outline" onClick={resetState}>
           <ArrowRight className="h-4 w-4 ml-2" />
           חזור
@@ -1256,8 +1260,8 @@ export function ImportLeadsWithMapping() {
           ייבוא לידים
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden">
-        <DialogHeader>
+      <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle>
             {step === "upload" && "ייבוא לידים מקובץ"}
             {step === "mapping" && "מיפוי שדות"}
@@ -1268,7 +1272,7 @@ export function ImportLeadsWithMapping() {
             ייבוא לידים מקובץ CSV או Excel
           </DialogDescription>
         </DialogHeader>
-        <div className="overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           {step === "upload" && renderUploadStep()}
           {step === "mapping" && renderMappingStep()}
           {step === "preview" && renderPreviewStep()}
