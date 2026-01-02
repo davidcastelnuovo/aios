@@ -63,7 +63,7 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
         body: {
           sheetId,
           range,
-          agencyId: agencyId || null,
+          agencyId: agencyId === "none" ? null : agencyId,
           addNotesAsUpdates
         }
       });
@@ -141,12 +141,12 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
 
           <div className="space-y-2">
             <Label>סוכנות (אופציונלי)</Label>
-            <Select value={agencyId} onValueChange={setAgencyId}>
+            <Select value={agencyId || "none"} onValueChange={setAgencyId}>
               <SelectTrigger>
                 <SelectValue placeholder="בחר סוכנות..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">ללא סוכנות</SelectItem>
+                <SelectItem value="none">ללא סוכנות</SelectItem>
                 {agencies.map((agency) => (
                   <SelectItem key={agency.id} value={agency.id}>
                     {agency.name}
