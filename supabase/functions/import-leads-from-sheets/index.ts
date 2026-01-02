@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { sheetId, range, agencyId, addNotesAsUpdates = true, fetchHeadersOnly = false, fieldMap } = await req.json()
+    const { sheetId, range, tenantId: requestTenantId, agencyId, addNotesAsUpdates = true, fetchHeadersOnly = false, fieldMap } = await req.json()
 
     if (!sheetId) {
       return new Response(
@@ -100,21 +100,25 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Get user's tenant
-    const { data: tenantUser, error: tenantError } = await supabaseUser
-      .from('tenant_users')
-      .select('tenant_id')
-      .eq('user_id', user.id)
-      .single()
+    // Use tenant_id from request (preferred) or fallback to user's first tenant
+    let tenantId = requestTenantId
+    if (!tenantId) {
+      const { data: tenantUser } = await supabaseUser
+        .from('tenant_users')
+        .select('tenant_id')
+        .eq('user_id', user.id)
+        .limit(1)
+        .maybeSingle()
+      tenantId = tenantUser?.tenant_id
+    }
 
-    if (tenantError || !tenantUser) {
+    if (!tenantId) {
       return new Response(
-        JSON.stringify({ error: 'User tenant not found' }),
+        JSON.stringify({ error: 'Tenant ID is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    const tenantId = tenantUser.tenant_id
     console.log(`Processing sheet for tenant: ${tenantId}`)
 
     // Fetch data from Google Sheets
