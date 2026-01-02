@@ -957,9 +957,10 @@ export function ImportLeadsWithMapping() {
 
       // Insert tag records
       if (tagRecords.length > 0) {
+        // Use ignoreDuplicates instead of onConflict for simpler handling
         const { error: tagError } = await supabase
           .from("chat_contact_tags")
-          .upsert(tagRecords, { onConflict: 'tag_id,lead_id,tenant_id,user_id' });
+          .upsert(tagRecords, { onConflict: 'tag_id,lead_id', ignoreDuplicates: true });
         if (tagError) {
           console.error("Error inserting tags:", tagError);
         }
