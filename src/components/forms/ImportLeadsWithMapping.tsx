@@ -59,7 +59,17 @@ const BASE_SYSTEM_FIELDS = [
   { key: "won_date", label: "תאריך סגירה" },
   { key: "created_at", label: "תאריך יצירה" },
   { key: "folder_link", label: "קישור לתיקייה" },
+  { key: "updates", label: "עדכונים" },
 ];
+
+// Auto-detect update columns (עדכון 1-21)
+const isUpdateColumn = (colName: string): boolean => {
+  const normalized = colName.trim().toLowerCase();
+  // Match "עדכון X" or "update X" patterns
+  const hebrewMatch = normalized.match(/^עדכון\s*(\d+)$/);
+  const englishMatch = normalized.match(/^update\s*(\d+)$/i);
+  return !!(hebrewMatch || englishMatch);
+};
 
 const AUTO_DETECT_MAPPINGS: Record<string, string> = {
   // עברית
@@ -144,7 +154,7 @@ export function ImportLeadsWithMapping() {
   const [mappings, setMappings] = useState<FieldMapping[]>([]);
   const [defaultAgencyId, setDefaultAgencyId] = useState<string>("");
   const [defaultSalesPersonId, setDefaultSalesPersonId] = useState<string>("");
-  const [importResult, setImportResult] = useState<{ updates: number; inserts: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ updates: number; inserts: number; leadUpdates?: number } | null>(null);
   const [newValues, setNewValues] = useState<NewValueItem[]>([]);
 
   const { toast } = useToast();
@@ -321,6 +331,10 @@ export function ImportLeadsWithMapping() {
       // Auto-detect mappings
       const autoMappings: FieldMapping[] = columns.map(col => {
         const normalizedCol = col.trim().toLowerCase();
+        // Check if it's an update column first
+        if (isUpdateColumn(col)) {
+          return { csvColumn: col, systemField: 'updates' };
+        }
         const detectedField = AUTO_DETECT_MAPPINGS[col] || 
                              AUTO_DETECT_MAPPINGS[col.trim()] ||
                              AUTO_DETECT_MAPPINGS[normalizedCol] ||
@@ -620,7 +634,18 @@ export function ImportLeadsWithMapping() {
       // Find tags column for later processing
       const tagsColumnName = Object.entries(fieldMap).find(([_, v]) => v === 'tags')?.[0];
 
-      const mapped = rawData.map(row => {
+      // Find update columns mapped to 'updates'
+      const updateColumns = Object.entries(fieldMap)
+        .filter(([_, v]) => v === 'updates')
+        .map(([k, _]) => k)
+        .sort((a, b) => {
+          // Sort by number in column name (עדכון 1, עדכון 2, etc.)
+          const numA = parseInt(a.match(/\d+/)?.[0] || '0');
+          const numB = parseInt(b.match(/\d+/)?.[0] || '0');
+          return numA - numB;
+        });
+
+      const mapped = rawData.map((row, rowIdx) => {
         const lead: any = {
           tenant_id: tenantId,
           agency_id: defaultAgencyId,
@@ -632,6 +657,15 @@ export function ImportLeadsWithMapping() {
 
         // Store tags for later processing (not a lead field)
         let rowTags: string[] = [];
+        
+        // Collect updates from update columns
+        const rowUpdates: string[] = [];
+        updateColumns.forEach(col => {
+          const val = row[col];
+          if (val && String(val).trim()) {
+            rowUpdates.push(String(val).trim());
+          }
+        });
 
         // Map each field
         Object.entries(fieldMap).forEach(([csvCol, sysField]) => {
@@ -673,6 +707,9 @@ export function ImportLeadsWithMapping() {
               // Parse tags and store for later
               rowTags = strValue.split(',').map(t => t.trim()).filter(t => t);
               break;
+            case 'updates':
+              // Already handled separately
+              break;
             case 'monthly_budget':
             case 'three_month_budget':
             case 'estimated_deal_value':
@@ -710,7 +747,7 @@ export function ImportLeadsWithMapping() {
         if (!lead.status) lead.status = 'new';
         if (!lead.created_at) lead.created_at = new Date().toISOString();
 
-        return { lead, tags: rowTags };
+        return { lead, tags: rowTags, updates: rowUpdates };
       });
 
       // Filter valid leads - must have company_name (or can generate one)
@@ -757,10 +794,10 @@ export function ImportLeadsWithMapping() {
         .eq("agency_id", defaultAgencyId);
 
       const normalizeStr = (s: string | null | undefined) => (s || "").toString().trim().toLowerCase();
-      const updates: { lead: any; tags: string[]; existingId: string }[] = [];
-      const inserts: { lead: any; tags: string[] }[] = [];
+      const leadUpdates: { lead: any; tags: string[]; updates: string[]; existingId: string }[] = [];
+      const leadInserts: { lead: any; tags: string[]; updates: string[] }[] = [];
 
-      for (const { lead, tags } of validLeads) {
+      for (const { lead, tags, updates: rowUpdates } of validLeads) {
         const name = normalizeStr(lead.company_name);
         const email = normalizeStr(lead.email);
         const phone = (lead.phone || "").toString().replace(/[\s-]/g, "");
@@ -774,24 +811,24 @@ export function ImportLeadsWithMapping() {
         );
 
         if (existing) {
-          updates.push({ lead: { ...lead, id: existing.id }, tags, existingId: existing.id });
+          leadUpdates.push({ lead: { ...lead, id: existing.id }, tags, updates: rowUpdates, existingId: existing.id });
         } else {
-          inserts.push({ lead, tags });
+          leadInserts.push({ lead, tags, updates: rowUpdates });
         }
       }
 
       // Execute updates
-      if (updates.length > 0) {
-        const { error } = await supabase.from("leads").upsert(updates.map(u => u.lead));
+      if (leadUpdates.length > 0) {
+        const { error } = await supabase.from("leads").upsert(leadUpdates.map(u => u.lead));
         if (error) throw error;
       }
 
       // Execute inserts and get new IDs
       const insertedIds: string[] = [];
-      if (inserts.length > 0) {
+      if (leadInserts.length > 0) {
         const { data: insertedData, error } = await supabase
           .from("leads")
-          .insert(inserts.map(i => i.lead))
+          .insert(leadInserts.map(i => i.lead))
           .select("id");
         if (error) throw error;
         if (insertedData) {
@@ -803,7 +840,7 @@ export function ImportLeadsWithMapping() {
       const tagRecords: { tag_id: string; lead_id: string; tenant_id: string; user_id: string }[] = [];
       
       // For updates
-      for (const { tags, existingId } of updates) {
+      for (const { tags, existingId } of leadUpdates) {
         for (const tagName of tags) {
           const tagId = tagIdMap[tagName.toLowerCase()];
           if (tagId) {
@@ -818,7 +855,7 @@ export function ImportLeadsWithMapping() {
       }
       
       // For inserts
-      inserts.forEach(({ tags }, idx) => {
+      leadInserts.forEach(({ tags }, idx) => {
         const leadId = insertedIds[idx];
         if (leadId) {
           for (const tagName of tags) {
@@ -845,14 +882,53 @@ export function ImportLeadsWithMapping() {
         }
       }
 
-      setImportResult({ updates: updates.length, inserts: inserts.length });
+      // Create lead_updates records from update columns
+      const leadUpdateRecords: { lead_id: string; user_id: string; content: string }[] = [];
+      
+      // For updated leads
+      for (const { updates: rowUpdates, existingId } of leadUpdates) {
+        for (const content of rowUpdates) {
+          leadUpdateRecords.push({
+            lead_id: existingId,
+            user_id: user.id,
+            content
+          });
+        }
+      }
+      
+      // For inserted leads
+      leadInserts.forEach(({ updates: rowUpdates }, idx) => {
+        const leadId = insertedIds[idx];
+        if (leadId) {
+          for (const content of rowUpdates) {
+            leadUpdateRecords.push({
+              lead_id: leadId,
+              user_id: user.id,
+              content
+            });
+          }
+        }
+      });
+
+      // Insert lead_updates records
+      if (leadUpdateRecords.length > 0) {
+        const { error: updateError } = await supabase
+          .from("lead_updates")
+          .insert(leadUpdateRecords);
+        if (updateError) {
+          console.error("Error inserting lead updates:", updateError);
+        }
+      }
+
+      setImportResult({ updates: leadUpdates.length, inserts: leadInserts.length, leadUpdates: leadUpdateRecords.length });
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       queryClient.invalidateQueries({ queryKey: ["lead-statuses"] });
       queryClient.invalidateQueries({ queryKey: ["chat-tags"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-updates"] });
       
       toast({
         title: "הצלחה!",
-        description: `${updates.length} לידים עודכנו, ${inserts.length} לידים חדשים נוספו`,
+        description: `${leadUpdates.length} לידים עודכנו, ${leadInserts.length} לידים חדשים נוספו${leadUpdateRecords.length > 0 ? `, ${leadUpdateRecords.length} עדכונים נוספו` : ''}`,
       });
 
     } catch (error: any) {
@@ -1123,6 +1199,11 @@ export function ImportLeadsWithMapping() {
             <p className="text-sm text-muted-foreground">
               {importResult.updates} לידים עודכנו, {importResult.inserts} לידים חדשים נוספו
             </p>
+            {(importResult.leadUpdates ?? 0) > 0 && (
+              <p className="text-sm text-blue-600 mt-1">
+                נוספו {importResult.leadUpdates} עדכונים ללידים
+              </p>
+            )}
             {newValues.length > 0 && (
               <p className="text-sm text-green-600 mt-1">
                 נוצרו {newValues.filter(v => v.type === 'status').length} סטטוסים ו-{newValues.filter(v => v.type === 'tag').length} תגיות חדשות
