@@ -118,7 +118,9 @@ export function LeadTagSelector({ leadId, initialTagIds }: LeadTagSelectorProps)
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['lead-tags', leadId] });
-      queryClient.invalidateQueries({ queryKey: ['leads-tags-bulk', tenantId] });
+      // Invalidate all visible-leads tag queries (they use different queryKeys with lead IDs)
+      queryClient.invalidateQueries({ queryKey: ['leads-tags-visible'] });
+      queryClient.invalidateQueries({ queryKey: ['leads-tags-table'] });
     },
   });
 
