@@ -858,27 +858,71 @@ export function ImportLeadsWithMapping() {
         records_count: validLeads.length,
       });
 
-      // Get existing leads for comparison
+      // Normalize phone function for consistent matching
+      const normalizePhone = (phone: string | null | undefined): string => {
+        if (!phone) return "";
+        // Remove all non-digits
+        let digits = phone.toString().replace(/\D/g, "");
+        // Handle Israeli numbers - convert 972 prefix to 0
+        if (digits.startsWith("972")) {
+          digits = "0" + digits.slice(3);
+        }
+        // Take last 9 digits for comparison (ignores country code variations)
+        return digits.slice(-9);
+      };
+
+      // Get ALL existing leads for the tenant (not just agency) to prevent duplicates
       const { data: existingLeads } = await supabase
         .from("leads")
         .select("id, company_name, email, phone")
-        .eq("agency_id", defaultAgencyId);
+        .eq("tenant_id", tenantId);
+
+      // Build a set of normalized existing phones for fast duplicate detection
+      const existingPhoneSet = new Set<string>();
+      existingLeads?.forEach(l => {
+        const normalized = normalizePhone(l.phone);
+        if (normalized) existingPhoneSet.add(normalized);
+      });
 
       const normalizeStr = (s: string | null | undefined) => (s || "").toString().trim().toLowerCase();
       const leadUpdates: { lead: any; tags: string[]; updates: string[]; existingId: string }[] = [];
       const leadInserts: { lead: any; tags: string[]; updates: string[] }[] = [];
+      let skippedDuplicates = 0;
+
+      // Track phones we're adding in this import to prevent in-file duplicates
+      const importingPhones = new Set<string>();
 
       for (const { lead, tags, updates: rowUpdates } of validLeads) {
         const name = normalizeStr(lead.company_name);
         const email = normalizeStr(lead.email);
-        const phone = (lead.phone || "").toString().replace(/[\s-]/g, "");
+        const rawPhone = (lead.phone || "").toString();
+        const normalizedPhone = normalizePhone(rawPhone);
         
+        // Check for duplicate by phone (primary duplicate detection)
+        if (normalizedPhone) {
+          // Skip if phone exists in database
+          if (existingPhoneSet.has(normalizedPhone)) {
+            // Find existing lead to update instead of insert
+            const existingByPhone = existingLeads?.find(e => normalizePhone(e.phone) === normalizedPhone);
+            if (existingByPhone) {
+              leadUpdates.push({ lead: { ...lead, id: existingByPhone.id }, tags, updates: rowUpdates, existingId: existingByPhone.id });
+              continue;
+            }
+          }
+          
+          // Skip if phone already added in this import batch
+          if (importingPhones.has(normalizedPhone)) {
+            skippedDuplicates++;
+            continue;
+          }
+          
+          importingPhones.add(normalizedPhone);
+        }
+        
+        // Fallback: check by company_name + email for leads without phone
         const existing = existingLeads?.find(e =>
           normalizeStr(e.company_name) === name &&
-          (
-            (email && normalizeStr(e.email) === email) ||
-            (!email && e.phone && e.phone.toString().replace(/[\s-]/g, "") === phone)
-          )
+          email && normalizeStr(e.email) === email
         );
 
         if (existing) {
@@ -887,6 +931,8 @@ export function ImportLeadsWithMapping() {
           leadInserts.push({ lead, tags, updates: rowUpdates });
         }
       }
+      
+      console.log("[Import Debug] Skipped duplicates (in-file):", skippedDuplicates);
 
       // Remove duplicates from leadUpdates - keep only the last entry for each existingId
       const uniqueUpdatesMap = new Map<string, typeof leadUpdates[0]>();

@@ -601,15 +601,36 @@ export default function Leads() {
     }
   }, [PIPELINE_STAGES, selectedMobileStage]);
 
-  // Fetch total count for pagination
+  // Fetch total count for pagination - includes server-side filters
   const { data: totalLeadsCount = 0 } = useQuery({
-    queryKey: ["leads-count", tenantId, selectedAgency],
+    queryKey: ["leads-count", tenantId, selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTag, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!tenantId) return 0;
+      
+      // For tag filtering, first get matching lead IDs
+      let tagFilterLeadIds: string[] | null = null;
+      if (filterTag !== "all") {
+        if (filterTag === "none") {
+          // Will handle in main query - leads without tags
+          tagFilterLeadIds = null;
+        } else {
+          const { data: taggedLeads } = await supabase
+            .from("chat_contact_tags")
+            .select("lead_id")
+            .eq("tag_id", filterTag)
+            .eq("tenant_id", tenantId)
+            .not("lead_id", "is", null);
+          
+          if (!taggedLeads || taggedLeads.length === 0) return 0;
+          tagFilterLeadIds = taggedLeads.map(t => t.lead_id!);
+        }
+      }
+      
       let query = supabase
         .from("leads")
         .select("id", { count: 'exact', head: true });
 
+      // Base tenant/agency filter
       if (selectedAgency && selectedAgency !== "all") {
         query = query.or(`tenant_id.eq.${tenantId},agency_id.eq.${selectedAgency}`);
       } else if (agencies && agencies.length > 0) {
@@ -618,19 +639,86 @@ export default function Leads() {
       } else {
         query = query.eq("tenant_id", tenantId);
       }
+      
+      // Server-side filters
+      if (filterStage !== "all") {
+        query = query.eq("status", filterStage as any);
+      }
+      
+      if (filterSalesPerson !== "all") {
+        if (filterSalesPerson === "none") {
+          query = query.is("sales_person_id", null);
+        } else {
+          query = query.eq("sales_person_id", filterSalesPerson);
+        }
+      }
+      
+      if (filterResponseStatus !== "all") {
+        if (filterResponseStatus === "none") {
+          query = query.is("response_status", null);
+        } else {
+          query = query.eq("response_status", filterResponseStatus);
+        }
+      }
+      
+      if (startDate) {
+        query = query.gte("created_at", startDate.toISOString());
+      }
+      if (endDate) {
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        query = query.lte("created_at", endOfDay.toISOString());
+      }
+      
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim();
+        query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%`);
+      }
+      
+      if (tagFilterLeadIds) {
+        query = query.in("id", tagFilterLeadIds);
+      }
 
       const { count, error } = await query;
       if (error) throw error;
       return count || 0;
     },
     enabled: !!tenantId,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 1000 * 60 * 2, // Reduced to 2 minutes since filters are now server-side
   });
 
   const { data: leads, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["leads", tenantId, selectedAgency, page],
+    queryKey: ["leads", tenantId, selectedAgency, page, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTag, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
+      
+      // For tag filtering, first get matching lead IDs
+      let tagFilterLeadIds: string[] | null = null;
+      if (filterTag !== "all") {
+        if (filterTag === "none") {
+          // Get leads that have NO tags
+          const { data: allLeadTags } = await supabase
+            .from("chat_contact_tags")
+            .select("lead_id")
+            .eq("tenant_id", tenantId)
+            .not("lead_id", "is", null);
+          
+          const leadsWithTags = new Set(allLeadTags?.map(t => t.lead_id) || []);
+          // We'll filter these out after fetching
+          tagFilterLeadIds = null; // Will handle with post-filter
+        } else {
+          const { data: taggedLeads } = await supabase
+            .from("chat_contact_tags")
+            .select("lead_id")
+            .eq("tag_id", filterTag)
+            .eq("tenant_id", tenantId)
+            .not("lead_id", "is", null);
+          
+          if (!taggedLeads || taggedLeads.length === 0) return [];
+          tagFilterLeadIds = taggedLeads.map(t => t.lead_id!);
+        }
+      }
+      
       const from = (page - 1) * LEADS_PER_PAGE;
       const to = from + LEADS_PER_PAGE - 1;
       
@@ -660,8 +748,7 @@ export default function Leads() {
           agencies (name),
           sales_people (full_name)
         `)
-        .order("created_at", { ascending: false })
-        .range(from, to);
+        .order("created_at", { ascending: false });
 
       // 🔒 CRITICAL SECURITY: Filter by tenant_id OR accessible agencies
       if (selectedAgency && selectedAgency !== "all") {
@@ -672,14 +759,56 @@ export default function Leads() {
       } else {
         query = query.eq("tenant_id", tenantId);
       }
+      
+      // Server-side filters
+      if (filterStage !== "all") {
+        query = query.eq("status", filterStage as any);
+      }
+      
+      if (filterSalesPerson !== "all") {
+        if (filterSalesPerson === "none") {
+          query = query.is("sales_person_id", null);
+        } else {
+          query = query.eq("sales_person_id", filterSalesPerson);
+        }
+      }
+      
+      if (filterResponseStatus !== "all") {
+        if (filterResponseStatus === "none") {
+          query = query.is("response_status", null);
+        } else {
+          query = query.eq("response_status", filterResponseStatus);
+        }
+      }
+      
+      if (startDate) {
+        query = query.gte("created_at", startDate.toISOString());
+      }
+      if (endDate) {
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        query = query.lte("created_at", endOfDay.toISOString());
+      }
+      
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim();
+        query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%`);
+      }
+      
+      if (tagFilterLeadIds) {
+        query = query.in("id", tagFilterLeadIds);
+      }
+      
+      // Apply pagination after all filters
+      query = query.range(from, to);
 
       const { data, error } = await query;
       if (error) throw error;
       return data;
     },
     enabled: !!tenantId,
-    staleTime: 1000 * 60 * 5, // 5 minutes - leads data considered fresh
-    placeholderData: (previousData) => previousData, // Keep showing previous data while refetching
+    staleTime: 1000 * 60 * 2,
+    placeholderData: (previousData) => previousData,
   });
 
   const totalPages = Math.ceil(totalLeadsCount / LEADS_PER_PAGE);
@@ -1020,77 +1149,21 @@ export default function Leads() {
     }
   };
 
+  // Filters are now applied server-side, but we still need to handle "none" tag filter client-side
   const filteredLeads = useMemo(() => {
     if (!leads) return [];
     
-    return leads.filter((lead: any) => {
-      // Search filter
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        const contactName = lead.contact_name?.toLowerCase() || "";
-        const companyName = lead.company_name?.toLowerCase() || "";
-        const phone = lead.phone?.toLowerCase() || "";
-        
-        const matchesSearch = contactName.includes(query) || 
-               companyName.includes(query) || 
-               phone.includes(query);
-        
-        if (!matchesSearch) return false;
-      }
-      
-      // Sales person filter
-      if (filterSalesPerson !== "all") {
-        if (filterSalesPerson === "none" && lead.sales_person_id !== null) {
-          return false;
-        } else if (filterSalesPerson !== "none" && lead.sales_person_id !== filterSalesPerson) {
-          return false;
-        }
-      }
-      
-      // Stage filter
-      if (filterStage !== "all" && lead.status !== filterStage) {
-        return false;
-      }
-      
-      // Response status filter
-      if (filterResponseStatus !== "all") {
-        if (filterResponseStatus === "none" && lead.response_status !== null) {
-          return false;
-        } else if (filterResponseStatus !== "none" && lead.response_status !== filterResponseStatus) {
-          return false;
-        }
-      }
-      
-      // Date range filter
-      if (startDate || endDate) {
-        const leadDate = new Date(lead.created_at);
-        
-        if (startDate) {
-          const start = new Date(startDate);
-          start.setHours(0, 0, 0, 0);
-          if (leadDate < start) return false;
-        }
-        
-        if (endDate) {
-          const end = new Date(endDate);
-          end.setHours(23, 59, 59, 999);
-          if (leadDate > end) return false;
-        }
-      }
-      
-      // Tag filter
-      if (filterTag !== "all") {
+    // Only client-side filter needed: "none" tag filter (leads without any tags)
+    if (filterTag === "none") {
+      return leads.filter((lead: any) => {
         const leadTags = leadsTagsMap[lead.id] || [];
-        if (filterTag === "none") {
-          if (leadTags.length > 0) return false;
-        } else {
-          if (!leadTags.includes(filterTag)) return false;
-        }
-      }
-      
-      return true;
-    });
-  }, [leads, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, startDate, endDate, filterTag, leadsTagsMap]);
+        return leadTags.length === 0;
+      });
+    }
+    
+    // All other filters are already applied server-side
+    return leads;
+  }, [leads, filterTag, leadsTagsMap]);
 
   const getLeadsByStage = (stageId: string, limit?: number) => {
     const stageLeads = filteredLeads?.filter((lead: any) => lead.status === stageId) || [];
