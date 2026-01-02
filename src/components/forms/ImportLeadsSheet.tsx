@@ -180,6 +180,10 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
       toast.error("יש להזין קישור או מזהה גיליון תקין");
       return;
     }
+    if (!tenantId) {
+      toast.error("לא נמצא ארגון פעיל");
+      return;
+    }
 
     setIsLoading(true);
     try {
@@ -187,6 +191,7 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
         body: {
           sheetId,
           range,
+          tenantId,
           fetchHeadersOnly: true
         }
       });
@@ -273,6 +278,7 @@ export function ImportLeadsSheet({ trigger }: ImportLeadsSheetProps) {
         body: {
           sheetId,
           range,
+          tenantId,
           agencyId: agencyId === "none" ? null : agencyId || null,
           addNotesAsUpdates,
           fieldMap
