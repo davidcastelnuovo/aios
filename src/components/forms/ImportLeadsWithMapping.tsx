@@ -169,7 +169,7 @@ export function ImportLeadsWithMapping() {
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from("custom_fields")
-        .select("field_key, is_required, is_visible")
+        .select("field_key, field_label, is_required, is_visible")
         .eq("tenant_id", tenantId)
         .eq("entity_type", "lead");
       if (error) throw error;
@@ -214,6 +214,8 @@ export function ImportLeadsWithMapping() {
       const customField = customFields.find(cf => cf.field_key === field.key);
       return {
         ...field,
+        // Use custom label if defined, otherwise fall back to base label
+        label: customField?.field_label || field.label,
         required: customField?.is_required ?? false,
         visible: customField?.is_visible ?? true,
       };
