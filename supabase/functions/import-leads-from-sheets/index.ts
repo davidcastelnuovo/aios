@@ -5,44 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-interface SheetRow {
-  company_name?: string;
-  phone?: string;
-  email?: string;
-  created_at?: string;
-  source?: string;
-  status?: string;
-  notes?: string;
-  contact_name?: string;
-}
-
-// Column name mappings (Hebrew and English)
-const columnMappings: Record<string, keyof SheetRow> = {
-  // Hebrew
-  'שם': 'company_name',
-  'שם חברה': 'company_name',
-  'טלפון': 'phone',
-  'מייל': 'email',
-  'אימייל': 'email',
-  'תאריך יצירה': 'created_at',
-  'תאריך': 'created_at',
-  'מקור': 'source',
-  'סטטוס': 'status',
-  'הערות': 'notes',
-  'איש קשר': 'contact_name',
-  // English
-  'company_name': 'company_name',
-  'name': 'company_name',
-  'phone': 'phone',
-  'email': 'email',
-  'created_at': 'created_at',
-  'date': 'created_at',
-  'source': 'source',
-  'status': 'status',
-  'notes': 'notes',
-  'contact_name': 'contact_name',
-}
-
 // Source mappings
 const sourceMappings: Record<string, string> = {
   'facebook': 'facebook',
@@ -71,13 +33,31 @@ const statusMappings: Record<string, string> = {
   'נסגר': 'closed',
 }
 
+const parseDate = (val: string): string | null => {
+  if (!val) return null;
+  // Try DD/MM/YY or DD/MM/YYYY format
+  const parts = val.split('/');
+  if (parts.length === 3) {
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    let year = parts[2];
+    if (year.length === 2) year = '20' + year;
+    const d = new Date(`${year}-${month}-${day}`);
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  }
+  // Try ISO format
+  const d = new Date(val);
+  if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    const { sheetId, range, agencyId, addNotesAsUpdates = true } = await req.json()
+    const { sheetId, range, agencyId, addNotesAsUpdates = true, fetchHeadersOnly = false, fieldMap } = await req.json()
 
     if (!sheetId) {
       return new Response(
@@ -135,7 +115,7 @@ Deno.serve(async (req) => {
     }
 
     const tenantId = tenantUser.tenant_id
-    console.log(`Importing leads for tenant: ${tenantId}, agency: ${agencyId}`)
+    console.log(`Processing sheet for tenant: ${tenantId}`)
 
     // Fetch data from Google Sheets
     const sheetRange = range || 'Sheet1!A:Z'
@@ -164,17 +144,62 @@ Deno.serve(async (req) => {
     }
 
     // Parse headers
-    const headers = rows[0].map((h: string) => h.trim().toLowerCase())
+    const headers = rows[0].map((h: string) => String(h).trim())
     console.log('Sheet headers:', headers)
 
-    // Map headers to our fields
-    const headerMapping: Record<number, keyof SheetRow> = {}
-    headers.forEach((header: string, index: number) => {
-      const mapped = columnMappings[header]
-      if (mapped) {
-        headerMapping[index] = mapped
+    // If only fetching headers for mapping UI
+    if (fetchHeadersOnly) {
+      const previewRows = rows.slice(1, 6).map((row: any[]) => 
+        row.map((cell: any) => String(cell || '').trim())
+      )
+      return new Response(
+        JSON.stringify({ headers, previewRows }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Build header index mapping from fieldMap
+    const headerMapping: Record<number, string> = {}
+    if (fieldMap && typeof fieldMap === 'object') {
+      // fieldMap: { "שם העמודה": "system_field" }
+      headers.forEach((header: string, index: number) => {
+        const systemField = fieldMap[header]
+        if (systemField) {
+          headerMapping[index] = systemField
+        }
+      })
+    } else {
+      // Legacy: auto-detect (for backwards compatibility)
+      const columnMappings: Record<string, string> = {
+        'שם': 'company_name',
+        'שם חברה': 'company_name',
+        'טלפון': 'phone',
+        'מייל': 'email',
+        'אימייל': 'email',
+        'תאריך יצירה': 'created_at',
+        'תאריך': 'created_at',
+        'מקור': 'source',
+        'סטטוס': 'status',
+        'הערות': 'notes',
+        'איש קשר': 'contact_name',
+        'company_name': 'company_name',
+        'name': 'company_name',
+        'phone': 'phone',
+        'email': 'email',
+        'created_at': 'created_at',
+        'date': 'created_at',
+        'source': 'source',
+        'status': 'status',
+        'notes': 'notes',
+        'contact_name': 'contact_name',
       }
-    })
+      headers.forEach((header: string, index: number) => {
+        const mapped = columnMappings[header.toLowerCase()]
+        if (mapped) {
+          headerMapping[index] = mapped
+        }
+      })
+    }
     console.log('Header mapping:', headerMapping)
 
     // Use service role for inserts
@@ -188,89 +213,115 @@ Deno.serve(async (req) => {
     // Process each data row
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i]
-      const rowData: SheetRow = {}
+      const rowData: Record<string, any> = {}
 
       // Map row values to fields
-      row.forEach((value: string, index: number) => {
+      row.forEach((value: any, index: number) => {
         const field = headerMapping[index]
         if (field && value) {
-          rowData[field] = value.trim()
+          rowData[field] = String(value).trim()
         }
       })
 
       // Skip empty rows
-      if (!rowData.company_name && !rowData.phone && !rowData.email) {
+      if (!rowData.company_name && !rowData.phone && !rowData.email && !rowData.contact_name) {
         continue
       }
 
       // Prepare lead data
       const leadData: Record<string, any> = {
-        company_name: rowData.company_name || rowData.phone || 'Unknown',
-        phone: rowData.phone || null,
-        email: rowData.email || null,
-        contact_name: rowData.contact_name || null,
-        notes: rowData.notes || null,
         tenant_id: tenantId,
         agency_id: agencyId || null,
       }
 
-      // Map source
-      if (rowData.source) {
-        const sourceLower = rowData.source.toLowerCase()
-        leadData.source = sourceMappings[sourceLower] || 'other'
+      // Map fields
+      for (const [field, value] of Object.entries(rowData)) {
+        if (!value) continue
+        const strValue = String(value).trim()
+
+        switch (field) {
+          case 'company_name':
+          case 'contact_name':
+          case 'notes':
+          case 'products':
+          case 'campaign_name':
+          case 'industry':
+          case 'folder_link':
+            leadData[field] = strValue
+            break
+          case 'email':
+            if (strValue.includes('@')) leadData.email = strValue
+            break
+          case 'phone':
+            leadData.phone = strValue.replace(/[^\d+\-\s]/g, '')
+            break
+          case 'source':
+            leadData.source = sourceMappings[strValue.toLowerCase()] || 'other'
+            break
+          case 'status':
+            leadData.status = statusMappings[strValue.toLowerCase()] || 'new'
+            break
+          case 'monthly_budget':
+          case 'three_month_budget':
+          case 'estimated_deal_value':
+            const num = parseFloat(strValue.replace(/[^\d.-]/g, ''))
+            if (!isNaN(num) && num > 0) leadData[field] = num
+            break
+          case 'created_at':
+            const createdDate = parseDate(strValue)
+            if (createdDate) leadData.created_at = createdDate + 'T00:00:00Z'
+            break
+          case 'proposal_date':
+            const propDate = parseDate(strValue)
+            if (propDate) {
+              leadData.proposal_date = propDate
+              leadData.proposal_sent_date = propDate
+            }
+            break
+          case 'won_date':
+            const wonDate = parseDate(strValue)
+            if (wonDate) {
+              leadData.won_date = wonDate
+              leadData.sale_date = wonDate
+              leadData.closing_date = wonDate
+              leadData.status = 'closed'
+            }
+            break
+        }
       }
 
-      // Map status
-      if (rowData.status) {
-        const statusLower = rowData.status.toLowerCase()
-        leadData.status = statusMappings[statusLower] || 'new'
-      }
-
-      // Parse created_at date
-      if (rowData.created_at) {
-        try {
-          // Try parsing various date formats
-          const dateStr = rowData.created_at
-          let parsedDate: Date | null = null
-          
-          // Try DD/MM/YYYY format
-          const ddmmyyyy = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
-          if (ddmmyyyy) {
-            parsedDate = new Date(`${ddmmyyyy[3]}-${ddmmyyyy[2].padStart(2, '0')}-${ddmmyyyy[1].padStart(2, '0')}`)
-          }
-          
-          // Try YYYY-MM-DD format
-          if (!parsedDate || isNaN(parsedDate.getTime())) {
-            parsedDate = new Date(dateStr)
-          }
-          
-          if (parsedDate && !isNaN(parsedDate.getTime())) {
-            leadData.created_at = parsedDate.toISOString()
-          }
-        } catch (e) {
-          console.log(`Could not parse date: ${rowData.created_at}`)
+      // Fallbacks
+      if (!leadData.company_name) {
+        if (rowData.contact_name) {
+          leadData.company_name = rowData.contact_name
+        } else if (leadData.phone) {
+          leadData.company_name = `ליד ${leadData.phone}`
+        } else if (leadData.email) {
+          leadData.company_name = leadData.email.split('@')[0]
+        } else {
+          continue // Skip row with no identifier
         }
       }
 
       try {
         // Check if lead exists by phone or email
         let existingLead = null
-        if (rowData.phone) {
+        if (leadData.phone) {
           const { data } = await supabaseAdmin
             .from('leads')
             .select('id')
             .eq('tenant_id', tenantId)
-            .eq('phone', rowData.phone)
+            .eq('phone', leadData.phone)
             .maybeSingle()
           existingLead = data
         }
         
-        if (!existingLead && rowData.email) {
+        if (!existingLead && leadData.email) {
           const { data } = await supabaseAdmin
             .from('leads')
             .select('id')
             .eq('tenant_id', tenantId)
-            .eq('email', rowData.email)
+            .eq('email', leadData.email)
             .maybeSingle()
           existingLead = data
         }
