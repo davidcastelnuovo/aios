@@ -458,13 +458,25 @@ export function ImportLeadsWithMapping() {
     );
   };
 
+  // Count update columns mapped
+  const updateColumnsCount = useMemo(() => {
+    return mappings.filter(m => m.systemField === 'updates').length;
+  }, [mappings]);
+
+  // Get mapped fields (excluding 'updates' which is handled separately)
+  const mappedFields = useMemo(() => {
+    return systemFields.filter(f => 
+      f.key !== 'updates' && mappings.some(m => m.systemField === f.key)
+    );
+  }, [systemFields, mappings]);
+
   const previewData = useMemo(() => {
     if (rawData.length === 0) return [];
     
     return rawData.slice(0, 5).map(row => {
       const mapped: Record<string, any> = {};
       mappings.forEach(m => {
-        if (m.systemField) {
+        if (m.systemField && m.systemField !== 'updates') {
           mapped[m.systemField] = row[m.csvColumn];
         }
       });
@@ -1083,12 +1095,27 @@ export function ImportLeadsWithMapping() {
 
   const renderPreviewStep = () => (
     <div className="space-y-4">
-      <div className="flex items-center gap-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
         <Badge variant="secondary">{rawData.length} שורות לייבוא</Badge>
         <Badge variant="outline">
           סוכנות: {agencies.find(a => a.id === defaultAgencyId)?.name}
         </Badge>
+        {updateColumnsCount > 0 && (
+          <Badge variant="default" className="bg-blue-600">
+            {updateColumnsCount} עמודות עדכונים
+          </Badge>
+        )}
       </div>
+
+      {/* Update columns info */}
+      {updateColumnsCount > 0 && (
+        <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-950/30 text-sm">
+          <p className="text-blue-700 dark:text-blue-300">
+            🔄 זוהו {updateColumnsCount} עמודות עדכונים (עדכון 1-{updateColumnsCount}). 
+            התוכן מכל עמודה יתווסף לעדכונים של הליד.
+          </p>
+        </div>
+      )}
 
       {/* New values to be created */}
       {newValues.length > 0 && (
@@ -1148,7 +1175,7 @@ export function ImportLeadsWithMapping() {
         <Table>
           <TableHeader>
             <TableRow>
-              {systemFields.filter(f => mappings.some(m => m.systemField === f.key)).map(field => (
+              {mappedFields.map(field => (
                 <TableHead key={field.key} className="whitespace-nowrap">
                   {field.label}
                 </TableHead>
@@ -1158,7 +1185,7 @@ export function ImportLeadsWithMapping() {
           <TableBody>
             {previewData.map((row, idx) => (
               <TableRow key={idx}>
-                {systemFields.filter(f => mappings.some(m => m.systemField === f.key)).map(field => (
+                {mappedFields.map(field => (
                   <TableCell key={field.key} className="max-w-[150px] truncate">
                     {row[field.key] ?? "-"}
                   </TableCell>
