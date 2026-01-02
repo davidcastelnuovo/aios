@@ -1237,7 +1237,7 @@ export default function Leads() {
           </Button>
           <AddLeadForm />
           <ImportLeadsWithMapping />
-          <ImportLeadsSheet />
+          {/* <ImportLeadsSheet /> - Hidden temporarily */}
         </div>
       </div>
 
@@ -1279,7 +1279,7 @@ export default function Leads() {
                 {syncFacebookLeadsMutation.isPending ? 'מסנכרן...' : 'סנכרן מפייסבוק'}
               </Button>
               <ImportLeadsWithMapping />
-              <ImportLeadsSheet />
+              {/* <ImportLeadsSheet /> - Hidden temporarily */}
               <AddLeadForm />
             </div>
           </div>
