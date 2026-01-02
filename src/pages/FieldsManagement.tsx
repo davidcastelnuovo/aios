@@ -57,6 +57,56 @@ const FIELD_TYPES = [
   { value: 'phone', label: 'טלפון' },
 ];
 
+// Built-in system fields for each entity type
+const SYSTEM_FIELDS: Record<'task' | 'client' | 'lead', Array<{ key: string; label: string; type: string }>> = {
+  lead: [
+    { key: 'company_name', label: 'שם העסק', type: 'text' },
+    { key: 'contact_name', label: 'שם איש קשר', type: 'text' },
+    { key: 'phone', label: 'טלפון', type: 'phone' },
+    { key: 'email', label: 'אימייל', type: 'email' },
+    { key: 'source', label: 'מקור הגעה', type: 'select' },
+    { key: 'status', label: 'סטטוס (פייפליין)', type: 'select' },
+    { key: 'response_status', label: 'סטטוס תגובה', type: 'select' },
+    { key: 'notes', label: 'הערות', type: 'textarea' },
+    { key: 'products', label: 'מוצרים', type: 'text' },
+    { key: 'campaign_name', label: 'שם קמפיין', type: 'text' },
+    { key: 'industry', label: 'תעשייה/תחום', type: 'text' },
+    { key: 'monthly_budget', label: 'תקציב חד"פ', type: 'number' },
+    { key: 'three_month_budget', label: 'הצעה 3 חודשים', type: 'number' },
+    { key: 'estimated_deal_value', label: 'שווי עסקה', type: 'number' },
+    { key: 'proposal_date', label: 'תאריך הצעה', type: 'date' },
+    { key: 'won_date', label: 'תאריך סגירה', type: 'date' },
+    { key: 'meeting_date', label: 'תאריך פגישה', type: 'date' },
+    { key: 'meeting_time', label: 'שעת פגישה', type: 'text' },
+    { key: 'meeting_location', label: 'מיקום פגישה', type: 'text' },
+    { key: 'folder_link', label: 'קישור לתיקייה', type: 'text' },
+    { key: 'lost_reason', label: 'סיבת אובדן', type: 'text' },
+  ],
+  client: [
+    { key: 'name', label: 'שם הלקוח', type: 'text' },
+    { key: 'contact_name', label: 'שם איש קשר', type: 'text' },
+    { key: 'phone', label: 'טלפון', type: 'phone' },
+    { key: 'email', label: 'אימייל', type: 'email' },
+    { key: 'website', label: 'אתר אינטרנט', type: 'text' },
+    { key: 'industry', label: 'תעשייה/תחום', type: 'text' },
+    { key: 'status', label: 'סטטוס', type: 'select' },
+    { key: 'mood_status', label: 'מצב רוח', type: 'select' },
+    { key: 'retainer', label: 'ריטיינר', type: 'number' },
+    { key: 'monthly_budget', label: 'תקציב חודשי', type: 'number' },
+    { key: 'start_date', label: 'תאריך התחלה', type: 'date' },
+    { key: 'folder_link', label: 'קישור לתיקייה', type: 'text' },
+    { key: 'notes', label: 'הערות', type: 'textarea' },
+  ],
+  task: [
+    { key: 'title', label: 'כותרת', type: 'text' },
+    { key: 'status', label: 'סטטוס', type: 'select' },
+    { key: 'priority', label: 'עדיפות', type: 'number' },
+    { key: 'due_date', label: 'תאריך יעד', type: 'date' },
+    { key: 'task_type', label: 'סוג משימה', type: 'select' },
+    { key: 'notes', label: 'הערות', type: 'textarea' },
+  ],
+};
+
 export default function FieldsManagement() {
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
@@ -179,19 +229,81 @@ export default function FieldsManagement() {
       return;
     }
 
-    updateMutation.mutate({
-      id: editingField.id,
-      field_label: editingField.field_label,
-      field_type: editingField.field_type,
-      is_required: editingField.is_required,
-      is_visible: editingField.is_visible,
-    });
+    if (editingField.id) {
+      // Update existing record
+      updateMutation.mutate({
+        id: editingField.id,
+        field_label: editingField.field_label,
+        field_type: editingField.field_type,
+        is_required: editingField.is_required,
+        is_visible: editingField.is_visible,
+      });
+    } else {
+      // Create new override for system field
+      createMutation.mutate({
+        entity_type: editingField.entity_type,
+        field_key: editingField.field_key,
+        field_label: editingField.field_label,
+        field_type: editingField.field_type,
+        is_required: editingField.is_required,
+        is_visible: editingField.is_visible,
+      });
+    }
     setIsEditDialogOpen(false);
     setEditingField(null);
   };
 
   const openEditDialog = (field: CustomField) => {
     setEditingField({ ...field });
+    setIsEditDialogOpen(true);
+  };
+
+  // Handle toggling required/visible for system fields
+  const handleSystemFieldToggle = async (
+    fieldKey: string,
+    property: 'is_required' | 'is_visible',
+    value: boolean,
+    existingOverride: CustomField | undefined,
+    sysField: { key: string; label: string; type: string }
+  ) => {
+    if (existingOverride) {
+      // Update existing record
+      updateMutation.mutate({ id: existingOverride.id, [property]: value });
+    } else {
+      // Create new custom_fields record for system field override
+      const newOverride = {
+        entity_type: selectedEntity,
+        field_key: fieldKey,
+        field_label: sysField.label,
+        field_type: sysField.type,
+        is_required: property === 'is_required' ? value : false,
+        is_visible: property === 'is_visible' ? value : true,
+      };
+      createMutation.mutate(newOverride);
+    }
+  };
+
+  // Open edit dialog for system field
+  const openSystemFieldEditDialog = (
+    sysField: { key: string; label: string; type: string },
+    existingOverride: CustomField | undefined
+  ) => {
+    if (existingOverride) {
+      setEditingField({ ...existingOverride });
+    } else {
+      // Create a temporary field object for editing
+      setEditingField({
+        id: '', // Empty means it's a new record
+        entity_type: selectedEntity,
+        field_key: sysField.key,
+        field_label: sysField.label,
+        field_type: sysField.type,
+        is_required: false,
+        is_visible: true,
+        options: null,
+        sort_order: 0,
+      });
+    }
     setIsEditDialogOpen(true);
   };
 
@@ -321,13 +433,75 @@ export default function FieldsManagement() {
               <TabsTrigger value="lead">לידים</TabsTrigger>
             </TabsList>
 
-            <TabsContent value={selectedEntity} className="mt-6">
+            <TabsContent value={selectedEntity} className="mt-6 space-y-6">
+          {/* System Fields */}
           <Card>
             <CardHeader>
-              <CardTitle>שדות {getEntityLabel(selectedEntity)}</CardTitle>
+              <CardTitle>שדות מערכת - {getEntityLabel(selectedEntity)}</CardTitle>
             </CardHeader>
             <CardContent>
-              {!fields || fields.length === 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>תווית</TableHead>
+                    <TableHead>מזהה</TableHead>
+                    <TableHead>סוג</TableHead>
+                    <TableHead>חובה</TableHead>
+                    <TableHead>נראה</TableHead>
+                    <TableHead>פעולות</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {SYSTEM_FIELDS[selectedEntity].map((sysField) => {
+                    // Check if there's a custom override for this system field
+                    const customOverride = fields.find(f => f.field_key === sysField.key);
+                    const displayLabel = customOverride?.field_label || sysField.label;
+                    const isRequired = customOverride?.is_required ?? false;
+                    const isVisible = customOverride?.is_visible ?? true;
+                    
+                    return (
+                      <TableRow key={sysField.key}>
+                        <TableCell className="font-medium">{displayLabel}</TableCell>
+                        <TableCell className="text-muted-foreground">{sysField.key}</TableCell>
+                        <TableCell>
+                          {FIELD_TYPES.find((t) => t.value === sysField.type)?.label || sysField.type}
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={isRequired}
+                            onCheckedChange={(checked) => handleSystemFieldToggle(sysField.key, 'is_required', checked, customOverride, sysField)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={isVisible}
+                            onCheckedChange={(checked) => handleSystemFieldToggle(sysField.key, 'is_visible', checked, customOverride, sysField)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openSystemFieldEditDialog(sysField, customOverride)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Custom Fields */}
+          <Card>
+            <CardHeader>
+              <CardTitle>שדות מותאמים אישית - {getEntityLabel(selectedEntity)}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {fields.filter(f => !SYSTEM_FIELDS[selectedEntity].some(sf => sf.key === f.field_key)).length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
                   לא הוגדרו שדות מותאמים אישית עבור {getEntityLabel(selectedEntity)}
                 </p>
@@ -344,7 +518,9 @@ export default function FieldsManagement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {fields.map((field) => (
+                    {fields
+                      .filter(f => !SYSTEM_FIELDS[selectedEntity].some(sf => sf.key === f.field_key))
+                      .map((field) => (
                       <TableRow key={field.id}>
                         <TableCell className="font-medium">{field.field_label}</TableCell>
                         <TableCell className="text-muted-foreground">{field.field_key}</TableCell>
