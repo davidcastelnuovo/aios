@@ -489,19 +489,62 @@ export function ImportLeadsWithMapping() {
 
   const parseDate = (val: string) => {
     if (!val) return null;
+    
+    const strVal = String(val).trim();
+    if (!strVal) return null;
+    
+    // Helper function to validate year is reasonable (1900-2100)
+    const isValidYear = (year: number) => year >= 1900 && year <= 2100;
+    
     // Try DD/MM/YY or DD/MM/YYYY format
-    const parts = val.split('/');
-    if (parts.length === 3) {
-      const day = parts[0].padStart(2, '0');
-      const month = parts[1].padStart(2, '0');
-      let year = parts[2];
-      if (year.length === 2) year = '20' + year;
-      const d = new Date(`${year}-${month}-${day}`);
-      if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    const slashParts = strVal.split('/');
+    if (slashParts.length === 3) {
+      const day = parseInt(slashParts[0], 10);
+      const month = parseInt(slashParts[1], 10);
+      let year = parseInt(slashParts[2], 10);
+      
+      // Convert 2-digit year
+      if (year < 100) year = year > 50 ? 1900 + year : 2000 + year;
+      
+      if (isValidYear(year) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        const d = new Date(year, month - 1, day);
+        if (!isNaN(d.getTime()) && d.getFullYear() === year) {
+          return d.toISOString().split('T')[0];
+        }
+      }
     }
-    // Try ISO format
-    const d = new Date(val);
-    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    
+    // Try DD-MM-YYYY or DD.MM.YYYY format
+    const otherParts = strVal.split(/[-.]/).filter(p => p);
+    if (otherParts.length === 3) {
+      const day = parseInt(otherParts[0], 10);
+      const month = parseInt(otherParts[1], 10);
+      const year = parseInt(otherParts[2], 10);
+      
+      if (isValidYear(year) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        const d = new Date(year, month - 1, day);
+        if (!isNaN(d.getTime()) && d.getFullYear() === year) {
+          return d.toISOString().split('T')[0];
+        }
+      }
+    }
+    
+    // Try ISO format (YYYY-MM-DD)
+    const isoMatch = strVal.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (isoMatch) {
+      const year = parseInt(isoMatch[1], 10);
+      const month = parseInt(isoMatch[2], 10);
+      const day = parseInt(isoMatch[3], 10);
+      
+      if (isValidYear(year) && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        const d = new Date(year, month - 1, day);
+        if (!isNaN(d.getTime())) {
+          return d.toISOString().split('T')[0];
+        }
+      }
+    }
+    
+    // Don't use generic Date() parsing - it produces weird results
     return null;
   };
 
