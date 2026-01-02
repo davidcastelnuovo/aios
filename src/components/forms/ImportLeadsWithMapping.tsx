@@ -414,19 +414,22 @@ export function ImportLeadsWithMapping() {
       });
     }
     
-    // Check for tags column
-    const tagsMapping = mappings.find(m => m.systemField === 'tags');
-    if (tagsMapping) {
+    // Check for ALL columns mapped to tags (support multiple columns)
+    const tagsMappings = mappings.filter(m => m.systemField === 'tags');
+    if (tagsMappings.length > 0) {
       const existingTagNames = existingTags.map(t => t.name.toLowerCase().trim());
       const uniqueTags = new Set<string>();
       
       rawData.forEach(row => {
-        const val = row[tagsMapping.csvColumn];
-        if (val && String(val).trim()) {
-          // Split by comma in case multiple tags
-          const tags = String(val).split(',').map(t => t.trim()).filter(t => t);
-          tags.forEach(tag => uniqueTags.add(tag));
-        }
+        // Loop through ALL columns mapped to tags
+        tagsMappings.forEach(tagsMapping => {
+          const val = row[tagsMapping.csvColumn];
+          if (val && String(val).trim()) {
+            // Split by comma in case multiple tags
+            const tags = String(val).split(',').map(t => t.trim()).filter(t => t);
+            tags.forEach(tag => uniqueTags.add(tag));
+          }
+        });
       });
       
       let colorIdx = 0;
@@ -765,8 +768,9 @@ export function ImportLeadsWithMapping() {
               }
               break;
             case 'tags':
-              // Parse tags and store for later
-              rowTags = strValue.split(',').map(t => t.trim()).filter(t => t);
+              // Parse tags and ACCUMULATE from multiple columns
+              const newTags = strValue.split(',').map(t => t.trim()).filter(t => t);
+              rowTags = [...rowTags, ...newTags];
               break;
             case 'updates':
               // Already handled separately
