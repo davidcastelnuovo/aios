@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -56,6 +56,8 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import AddTaskForm from "@/components/forms/AddTaskForm";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
+import { LeadTagSelector, LeadTagBadges } from "@/components/leads/LeadTagSelector";
+import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 
 // Helper functions for dynamic pipeline stages
 function hexToLightBg(hex: string): string {
@@ -353,6 +355,7 @@ function LeadCard({
             open={editDialogOpen} 
             onOpenChange={setEditDialogOpen}
           />
+          <LeadTagSelector leadId={lead.id} />
           <AddTaskForm
             leadId={lead.id}
             agencyId={lead.agency_id || undefined}
@@ -539,6 +542,7 @@ export default function Leads() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStage, setFilterStage] = useState<string>("all");
   const [filterResponseStatus, setFilterResponseStatus] = useState<string>("all");
+  const [filterTag, setFilterTag] = useState<string>("all");
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [openTables, setOpenTables] = useState<Record<string, boolean>>({});
@@ -689,6 +693,51 @@ export default function Leads() {
       return acc;
     }, {} as Record<string, { name: string; price: number }>);
   }, [allProducts]);
+
+  // Fetch all tags for filtering
+  const { data: allTags = [] } = useQuery({
+    queryKey: ['chat-tags', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from('chat_tags')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('sort_order', { ascending: true });
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId,
+    staleTime: 60000,
+  });
+
+  // Fetch lead tags in bulk for filtering
+  const { data: leadsTagsMap = {} } = useQuery({
+    queryKey: ['leads-tags-bulk', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return {};
+      const { data, error } = await supabase
+        .from('chat_contact_tags')
+        .select('lead_id, tag_id')
+        .eq('tenant_id', tenantId)
+        .not('lead_id', 'is', null);
+      
+      if (error) throw error;
+      
+      // Group by lead_id
+      const map: Record<string, string[]> = {};
+      data.forEach(item => {
+        if (item.lead_id) {
+          if (!map[item.lead_id]) map[item.lead_id] = [];
+          map[item.lead_id].push(item.tag_id);
+        }
+      });
+      return map;
+    },
+    enabled: !!tenantId,
+    staleTime: 30000,
+  });
 
   // Debug: log how many leads are missing phone/email to verify visibility
   useEffect(() => {
@@ -970,9 +1019,19 @@ export default function Leads() {
         }
       }
       
+      // Tag filter
+      if (filterTag !== "all") {
+        const leadTags = leadsTagsMap[lead.id] || [];
+        if (filterTag === "none") {
+          if (leadTags.length > 0) return false;
+        } else {
+          if (!leadTags.includes(filterTag)) return false;
+        }
+      }
+      
       return true;
     });
-  }, [leads, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, startDate, endDate]);
+  }, [leads, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, startDate, endDate, filterTag, leadsTagsMap]);
 
   const getLeadsByStage = (stageId: string) => {
     return filteredLeads?.filter((lead: any) => lead.status === stageId) || [];
@@ -1058,6 +1117,32 @@ export default function Leads() {
                   style={{ backgroundColor: status.color, color: '#fff' }}
                 >
                   {status.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterTag} onValueChange={setFilterTag}>
+            <SelectTrigger 
+              className="flex-1 border-2"
+              style={{ 
+                backgroundColor: filterTag !== "all" && filterTag !== "none" 
+                  ? allTags.find((t: any) => t.id === filterTag)?.color || undefined 
+                  : undefined,
+                color: filterTag !== "all" && filterTag !== "none" ? '#fff' : undefined
+              }}
+            >
+              <SelectValue placeholder="תגית" />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-[100]">
+              <SelectItem value="all">כל התגיות</SelectItem>
+              <SelectItem value="none">ללא תגית</SelectItem>
+              {allTags.map((tag: any) => (
+                <SelectItem 
+                  key={tag.id} 
+                  value={tag.id}
+                  style={{ backgroundColor: tag.color, color: '#fff' }}
+                >
+                  {tag.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -1267,11 +1352,48 @@ export default function Leads() {
             </SelectContent>
           </Select>
           
+          {/* Tag Filter */}
+          <Select value={filterTag} onValueChange={setFilterTag}>
+            <SelectTrigger 
+              className="w-[160px] border-2"
+              style={{ 
+                backgroundColor: filterTag !== "all" && filterTag !== "none" 
+                  ? allTags.find((t: any) => t.id === filterTag)?.color || undefined 
+                  : undefined,
+                color: filterTag !== "all" && filterTag !== "none" ? '#fff' : undefined
+              }}
+            >
+              <SelectValue placeholder="כל התגיות" />
+            </SelectTrigger>
+            <SelectContent className="bg-background z-[100]">
+              <SelectItem value="all">כל התגיות</SelectItem>
+              <SelectItem value="none">ללא תגית</SelectItem>
+              {allTags.map((tag: any) => (
+                <SelectItem 
+                  key={tag.id} 
+                  value={tag.id}
+                  style={{ backgroundColor: tag.color, color: '#fff' }}
+                >
+                  {tag.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
           {/* Manage Lead Statuses Button */}
           <ManageLeadStatusesDialog 
             trigger={
               <Button variant="outline" size="icon" title="ניהול סטטוסי לידים">
                 <Settings2 className="h-4 w-4" />
+              </Button>
+            }
+          />
+          
+          {/* Manage Tags Button */}
+          <ChatTagsManager 
+            trigger={
+              <Button variant="outline" size="icon" title="ניהול תגיות">
+                <Tag className="h-4 w-4" />
               </Button>
             }
           />
