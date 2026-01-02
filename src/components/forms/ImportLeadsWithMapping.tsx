@@ -1031,8 +1031,8 @@ export function ImportLeadsWithMapping() {
       </div>
 
       <div className="text-sm font-medium mb-2">מיפוי שדות:</div>
-      <ScrollArea className="h-[300px] border rounded-lg p-2">
-        <div className="space-y-2">
+      <ScrollArea className="h-[350px] border rounded-lg p-3">
+        <div className="space-y-2 pe-4">
           {mappings.map((mapping, idx) => {
             const sampleValue = rawData[0]?.[mapping.csvColumn];
             const displaySample = sampleValue !== undefined && sampleValue !== null && sampleValue !== '' 
@@ -1040,7 +1040,7 @@ export function ImportLeadsWithMapping() {
               : "(ריק)";
             return (
               <div key={idx} className="flex items-center gap-3 p-2 bg-muted/50 rounded">
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="font-mono text-sm truncate" title={mapping.csvColumn}>
                     {mapping.csvColumn}
                   </div>
@@ -1048,12 +1048,12 @@ export function ImportLeadsWithMapping() {
                     דוגמה: {displaySample}
                   </div>
                 </div>
-                <ArrowLeft className="h-4 w-4 text-muted-foreground" />
+                <ArrowLeft className="h-4 w-4 text-muted-foreground shrink-0" />
                 <Select
                   value={mapping.systemField || "skip"}
                   onValueChange={(value) => updateMapping(mapping.csvColumn, value)}
                 >
-                  <SelectTrigger className="w-[180px]">
+                  <SelectTrigger className="w-[180px] shrink-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
