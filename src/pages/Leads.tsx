@@ -564,6 +564,11 @@ export default function Leads() {
   const [page, setPage] = useState(1);
   const LEADS_PER_PAGE = 100;
   
+  // Reset page to 1 when filters change to prevent showing empty results
+  useEffect(() => {
+    setPage(1);
+  }, [selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTag, startDate, endDate]);
+  
   // Kanban limiting state - how many leads to show per stage
   const KANBAN_LEADS_PER_STAGE = 30;
   const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({});
