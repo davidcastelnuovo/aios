@@ -326,10 +326,10 @@ function LeadCard({
               className="h-9 text-sm border-2 font-medium"
               style={{ 
                 backgroundColor: getStatusColor(lead.response_status, leadStatuses) || undefined,
-                color: lead.response_status ? '#fff' : undefined 
+                color: getStatusColor(lead.response_status, leadStatuses) ? '#fff' : undefined 
               }}
             >
-              <SelectValue />
+              <SelectValue placeholder={leadStatuses.length === 0 ? "טוען..." : "בחר סטטוס"} />
             </SelectTrigger>
             <SelectContent className="bg-background z-[100]">
               <SelectItem value="none">ללא סטטוס</SelectItem>
@@ -366,7 +366,7 @@ function LeadCard({
             open={editDialogOpen} 
             onOpenChange={setEditDialogOpen}
           />
-          <LeadTagSelector leadId={lead.id} />
+          <LeadTagSelector leadId={lead.id} initialTagIds={leadTagIds} />
           <AddTaskForm
             leadId={lead.id}
             agencyId={lead.agency_id || undefined}
@@ -1905,10 +1905,55 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   const queryClient = useQueryClient();
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const { selectedAgency } = useAgency();
-  const { activeStatuses: leadStatuses } = useLeadStatuses();
+  const { activeStatuses: leadStatuses, isLoading: isStatusesLoading } = useLeadStatuses();
   const { activeStages: pipelineStagesData } = useLeadPipelineStages();
   const { isFieldVisible } = useCustomFieldLabels('lead');
   const { tenantId } = useCurrentTenant();
+
+  // Fetch all tags for display in table
+  const { data: allTags = [] } = useQuery({
+    queryKey: ['chat-tags', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from('chat_tags')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('sort_order', { ascending: true });
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId,
+    staleTime: 60000,
+  });
+
+  // Fetch lead tags in bulk
+  const { data: leadsTagsMap = {} } = useQuery({
+    queryKey: ['leads-tags-bulk', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return {};
+      const { data, error } = await supabase
+        .from('chat_contact_tags')
+        .select('lead_id, tag_id')
+        .eq('tenant_id', tenantId)
+        .not('lead_id', 'is', null);
+      
+      if (error) throw error;
+      
+      // Group by lead_id
+      const map: Record<string, string[]> = {};
+      data.forEach(item => {
+        if (item.lead_id) {
+          if (!map[item.lead_id]) map[item.lead_id] = [];
+          map[item.lead_id].push(item.tag_id);
+        }
+      });
+      return map;
+    },
+    enabled: !!tenantId,
+    staleTime: 1000 * 60 * 2,
+  });
   
   // State for management dialogs
   const [manageStagesOpen, setManageStagesOpen] = useState(false);
@@ -2236,10 +2281,10 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                       className="h-8 w-full border-2"
                       style={{ 
                         backgroundColor: status?.color || undefined,
-                        color: lead.response_status ? '#fff' : undefined 
+                        color: status?.color ? '#fff' : undefined 
                       }}
                     >
-                      <SelectValue placeholder="בחר סטטוס" />
+                      <SelectValue placeholder={isStatusesLoading ? "טוען..." : "בחר סטטוס"} />
                     </SelectTrigger>
                     <SelectContent className="bg-background z-50">
                       <SelectItem value="none">ללא סטטוס</SelectItem>
@@ -2267,6 +2312,20 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                       </div>
                     </SelectContent>
                   </Select>
+                );
+              }
+            },
+            { 
+              id: "tags", 
+              label: "תגיות", 
+              width: 150,
+              render: (lead: any) => {
+                const tagIds = leadsTagsMap[lead.id] || [];
+                return (
+                  <div className="flex items-center gap-1">
+                    <LeadTagBadges allTags={allTags} tagIds={tagIds} />
+                    <LeadTagSelector leadId={lead.id} initialTagIds={tagIds} />
+                  </div>
                 );
               }
             },
