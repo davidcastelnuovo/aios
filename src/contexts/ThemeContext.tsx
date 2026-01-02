@@ -60,16 +60,18 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     queryKey: ['tenant-branding', currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
-      
+
       const { data, error } = await supabase
         .from('tenant_settings')
         .select('setting_value')
         .eq('tenant_id', currentTenantId)
         .eq('setting_key', 'branding')
         .maybeSingle();
-      
+
       if (error) throw error;
-      return data?.setting_value;
+
+      // IMPORTANT: React Query does not allow `undefined` as resolved data.
+      return (data?.setting_value ?? null) as any;
     },
     enabled: !!currentTenantId,
   });
