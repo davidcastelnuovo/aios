@@ -731,6 +731,7 @@ export default function Leads() {
         .from("leads")
         .select(`
           id,
+          tenant_id,
           contact_name,
           company_name,
           phone,
