@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -32,8 +32,11 @@ import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useLeadStatuses, LeadStatus } from "@/hooks/useLeadStatuses";
 import { useLeadPipelineStages, LeadPipelineStage } from "@/hooks/useLeadPipelineStages";
+import { LeadFiltersDialog, FilterState } from "@/components/leads/LeadFiltersDialog";
+import { LeadFilterPresetTabs, FilterPreset } from "@/components/leads/LeadFilterPresetTabs";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
@@ -516,13 +519,26 @@ export default function Leads() {
   const { userAgencyIds } = useUserAgencies();
   const { isOwner } = useUserRole();
   const { tenantId } = useCurrentTenant();
+  const { userId } = useCurrentUser();
   const { activeStatuses: leadStatuses } = useLeadStatuses();
   const { activeStages: pipelineStagesData } = useLeadPipelineStages();
   const { isFieldVisible } = useCustomFieldLabels('lead');
-  const [filterSalesPerson, setFilterSalesPerson] = useState<string>("all");
   const [searchParams, setSearchParams] = useSearchParams();
   const leadIdFromUrl = searchParams.get('leadId');
   const [autoOpenLeadId, setAutoOpenLeadId] = useState<string | null>(null);
+  
+  // Filter states
+  const [filterSalesPerson, setFilterSalesPerson] = useState<string>("all");
+  const [filterStage, setFilterStage] = useState<string>("all");
+  const [filterResponseStatus, setFilterResponseStatus] = useState<string>("all");
+  const [filterTag, setFilterTag] = useState<string>("all");
+  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
+  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  // Filters dialog and preset states
+  const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
+  const [activePresetId, setActivePresetId] = useState<string | null>(null);
   
   // Convert dynamic pipeline stages to format compatible with existing code
   const PIPELINE_STAGES = useMemo(() => {
@@ -550,12 +566,6 @@ export default function Leads() {
   const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterStage, setFilterStage] = useState<string>("all");
-  const [filterResponseStatus, setFilterResponseStatus] = useState<string>("all");
-  const [filterTag, setFilterTag] = useState<string>("all");
-  const [startDate, setStartDate] = useState<Date | undefined>(undefined);
-  const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [openTables, setOpenTables] = useState<Record<string, boolean>>({});
   const [selectedMobileStage, setSelectedMobileStage] = useState<string>("");
   const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
@@ -1186,6 +1196,65 @@ export default function Leads() {
     return secureFilteredLeads;
   }, [secureFilteredLeads, filterTag, leadsTagsMap]);
 
+  // Helper to check if any filters are active
+  const hasActiveFilters = useMemo(() => {
+    return filterSalesPerson !== "all" ||
+      filterStage !== "all" ||
+      filterResponseStatus !== "all" ||
+      filterTag !== "all" ||
+      startDate !== undefined ||
+      endDate !== undefined;
+  }, [filterSalesPerson, filterStage, filterResponseStatus, filterTag, startDate, endDate]);
+
+  // Current filter state for dialog
+  const currentFilters: FilterState = useMemo(() => ({
+    searchQuery,
+    salesPersonId: filterSalesPerson,
+    stageId: filterStage,
+    responseStatus: filterResponseStatus,
+    tagId: filterTag,
+    startDate,
+    endDate,
+  }), [searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTag, startDate, endDate]);
+
+  // Handle applying filters from dialog
+  const handleApplyFilters = (filters: FilterState) => {
+    setSearchQuery(filters.searchQuery);
+    setFilterSalesPerson(filters.salesPersonId);
+    setFilterStage(filters.stageId);
+    setFilterResponseStatus(filters.responseStatus);
+    setFilterTag(filters.tagId);
+    setStartDate(filters.startDate);
+    setEndDate(filters.endDate);
+    setActivePresetId(null); // Clear preset when manually applying
+  };
+
+  // Handle preset selection
+  const handlePresetSelect = (preset: FilterPreset | null) => {
+    if (!preset) {
+      // Reset all filters
+      setFilterSalesPerson("all");
+      setFilterStage("all");
+      setFilterResponseStatus("all");
+      setFilterTag("all");
+      setStartDate(undefined);
+      setEndDate(undefined);
+      setSearchQuery("");
+      setActivePresetId(null);
+    } else {
+      // Apply preset filters
+      const f = preset.filters;
+      setFilterSalesPerson(f.salesPersonId || "all");
+      setFilterStage(f.stageId || "all");
+      setFilterResponseStatus(f.responseStatus || "all");
+      setFilterTag(f.tagId || "all");
+      setStartDate(f.startDate ? new Date(f.startDate) : undefined);
+      setEndDate(f.endDate ? new Date(f.endDate) : undefined);
+      setSearchQuery(f.searchQuery || "");
+      setActivePresetId(preset.id);
+    }
+  };
+
   const getLeadsByStage = (stageId: string, limit?: number) => {
     const stageLeads = filteredLeads?.filter((lead: any) => lead.status === stageId) || [];
     if (limit && !expandedStages[stageId]) {
@@ -1214,165 +1283,32 @@ export default function Leads() {
             {isFetching ? '...' : filteredLeads?.length || 0}
           </Badge>
         </div>
-        <div className="relative">
-          <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="חיפוש..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pr-10"
-          />
-        </div>
         <div className="flex gap-2">
-          <Select value={filterSalesPerson} onValueChange={setFilterSalesPerson}>
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder="איש מכירות" />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-[100]">
-              <SelectItem value="all">כל אנשי המכירות</SelectItem>
-              <SelectItem value="none">ללא שיוך</SelectItem>
-              {salesPeople?.map((sp) => (
-                <SelectItem key={sp.id} value={sp.id}>
-                  {sp.full_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterStage} onValueChange={setFilterStage}>
-            <SelectTrigger className={`flex-1 border-2 ${
-              filterStage !== "all" 
-                ? PIPELINE_STAGES.find(s => s.id === filterStage)?.bgClass || "bg-background"
-                : "bg-background"
-            }`}>
-              <SelectValue placeholder="שלב" />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-[100]">
-              <SelectItem value="all">כל השלבים</SelectItem>
-              {PIPELINE_STAGES.map((stage) => (
-                <SelectItem key={stage.id} value={stage.id} className={stage.bgClass}>
-                  {stage.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterResponseStatus} onValueChange={setFilterResponseStatus}>
-            <SelectTrigger 
-              className="flex-1 border-2"
-              style={{ 
-                backgroundColor: filterResponseStatus !== "all" && filterResponseStatus !== "none" 
-                  ? getStatusColor(filterResponseStatus, leadStatuses) || undefined 
-                  : undefined,
-                color: filterResponseStatus !== "all" && filterResponseStatus !== "none" ? '#fff' : undefined
-              }}
-            >
-              <SelectValue placeholder="סטטוס" />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-[100]">
-              <SelectItem value="all">כל הסטטוסים</SelectItem>
-              <SelectItem value="none">ללא סטטוס</SelectItem>
-              {leadStatuses.map((status) => (
-                <SelectItem 
-                  key={status.status_key} 
-                  value={status.status_key}
-                  style={{ backgroundColor: status.color, color: '#fff' }}
-                >
-                  {status.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterTag} onValueChange={setFilterTag}>
-            <SelectTrigger 
-              className="flex-1 border-2"
-              style={{ 
-                backgroundColor: filterTag !== "all" && filterTag !== "none" 
-                  ? allTags.find((t: any) => t.id === filterTag)?.color || undefined 
-                  : undefined,
-                color: filterTag !== "all" && filterTag !== "none" ? '#fff' : undefined
-              }}
-            >
-              <SelectValue placeholder="תגית" />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-[100]">
-              <SelectItem value="all">כל התגיות</SelectItem>
-              <SelectItem value="none">ללא תגית</SelectItem>
-              {allTags.map((tag: any) => (
-                <SelectItem 
-                  key={tag.id} 
-                  value={tag.id}
-                  style={{ backgroundColor: tag.color, color: '#fff' }}
-                >
-                  {tag.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        {/* Date Range Filters */}
-        <div className="flex gap-2">
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "flex-1 justify-start text-right font-normal border-2",
-                  !startDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="ml-2 h-4 w-4" />
-                {startDate ? format(startDate, "dd/MM/yyyy") : "מתאריך"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={startDate}
-                onSelect={setStartDate}
-                initialFocus
-                className={cn("p-3 pointer-events-auto")}
-              />
-            </PopoverContent>
-          </Popover>
-          
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "flex-1 justify-start text-right font-normal border-2",
-                  !endDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="ml-2 h-4 w-4" />
-                {endDate ? format(endDate, "dd/MM/yyyy") : "עד תאריך"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={endDate}
-                onSelect={setEndDate}
-                initialFocus
-                className={cn("p-3 pointer-events-auto")}
-              />
-            </PopoverContent>
-          </Popover>
-          
-          {(startDate || endDate) && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                setStartDate(undefined);
-                setEndDate(undefined);
-              }}
-              className="shrink-0"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
+          <div className="relative flex-1">
+            <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="חיפוש..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pr-10"
+            />
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => setFiltersDialogOpen(true)}
+            className={cn(
+              "gap-2 shrink-0",
+              hasActiveFilters && "border-primary text-primary"
+            )}
+          >
+            <Filter className="h-4 w-4" />
+            {hasActiveFilters && (
+              <Badge variant="secondary" className="h-5 w-5 p-0 flex items-center justify-center rounded-full text-xs">
+                ✓
+              </Badge>
+            )}
+          </Button>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button
@@ -1387,7 +1323,6 @@ export default function Leads() {
           </Button>
           <AddLeadForm />
           <ImportLeadsWithMapping />
-          {/* <ImportLeadsSheet /> - Hidden temporarily */}
         </div>
       </div>
 
@@ -1439,9 +1374,9 @@ export default function Leads() {
           </div>
         </div>
         
-        {/* Search and Filters in one row */}
+        {/* Search + Preset Tabs + Filters Button */}
         <div className="flex gap-3 items-center">
-          <div className="relative flex-1 max-w-xl">
+          <div className="relative flex-1 max-w-md">
             <Search className="absolute right-4 top-1/2 transform -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
               type="text"
@@ -1461,91 +1396,16 @@ export default function Leads() {
               </Button>
             )}
           </div>
-          <Select value={filterSalesPerson} onValueChange={setFilterSalesPerson}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="איש מכירות" />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-[100]">
-              <SelectItem value="all">כל אנשי המכירות</SelectItem>
-              <SelectItem value="none">ללא שיוך</SelectItem>
-              {salesPeople?.map((sp) => (
-                <SelectItem key={sp.id} value={sp.id}>
-                  {sp.full_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterStage} onValueChange={setFilterStage}>
-            <SelectTrigger className={`w-[180px] border-2 ${
-              filterStage !== "all" 
-                ? PIPELINE_STAGES.find(s => s.id === filterStage)?.bgClass || "bg-background"
-                : "bg-background"
-            }`}>
-              <SelectValue placeholder="כל השלבים" />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-[100]">
-              <SelectItem value="all">כל השלבים</SelectItem>
-              {PIPELINE_STAGES.map((stage) => (
-                <SelectItem key={stage.id} value={stage.id} className={stage.bgClass}>
-                  {stage.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterResponseStatus} onValueChange={setFilterResponseStatus}>
-            <SelectTrigger 
-              className="w-[160px] border-2"
-              style={{ 
-                backgroundColor: filterResponseStatus !== "all" && filterResponseStatus !== "none" 
-                  ? getStatusColor(filterResponseStatus, leadStatuses) || undefined 
-                  : undefined,
-                color: filterResponseStatus !== "all" && filterResponseStatus !== "none" ? '#fff' : undefined
-              }}
-            >
-              <SelectValue placeholder="כל הסטטוסים" />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-[100]">
-              <SelectItem value="all">כל הסטטוסים</SelectItem>
-              <SelectItem value="none">ללא סטטוס</SelectItem>
-              {leadStatuses.map((status) => (
-                <SelectItem 
-                  key={status.status_key} 
-                  value={status.status_key}
-                  style={{ backgroundColor: status.color, color: '#fff' }}
-                >
-                  {status.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           
-          {/* Tag Filter */}
-          <Select value={filterTag} onValueChange={setFilterTag}>
-            <SelectTrigger 
-              className="w-[160px] border-2"
-              style={{ 
-                backgroundColor: filterTag !== "all" && filterTag !== "none" 
-                  ? allTags.find((t: any) => t.id === filterTag)?.color || undefined 
-                  : undefined,
-                color: filterTag !== "all" && filterTag !== "none" ? '#fff' : undefined
-              }}
-            >
-              <SelectValue placeholder="כל התגיות" />
-            </SelectTrigger>
-            <SelectContent className="bg-background z-[100]">
-              <SelectItem value="all">כל התגיות</SelectItem>
-              <SelectItem value="none">ללא תגית</SelectItem>
-              {allTags.map((tag: any) => (
-                <SelectItem 
-                  key={tag.id} 
-                  value={tag.id}
-                  style={{ backgroundColor: tag.color, color: '#fff' }}
-                >
-                  {tag.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Preset Tabs + Filters Button */}
+          <div className="flex-1">
+            <LeadFilterPresetTabs
+              activePresetId={activePresetId}
+              onPresetSelect={handlePresetSelect}
+              onOpenFiltersDialog={() => setFiltersDialogOpen(true)}
+              hasActiveFilters={hasActiveFilters}
+            />
+          </div>
           
           {/* Manage Lead Statuses Button */}
           <ManageLeadStatusesDialog 
@@ -1564,71 +1424,20 @@ export default function Leads() {
               </Button>
             }
           />
-          
-          {/* Date Range Filters */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-[140px] justify-start text-right font-normal border-2",
-                  !startDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="ml-2 h-4 w-4" />
-                {startDate ? format(startDate, "dd/MM/yy") : "מתאריך"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={startDate}
-                onSelect={setStartDate}
-                initialFocus
-                className={cn("p-3 pointer-events-auto")}
-              />
-            </PopoverContent>
-          </Popover>
-          
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  "w-[140px] justify-start text-right font-normal border-2",
-                  !endDate && "text-muted-foreground"
-                )}
-              >
-                <CalendarIcon className="ml-2 h-4 w-4" />
-                {endDate ? format(endDate, "dd/MM/yy") : "עד תאריך"}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={endDate}
-                onSelect={setEndDate}
-                initialFocus
-                className={cn("p-3 pointer-events-auto")}
-              />
-            </PopoverContent>
-          </Popover>
-          
-          {(startDate || endDate) && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                setStartDate(undefined);
-                setEndDate(undefined);
-              }}
-              title="נקה סינון תאריכים"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
         </div>
       </div>
+      
+      {/* Filters Dialog */}
+      <LeadFiltersDialog
+        open={filtersDialogOpen}
+        onOpenChange={setFiltersDialogOpen}
+        currentFilters={currentFilters}
+        onApply={handleApplyFilters}
+        salesPeople={salesPeople || []}
+        pipelineStages={PIPELINE_STAGES}
+        leadStatuses={leadStatuses}
+        allTags={allTags}
+      />
 
       {leads?.length === 0 ? (
         <Card>
