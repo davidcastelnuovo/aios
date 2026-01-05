@@ -156,7 +156,8 @@ export default function TimeTracking() {
         .from("time_entries")
         .select(`
           *,
-          campaigners (full_name)
+          campaigners (full_name),
+          time_entry_breaks (*)
         `)
         .eq("tenant_id", tenantId)
         .order("start_time", { ascending: false });
@@ -404,12 +405,14 @@ export default function TimeTracking() {
 
   const calculateTotalHours = () => {
     if (!timeEntries) return "0:00";
-    const totalMinutes = timeEntries.reduce((acc, entry) => {
+    const totalNetMinutes = timeEntries.reduce((acc, entry) => {
       if (!entry.end_time) return acc;
-      return acc + differenceInMinutes(new Date(entry.end_time), new Date(entry.start_time));
+      const grossMinutes = differenceInMinutes(new Date(entry.end_time), new Date(entry.start_time));
+      const breakMinutes = calculateBreakTime(entry.time_entry_breaks || []);
+      return acc + Math.max(0, grossMinutes - breakMinutes);
     }, 0);
-    const hours = Math.floor(totalMinutes / 60);
-    const mins = totalMinutes % 60;
+    const hours = Math.floor(totalNetMinutes / 60);
+    const mins = totalNetMinutes % 60;
     return `${hours}:${mins.toString().padStart(2, "0")}`;
   };
 
@@ -642,7 +645,9 @@ export default function TimeTracking() {
                     <TableHead className="text-right font-semibold">תאריך</TableHead>
                     <TableHead className="text-right font-semibold">התחלה</TableHead>
                     <TableHead className="text-right font-semibold">סיום</TableHead>
-                    <TableHead className="text-right font-semibold">משך</TableHead>
+                    <TableHead className="text-right font-semibold">ברוטו</TableHead>
+                    <TableHead className="text-right font-semibold">הפסקות</TableHead>
+                    <TableHead className="text-right font-semibold">נטו</TableHead>
                     <TableHead className="text-right font-semibold">פעולות</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -669,8 +674,16 @@ export default function TimeTracking() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="font-medium text-primary">
+                      <TableCell className="text-muted-foreground">
                         {calculateDuration(entry.start_time, entry.end_time)}
+                      </TableCell>
+                      <TableCell className="text-amber-600 dark:text-amber-400">
+                        {entry.time_entry_breaks && entry.time_entry_breaks.length > 0 
+                          ? formatMinutesToTime(calculateBreakTime(entry.time_entry_breaks))
+                          : "-"}
+                      </TableCell>
+                      <TableCell className="font-medium text-primary">
+                        {calculateNetWorkTime(entry.start_time, entry.end_time, entry.time_entry_breaks || [])}
                       </TableCell>
                       <TableCell>
                         <div className="flex gap-2">
