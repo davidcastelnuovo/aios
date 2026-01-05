@@ -79,17 +79,17 @@ function TimeSlotDroppable({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex items-start gap-1 py-0.5 px-1 border-b border-dashed border-muted relative",
+        "flex items-start gap-1 py-0.5 px-1 border-b border-dashed border-muted",
         isOver && "bg-accent/50"
       )}
-      style={{ minHeight: `${SLOT_HEIGHT}px` }}
+      style={{ minHeight: `${SLOT_HEIGHT}px`, position: "relative" }}
     >
       <span className="text-[10px] text-muted-foreground w-8 shrink-0 pt-1">
         {time}
       </span>
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 relative" style={{ minHeight: `${SLOT_HEIGHT - 8}px` }}>
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-          {slotTasks.map((task) => (
+          {slotTasks.map((task, index) => (
             <ResizableTaskItem
               key={task.id}
               task={task}
@@ -98,6 +98,7 @@ function TimeSlotDroppable({
               onDurationChange={onDurationChange}
               compact
               slotHeight={SLOT_HEIGHT}
+              taskIndex={index}
             />
           ))}
         </SortableContext>

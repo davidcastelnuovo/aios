@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -112,7 +112,7 @@ export function WeeklyTaskBoard() {
   });
 
   // Fetch tasks for the current view + overdue tasks
-  const { data: tasks = [], isLoading } = useQuery({
+  const { data: fetchedTasks = [], isLoading } = useQuery({
     queryKey: ["tasks", tenantId, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode],
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
@@ -181,6 +181,16 @@ export function WeeklyTaskBoard() {
     },
     enabled: !!tenantId,
   });
+
+  // Local tasks state for optimistic updates
+  const [localTasks, setLocalTasks] = useState<FullTask[]>([]);
+  
+  useEffect(() => {
+    setLocalTasks(fetchedTasks);
+  }, [fetchedTasks]);
+  
+  // Use localTasks for rendering
+  const tasks = localTasks;
 
   const { data: firstAgency } = useQuery({
     queryKey: ["first-agency", tenantId],
@@ -339,7 +349,7 @@ export function WeeklyTaskBoard() {
     setActiveTaskId(event.active.id as string);
   };
 
-  // Handle drag end
+  // Handle drag end with optimistic update
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveTaskId(null);
@@ -348,12 +358,12 @@ export function WeeklyTaskBoard() {
 
     const taskId = active.id as string;
     const dropTarget = over.id as string;
-    const draggedTask = tasks.find((t) => t.id === taskId);
+    const draggedTask = localTasks.find((t) => t.id === taskId);
     
     if (!draggedTask) return;
 
     // Check if dropped on another task (reordering within same container)
-    const targetTask = tasks.find((t) => t.id === dropTarget);
+    const targetTask = localTasks.find((t) => t.id === dropTarget);
     if (targetTask) {
       // Both tasks should be in the same day and same time slot for reordering
       if (
@@ -361,7 +371,7 @@ export function WeeklyTaskBoard() {
         draggedTask.due_time === targetTask.due_time
       ) {
         // Get tasks in the same container
-        const containerTasks = tasks
+        const containerTasks = localTasks
           .filter(
             (t) =>
               t.due_date === draggedTask.due_date &&
@@ -378,6 +388,19 @@ export function WeeklyTaskBoard() {
             id: t.id,
             sort_order: idx,
           }));
+          
+          // Optimistic update for reordering
+          setLocalTasks(prev => {
+            const updated = [...prev];
+            updates.forEach(u => {
+              const idx = updated.findIndex(t => t.id === u.id);
+              if (idx !== -1) {
+                updated[idx] = { ...updated[idx], sort_order: u.sort_order };
+              }
+            });
+            return updated;
+          });
+          
           updateSortOrder.mutate(updates);
         }
       }
@@ -389,10 +412,18 @@ export function WeeklyTaskBoard() {
       const [dateStr, time] = dropTarget.split("_");
       try {
         const parsedDate = parseISO(dateStr);
+        const newDate = format(parsedDate, "yyyy-MM-dd");
+        const newTime = time + ":00";
+        
+        // Optimistic update
+        setLocalTasks(prev => prev.map(t => 
+          t.id === taskId ? { ...t, due_date: newDate, due_time: newTime } : t
+        ));
+        
         updateDueDate.mutate({
           taskId,
-          newDate: format(parsedDate, "yyyy-MM-dd"),
-          newTime: time + ":00",
+          newDate,
+          newTime,
         });
       } catch {
         // Invalid format
@@ -401,10 +432,17 @@ export function WeeklyTaskBoard() {
       // Just date - drop on untimed section
       try {
         const parsedDate = parseISO(dropTarget);
+        const newDate = format(parsedDate, "yyyy-MM-dd");
+        
+        // Optimistic update
+        setLocalTasks(prev => prev.map(t => 
+          t.id === taskId ? { ...t, due_date: newDate, due_time: null } : t
+        ));
+        
         updateDueDate.mutate({
           taskId,
-          newDate: format(parsedDate, "yyyy-MM-dd"),
-          newTime: null, // Remove time when dropping on untimed section
+          newDate,
+          newTime: null,
         });
       } catch {
         // Invalid date, ignore
