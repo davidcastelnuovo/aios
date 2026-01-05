@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Clock, Play, Square, Trash2, Calendar, Pencil, Filter, X } from "lucide-react";
+import { Clock, Play, Square, Trash2, Calendar, Pencil, Filter, X, Pause, Coffee } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
 import { format, differenceInMinutes, parse, startOfDay, endOfDay } from "date-fns";
@@ -108,6 +108,46 @@ export default function TimeTracking() {
     refetchInterval: 5000,
   });
 
+  // Query for active break
+  const { data: activeBreak } = useQuery({
+    queryKey: ["active-break", activeEntry?.id],
+    queryFn: async () => {
+      if (!activeEntry?.id) return null;
+
+      const { data, error } = await supabase
+        .from("time_entry_breaks")
+        .select("*")
+        .eq("time_entry_id", activeEntry.id)
+        .is("end_time", null)
+        .order("start_time", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!activeEntry?.id,
+    refetchInterval: 5000,
+  });
+
+  // Query for all breaks of active entry (to calculate total break time)
+  const { data: activeEntryBreaks } = useQuery({
+    queryKey: ["active-entry-breaks", activeEntry?.id],
+    queryFn: async () => {
+      if (!activeEntry?.id) return [];
+
+      const { data, error } = await supabase
+        .from("time_entry_breaks")
+        .select("*")
+        .eq("time_entry_id", activeEntry.id)
+        .order("start_time", { ascending: false });
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!activeEntry?.id,
+  });
+
   const { data: timeEntries } = useQuery({
     queryKey: ["time-entries", tenantId, selectedCampaigner, filterStartDate?.toISOString(), filterEndDate?.toISOString()],
     queryFn: async () => {
@@ -192,6 +232,14 @@ export default function TimeTracking() {
 
   const stopTimerMutation = useMutation({
     mutationFn: async (entryId: string) => {
+      // First, end any active break
+      if (activeBreak) {
+        await supabase
+          .from("time_entry_breaks")
+          .update({ end_time: new Date().toISOString() })
+          .eq("id", activeBreak.id);
+      }
+
       const { error } = await supabase
         .from("time_entries")
         .update({ end_time: new Date().toISOString() })
@@ -202,10 +250,57 @@ export default function TimeTracking() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["active-time-entry"] });
       queryClient.invalidateQueries({ queryKey: ["time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["active-break"] });
+      queryClient.invalidateQueries({ queryKey: ["active-entry-breaks"] });
       toast.success("השעון נעצר");
     },
     onError: () => {
       toast.error("שגיאה בעצירת השעון");
+    },
+  });
+
+  // Start break mutation
+  const startBreakMutation = useMutation({
+    mutationFn: async (entryId: string) => {
+      if (!tenantId) throw new Error("No tenant");
+      
+      const { error } = await supabase
+        .from("time_entry_breaks")
+        .insert({
+          time_entry_id: entryId,
+          tenant_id: tenantId,
+          start_time: new Date().toISOString(),
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["active-break"] });
+      queryClient.invalidateQueries({ queryKey: ["active-entry-breaks"] });
+      toast.success("הפסקה התחילה");
+    },
+    onError: () => {
+      toast.error("שגיאה בהתחלת הפסקה");
+    },
+  });
+
+  // End break mutation
+  const endBreakMutation = useMutation({
+    mutationFn: async (breakId: string) => {
+      const { error } = await supabase
+        .from("time_entry_breaks")
+        .update({ end_time: new Date().toISOString() })
+        .eq("id", breakId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["active-break"] });
+      queryClient.invalidateQueries({ queryKey: ["active-entry-breaks"] });
+      toast.success("הפסקה הסתיימה");
+    },
+    onError: () => {
+      toast.error("שגיאה בסיום הפסקה");
     },
   });
 
@@ -276,6 +371,35 @@ export default function TimeTracking() {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${hours}:${mins.toString().padStart(2, "0")}`;
+  };
+
+  // Calculate total break time for a given list of breaks
+  const calculateBreakTime = (breaks: any[]) => {
+    if (!breaks || breaks.length === 0) return 0;
+    return breaks.reduce((acc, brk) => {
+      if (!brk.end_time) {
+        // Active break - count from start to now
+        return acc + differenceInMinutes(currentTime, new Date(brk.start_time));
+      }
+      return acc + differenceInMinutes(new Date(brk.end_time), new Date(brk.start_time));
+    }, 0);
+  };
+
+  // Format minutes to HH:MM
+  const formatMinutesToTime = (totalMinutes: number) => {
+    const hours = Math.floor(totalMinutes / 60);
+    const mins = totalMinutes % 60;
+    return `${hours}:${mins.toString().padStart(2, "0")}`;
+  };
+
+  // Calculate net work time (total - breaks)
+  const calculateNetWorkTime = (start: string, end: string | null, breaks: any[]) => {
+    const startDate = new Date(start);
+    const endDate = end ? new Date(end) : currentTime;
+    const totalMinutes = differenceInMinutes(endDate, startDate);
+    const breakMinutes = calculateBreakTime(breaks);
+    const netMinutes = Math.max(0, totalMinutes - breakMinutes);
+    return formatMinutesToTime(netMinutes);
   };
 
   const calculateTotalHours = () => {
@@ -384,31 +508,93 @@ export default function TimeTracking() {
         <CardContent className="space-y-4 pt-6">
           {activeEntry ? (
             <div className="space-y-4">
-              <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg border-2 border-green-400/50 p-6">
-                <div className="grid grid-cols-[1fr_auto] gap-4 items-center">
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700/30">
-                      <span className="text-sm text-muted-foreground">התחלה</span>
-                      <span className="text-lg font-semibold text-foreground">
-                        {format(new Date(activeEntry.start_time), "HH:mm:ss", { locale: he })}
-                      </span>
+              {/* Active break indicator */}
+              {activeBreak && (
+                <div className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20 rounded-lg border-2 border-amber-400/50 p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Coffee className="h-5 w-5 text-amber-600" />
+                      <span className="font-medium text-amber-700 dark:text-amber-400">בהפסקה</span>
                     </div>
-                    <div className="flex items-center justify-between py-2">
-                      <span className="text-sm text-muted-foreground">זמן עבודה</span>
-                      <span className="text-2xl font-bold text-green-600 dark:text-green-400">
-                        {calculateDuration(activeEntry.start_time, null)}
-                      </span>
-                    </div>
+                    <span className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                      {calculateDuration(activeBreak.start_time, null)}
+                    </span>
                   </div>
-                  <Button
-                    onClick={() => stopTimerMutation.mutate(activeEntry.id)}
-                    variant="destructive"
-                    size="sm"
-                    className="shadow-lg"
-                  >
-                    <Square className="h-4 w-4 ml-2" />
-                    עצור
-                  </Button>
+                </div>
+              )}
+
+              <div className={`rounded-lg border-2 p-6 ${
+                activeBreak 
+                  ? 'bg-gradient-to-br from-amber-50/50 to-amber-100/50 dark:from-amber-900/10 dark:to-amber-800/10 border-amber-400/30' 
+                  : 'bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-400/50'
+              }`}>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700/30">
+                    <span className="text-sm text-muted-foreground">התחלה</span>
+                    <span className="text-lg font-semibold text-foreground">
+                      {format(new Date(activeEntry.start_time), "HH:mm:ss", { locale: he })}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700/30">
+                    <span className="text-sm text-muted-foreground">זמן ברוטו</span>
+                    <span className="text-xl font-bold text-muted-foreground">
+                      {calculateDuration(activeEntry.start_time, null)}
+                    </span>
+                  </div>
+
+                  {activeEntryBreaks && activeEntryBreaks.length > 0 && (
+                    <div className="flex items-center justify-between py-2 border-b border-green-200 dark:border-green-700/30">
+                      <span className="text-sm text-muted-foreground flex items-center gap-1">
+                        <Coffee className="h-4 w-4" />
+                        הפסקות
+                      </span>
+                      <span className="text-lg font-medium text-amber-600 dark:text-amber-400">
+                        -{formatMinutesToTime(calculateBreakTime(activeEntryBreaks))}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-sm text-muted-foreground">זמן עבודה נטו</span>
+                    <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                      {calculateNetWorkTime(activeEntry.start_time, null, activeEntryBreaks || [])}
+                    </span>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex gap-2 pt-2">
+                    {activeBreak ? (
+                      <Button
+                        onClick={() => endBreakMutation.mutate(activeBreak.id)}
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20"
+                      >
+                        <Play className="h-4 w-4 ml-2" />
+                        חזור לעבודה
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => startBreakMutation.mutate(activeEntry.id)}
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+                      >
+                        <Coffee className="h-4 w-4 ml-2" />
+                        הפסקה
+                      </Button>
+                    )}
+                    <Button
+                      onClick={() => stopTimerMutation.mutate(activeEntry.id)}
+                      variant="destructive"
+                      size="sm"
+                      className="shadow-lg"
+                    >
+                      <Square className="h-4 w-4 ml-2" />
+                      עצור
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
