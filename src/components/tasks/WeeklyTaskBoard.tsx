@@ -514,6 +514,7 @@ export function WeeklyTaskBoard() {
                 setDialogOpen(true);
               }}
               isLoading={isLoading || addTask.isPending}
+              isCurrentDay={isToday(date)}
             />
           ))}
 
