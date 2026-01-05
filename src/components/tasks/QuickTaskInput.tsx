@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 
 interface QuickTaskInputProps {
@@ -10,24 +11,33 @@ interface QuickTaskInputProps {
 export function QuickTaskInput({ onAddTask, disabled }: QuickTaskInputProps) {
   const [title, setTitle] = useState("");
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && title.trim()) {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (title.trim()) {
       onAddTask(title.trim());
       setTitle("");
     }
   };
 
   return (
-    <div className="relative">
-      <Plus className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+    <form onSubmit={handleSubmit} className="flex gap-2">
       <Input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder="משימה חדשה + Enter"
+        placeholder="משימה חדשה..."
         disabled={disabled}
-        className="pr-9 text-sm h-9 bg-background/50 border-dashed"
+        enterKeyHint="send"
+        className="text-sm h-9 bg-background/50 border-dashed flex-1"
       />
-    </div>
+      <Button 
+        type="submit" 
+        size="icon" 
+        variant="outline"
+        disabled={!title.trim() || disabled}
+        className="h-9 w-9 shrink-0"
+      >
+        <Plus className="h-4 w-4" />
+      </Button>
+    </form>
   );
 }
