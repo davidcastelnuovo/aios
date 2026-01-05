@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import { QuickTaskInput } from "./QuickTaskInput";
 
 interface Task {
   id: string;
@@ -29,6 +30,8 @@ interface TaskBacklogPanelProps {
   tasks: Task[];
   onToggleComplete: (taskId: string, completed: boolean) => void;
   onTaskClick: (task: Task) => void;
+  onAddTask?: (title: string) => void;
+  isLoading?: boolean;
 }
 
 function DraggableBacklogTask({
@@ -119,6 +122,8 @@ export function TaskBacklogPanel({
   tasks,
   onToggleComplete,
   onTaskClick,
+  onAddTask,
+  isLoading,
 }: TaskBacklogPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   
@@ -222,6 +227,15 @@ export function TaskBacklogPanel({
       {/* Tasks List - only show when expanded */}
       {isExpanded && (
         <div className="p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-250px)]">
+          {/* Quick Add Input */}
+          {onAddTask && (
+            <div className="pb-2 border-b border-border/50 mb-2">
+              <QuickTaskInput
+                onAddTask={onAddTask}
+                disabled={isLoading}
+              />
+            </div>
+          )}
           {/* Overdue section */}
           {overdueCount > 0 && (
             <>

@@ -598,6 +598,8 @@ export function WeeklyTaskBoard() {
               setSelectedTask(task);
               setDialogOpen(true);
             }}
+            onAddTask={(title) => addTask.mutate({ title, date: null })}
+            isLoading={isLoading || addTask.isPending}
           />
 
           {/* Main View based on viewMode */}
