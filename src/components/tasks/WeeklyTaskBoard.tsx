@@ -738,11 +738,91 @@ export function WeeklyTaskBoard() {
 
       {/* Board with Overdue Panel */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex flex-col-reverse md:flex-row gap-2 flex-1 relative min-h-0">
-          {/* Scrollable days container - with padding for fixed panel on desktop only */}
-          <div className="flex gap-2 overflow-x-auto pb-4 flex-1 md:pr-[280px] min-h-0 order-last md:order-first">
+        {/* Mobile: Stack vertically with backlog on top */}
+        <div className="flex flex-col md:hidden gap-4 flex-1 min-h-0">
+          {/* Task Backlog Panel - Mobile */}
+          <div className="w-full">
+            <TaskBacklogPanel
+              tasks={backlogTasks}
+              onToggleComplete={(taskId, completed) =>
+                toggleComplete.mutate({ taskId, completed })
+              }
+              onTaskClick={(task) => {
+                setSelectedTask(task);
+                setDialogOpen(true);
+              }}
+              onAddTask={(title) => addTask.mutate({ title, date: null })}
+              isLoading={isLoading || addTask.isPending}
+            />
+          </div>
+          
+          {/* Calendar/Tasks view - Mobile */}
+          <div className="flex gap-2 overflow-x-auto pb-4 flex-1 min-h-0">
+            {viewMode === "daily" && (
+              <DailyView
+                date={currentDate}
+                tasks={dailyTasks}
+                onToggleComplete={(taskId, completed) =>
+                  toggleComplete.mutate({ taskId, completed })
+                }
+                onTaskClick={(task) => {
+                  setSelectedTask(task);
+                  setDialogOpen(true);
+                }}
+                onDropOnSlot={(taskId, time) => {
+                  updateDueDate.mutate({
+                    taskId,
+                    newDate: format(currentDate, "yyyy-MM-dd"),
+                    newTime: time + ":00",
+                  });
+                }}
+              />
+            )}
 
-            {/* Main View based on viewMode */}
+            {viewMode === "weekly" && weekDays.map((date) => (
+              <DayColumn
+                key={date.toISOString()}
+                date={date}
+                tasks={currentRangeTasks}
+                onAddTask={(title, date) => addTask.mutate({ title, date })}
+                onToggleComplete={(taskId, completed) =>
+                  toggleComplete.mutate({ taskId, completed })
+                }
+                onTaskClick={(task) => {
+                  setSelectedTask(task);
+                  setDialogOpen(true);
+                }}
+                onDurationChange={(taskId, duration) =>
+                  updateDuration.mutate({ taskId, duration })
+                }
+                onCalendarEventClick={(event) => {
+                  setSelectedCalendarEvent(event);
+                  setCalendarEventDialogOpen(true);
+                }}
+                isLoading={isLoading || addTask.isPending}
+                isCurrentDay={isToday(date)}
+                calendarEvents={calendarEvents}
+              />
+            ))}
+
+            {viewMode === "monthly" && (
+              <MonthlyView
+                currentDate={currentDate}
+                tasks={currentRangeTasks}
+                onDayClick={handleDayClick}
+                onTaskClick={(task) => {
+                  setSelectedTask(task);
+                  setDialogOpen(true);
+                }}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Desktop: Side by side with fixed panel */}
+        <div className="hidden md:flex gap-2 flex-1 relative min-h-0">
+          {/* Scrollable days container - with padding for fixed panel */}
+          <div className="flex gap-2 overflow-x-auto pb-4 flex-1 pr-[280px] min-h-0">
             {viewMode === "daily" && (
               <DailyView
                 date={currentDate}
@@ -803,15 +883,12 @@ export function WeeklyTaskBoard() {
             )}
           </div>
 
-          {/* Task Backlog Panel - Static on mobile, fixed on desktop */}
-          <div className={`
-            relative md:fixed md:top-[200px] z-20 transition-all duration-200
-            w-full md:w-auto
-            ${sidebarState === "collapsed" 
-              ? "md:right-[calc(var(--sidebar-width-icon,3rem)+1rem)]" 
-              : "md:right-[calc(var(--sidebar-width,16rem)+1rem)]"
-            }
-          `}>
+          {/* Task Backlog Panel - Fixed on desktop */}
+          <div className={`fixed top-[200px] z-20 transition-all duration-200 ${
+            sidebarState === "collapsed" 
+              ? "right-[calc(var(--sidebar-width-icon,3rem)+1rem)]" 
+              : "right-[calc(var(--sidebar-width,16rem)+1rem)]"
+          }`}>
             <TaskBacklogPanel
               tasks={backlogTasks}
               onToggleComplete={(taskId, completed) =>
