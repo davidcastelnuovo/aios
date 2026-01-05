@@ -67,6 +67,7 @@ export function TaskDetailDialog({
   const [clientId, setClientId] = useState("");
   const [leadId, setLeadId] = useState("");
   const [dueTime, setDueTime] = useState<string | null>(null);
+  const [durationMinutes, setDurationMinutes] = useState(30);
   const [newUpdate, setNewUpdate] = useState("");
   const [selectedCollaborator, setSelectedCollaborator] = useState("");
   
@@ -88,6 +89,7 @@ export function TaskDetailDialog({
       setClientId(task.client_id || "");
       setLeadId(task.lead_id || "");
       setDueTime(task.due_time ? task.due_time.substring(0, 5) : null);
+      setDurationMinutes((task as any).duration_minutes || 30);
       setAssignedCampaignerId(task.campaigner_id || "");
       setClientSearch("");
       setCampaignerSearch("");
@@ -206,6 +208,7 @@ export function TaskDetailDialog({
           status,
           due_date: dueDate?.toISOString().split("T")[0] || null,
           due_time: dueTime ? dueTime + ":00" : null,
+          duration_minutes: durationMinutes,
           client_id: clientId || null,
           lead_id: leadId || null,
           campaigner_id: assignedCampaignerId || null,
@@ -472,6 +475,26 @@ export function TaskDetailDialog({
                     onChange={setDueTime}
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>משך המשימה</Label>
+                <Select 
+                  value={durationMinutes.toString()} 
+                  onValueChange={(val) => setDurationMinutes(parseInt(val))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="30">30 דקות</SelectItem>
+                    <SelectItem value="60">שעה</SelectItem>
+                    <SelectItem value="90">שעה וחצי</SelectItem>
+                    <SelectItem value="120">שעתיים</SelectItem>
+                    <SelectItem value="150">שעתיים וחצי</SelectItem>
+                    <SelectItem value="180">3 שעות</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

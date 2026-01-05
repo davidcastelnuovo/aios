@@ -11,6 +11,7 @@ interface SortableTaskItemProps {
     title: string;
     status: string;
     client_id: string | null;
+    duration_minutes?: number;
     clients?: { name: string } | null;
     task_updates?: { id: string }[];
     task_collaborators?: { id: string }[];
@@ -18,9 +19,10 @@ interface SortableTaskItemProps {
   onToggleComplete: (taskId: string, completed: boolean) => void;
   onClick: () => void;
   compact?: boolean;
+  slotHeight?: number;
 }
 
-export function SortableTaskItem({ task, onToggleComplete, onClick, compact = false }: SortableTaskItemProps) {
+export function SortableTaskItem({ task, onToggleComplete, onClick, compact = false, slotHeight = 40 }: SortableTaskItemProps) {
   const {
     attributes,
     listeners,
@@ -30,9 +32,14 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
     isDragging,
   } = useSortable({ id: task.id });
 
+  // Calculate height based on duration (30 min = 1 slot)
+  const durationMinutes = task.duration_minutes || 30;
+  const taskHeight = compact ? (durationMinutes / 30) * slotHeight : undefined;
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
+    ...(compact && taskHeight && durationMinutes > 30 ? { height: `${taskHeight - 4}px` } : {}),
   };
 
   const isCompleted = task.status === "done";
@@ -45,9 +52,10 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
         ref={setNodeRef}
         style={style}
         className={cn(
-          "group flex items-center gap-1 px-1 py-0.5 rounded border bg-card hover:bg-accent/50 cursor-pointer transition-all text-[11px]",
+          "group flex items-start gap-1 px-1 py-0.5 rounded border bg-card hover:bg-accent/50 cursor-pointer transition-all text-[11px]",
           isDragging && "opacity-50 shadow-lg z-50",
-          isCompleted && "opacity-60"
+          isCompleted && "opacity-60",
+          durationMinutes > 30 && "flex-col"
         )}
       >
         <button
