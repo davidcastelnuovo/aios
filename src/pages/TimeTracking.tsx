@@ -4,11 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Clock, Play, Square, Trash2, Calendar, Pencil } from "lucide-react";
+import { Clock, Play, Square, Trash2, Calendar, Pencil, Filter, X } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
-import { format, differenceInMinutes, parse } from "date-fns";
+import { format, differenceInMinutes, parse, startOfDay, endOfDay } from "date-fns";
 import { he } from "date-fns/locale";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -38,6 +40,8 @@ export default function TimeTracking() {
   const [editingEntry, setEditingEntry] = useState<any>(null);
   const [editStartTime, setEditStartTime] = useState("");
   const [editEndTime, setEditEndTime] = useState("");
+  const [filterStartDate, setFilterStartDate] = useState<Date | undefined>(undefined);
+  const [filterEndDate, setFilterEndDate] = useState<Date | undefined>(undefined);
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -105,7 +109,7 @@ export default function TimeTracking() {
   });
 
   const { data: timeEntries } = useQuery({
-    queryKey: ["time-entries", tenantId, selectedCampaigner],
+    queryKey: ["time-entries", tenantId, selectedCampaigner, filterStartDate?.toISOString(), filterEndDate?.toISOString()],
     queryFn: async () => {
       if (!tenantId) return [];
       let query = supabase
@@ -121,6 +125,14 @@ export default function TimeTracking() {
         query = query.eq("campaigner_id", profile.campaigner_id);
       } else if (selectedCampaigner !== "all" && selectedCampaigner !== "me") {
         query = query.eq("campaigner_id", selectedCampaigner);
+      }
+
+      // Date filtering
+      if (filterStartDate) {
+        query = query.gte("start_time", startOfDay(filterStartDate).toISOString());
+      }
+      if (filterEndDate) {
+        query = query.lte("start_time", endOfDay(filterEndDate).toISOString());
       }
 
       const { data, error } = await query;
@@ -301,6 +313,63 @@ export default function TimeTracking() {
               </SelectContent>
             </Select>
           </div>
+        )}
+      </div>
+
+      {/* Date Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">סינון לפי תאריך:</span>
+        </div>
+        
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Calendar className="h-4 w-4" />
+              {filterStartDate ? format(filterStartDate, "dd/MM/yyyy") : "מתאריך"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <CalendarComponent
+              mode="single"
+              selected={filterStartDate}
+              onSelect={setFilterStartDate}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2">
+              <Calendar className="h-4 w-4" />
+              {filterEndDate ? format(filterEndDate, "dd/MM/yyyy") : "עד תאריך"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <CalendarComponent
+              mode="single"
+              selected={filterEndDate}
+              onSelect={setFilterEndDate}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+
+        {(filterStartDate || filterEndDate) && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setFilterStartDate(undefined);
+              setFilterEndDate(undefined);
+            }}
+            className="gap-1 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+            נקה פילטרים
+          </Button>
         )}
       </div>
 
