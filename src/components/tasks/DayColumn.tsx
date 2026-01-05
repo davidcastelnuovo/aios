@@ -108,16 +108,11 @@ export function DayColumn({
     id: date.toISOString(),
   });
 
+  // Only show tasks with time
   const dayTasks = tasks.filter(
-    (task) => task.due_date && isSameDay(new Date(task.due_date), date)
+    (task) => task.due_date && task.due_time && isSameDay(new Date(task.due_date), date)
   );
 
-  // Tasks without time go to "no time" section
-  const untimedTasks = dayTasks
-    .filter((t) => !t.due_time)
-    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-
-  const untimedTaskIds = untimedTasks.map((t) => t.id);
   const today = isToday(date);
 
   return (
@@ -158,31 +153,8 @@ export function DayColumn({
         />
       </div>
 
-      {/* Untimed Tasks Section */}
-      <div className="p-2 border-b">
-        <p className="text-xs text-muted-foreground mb-1">ללא שעה</p>
-        <SortableContext items={untimedTaskIds} strategy={verticalListSortingStrategy}>
-          <div className="space-y-1">
-            {untimedTasks.length === 0 ? (
-              <p className="text-xs text-muted-foreground/50 text-center py-2">
-                אין משימות
-              </p>
-            ) : (
-              untimedTasks.map((task) => (
-                <SortableTaskItem
-                  key={task.id}
-                  task={task}
-                  onToggleComplete={onToggleComplete}
-                  onClick={() => onTaskClick(task)}
-                />
-              ))
-            )}
-          </div>
-        </SortableContext>
-      </div>
-
       {/* Time Slots */}
-      <div className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         {TIME_SLOTS.map((time) => (
           <TimeSlotDroppable
             key={time}

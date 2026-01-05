@@ -23,7 +23,7 @@ import { DailyView } from "./DailyView";
 import { MonthlyView } from "./MonthlyView";
 import { TaskDetailDialog } from "./TaskDetailDialog";
 import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters } from "./TaskFiltersDialog";
-import { OverdueTasksPanel } from "./OverdueTasksPanel";
+import { TaskBacklogPanel } from "./OverdueTasksPanel";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { toast } from "sonner";
@@ -397,20 +397,25 @@ export function WeeklyTaskBoard() {
     ? tasks.find((t) => t.id === activeTaskId)
     : null;
 
-  // Split tasks: overdue/unscheduled vs current range
+  // Split tasks: backlog (overdue + unscheduled + untimed) vs scheduled in range
   const today = startOfDay(new Date());
   
-  const overdueTasks = tasks.filter((t) => {
+  // Backlog includes: overdue, no due_date, or has due_date but no due_time
+  const backlogTasks = tasks.filter((t) => {
     if (t.status === "done") return false;
     if (t.due_date === null) return true; // Unscheduled
     const dueDate = new Date(t.due_date);
-    return dueDate < today; // Past due
+    if (dueDate < today) return true; // Overdue
+    if (!t.due_time) return true; // Has date but no time - goes to backlog
+    return false;
   });
 
+  // Current range tasks: only those with both due_date AND due_time in range
   const currentRangeTasks = tasks.filter((t) => {
     if (t.due_date === null) return false;
+    if (!t.due_time) return false; // No time = goes to backlog
     const dueDate = new Date(t.due_date);
-    if (dueDate < today && t.status !== "done") return false; // Overdue, show in overdue panel
+    if (dueDate < today && t.status !== "done") return false; // Overdue, show in backlog
     return dueDate >= dateRange.start && dueDate <= dateRange.end;
   });
 
@@ -526,9 +531,9 @@ export function WeeklyTaskBoard() {
       {/* Board with Overdue Panel */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex gap-2 overflow-x-auto pb-4 flex-1">
-          {/* Overdue Tasks Panel - Always visible on the right */}
-          <OverdueTasksPanel
-            tasks={overdueTasks}
+          {/* Task Backlog Panel - Always visible on the right */}
+          <TaskBacklogPanel
+            tasks={backlogTasks}
             onToggleComplete={(taskId, completed) =>
               toggleComplete.mutate({ taskId, completed })
             }
