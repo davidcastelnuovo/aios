@@ -7,6 +7,7 @@ import {
   DragEndEvent,
   DragStartEvent,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragOverlay,
@@ -93,6 +94,9 @@ export function WeeklyTaskBoard() {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 300, tolerance: 5 },
     })
   );
 
@@ -842,8 +846,8 @@ export function WeeklyTaskBoard() {
           </div>
           
           {/* Bottom: Calendar/Tasks - takes remaining height with scroll */}
-          <div className="min-h-[300px]">
-            <div className="flex gap-2 pb-4">
+          <div className="min-h-[300px] overflow-x-auto">
+            <div className="flex gap-2 pb-4 min-w-max">
               {viewMode === "daily" && (
                 <DailyView
                   date={currentDate}
