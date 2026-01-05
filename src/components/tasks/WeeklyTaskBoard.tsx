@@ -12,7 +12,7 @@ import {
   closestCenter,
 } from "@dnd-kit/core";
 import { arrayMove } from "@dnd-kit/sortable";
-import { addDays, addMonths, format, parseISO, isToday, startOfDay, startOfMonth } from "date-fns";
+import { addDays, addMonths, format, parseISO, isToday, startOfDay, startOfMonth, endOfDay } from "date-fns";
 import { he } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +47,15 @@ interface Task {
   clients?: { name: string } | null;
   task_updates?: { id: string }[];
   task_collaborators?: { id: string }[];
+}
+
+interface CalendarEvent {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  colorId?: string;
+  calendarId?: string;
 }
 
 export type ViewMode = "daily" | "weekly" | "monthly";
@@ -109,6 +118,28 @@ export function WeeklyTaskBoard() {
       return data;
     },
     enabled: !!user?.id,
+  });
+
+  // Fetch Google Calendar events
+  const { data: calendarEvents = [] } = useQuery({
+    queryKey: ["calendar-events-weekly", format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd")],
+    queryFn: async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("get-calendar-events", {
+          body: {
+            timeMin: dateRange.start.toISOString(),
+            timeMax: endOfDay(addDays(dateRange.end, 1)).toISOString(),
+          },
+        });
+        if (error) throw error;
+        return (data?.events || []) as CalendarEvent[];
+      } catch {
+        // User might not have connected calendar - that's ok
+        return [];
+      }
+    },
+    enabled: !!user?.id && viewMode !== "monthly",
+    staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
   // Fetch tasks for the current view + overdue tasks
@@ -642,6 +673,7 @@ export function WeeklyTaskBoard() {
               }
               isLoading={isLoading || addTask.isPending}
               isCurrentDay={isToday(date)}
+              calendarEvents={calendarEvents}
             />
           ))}
 
