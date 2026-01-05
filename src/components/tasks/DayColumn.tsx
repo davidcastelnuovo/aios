@@ -1,4 +1,4 @@
-import { useDroppable } from "@dnd-kit/core";
+import { useDroppable, useDraggable } from "@dnd-kit/core";
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -45,6 +45,7 @@ interface DayColumnProps {
   onToggleComplete: (taskId: string, completed: boolean) => void;
   onTaskClick: (task: Task) => void;
   onDurationChange?: (taskId: string, newDuration: number) => void;
+  onCalendarEventClick?: (event: CalendarEvent) => void;
   isLoading?: boolean;
   isCurrentDay?: boolean;
   calendarEvents?: CalendarEvent[];
@@ -70,8 +71,21 @@ function getSlotIndex(time: string): number {
   return hours * 2 + (minutes >= 30 ? 1 : 0);
 }
 
-// Calendar event block component
-function CalendarEventBlock({ event, slotHeight }: { event: CalendarEvent; slotHeight: number }) {
+// Draggable calendar event block component
+function DraggableCalendarEventBlock({ 
+  event, 
+  slotHeight, 
+  onClick 
+}: { 
+  event: CalendarEvent; 
+  slotHeight: number;
+  onClick?: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: `calendar-event-${event.id}`,
+    data: { type: 'calendar-event', event }
+  });
+
   const startTime = new Date(event.start);
   const endTime = new Date(event.end);
   const durationMinutes = (endTime.getTime() - startTime.getTime()) / (1000 * 60);
@@ -82,11 +96,30 @@ function CalendarEventBlock({ event, slotHeight }: { event: CalendarEvent; slotH
   const startMins = startTime.getMinutes().toString().padStart(2, "0");
   const endHours = endTime.getHours().toString().padStart(2, "0");
   const endMins = endTime.getMinutes().toString().padStart(2, "0");
+
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    height: `${height}px`,
+    zIndex: isDragging ? 50 : 5,
+  } : {
+    height: `${height}px`,
+    zIndex: 5,
+  };
   
   return (
     <div 
-      className="absolute left-8 right-1 bg-blue-100 dark:bg-blue-900/40 border-r-2 border-blue-500 rounded px-2 py-0.5 text-xs overflow-hidden pointer-events-none"
-      style={{ height: `${height}px`, zIndex: 5 }}
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.();
+      }}
+      className={cn(
+        "absolute left-8 right-1 bg-blue-100 dark:bg-blue-900/40 border-r-2 border-blue-500 rounded px-2 py-0.5 text-xs overflow-hidden cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors",
+        isDragging && "opacity-50 shadow-lg"
+      )}
+      style={style}
     >
       <div className="flex items-center gap-1 truncate">
         <span className="text-muted-foreground text-[10px]">
@@ -105,6 +138,7 @@ function TimeSlotDroppable({
   onToggleComplete,
   onTaskClick,
   onDurationChange,
+  onCalendarEventClick,
   calendarEvents = [],
 }: {
   date: Date;
@@ -113,6 +147,7 @@ function TimeSlotDroppable({
   onToggleComplete: (taskId: string, completed: boolean) => void;
   onTaskClick: (task: Task) => void;
   onDurationChange?: (taskId: string, newDuration: number) => void;
+  onCalendarEventClick?: (event: CalendarEvent) => void;
   calendarEvents?: CalendarEvent[];
 }) {
   const droppableId = `${date.toISOString()}_${time}`;
@@ -145,9 +180,14 @@ function TimeSlotDroppable({
         {time}
       </span>
       <div className="flex-1 min-w-0 relative" style={{ minHeight: `${SLOT_HEIGHT - 8}px` }}>
-        {/* Calendar events (background) */}
+        {/* Calendar events (draggable) */}
         {slotEvents.map((event) => (
-          <CalendarEventBlock key={event.id} event={event} slotHeight={SLOT_HEIGHT} />
+          <DraggableCalendarEventBlock 
+            key={event.id} 
+            event={event} 
+            slotHeight={SLOT_HEIGHT}
+            onClick={() => onCalendarEventClick?.(event)}
+          />
         ))}
         
         {/* Tasks (foreground) */}
@@ -177,6 +217,7 @@ export function DayColumn({
   onToggleComplete,
   onTaskClick,
   onDurationChange,
+  onCalendarEventClick,
   isLoading,
   isCurrentDay,
   calendarEvents = [],
@@ -252,6 +293,7 @@ export function DayColumn({
             onToggleComplete={onToggleComplete}
             onTaskClick={onTaskClick}
             onDurationChange={onDurationChange}
+            onCalendarEventClick={onCalendarEventClick}
             calendarEvents={dayEvents}
           />
         ))}

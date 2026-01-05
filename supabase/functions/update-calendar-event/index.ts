@@ -26,8 +26,8 @@ serve(async (req) => {
     const { eventId, summary, description, start, end } = await req.json();
     console.log('Updating calendar event:', { eventId, summary, start, end, userId: user.id });
 
-    if (!eventId || !summary || !start) {
-      throw new Error('Missing required fields: eventId, summary and start are required');
+    if (!eventId || !start) {
+      throw new Error('Missing required fields: eventId and start are required');
     }
 
     // Get user's calendar tokens
@@ -87,10 +87,28 @@ serve(async (req) => {
       console.log('Token refreshed successfully');
     }
 
-    // Update event in Google Calendar
+    // First, get the existing event to preserve fields not being updated
+    const getEventResponse = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    const existingEvent = await getEventResponse.json();
+    
+    if (!getEventResponse.ok) {
+      console.error('Failed to get existing event:', existingEvent);
+      throw new Error(existingEvent.error?.message || 'Failed to get existing event');
+    }
+
+    // Update event in Google Calendar - merge with existing data
     const event = {
-      summary,
-      description: description || '',
+      summary: summary ?? existingEvent.summary,
+      description: description ?? existingEvent.description ?? '',
       start: {
         dateTime: start,
         timeZone: 'Asia/Jerusalem',
