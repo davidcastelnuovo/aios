@@ -46,6 +46,7 @@ interface DayColumnProps {
   onTaskClick: (task: Task) => void;
   onDurationChange?: (taskId: string, newDuration: number) => void;
   onCalendarEventClick?: (event: CalendarEvent) => void;
+  onSlotDoubleClick?: (date: Date, time: string) => void;
   isLoading?: boolean;
   isCurrentDay?: boolean;
   calendarEvents?: CalendarEvent[];
@@ -139,6 +140,7 @@ function TimeSlotDroppable({
   onTaskClick,
   onDurationChange,
   onCalendarEventClick,
+  onSlotDoubleClick,
   calendarEvents = [],
 }: {
   date: Date;
@@ -148,6 +150,7 @@ function TimeSlotDroppable({
   onTaskClick: (task: Task) => void;
   onDurationChange?: (taskId: string, newDuration: number) => void;
   onCalendarEventClick?: (event: CalendarEvent) => void;
+  onSlotDoubleClick?: (date: Date, time: string) => void;
   calendarEvents?: CalendarEvent[];
 }) {
   const droppableId = `${date.toISOString()}_${time}`;
@@ -170,8 +173,9 @@ function TimeSlotDroppable({
   return (
     <div
       ref={setNodeRef}
+      onDoubleClick={() => onSlotDoubleClick?.(date, time)}
       className={cn(
-        "flex items-start gap-1 py-0.5 px-1 border-b border-dashed border-muted",
+        "flex items-start gap-1 py-0.5 px-1 border-b border-dashed border-muted cursor-pointer hover:bg-accent/30 transition-colors",
         isOver && "bg-accent/50"
       )}
       style={{ minHeight: `${SLOT_HEIGHT}px`, position: "relative" }}
@@ -218,6 +222,7 @@ export function DayColumn({
   onTaskClick,
   onDurationChange,
   onCalendarEventClick,
+  onSlotDoubleClick,
   isLoading,
   isCurrentDay,
   calendarEvents = [],
@@ -293,6 +298,7 @@ export function DayColumn({
             onTaskClick={onTaskClick}
             onDurationChange={onDurationChange}
             onCalendarEventClick={onCalendarEventClick}
+            onSlotDoubleClick={onSlotDoubleClick}
             calendarEvents={dayEvents}
           />
         ))}

@@ -17,7 +17,9 @@ import { addDays, addMonths, format, parseISO, isToday, startOfDay, startOfMonth
 import { he } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DayColumn } from "./DayColumn";
 import { DailyView } from "./DailyView";
@@ -78,6 +80,8 @@ export function WeeklyTaskBoard() {
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
   const [selectedCalendarEvent, setSelectedCalendarEvent] = useState<CalendarEvent | null>(null);
   const [calendarEventDialogOpen, setCalendarEventDialogOpen] = useState(false);
+  const [quickAddSlot, setQuickAddSlot] = useState<{ date: Date; time: string } | null>(null);
+  const [quickAddTitle, setQuickAddTitle] = useState("");
 
   // Full task type from DB
   type FullTask = Task & {
@@ -260,17 +264,23 @@ export function WeeklyTaskBoard() {
 
   // Add task mutation
   const addTask = useMutation({
-    mutationFn: async ({ title, date }: { title: string; date: Date }) => {
-      const { error } = await supabase.from("tasks").insert({
+    mutationFn: async ({ title, date, time }: { title: string; date: Date | null; time?: string }) => {
+      const insertData: any = {
         title,
-        due_date: format(date, "yyyy-MM-dd"),
         status: "open",
         priority: 5,
         tenant_id: tenantId,
         agency_id: firstAgency?.id,
         campaigner_id: userProfile?.campaigner_id || null,
         client_id: null,
-      });
+      };
+      if (date) {
+        insertData.due_date = format(date, "yyyy-MM-dd");
+      }
+      if (time) {
+        insertData.due_time = time + ":00";
+      }
+      const { error } = await supabase.from("tasks").insert(insertData);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -676,6 +686,25 @@ export function WeeklyTaskBoard() {
     setViewMode("daily");
   };
 
+  // Handle double-click on time slot to add task
+  const handleSlotDoubleClick = (date: Date, time: string) => {
+    setQuickAddSlot({ date, time });
+    setQuickAddTitle("");
+  };
+
+  const handleQuickAddSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (quickAddTitle.trim() && quickAddSlot) {
+      addTask.mutate({ 
+        title: quickAddTitle.trim(), 
+        date: quickAddSlot.date, 
+        time: quickAddSlot.time 
+      });
+      setQuickAddSlot(null);
+      setQuickAddTitle("");
+    }
+  };
+
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Header - Desktop only */}
@@ -856,6 +885,7 @@ export function WeeklyTaskBoard() {
                     setSelectedCalendarEvent(event);
                     setCalendarEventDialogOpen(true);
                   }}
+                  onSlotDoubleClick={handleSlotDoubleClick}
                   isLoading={isLoading || addTask.isPending}
                   isCurrentDay={isToday(date)}
                   calendarEvents={calendarEvents}
@@ -922,6 +952,7 @@ export function WeeklyTaskBoard() {
                   setSelectedCalendarEvent(event);
                   setCalendarEventDialogOpen(true);
                 }}
+                onSlotDoubleClick={handleSlotDoubleClick}
                 isLoading={isLoading || addTask.isPending}
                 isCurrentDay={isToday(date)}
                 calendarEvents={calendarEvents}
@@ -1003,6 +1034,36 @@ export function WeeklyTaskBoard() {
         currentFilters={filters}
         onApply={setFilters}
       />
+
+      {/* Quick Add Task Dialog (double-click on slot) */}
+      <Dialog open={!!quickAddSlot} onOpenChange={(open) => !open && setQuickAddSlot(null)}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-right">
+              הוספת משימה ל-{quickAddSlot?.time}
+              {quickAddSlot && (
+                <span className="block text-sm font-normal text-muted-foreground">
+                  {format(quickAddSlot.date, "EEEE, dd/MM", { locale: he })}
+                </span>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleQuickAddSubmit} className="flex gap-2">
+            <Input
+              value={quickAddTitle}
+              onChange={(e) => setQuickAddTitle(e.target.value)}
+              placeholder="שם המשימה..."
+              autoFocus
+              enterKeyHint="send"
+              className="flex-1"
+            />
+            <Button type="submit" disabled={!quickAddTitle.trim() || addTask.isPending}>
+              <Plus className="h-4 w-4 ml-1" />
+              הוסף
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
