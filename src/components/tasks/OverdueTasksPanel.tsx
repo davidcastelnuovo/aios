@@ -164,10 +164,10 @@ export function TaskBacklogPanel({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex flex-col rounded-xl border transition-all duration-200 shrink-0",
+        "flex flex-col rounded-xl border transition-all duration-200 shrink-0 h-fit",
         overdueCount > 0 
           ? "bg-destructive/5 border-destructive/30" 
-          : "bg-muted/30 border-border",
+          : "bg-background border-border",
         isExpanded ? "min-w-[260px] w-[260px]" : "w-[60px]",
         isOver && (overdueCount > 0 ? "bg-destructive/10" : "bg-accent/50")
       )}

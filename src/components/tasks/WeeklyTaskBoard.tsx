@@ -729,20 +729,25 @@ export function WeeklyTaskBoard() {
 
       {/* Board with Overdue Panel */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-2 overflow-x-auto pb-4 flex-1">
-          {/* Task Backlog Panel - Always visible on the right */}
-          <TaskBacklogPanel
-            tasks={backlogTasks}
-            onToggleComplete={(taskId, completed) =>
-              toggleComplete.mutate({ taskId, completed })
-            }
-            onTaskClick={(task) => {
-              setSelectedTask(task);
-              setDialogOpen(true);
-            }}
-            onAddTask={(title) => addTask.mutate({ title, date: null })}
-            isLoading={isLoading || addTask.isPending}
-          />
+        <div className="flex gap-2 flex-1 relative">
+          {/* Task Backlog Panel - Sticky on the right */}
+          <div className="sticky right-0 z-10 shrink-0">
+            <TaskBacklogPanel
+              tasks={backlogTasks}
+              onToggleComplete={(taskId, completed) =>
+                toggleComplete.mutate({ taskId, completed })
+              }
+              onTaskClick={(task) => {
+                setSelectedTask(task);
+                setDialogOpen(true);
+              }}
+              onAddTask={(title) => addTask.mutate({ title, date: null })}
+              isLoading={isLoading || addTask.isPending}
+            />
+          </div>
+
+          {/* Scrollable days container */}
+          <div className="flex gap-2 overflow-x-auto pb-4 flex-1">
 
           {/* Main View based on viewMode */}
           {viewMode === "daily" && (
@@ -803,6 +808,7 @@ export function WeeklyTaskBoard() {
               }}
             />
           )}
+          </div>
         </div>
         <DragOverlay>
           {activeTask ? (
