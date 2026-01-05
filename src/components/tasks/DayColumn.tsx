@@ -256,8 +256,7 @@ export function DayColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex flex-col rounded-xl border bg-muted/30",
-        isCurrentDay ? "min-w-[300px] flex-[1.5]" : "min-w-[200px] flex-1",
+        "flex flex-col rounded-xl border bg-muted/30 min-w-[300px] flex-1",
         today && "ring-2 ring-primary/50 bg-primary/5",
         isOver && "bg-accent/50"
       )}
