@@ -6,7 +6,7 @@ import {
 import { format, isToday, isSameDay } from "date-fns";
 import { he } from "date-fns/locale";
 import { QuickTaskInput } from "./QuickTaskInput";
-import { SortableTaskItem } from "./SortableTaskItem";
+import { ResizableTaskItem } from "./ResizableTaskItem";
 import { cn } from "@/lib/utils";
 
 interface Task {
@@ -35,6 +35,7 @@ interface DayColumnProps {
   onAddTask: (title: string, date: Date, time?: string) => void;
   onToggleComplete: (taskId: string, completed: boolean) => void;
   onTaskClick: (task: Task) => void;
+  onDurationChange?: (taskId: string, newDuration: number) => void;
   isLoading?: boolean;
   isCurrentDay?: boolean;
 }
@@ -55,12 +56,14 @@ function TimeSlotDroppable({
   tasks,
   onToggleComplete,
   onTaskClick,
+  onDurationChange,
 }: {
   date: Date;
   time: string;
   tasks: Task[];
   onToggleComplete: (taskId: string, completed: boolean) => void;
   onTaskClick: (task: Task) => void;
+  onDurationChange?: (taskId: string, newDuration: number) => void;
 }) {
   const droppableId = `${date.toISOString()}_${time}`;
   const { setNodeRef, isOver } = useDroppable({ id: droppableId });
@@ -87,11 +90,12 @@ function TimeSlotDroppable({
       <div className="flex-1 min-w-0">
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
           {slotTasks.map((task) => (
-            <SortableTaskItem
+            <ResizableTaskItem
               key={task.id}
               task={task}
               onToggleComplete={onToggleComplete}
               onClick={() => onTaskClick(task)}
+              onDurationChange={onDurationChange}
               compact
               slotHeight={SLOT_HEIGHT}
             />
@@ -108,6 +112,7 @@ export function DayColumn({
   onAddTask,
   onToggleComplete,
   onTaskClick,
+  onDurationChange,
   isLoading,
   isCurrentDay,
 }: DayColumnProps) {
@@ -170,6 +175,7 @@ export function DayColumn({
             tasks={dayTasks}
             onToggleComplete={onToggleComplete}
             onTaskClick={onTaskClick}
+            onDurationChange={onDurationChange}
           />
         ))}
       </div>
