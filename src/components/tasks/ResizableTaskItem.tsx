@@ -22,6 +22,7 @@ interface ResizableTaskItemProps {
   onDurationChange?: (taskId: string, newDuration: number) => void;
   compact?: boolean;
   slotHeight?: number;
+  taskIndex?: number;
 }
 
 export function ResizableTaskItem({ 
@@ -30,7 +31,8 @@ export function ResizableTaskItem({
   onClick, 
   onDurationChange,
   compact = false, 
-  slotHeight = 40 
+  slotHeight = 40,
+  taskIndex = 0
 }: ResizableTaskItemProps) {
   const {
     attributes,
@@ -53,10 +55,21 @@ export function ResizableTaskItem({
   const baseHeight = compact ? (durationMinutes / 30) * slotHeight : undefined;
   const displayHeight = resizeHeight ?? baseHeight;
 
+  // Calculate z-index: resizing gets highest, then longer tasks, then by index
+  const baseZIndex = isResizing ? 100 : (durationMinutes > 30 ? 20 : 10);
+  const zIndex = baseZIndex - taskIndex;
+
   const style = {
     transform: isResizing ? undefined : CSS.Transform.toString(transform),
     transition: isResizing ? undefined : transition,
-    ...(compact && displayHeight && (durationMinutes > 30 || resizeHeight) ? { height: `${displayHeight - 4}px` } : {}),
+    ...(compact ? { 
+      position: "absolute" as const,
+      top: 0,
+      left: 0,
+      right: 0,
+      height: `${(displayHeight || slotHeight) - 4}px`,
+      zIndex,
+    } : {}),
   };
 
   const isCompleted = task.status === "done";
@@ -115,10 +128,10 @@ export function ResizableTaskItem({
         }}
         style={style}
         className={cn(
-          "group relative flex items-start gap-1 px-1 py-0.5 rounded border bg-card hover:bg-accent/50 cursor-pointer transition-all text-[11px]",
-          isDragging && "opacity-50 shadow-lg z-50",
+          "group flex items-start gap-1 px-1 py-0.5 rounded border bg-card hover:bg-accent/50 cursor-pointer transition-colors text-[11px]",
+          isDragging && "opacity-50 shadow-lg",
           isCompleted && "opacity-60",
-          isResizing && "z-50 shadow-lg ring-2 ring-primary",
+          isResizing && "shadow-lg ring-2 ring-primary",
           durationMinutes > 30 && "flex-col"
         )}
       >
