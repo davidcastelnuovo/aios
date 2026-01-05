@@ -71,14 +71,14 @@ function TimeSlotDroppable({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex items-start gap-2 py-1 px-2 border-b border-dashed border-muted min-h-[32px]",
+        "flex items-center gap-1 py-0.5 px-1 border-b border-dashed border-muted min-h-[24px]",
         isOver && "bg-accent/50"
       )}
     >
-      <span className="text-xs text-muted-foreground w-10 shrink-0 pt-1">
+      <span className="text-[10px] text-muted-foreground w-8 shrink-0">
         {time}
       </span>
-      <div className="flex-1">
+      <div className="flex-1 min-w-0">
         <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
           {slotTasks.map((task) => (
             <SortableTaskItem
@@ -86,6 +86,7 @@ function TimeSlotDroppable({
               task={task}
               onToggleComplete={onToggleComplete}
               onClick={() => onTaskClick(task)}
+              compact
             />
           ))}
         </SortableContext>

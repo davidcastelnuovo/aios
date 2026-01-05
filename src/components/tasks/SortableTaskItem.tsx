@@ -17,9 +17,10 @@ interface SortableTaskItemProps {
   };
   onToggleComplete: (taskId: string, completed: boolean) => void;
   onClick: () => void;
+  compact?: boolean;
 }
 
-export function SortableTaskItem({ task, onToggleComplete, onClick }: SortableTaskItemProps) {
+export function SortableTaskItem({ task, onToggleComplete, onClick, compact = false }: SortableTaskItemProps) {
   const {
     attributes,
     listeners,
@@ -37,6 +38,65 @@ export function SortableTaskItem({ task, onToggleComplete, onClick }: SortableTa
   const isCompleted = task.status === "done";
   const updatesCount = task.task_updates?.length || 0;
   const collaboratorsCount = task.task_collaborators?.length || 0;
+
+  if (compact) {
+    return (
+      <div
+        ref={setNodeRef}
+        style={style}
+        className={cn(
+          "group flex items-center gap-1 px-1 py-0.5 rounded border bg-card hover:bg-accent/50 cursor-pointer transition-all text-[11px]",
+          isDragging && "opacity-50 shadow-lg z-50",
+          isCompleted && "opacity-60"
+        )}
+      >
+        <button
+          {...attributes}
+          {...listeners}
+          className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity shrink-0"
+        >
+          <GripVertical className="h-3 w-3 text-muted-foreground" />
+        </button>
+        
+        <Checkbox
+          checked={isCompleted}
+          onCheckedChange={(checked) => {
+            onToggleComplete(task.id, checked as boolean);
+          }}
+          onClick={(e) => e.stopPropagation()}
+          className="h-3 w-3 shrink-0"
+        />
+        
+        <div className="flex-1 min-w-0 truncate" onClick={onClick}>
+          <span
+            className={cn(
+              "font-medium",
+              isCompleted && "line-through text-muted-foreground"
+            )}
+          >
+            {task.title}
+          </span>
+          {task.clients?.name && (
+            <span className="text-muted-foreground mx-1">•</span>
+          )}
+          {task.clients?.name && (
+            <span className="text-muted-foreground">{task.clients.name}</span>
+          )}
+        </div>
+
+        {(updatesCount > 0 || collaboratorsCount > 0) && (
+          <div className="flex items-center gap-0.5 shrink-0">
+            {updatesCount > 0 && (
+              <MessageSquare className="h-2.5 w-2.5 text-muted-foreground" />
+            )}
+            {collaboratorsCount > 0 && (
+              <Users className="h-2.5 w-2.5 text-muted-foreground" />
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
