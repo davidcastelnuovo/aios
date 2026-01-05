@@ -669,7 +669,7 @@ export function WeeklyTaskBoard() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2">
@@ -729,9 +729,9 @@ export function WeeklyTaskBoard() {
 
       {/* Board with Overdue Panel */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-2 flex-1 relative">
+        <div className="flex gap-2 flex-1 relative min-h-0">
           {/* Scrollable days container - with padding for fixed panel */}
-          <div className="flex gap-2 overflow-x-auto pb-4 flex-1 pr-[280px]">
+          <div className="flex gap-2 overflow-x-auto pb-4 flex-1 pr-[280px] min-h-0">
 
             {/* Main View based on viewMode */}
             {viewMode === "daily" && (
@@ -795,7 +795,7 @@ export function WeeklyTaskBoard() {
           </div>
 
           {/* Task Backlog Panel - Fixed on the right */}
-          <div className="fixed top-[140px] right-[calc(var(--sidebar-width,16rem)+1rem)] z-20">
+          <div className="fixed top-[200px] right-[calc(var(--sidebar-width,16rem)+1rem)] z-20">
             <TaskBacklogPanel
               tasks={backlogTasks}
               onToggleComplete={(taskId, completed) =>
