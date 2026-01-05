@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { useSidebar } from "@/components/ui/sidebar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -65,6 +66,7 @@ export function WeeklyTaskBoard() {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
+  const { state: sidebarState } = useSidebar();
 
   // Start from today instead of week start
   const [currentDate, setCurrentDate] = useState(() => startOfDay(new Date()));
@@ -795,7 +797,11 @@ export function WeeklyTaskBoard() {
           </div>
 
           {/* Task Backlog Panel - Fixed on the right */}
-          <div className="fixed top-[200px] right-[calc(var(--sidebar-width,16rem)+1rem)] z-20">
+          <div className={`fixed top-[200px] z-20 transition-all duration-200 ${
+            sidebarState === "collapsed" 
+              ? "right-[calc(var(--sidebar-width-icon,3rem)+1rem)]" 
+              : "right-[calc(var(--sidebar-width,16rem)+1rem)]"
+          }`}>
             <TaskBacklogPanel
               tasks={backlogTasks}
               onToggleComplete={(taskId, completed) =>
