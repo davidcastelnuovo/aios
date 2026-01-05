@@ -738,9 +738,9 @@ export function WeeklyTaskBoard() {
 
       {/* Board with Overdue Panel */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex flex-col md:flex-row gap-2 flex-1 relative min-h-0">
+        <div className="flex flex-col-reverse md:flex-row gap-2 flex-1 relative min-h-0">
           {/* Scrollable days container - with padding for fixed panel on desktop only */}
-          <div className="flex gap-2 overflow-x-auto pb-4 flex-1 md:pr-[280px] min-h-0">
+          <div className="flex gap-2 overflow-x-auto pb-4 flex-1 md:pr-[280px] min-h-0 order-last md:order-first">
 
             {/* Main View based on viewMode */}
             {viewMode === "daily" && (
