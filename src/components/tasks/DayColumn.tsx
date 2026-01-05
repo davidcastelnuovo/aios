@@ -158,14 +158,6 @@ export function DayColumn({
         </p>
       </div>
 
-      {/* Quick Add Input */}
-      <div className="p-2 border-b">
-        <QuickTaskInput
-          onAddTask={(title) => onAddTask(title, date)}
-          disabled={isLoading}
-        />
-      </div>
-
       {/* Time Slots */}
       <div className="flex-1 overflow-y-auto">
         {TIME_SLOTS.map((time) => (
