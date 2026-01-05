@@ -139,7 +139,7 @@ export function ResizableTaskItem({
           <button
             {...attributes}
             {...listeners}
-            className="opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity shrink-0"
+            className="opacity-100 md:opacity-0 md:group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity shrink-0 touch-none"
           >
             <GripVertical className="h-3 w-3 text-muted-foreground" />
           </button>
@@ -216,7 +216,7 @@ export function ResizableTaskItem({
       <button
         {...attributes}
         {...listeners}
-        className="mt-0.5 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity"
+        className="mt-0.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 cursor-grab active:cursor-grabbing transition-opacity touch-none"
       >
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </button>
