@@ -739,7 +739,7 @@ export function WeeklyTaskBoard() {
       {/* Board with Overdue Panel */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {/* Mobile Layout */}
-        <div className="flex flex-col md:hidden gap-2 flex-1 min-h-0">
+        <div className="flex flex-col md:hidden gap-2">
           {/* Row 1: Task Panel RIGHT, Title + Navigation LEFT */}
           <div className="flex gap-2 items-start justify-between">
             {/* RIGHT: Task Backlog Panel - first in DOM for RTL */}
@@ -810,7 +810,7 @@ export function WeeklyTaskBoard() {
           </div>
           
           {/* Bottom: Calendar/Tasks - takes remaining height with scroll */}
-          <div className="flex-1 overflow-auto min-h-[300px]">
+          <div className="min-h-[300px]">
             <div className="flex gap-2 pb-4">
               {viewMode === "daily" && (
                 <DailyView
