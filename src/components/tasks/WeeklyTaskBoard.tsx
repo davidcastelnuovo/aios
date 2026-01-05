@@ -9,7 +9,9 @@ import {
   useSensor,
   useSensors,
   DragOverlay,
+  closestCenter,
 } from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
 import { addDays, addMonths, format, parseISO, isToday, startOfDay, startOfMonth } from "date-fns";
 import { he } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -40,6 +42,7 @@ interface Task {
   agency_id: string | null;
   campaigner_id: string | null;
   tenant_id: string | null;
+  sort_order?: number;
   clients?: { name: string } | null;
   task_updates?: { id: string }[];
   task_collaborators?: { id: string }[];
@@ -168,7 +171,9 @@ export function WeeklyTaskBoard() {
         query = query.is("client_id", null).is("lead_id", null);
       }
 
-      const { data, error } = await query.order("priority", { ascending: false });
+      const { data, error } = await query
+        .order("sort_order", { ascending: true })
+        .order("priority", { ascending: false });
 
       if (error) throw error;
       return data as FullTask[];
@@ -276,6 +281,25 @@ export function WeeklyTaskBoard() {
     },
   });
 
+  // Update sort order mutation (for reordering within a day)
+  const updateSortOrder = useMutation({
+    mutationFn: async (updates: { id: string; sort_order: number }[]) => {
+      for (const update of updates) {
+        const { error } = await supabase
+          .from("tasks")
+          .update({ sort_order: update.sort_order })
+          .eq("id", update.id);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון סדר המשימות");
+    },
+  });
+
   // Delete task mutation
   const deleteTask = useMutation({
     mutationFn: async (taskId: string) => {
@@ -305,6 +329,41 @@ export function WeeklyTaskBoard() {
 
     const taskId = active.id as string;
     const dropTarget = over.id as string;
+    const draggedTask = tasks.find((t) => t.id === taskId);
+    
+    if (!draggedTask) return;
+
+    // Check if dropped on another task (reordering within same container)
+    const targetTask = tasks.find((t) => t.id === dropTarget);
+    if (targetTask) {
+      // Both tasks should be in the same day and same time slot for reordering
+      if (
+        draggedTask.due_date === targetTask.due_date &&
+        draggedTask.due_time === targetTask.due_time
+      ) {
+        // Get tasks in the same container
+        const containerTasks = tasks
+          .filter(
+            (t) =>
+              t.due_date === draggedTask.due_date &&
+              t.due_time === draggedTask.due_time
+          )
+          .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+        const oldIndex = containerTasks.findIndex((t) => t.id === taskId);
+        const newIndex = containerTasks.findIndex((t) => t.id === dropTarget);
+
+        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+          const reordered = arrayMove(containerTasks, oldIndex, newIndex);
+          const updates = reordered.map((t, idx) => ({
+            id: t.id,
+            sort_order: idx,
+          }));
+          updateSortOrder.mutate(updates);
+        }
+      }
+      return;
+    }
 
     // Check if drop target includes time (format: ISO_DATE_TIME)
     if (dropTarget.includes("_")) {
@@ -320,12 +379,13 @@ export function WeeklyTaskBoard() {
         // Invalid format
       }
     } else {
-      // Just date
+      // Just date - drop on untimed section
       try {
         const parsedDate = parseISO(dropTarget);
         updateDueDate.mutate({
           taskId,
           newDate: format(parsedDate, "yyyy-MM-dd"),
+          newTime: null, // Remove time when dropping on untimed section
         });
       } catch {
         // Invalid date, ignore

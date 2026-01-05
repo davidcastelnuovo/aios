@@ -2374,6 +2374,7 @@ export type Database = {
           overdue_notified_at: string | null
           priority: number
           sales_person_id: string | null
+          sort_order: number | null
           status: Database["public"]["Enums"]["task_status"]
           task_type: Database["public"]["Enums"]["task_type"] | null
           tenant_id: string
@@ -2393,6 +2394,7 @@ export type Database = {
           overdue_notified_at?: string | null
           priority?: number
           sales_person_id?: string | null
+          sort_order?: number | null
           status?: Database["public"]["Enums"]["task_status"]
           task_type?: Database["public"]["Enums"]["task_type"] | null
           tenant_id: string
@@ -2412,6 +2414,7 @@ export type Database = {
           overdue_notified_at?: string | null
           priority?: number
           sales_person_id?: string | null
+          sort_order?: number | null
           status?: Database["public"]["Enums"]["task_status"]
           task_type?: Database["public"]["Enums"]["task_type"] | null
           tenant_id?: string
