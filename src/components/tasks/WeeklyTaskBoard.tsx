@@ -13,9 +13,12 @@ import {
 import { addDays, startOfWeek, format, parseISO } from "date-fns";
 import { he } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ChevronLeft, CalendarDays } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ChevronRight, ChevronLeft, CalendarDays, Filter } from "lucide-react";
 import { DayColumn } from "./DayColumn";
 import { TaskDetailDialog } from "./TaskDetailDialog";
+import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters } from "./TaskFiltersDialog";
+import { UnscheduledTasksPanel } from "./UnscheduledTasksPanel";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { toast } from "sonner";
@@ -49,6 +52,8 @@ export function WeeklyTaskBoard() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
+  const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
 
   // Full task type from DB
   type FullTask = Task & {
@@ -68,31 +73,7 @@ export function WeeklyTaskBoard() {
     return Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
   }, [currentWeekStart]);
 
-  // Fetch tasks
-  const { data: tasks = [], isLoading } = useQuery({
-    queryKey: ["tasks", tenantId, format(currentWeekStart, "yyyy-MM-dd")],
-    queryFn: async () => {
-      const weekEnd = addDays(currentWeekStart, 6);
-      const { data, error } = await supabase
-        .from("tasks")
-        .select(`
-          *,
-          clients (name),
-          task_updates (id),
-          task_collaborators (id)
-        `)
-        .eq("tenant_id", tenantId)
-        .gte("due_date", format(currentWeekStart, "yyyy-MM-dd"))
-        .lte("due_date", format(weekEnd, "yyyy-MM-dd"))
-        .order("priority", { ascending: false });
-
-      if (error) throw error;
-      return data as FullTask[];
-    },
-    enabled: !!tenantId,
-  });
-
-  // Fetch user's campaigner info and first agency
+  // Fetch user profile to get campaigner_id for "mine" filter
   const { data: userProfile } = useQuery({
     queryKey: ["user-profile-for-tasks", user?.id],
     queryFn: async () => {
@@ -104,6 +85,73 @@ export function WeeklyTaskBoard() {
       return data;
     },
     enabled: !!user?.id,
+  });
+
+  // Fetch tasks - includes unscheduled if showUnscheduled is true
+  const { data: tasks = [], isLoading } = useQuery({
+    queryKey: ["tasks", tenantId, format(currentWeekStart, "yyyy-MM-dd"), filters],
+    queryFn: async () => {
+      const weekEnd = addDays(currentWeekStart, 6);
+      const weekStartStr = format(currentWeekStart, "yyyy-MM-dd");
+      const weekEndStr = format(weekEnd, "yyyy-MM-dd");
+      
+      let query = supabase
+        .from("tasks")
+        .select(`
+          *,
+          clients (name),
+          task_updates (id),
+          task_collaborators (id)
+        `)
+        .eq("tenant_id", tenantId);
+
+      // Apply date filter - either week range, custom range, or include null dates
+      if (filters.startDate && filters.endDate) {
+        // Custom date range from filters
+        const customStart = format(filters.startDate, "yyyy-MM-dd");
+        const customEnd = format(filters.endDate, "yyyy-MM-dd");
+        if (filters.showUnscheduled) {
+          query = query.or(`and(due_date.gte.${customStart},due_date.lte.${customEnd}),due_date.is.null`);
+        } else {
+          query = query.gte("due_date", customStart).lte("due_date", customEnd);
+        }
+      } else if (filters.showUnscheduled) {
+        // Week range OR null dates
+        query = query.or(`and(due_date.gte.${weekStartStr},due_date.lte.${weekEndStr}),due_date.is.null`);
+      } else {
+        // Just week range
+        query = query.gte("due_date", weekStartStr).lte("due_date", weekEndStr);
+      }
+
+      // Apply campaigner filter
+      if (filters.campaignerId === "mine" && userProfile?.campaigner_id) {
+        query = query.eq("campaigner_id", userProfile.campaigner_id);
+      } else if (filters.campaignerId === "none") {
+        query = query.is("campaigner_id", null);
+      } else if (filters.campaignerId !== "all") {
+        query = query.eq("campaigner_id", filters.campaignerId);
+      }
+
+      // Apply task type filter
+      if (filters.taskType !== "all") {
+        query = query.eq("task_type", filters.taskType as "campaign" | "collection" | "creative" | "other");
+      }
+
+      // Apply association filter
+      if (filters.association === "clients") {
+        query = query.not("client_id", "is", null);
+      } else if (filters.association === "leads") {
+        query = query.not("lead_id", "is", null);
+      } else if (filters.association === "general") {
+        query = query.is("client_id", null).is("lead_id", null);
+      }
+
+      const { data, error } = await query.order("priority", { ascending: false });
+
+      if (error) throw error;
+      return data as FullTask[];
+    },
+    enabled: !!tenantId,
   });
 
   const { data: firstAgency } = useQuery({
@@ -246,6 +294,20 @@ export function WeeklyTaskBoard() {
     ? tasks.find((t) => t.id === activeTaskId)
     : null;
 
+  // Split tasks into scheduled and unscheduled
+  const scheduledTasks = tasks.filter((t) => t.due_date !== null);
+  const unscheduledTasks = tasks.filter((t) => t.due_date === null);
+
+  // Count active filters
+  const activeFiltersCount = [
+    filters.campaignerId !== "all",
+    filters.taskType !== "all",
+    filters.association !== "all",
+    filters.startDate !== undefined,
+    filters.endDate !== undefined,
+    filters.showUnscheduled,
+  ].filter(Boolean).length;
+
   const goToToday = () => {
     setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }));
   };
@@ -273,6 +335,19 @@ export function WeeklyTaskBoard() {
             <CalendarDays className="h-4 w-4" />
             היום
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => setFiltersDialogOpen(true)}
+            className="gap-2"
+          >
+            <Filter className="h-4 w-4" />
+            פילטרים
+            {activeFiltersCount > 0 && (
+              <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
+                {activeFiltersCount}
+              </Badge>
+            )}
+          </Button>
         </div>
         <h2 className="text-lg font-semibold">
           {format(currentWeekStart, "MMMM yyyy", { locale: he })}
@@ -286,7 +361,7 @@ export function WeeklyTaskBoard() {
             <DayColumn
               key={date.toISOString()}
               date={date}
-              tasks={tasks}
+              tasks={scheduledTasks}
               onAddTask={(title, date) => addTask.mutate({ title, date })}
               onToggleComplete={(taskId, completed) =>
                 toggleComplete.mutate({ taskId, completed })
@@ -298,6 +373,20 @@ export function WeeklyTaskBoard() {
               isLoading={isLoading || addTask.isPending}
             />
           ))}
+
+          {/* Unscheduled Tasks Panel */}
+          {filters.showUnscheduled && (
+            <UnscheduledTasksPanel
+              tasks={unscheduledTasks}
+              onToggleComplete={(taskId, completed) =>
+                toggleComplete.mutate({ taskId, completed })
+              }
+              onTaskClick={(task) => {
+                setSelectedTask(task);
+                setDialogOpen(true);
+              }}
+            />
+          )}
         </div>
         <DragOverlay>
           {activeTask ? (
@@ -314,6 +403,14 @@ export function WeeklyTaskBoard() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onDelete={(taskId) => deleteTask.mutate(taskId)}
+      />
+
+      {/* Filters Dialog */}
+      <TaskFiltersDialog
+        open={filtersDialogOpen}
+        onOpenChange={setFiltersDialogOpen}
+        currentFilters={filters}
+        onApply={setFilters}
       />
     </div>
   );
