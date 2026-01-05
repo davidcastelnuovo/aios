@@ -2266,6 +2266,55 @@ export type Database = {
           },
         ]
       }
+      task_collaborators: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          campaigner_id: string
+          id: string
+          task_id: string
+          tenant_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          campaigner_id: string
+          id?: string
+          task_id: string
+          tenant_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          campaigner_id?: string
+          id?: string
+          task_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "task_collaborators_campaigner_id_fkey"
+            columns: ["campaigner_id"]
+            isOneToOne: false
+            referencedRelation: "campaigners"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_collaborators_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "task_collaborators_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       task_updates: {
         Row: {
           attachments: Json | null
