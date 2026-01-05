@@ -34,7 +34,7 @@ export interface TaskFilterState {
 }
 
 export const defaultTaskFilters: TaskFilterState = {
-  campaignerId: "all",
+  campaignerId: "mine",
   taskType: "all",
   association: "all",
   startDate: undefined,

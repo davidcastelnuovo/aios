@@ -4,7 +4,6 @@ import { he } from "date-fns/locale";
 import { QuickTaskInput } from "./QuickTaskInput";
 import { TaskItem } from "./TaskItem";
 import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Task {
   id: string;
@@ -31,6 +30,7 @@ interface DayColumnProps {
   onToggleComplete: (taskId: string, completed: boolean) => void;
   onTaskClick: (task: Task) => void;
   isLoading?: boolean;
+  isCurrentDay?: boolean;
 }
 
 export function DayColumn({
@@ -40,6 +40,7 @@ export function DayColumn({
   onToggleComplete,
   onTaskClick,
   isLoading,
+  isCurrentDay,
 }: DayColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: date.toISOString(),
@@ -55,7 +56,8 @@ export function DayColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex flex-col min-w-[200px] flex-1 rounded-xl border bg-muted/30",
+        "flex flex-col rounded-xl border bg-muted/30",
+        isCurrentDay ? "min-w-[300px] flex-[1.5]" : "min-w-[200px] flex-1",
         today && "ring-2 ring-primary/50 bg-primary/5",
         isOver && "bg-accent/50"
       )}
@@ -88,25 +90,23 @@ export function DayColumn({
         />
       </div>
 
-      {/* Tasks List */}
-      <ScrollArea className="flex-1 max-h-[calc(100vh-380px)]">
-        <div className="p-2 space-y-2">
-          {dayTasks.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-4">
-              אין משימות
-            </p>
-          ) : (
-            dayTasks.map((task) => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                onToggleComplete={onToggleComplete}
-                onClick={() => onTaskClick(task)}
-              />
-            ))
-          )}
-        </div>
-      </ScrollArea>
+      {/* Tasks List - no scroll, grows with content */}
+      <div className="p-2 space-y-2">
+        {dayTasks.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-4">
+            אין משימות
+          </p>
+        ) : (
+          dayTasks.map((task) => (
+            <TaskItem
+              key={task.id}
+              task={task}
+              onToggleComplete={onToggleComplete}
+              onClick={() => onTaskClick(task)}
+            />
+          ))
+        )}
+      </div>
     </div>
   );
 }
