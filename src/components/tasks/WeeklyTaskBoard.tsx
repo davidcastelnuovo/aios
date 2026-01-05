@@ -795,7 +795,7 @@ export function WeeklyTaskBoard() {
           </div>
 
           {/* Task Backlog Panel - Fixed on the right */}
-          <div className="fixed top-[140px] right-4 z-20">
+          <div className="fixed top-[140px] right-[calc(var(--sidebar-width,16rem)+1rem)] z-20">
             <TaskBacklogPanel
               tasks={backlogTasks}
               onToggleComplete={(taskId, completed) =>
