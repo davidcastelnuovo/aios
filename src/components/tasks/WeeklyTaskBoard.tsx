@@ -740,7 +740,7 @@ export function WeeklyTaskBoard() {
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {/* Mobile Layout */}
         <div className="flex flex-col md:hidden gap-2">
-          {/* Row 1: Task Panel RIGHT, Title + Navigation LEFT */}
+          {/* Row 1: Task Panel RIGHT, Title + Filters LEFT */}
           <div className="flex gap-2 items-start justify-between">
             {/* RIGHT: Task Backlog Panel - first in DOM for RTL */}
             <TaskBacklogPanel
@@ -756,57 +756,60 @@ export function WeeklyTaskBoard() {
               isLoading={isLoading || addTask.isPending}
             />
             
-            {/* LEFT: Title + Navigation - second in DOM for RTL */}
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold">משימות</h1>
-              <Button variant="outline" size="icon" onClick={goToPrev}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon" onClick={goToNext}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon" onClick={goToToday}>
-                <CalendarDays className="h-4 w-4" />
-              </Button>
+            {/* LEFT: Title + Navigation + Filters - second in DOM for RTL */}
+            <div className="flex flex-col gap-2">
+              {/* Title + Navigation */}
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold">משימות</h1>
+                <Button variant="outline" size="icon" onClick={goToPrev}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" onClick={goToNext}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" onClick={goToToday}>
+                  <CalendarDays className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              {/* Filters row */}
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold truncate">
+                  {viewMode === "daily" && format(currentDate, "EEEE, dd/MM", { locale: he })}
+                  {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
+                  {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
+                </h2>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setFiltersDialogOpen(true)}
+                  className="relative"
+                >
+                  <Filter className="h-4 w-4" />
+                  {activeFiltersCount > 0 && (
+                    <Badge variant="secondary" className="absolute -top-1 -right-1 h-4 w-4 p-0 justify-center text-xs">
+                      {activeFiltersCount}
+                    </Badge>
+                  )}
+                </Button>
+                <ToggleGroup
+                  type="single"
+                  value={viewMode}
+                  onValueChange={handleViewModeChange}
+                  className="border rounded-lg"
+                >
+                  <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="px-2">
+                    <List className="h-4 w-4" />
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="weekly" aria-label="תצוגה שבועית" className="px-2">
+                    <LayoutGrid className="h-4 w-4" />
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="monthly" aria-label="תצוגה חודשית" className="px-2">
+                    <Calendar className="h-4 w-4" />
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
             </div>
-          </div>
-          
-          {/* Row 2: View mode + Filter + Date */}
-          <div className="flex items-center gap-2">
-            <ToggleGroup
-              type="single"
-              value={viewMode}
-              onValueChange={handleViewModeChange}
-              className="border rounded-lg"
-            >
-              <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="px-2">
-                <List className="h-4 w-4" />
-              </ToggleGroupItem>
-              <ToggleGroupItem value="weekly" aria-label="תצוגה שבועית" className="px-2">
-                <LayoutGrid className="h-4 w-4" />
-              </ToggleGroupItem>
-              <ToggleGroupItem value="monthly" aria-label="תצוגה חודשית" className="px-2">
-                <Calendar className="h-4 w-4" />
-              </ToggleGroupItem>
-            </ToggleGroup>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setFiltersDialogOpen(true)}
-              className="relative"
-            >
-              <Filter className="h-4 w-4" />
-              {activeFiltersCount > 0 && (
-                <Badge variant="secondary" className="absolute -top-1 -right-1 h-4 w-4 p-0 justify-center text-xs">
-                  {activeFiltersCount}
-                </Badge>
-              )}
-            </Button>
-            <h2 className="text-sm font-semibold truncate flex-1">
-              {viewMode === "daily" && format(currentDate, "EEEE, dd/MM", { locale: he })}
-              {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
-              {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
-            </h2>
           </div>
           
           {/* Bottom: Calendar/Tasks - takes remaining height with scroll */}
