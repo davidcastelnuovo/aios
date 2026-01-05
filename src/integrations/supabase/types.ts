@@ -2368,6 +2368,7 @@ export type Database = {
           created_at: string
           due_date: string | null
           due_time: string | null
+          duration_minutes: number | null
           id: string
           lead_id: string | null
           notes: string | null
@@ -2388,6 +2389,7 @@ export type Database = {
           created_at?: string
           due_date?: string | null
           due_time?: string | null
+          duration_minutes?: number | null
           id?: string
           lead_id?: string | null
           notes?: string | null
@@ -2408,6 +2410,7 @@ export type Database = {
           created_at?: string
           due_date?: string | null
           due_time?: string | null
+          duration_minutes?: number | null
           id?: string
           lead_id?: string | null
           notes?: string | null

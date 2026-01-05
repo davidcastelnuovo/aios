@@ -23,6 +23,7 @@ interface Task {
   campaigner_id: string | null;
   tenant_id: string | null;
   sort_order?: number;
+  duration_minutes?: number;
   clients?: { name: string } | null;
   task_updates?: { id: string }[];
   task_collaborators?: { id: string }[];
@@ -38,11 +39,15 @@ interface DayColumnProps {
   isCurrentDay?: boolean;
 }
 
-// Generate time slots for the day (08:00 - 20:00)
+// Generate half-hour time slots for the day (08:00 - 20:00)
 const TIME_SLOTS = [
-  "08:00", "09:00", "10:00", "11:00", "12:00", "13:00",
-  "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"
+  "08:00", "08:30", "09:00", "09:30", "10:00", "10:30",
+  "11:00", "11:30", "12:00", "12:30", "13:00", "13:30",
+  "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",
+  "17:00", "17:30", "18:00", "18:30", "19:00", "19:30", "20:00"
 ];
+
+const SLOT_HEIGHT = 40; // Height in pixels for each half-hour slot
 
 function TimeSlotDroppable({
   date,
@@ -71,11 +76,12 @@ function TimeSlotDroppable({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex items-center gap-1 py-0.5 px-1 border-b border-dashed border-muted min-h-[24px]",
+        "flex items-start gap-1 py-0.5 px-1 border-b border-dashed border-muted relative",
         isOver && "bg-accent/50"
       )}
+      style={{ minHeight: `${SLOT_HEIGHT}px` }}
     >
-      <span className="text-[10px] text-muted-foreground w-8 shrink-0">
+      <span className="text-[10px] text-muted-foreground w-8 shrink-0 pt-1">
         {time}
       </span>
       <div className="flex-1 min-w-0">
@@ -87,6 +93,7 @@ function TimeSlotDroppable({
               onToggleComplete={onToggleComplete}
               onClick={() => onTaskClick(task)}
               compact
+              slotHeight={SLOT_HEIGHT}
             />
           ))}
         </SortableContext>
