@@ -13,6 +13,7 @@ interface Task {
   status: string;
   priority: number;
   due_date: string | null;
+  due_time: string | null;
   client_id: string | null;
   lead_id: string | null;
   agency_id: string | null;

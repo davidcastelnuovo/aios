@@ -25,6 +25,7 @@ import { CalendarIcon, Save, Trash2, UserPlus, X, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { TimeSlotPicker } from "./TimeSlotPicker";
 
 interface Task {
   id: string;
@@ -33,6 +34,7 @@ interface Task {
   status: string;
   priority: number;
   due_date: string | null;
+  due_time: string | null;
   client_id: string | null;
   lead_id: string | null;
   agency_id: string | null;
@@ -68,6 +70,7 @@ export function TaskDetailDialog({
   );
   const [clientId, setClientId] = useState(task?.client_id || "");
   const [leadId, setLeadId] = useState(task?.lead_id || "");
+  const [dueTime, setDueTime] = useState<string | null>(task?.due_time ? task.due_time.substring(0, 5) : null);
   const [newUpdate, setNewUpdate] = useState("");
   const [selectedCollaborator, setSelectedCollaborator] = useState("");
 
@@ -81,6 +84,7 @@ export function TaskDetailDialog({
       setDueDate(task.due_date ? new Date(task.due_date) : undefined);
       setClientId(task.client_id || "");
       setLeadId(task.lead_id || "");
+      setDueTime(task.due_time ? task.due_time.substring(0, 5) : null);
     }
   });
 
@@ -165,6 +169,7 @@ export function TaskDetailDialog({
           priority,
           status,
           due_date: dueDate?.toISOString().split("T")[0] || null,
+          due_time: dueTime ? dueTime + ":00" : null,
           client_id: clientId || null,
           lead_id: leadId || null,
         })
@@ -317,6 +322,16 @@ export function TaskDetailDialog({
                   </Popover>
                 </div>
 
+                <div className="space-y-2">
+                  <Label>שעת יעד</Label>
+                  <TimeSlotPicker
+                    value={dueTime}
+                    onChange={setDueTime}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>סטטוס</Label>
                   <Select value={status} onValueChange={(val) => setStatus(val as "open" | "in_progress" | "done")}>

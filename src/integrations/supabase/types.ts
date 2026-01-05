@@ -2367,6 +2367,7 @@ export type Database = {
           client_id: string | null
           created_at: string
           due_date: string | null
+          due_time: string | null
           id: string
           lead_id: string | null
           notes: string | null
@@ -2385,6 +2386,7 @@ export type Database = {
           client_id?: string | null
           created_at?: string
           due_date?: string | null
+          due_time?: string | null
           id?: string
           lead_id?: string | null
           notes?: string | null
@@ -2403,6 +2405,7 @@ export type Database = {
           client_id?: string | null
           created_at?: string
           due_date?: string | null
+          due_time?: string | null
           id?: string
           lead_id?: string | null
           notes?: string | null
