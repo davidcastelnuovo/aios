@@ -24,6 +24,7 @@ import { MonthlyView } from "./MonthlyView";
 import { TaskDetailDialog } from "./TaskDetailDialog";
 import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters } from "./TaskFiltersDialog";
 import { TaskBacklogPanel } from "./OverdueTasksPanel";
+import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { toast } from "sonner";
@@ -73,6 +74,8 @@ export function WeeklyTaskBoard() {
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [filters, setFilters] = useState<TaskFilterState>(defaultTaskFilters);
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
+  const [selectedCalendarEvent, setSelectedCalendarEvent] = useState<CalendarEvent | null>(null);
+  const [calendarEventDialogOpen, setCalendarEventDialogOpen] = useState(false);
 
   // Full task type from DB
   type FullTask = Task & {
@@ -389,6 +392,58 @@ export function WeeklyTaskBoard() {
     },
   });
 
+  // Update calendar event mutation
+  const updateCalendarEvent = useMutation({
+    mutationFn: async ({ 
+      eventId, 
+      summary, 
+      description, 
+      start, 
+      end 
+    }: { 
+      eventId: string; 
+      summary?: string; 
+      description?: string; 
+      start: string; 
+      end: string;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("update-calendar-event", {
+        body: { eventId, summary, description, start, end },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
+      toast.success("האירוע עודכן בהצלחה");
+      setCalendarEventDialogOpen(false);
+      setSelectedCalendarEvent(null);
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון האירוע");
+    },
+  });
+
+  // Delete calendar event mutation
+  const deleteCalendarEvent = useMutation({
+    mutationFn: async (eventId: string) => {
+      const { data, error } = await supabase.functions.invoke("delete-calendar-event", {
+        body: { eventId },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
+      toast.success("האירוע נמחק בהצלחה");
+      setCalendarEventDialogOpen(false);
+      setSelectedCalendarEvent(null);
+    },
+    onError: () => {
+      toast.error("שגיאה במחיקת האירוע");
+    },
+  });
+
   // Handle drag start
   const handleDragStart = (event: DragStartEvent) => {
     setActiveTaskId(event.active.id as string);
@@ -401,8 +456,50 @@ export function WeeklyTaskBoard() {
     
     if (!over || active.id === over.id) return;
 
-    const taskId = active.id as string;
+    const activeId = active.id as string;
     const dropTarget = over.id as string;
+
+    // Check if this is a calendar event drag
+    if (activeId.startsWith('calendar-event-')) {
+      const eventId = activeId.replace('calendar-event-', '');
+      const draggedEvent = calendarEvents.find((e) => e.id === eventId);
+      
+      if (!draggedEvent) return;
+
+      // Check if drop target includes time (format: ISO_DATE_TIME)
+      if (dropTarget.includes("_")) {
+        const [dateStr, time] = dropTarget.split("_");
+        try {
+          const parsedDate = parseISO(dateStr);
+          const newDateStr = format(parsedDate, "yyyy-MM-dd");
+          
+          // Calculate duration from original event
+          const originalStart = new Date(draggedEvent.start);
+          const originalEnd = new Date(draggedEvent.end);
+          const durationMs = originalEnd.getTime() - originalStart.getTime();
+          
+          // Create new start time
+          const [hours, minutes] = time.split(":").map(Number);
+          const newStart = new Date(parsedDate);
+          newStart.setHours(hours, minutes, 0, 0);
+          
+          // Create new end time based on original duration
+          const newEnd = new Date(newStart.getTime() + durationMs);
+          
+          updateCalendarEvent.mutate({
+            eventId,
+            start: newStart.toISOString(),
+            end: newEnd.toISOString(),
+          });
+        } catch {
+          // Invalid format
+        }
+      }
+      return;
+    }
+
+    // Regular task drag
+    const taskId = activeId;
     const draggedTask = localTasks.find((t) => t.id === taskId);
     
     if (!draggedTask) return;
@@ -685,6 +782,10 @@ export function WeeklyTaskBoard() {
               onDurationChange={(taskId, duration) =>
                 updateDuration.mutate({ taskId, duration })
               }
+              onCalendarEventClick={(event) => {
+                setSelectedCalendarEvent(event);
+                setCalendarEventDialogOpen(true);
+              }}
               isLoading={isLoading || addTask.isPending}
               isCurrentDay={isToday(date)}
               calendarEvents={calendarEvents}
@@ -718,6 +819,24 @@ export function WeeklyTaskBoard() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onDelete={(taskId) => deleteTask.mutate(taskId)}
+      />
+
+      {/* Calendar Event Edit Dialog */}
+      <CalendarEventEditDialog
+        event={selectedCalendarEvent}
+        open={calendarEventDialogOpen}
+        onOpenChange={setCalendarEventDialogOpen}
+        onSave={(eventId, data) => {
+          updateCalendarEvent.mutate({
+            eventId,
+            summary: data.summary,
+            description: data.description,
+            start: data.start,
+            end: data.end,
+          });
+        }}
+        onDelete={(eventId) => deleteCalendarEvent.mutate(eventId)}
+        isLoading={updateCalendarEvent.isPending || deleteCalendarEvent.isPending}
       />
 
       {/* Filters Dialog */}
