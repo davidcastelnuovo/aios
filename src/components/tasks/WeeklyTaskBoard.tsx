@@ -132,7 +132,19 @@ export function WeeklyTaskBoard() {
           },
         });
         if (error) throw error;
-        return (data?.events || []) as CalendarEvent[];
+        
+        // Transform Google Calendar API response to our CalendarEvent format
+        const events = (data?.events || []).map((event: any) => ({
+          id: event.id,
+          title: event.summary || "ללא כותרת",
+          // Handle both dateTime (timed events) and date (all-day events)
+          start: event.start?.dateTime || event.start?.date || "",
+          end: event.end?.dateTime || event.end?.date || "",
+          colorId: event.colorId,
+          calendarId: event.calendarId,
+        })).filter((e: CalendarEvent) => e.start && e.end);
+        
+        return events as CalendarEvent[];
       } catch {
         // User might not have connected calendar - that's ok
         return [];
