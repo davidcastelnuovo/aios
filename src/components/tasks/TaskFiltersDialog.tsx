@@ -31,7 +31,6 @@ export interface TaskFilterState {
   association: string;
   startDate: Date | undefined;
   endDate: Date | undefined;
-  showUnscheduled: boolean;
 }
 
 export const defaultTaskFilters: TaskFilterState = {
@@ -40,7 +39,6 @@ export const defaultTaskFilters: TaskFilterState = {
   association: "all",
   startDate: undefined,
   endDate: undefined,
-  showUnscheduled: false,
 };
 
 interface TaskFiltersDialogProps {
@@ -261,22 +259,6 @@ export function TaskFiltersDialog({
             </div>
           </div>
 
-          {/* Show Unscheduled */}
-          <div className="flex items-center gap-3 pt-2">
-            <Checkbox
-              id="showUnscheduled"
-              checked={filters.showUnscheduled}
-              onCheckedChange={(checked) =>
-                setFilters((prev) => ({
-                  ...prev,
-                  showUnscheduled: checked === true,
-                }))
-              }
-            />
-            <Label htmlFor="showUnscheduled" className="cursor-pointer">
-              הצג משימות ללא תאריך יעד
-            </Label>
-          </div>
         </div>
 
         <DialogFooter className="flex gap-2 sm:gap-2">

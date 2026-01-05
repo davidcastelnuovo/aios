@@ -10,15 +10,18 @@ import {
   useSensors,
   DragOverlay,
 } from "@dnd-kit/core";
-import { addDays, startOfWeek, format, parseISO } from "date-fns";
+import { addDays, addMonths, format, parseISO, isToday, startOfDay, startOfMonth } from "date-fns";
 import { he } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronRight, ChevronLeft, CalendarDays, Filter } from "lucide-react";
+import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List } from "lucide-react";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DayColumn } from "./DayColumn";
+import { DailyView } from "./DailyView";
+import { MonthlyView } from "./MonthlyView";
 import { TaskDetailDialog } from "./TaskDetailDialog";
 import { TaskFiltersDialog, TaskFilterState, defaultTaskFilters } from "./TaskFiltersDialog";
-import { UnscheduledTasksPanel } from "./UnscheduledTasksPanel";
+import { OverdueTasksPanel } from "./OverdueTasksPanel";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { toast } from "sonner";
@@ -31,6 +34,7 @@ interface Task {
   status: string;
   priority: number;
   due_date: string | null;
+  due_time: string | null;
   client_id: string | null;
   lead_id: string | null;
   agency_id: string | null;
@@ -41,14 +45,16 @@ interface Task {
   task_collaborators?: { id: string }[];
 }
 
+export type ViewMode = "daily" | "weekly" | "monthly";
+
 export function WeeklyTaskBoard() {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
 
-  const [currentWeekStart, setCurrentWeekStart] = useState(() =>
-    startOfWeek(new Date(), { weekStartsOn: 0 })
-  );
+  // Start from today instead of week start
+  const [currentDate, setCurrentDate] = useState(() => startOfDay(new Date()));
+  const [viewMode, setViewMode] = useState<ViewMode>("weekly");
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -68,10 +74,24 @@ export function WeeklyTaskBoard() {
     })
   );
 
-  // Generate week days
+  // Generate 7 days starting from today
   const weekDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => addDays(currentWeekStart, i));
-  }, [currentWeekStart]);
+    return Array.from({ length: 7 }, (_, i) => addDays(currentDate, i));
+  }, [currentDate]);
+
+  // Calculate date range based on view mode
+  const dateRange = useMemo(() => {
+    if (viewMode === "daily") {
+      return { start: currentDate, end: currentDate };
+    } else if (viewMode === "monthly") {
+      const monthStart = startOfMonth(currentDate);
+      const monthEnd = addDays(addMonths(monthStart, 1), -1);
+      return { start: monthStart, end: monthEnd };
+    } else {
+      // Weekly - 7 days from current date
+      return { start: currentDate, end: addDays(currentDate, 6) };
+    }
+  }, [currentDate, viewMode]);
 
   // Fetch user profile to get campaigner_id for "mine" filter
   const { data: userProfile } = useQuery({
@@ -87,13 +107,13 @@ export function WeeklyTaskBoard() {
     enabled: !!user?.id,
   });
 
-  // Fetch tasks - includes unscheduled if showUnscheduled is true
+  // Fetch tasks for the current view + overdue tasks
   const { data: tasks = [], isLoading } = useQuery({
-    queryKey: ["tasks", tenantId, format(currentWeekStart, "yyyy-MM-dd"), filters],
+    queryKey: ["tasks", tenantId, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode],
     queryFn: async () => {
-      const weekEnd = addDays(currentWeekStart, 6);
-      const weekStartStr = format(currentWeekStart, "yyyy-MM-dd");
-      const weekEndStr = format(weekEnd, "yyyy-MM-dd");
+      const today = format(startOfDay(new Date()), "yyyy-MM-dd");
+      const rangeStartStr = format(dateRange.start, "yyyy-MM-dd");
+      const rangeEndStr = format(dateRange.end, "yyyy-MM-dd");
       
       let query = supabase
         .from("tasks")
@@ -105,22 +125,24 @@ export function WeeklyTaskBoard() {
         `)
         .eq("tenant_id", tenantId);
 
-      // Apply date filter - either week range, custom range, or include null dates
+      // Include: current range OR overdue (past due_date with status != done) OR null due_date
+      // Overdue = due_date < today AND status != 'done'
       if (filters.startDate && filters.endDate) {
-        // Custom date range from filters
+        // Custom date range
         const customStart = format(filters.startDate, "yyyy-MM-dd");
         const customEnd = format(filters.endDate, "yyyy-MM-dd");
-        if (filters.showUnscheduled) {
-          query = query.or(`and(due_date.gte.${customStart},due_date.lte.${customEnd}),due_date.is.null`);
-        } else {
-          query = query.gte("due_date", customStart).lte("due_date", customEnd);
-        }
-      } else if (filters.showUnscheduled) {
-        // Week range OR null dates
-        query = query.or(`and(due_date.gte.${weekStartStr},due_date.lte.${weekEndStr}),due_date.is.null`);
+        query = query.or(
+          `and(due_date.gte.${customStart},due_date.lte.${customEnd}),` +
+          `and(due_date.lt.${today},status.neq.done),` +
+          `due_date.is.null`
+        );
       } else {
-        // Just week range
-        query = query.gte("due_date", weekStartStr).lte("due_date", weekEndStr);
+        // View range + overdue + unscheduled
+        query = query.or(
+          `and(due_date.gte.${rangeStartStr},due_date.lte.${rangeEndStr}),` +
+          `and(due_date.lt.${today},status.neq.done),` +
+          `due_date.is.null`
+        );
       }
 
       // Apply campaigner filter
@@ -229,13 +251,19 @@ export function WeeklyTaskBoard() {
     mutationFn: async ({
       taskId,
       newDate,
+      newTime,
     }: {
       taskId: string;
       newDate: string;
+      newTime?: string | null;
     }) => {
+      const updateData: { due_date: string; due_time?: string | null } = { due_date: newDate };
+      if (newTime !== undefined) {
+        updateData.due_time = newTime;
+      }
       const { error } = await supabase
         .from("tasks")
-        .update({ due_date: newDate })
+        .update(updateData)
         .eq("id", taskId);
       if (error) throw error;
     },
@@ -276,17 +304,32 @@ export function WeeklyTaskBoard() {
     if (!over || active.id === over.id) return;
 
     const taskId = active.id as string;
-    const newDate = over.id as string;
+    const dropTarget = over.id as string;
 
-    // Parse the ISO date string from droppable id
-    try {
-      const parsedDate = parseISO(newDate);
-      updateDueDate.mutate({
-        taskId,
-        newDate: format(parsedDate, "yyyy-MM-dd"),
-      });
-    } catch {
-      // Invalid date, ignore
+    // Check if drop target includes time (format: ISO_DATE_TIME)
+    if (dropTarget.includes("_")) {
+      const [dateStr, time] = dropTarget.split("_");
+      try {
+        const parsedDate = parseISO(dateStr);
+        updateDueDate.mutate({
+          taskId,
+          newDate: format(parsedDate, "yyyy-MM-dd"),
+          newTime: time + ":00",
+        });
+      } catch {
+        // Invalid format
+      }
+    } else {
+      // Just date
+      try {
+        const parsedDate = parseISO(dropTarget);
+        updateDueDate.mutate({
+          taskId,
+          newDate: format(parsedDate, "yyyy-MM-dd"),
+        });
+      } catch {
+        // Invalid date, ignore
+      }
     }
   };
 
@@ -294,9 +337,28 @@ export function WeeklyTaskBoard() {
     ? tasks.find((t) => t.id === activeTaskId)
     : null;
 
-  // Split tasks into scheduled and unscheduled
-  const scheduledTasks = tasks.filter((t) => t.due_date !== null);
-  const unscheduledTasks = tasks.filter((t) => t.due_date === null);
+  // Split tasks: overdue/unscheduled vs current range
+  const today = startOfDay(new Date());
+  
+  const overdueTasks = tasks.filter((t) => {
+    if (t.status === "done") return false;
+    if (t.due_date === null) return true; // Unscheduled
+    const dueDate = new Date(t.due_date);
+    return dueDate < today; // Past due
+  });
+
+  const currentRangeTasks = tasks.filter((t) => {
+    if (t.due_date === null) return false;
+    const dueDate = new Date(t.due_date);
+    if (dueDate < today && t.status !== "done") return false; // Overdue, show in overdue panel
+    return dueDate >= dateRange.start && dueDate <= dateRange.end;
+  });
+
+  // For daily view - filter tasks for the specific day
+  const dailyTasks = currentRangeTasks.filter((t) => {
+    if (!t.due_date) return false;
+    return format(new Date(t.due_date), "yyyy-MM-dd") === format(currentDate, "yyyy-MM-dd");
+  });
 
   // Count active filters
   const activeFiltersCount = [
@@ -305,30 +367,52 @@ export function WeeklyTaskBoard() {
     filters.association !== "all",
     filters.startDate !== undefined,
     filters.endDate !== undefined,
-    filters.showUnscheduled,
   ].filter(Boolean).length;
 
   const goToToday = () => {
-    setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }));
+    setCurrentDate(startOfDay(new Date()));
   };
 
-  const goToPrevWeek = () => {
-    setCurrentWeekStart((prev) => addDays(prev, -7));
+  const goToPrev = () => {
+    if (viewMode === "daily") {
+      setCurrentDate((prev) => addDays(prev, -1));
+    } else if (viewMode === "weekly") {
+      setCurrentDate((prev) => addDays(prev, -7));
+    } else {
+      setCurrentDate((prev) => addMonths(prev, -1));
+    }
   };
 
-  const goToNextWeek = () => {
-    setCurrentWeekStart((prev) => addDays(prev, 7));
+  const goToNext = () => {
+    if (viewMode === "daily") {
+      setCurrentDate((prev) => addDays(prev, 1));
+    } else if (viewMode === "weekly") {
+      setCurrentDate((prev) => addDays(prev, 7));
+    } else {
+      setCurrentDate((prev) => addMonths(prev, 1));
+    }
+  };
+
+  const handleViewModeChange = (value: string) => {
+    if (value) {
+      setViewMode(value as ViewMode);
+    }
+  };
+
+  const handleDayClick = (date: Date) => {
+    setCurrentDate(date);
+    setViewMode("daily");
   };
 
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={goToPrevWeek}>
+          <Button variant="outline" size="icon" onClick={goToPrev}>
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="icon" onClick={goToNextWeek}>
+          <Button variant="outline" size="icon" onClick={goToNext}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <Button variant="outline" onClick={goToToday} className="gap-2">
@@ -349,19 +433,78 @@ export function WeeklyTaskBoard() {
             )}
           </Button>
         </div>
-        <h2 className="text-lg font-semibold">
-          {format(currentWeekStart, "MMMM yyyy", { locale: he })}
-        </h2>
+        
+        <div className="flex items-center gap-4">
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={handleViewModeChange}
+            className="border rounded-lg"
+          >
+            <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="gap-1 px-3">
+              <List className="h-4 w-4" />
+              יומי
+            </ToggleGroupItem>
+            <ToggleGroupItem value="weekly" aria-label="תצוגה שבועית" className="gap-1 px-3">
+              <LayoutGrid className="h-4 w-4" />
+              שבועי
+            </ToggleGroupItem>
+            <ToggleGroupItem value="monthly" aria-label="תצוגה חודשית" className="gap-1 px-3">
+              <Calendar className="h-4 w-4" />
+              חודשי
+            </ToggleGroupItem>
+          </ToggleGroup>
+
+          <h2 className="text-lg font-semibold">
+            {viewMode === "daily" && format(currentDate, "EEEE, dd MMMM yyyy", { locale: he })}
+            {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
+            {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
+          </h2>
+        </div>
       </div>
 
-      {/* Week Board */}
+      {/* Board with Overdue Panel */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex gap-2 overflow-x-auto pb-4 flex-1">
-          {weekDays.map((date) => (
+          {/* Overdue Tasks Panel - Always visible on the right */}
+          <OverdueTasksPanel
+            tasks={overdueTasks}
+            onToggleComplete={(taskId, completed) =>
+              toggleComplete.mutate({ taskId, completed })
+            }
+            onTaskClick={(task) => {
+              setSelectedTask(task);
+              setDialogOpen(true);
+            }}
+          />
+
+          {/* Main View based on viewMode */}
+          {viewMode === "daily" && (
+            <DailyView
+              date={currentDate}
+              tasks={dailyTasks}
+              onToggleComplete={(taskId, completed) =>
+                toggleComplete.mutate({ taskId, completed })
+              }
+              onTaskClick={(task) => {
+                setSelectedTask(task);
+                setDialogOpen(true);
+              }}
+              onDropOnSlot={(taskId, time) => {
+                updateDueDate.mutate({
+                  taskId,
+                  newDate: format(currentDate, "yyyy-MM-dd"),
+                  newTime: time + ":00",
+                });
+              }}
+            />
+          )}
+
+          {viewMode === "weekly" && weekDays.map((date) => (
             <DayColumn
               key={date.toISOString()}
               date={date}
-              tasks={scheduledTasks}
+              tasks={currentRangeTasks}
               onAddTask={(title, date) => addTask.mutate({ title, date })}
               onToggleComplete={(taskId, completed) =>
                 toggleComplete.mutate({ taskId, completed })
@@ -374,13 +517,11 @@ export function WeeklyTaskBoard() {
             />
           ))}
 
-          {/* Unscheduled Tasks Panel */}
-          {filters.showUnscheduled && (
-            <UnscheduledTasksPanel
-              tasks={unscheduledTasks}
-              onToggleComplete={(taskId, completed) =>
-                toggleComplete.mutate({ taskId, completed })
-              }
+          {viewMode === "monthly" && (
+            <MonthlyView
+              currentDate={currentDate}
+              tasks={currentRangeTasks}
+              onDayClick={handleDayClick}
               onTaskClick={(task) => {
                 setSelectedTask(task);
                 setDialogOpen(true);
