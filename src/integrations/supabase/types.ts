@@ -2738,6 +2738,51 @@ export type Database = {
           },
         ]
       }
+      time_entry_breaks: {
+        Row: {
+          created_at: string
+          end_time: string | null
+          id: string
+          start_time: string
+          tenant_id: string
+          time_entry_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          start_time?: string
+          tenant_id: string
+          time_entry_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          end_time?: string | null
+          id?: string
+          start_time?: string
+          tenant_id?: string
+          time_entry_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "time_entry_breaks_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_entry_breaks_time_entry_id_fkey"
+            columns: ["time_entry_id"]
+            isOneToOne: false
+            referencedRelation: "time_entries"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_active_tenant: {
         Row: {
           created_at: string
