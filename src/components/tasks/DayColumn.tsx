@@ -117,7 +117,7 @@ function DraggableCalendarEventBlock({
         onClick?.();
       }}
       className={cn(
-        "absolute left-8 right-1 bg-blue-100 dark:bg-blue-900/40 border-r-2 border-blue-500 rounded px-2 py-0.5 text-xs overflow-hidden cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors",
+        "absolute left-8 right-1 bg-blue-100 dark:bg-blue-900/40 border-r-2 border-blue-500 rounded px-2 py-0.5 text-xs overflow-hidden cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors touch-none",
         isDragging && "opacity-50 shadow-lg"
       )}
       style={style}

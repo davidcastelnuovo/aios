@@ -6,7 +6,7 @@ import {
   DndContext,
   DragEndEvent,
   DragStartEvent,
-  PointerSensor,
+  MouseSensor,
   TouchSensor,
   useSensor,
   useSensors,
@@ -92,11 +92,11 @@ export function WeeklyTaskBoard() {
   };
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
+    useSensor(MouseSensor, {
       activationConstraint: { distance: 8 },
     }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 300, tolerance: 5 },
+      activationConstraint: { delay: 300, tolerance: 8 },
     })
   );
 

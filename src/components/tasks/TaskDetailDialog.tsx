@@ -298,7 +298,7 @@ export function TaskDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>פרטי משימה</DialogTitle>
         </DialogHeader>
@@ -457,7 +457,7 @@ export function TaskDetailDialog({
                           : "בחר תאריך"}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 z-50" align="start">
+                    <PopoverContent portalled={false} className="w-auto p-0 z-[9999]" align="start">
                       <Calendar
                         mode="single"
                         selected={dueDate}

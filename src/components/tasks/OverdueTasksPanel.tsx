@@ -1,6 +1,6 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ListTodo, MessageSquare, Users, Clock, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import { ListTodo, MessageSquare, Users, Clock, ChevronLeft, ChevronRight, AlertTriangle, GripVertical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -60,16 +60,21 @@ function DraggableBacklogTask({
     <div
       ref={setNodeRef}
       style={style}
-      {...listeners}
-      {...attributes}
       className={cn(
-        "p-2 rounded-lg border bg-card cursor-grab active:cursor-grabbing transition-all",
+        "p-2 rounded-lg border bg-card transition-all",
         isDragging && "opacity-50 shadow-lg",
         isCompleted && "opacity-60",
         isOverdue && "border-destructive/50 bg-destructive/5"
       )}
     >
       <div className="flex items-start gap-2">
+        <button
+          {...listeners}
+          {...attributes}
+          className="mt-0.5 cursor-grab active:cursor-grabbing touch-none shrink-0"
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </button>
         <div onClick={(e) => e.stopPropagation()}>
           <Checkbox
             checked={isCompleted}
