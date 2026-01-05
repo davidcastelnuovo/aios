@@ -134,15 +134,17 @@ export function WeeklyTaskBoard() {
         if (error) throw error;
         
         // Transform Google Calendar API response to our CalendarEvent format
-        const events = (data?.events || []).map((event: any) => ({
-          id: event.id,
-          title: event.summary || "ללא כותרת",
-          // Handle both dateTime (timed events) and date (all-day events)
-          start: event.start?.dateTime || event.start?.date || "",
-          end: event.end?.dateTime || event.end?.date || "",
-          colorId: event.colorId,
-          calendarId: event.calendarId,
-        })).filter((e: CalendarEvent) => e.start && e.end);
+        // Only include timed events (with dateTime), skip all-day events (with date only)
+        const events = (data?.events || [])
+          .filter((event: any) => event.start?.dateTime && event.end?.dateTime)
+          .map((event: any) => ({
+            id: event.id,
+            title: event.summary || "ללא כותרת",
+            start: event.start.dateTime,
+            end: event.end.dateTime,
+            colorId: event.colorId,
+            calendarId: event.calendarId,
+          }));
         
         return events as CalendarEvent[];
       } catch {
