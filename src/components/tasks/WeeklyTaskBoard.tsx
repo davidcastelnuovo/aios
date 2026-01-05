@@ -679,8 +679,9 @@ export function WeeklyTaskBoard() {
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3">
+        {/* Navigation controls */}
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" size="icon" onClick={goToPrev}>
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -706,40 +707,40 @@ export function WeeklyTaskBoard() {
           </Button>
         </div>
         
-        <div className="flex items-center gap-4">
+        {/* View mode and date */}
+        <div className="flex items-center gap-2 md:gap-4 flex-wrap">
+          <h2 className="text-base md:text-lg font-semibold order-first md:order-last">
+            {viewMode === "daily" && format(currentDate, "EEEE, dd MMMM yyyy", { locale: he })}
+            {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
+            {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
+          </h2>
           <ToggleGroup
             type="single"
             value={viewMode}
             onValueChange={handleViewModeChange}
             className="border rounded-lg"
           >
-            <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="gap-1 px-3">
+            <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="gap-1 px-2 md:px-3 text-xs md:text-sm">
               <List className="h-4 w-4" />
-              יומי
+              <span className="hidden sm:inline">יומי</span>
             </ToggleGroupItem>
-            <ToggleGroupItem value="weekly" aria-label="תצוגה שבועית" className="gap-1 px-3">
+            <ToggleGroupItem value="weekly" aria-label="תצוגה שבועית" className="gap-1 px-2 md:px-3 text-xs md:text-sm">
               <LayoutGrid className="h-4 w-4" />
-              שבועי
+              <span className="hidden sm:inline">שבועי</span>
             </ToggleGroupItem>
-            <ToggleGroupItem value="monthly" aria-label="תצוגה חודשית" className="gap-1 px-3">
+            <ToggleGroupItem value="monthly" aria-label="תצוגה חודשית" className="gap-1 px-2 md:px-3 text-xs md:text-sm">
               <Calendar className="h-4 w-4" />
-              חודשי
+              <span className="hidden sm:inline">חודשי</span>
             </ToggleGroupItem>
           </ToggleGroup>
-
-          <h2 className="text-lg font-semibold">
-            {viewMode === "daily" && format(currentDate, "EEEE, dd MMMM yyyy", { locale: he })}
-            {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
-            {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
-          </h2>
         </div>
       </div>
 
       {/* Board with Overdue Panel */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-2 flex-1 relative min-h-0">
-          {/* Scrollable days container - with padding for fixed panel */}
-          <div className="flex gap-2 overflow-x-auto pb-4 flex-1 pr-[280px] min-h-0">
+        <div className="flex flex-col md:flex-row gap-2 flex-1 relative min-h-0">
+          {/* Scrollable days container - with padding for fixed panel on desktop only */}
+          <div className="flex gap-2 overflow-x-auto pb-4 flex-1 md:pr-[280px] min-h-0">
 
             {/* Main View based on viewMode */}
             {viewMode === "daily" && (
@@ -802,12 +803,15 @@ export function WeeklyTaskBoard() {
             )}
           </div>
 
-          {/* Task Backlog Panel - Fixed on the right */}
-          <div className={`fixed top-[200px] z-20 transition-all duration-200 ${
-            sidebarState === "collapsed" 
-              ? "right-[calc(var(--sidebar-width-icon,3rem)+1rem)]" 
-              : "right-[calc(var(--sidebar-width,16rem)+1rem)]"
-          }`}>
+          {/* Task Backlog Panel - Static on mobile, fixed on desktop */}
+          <div className={`
+            relative md:fixed md:top-[200px] z-20 transition-all duration-200
+            w-full md:w-auto
+            ${sidebarState === "collapsed" 
+              ? "md:right-[calc(var(--sidebar-width-icon,3rem)+1rem)]" 
+              : "md:right-[calc(var(--sidebar-width,16rem)+1rem)]"
+            }
+          `}>
             <TaskBacklogPanel
               tasks={backlogTasks}
               onToggleComplete={(taskId, completed) =>
