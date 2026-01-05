@@ -125,7 +125,8 @@ export function TaskBacklogPanel({
   onAddTask,
   isLoading,
 }: TaskBacklogPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  // Start collapsed if no tasks, expanded if there are tasks
+  const [isExpanded, setIsExpanded] = useState(() => tasks.length > 0);
   
   const { setNodeRef, isOver } = useDroppable({
     id: "backlog",
