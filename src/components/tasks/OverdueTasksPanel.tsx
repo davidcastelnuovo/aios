@@ -157,10 +157,7 @@ export function TaskBacklogPanel({
   const unscheduledCount = unscheduledTasks.length;
   const totalCount = tasks.length;
 
-  // Don't render if no tasks
-  if (totalCount === 0) {
-    return null;
-  }
+  // Always render the panel, even when empty - so user can add tasks
 
   return (
     <div
@@ -291,6 +288,13 @@ export function TaskBacklogPanel({
                 />
               ))}
             </>
+          )}
+          
+          {/* Empty state message */}
+          {totalCount === 0 && (
+            <p className="text-center text-sm text-muted-foreground py-4">
+              אין משימות ממתינות
+            </p>
           )}
         </div>
       )}
