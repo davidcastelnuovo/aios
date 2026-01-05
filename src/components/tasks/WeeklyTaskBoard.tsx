@@ -740,23 +740,9 @@ export function WeeklyTaskBoard() {
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {/* Mobile Layout */}
         <div className="flex flex-col md:hidden gap-2 flex-1 min-h-0">
-          {/* Row 1: Title + Navigation LEFT, Task Panel RIGHT */}
+          {/* Row 1: Task Panel RIGHT, Title + Navigation LEFT */}
           <div className="flex gap-2 items-start justify-between">
-            {/* Left: Title + Navigation */}
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold">משימות</h1>
-              <Button variant="outline" size="icon" onClick={goToPrev}>
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon" onClick={goToNext}>
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="icon" onClick={goToToday}>
-                <CalendarDays className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            {/* Right: Task Backlog Panel */}
+            {/* RIGHT: Task Backlog Panel - first in DOM for RTL */}
             <TaskBacklogPanel
               tasks={backlogTasks}
               onToggleComplete={(taskId, completed) =>
@@ -769,6 +755,20 @@ export function WeeklyTaskBoard() {
               onAddTask={(title) => addTask.mutate({ title, date: null })}
               isLoading={isLoading || addTask.isPending}
             />
+            
+            {/* LEFT: Title + Navigation - second in DOM for RTL */}
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold">משימות</h1>
+              <Button variant="outline" size="icon" onClick={goToPrev}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon" onClick={goToNext}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="icon" onClick={goToToday}>
+                <CalendarDays className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           
           {/* Row 2: View mode + Filter + Date */}
