@@ -236,11 +236,13 @@ export function WeeklyTaskBoard() {
   const [localTasks, setLocalTasks] = useState<FullTask[]>([]);
   
   useEffect(() => {
-    setLocalTasks(fetchedTasks);
-  }, [fetchedTasks]);
+    if (fetchedTasks && fetchedTasks.length > 0) {
+      setLocalTasks(fetchedTasks);
+    }
+  }, [JSON.stringify(fetchedTasks?.map(t => t.id))]);
   
-  // Use localTasks for rendering
-  const tasks = localTasks;
+  // Use localTasks for rendering, fallback to fetchedTasks if empty
+  const tasks = localTasks.length > 0 ? localTasks : (fetchedTasks || []);
 
   const { data: firstAgency } = useQuery({
     queryKey: ["first-agency", tenantId],
@@ -620,10 +622,14 @@ export function WeeklyTaskBoard() {
     return dueDate >= dateRange.start && dueDate <= dateRange.end;
   });
 
-  // For daily view - filter tasks for the specific day
-  const dailyTasks = currentRangeTasks.filter((t) => {
+  // For daily view - filter tasks for the specific day (include tasks with OR without time)
+  const dailyTasks = tasks.filter((t) => {
     if (!t.due_date) return false;
-    return format(new Date(t.due_date), "yyyy-MM-dd") === format(currentDate, "yyyy-MM-dd");
+    if (t.status === "done") return false;
+    const dueDate = new Date(t.due_date);
+    const isToday = format(dueDate, "yyyy-MM-dd") === format(currentDate, "yyyy-MM-dd");
+    // For daily view, include all tasks for that day regardless of time
+    return isToday;
   });
 
   // Count active filters
