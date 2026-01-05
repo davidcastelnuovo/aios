@@ -43,6 +43,7 @@ interface Task {
   campaigner_id: string | null;
   tenant_id: string | null;
   sort_order?: number;
+  duration_minutes?: number;
   clients?: { name: string } | null;
   task_updates?: { id: string }[];
   task_collaborators?: { id: string }[];
@@ -315,6 +316,24 @@ export function WeeklyTaskBoard() {
     },
   });
 
+  // Update task duration mutation (for resize)
+  const updateDuration = useMutation({
+    mutationFn: async ({ taskId, duration }: { taskId: string; duration: number }) => {
+      const { error } = await supabase
+        .from("tasks")
+        .update({ duration_minutes: duration })
+        .eq("id", taskId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.success("משך המשימה עודכן");
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון משך המשימה");
+    },
+  });
+
   // Handle drag start
   const handleDragStart = (event: DragStartEvent) => {
     setActiveTaskId(event.active.id as string);
@@ -578,6 +597,9 @@ export function WeeklyTaskBoard() {
                 setSelectedTask(task);
                 setDialogOpen(true);
               }}
+              onDurationChange={(taskId, duration) =>
+                updateDuration.mutate({ taskId, duration })
+              }
               isLoading={isLoading || addTask.isPending}
               isCurrentDay={isToday(date)}
             />
