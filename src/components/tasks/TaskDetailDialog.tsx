@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -21,7 +21,7 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { CalendarIcon, Save, Trash2, UserPlus, X, Send } from "lucide-react";
+import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -59,24 +59,27 @@ export function TaskDetailDialog({
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
   
-  const [title, setTitle] = useState(task?.title || "");
-  const [notes, setNotes] = useState(task?.notes || "");
-  const [priority, setPriority] = useState(task?.priority || 5);
-  const [status, setStatus] = useState<"open" | "in_progress" | "done">(
-    (task?.status as "open" | "in_progress" | "done") || "open"
-  );
-  const [dueDate, setDueDate] = useState<Date | undefined>(
-    task?.due_date ? new Date(task.due_date) : undefined
-  );
-  const [clientId, setClientId] = useState(task?.client_id || "");
-  const [leadId, setLeadId] = useState(task?.lead_id || "");
-  const [dueTime, setDueTime] = useState<string | null>(task?.due_time ? task.due_time.substring(0, 5) : null);
+  const [title, setTitle] = useState("");
+  const [notes, setNotes] = useState("");
+  const [priority, setPriority] = useState(5);
+  const [status, setStatus] = useState<"open" | "in_progress" | "done">("open");
+  const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
+  const [clientId, setClientId] = useState("");
+  const [leadId, setLeadId] = useState("");
+  const [dueTime, setDueTime] = useState<string | null>(null);
   const [newUpdate, setNewUpdate] = useState("");
   const [selectedCollaborator, setSelectedCollaborator] = useState("");
+  
+  // Search states for comboboxes
+  const [clientSearch, setClientSearch] = useState("");
+  const [campaignerSearch, setCampaignerSearch] = useState("");
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const [campaignerDropdownOpen, setCampaignerDropdownOpen] = useState(false);
+  const [assignedCampaignerId, setAssignedCampaignerId] = useState("");
 
-  // Reset form when task changes
-  useState(() => {
-    if (task) {
+  // Reset form when task changes or dialog opens
+  useEffect(() => {
+    if (task && open) {
       setTitle(task.title);
       setNotes(task.notes || "");
       setPriority(task.priority);
@@ -85,8 +88,11 @@ export function TaskDetailDialog({
       setClientId(task.client_id || "");
       setLeadId(task.lead_id || "");
       setDueTime(task.due_time ? task.due_time.substring(0, 5) : null);
+      setAssignedCampaignerId(task.campaigner_id || "");
+      setClientSearch("");
+      setCampaignerSearch("");
     }
-  });
+  }, [task, open]);
 
   // Fetch clients
   const { data: clients } = useQuery({
@@ -158,6 +164,36 @@ export function TaskDetailDialog({
     enabled: !!task?.id && open,
   });
 
+  // Filter clients based on search
+  const filteredClients = useMemo(() => {
+    if (!clients) return [];
+    if (!clientSearch.trim()) return clients;
+    return clients.filter(c => 
+      c.name.toLowerCase().includes(clientSearch.toLowerCase())
+    );
+  }, [clients, clientSearch]);
+
+  // Filter campaigners based on search
+  const filteredCampaigners = useMemo(() => {
+    if (!campaigners) return [];
+    if (!campaignerSearch.trim()) return campaigners;
+    return campaigners.filter(c => 
+      c.full_name.toLowerCase().includes(campaignerSearch.toLowerCase())
+    );
+  }, [campaigners, campaignerSearch]);
+
+  // Get selected client name
+  const selectedClientName = useMemo(() => {
+    if (!clientId) return "";
+    return clients?.find(c => c.id === clientId)?.name || "";
+  }, [clients, clientId]);
+
+  // Get assigned campaigner name
+  const assignedCampaignerName = useMemo(() => {
+    if (!assignedCampaignerId) return "";
+    return campaigners?.find(c => c.id === assignedCampaignerId)?.full_name || "";
+  }, [campaigners, assignedCampaignerId]);
+
   // Update task mutation
   const updateTask = useMutation({
     mutationFn: async () => {
@@ -172,6 +208,7 @@ export function TaskDetailDialog({
           due_time: dueTime ? dueTime + ":00" : null,
           client_id: clientId || null,
           lead_id: leadId || null,
+          campaigner_id: assignedCampaignerId || null,
         })
         .eq("id", task!.id);
       if (error) throw error;
@@ -264,9 +301,8 @@ export function TaskDetailDialog({
         </DialogHeader>
 
         <Tabs defaultValue="details" className="flex-1 overflow-hidden flex flex-col">
-          <TabsList className="grid grid-cols-4">
+          <TabsList className="grid grid-cols-3">
             <TabsTrigger value="details">פרטים</TabsTrigger>
-            <TabsTrigger value="association">שיוך</TabsTrigger>
             <TabsTrigger value="team">צוות</TabsTrigger>
             <TabsTrigger value="updates">עדכונים</TabsTrigger>
           </TabsList>
@@ -281,6 +317,113 @@ export function TaskDetailDialog({
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="כותרת המשימה"
                 />
+              </div>
+
+              {/* Client and Campaigner associations - side by side */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* Client search combobox */}
+                <div className="space-y-2">
+                  <Label>שיוך ללקוח</Label>
+                  <div className="relative">
+                    <div className="relative">
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={clientDropdownOpen ? clientSearch : (selectedClientName || clientSearch)}
+                        onChange={(e) => {
+                          setClientSearch(e.target.value);
+                          setClientDropdownOpen(true);
+                        }}
+                        onFocus={() => setClientDropdownOpen(true)}
+                        onBlur={() => setTimeout(() => setClientDropdownOpen(false), 150)}
+                        placeholder="חפש לקוח..."
+                        className="pr-9"
+                      />
+                      {clientId && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute left-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                          onClick={() => {
+                            setClientId("");
+                            setClientSearch("");
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                    {clientDropdownOpen && filteredClients.length > 0 && (
+                      <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
+                        {filteredClients.slice(0, 10).map((client) => (
+                          <button
+                            key={client.id}
+                            type="button"
+                            className="w-full px-3 py-2 text-right text-sm hover:bg-accent transition-colors"
+                            onMouseDown={() => {
+                              setClientId(client.id);
+                              setClientSearch("");
+                              setClientDropdownOpen(false);
+                            }}
+                          >
+                            {client.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Campaigner search combobox */}
+                <div className="space-y-2">
+                  <Label>שיוך לקמפיינר</Label>
+                  <div className="relative">
+                    <div className="relative">
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={campaignerDropdownOpen ? campaignerSearch : (assignedCampaignerName || campaignerSearch)}
+                        onChange={(e) => {
+                          setCampaignerSearch(e.target.value);
+                          setCampaignerDropdownOpen(true);
+                        }}
+                        onFocus={() => setCampaignerDropdownOpen(true)}
+                        onBlur={() => setTimeout(() => setCampaignerDropdownOpen(false), 150)}
+                        placeholder="חפש קמפיינר..."
+                        className="pr-9"
+                      />
+                      {assignedCampaignerId && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute left-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                          onClick={() => {
+                            setAssignedCampaignerId("");
+                            setCampaignerSearch("");
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                    {campaignerDropdownOpen && filteredCampaigners.length > 0 && (
+                      <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
+                        {filteredCampaigners.slice(0, 10).map((campaigner) => (
+                          <button
+                            key={campaigner.id}
+                            type="button"
+                            className="w-full px-3 py-2 text-right text-sm hover:bg-accent transition-colors"
+                            onMouseDown={() => {
+                              setAssignedCampaignerId(campaigner.id);
+                              setCampaignerSearch("");
+                              setCampaignerDropdownOpen(false);
+                            }}
+                          >
+                            {campaigner.full_name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -360,42 +503,6 @@ export function TaskDetailDialog({
               </div>
             </TabsContent>
 
-            {/* Association Tab */}
-            <TabsContent value="association" className="space-y-4 px-1">
-              <div className="space-y-2">
-                <Label>לקוח (אופציונלי)</Label>
-                <Select value={clientId} onValueChange={setClientId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="משימה כללית - ללא לקוח" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">ללא - משימה כללית</SelectItem>
-                    {clients?.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>ליד (אופציונלי)</Label>
-                <Select value={leadId} onValueChange={setLeadId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="ללא ליד" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">ללא ליד</SelectItem>
-                    {leads?.map((lead) => (
-                      <SelectItem key={lead.id} value={lead.id}>
-                        {lead.company_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </TabsContent>
 
             {/* Team Tab */}
             <TabsContent value="team" className="space-y-4 px-1">
