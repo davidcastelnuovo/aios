@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   DndContext,
   DragEndEvent,
+  DragStartEvent,
   PointerSensor,
   useSensor,
   useSensors,
@@ -47,6 +48,7 @@ export function WeeklyTaskBoard() {
   );
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
   // Full task type from DB
   type FullTask = Task & {
@@ -213,9 +215,16 @@ export function WeeklyTaskBoard() {
     },
   });
 
+  // Handle drag start
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveTaskId(event.active.id as string);
+  };
+
   // Handle drag end
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
+    setActiveTaskId(null);
+    
     if (!over || active.id === over.id) return;
 
     const taskId = active.id as string;
@@ -232,6 +241,10 @@ export function WeeklyTaskBoard() {
       // Invalid date, ignore
     }
   };
+
+  const activeTask = activeTaskId
+    ? tasks.find((t) => t.id === activeTaskId)
+    : null;
 
   const goToToday = () => {
     setCurrentWeekStart(startOfWeek(new Date(), { weekStartsOn: 0 }));
@@ -267,7 +280,7 @@ export function WeeklyTaskBoard() {
       </div>
 
       {/* Week Board */}
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex gap-2 overflow-x-auto pb-4 flex-1">
           {weekDays.map((date) => (
             <DayColumn
@@ -286,6 +299,13 @@ export function WeeklyTaskBoard() {
             />
           ))}
         </div>
+        <DragOverlay>
+          {activeTask ? (
+            <div className="p-2 rounded-lg border bg-card shadow-lg">
+              <p className="text-sm font-medium">{activeTask.title}</p>
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
 
       {/* Task Detail Dialog */}

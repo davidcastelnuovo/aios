@@ -1,5 +1,4 @@
 import { useDroppable } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { format, isToday, isSameDay } from "date-fns";
 import { he } from "date-fns/locale";
 import { QuickTaskInput } from "./QuickTaskInput";
@@ -91,25 +90,20 @@ export function DayColumn({
       {/* Tasks List */}
       <ScrollArea className="flex-1 max-h-[calc(100vh-380px)]">
         <div className="p-2 space-y-2">
-          <SortableContext
-            items={dayTasks.map((t) => t.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {dayTasks.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4">
-                אין משימות
-              </p>
-            ) : (
-              dayTasks.map((task) => (
-                <TaskItem
-                  key={task.id}
-                  task={task}
-                  onToggleComplete={onToggleComplete}
-                  onClick={() => onTaskClick(task)}
-                />
-              ))
-            )}
-          </SortableContext>
+          {dayTasks.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-4">
+              אין משימות
+            </p>
+          ) : (
+            dayTasks.map((task) => (
+              <TaskItem
+                key={task.id}
+                task={task}
+                onToggleComplete={onToggleComplete}
+                onClick={() => onTaskClick(task)}
+              />
+            ))
+          )}
         </div>
       </ScrollArea>
     </div>
