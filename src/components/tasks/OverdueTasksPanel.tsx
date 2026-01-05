@@ -224,7 +224,7 @@ export function TaskBacklogPanel({
 
       {/* Tasks List - only show when expanded */}
       {isExpanded && (
-        <div className="p-2 space-y-2 overflow-y-auto max-h-[calc(100vh-250px)]">
+        <div className="p-2 space-y-2 overflow-y-auto max-h-[200px] md:max-h-[calc(100vh-250px)]">
           {/* Quick Add Input */}
           {onAddTask && (
             <div className="pb-2 border-b border-border/50 mb-2">

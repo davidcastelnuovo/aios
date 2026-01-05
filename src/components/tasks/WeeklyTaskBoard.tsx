@@ -678,8 +678,8 @@ export function WeeklyTaskBoard() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-3">
+      {/* Header - Desktop only */}
+      <div className="hidden md:flex md:items-center md:justify-between mb-4 gap-3">
         {/* Navigation controls */}
         <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" size="icon" onClick={goToPrev}>
@@ -708,8 +708,8 @@ export function WeeklyTaskBoard() {
         </div>
         
         {/* View mode and date */}
-        <div className="flex items-center gap-2 md:gap-4 flex-wrap">
-          <h2 className="text-base md:text-lg font-semibold order-first md:order-last">
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-semibold">
             {viewMode === "daily" && format(currentDate, "EEEE, dd MMMM yyyy", { locale: he })}
             {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
             {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
@@ -720,17 +720,17 @@ export function WeeklyTaskBoard() {
             onValueChange={handleViewModeChange}
             className="border rounded-lg"
           >
-            <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="gap-1 px-2 md:px-3 text-xs md:text-sm">
+            <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="gap-1 px-3">
               <List className="h-4 w-4" />
-              <span className="hidden sm:inline">יומי</span>
+              <span>יומי</span>
             </ToggleGroupItem>
-            <ToggleGroupItem value="weekly" aria-label="תצוגה שבועית" className="gap-1 px-2 md:px-3 text-xs md:text-sm">
+            <ToggleGroupItem value="weekly" aria-label="תצוגה שבועית" className="gap-1 px-3">
               <LayoutGrid className="h-4 w-4" />
-              <span className="hidden sm:inline">שבועי</span>
+              <span>שבועי</span>
             </ToggleGroupItem>
-            <ToggleGroupItem value="monthly" aria-label="תצוגה חודשית" className="gap-1 px-2 md:px-3 text-xs md:text-sm">
+            <ToggleGroupItem value="monthly" aria-label="תצוגה חודשית" className="gap-1 px-3">
               <Calendar className="h-4 w-4" />
-              <span className="hidden sm:inline">חודשי</span>
+              <span>חודשי</span>
             </ToggleGroupItem>
           </ToggleGroup>
         </div>
@@ -738,10 +738,68 @@ export function WeeklyTaskBoard() {
 
       {/* Board with Overdue Panel */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        {/* Mobile: Stack vertically with backlog on top */}
-        <div className="flex flex-col md:hidden gap-4 flex-1 min-h-0">
-          {/* Task Backlog Panel - Mobile */}
-          <div className="w-full">
+        {/* Mobile: Controls left + Task panel right, calendar below */}
+        <div className="flex flex-col md:hidden gap-3 flex-1 min-h-0">
+          {/* Top section: Controls + Task Panel side by side */}
+          <div className="flex gap-3 items-start">
+            {/* Left: Navigation, filters, view mode */}
+            <div className="flex flex-col gap-2 flex-1 min-w-0">
+              {/* Navigation buttons */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button variant="outline" size="icon" onClick={goToPrev}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" onClick={goToNext}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" onClick={goToToday} className="gap-2">
+                  <CalendarDays className="h-4 w-4" />
+                  היום
+                </Button>
+              </div>
+              
+              {/* Filters button */}
+              <Button
+                variant="outline"
+                onClick={() => setFiltersDialogOpen(true)}
+                className="gap-2 w-fit"
+              >
+                <Filter className="h-4 w-4" />
+                פילטרים
+                {activeFiltersCount > 0 && (
+                  <Badge variant="secondary" className="h-5 w-5 p-0 justify-center">
+                    {activeFiltersCount}
+                  </Badge>
+                )}
+              </Button>
+              
+              {/* View mode + date */}
+              <div className="flex flex-col gap-1">
+                <ToggleGroup
+                  type="single"
+                  value={viewMode}
+                  onValueChange={handleViewModeChange}
+                  className="border rounded-lg w-fit"
+                >
+                  <ToggleGroupItem value="daily" aria-label="תצוגה יומית" className="gap-1 px-2 text-xs">
+                    <List className="h-4 w-4" />
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="weekly" aria-label="תצוגה שבועית" className="gap-1 px-2 text-xs">
+                    <LayoutGrid className="h-4 w-4" />
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="monthly" aria-label="תצוגה חודשית" className="gap-1 px-2 text-xs">
+                    <Calendar className="h-4 w-4" />
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                <h2 className="text-sm font-semibold truncate">
+                  {viewMode === "daily" && format(currentDate, "EEEE, dd/MM", { locale: he })}
+                  {viewMode === "weekly" && format(currentDate, "MMMM yyyy", { locale: he })}
+                  {viewMode === "monthly" && format(currentDate, "MMMM yyyy", { locale: he })}
+                </h2>
+              </div>
+            </div>
+            
+            {/* Right: Task Backlog Panel */}
             <TaskBacklogPanel
               tasks={backlogTasks}
               onToggleComplete={(taskId, completed) =>
@@ -756,66 +814,68 @@ export function WeeklyTaskBoard() {
             />
           </div>
           
-          {/* Calendar/Tasks view - Mobile */}
-          <div className="flex gap-2 overflow-x-auto pb-4 flex-1 min-h-0">
-            {viewMode === "daily" && (
-              <DailyView
-                date={currentDate}
-                tasks={dailyTasks}
-                onToggleComplete={(taskId, completed) =>
-                  toggleComplete.mutate({ taskId, completed })
-                }
-                onTaskClick={(task) => {
-                  setSelectedTask(task);
-                  setDialogOpen(true);
-                }}
-                onDropOnSlot={(taskId, time) => {
-                  updateDueDate.mutate({
-                    taskId,
-                    newDate: format(currentDate, "yyyy-MM-dd"),
-                    newTime: time + ":00",
-                  });
-                }}
-              />
-            )}
+          {/* Bottom: Calendar/Tasks - takes remaining height with scroll */}
+          <div className="flex-1 overflow-auto min-h-[300px]">
+            <div className="flex gap-2 pb-4">
+              {viewMode === "daily" && (
+                <DailyView
+                  date={currentDate}
+                  tasks={dailyTasks}
+                  onToggleComplete={(taskId, completed) =>
+                    toggleComplete.mutate({ taskId, completed })
+                  }
+                  onTaskClick={(task) => {
+                    setSelectedTask(task);
+                    setDialogOpen(true);
+                  }}
+                  onDropOnSlot={(taskId, time) => {
+                    updateDueDate.mutate({
+                      taskId,
+                      newDate: format(currentDate, "yyyy-MM-dd"),
+                      newTime: time + ":00",
+                    });
+                  }}
+                />
+              )}
 
-            {viewMode === "weekly" && weekDays.map((date) => (
-              <DayColumn
-                key={date.toISOString()}
-                date={date}
-                tasks={currentRangeTasks}
-                onAddTask={(title, date) => addTask.mutate({ title, date })}
-                onToggleComplete={(taskId, completed) =>
-                  toggleComplete.mutate({ taskId, completed })
-                }
-                onTaskClick={(task) => {
-                  setSelectedTask(task);
-                  setDialogOpen(true);
-                }}
-                onDurationChange={(taskId, duration) =>
-                  updateDuration.mutate({ taskId, duration })
-                }
-                onCalendarEventClick={(event) => {
-                  setSelectedCalendarEvent(event);
-                  setCalendarEventDialogOpen(true);
-                }}
-                isLoading={isLoading || addTask.isPending}
-                isCurrentDay={isToday(date)}
-                calendarEvents={calendarEvents}
-              />
-            ))}
+              {viewMode === "weekly" && weekDays.map((date) => (
+                <DayColumn
+                  key={date.toISOString()}
+                  date={date}
+                  tasks={currentRangeTasks}
+                  onAddTask={(title, date) => addTask.mutate({ title, date })}
+                  onToggleComplete={(taskId, completed) =>
+                    toggleComplete.mutate({ taskId, completed })
+                  }
+                  onTaskClick={(task) => {
+                    setSelectedTask(task);
+                    setDialogOpen(true);
+                  }}
+                  onDurationChange={(taskId, duration) =>
+                    updateDuration.mutate({ taskId, duration })
+                  }
+                  onCalendarEventClick={(event) => {
+                    setSelectedCalendarEvent(event);
+                    setCalendarEventDialogOpen(true);
+                  }}
+                  isLoading={isLoading || addTask.isPending}
+                  isCurrentDay={isToday(date)}
+                  calendarEvents={calendarEvents}
+                />
+              ))}
 
-            {viewMode === "monthly" && (
-              <MonthlyView
-                currentDate={currentDate}
-                tasks={currentRangeTasks}
-                onDayClick={handleDayClick}
-                onTaskClick={(task) => {
-                  setSelectedTask(task);
-                  setDialogOpen(true);
-                }}
-              />
-            )}
+              {viewMode === "monthly" && (
+                <MonthlyView
+                  currentDate={currentDate}
+                  tasks={currentRangeTasks}
+                  onDayClick={handleDayClick}
+                  onTaskClick={(task) => {
+                    setSelectedTask(task);
+                    setDialogOpen(true);
+                  }}
+                />
+              )}
+            </div>
           </div>
         </div>
 
