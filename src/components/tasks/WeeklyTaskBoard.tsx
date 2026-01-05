@@ -738,12 +738,13 @@ export function WeeklyTaskBoard() {
 
       {/* Board with Overdue Panel */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        {/* Mobile: Controls left + Task panel right, calendar below */}
+        {/* Mobile Layout */}
         <div className="flex flex-col md:hidden gap-2 flex-1 min-h-0">
-          {/* Row 1: Navigation left, Task Panel right */}
+          {/* Row 1: Title + Navigation LEFT, Task Panel RIGHT */}
           <div className="flex gap-2 items-start justify-between">
-            {/* Left: Navigation buttons */}
-            <div className="flex items-center gap-1">
+            {/* Left: Title + Navigation */}
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold">משימות</h1>
               <Button variant="outline" size="icon" onClick={goToPrev}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
@@ -770,7 +771,7 @@ export function WeeklyTaskBoard() {
             />
           </div>
           
-          {/* Row 2: View mode toggles + Filter icon */}
+          {/* Row 2: View mode + Filter + Date */}
           <div className="flex items-center gap-2">
             <ToggleGroup
               type="single"
