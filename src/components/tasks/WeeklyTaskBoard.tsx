@@ -730,8 +730,72 @@ export function WeeklyTaskBoard() {
       {/* Board with Overdue Panel */}
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <div className="flex gap-2 flex-1 relative">
-          {/* Task Backlog Panel - Sticky on the right */}
-          <div className="sticky right-0 z-10 shrink-0">
+          {/* Scrollable days container - with padding for fixed panel */}
+          <div className="flex gap-2 overflow-x-auto pb-4 flex-1 pr-[280px]">
+
+            {/* Main View based on viewMode */}
+            {viewMode === "daily" && (
+              <DailyView
+                date={currentDate}
+                tasks={dailyTasks}
+                onToggleComplete={(taskId, completed) =>
+                  toggleComplete.mutate({ taskId, completed })
+                }
+                onTaskClick={(task) => {
+                  setSelectedTask(task);
+                  setDialogOpen(true);
+                }}
+                onDropOnSlot={(taskId, time) => {
+                  updateDueDate.mutate({
+                    taskId,
+                    newDate: format(currentDate, "yyyy-MM-dd"),
+                    newTime: time + ":00",
+                  });
+                }}
+              />
+            )}
+
+            {viewMode === "weekly" && weekDays.map((date) => (
+              <DayColumn
+                key={date.toISOString()}
+                date={date}
+                tasks={currentRangeTasks}
+                onAddTask={(title, date) => addTask.mutate({ title, date })}
+                onToggleComplete={(taskId, completed) =>
+                  toggleComplete.mutate({ taskId, completed })
+                }
+                onTaskClick={(task) => {
+                  setSelectedTask(task);
+                  setDialogOpen(true);
+                }}
+                onDurationChange={(taskId, duration) =>
+                  updateDuration.mutate({ taskId, duration })
+                }
+                onCalendarEventClick={(event) => {
+                  setSelectedCalendarEvent(event);
+                  setCalendarEventDialogOpen(true);
+                }}
+                isLoading={isLoading || addTask.isPending}
+                isCurrentDay={isToday(date)}
+                calendarEvents={calendarEvents}
+              />
+            ))}
+
+            {viewMode === "monthly" && (
+              <MonthlyView
+                currentDate={currentDate}
+                tasks={currentRangeTasks}
+                onDayClick={handleDayClick}
+                onTaskClick={(task) => {
+                  setSelectedTask(task);
+                  setDialogOpen(true);
+                }}
+              />
+            )}
+          </div>
+
+          {/* Task Backlog Panel - Fixed on the right */}
+          <div className="fixed top-[140px] right-4 z-20">
             <TaskBacklogPanel
               tasks={backlogTasks}
               onToggleComplete={(taskId, completed) =>
@@ -744,70 +808,6 @@ export function WeeklyTaskBoard() {
               onAddTask={(title) => addTask.mutate({ title, date: null })}
               isLoading={isLoading || addTask.isPending}
             />
-          </div>
-
-          {/* Scrollable days container */}
-          <div className="flex gap-2 overflow-x-auto pb-4 flex-1">
-
-          {/* Main View based on viewMode */}
-          {viewMode === "daily" && (
-            <DailyView
-              date={currentDate}
-              tasks={dailyTasks}
-              onToggleComplete={(taskId, completed) =>
-                toggleComplete.mutate({ taskId, completed })
-              }
-              onTaskClick={(task) => {
-                setSelectedTask(task);
-                setDialogOpen(true);
-              }}
-              onDropOnSlot={(taskId, time) => {
-                updateDueDate.mutate({
-                  taskId,
-                  newDate: format(currentDate, "yyyy-MM-dd"),
-                  newTime: time + ":00",
-                });
-              }}
-            />
-          )}
-
-          {viewMode === "weekly" && weekDays.map((date) => (
-            <DayColumn
-              key={date.toISOString()}
-              date={date}
-              tasks={currentRangeTasks}
-              onAddTask={(title, date) => addTask.mutate({ title, date })}
-              onToggleComplete={(taskId, completed) =>
-                toggleComplete.mutate({ taskId, completed })
-              }
-              onTaskClick={(task) => {
-                setSelectedTask(task);
-                setDialogOpen(true);
-              }}
-              onDurationChange={(taskId, duration) =>
-                updateDuration.mutate({ taskId, duration })
-              }
-              onCalendarEventClick={(event) => {
-                setSelectedCalendarEvent(event);
-                setCalendarEventDialogOpen(true);
-              }}
-              isLoading={isLoading || addTask.isPending}
-              isCurrentDay={isToday(date)}
-              calendarEvents={calendarEvents}
-            />
-          ))}
-
-          {viewMode === "monthly" && (
-            <MonthlyView
-              currentDate={currentDate}
-              tasks={currentRangeTasks}
-              onDayClick={handleDayClick}
-              onTaskClick={(task) => {
-                setSelectedTask(task);
-                setDialogOpen(true);
-              }}
-            />
-          )}
           </div>
         </div>
         <DragOverlay>
