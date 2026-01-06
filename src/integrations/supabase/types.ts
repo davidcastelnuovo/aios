@@ -21,6 +21,7 @@ export type Database = {
           email: string | null
           folder_link: string | null
           id: string
+          is_default: boolean | null
           name: string
           notes: string | null
           phone: string | null
@@ -35,6 +36,7 @@ export type Database = {
           email?: string | null
           folder_link?: string | null
           id?: string
+          is_default?: boolean | null
           name: string
           notes?: string | null
           phone?: string | null
@@ -49,6 +51,7 @@ export type Database = {
           email?: string | null
           folder_link?: string | null
           id?: string
+          is_default?: boolean | null
           name?: string
           notes?: string | null
           phone?: string | null

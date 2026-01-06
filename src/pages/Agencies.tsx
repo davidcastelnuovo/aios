@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Building2, Phone, Mail, Calendar, Link as LinkIcon, Pencil, Trash2 } from "lucide-react";
+import { Building2, Phone, Mail, Calendar, Link as LinkIcon, Pencil, Trash2, Star } from "lucide-react";
 import { AddAgencyForm } from "@/components/forms/AddAgencyForm";
 import { EditAgencyDialog } from "@/components/forms/EditAgencyDialog";
 import { useUserRole } from "@/hooks/useUserRole";
@@ -22,6 +22,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function Agencies() {
   const { userId, isOwner } = useUserRole();
@@ -61,7 +67,8 @@ export default function Agencies() {
             email,
             start_date,
             notes,
-            created_at
+            created_at,
+            is_default
           )
         `)
         .eq("accessing_tenant_id", tenantId);
@@ -134,6 +141,32 @@ export default function Agencies() {
     },
   });
 
+  const setDefaultAgencyMutation = useMutation({
+    mutationFn: async (agencyId: string) => {
+      const { error } = await supabase
+        .from("agencies")
+        .update({ is_default: true })
+        .eq("id", agencyId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agencies-list"] });
+      queryClient.invalidateQueries({ queryKey: ["agencies"] });
+      toast({
+        title: "סוכנות ברירת מחדל עודכנה",
+        description: "לידים חדשים ישויכו לסוכנות זו אוטומטית",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "שגיאה בעדכון סוכנות ברירת מחדל",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
@@ -175,7 +208,7 @@ export default function Agencies() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {agencies?.map((agency) => (
-          <Card key={agency.id} className="shadow-card hover:shadow-lg transition-all hover:scale-[1.02]">
+          <Card key={agency.id} className={`shadow-card hover:shadow-lg transition-all hover:scale-[1.02] ${agency.is_default ? 'ring-2 ring-primary' : ''}`}>
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -185,6 +218,12 @@ export default function Agencies() {
                   <div>
                     <div className="flex items-center gap-2">
                       <CardTitle className="text-lg">{agency.name}</CardTitle>
+                      {agency.is_default && (
+                        <Badge variant="default" className="text-xs bg-primary">
+                          <Star className="h-3 w-3 mr-1 fill-current" />
+                          ברירת מחדל
+                        </Badge>
+                      )}
                       {!agency.is_owned && (
                         <Badge variant="secondary" className="text-xs">
                           <LinkIcon className="h-3 w-3 mr-1" />
@@ -200,6 +239,25 @@ export default function Agencies() {
                 <div className="flex items-center gap-1">
                   {agency.is_owned && isOwner && (
                     <>
+                      {!agency.is_default && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setDefaultAgencyMutation.mutate(agency.id)}
+                                disabled={setDefaultAgencyMutation.isPending}
+                              >
+                                <Star className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>הגדר כסוכנות ברירת מחדל</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
                       <Button
                         variant="ghost"
                         size="icon"

@@ -17,6 +17,7 @@ interface Field {
 
 // Base fields with default labels
 const baseFields: Field[] = [
+  { key: "tenant_slug", label: "🔑 מזהה ארגון (חובה)", exampleValue: "your-tenant-slug" },
   { key: "company_name", label: "שם החברה", exampleValue: "שם החברה" },
   { key: "contact_name", label: "שם איש קשר", exampleValue: "שם איש הקשר" },
   { key: "email", label: "אימייל", exampleValue: "email@example.com" },
@@ -27,7 +28,7 @@ const baseFields: Field[] = [
   { key: "three_month_budget", label: "תקציב ל-3 חודשים", exampleValue: "15000" },
   { key: "products", label: "מוצרים מעניינים", exampleValue: "קמפיין פייסבוק, גוגל" },
   { key: "industry", label: "תעשייה", exampleValue: "טכנולוגיה" },
-  { key: "agency_id", label: "ID של סוכנות", exampleValue: "uuid-של-סוכנות" },
+  { key: "agency_id", label: "ID של סוכנות (אם לא תספק - ישתמש בסוכנות ברירת מחדל)", exampleValue: "uuid-של-סוכנות" },
   { key: "manychat_subscriber_id", label: "ManyChat Subscriber ID", exampleValue: "123456789" },
   { key: "tag_name", label: "שם תגית (יצירה אוטומטית)", exampleValue: "ליד מהאתר" },
 ];
@@ -35,7 +36,7 @@ const baseFields: Field[] = [
 export default function JsonLeadBuilder() {
   const { toast } = useToast();
   const { tenant } = useCurrentTenant();
-  const [selectedFields, setSelectedFields] = useState<string[]>(["company_name"]);
+  const [selectedFields, setSelectedFields] = useState<string[]>(["tenant_slug", "company_name"]);
 
   // Fetch custom field labels for leads
   const { data: customFields } = useQuery({
