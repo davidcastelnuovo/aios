@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus } from "lucide-react";
+import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DayColumn } from "./DayColumn";
 import { DailyView } from "./DailyView";
@@ -334,6 +334,26 @@ export function WeeklyTaskBoard() {
         return;
       }
       toast.error("שגיאה בהוספת משימה");
+    },
+  });
+
+  // Sync tasks to Google Calendar mutation
+  const syncToCalendar = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("sync-tasks-to-calendar");
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+      toast.success(`סונכרנו ${data.synced} משימות ליומן גוגל`);
+      if (data.failed > 0) {
+        toast.warning(`${data.failed} משימות נכשלו בסנכרון`);
+      }
+    },
+    onError: (error) => {
+      console.error("[syncToCalendar] failed", error);
+      toast.error("שגיאה בסנכרון ליומן גוגל");
     },
   });
 
@@ -801,6 +821,15 @@ export function WeeklyTaskBoard() {
                 {activeFiltersCount}
               </Badge>
             )}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => syncToCalendar.mutate()}
+            disabled={syncToCalendar.isPending}
+            className="gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${syncToCalendar.isPending ? 'animate-spin' : ''}`} />
+            סנכרן ליומן
           </Button>
         </div>
         
