@@ -208,8 +208,11 @@ export function WeeklyTaskBoard() {
       }
 
       // Apply campaigner filter
-      if (filters.campaignerId === "mine" && userProfile?.campaigner_id) {
-        query = query.eq("campaigner_id", userProfile.campaigner_id);
+      if (filters.campaignerId === "mine") {
+        // If campaigner_id isn't loaded yet, don't apply a filter (prevents treating "mine" as UUID)
+        if (userProfile?.campaigner_id) {
+          query = query.eq("campaigner_id", userProfile.campaigner_id);
+        }
       } else if (filters.campaignerId === "none") {
         query = query.is("campaigner_id", null);
       } else if (filters.campaignerId !== "all") {
@@ -266,15 +269,20 @@ export function WeeklyTaskBoard() {
     enabled: !!tenantId,
   });
 
+  const canQuickAddTask = !!tenantId && !!firstAgency?.id;
+
   // Add task mutation
   const addTask = useMutation({
     mutationFn: async ({ title, date, time }: { title: string; date: Date | null; time?: string }) => {
+      if (!tenantId) throw new Error("TENANT_NOT_READY");
+      if (!firstAgency?.id) throw new Error("NO_AGENCY");
+
       const insertData: any = {
         title,
         status: "open",
         priority: 5,
         tenant_id: tenantId,
-        agency_id: firstAgency?.id,
+        agency_id: firstAgency.id,
         campaigner_id: userProfile?.campaigner_id || null,
         client_id: null,
       };
@@ -291,10 +299,28 @@ export function WeeklyTaskBoard() {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.success("משימה נוספה");
     },
-    onError: () => {
+    onError: (error) => {
+      console.error("[addTask] failed", error);
+      const msg = (error as any)?.message;
+      if (msg === "TENANT_NOT_READY") {
+        toast.error("המערכת עדיין נטענת, נסי שוב בעוד רגע");
+        return;
+      }
+      if (msg === "NO_AGENCY") {
+        toast.error("לא נמצאה סוכנות בארגון – אי אפשר להוסיף משימה");
+        return;
+      }
       toast.error("שגיאה בהוספת משימה");
     },
   });
+
+  const handleBacklogAddTask = (title: string) => {
+    if (!canQuickAddTask) {
+      toast.error("המערכת עדיין נטענת, נסי שוב בעוד רגע");
+      return;
+    }
+    addTask.mutate({ title, date: null });
+  };
 
   // Toggle complete mutation
   const toggleComplete = useMutation({
@@ -790,8 +816,8 @@ export function WeeklyTaskBoard() {
                 setSelectedTask(task);
                 setDialogOpen(true);
               }}
-              onAddTask={(title) => addTask.mutate({ title, date: null })}
-              isLoading={isLoading || addTask.isPending}
+              onAddTask={handleBacklogAddTask}
+              isLoading={isLoading || addTask.isPending || !canQuickAddTask}
             />
             
             {/* LEFT: Title + Navigation + Filters - second in DOM for RTL */}
@@ -996,8 +1022,8 @@ export function WeeklyTaskBoard() {
                 setSelectedTask(task);
                 setDialogOpen(true);
               }}
-              onAddTask={(title) => addTask.mutate({ title, date: null })}
-              isLoading={isLoading || addTask.isPending}
+              onAddTask={handleBacklogAddTask}
+              isLoading={isLoading || addTask.isPending || !canQuickAddTask}
             />
           </div>
         </div>
