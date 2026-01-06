@@ -23,6 +23,7 @@ interface ResizableTaskItemProps {
   compact?: boolean;
   slotHeight?: number;
   taskIndex?: number;
+  totalTasksInSlot?: number;
 }
 
 export function ResizableTaskItem({ 
@@ -32,7 +33,8 @@ export function ResizableTaskItem({
   onDurationChange,
   compact = false, 
   slotHeight = 40,
-  taskIndex = 0
+  taskIndex = 0,
+  totalTasksInSlot = 1
 }: ResizableTaskItemProps) {
   const {
     attributes,
@@ -59,14 +61,19 @@ export function ResizableTaskItem({
   const baseZIndex = isResizing ? 100 : (durationMinutes > 30 ? 20 : 10);
   const zIndex = baseZIndex - taskIndex;
 
+  // Calculate width for side-by-side layout (max 4 per row)
+  const tasksPerRow = Math.min(4, totalTasksInSlot);
+  const widthPercent = 100 / tasksPerRow;
+  const leftPercent = (taskIndex % tasksPerRow) * widthPercent;
+
   const style = {
     transform: isResizing ? undefined : CSS.Transform.toString(transform),
     transition: isResizing ? undefined : transition,
     ...(compact ? { 
       position: "absolute" as const,
       top: 0,
-      left: 0,
-      right: 0,
+      left: `${leftPercent}%`,
+      width: `${widthPercent}%`,
       height: `${(displayHeight || slotHeight) - 4}px`,
       zIndex,
     } : {}),
@@ -90,9 +97,9 @@ export function ResizableTaskItem({
     const handleMove = (moveEvent: MouseEvent | TouchEvent) => {
       const currentY = 'touches' in moveEvent ? moveEvent.touches[0].clientY : moveEvent.clientY;
       const delta = currentY - startYRef.current;
-      const newHeight = Math.max(slotHeight - 4, startHeightRef.current + delta);
-      // Snap to slot increments (each slot = slotHeight)
-      const snappedHeight = Math.round(newHeight / slotHeight) * slotHeight;
+      const newHeight = Math.max(slotHeight, startHeightRef.current + delta);
+      // Snap to slot increments (each slot = slotHeight), minimum 1 slot
+      const snappedHeight = Math.max(slotHeight, Math.round(newHeight / slotHeight) * slotHeight);
       currentHeightRef.current = snappedHeight;
       setResizeHeight(snappedHeight);
     };

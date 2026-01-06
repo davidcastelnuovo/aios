@@ -206,6 +206,7 @@ function TimeSlotDroppable({
               compact
               slotHeight={SLOT_HEIGHT}
               taskIndex={index}
+              totalTasksInSlot={slotTasks.length}
             />
           ))}
         </SortableContext>
