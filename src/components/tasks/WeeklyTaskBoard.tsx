@@ -306,6 +306,7 @@ export function WeeklyTaskBoard() {
         tenant_id: tenantId,
         agency_id: firstAgency.id,
         campaigner_id: userProfile?.campaigner_id || null,
+        created_by: user?.id,
         client_id: null,
       };
       if (date) {
@@ -346,9 +347,15 @@ export function WeeklyTaskBoard() {
       
       return newTask;
     },
-    onSuccess: () => {
+    onSuccess: (newTask) => {
+      // Optimistic add so the user sees it immediately even if filters are restrictive
+      setLocalTasks(prev => {
+        if (!newTask) return prev;
+        return prev.some(t => t.id === (newTask as any).id) ? prev : [newTask as any, ...prev];
+      });
+
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
       toast.success("משימה נוספה");
     },
     onError: (error) => {
