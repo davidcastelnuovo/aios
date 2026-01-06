@@ -211,14 +211,23 @@ export function WeeklyTaskBoard() {
 
       // Apply campaigner filter
       if (filters.campaignerId === "mine") {
-        // If campaigner_id isn't loaded yet, don't apply a filter (prevents treating "mine" as UUID)
-        if (userProfile?.campaigner_id) {
-          query = query.eq("campaigner_id", userProfile.campaigner_id);
+        // Filter by: tasks assigned to my campaigner_id OR tasks I created
+        const myCampaignerId = userProfile?.campaigner_id;
+        const myUserId = user?.id;
+        if (myCampaignerId && myUserId) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          query = (query as any).or(`campaigner_id.eq.${myCampaignerId},created_by.eq.${myUserId}`);
+        } else if (myUserId) {
+          // If no campaigner_id, just filter by tasks I created
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          query = (query as any).eq("created_by", myUserId);
         }
       } else if (filters.campaignerId === "none") {
-        query = query.is("campaigner_id", null);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        query = (query as any).is("campaigner_id", null);
       } else if (filters.campaignerId !== "all") {
-        query = query.eq("campaigner_id", filters.campaignerId);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        query = (query as any).eq("campaigner_id", filters.campaignerId);
       }
 
       // Apply task type filter
