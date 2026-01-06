@@ -29,6 +29,7 @@ interface FormMapping {
   field_mappings: Record<string, string>;
   agency_id: string | null;
   sales_person_id: string | null;
+  tag_id: string | null;
 }
 
 interface Props {
@@ -37,6 +38,7 @@ interface Props {
   accessToken: string | null;
   agencies: Array<{ id: string; name: string }>;
   salesPeople: Array<{ id: string; full_name: string }>;
+  tags: Array<{ id: string; name: string; color: string }>;
   sharedFromIntegrationId?: string | null;
 }
 
@@ -65,7 +67,7 @@ interface FacebookPage {
   access_token?: string;
 }
 
-export function FacebookFormMappingSection({ tenantId, integrationId, accessToken, agencies, salesPeople, sharedFromIntegrationId }: Props) {
+export function FacebookFormMappingSection({ tenantId, integrationId, accessToken, agencies, salesPeople, tags, sharedFromIntegrationId }: Props) {
   const queryClient = useQueryClient();
   const [selectedPageId, setSelectedPageId] = useState<string>("");
   const [manualPageId, setManualPageId] = useState<string>("");
@@ -75,6 +77,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
   const [selectedAgency, setSelectedAgency] = useState<string>("");
   const [selectedSalesPerson, setSelectedSalesPerson] = useState<string>("");
+  const [selectedTag, setSelectedTag] = useState<string>("");
   const [pageTokens, setPageTokens] = useState<Record<string, string>>({});
   const [pageSearchQuery, setPageSearchQuery] = useState<string>("");
   const [isAddingNewForm, setIsAddingNewForm] = useState<boolean>(false);
@@ -208,6 +211,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       setFieldMappings(mapping.field_mappings || {});
       setSelectedAgency(mapping.agency_id || "");
       setSelectedSalesPerson(mapping.sales_person_id || "");
+      setSelectedTag(mapping.tag_id || "");
     } else if (selectedFormId) {
       // Set default mappings for new form
       const form = formsData?.forms?.find((f: FacebookForm) => f.id === selectedFormId);
@@ -221,6 +225,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
         setFieldMappings(defaultMappings);
       }
       setSelectedSalesPerson("");
+      setSelectedTag("");
     }
   }, [selectedFormId, existingSettings, formsData]);
 
@@ -245,6 +250,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
         field_mappings: fieldMappings,
         agency_id: selectedAgency || null,
         sales_person_id: selectedSalesPerson || null,
+        tag_id: selectedTag || null,
         form_name: selectedForm?.name || `טופס ${selectedFormId}`,
         page_id: selectedPageId,
       };
@@ -293,6 +299,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       setFieldMappings({});
       setSelectedAgency("");
       setSelectedSalesPerson("");
+      setSelectedTag("");
       queryClient.invalidateQueries({ queryKey: ['facebook-integration-settings'] });
       queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
     },
@@ -336,7 +343,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   });
 
   // Get existing form mappings
-  const existingFormMappings = (existingSettings?.form_mappings || {}) as Record<string, FormMapping & { form_name?: string; page_id?: string }>;
+  const existingFormMappings = (existingSettings?.form_mappings || {}) as Record<string, FormMapping & { form_name?: string; page_id?: string; tag_id?: string }>;
   const mappedFormIds = Object.keys(existingFormMappings);
   const hasMappedForms = mappedFormIds.length > 0;
   const showFormEditor = isAddingNewForm || editingFormId;
@@ -427,6 +434,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
               const mapping = existingFormMappings[formId];
               const agencyName = agencies.find(a => a.id === mapping.agency_id)?.name;
               const salesPersonName = salesPeople.find(sp => sp.id === mapping.sales_person_id)?.full_name;
+              const tagName = tags.find(t => t.id === mapping.tag_id)?.name;
               const fieldCount = Object.values(mapping.field_mappings || {}).filter(v => v !== 'skip').length;
               
               return (
@@ -446,6 +454,8 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
                       {agencyName && <span>סוכנות: {agencyName}</span>}
                       {agencyName && salesPersonName && <span>•</span>}
                       {salesPersonName && <span>איש מכירות: {salesPersonName}</span>}
+                      {(agencyName || salesPersonName) && tagName && <span>•</span>}
+                      {tagName && <span>תווית: {tagName}</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -803,6 +813,33 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
               </Select>
               <p className="text-xs text-muted-foreground">
                 לידים מטופס זה ישויכו אוטומטית לאיש המכירות שנבחר
+              </p>
+            </div>
+
+            {/* Tag Selection */}
+            <div className="space-y-2">
+              <Label>תווית ברירת מחדל ללידים מטופס זה</Label>
+              <Select value={selectedTag} onValueChange={setSelectedTag}>
+                <SelectTrigger>
+                  <SelectValue placeholder="בחר תווית (אופציונלי)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">ללא תווית</SelectItem>
+                  {tags.map((tag) => (
+                    <SelectItem key={tag.id} value={tag.id}>
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-3 h-3 rounded-full" 
+                          style={{ backgroundColor: tag.color }} 
+                        />
+                        {tag.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                לידים מטופס זה יקבלו אוטומטית את התווית שנבחרה
               </p>
             </div>
 
