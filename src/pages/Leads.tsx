@@ -545,12 +545,12 @@ export default function Leads() {
     if (!pipelineStagesData || pipelineStagesData.length === 0) {
       // Fallback to defaults while loading
        return [
-         { id: "new", label: "חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500" },
-         { id: "contacted", label: "יצרנו קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300", borderColor: "border-purple-500" },
-         { id: "meeting_scheduled", label: "נקבעה פגישה", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300", borderColor: "border-yellow-500" },
-         { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300", borderColor: "border-orange-500" },
-         { id: "negotiation", label: "משא ומתן", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300", borderColor: "border-green-500" },
-         { id: "closed", label: "נסגר", color: "bg-emerald-100 dark:bg-emerald-900", bgClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 border-emerald-300", borderColor: "border-emerald-500" },
+         { id: "new", label: "חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500", hexColor: "#3b82f6" },
+         { id: "contacted", label: "יצרנו קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300", borderColor: "border-purple-500", hexColor: "#a855f7" },
+         { id: "meeting_scheduled", label: "נקבעה פגישה", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300", borderColor: "border-yellow-500", hexColor: "#eab308" },
+         { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300", borderColor: "border-orange-500", hexColor: "#f97316" },
+         { id: "negotiation", label: "משא ומתן", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300", borderColor: "border-green-500", hexColor: "#22c55e" },
+         { id: "closed", label: "נסגר", color: "bg-emerald-100 dark:bg-emerald-900", bgClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 border-emerald-300", borderColor: "border-emerald-500", hexColor: "#10b981" },
        ];
     }
     return pipelineStagesData.map(stage => ({
@@ -1740,6 +1740,28 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   const { isFieldVisible } = useCustomFieldLabels('lead');
   const { tenantId } = useCurrentTenant();
 
+  // Convert dynamic pipeline stages to format compatible with existing code
+  const PIPELINE_STAGES = useMemo(() => {
+    if (!pipelineStagesData || pipelineStagesData.length === 0) {
+      return [
+        { id: "new", label: "חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500", hexColor: "#3b82f6" },
+        { id: "contacted", label: "יצרנו קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300", borderColor: "border-purple-500", hexColor: "#a855f7" },
+        { id: "meeting_scheduled", label: "נקבעה פגישה", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300", borderColor: "border-yellow-500", hexColor: "#eab308" },
+        { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300", borderColor: "border-orange-500", hexColor: "#f97316" },
+        { id: "negotiation", label: "משא ומתן", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300", borderColor: "border-green-500", hexColor: "#22c55e" },
+        { id: "closed", label: "נסגר", color: "bg-emerald-100 dark:bg-emerald-900", bgClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 border-emerald-300", borderColor: "border-emerald-500", hexColor: "#10b981" },
+      ];
+    }
+    return pipelineStagesData.map(stage => ({
+      id: stage.stage_key,
+      label: stage.label,
+      color: hexToLightBg(stage.color),
+      bgClass: `border-2`,
+      borderColor: `border-2`,
+      hexColor: stage.color,
+    }));
+  }, [pipelineStagesData]);
+
   // Fetch all tags for display in table
   const { data: allTags = [] } = useQuery({
     queryKey: ['chat-tags', tenantId],
@@ -1795,28 +1817,6 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   // State for management dialogs
   const [manageStagesOpen, setManageStagesOpen] = useState(false);
   const [manageStatusesOpen, setManageStatusesOpen] = useState(false);
-  
-  // Convert dynamic pipeline stages to format compatible with existing code
-  const PIPELINE_STAGES = useMemo(() => {
-     if (!pipelineStagesData || pipelineStagesData.length === 0) {
-       return [
-         { id: "new", label: "חדש", color: "bg-blue-100 dark:bg-blue-900", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 border-blue-300", borderColor: "border-blue-500", hexColor: "#3b82f6" },
-         { id: "contacted", label: "יצרנו קשר", color: "bg-purple-100 dark:bg-purple-900", bgClass: "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 border-purple-300", borderColor: "border-purple-500", hexColor: "#a855f7" },
-         { id: "meeting_scheduled", label: "נקבעה פגישה", color: "bg-yellow-100 dark:bg-yellow-900", bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100 border-yellow-300", borderColor: "border-yellow-500", hexColor: "#eab308" },
-         { id: "proposal_sent", label: "נשלחה הצעה", color: "bg-orange-100 dark:bg-orange-900", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100 border-orange-300", borderColor: "border-orange-500", hexColor: "#f97316" },
-         { id: "negotiation", label: "משא ומתן", color: "bg-green-100 dark:bg-green-900", bgClass: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 border-green-300", borderColor: "border-green-500", hexColor: "#22c55e" },
-         { id: "closed", label: "נסגר", color: "bg-emerald-100 dark:bg-emerald-900", bgClass: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-100 border-emerald-300", borderColor: "border-emerald-500", hexColor: "#10b981" },
-       ];
-     }
-    return pipelineStagesData.map(stage => ({
-      id: stage.stage_key,
-      label: stage.label,
-      color: hexToLightBg(stage.color),
-      bgClass: `border-2`,
-      borderColor: `border-2`,
-      hexColor: stage.color,
-    }));
-  }, [pipelineStagesData]);
 
   const updateLeadStatus = useMutation({
     mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "meeting_scheduled" | "negotiation" | "transferred_to_onboarding" | "closed" }) => {
