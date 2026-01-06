@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   Building2,
@@ -113,6 +113,7 @@ export function AppSidebar() {
   const { menuItems: dbMenuItems, menuItemsMap, isLoading: isLoadingMenuItems, orgType, isPremium } = useMenuItems();
   const isCollapsed = state === "collapsed";
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [isQuickCreateOpen, setIsQuickCreateOpen] = useState(false);
 
   const { userId } = useCurrentUser();
@@ -218,17 +219,23 @@ export function AppSidebar() {
 
       if (error) throw error;
 
-      // CRITICAL: Redirect BEFORE updating React state
-      // This ensures URL changes happen via full page reload,
-      // preventing React from re-rendering with new tenant but old URL
+      // CRITICAL: Clear cache and navigate using React Router
+      // This works better in iframe environments (like Lovable Preview)
       if (newTenant?.slug) {
         const currentPath = window.location.pathname;
         const pathMatch = currentPath.match(/^\/t\/[^/]+\/(.+)$/);
         const currentModule = pathMatch ? pathMatch[1] : 'dashboard';
-        window.location.replace(`/t/${newTenant.slug}/${currentModule}`);
-        return; // Exit early - page will reload anyway
+        
+        // Clear all cached data before navigation
+        queryClient.clear();
+        
+        // Use React Router navigate for better iframe compatibility
+        navigate(`/t/${newTenant.slug}/${currentModule}`, { replace: true });
+        return;
       } else {
-        window.location.reload();
+        // Fallback - clear cache and go to root
+        queryClient.clear();
+        navigate('/', { replace: true });
         return;
       }
     } catch (error) {
