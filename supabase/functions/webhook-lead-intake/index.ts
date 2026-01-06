@@ -18,6 +18,7 @@ interface LeadPayload {
   industry?: string
   agency_id?: string
   manychat_subscriber_id?: string
+  tag_name?: string
 }
 
 Deno.serve(async (req) => {
@@ -212,6 +213,71 @@ Deno.serve(async (req) => {
     }
 
     console.log('✅ Lead created successfully:', lead.id)
+
+    // Handle tag_name - find or create tag and apply it
+    if (payload.tag_name && tenantId) {
+      try {
+        const tagName = payload.tag_name.trim()
+        console.log(`🏷️ Processing tag_name: "${tagName}"`)
+        
+        // Check if tag exists
+        const { data: existingTag, error: tagQueryError } = await supabase
+          .from('chat_tags')
+          .select('id')
+          .eq('tenant_id', tenantId)
+          .eq('name', tagName)
+          .maybeSingle()
+        
+        if (tagQueryError) {
+          console.error('⚠️ Error querying existing tag:', tagQueryError)
+        } else {
+          let tagId = existingTag?.id
+          
+          // Create tag if it doesn't exist
+          if (!tagId) {
+            console.log(`🆕 Creating new tag: "${tagName}"`)
+            const { data: newTag, error: createTagError } = await supabase
+              .from('chat_tags')
+              .insert({
+                tenant_id: tenantId,
+                name: tagName,
+                color: '#3b82f6' // default blue color
+              })
+              .select('id')
+              .single()
+            
+            if (createTagError) {
+              console.error('⚠️ Error creating tag:', createTagError)
+            } else {
+              tagId = newTag.id
+              console.log(`✅ Tag created with id: ${tagId}`)
+            }
+          } else {
+            console.log(`✅ Found existing tag with id: ${tagId}`)
+          }
+          
+          // Apply tag to lead
+          if (tagId) {
+            const { error: applyTagError } = await supabase
+              .from('chat_contact_tags')
+              .insert({
+                tenant_id: tenantId,
+                tag_id: tagId,
+                lead_id: lead.id,
+                user_id: '00000000-0000-0000-0000-000000000000' // system user placeholder
+              })
+            
+            if (applyTagError) {
+              console.error('⚠️ Error applying tag to lead:', applyTagError)
+            } else {
+              console.log(`✅ Tag applied to lead ${lead.id}`)
+            }
+          }
+        }
+      } catch (tagError) {
+        console.error('⚠️ Error processing tag:', tagError)
+      }
+    }
 
     // Trigger lead_created automation
     if (tenantId) {

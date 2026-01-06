@@ -29,6 +29,7 @@ const baseFields: Field[] = [
   { key: "industry", label: "תעשייה", exampleValue: "טכנולוגיה" },
   { key: "agency_id", label: "ID של סוכנות", exampleValue: "uuid-של-סוכנות" },
   { key: "manychat_subscriber_id", label: "ManyChat Subscriber ID", exampleValue: "123456789" },
+  { key: "tag_name", label: "שם תגית (יצירה אוטומטית)", exampleValue: "ליד מהאתר" },
 ];
 
 export default function JsonLeadBuilder() {
