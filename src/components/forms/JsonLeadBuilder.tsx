@@ -1,42 +1,76 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Input } from "@/components/ui/input";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Field {
   key: string;
   label: string;
-  description: string;
-  required: boolean;
   exampleValue: string;
 }
 
-const availableFields: Field[] = [
-  { key: "company_name", label: "שם החברה", description: "חובה", required: true, exampleValue: "שם החברה" },
-  { key: "contact_name", label: "שם איש קשר", description: "אופציונלי", required: false, exampleValue: "שם איש הקשר" },
-  { key: "email", label: "אימייל", description: "אופציונלי", required: false, exampleValue: "email@example.com" },
-  { key: "phone", label: "מספר טלפון", description: "אופציונלי", required: false, exampleValue: "050-1234567" },
-  { key: "source", label: "מקור הליד", description: "(website/referral/linkedin/facebook/other)", required: false, exampleValue: "website" },
-  { key: "notes", label: "הערות", description: "אופציונלי", required: false, exampleValue: "הערות נוספות" },
-  { key: "monthly_budget", label: "תקציב חודשי", description: "אופציונלי", required: false, exampleValue: "5000" },
-  { key: "three_month_budget", label: "תקציב ל-3 חודשים", description: "אופציונלי", required: false, exampleValue: "15000" },
-  { key: "products", label: "מוצרים מעניינים", description: "אופציונלי", required: false, exampleValue: "קמפיין פייסבוק, גוגל" },
-  { key: "industry", label: "תעשייה", description: "אופציונלי", required: false, exampleValue: "טכנולוגיה" },
-  { key: "agency_id", label: "ID של סוכנות", description: "אופציונלי", required: false, exampleValue: "uuid-של-סוכנות" },
-  { key: "manychat_subscriber_id", label: "ManyChat Subscriber ID", description: "אופציונלי", required: false, exampleValue: "123456789" },
+// Base fields with default labels
+const baseFields: Field[] = [
+  { key: "company_name", label: "שם החברה", exampleValue: "שם החברה" },
+  { key: "contact_name", label: "שם איש קשר", exampleValue: "שם איש הקשר" },
+  { key: "email", label: "אימייל", exampleValue: "email@example.com" },
+  { key: "phone", label: "מספר טלפון", exampleValue: "050-1234567" },
+  { key: "source", label: "מקור הליד", exampleValue: "website" },
+  { key: "notes", label: "הערות", exampleValue: "הערות נוספות" },
+  { key: "monthly_budget", label: "תקציב חודשי", exampleValue: "5000" },
+  { key: "three_month_budget", label: "תקציב ל-3 חודשים", exampleValue: "15000" },
+  { key: "products", label: "מוצרים מעניינים", exampleValue: "קמפיין פייסבוק, גוגל" },
+  { key: "industry", label: "תעשייה", exampleValue: "טכנולוגיה" },
+  { key: "agency_id", label: "ID של סוכנות", exampleValue: "uuid-של-סוכנות" },
+  { key: "manychat_subscriber_id", label: "ManyChat Subscriber ID", exampleValue: "123456789" },
 ];
 
 export default function JsonLeadBuilder() {
   const { toast } = useToast();
+  const { tenant } = useCurrentTenant();
   const [selectedFields, setSelectedFields] = useState<string[]>(["company_name"]);
 
+  // Fetch custom field labels for leads
+  const { data: customFields } = useQuery({
+    queryKey: ['custom-fields-leads', tenant?.id],
+    queryFn: async () => {
+      if (!tenant?.id) return [];
+      const { data, error } = await supabase
+        .from('custom_fields')
+        .select('field_key, field_label')
+        .eq('tenant_id', tenant.id)
+        .eq('entity_type', 'lead');
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenant?.id,
+  });
+
+  // Create a map of custom labels
+  const customLabelsMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    customFields?.forEach(cf => {
+      map[cf.field_key] = cf.field_label;
+    });
+    return map;
+  }, [customFields]);
+
+  // Apply custom labels to base fields
+  const availableFields = useMemo(() => {
+    return baseFields.map(field => ({
+      ...field,
+      label: customLabelsMap[field.key] || field.label,
+    }));
+  }, [customLabelsMap]);
+
   const toggleField = (fieldKey: string) => {
-    if (fieldKey === "company_name") return; // Can't uncheck required field
-    
     setSelectedFields(prev =>
       prev.includes(fieldKey)
         ? prev.filter(k => k !== fieldKey)
@@ -81,7 +115,6 @@ export default function JsonLeadBuilder() {
                 id={field.key}
                 checked={selectedFields.includes(field.key)}
                 onCheckedChange={() => toggleField(field.key)}
-                disabled={field.required}
               />
               <div className="grid gap-1.5 leading-none flex-1">
                 <Label
@@ -89,10 +122,9 @@ export default function JsonLeadBuilder() {
                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                 >
                   {field.label}
-                  {field.required && <span className="text-destructive mr-1">*</span>}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  {field.description}
+                  אופציונלי
                 </p>
               </div>
             </div>
