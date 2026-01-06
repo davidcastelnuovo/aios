@@ -11,6 +11,7 @@ interface FormMapping {
   form_name: string;
   agency_id: string;
   sales_person_id?: string | null;
+  tag_id?: string | null;
   field_mappings: Record<string, string>;
 }
 
@@ -185,6 +186,24 @@ serve(async (req) => {
             console.log(`✅ Created new lead: ${newLead.id}`);
             totalSynced++;
 
+            // Apply tag if configured
+            if (mapping.tag_id) {
+              const { error: tagError } = await supabase
+                .from('chat_contact_tags')
+                .insert({
+                  tag_id: mapping.tag_id,
+                  lead_id: newLead.id,
+                  tenant_id: integration.tenant_id,
+                  user_id: '00000000-0000-0000-0000-000000000000',
+                });
+              
+              if (tagError) {
+                console.error(`⚠️ Error applying tag to lead ${newLead.id}:`, tagError);
+              } else {
+                console.log(`🏷️ Tag ${mapping.tag_id} applied to lead ${newLead.id}`);
+              }
+            }
+
             // Trigger lead_created automation
             try {
               const automationResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
@@ -290,6 +309,24 @@ serve(async (req) => {
               }
 
               totalSynced++;
+
+              // Apply tag if configured (pagination loop)
+              if (mapping.tag_id) {
+                const { error: tagError } = await supabase
+                  .from('chat_contact_tags')
+                  .insert({
+                    tag_id: mapping.tag_id,
+                    lead_id: newLead.id,
+                    tenant_id: integration.tenant_id,
+                    user_id: '00000000-0000-0000-0000-000000000000',
+                  });
+                
+                if (tagError) {
+                  console.error(`⚠️ Error applying tag to lead ${newLead.id}:`, tagError);
+                } else {
+                  console.log(`🏷️ Tag ${mapping.tag_id} applied to lead ${newLead.id}`);
+                }
+              }
 
               // Trigger automation
               try {
