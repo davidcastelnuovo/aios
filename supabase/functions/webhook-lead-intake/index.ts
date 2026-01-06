@@ -6,7 +6,7 @@ const corsHeaders = {
 }
 
 interface LeadPayload {
-  company_name: string
+  company_name?: string
   contact_name?: string
   email?: string
   phone?: string
@@ -19,6 +19,8 @@ interface LeadPayload {
   agency_id?: string
   manychat_subscriber_id?: string
   tag_name?: string
+  tenant_slug?: string
+  tenant_id?: string
 }
 
 Deno.serve(async (req) => {
@@ -38,81 +40,39 @@ Deno.serve(async (req) => {
     const payload: LeadPayload = await req.json()
     console.log('📦 Received payload:', JSON.stringify(payload, null, 2))
 
-    // No required fields - accept all leads even with empty fields
-
-    // Get default agency if not provided - default to "promo"
     let agencyId = payload.agency_id
-    let tenantId: string | null = null
+    let tenantId: string | null = payload.tenant_id || null
     
-    if (!agencyId) {
-      console.log('🔍 No agency_id provided, searching for "promo" agency...')
+    // Resolve tenant from tenant_slug if provided
+    if (!tenantId && payload.tenant_slug) {
+      console.log(`🔍 Resolving tenant from slug: "${payload.tenant_slug}"`)
+      const { data: tenantData, error: tenantError } = await supabase
+        .from('tenants')
+        .select('id')
+        .eq('slug', payload.tenant_slug)
+        .single()
       
-      // Look for "promo" agency first
-      const { data: agencies, error: agencyError } = await supabase
-        .from('agencies')
-        .select('id, tenant_id, name')
-        .eq('status', 'active')
-        .ilike('name', '%promo%')
-        .limit(1)
-      
-      if (agencyError) {
-        console.error('❌ Error querying promo agency:', agencyError)
+      if (tenantError || !tenantData) {
+        console.error('❌ Tenant not found for slug:', payload.tenant_slug)
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: 'Database error while searching for agency',
-            details: agencyError.message
+            error: `Tenant not found for slug: ${payload.tenant_slug}`,
           }),
           { 
-            status: 500, 
+            status: 400, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         )
       }
-      
-      console.log('📊 Promo agency query result:', agencies)
-      
-      if (agencies && agencies.length > 0) {
-        agencyId = agencies[0].id
-        tenantId = agencies[0].tenant_id
-        console.log(`✅ Found promo agency: ${agencies[0].name} (${agencyId})`)
-      } else {
-        console.log('⚠️ No promo agency found, trying any active agency...')
-        
-        // Fallback to any active agency if promo not found
-        const { data: fallbackAgencies, error: fallbackError } = await supabase
-          .from('agencies')
-          .select('id, tenant_id, name')
-          .eq('status', 'active')
-          .limit(1)
-        
-        if (fallbackError) {
-          console.error('❌ Error querying fallback agency:', fallbackError)
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'Database error while searching for fallback agency',
-              details: fallbackError.message
-            }),
-            { 
-              status: 500, 
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-            }
-          )
-        }
-        
-        if (fallbackAgencies && fallbackAgencies.length > 0) {
-          agencyId = fallbackAgencies[0].id
-          tenantId = fallbackAgencies[0].tenant_id
-          console.log(`✅ Found fallback agency: ${fallbackAgencies[0].name} (${agencyId})`)
-        } else {
-          console.log('❌ No active agencies found at all')
-        }
-      }
-    } else {
+      tenantId = tenantData.id
+      console.log(`✅ Resolved tenant_id: ${tenantId}`)
+    }
+
+    // If agency_id is provided, use it and get tenant_id from it
+    if (agencyId) {
       console.log(`🔑 Agency ID provided: ${agencyId}`)
       
-      // Get tenant_id for the provided agency
       const { data: agency, error: agencyError } = await supabase
         .from('agencies')
         .select('tenant_id')
@@ -120,26 +80,81 @@ Deno.serve(async (req) => {
         .single()
       
       if (agencyError) {
-        console.error('❌ Error querying agency tenant_id:', agencyError)
+        console.error('❌ Error querying agency:', agencyError)
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: 'Database error while getting agency details',
+            error: 'Agency not found',
             details: agencyError.message
           }),
           { 
-            status: 500, 
+            status: 400, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
           }
         )
       }
       
-      if (agency) {
-        tenantId = agency.tenant_id
-        console.log(`✅ Found tenant_id: ${tenantId}`)
-      } else {
-        console.log('⚠️ Agency not found')
+      tenantId = agency.tenant_id
+      console.log(`✅ Found tenant_id from agency: ${tenantId}`)
+    } 
+    // If no agency_id but we have tenant_id, find the default or first agency
+    else if (tenantId) {
+      console.log(`🔍 Finding agency for tenant: ${tenantId}`)
+      
+      // First, try to find the default agency for this tenant
+      const { data: defaultAgency, error: defaultError } = await supabase
+        .from('agencies')
+        .select('id, name')
+        .eq('tenant_id', tenantId)
+        .eq('status', 'active')
+        .eq('is_default', true)
+        .limit(1)
+        .maybeSingle()
+      
+      if (defaultError) {
+        console.error('⚠️ Error querying default agency:', defaultError)
       }
+      
+      if (defaultAgency) {
+        agencyId = defaultAgency.id
+        console.log(`✅ Found default agency: ${defaultAgency.name} (${agencyId})`)
+      } else {
+        console.log('⚠️ No default agency found, trying first active agency...')
+        
+        // Fallback to first active agency in this tenant
+        const { data: firstAgency, error: firstError } = await supabase
+          .from('agencies')
+          .select('id, name')
+          .eq('tenant_id', tenantId)
+          .eq('status', 'active')
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+        
+        if (firstError) {
+          console.error('❌ Error querying first agency:', firstError)
+        }
+        
+        if (firstAgency) {
+          agencyId = firstAgency.id
+          console.log(`✅ Found first active agency: ${firstAgency.name} (${agencyId})`)
+        } else {
+          console.log('❌ No active agencies found for this tenant')
+        }
+      }
+    } else {
+      // No tenant identification provided
+      console.error('❌ No tenant_slug, tenant_id, or agency_id provided')
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Missing tenant identification. Please provide tenant_slug, tenant_id, or agency_id in the payload.',
+        }),
+        { 
+          status: 400, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
     }
     
     console.log(`📍 Final - agencyId: ${agencyId}, tenantId: ${tenantId}`)
@@ -148,7 +163,7 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'No active agency found' 
+          error: 'No active agency found for this tenant. Please create an agency first or mark one as default.' 
         }),
         { 
           status: 400, 
@@ -168,6 +183,8 @@ Deno.serve(async (req) => {
       'referral': 'referral',
       'linkedin': 'linkedin',
       'facebook': 'facebook',
+      'ווטסאפ': 'whatsapp',
+      'whatsapp': 'whatsapp',
     }
     
     const leadSource = payload.source 
