@@ -266,6 +266,16 @@ export function WeeklyTaskBoard() {
   // Use localTasks for rendering, fallback to fetchedTasks if empty
   const tasks = localTasks.length > 0 ? localTasks : (fetchedTasks || []);
 
+  // Filter out calendar events that are actually synced tasks (to avoid duplicates)
+  const filteredCalendarEvents = useMemo(() => {
+    const syncedEventIds = new Set(
+      tasks
+        .filter(t => t.google_calendar_event_id)
+        .map(t => t.google_calendar_event_id)
+    );
+    return calendarEvents.filter(event => !syncedEventIds.has(event.id));
+  }, [calendarEvents, tasks]);
+
   const { data: firstAgency } = useQuery({
     queryKey: ["first-agency", tenantId],
     queryFn: async () => {
@@ -1066,7 +1076,7 @@ export function WeeklyTaskBoard() {
                   onSlotDoubleClick={handleSlotDoubleClick}
                   isLoading={isLoading || addTask.isPending}
                   isCurrentDay={isToday(date)}
-                  calendarEvents={calendarEvents}
+                calendarEvents={filteredCalendarEvents}
                 />
               ))}
 
@@ -1133,7 +1143,7 @@ export function WeeklyTaskBoard() {
                 onSlotDoubleClick={handleSlotDoubleClick}
                 isLoading={isLoading || addTask.isPending}
                 isCurrentDay={isToday(date)}
-                calendarEvents={calendarEvents}
+                calendarEvents={filteredCalendarEvents}
               />
             ))}
 
