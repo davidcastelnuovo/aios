@@ -219,23 +219,18 @@ export function AppSidebar() {
 
       if (error) throw error;
 
-      // CRITICAL: Clear cache and navigate using React Router
-      // This works better in iframe environments (like Lovable Preview)
+      // CRITICAL: Full page reload ensures complete data refresh
+      // React Router navigation can leave stale cached data
       if (newTenant?.slug) {
         const currentPath = window.location.pathname;
         const pathMatch = currentPath.match(/^\/t\/[^/]+\/(.+)$/);
         const currentModule = pathMatch ? pathMatch[1] : 'dashboard';
         
-        // Clear all cached data before navigation
-        queryClient.clear();
-        
-        // Use React Router navigate for better iframe compatibility
-        navigate(`/t/${newTenant.slug}/${currentModule}`, { replace: true });
+        // Force full page reload to ensure clean state
+        window.location.href = `/t/${newTenant.slug}/${currentModule}`;
         return;
       } else {
-        // Fallback - clear cache and go to root
-        queryClient.clear();
-        navigate('/', { replace: true });
+        window.location.href = '/';
         return;
       }
     } catch (error) {
