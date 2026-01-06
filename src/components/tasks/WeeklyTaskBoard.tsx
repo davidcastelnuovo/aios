@@ -250,7 +250,7 @@ export function WeeklyTaskBoard() {
     if (fetchedTasks && fetchedTasks.length > 0) {
       setLocalTasks(fetchedTasks);
     }
-  }, [JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.duration_minutes}`))]);
+  }, [JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.duration_minutes}_${t.status}`))]);
   
   // Use localTasks for rendering, fallback to fetchedTasks if empty
   const tasks = localTasks.length > 0 ? localTasks : (fetchedTasks || []);
@@ -292,11 +292,34 @@ export function WeeklyTaskBoard() {
       if (time) {
         insertData.due_time = time + ":00";
       }
-      const { error } = await supabase.from("tasks").insert(insertData);
+      const { data: newTask, error } = await supabase.from("tasks").insert(insertData).select().single();
       if (error) throw error;
+
+      // אם יש תאריך ושעה - יצור גם אירוע ביומן גוגל
+      if (date && time) {
+        try {
+          const startDateTime = new Date(`${format(date, "yyyy-MM-dd")}T${time}:00`);
+          const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // 30 דקות
+          
+          await supabase.functions.invoke("add-calendar-event", {
+            body: {
+              summary: title,
+              description: `משימה ממערכת Marketing Captain`,
+              start: startDateTime.toISOString(),
+              end: endDateTime.toISOString(),
+            },
+          });
+        } catch (calendarError) {
+          console.warn("לא הצלחנו ליצור אירוע ביומן גוגל:", calendarError);
+          // לא נזרוק שגיאה - המשימה כבר נוספה
+        }
+      }
+      
+      return newTask;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
       toast.success("משימה נוספה");
     },
     onError: (error) => {
@@ -336,9 +359,19 @@ export function WeeklyTaskBoard() {
         .update({ status: completed ? "done" : "open" })
         .eq("id", taskId);
       if (error) throw error;
-      return completed;
+      return { taskId, completed };
     },
-    onSuccess: (completed) => {
+    onMutate: async ({ taskId, completed }) => {
+      // Optimistic update - עדכון מיידי של הממשק
+      setLocalTasks(prev =>
+        prev.map(task =>
+          task.id === taskId
+            ? { ...task, status: completed ? "done" : "open" }
+            : task
+        )
+      );
+    },
+    onSuccess: ({ completed }) => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       if (completed) {
         confetti({
