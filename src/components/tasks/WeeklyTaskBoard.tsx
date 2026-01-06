@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useSidebar } from "@/components/ui/sidebar";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,6 +46,7 @@ interface Task {
   lead_id: string | null;
   agency_id: string | null;
   campaigner_id: string | null;
+  sales_person_id?: string | null;
   tenant_id: string | null;
   sort_order?: number;
   duration_minutes?: number;
@@ -120,19 +121,34 @@ export function WeeklyTaskBoard() {
     }
   }, [currentDate, viewMode]);
 
-  // Fetch user profile to get campaigner_id for "mine" filter
-  const { data: userProfile } = useQuery({
+  // Fetch user profile to get campaigner_id / sales_person_id for "mine" filter
+  const { data: userProfile, isFetched: isUserProfileFetched } = useQuery({
     queryKey: ["user-profile-for-tasks", user?.id],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
-        .select("campaigner_id")
+        .select("campaigner_id, sales_person_id")
         .eq("id", user!.id)
-        .single();
+        .maybeSingle();
+      if (error) throw error;
       return data;
     },
     enabled: !!user?.id,
   });
+
+  // If user has no campaigner/sales profile, default to "all" so tasks are visible
+  const didInitFiltersRef = useRef(false);
+  useEffect(() => {
+    if (didInitFiltersRef.current) return;
+    if (!tenantId || !user?.id || !isUserProfileFetched) return;
+
+    const hasMineIdentity = !!userProfile?.campaigner_id || !!userProfile?.sales_person_id;
+    if (!hasMineIdentity) {
+      setFilters((prev) => (prev.campaignerId === "mine" ? { ...prev, campaignerId: "all" } : prev));
+    }
+
+    didInitFiltersRef.current = true;
+  }, [tenantId, user?.id, isUserProfileFetched, userProfile?.campaigner_id, userProfile?.sales_person_id]);
 
   // Fetch Google Calendar events
   const { data: calendarEvents = [] } = useQuery({
@@ -210,18 +226,18 @@ export function WeeklyTaskBoard() {
         );
       }
 
-      // Apply campaigner filter
+      // Apply "mine" filter
       if (filters.campaignerId === "mine") {
-        // Filter by: tasks assigned to my campaigner_id OR tasks I created
         const myCampaignerId = userProfile?.campaigner_id;
-        const myUserId = user?.id;
-        if (myCampaignerId && myUserId) {
+        const mySalesPersonId = userProfile?.sales_person_id;
+
+        if (myCampaignerId && mySalesPersonId) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          query = (query as any).or(`campaigner_id.eq.${myCampaignerId},created_by.eq.${myUserId}`);
-        } else if (myUserId) {
-          // If no campaigner_id, just filter by tasks I created
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          query = (query as any).eq("created_by", myUserId);
+          query = (query as any).or(`campaigner_id.eq.${myCampaignerId},sales_person_id.eq.${mySalesPersonId}`);
+        } else if (myCampaignerId) {
+          query = query.eq("campaigner_id", myCampaignerId);
+        } else if (mySalesPersonId) {
+          query = query.eq("sales_person_id", mySalesPersonId);
         }
       } else if (filters.campaignerId === "none") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -299,14 +315,17 @@ export function WeeklyTaskBoard() {
       if (!tenantId) throw new Error("TENANT_NOT_READY");
       if (!firstAgency?.id) throw new Error("NO_AGENCY");
 
+      const myCampaignerId = userProfile?.campaigner_id || null;
+      const mySalesPersonId = userProfile?.sales_person_id || null;
+
       const insertData: any = {
         title,
         status: "open",
         priority: 5,
         tenant_id: tenantId,
         agency_id: firstAgency.id,
-        campaigner_id: userProfile?.campaigner_id || null,
-        created_by: user?.id,
+        campaigner_id: myCampaignerId,
+        sales_person_id: myCampaignerId ? null : mySalesPersonId,
         client_id: null,
       };
       if (date) {
@@ -1231,7 +1250,10 @@ export function WeeklyTaskBoard() {
         open={filtersDialogOpen}
         onOpenChange={setFiltersDialogOpen}
         currentFilters={filters}
-        onApply={setFilters}
+        onApply={(next) => {
+          const hasMineIdentity = !!userProfile?.campaigner_id || !!userProfile?.sales_person_id;
+          setFilters(!hasMineIdentity && next.campaignerId === "mine" ? { ...next, campaignerId: "all" } : next);
+        }}
       />
 
       {/* Quick Add Task Dialog (double-click on slot) */}
