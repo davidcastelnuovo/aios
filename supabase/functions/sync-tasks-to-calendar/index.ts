@@ -82,23 +82,24 @@ serve(async (req) => {
       console.log('Token refreshed successfully');
     }
 
-    // Get user's tenant
-    const { data: tenantUser } = await supabaseClient
-      .from('tenant_users')
-      .select('tenant_id')
-      .eq('user_id', user.id)
-      .limit(1)
+    // Get user's profile to find their campaigner_id
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('campaigner_id')
+      .eq('id', user.id)
       .single();
 
-    if (!tenantUser) {
-      throw new Error('User not associated with any tenant');
+    if (!profile?.campaigner_id) {
+      throw new Error('User is not linked to a campaigner. Please link your profile to a campaigner first.');
     }
 
-    // Get tasks with date and time that are not done
+    console.log('User campaigner_id:', profile.campaigner_id);
+
+    // Get ONLY tasks assigned to the current user's campaigner_id
     const { data: tasks, error: tasksError } = await supabaseClient
       .from('tasks')
       .select('id, title, due_date, due_time, duration_minutes, google_calendar_event_id')
-      .eq('tenant_id', tenantUser.tenant_id)
+      .eq('campaigner_id', profile.campaigner_id)
       .not('due_date', 'is', null)
       .not('due_time', 'is', null)
       .neq('status', 'done')
