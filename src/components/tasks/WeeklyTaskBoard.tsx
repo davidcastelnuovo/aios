@@ -247,7 +247,7 @@ export function WeeklyTaskBoard() {
     if (fetchedTasks && fetchedTasks.length > 0) {
       setLocalTasks(fetchedTasks);
     }
-  }, [JSON.stringify(fetchedTasks?.map(t => t.id))]);
+  }, [JSON.stringify(fetchedTasks?.map(t => `${t.id}_${t.duration_minutes}`))]);
   
   // Use localTasks for rendering, fallback to fetchedTasks if empty
   const tasks = localTasks.length > 0 ? localTasks : (fetchedTasks || []);
@@ -400,8 +400,13 @@ export function WeeklyTaskBoard() {
         .update({ duration_minutes: duration })
         .eq("id", taskId);
       if (error) throw error;
+      return { taskId, duration };
     },
-    onSuccess: () => {
+    onSuccess: ({ taskId, duration }) => {
+      // Optimistic update for immediate UI feedback
+      setLocalTasks(prev => prev.map(t => 
+        t.id === taskId ? { ...t, duration_minutes: duration } : t
+      ));
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.success("משך המשימה עודכן");
     },
