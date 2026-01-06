@@ -97,7 +97,7 @@ serve(async (req) => {
     // Get tasks with date and time that are not done
     const { data: tasks, error: tasksError } = await supabaseClient
       .from('tasks')
-      .select('id, title, due_date, due_time, duration_minutes')
+      .select('id, title, due_date, due_time, duration_minutes, google_calendar_event_id')
       .eq('tenant_id', tenantUser.tenant_id)
       .not('due_date', 'is', null)
       .not('due_time', 'is', null)
@@ -113,6 +113,7 @@ serve(async (req) => {
 
     const results = {
       synced: 0,
+      updated: 0,
       failed: 0,
       errors: [] as string[],
     };
@@ -120,7 +121,6 @@ serve(async (req) => {
     for (const task of tasks || []) {
       try {
         // Parse time (format: HH:MM:SS)
-        const timeParts = task.due_time.split(':');
         const startDateTime = new Date(`${task.due_date}T${task.due_time}`);
         const durationMs = (task.duration_minutes || 30) * 60 * 1000;
         const endDateTime = new Date(startDateTime.getTime() + durationMs);
@@ -138,26 +138,89 @@ serve(async (req) => {
           },
         };
 
-        const calendarResponse = await fetch(
-          'https://www.googleapis.com/calendar/v3/calendars/primary/events',
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(event),
-          }
-        );
+        let calendarResponse;
+        let isUpdate = false;
+
+        // אם יש google_calendar_event_id - עדכן את האירוע הקיים
+        if (task.google_calendar_event_id) {
+          isUpdate = true;
+          calendarResponse = await fetch(
+            `https://www.googleapis.com/calendar/v3/calendars/primary/events/${task.google_calendar_event_id}`,
+            {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(event),
+            }
+          );
+        } else {
+          // צור אירוע חדש
+          calendarResponse = await fetch(
+            'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(event),
+            }
+          );
+        }
 
         if (calendarResponse.ok) {
-          results.synced++;
-          console.log(`Synced task: ${task.title}`);
+          const responseData = await calendarResponse.json();
+          
+          // אם יצרנו אירוע חדש - שמור את ה-eventId
+          if (!isUpdate && responseData.id) {
+            await supabaseClient
+              .from('tasks')
+              .update({ google_calendar_event_id: responseData.id })
+              .eq('id', task.id);
+            results.synced++;
+            console.log(`Created new event for task: ${task.title}`);
+          } else {
+            results.updated++;
+            console.log(`Updated event for task: ${task.title}`);
+          }
         } else {
           const errorData = await calendarResponse.json();
-          results.failed++;
-          results.errors.push(`${task.title}: ${errorData.error?.message || 'Unknown error'}`);
-          console.error(`Failed to sync task ${task.title}:`, errorData);
+          
+          // אם האירוע לא נמצא (404), צור חדש
+          if (calendarResponse.status === 404 && task.google_calendar_event_id) {
+            console.log(`Event not found for task ${task.title}, creating new one...`);
+            
+            const createResponse = await fetch(
+              'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(event),
+              }
+            );
+            
+            if (createResponse.ok) {
+              const createData = await createResponse.json();
+              await supabaseClient
+                .from('tasks')
+                .update({ google_calendar_event_id: createData.id })
+                .eq('id', task.id);
+              results.synced++;
+              console.log(`Re-created event for task: ${task.title}`);
+            } else {
+              results.failed++;
+              results.errors.push(`${task.title}: Failed to re-create event`);
+            }
+          } else {
+            results.failed++;
+            results.errors.push(`${task.title}: ${errorData.error?.message || 'Unknown error'}`);
+            console.error(`Failed to sync task ${task.title}:`, errorData);
+          }
         }
 
         // Small delay to avoid rate limiting
