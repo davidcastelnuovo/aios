@@ -676,6 +676,26 @@ export function WeeklyTaskBoard() {
     const activeId = active.id as string;
     const dropTarget = over.id as string;
 
+    // Check if dropped on backlog - clear date and time
+    if (dropTarget === "backlog") {
+      const taskId = activeId;
+      const draggedTask = localTasks.find((t) => t.id === taskId);
+      if (!draggedTask) return;
+      
+      // Optimistic update - clear date and time
+      setLocalTasks(prev => prev.map(t => 
+        t.id === taskId ? { ...t, due_date: null, due_time: null } : t
+      ));
+      
+      updateDueDate.mutate({
+        taskId,
+        newDate: null,
+        newTime: null,
+      });
+      toast.success("המשימה הועברה לרשימת המשימות");
+      return;
+    }
+
     // Check if this is a calendar event drag
     if (activeId.startsWith('calendar-event-')) {
       const eventId = activeId.replace('calendar-event-', '');
@@ -1225,6 +1245,18 @@ export function WeeklyTaskBoard() {
           taskId, 
           googleCalendarEventId: selectedTask?.google_calendar_event_id 
         })}
+        onMoveToBacklog={(taskId) => {
+          // Optimistic update - clear date and time
+          setLocalTasks(prev => prev.map(t => 
+            t.id === taskId ? { ...t, due_date: null, due_time: null } : t
+          ));
+          updateDueDate.mutate({
+            taskId,
+            newDate: null,
+            newTime: null,
+          });
+          toast.success("המשימה הועברה לרשימת המשימות");
+        }}
       />
 
       {/* Calendar Event Edit Dialog */}

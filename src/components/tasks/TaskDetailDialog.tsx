@@ -21,7 +21,7 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search } from "lucide-react";
+import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -47,6 +47,7 @@ interface TaskDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDelete?: (taskId: string) => void;
+  onMoveToBacklog?: (taskId: string) => void;
 }
 
 export function TaskDetailDialog({
@@ -54,6 +55,7 @@ export function TaskDetailDialog({
   open,
   onOpenChange,
   onDelete,
+  onMoveToBacklog,
 }: TaskDetailDialogProps) {
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
@@ -640,17 +642,32 @@ export function TaskDetailDialog({
         </Tabs>
 
         <div className="flex justify-between pt-4 border-t mt-4">
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => {
-              onDelete?.(task.id);
-              onOpenChange(false);
-            }}
-          >
-            <Trash2 className="h-4 w-4 ml-2" />
-            מחק
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => {
+                onDelete?.(task.id);
+                onOpenChange(false);
+              }}
+            >
+              <Trash2 className="h-4 w-4 ml-2" />
+              מחק
+            </Button>
+            {(task.due_date || task.due_time) && onMoveToBacklog && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  onMoveToBacklog(task.id);
+                  onOpenChange(false);
+                }}
+              >
+                <ListTodo className="h-4 w-4 ml-2" />
+                העבר לרשימה
+              </Button>
+            )}
+          </div>
           <Button onClick={() => updateTask.mutate()} disabled={updateTask.isPending}>
             <Save className="h-4 w-4 ml-2" />
             שמור שינויים
