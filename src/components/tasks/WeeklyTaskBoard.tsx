@@ -413,10 +413,12 @@ export function WeeklyTaskBoard() {
       taskId,
       newDate,
       newTime,
+      title,
     }: {
       taskId: string;
       newDate: string;
       newTime?: string | null;
+      title?: string;
     }) => {
       const updateData: { due_date: string; due_time?: string | null } = { due_date: newDate };
       if (newTime !== undefined) {
@@ -427,9 +429,29 @@ export function WeeklyTaskBoard() {
         .update(updateData)
         .eq("id", taskId);
       if (error) throw error;
+
+      // אם יש תאריך ושעה - צור אירוע ביומן גוגל
+      if (newDate && newTime && title) {
+        try {
+          const startDateTime = new Date(`${newDate}T${newTime}`);
+          const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // 30 דקות
+          
+          await supabase.functions.invoke("add-calendar-event", {
+            body: {
+              summary: title,
+              description: `משימה ממערכת Marketing Captain`,
+              start: startDateTime.toISOString(),
+              end: endDateTime.toISOString(),
+            },
+          });
+        } catch (calendarError) {
+          console.warn("לא הצלחנו לעדכן ביומן גוגל:", calendarError);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
       toast.success("תאריך המשימה עודכן");
     },
     onError: () => {
@@ -668,6 +690,7 @@ export function WeeklyTaskBoard() {
           taskId,
           newDate,
           newTime,
+          title: draggedTask.title,
         });
       } catch {
         // Invalid format
