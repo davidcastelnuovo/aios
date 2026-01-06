@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Facebook, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft, Loader2, TestTube, Download } from "lucide-react";
+import { Facebook, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft, Loader2, TestTube, Download, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { FacebookFormMappingSection } from "@/components/forms/FacebookFormMappingSection";
@@ -36,6 +36,7 @@ export default function FacebookSettings() {
   const [pixelId, setPixelId] = useState<string>("");
   const [testEventCode, setTestEventCode] = useState<string>("");
   const [manualToken, setManualToken] = useState<string>("");
+  const [pageSearchQuery, setPageSearchQuery] = useState<string>("");
 
   const projectUrl = import.meta.env.VITE_SUPABASE_URL || '';
   const webhookUrl = `${projectUrl}/functions/v1/facebook-lead-webhook`;
@@ -336,6 +337,11 @@ export default function FacebookSettings() {
   const pages = leadAdsSettings?.pages || [];
   const selectedPageName = leadAdsSettings?.page_name;
   
+  // Filter pages based on search query
+  const filteredPages = pages.filter((page: FacebookPage) =>
+    page.name.toLowerCase().includes(pageSearchQuery.toLowerCase())
+  );
+  
   // Check if this integration is shared from another
   const isSharedConnection = !!(leadAdsIntegration as any)?.shared_from_integration_id;
   const isOwnConnection = leadAdsIntegration?.is_active && !isSharedConnection;
@@ -566,17 +572,42 @@ export default function FacebookSettings() {
                   {pages.length > 0 && (
                     <div className="space-y-2 text-right">
                       <Label>בחר עמוד פייסבוק</Label>
+                      
+                      {/* Search input for pages */}
+                      {pages.length > 10 && (
+                        <div className="relative">
+                          <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            value={pageSearchQuery}
+                            onChange={(e) => setPageSearchQuery(e.target.value)}
+                            placeholder="חפש עמוד לפי שם..."
+                            className="pr-10"
+                          />
+                          {pageSearchQuery && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              נמצאו {filteredPages.length} עמודים מתוך {pages.length}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                      
                       <div className="flex gap-2 flex-row-reverse">
                         <Select value={selectedPage || leadAdsSettings?.page_id || ''} onValueChange={setSelectedPage}>
                           <SelectTrigger className="flex-1">
-                            <SelectValue placeholder="בחר עמוד" />
+                            <SelectValue placeholder={`בחר עמוד (${filteredPages.length})`} />
                           </SelectTrigger>
                           <SelectContent>
-                            {pages.map((page: FacebookPage) => (
-                              <SelectItem key={page.id} value={page.id}>
-                                {page.name}
-                              </SelectItem>
-                            ))}
+                            {filteredPages.length === 0 ? (
+                              <div className="py-2 px-3 text-sm text-muted-foreground text-center">
+                                לא נמצאו עמודים התואמים לחיפוש
+                              </div>
+                            ) : (
+                              filteredPages.map((page: FacebookPage) => (
+                                <SelectItem key={page.id} value={page.id}>
+                                  {page.name}
+                                </SelectItem>
+                              ))
+                            )}
                           </SelectContent>
                         </Select>
                         <Button
