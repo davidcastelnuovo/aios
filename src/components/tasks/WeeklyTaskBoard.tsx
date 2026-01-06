@@ -49,6 +49,7 @@ interface Task {
   tenant_id: string | null;
   sort_order?: number;
   duration_minutes?: number;
+  google_calendar_event_id?: string | null;
   clients?: { name: string } | null;
   task_updates?: { id: string }[];
   task_collaborators?: { id: string }[];
@@ -295,13 +296,13 @@ export function WeeklyTaskBoard() {
       const { data: newTask, error } = await supabase.from("tasks").insert(insertData).select().single();
       if (error) throw error;
 
-      // אם יש תאריך ושעה - יצור גם אירוע ביומן גוגל
+      // אם יש תאריך ושעה - יצור גם אירוע ביומן גוגל ושמור את ה-eventId
       if (date && time) {
         try {
           const startDateTime = new Date(`${format(date, "yyyy-MM-dd")}T${time}:00`);
           const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // 30 דקות
           
-          await supabase.functions.invoke("add-calendar-event", {
+          const { data: calendarResult } = await supabase.functions.invoke("add-calendar-event", {
             body: {
               summary: title,
               description: `משימה ממערכת Marketing Captain`,
@@ -309,6 +310,13 @@ export function WeeklyTaskBoard() {
               end: endDateTime.toISOString(),
             },
           });
+          
+          // שמור את ה-eventId במשימה לסנכרון עתידי
+          if (calendarResult?.eventId) {
+            await supabase.from("tasks")
+              .update({ google_calendar_event_id: calendarResult.eventId })
+              .eq("id", newTask.id);
+          }
         } catch (calendarError) {
           console.warn("לא הצלחנו ליצור אירוע ביומן גוגל:", calendarError);
           // לא נזרוק שגיאה - המשימה כבר נוספה
@@ -407,18 +415,22 @@ export function WeeklyTaskBoard() {
     },
   });
 
-  // Update due date mutation (for drag & drop)
+  // Update due date mutation (for drag & drop) - עם סנכרון דו-כיווני לגוגל
   const updateDueDate = useMutation({
     mutationFn: async ({
       taskId,
       newDate,
       newTime,
       title,
+      googleCalendarEventId,
+      durationMinutes,
     }: {
       taskId: string;
       newDate: string;
       newTime?: string | null;
       title?: string;
+      googleCalendarEventId?: string | null;
+      durationMinutes?: number;
     }) => {
       const updateData: { due_date: string; due_time?: string | null } = { due_date: newDate };
       if (newTime !== undefined) {
@@ -430,20 +442,40 @@ export function WeeklyTaskBoard() {
         .eq("id", taskId);
       if (error) throw error;
 
-      // אם יש תאריך ושעה - צור אירוע ביומן גוגל
+      // אם יש תאריך ושעה - עדכן או צור אירוע ביומן גוגל
       if (newDate && newTime && title) {
         try {
           const startDateTime = new Date(`${newDate}T${newTime}`);
-          const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // 30 דקות
+          const duration = durationMinutes || 30;
+          const endDateTime = new Date(startDateTime.getTime() + duration * 60000);
           
-          await supabase.functions.invoke("add-calendar-event", {
-            body: {
-              summary: title,
-              description: `משימה ממערכת Marketing Captain`,
-              start: startDateTime.toISOString(),
-              end: endDateTime.toISOString(),
-            },
-          });
+          if (googleCalendarEventId) {
+            // עדכון אירוע קיים
+            await supabase.functions.invoke("update-calendar-event", {
+              body: {
+                eventId: googleCalendarEventId,
+                summary: title,
+                start: startDateTime.toISOString(),
+                end: endDateTime.toISOString(),
+              },
+            });
+          } else {
+            // יצירת אירוע חדש ושמירת ה-eventId
+            const { data: calendarResult } = await supabase.functions.invoke("add-calendar-event", {
+              body: {
+                summary: title,
+                description: `משימה ממערכת Marketing Captain`,
+                start: startDateTime.toISOString(),
+                end: endDateTime.toISOString(),
+              },
+            });
+            
+            if (calendarResult?.eventId) {
+              await supabase.from("tasks")
+                .update({ google_calendar_event_id: calendarResult.eventId })
+                .eq("id", taskId);
+            }
+          }
         } catch (calendarError) {
           console.warn("לא הצלחנו לעדכן ביומן גוגל:", calendarError);
         }
@@ -452,6 +484,7 @@ export function WeeklyTaskBoard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
       toast.success("תאריך המשימה עודכן");
     },
     onError: () => {
@@ -478,14 +511,27 @@ export function WeeklyTaskBoard() {
     },
   });
 
-  // Delete task mutation
+  // Delete task mutation - עם מחיקה מגוגל קלנדר
   const deleteTask = useMutation({
-    mutationFn: async (taskId: string) => {
+    mutationFn: async ({ taskId, googleCalendarEventId }: { taskId: string; googleCalendarEventId?: string | null }) => {
+      // אם יש eventId - מחק גם מגוגל קלנדר
+      if (googleCalendarEventId) {
+        try {
+          await supabase.functions.invoke("delete-calendar-event", {
+            body: { eventId: googleCalendarEventId },
+          });
+        } catch (calendarError) {
+          console.warn("לא הצלחנו למחוק מיומן גוגל:", calendarError);
+          // ממשיכים למחוק את המשימה גם אם מחיקת הגוגל נכשלה
+        }
+      }
+      
       const { error } = await supabase.from("tasks").delete().eq("id", taskId);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-events-weekly"] });
       toast.success("המשימה נמחקה");
     },
     onError: () => {
@@ -691,6 +737,8 @@ export function WeeklyTaskBoard() {
           newDate,
           newTime,
           title: draggedTask.title,
+          googleCalendarEventId: draggedTask.google_calendar_event_id,
+          durationMinutes: draggedTask.duration_minutes,
         });
       } catch {
         // Invalid format
@@ -1126,7 +1174,10 @@ export function WeeklyTaskBoard() {
         task={selectedTask}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onDelete={(taskId) => deleteTask.mutate(taskId)}
+        onDelete={(taskId) => deleteTask.mutate({ 
+          taskId, 
+          googleCalendarEventId: selectedTask?.google_calendar_event_id 
+        })}
       />
 
       {/* Calendar Event Edit Dialog */}

@@ -2372,6 +2372,7 @@ export type Database = {
           due_date: string | null
           due_time: string | null
           duration_minutes: number | null
+          google_calendar_event_id: string | null
           id: string
           lead_id: string | null
           notes: string | null
@@ -2393,6 +2394,7 @@ export type Database = {
           due_date?: string | null
           due_time?: string | null
           duration_minutes?: number | null
+          google_calendar_event_id?: string | null
           id?: string
           lead_id?: string | null
           notes?: string | null
@@ -2414,6 +2416,7 @@ export type Database = {
           due_date?: string | null
           due_time?: string | null
           duration_minutes?: number | null
+          google_calendar_event_id?: string | null
           id?: string
           lead_id?: string | null
           notes?: string | null
