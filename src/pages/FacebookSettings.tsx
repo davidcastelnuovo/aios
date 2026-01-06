@@ -106,6 +106,22 @@ export default function FacebookSettings() {
     enabled: !!currentTenant?.id,
   });
 
+  // Fetch tags for form mapping
+  const { data: tags } = useQuery({
+    queryKey: ['chat-tags', currentTenant?.id],
+    queryFn: async () => {
+      if (!currentTenant?.id) return [];
+      const { data, error } = await supabase
+        .from('chat_tags')
+        .select('id, name, color')
+        .eq('tenant_id', currentTenant.id)
+        .order('sort_order');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenant?.id,
+  });
+
   // Initialize pixel ID from existing integration
   useEffect(() => {
     if (capiIntegration?.settings) {
@@ -671,6 +687,7 @@ export default function FacebookSettings() {
               accessToken={leadAdsIntegration?.api_key || null}
               agencies={agencies || []}
               salesPeople={salesPeople || []}
+              tags={tags || []}
               sharedFromIntegrationId={(leadAdsIntegration as any)?.shared_from_integration_id}
             />
           )}

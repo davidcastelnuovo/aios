@@ -195,6 +195,24 @@ serve(async (req) => {
               } else {
                 console.log('Lead created successfully:', newLead.id);
 
+                // Apply tag if configured
+                if (formMappings.tag_id) {
+                  const { error: tagError } = await supabase
+                    .from('chat_contact_tags')
+                    .insert({
+                      tag_id: formMappings.tag_id,
+                      lead_id: newLead.id,
+                      tenant_id: integration.tenant_id,
+                      user_id: '00000000-0000-0000-0000-000000000000', // System user placeholder
+                    });
+                  
+                  if (tagError) {
+                    console.error('Error applying tag to lead:', tagError);
+                  } else {
+                    console.log('Tag applied to lead:', formMappings.tag_id);
+                  }
+                }
+
                 // Update last_sync_at
                 await supabase
                   .from('tenant_integrations')

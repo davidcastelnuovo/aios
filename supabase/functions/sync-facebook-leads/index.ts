@@ -222,9 +222,11 @@ serve(async (req) => {
             }
 
             // Insert the lead
-            const { error: insertError } = await supabase
+            const { data: newLead, error: insertError } = await supabase
               .from('leads')
-              .insert(leadRecord);
+              .insert(leadRecord)
+              .select('id')
+              .single();
 
             if (insertError) {
               console.error('Error inserting lead:', insertError);
@@ -232,6 +234,24 @@ serve(async (req) => {
             } else {
               console.log('Inserted lead:', leadgenId);
               totalSynced++;
+
+              // Apply tag if configured
+              if (formMapping.tag_id) {
+                const { error: tagError } = await supabase
+                  .from('chat_contact_tags')
+                  .insert({
+                    tag_id: formMapping.tag_id,
+                    lead_id: newLead.id,
+                    tenant_id: integration.tenant_id,
+                    user_id: '00000000-0000-0000-0000-000000000000', // System user placeholder
+                  });
+                
+                if (tagError) {
+                  console.error('Error applying tag to lead:', tagError);
+                } else {
+                  console.log('Tag applied to lead:', formMapping.tag_id);
+                }
+              }
             }
           }
         } catch (formError) {
