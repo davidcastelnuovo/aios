@@ -172,7 +172,8 @@ export function WeeklyTaskBoard() {
 
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading } = useQuery({
-    queryKey: ["tasks", tenantId, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode],
+    queryKey: ["tasks", tenantId, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id],
+    enabled: !!tenantId && (filters.campaignerId !== "mine" || !!userProfile?.campaigner_id),
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
       const rangeStartStr = format(dateRange.start, "yyyy-MM-dd");
@@ -241,7 +242,7 @@ export function WeeklyTaskBoard() {
       if (error) throw error;
       return data as FullTask[];
     },
-    enabled: !!tenantId,
+    staleTime: 1000 * 60,
   });
 
   // Local tasks state for optimistic updates
