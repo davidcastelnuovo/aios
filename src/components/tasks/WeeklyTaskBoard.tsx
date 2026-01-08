@@ -189,7 +189,6 @@ export function WeeklyTaskBoard() {
   // Fetch tasks for the current view + overdue tasks
   const { data: fetchedTasks = [], isLoading } = useQuery({
     queryKey: ["tasks", tenantId, format(dateRange.start, "yyyy-MM-dd"), format(dateRange.end, "yyyy-MM-dd"), filters, viewMode, userProfile?.campaigner_id],
-    // IMPORTANT: allow "mine" filter even when user has no campaigner_id (fallback to created_by)
     enabled: !!tenantId && !!user?.id,
     queryFn: async () => {
       const today = format(startOfDay(new Date()), "yyyy-MM-dd");
@@ -226,21 +225,18 @@ export function WeeklyTaskBoard() {
         );
       }
 
-      // Apply "mine" filter - includes tasks assigned to me OR created by me
+      // Apply "mine" filter - tasks assigned to me (campaigner or sales)
       if (filters.campaignerId === "mine") {
         const myCampaignerId = userProfile?.campaigner_id;
         const mySalesPersonId = userProfile?.sales_person_id;
-        const myUserId = user?.id;
 
-        // Build OR conditions for "mine" filter
-        const orConditions: string[] = [];
-        if (myCampaignerId) orConditions.push(`campaigner_id.eq.${myCampaignerId}`);
-        if (mySalesPersonId) orConditions.push(`sales_person_id.eq.${mySalesPersonId}`);
-        if (myUserId) orConditions.push(`created_by.eq.${myUserId}`);
-
-        if (orConditions.length > 0) {
+        if (myCampaignerId && mySalesPersonId) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          query = (query as any).or(orConditions.join(","));
+          query = (query as any).or(`campaigner_id.eq.${myCampaignerId},sales_person_id.eq.${mySalesPersonId}`);
+        } else if (myCampaignerId) {
+          query = query.eq("campaigner_id", myCampaignerId);
+        } else if (mySalesPersonId) {
+          query = query.eq("sales_person_id", mySalesPersonId);
         }
       } else if (filters.campaignerId === "none") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
