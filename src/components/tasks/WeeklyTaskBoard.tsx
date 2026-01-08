@@ -226,18 +226,21 @@ export function WeeklyTaskBoard() {
         );
       }
 
-      // Apply "mine" filter
+      // Apply "mine" filter - includes tasks assigned to me OR created by me
       if (filters.campaignerId === "mine") {
         const myCampaignerId = userProfile?.campaigner_id;
         const mySalesPersonId = userProfile?.sales_person_id;
+        const myUserId = user?.id;
 
-        if (myCampaignerId && mySalesPersonId) {
+        // Build OR conditions for "mine" filter
+        const orConditions: string[] = [];
+        if (myCampaignerId) orConditions.push(`campaigner_id.eq.${myCampaignerId}`);
+        if (mySalesPersonId) orConditions.push(`sales_person_id.eq.${mySalesPersonId}`);
+        if (myUserId) orConditions.push(`created_by.eq.${myUserId}`);
+
+        if (orConditions.length > 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          query = (query as any).or(`campaigner_id.eq.${myCampaignerId},sales_person_id.eq.${mySalesPersonId}`);
-        } else if (myCampaignerId) {
-          query = query.eq("campaigner_id", myCampaignerId);
-        } else if (mySalesPersonId) {
-          query = query.eq("sales_person_id", mySalesPersonId);
+          query = (query as any).or(orConditions.join(","));
         }
       } else if (filters.campaignerId === "none") {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
