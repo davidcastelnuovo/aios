@@ -302,18 +302,9 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       // Get campaigner name
       const selectedCampaigner = campaigners?.find(c => c.id === finalCampaignerId);
       
-      // Get tenant_id
-      let tenantId: string;
-      if (values.task_category === "client" && selectedClient) {
-        tenantId = selectedClient.tenant_id;
-      } else if (values.task_category === "lead" && selectedLead) {
-        tenantId = selectedLead.tenant_id || currentTenantId;
-      } else {
-        // For quick tasks, use current tenant
-        if (!currentTenantId) throw new Error("לא נמצא טנט פעיל");
-        tenantId = currentTenantId;
-      }
-      if (!tenantId) throw new Error("לא נמצא טנט פעיל");
+      // ALWAYS use current tenant - tasks should appear where user is working
+      if (!currentTenantId) throw new Error("לא נמצא טנט פעיל");
+      const tenantId = currentTenantId;
       
       const { error } = await supabase.from("tasks").insert([{
         title: values.title,
