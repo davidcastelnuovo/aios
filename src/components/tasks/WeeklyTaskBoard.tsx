@@ -284,14 +284,21 @@ export function WeeklyTaskBoard() {
   const tasks = localTasks.length > 0 ? localTasks : (fetchedTasks || []);
 
   // Filter out calendar events that are actually synced tasks (to avoid duplicates)
+  // Also hide calendar events when filtering by a specific campaigner (not "mine" or "all")
   const filteredCalendarEvents = useMemo(() => {
+    // If filtering by a specific campaigner (not mine or all), hide all calendar events
+    // The calendar shows the current user's events, not the filtered campaigner's
+    if (filters.campaignerId && filters.campaignerId !== "mine" && filters.campaignerId !== "all") {
+      return [];
+    }
+    
     const syncedEventIds = new Set(
       tasks
         .filter(t => t.google_calendar_event_id)
         .map(t => t.google_calendar_event_id)
     );
     return calendarEvents.filter(event => !syncedEventIds.has(event.id));
-  }, [calendarEvents, tasks]);
+  }, [calendarEvents, tasks, filters.campaignerId]);
 
   const { data: firstAgency } = useQuery({
     queryKey: ["first-agency", tenantId],
