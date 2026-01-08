@@ -76,8 +76,10 @@ export function TaskDetailDialog({
   // Search states for comboboxes
   const [clientSearch, setClientSearch] = useState("");
   const [campaignerSearch, setCampaignerSearch] = useState("");
+  const [leadSearch, setLeadSearch] = useState("");
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
   const [campaignerDropdownOpen, setCampaignerDropdownOpen] = useState(false);
+  const [leadDropdownOpen, setLeadDropdownOpen] = useState(false);
   const [assignedCampaignerId, setAssignedCampaignerId] = useState("");
 
   // Reset form when task changes or dialog opens
@@ -95,6 +97,7 @@ export function TaskDetailDialog({
       setAssignedCampaignerId(task.campaigner_id || "");
       setClientSearch("");
       setCampaignerSearch("");
+      setLeadSearch("");
     }
   }, [task, open]);
 
@@ -186,6 +189,15 @@ export function TaskDetailDialog({
     );
   }, [campaigners, campaignerSearch]);
 
+  // Filter leads based on search
+  const filteredLeads = useMemo(() => {
+    if (!leads) return [];
+    if (!leadSearch.trim()) return leads;
+    return leads.filter(l => 
+      l.company_name?.toLowerCase().includes(leadSearch.toLowerCase())
+    );
+  }, [leads, leadSearch]);
+
   // Get selected client name
   const selectedClientName = useMemo(() => {
     if (!clientId) return "";
@@ -197,6 +209,12 @@ export function TaskDetailDialog({
     if (!assignedCampaignerId) return "";
     return campaigners?.find(c => c.id === assignedCampaignerId)?.full_name || "";
   }, [campaigners, assignedCampaignerId]);
+
+  // Get selected lead name
+  const selectedLeadName = useMemo(() => {
+    if (!leadId) return "";
+    return leads?.find(l => l.id === leadId)?.company_name || "";
+  }, [leads, leadId]);
 
   // Update task mutation
   const updateTask = useMutation({
@@ -324,8 +342,8 @@ export function TaskDetailDialog({
                 />
               </div>
 
-              {/* Client and Campaigner associations - side by side */}
-              <div className="grid grid-cols-2 gap-4">
+              {/* Client, Lead and Campaigner associations - 3 columns */}
+              <div className="grid grid-cols-3 gap-4">
                 {/* Client search combobox */}
                 <div className="space-y-2">
                   <Label>שיוך ללקוח</Label>
@@ -371,6 +389,58 @@ export function TaskDetailDialog({
                             }}
                           >
                             {client.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Lead search combobox */}
+                <div className="space-y-2">
+                  <Label>שיוך לליד</Label>
+                  <div className="relative">
+                    <div className="relative">
+                      <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        value={leadDropdownOpen ? leadSearch : (selectedLeadName || leadSearch)}
+                        onChange={(e) => {
+                          setLeadSearch(e.target.value);
+                          setLeadDropdownOpen(true);
+                        }}
+                        onFocus={() => setLeadDropdownOpen(true)}
+                        onBlur={() => setTimeout(() => setLeadDropdownOpen(false), 150)}
+                        placeholder="חפש ליד..."
+                        className="pr-9"
+                      />
+                      {leadId && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute left-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                          onClick={() => {
+                            setLeadId("");
+                            setLeadSearch("");
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                    {leadDropdownOpen && filteredLeads.length > 0 && (
+                      <div className="absolute z-50 top-full mt-1 w-full bg-popover border rounded-md shadow-md max-h-40 overflow-y-auto">
+                        {filteredLeads.slice(0, 10).map((lead) => (
+                          <button
+                            key={lead.id}
+                            type="button"
+                            className="w-full px-3 py-2 text-right text-sm hover:bg-accent transition-colors"
+                            onMouseDown={() => {
+                              setLeadId(lead.id);
+                              setLeadSearch("");
+                              setLeadDropdownOpen(false);
+                            }}
+                          >
+                            {lead.company_name}
                           </button>
                         ))}
                       </div>
