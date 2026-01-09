@@ -230,14 +230,38 @@ Deno.serve(async (req) => {
       });
     }
 
+    // All lead action types to count (including landing page leads)
+    const leadActionTypes = [
+      'lead',  // Aggregate lead count
+      'leadgen_grouped',  // Facebook Lead Forms
+      'offsite_conversion.fb_pixel_lead',  // Landing page leads!
+      'onsite_conversion.lead_grouped',  // On-site leads
+      'app_custom_event.fb_mobile_lead',  // App leads
+    ];
+
     const insights: InsightRecord[] = (data.data || []).map((insight: any) => {
-      // Extract lead count from actions
-      const leadAction = insight.actions?.find((a: any) => a.action_type === 'lead' || a.action_type === 'leadgen_grouped');
-      const leads = leadAction ? parseInt(leadAction.value) : 0;
+      // Extract lead count from all lead action types
+      let leads = 0;
+      const aggregateLeadAction = insight.actions?.find((a: any) => a.action_type === 'lead');
+      if (aggregateLeadAction) {
+        // If 'lead' exists, it's the aggregate - use it
+        leads = parseInt(aggregateLeadAction.value) || 0;
+      } else {
+        // Otherwise, sum up all other lead types
+        leads = insight.actions
+          ?.filter((a: any) => leadActionTypes.slice(1).includes(a.action_type))
+          .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0) || 0;
+      }
       
-      // Extract cost per lead
-      const cplAction = insight.cost_per_action_type?.find((a: any) => a.action_type === 'lead' || a.action_type === 'leadgen_grouped');
-      const costPerLead = cplAction ? parseFloat(cplAction.value) : 0;
+      // Extract cost per lead - try aggregate first, then calculate
+      let costPerLead = 0;
+      const cplAction = insight.cost_per_action_type?.find((a: any) => a.action_type === 'lead');
+      if (cplAction) {
+        costPerLead = parseFloat(cplAction.value) || 0;
+      } else if (leads > 0) {
+        // Calculate CPL manually if not provided
+        costPerLead = (parseFloat(insight.spend) || 0) / leads;
+      }
 
       // Get campaign status
       const campaignStatus = campaignStatuses[insight.campaign_id];
