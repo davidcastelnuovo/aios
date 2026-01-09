@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 // Helper to get date range for filtering
-function getDateRange(filter: string): { startDate: string | null; endDate: string | null } {
+function getDateRange(filter: string, customFrom?: string, customTo?: string): { startDate: string | null; endDate: string | null } {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let startDate: string | null = null;
@@ -24,10 +24,19 @@ function getDateRange(filter: string): { startDate: string | null; endDate: stri
       endDate = startDate;
       break;
     case 'this_week':
+      // Start of current week (Sunday)
       const dayOfWeek = now.getDay();
-      const startOfWeek = new Date(today.getTime() - dayOfWeek * 24 * 60 * 60 * 1000);
-      startDate = startOfWeek.toISOString().split('T')[0];
+      const startOfThisWeek = new Date(today.getTime() - dayOfWeek * 24 * 60 * 60 * 1000);
+      startDate = startOfThisWeek.toISOString().split('T')[0];
       endDate = today.toISOString().split('T')[0];
+      break;
+    case 'last_week':
+      // Previous complete week (Sunday to Saturday)
+      const currentDayOfWeek = now.getDay();
+      const endOfLastWeek = new Date(today.getTime() - (currentDayOfWeek + 1) * 24 * 60 * 60 * 1000);
+      const startOfLastWeek = new Date(endOfLastWeek.getTime() - 6 * 24 * 60 * 60 * 1000);
+      startDate = startOfLastWeek.toISOString().split('T')[0];
+      endDate = endOfLastWeek.toISOString().split('T')[0];
       break;
     case 'last_7_days':
       startDate = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -63,6 +72,12 @@ function getDateRange(filter: string): { startDate: string | null; endDate: stri
     case 'last_365_days':
       startDate = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       endDate = today.toISOString().split('T')[0];
+      break;
+    case 'custom':
+      if (customFrom && customTo) {
+        startDate = customFrom;
+        endDate = customTo;
+      }
       break;
   }
   
@@ -130,6 +145,8 @@ Deno.serve(async (req) => {
       const url = new URL(req.url);
       const table_id = url.searchParams.get('table_id');
       const date_filter = url.searchParams.get('date_filter');
+      const date_from = url.searchParams.get('date_from');
+      const date_to = url.searchParams.get('date_to');
       const aggregated = url.searchParams.get('aggregated');
       
       if (!table_id) {
@@ -281,7 +298,7 @@ Deno.serve(async (req) => {
       let filteredRecords = records || [];
       
       if (date_filter && date_filter !== 'all') {
-        const { startDate, endDate } = getDateRange(date_filter);
+        const { startDate, endDate } = getDateRange(date_filter, date_from || undefined, date_to || undefined);
         
         if (startDate) {
           filteredRecords = filteredRecords.filter((record: any) => {
