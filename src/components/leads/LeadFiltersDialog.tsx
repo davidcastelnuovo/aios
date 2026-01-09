@@ -27,7 +27,7 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useQueryClient } from "@tanstack/react-query";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
+
 import { Badge } from "@/components/ui/badge";
 
 export interface FilterState {
@@ -311,7 +311,7 @@ export function LeadFiltersDialog({
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0 bg-popover" align="start">
+                <PopoverContent className="w-[300px] p-0 bg-popover z-[200]" align="start">
                   <div className="p-2 border-b">
                     <div className="relative">
                       <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -323,7 +323,7 @@ export function LeadFiltersDialog({
                       />
                     </div>
                   </div>
-                  <ScrollArea className="max-h-[200px]">
+                  <div className="max-h-[200px] overflow-y-auto">
                     <div className="p-2 space-y-1">
                       {/* "None" option */}
                       <label
@@ -357,7 +357,7 @@ export function LeadFiltersDialog({
                         </div>
                       )}
                     </div>
-                  </ScrollArea>
+                  </div>
                   {filters.responseStatus.length > 0 && (
                     <div className="p-2 border-t">
                       <Button
@@ -393,7 +393,7 @@ export function LeadFiltersDialog({
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[300px] p-0 bg-popover" align="start">
+                <PopoverContent className="w-[300px] p-0 bg-popover z-[200]" align="start">
                   <div className="p-2 border-b">
                     <div className="relative">
                       <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -405,7 +405,7 @@ export function LeadFiltersDialog({
                       />
                     </div>
                   </div>
-                  <ScrollArea className="max-h-[200px]">
+                  <div className="max-h-[200px] overflow-y-auto">
                     <div className="p-2 space-y-1">
                       {/* "None" option */}
                       <label
@@ -439,7 +439,7 @@ export function LeadFiltersDialog({
                         </div>
                       )}
                     </div>
-                  </ScrollArea>
+                  </div>
                   {filters.tagIds.length > 0 && (
                     <div className="p-2 border-t">
                       <Button
