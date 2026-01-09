@@ -5,7 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell } from "lucide-react";
+import { format, subDays, startOfWeek, endOfWeek, subWeeks } from "date-fns";
+import { he } from "date-fns/locale";
+import { cn } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -87,7 +92,9 @@ export default function DynamicTableView() {
   const [editingFieldName, setEditingFieldName] = useState("");
   const [editingCell, setEditingCell] = useState<{ recordId: string; fieldKey: string; initialValue: string } | null>(null);
   const [cellValues, setCellValues] = useState<Record<string, string>>({});
-  const [dateFilter, setDateFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("last_7_days");
+  const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [selectedSyncDateRange, setSelectedSyncDateRange] = useState<string>("last_30_days");
   const [activeTab, setActiveTab] = useState<string>("main"); // 'main' | 'facebook' | 'google_ads' | 'combined'
   const [showGoogleSettingsDialog, setShowGoogleSettingsDialog] = useState(false);
@@ -100,6 +107,7 @@ export default function DynamicTableView() {
     { value: "today", label: "היום" },
     { value: "yesterday", label: "אתמול" },
     { value: "this_week", label: "השבוע" },
+    { value: "last_week", label: "שבוע שעבר" },
     { value: "last_7_days", label: "7 ימים אחרונים" },
     { value: "last_14_days", label: "14 יום" },
     { value: "last_30_days", label: "30 יום" },
@@ -108,6 +116,7 @@ export default function DynamicTableView() {
     { value: "last_90_days", label: "3 חודשים" },
     { value: "last_180_days", label: "6 חודשים" },
     { value: "last_365_days", label: "שנה" },
+    { value: "custom", label: "תאריכים מותאמים..." },
   ];
 
   const syncDateRangeOptions = [
@@ -169,13 +178,17 @@ export default function DynamicTableView() {
   });
 
   const { data: records, isLoading: recordsLoading } = useQuery({
-    queryKey: ['crm-records', table?.id, dateFilter],
+    queryKey: ['crm-records', table?.id, dateFilter, customDateRange.from?.toISOString(), customDateRange.to?.toISOString()],
     queryFn: async () => {
       if (!table?.id) return [];
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       const params = new URLSearchParams({ table_id: table.id });
-      if (dateFilter !== 'all') {
+      if (dateFilter === 'custom' && customDateRange.from && customDateRange.to) {
+        params.append('date_filter', 'custom');
+        params.append('date_from', format(customDateRange.from, 'yyyy-MM-dd'));
+        params.append('date_to', format(customDateRange.to, 'yyyy-MM-dd'));
+      } else if (dateFilter !== 'all') {
         params.append('date_filter', dateFilter);
       }
       const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
@@ -185,7 +198,7 @@ export default function DynamicTableView() {
       // Ensure we always return an array
       return Array.isArray(response.data) ? response.data as CrmRecord[] : [];
     },
-    enabled: !!table?.id,
+    enabled: !!table?.id && (dateFilter !== 'custom' || (!!customDateRange.from && !!customDateRange.to)),
   });
 
   const addColumnMutation = useMutation({
@@ -977,10 +990,24 @@ export default function DynamicTableView() {
           {/* Hide date filter for Analytics and Search Console - they have internal filtering */}
           {!hasGoogleAnalytics && !hasGoogleSearchConsole && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <Select value={dateFilter} onValueChange={setDateFilter}>
-                <SelectTrigger className="w-full md:w-[160px]">
-                  <SelectValue placeholder="סנן לפי תאריך" />
+              <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+              <Select 
+                value={dateFilter} 
+                onValueChange={(val) => {
+                  if (val === 'custom') {
+                    setShowCustomDatePicker(true);
+                  } else {
+                    setDateFilter(val);
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full md:w-[180px]">
+                  <SelectValue>
+                    {dateFilter === 'custom' && customDateRange.from && customDateRange.to
+                      ? `${format(customDateRange.from, 'dd/MM/yy')} - ${format(customDateRange.to, 'dd/MM/yy')}`
+                      : dateFilterOptions.find(o => o.value === dateFilter)?.label || 'בחר תאריך'
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {dateFilterOptions.map((option) => (
@@ -992,6 +1019,86 @@ export default function DynamicTableView() {
               </Select>
             </div>
           )}
+
+          {/* Custom Date Range Picker Dialog */}
+          <Dialog open={showCustomDatePicker} onOpenChange={setShowCustomDatePicker}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>בחר טווח תאריכים</DialogTitle>
+                <DialogDescription>בחר תאריך התחלה וסיום לסינון הנתונים</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>מתאריך</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !customDateRange.from && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="ml-2 h-4 w-4" />
+                          {customDateRange.from ? format(customDateRange.from, "dd/MM/yyyy") : "בחר תאריך"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={customDateRange.from}
+                          onSelect={(date) => setCustomDateRange(prev => ({ ...prev, from: date }))}
+                          initialFocus
+                          className="p-3 pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div>
+                    <Label>עד תאריך</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !customDateRange.to && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="ml-2 h-4 w-4" />
+                          {customDateRange.to ? format(customDateRange.to, "dd/MM/yyyy") : "בחר תאריך"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={customDateRange.to}
+                          onSelect={(date) => setCustomDateRange(prev => ({ ...prev, to: date }))}
+                          initialFocus
+                          className="p-3 pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </div>
+                <Button 
+                  onClick={() => {
+                    if (customDateRange.from && customDateRange.to) {
+                      setDateFilter('custom');
+                      setShowCustomDatePicker(false);
+                    } else {
+                      toast.error('יש לבחור תאריך התחלה וסיום');
+                    }
+                  }}
+                  className="w-full"
+                  disabled={!customDateRange.from || !customDateRange.to}
+                >
+                  החל סינון
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
           
           <Dialog open={showWebhookDialog} onOpenChange={setShowWebhookDialog}>
             <DialogContent>
