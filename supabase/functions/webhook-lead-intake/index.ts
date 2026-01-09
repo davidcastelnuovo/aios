@@ -226,9 +226,9 @@ Deno.serve(async (req) => {
       'make': 'other',
       'zapier': 'other',
 
-      // messaging channels (no dedicated enum currently)
-      'whatsapp': 'other',
-      'ווטסאפ': 'other',
+      // messaging channels - now has dedicated enum value
+      'whatsapp': 'whatsapp',
+      'ווטסאפ': 'whatsapp',
     }
 
     const normalizedSource = payload.source?.toString().trim().toLowerCase() || ''
