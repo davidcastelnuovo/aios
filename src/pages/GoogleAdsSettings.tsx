@@ -60,12 +60,15 @@ export default function GoogleAdsSettings() {
       });
 
       if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
+      
+      // Redirect immediately if we have auth_url
       if (data?.auth_url) {
         window.location.href = data.auth_url;
+      } else {
+        throw new Error('No auth URL received');
       }
+      
+      return data;
     },
     onError: (error) => {
       toast.error('שגיאה בהתחברות ל-Google Ads: ' + (error as Error).message);
