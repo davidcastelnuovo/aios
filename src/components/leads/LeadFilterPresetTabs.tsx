@@ -145,57 +145,84 @@ export function LeadFilterPresetTabs({
     updatePresetMutation.mutate({ id: editingPreset.id, name: editName.trim() });
   };
 
+  // Get the active preset for display
+  const activePreset = presets.find(p => p.id === activePresetId);
+
   return (
     <>
       <div className="flex items-center gap-2">
-        <ScrollArea className="flex-1" dir="rtl">
-          <div className="flex items-center gap-2 pb-2">
-            {/* All button */}
+        {/* Presets Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <Button
-              variant={activePresetId === null && !hasActiveFilters ? "default" : "outline"}
+              variant={activePresetId ? "default" : "outline"}
               size="sm"
+              className="gap-2 min-w-[120px]"
+            >
+              {activePreset ? activePreset.name : "הכל"}
+              {presets.length > 0 && (
+                <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                  {presets.length}
+                </Badge>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-56 bg-popover">
+            {/* "All" option */}
+            <DropdownMenuItem
               onClick={() => onPresetSelect(null)}
-              className="shrink-0"
+              className={cn(
+                "gap-2",
+                !activePresetId && "bg-accent"
+              )}
             >
               הכל
-            </Button>
-
-            {/* Preset tabs */}
+            </DropdownMenuItem>
+            
+            {presets.length > 0 && (
+              <div className="h-px bg-border my-1" />
+            )}
+            
+            {/* Preset list */}
             {presets.map((preset) => (
-              <div key={preset.id} className="flex items-center gap-1 shrink-0">
-                <Button
-                  variant={activePresetId === preset.id ? "default" : "outline"}
-                  size="sm"
+              <div key={preset.id} className="flex items-center group">
+                <DropdownMenuItem
                   onClick={() => onPresetSelect(preset)}
-                  className="gap-2"
+                  className={cn(
+                    "flex-1 gap-2",
+                    activePresetId === preset.id && "bg-accent"
+                  )}
                 >
                   {preset.name}
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleEditClick(preset)}>
-                      <Pencil className="h-4 w-4 ml-2" />
-                      שנה שם
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={() => handleDeleteClick(preset)}
-                      className="text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4 ml-2" />
-                      מחק
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                </DropdownMenuItem>
+                <div className="flex items-center gap-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditClick(preset);
+                    }}
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-destructive hover:text-destructive"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteClick(preset);
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
               </div>
             ))}
-            <ScrollBar orientation="horizontal" />
-          </div>
-        </ScrollArea>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Filters Button */}
         <Button
