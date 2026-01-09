@@ -323,21 +323,19 @@ export function LeadFiltersDialog({
                   <ScrollArea className="max-h-[200px]">
                     <div className="p-2 space-y-1">
                       {/* "None" option */}
-                      <div
+                      <label
                         className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent"
-                        onClick={() => toggleStatus("none")}
                       >
                         <Checkbox
                           checked={filters.responseStatus.includes("none")}
                           onCheckedChange={() => toggleStatus("none")}
                         />
                         <span>ללא סטטוס</span>
-                      </div>
+                      </label>
                       {filteredStatuses.map((status) => (
-                        <div
+                        <label
                           key={status.status_key}
                           className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent"
-                          onClick={() => toggleStatus(status.status_key)}
                         >
                           <Checkbox
                             checked={filters.responseStatus.includes(status.status_key)}
@@ -348,7 +346,7 @@ export function LeadFiltersDialog({
                             style={{ backgroundColor: status.color }}
                           />
                           <span>{status.label}</span>
-                        </div>
+                        </label>
                       ))}
                       {filteredStatuses.length === 0 && (
                         <div className="text-center text-muted-foreground py-2">
@@ -407,21 +405,19 @@ export function LeadFiltersDialog({
                   <ScrollArea className="max-h-[200px]">
                     <div className="p-2 space-y-1">
                       {/* "None" option */}
-                      <div
+                      <label
                         className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent"
-                        onClick={() => toggleTag("none")}
                       >
                         <Checkbox
                           checked={filters.tagIds.includes("none")}
                           onCheckedChange={() => toggleTag("none")}
                         />
                         <span>ללא תגית</span>
-                      </div>
+                      </label>
                       {filteredTags.map((tag) => (
-                        <div
+                        <label
                           key={tag.id}
                           className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent"
-                          onClick={() => toggleTag(tag.id)}
                         >
                           <Checkbox
                             checked={filters.tagIds.includes(tag.id)}
@@ -432,7 +428,7 @@ export function LeadFiltersDialog({
                             style={{ backgroundColor: tag.color }}
                           />
                           <span>{tag.name}</span>
-                        </div>
+                        </label>
                       ))}
                       {filteredTags.length === 0 && (
                         <div className="text-center text-muted-foreground py-2">
