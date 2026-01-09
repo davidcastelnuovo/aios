@@ -1,11 +1,12 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, TrendingUp, TrendingDown, Ban } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, Ban, CreditCard, ShieldAlert } from "lucide-react";
 import { format, subDays } from "date-fns";
 
 interface TableCardAlertsProps {
   tableId: string;
+  integrationSettings?: any;
 }
 
 interface ReportAlert {
@@ -26,14 +27,34 @@ interface CrmRecord {
 
 interface TriggeredAlert {
   alert: ReportAlert;
+  campaignName?: string;
   currentValue: number;
   previousValue: number;
   changePercent: number;
   isNegative: boolean;
   isBlocking: boolean;
+  blockingReason?: string;
 }
 
-export function TableCardAlerts({ tableId }: TableCardAlertsProps) {
+// Statuses that indicate a real block by Meta (not manually paused)
+const BLOCKED_STATUSES = [
+  'WITH_ISSUES',
+  'DISAPPROVED',
+  'PENDING_BILLING_INFO',
+  'ADSET_PAUSED',
+  'CAMPAIGN_PAUSED',
+];
+
+// Account statuses that indicate issues
+const BLOCKED_ACCOUNT_STATUSES = [
+  'disabled',
+  'unsettled',
+  'pending_risk_review',
+  'pending_settlement',
+  'closed',
+];
+
+export function TableCardAlerts({ tableId, integrationSettings }: TableCardAlertsProps) {
   // Fetch alerts for this table
   const { data: alerts = [] } = useQuery({
     queryKey: ["report-alerts", tableId],
@@ -68,49 +89,56 @@ export function TableCardAlerts({ tableId }: TableCardAlertsProps) {
   });
 
   const triggeredAlerts = useMemo(() => {
-    if (!alerts.length || !records.length) {
-      // Check for blocking alerts (no data)
-      const blockingAlerts = alerts.filter(
-        a => a.comparison_type === "no_data" || a.operator === "no_data_days"
-      );
-      
-      if (blockingAlerts.length > 0 && records.length === 0) {
-        return blockingAlerts.map(alert => ({
-          alert,
+    const triggered: TriggeredAlert[] = [];
+    const today = new Date();
+
+    // Check account-level blocking first
+    const accountStatus = integrationSettings?.account_status;
+    if (accountStatus && BLOCKED_ACCOUNT_STATUSES.includes(accountStatus)) {
+      const blockingAlert = alerts.find(a => a.comparison_type === "no_data" || a.operator === "no_data_days");
+      if (blockingAlert) {
+        triggered.push({
+          alert: blockingAlert,
           currentValue: 0,
           previousValue: 0,
           changePercent: 0,
           isNegative: true,
           isBlocking: true,
-        }));
+          blockingReason: getAccountBlockReason(accountStatus),
+        });
       }
-      return [];
     }
 
-    const triggered: TriggeredAlert[] = [];
-    const today = new Date();
+    if (!alerts.length || records.length === 0) {
+      return triggered;
+    }
+
+    // Group records by campaign
+    const campaignGroups = groupRecordsByCampaign(records);
 
     for (const alert of alerts) {
-      // Handle blocking/no-data alerts
+      // Handle blocking/no-data alerts - check campaign effective_status
       if (alert.comparison_type === "no_data" || alert.operator === "no_data_days") {
-        const daysThreshold = alert.threshold || 2;
-        const recentDate = subDays(today, daysThreshold);
-        const recentDateStr = format(recentDate, "yyyy-MM-dd");
-        
-        const hasRecentData = records.some(r => {
-          const recordDate = r.data?.date || r.data?.Date;
-          return recordDate && recordDate >= recentDateStr;
-        });
-        
-        if (!hasRecentData) {
-          triggered.push({
-            alert,
-            currentValue: 0,
-            previousValue: 0,
-            changePercent: 0,
-            isNegative: true,
-            isBlocking: true,
-          });
+        for (const [campaignId, campaignRecords] of Object.entries(campaignGroups)) {
+          const latestRecord = getLatestRecord(campaignRecords as CrmRecord[]);
+          const effectiveStatus = latestRecord?.data?.effective_status;
+          const configuredStatus = latestRecord?.data?.configured_status;
+          
+          // Only show alert if BLOCKED by Meta (not manually paused)
+          if (effectiveStatus && BLOCKED_STATUSES.includes(effectiveStatus)) {
+            if (configuredStatus === 'PAUSED') continue;
+            
+            triggered.push({
+              alert,
+              campaignName: getCampaignName(campaignRecords as CrmRecord[]),
+              currentValue: 0,
+              previousValue: 0,
+              changePercent: 0,
+              isNegative: true,
+              isBlocking: true,
+              blockingReason: getCampaignBlockReason(effectiveStatus),
+            });
+          }
         }
         continue;
       }
@@ -183,7 +211,7 @@ export function TableCardAlerts({ tableId }: TableCardAlertsProps) {
     }
 
     return triggered;
-  }, [alerts, records]);
+  }, [alerts, records, integrationSettings]);
 
   if (triggeredAlerts.length === 0) return null;
 
@@ -193,12 +221,22 @@ export function TableCardAlerts({ tableId }: TableCardAlertsProps) {
 
   return (
     <div className="flex flex-wrap gap-1 mt-2">
-      {blockingAlerts.length > 0 && (
-        <div className="flex items-center gap-1 px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full text-xs">
-          <Ban className="h-3 w-3" />
-          <span>חסימה</span>
+      {blockingAlerts.map((item, idx) => (
+        <div 
+          key={`block-${idx}`}
+          className="flex items-center gap-1 px-2 py-0.5 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-full text-xs"
+          title={item.blockingReason}
+        >
+          {item.blockingReason?.includes('אשראי') || item.blockingReason?.includes('תשלום') ? (
+            <CreditCard className="h-3 w-3" />
+          ) : item.blockingReason?.includes('מדיניות') ? (
+            <ShieldAlert className="h-3 w-3" />
+          ) : (
+            <Ban className="h-3 w-3" />
+          )}
+          <span>{item.campaignName ? `חסימה: ${item.campaignName}` : 'חסימה'}</span>
         </div>
-      )}
+      ))}
       {performanceAlerts.map((item, idx) => (
         <div
           key={idx}
@@ -223,6 +261,64 @@ export function TableCardAlerts({ tableId }: TableCardAlertsProps) {
       ))}
     </div>
   );
+}
+
+function getAccountBlockReason(status: string): string {
+  switch (status) {
+    case 'disabled':
+      return 'חשבון פרסום מושבת - הפרת מדיניות';
+    case 'unsettled':
+      return 'בעיית תשלום - יש להסדיר את האשראי';
+    case 'pending_risk_review':
+      return 'החשבון בבדיקת אבטחה';
+    case 'pending_settlement':
+      return 'ממתין להסדר תשלום';
+    case 'closed':
+      return 'חשבון הפרסום נסגר';
+    default:
+      return 'בעיה בחשבון הפרסום';
+  }
+}
+
+function getCampaignBlockReason(effectiveStatus: string): string {
+  switch (effectiveStatus) {
+    case 'WITH_ISSUES':
+      return 'קמפיין עם בעיות';
+    case 'DISAPPROVED':
+      return 'הפרת מדיניות';
+    case 'PENDING_BILLING_INFO':
+      return 'בעיית אשראי';
+    case 'ADSET_PAUSED':
+      return 'מערך מודעות מושהה';
+    case 'CAMPAIGN_PAUSED':
+      return 'קמפיין מושהה ע"י המערכת';
+    default:
+      return `קמפיין חסום`;
+  }
+}
+
+function getLatestRecord(records: CrmRecord[]): CrmRecord | null {
+  if (records.length === 0) return null;
+  return records.reduce((latest, record) => {
+    const recordDate = record.data?.date || record.data?.Date || '';
+    const latestDate = latest?.data?.date || latest?.data?.Date || '';
+    return recordDate > latestDate ? record : latest;
+  }, records[0]);
+}
+
+function groupRecordsByCampaign(records: CrmRecord[]): Record<string, CrmRecord[]> {
+  const groups: Record<string, CrmRecord[]> = {};
+  for (const record of records) {
+    const campaignId = record.data?.campaign_id || record.data?.campaignId || record.data?.campaign_name || "unknown";
+    if (!groups[campaignId]) groups[campaignId] = [];
+    groups[campaignId].push(record);
+  }
+  return groups;
+}
+
+function getCampaignName(records: CrmRecord[]): string {
+  if (records.length === 0) return "";
+  return records[0].data?.campaign_name || records[0].data?.campaignName || "";
 }
 
 function calculateMetric(
