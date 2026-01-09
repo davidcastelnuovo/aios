@@ -1,12 +1,13 @@
 import React, { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { AlertTriangle, TrendingUp, TrendingDown, CheckCircle, Ban } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, CheckCircle, Ban, CreditCard, ShieldAlert } from "lucide-react";
 import { format, subDays } from "date-fns";
 
 interface ActiveAlertsProps {
   tableId: string;
   records: any[];
+  integrationSettings?: any;
 }
 
 interface ReportAlert {
@@ -29,6 +30,7 @@ interface TriggeredAlert {
   changePercent: number;
   isNegative: boolean;
   isBlocking: boolean;
+  blockingReason?: string;
 }
 
 const METRIC_LABELS: Record<string, string> = {
@@ -42,7 +44,30 @@ const METRIC_LABELS: Record<string, string> = {
   account_status: "סטטוס חשבון",
 };
 
-export function ActiveAlerts({ tableId, records }: ActiveAlertsProps) {
+// Statuses that indicate a real block by Meta (not manually paused)
+const BLOCKED_STATUSES = [
+  'WITH_ISSUES',           // Campaign has issues
+  'DISAPPROVED',           // Policy violation
+  'PENDING_BILLING_INFO',  // Payment issues
+  'ADSET_PAUSED',          // Ad set has issues (could be budget/billing)
+  'CAMPAIGN_PAUSED',       // Could be due to issues
+];
+
+// Statuses that indicate the campaign was manually paused (NOT a block)
+const PAUSED_STATUSES = [
+  'PAUSED',               // Manually paused
+];
+
+// Account statuses that indicate issues
+const BLOCKED_ACCOUNT_STATUSES = [
+  'disabled',             // Account disabled
+  'unsettled',            // Payment issues
+  'pending_risk_review',  // Security review
+  'pending_settlement',   // Settlement issues
+  'closed',               // Account closed
+];
+
+export function ActiveAlerts({ tableId, records, integrationSettings }: ActiveAlertsProps) {
   const { data: alerts = [] } = useQuery({
     queryKey: ["report-alerts", tableId],
     queryFn: async () => {
@@ -64,44 +89,54 @@ export function ActiveAlerts({ tableId, records }: ActiveAlertsProps) {
     const triggered: TriggeredAlert[] = [];
     const today = new Date();
 
-    // Check for blocking alerts when no records
+    // Check account-level blocking first
+    const accountStatus = integrationSettings?.account_status;
+    if (accountStatus && BLOCKED_ACCOUNT_STATUSES.includes(accountStatus)) {
+      const blockingAlert = alerts.find(a => a.comparison_type === "no_data" || a.operator === "no_data_days");
+      if (blockingAlert) {
+        const reason = getAccountBlockReason(accountStatus, integrationSettings?.account_disable_reason);
+        triggered.push({
+          alert: blockingAlert,
+          campaignId: undefined,
+          campaignName: undefined,
+          currentValue: 0,
+          previousValue: 0,
+          changePercent: 0,
+          isNegative: true,
+          isBlocking: true,
+          blockingReason: reason,
+        });
+      }
+    }
+
+    // If no records at all, don't show blocking alerts (might just be no data)
     if (records.length === 0) {
-      const blockingAlerts = alerts.filter(
-        a => a.comparison_type === "no_data" || a.operator === "no_data_days"
-      );
-      
-      return blockingAlerts.map(alert => ({
-        alert,
-        campaignId: undefined,
-        campaignName: undefined,
-        currentValue: 0,
-        previousValue: 0,
-        changePercent: 0,
-        isNegative: true,
-        isBlocking: true,
-      }));
+      return triggered;
     }
 
     // Group records by campaign
     const campaignGroups = groupRecordsByCampaign(records);
 
     for (const alert of alerts) {
-      // Handle blocking/no-data alerts - check per campaign
+      // Handle blocking/no-data alerts - check campaign effective_status
       if (alert.comparison_type === "no_data" || alert.operator === "no_data_days") {
-        // Default to 5 days since Facebook data can be delayed 1-2 days
-        const daysThreshold = alert.threshold || 5;
-        const recentDate = subDays(today, daysThreshold);
-        const recentDateStr = format(recentDate, "yyyy-MM-dd");
-        
-        // Check each campaign for recent data
+        // Check each campaign for blocking status
         for (const [campaignId, campaignRecords] of Object.entries(campaignGroups)) {
           const campaignName = getCampaignName(campaignRecords as any[]);
-          const hasRecentData = (campaignRecords as any[]).some(r => {
-            const recordDate = r.data?.date || r.data?.Date;
-            return recordDate && recordDate >= recentDateStr;
-          });
           
-          if (!hasRecentData) {
+          // Get the latest record's effective_status
+          const latestRecord = getLatestRecord(campaignRecords as any[]);
+          const effectiveStatus = latestRecord?.data?.effective_status;
+          const configuredStatus = latestRecord?.data?.configured_status;
+          
+          // Only show alert if the campaign is BLOCKED by Meta (not manually paused)
+          if (effectiveStatus && BLOCKED_STATUSES.includes(effectiveStatus)) {
+            // Skip if the user manually paused it (configured_status is PAUSED)
+            if (configuredStatus === 'PAUSED') {
+              continue;
+            }
+            
+            const reason = getCampaignBlockReason(effectiveStatus);
             triggered.push({
               alert,
               campaignId,
@@ -111,6 +146,7 @@ export function ActiveAlerts({ tableId, records }: ActiveAlertsProps) {
               changePercent: 0,
               isNegative: true,
               isBlocking: true,
+              blockingReason: reason,
             });
           }
         }
@@ -214,7 +250,7 @@ export function ActiveAlerts({ tableId, records }: ActiveAlertsProps) {
     }
 
     return triggered;
-  }, [alerts, records]);
+  }, [alerts, records, integrationSettings]);
 
   if (triggeredAlerts.length === 0) return null;
 
@@ -235,21 +271,28 @@ function AlertCard({
   changePercent,
   isNegative,
   isBlocking,
+  blockingReason,
 }: TriggeredAlert) {
-  const Icon = isBlocking ? Ban : isNegative ? AlertTriangle : CheckCircle;
+  const Icon = isBlocking 
+    ? (blockingReason?.includes('אשראי') || blockingReason?.includes('תשלום') ? CreditCard : 
+       blockingReason?.includes('מדיניות') || blockingReason?.includes('אבטחה') ? ShieldAlert : Ban)
+    : isNegative ? AlertTriangle : CheckCircle;
   const TrendIcon = changePercent > 0 ? TrendingUp : TrendingDown;
 
   if (isBlocking) {
     return (
       <div className="rounded-lg p-3 flex items-start gap-3 bg-destructive/10 border border-destructive/30 text-destructive">
-        <Ban className="h-5 w-5 mt-0.5 flex-shrink-0" />
+        <Icon className="h-5 w-5 mt-0.5 flex-shrink-0" />
         <div className="flex-1 min-w-0">
           <div className="font-medium">
             {campaignName && <span className="text-xs bg-destructive/20 px-2 py-0.5 rounded ml-2">{campaignName}</span>}
-            {alert.name}
+            {blockingReason || alert.name}
           </div>
           <div className="text-sm opacity-80">
-            אין נתונים חדשים - ייתכן שיש חסימת חשבון או בעיית אשראי
+            {blockingReason 
+              ? "יש לבדוק את החשבון בממשק הפרסום של מטא"
+              : "אין נתונים חדשים - ייתכן שיש חסימת חשבון או בעיית אשראי"
+            }
           </div>
         </div>
       </div>
@@ -291,6 +334,50 @@ function AlertCard({
       </div>
     </div>
   );
+}
+
+function getAccountBlockReason(status: string, disableReason?: string): string {
+  switch (status) {
+    case 'disabled':
+      return disableReason ? `חשבון מושבת - ${disableReason}` : 'חשבון פרסום מושבת - הפרת מדיניות';
+    case 'unsettled':
+      return 'בעיית תשלום - יש להסדיר את האשראי';
+    case 'pending_risk_review':
+      return 'החשבון בבדיקת אבטחה';
+    case 'pending_settlement':
+      return 'ממתין להסדר תשלום';
+    case 'closed':
+      return 'חשבון הפרסום נסגר';
+    default:
+      return 'בעיה בחשבון הפרסום';
+  }
+}
+
+function getCampaignBlockReason(effectiveStatus: string): string {
+  switch (effectiveStatus) {
+    case 'WITH_ISSUES':
+      return 'קמפיין עם בעיות - יש לבדוק בממשק מטא';
+    case 'DISAPPROVED':
+      return 'קמפיין לא מאושר - הפרת מדיניות';
+    case 'PENDING_BILLING_INFO':
+      return 'בעיית אשראי - יש להזין פרטי תשלום';
+    case 'ADSET_PAUSED':
+      return 'מערך מודעות מושהה - ייתכן בעיית תקציב';
+    case 'CAMPAIGN_PAUSED':
+      return 'קמפיין מושהה ע"י המערכת';
+    default:
+      return `קמפיין חסום (${effectiveStatus})`;
+  }
+}
+
+function getLatestRecord(records: any[]): any | null {
+  if (records.length === 0) return null;
+  
+  return records.reduce((latest, record) => {
+    const recordDate = record.data?.date || record.data?.Date || '';
+    const latestDate = latest?.data?.date || latest?.data?.Date || '';
+    return recordDate > latestDate ? record : latest;
+  }, records[0]);
 }
 
 function groupRecordsByCampaign(records: any[]): Record<string, any[]> {

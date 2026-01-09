@@ -1112,8 +1112,12 @@ export default function DynamicTableView() {
       </div>
 
       {/* Active Alerts for Facebook Insights */}
-      {hasFacebook && table?.id && records && records.length > 0 && (
-        <ActiveAlerts tableId={table.id} records={records} />
+      {hasFacebook && table?.id && records && (
+        <ActiveAlerts 
+          tableId={table.id} 
+          records={records} 
+          integrationSettings={table.integration_settings}
+        />
       )}
 
       {/* Alerts Management Dialog */}

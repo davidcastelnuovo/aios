@@ -17,6 +17,15 @@ interface InsightRecord {
   leads: number;
   cost_per_lead: number;
   spend: number;
+  effective_status?: string;
+  configured_status?: string;
+}
+
+interface CampaignStatus {
+  id: string;
+  name: string;
+  effective_status: string;
+  configured_status: string;
 }
 
 Deno.serve(async (req) => {
@@ -165,6 +174,46 @@ Deno.serve(async (req) => {
 
     console.log(`Syncing daily insights for ${adAccountId} from ${sinceStr} to ${untilStr}`);
 
+    // First, fetch campaign statuses to detect real blocks
+    const campaignsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/campaigns?fields=id,name,effective_status,configured_status&limit=500&access_token=${accessToken}`;
+    const campaignsResponse = await fetch(campaignsUrl);
+    const campaignsData = await campaignsResponse.json();
+    
+    const campaignStatuses: Record<string, CampaignStatus> = {};
+    if (campaignsData.data) {
+      for (const campaign of campaignsData.data) {
+        campaignStatuses[campaign.id] = {
+          id: campaign.id,
+          name: campaign.name,
+          effective_status: campaign.effective_status,
+          configured_status: campaign.configured_status,
+        };
+      }
+      console.log(`Fetched statuses for ${Object.keys(campaignStatuses).length} campaigns`);
+    }
+
+    // Also fetch ad account status
+    const accountUrl = `https://graph.facebook.com/v21.0/${adAccountId}?fields=account_status,disable_reason,name&access_token=${accessToken}`;
+    const accountResponse = await fetch(accountUrl);
+    const accountData = await accountResponse.json();
+    
+    let accountStatus = 'active';
+    let accountDisableReason = null;
+    if (accountData.account_status) {
+      // account_status: 1=Active, 2=Disabled, 3=Unsettled, 7=Pending Risk Review, 9=Pending Settlement, 101=Closed
+      const statusMap: Record<number, string> = {
+        1: 'active',
+        2: 'disabled',
+        3: 'unsettled',
+        7: 'pending_risk_review',
+        9: 'pending_settlement',
+        101: 'closed',
+      };
+      accountStatus = statusMap[accountData.account_status] || `unknown_${accountData.account_status}`;
+      accountDisableReason = accountData.disable_reason || null;
+      console.log(`Account status: ${accountStatus}, disable_reason: ${accountDisableReason}`);
+    }
+
     // Fetch insights from Facebook with time_increment=1 for daily breakdown
     const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,cost_per_action_type,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&limit=500&access_token=${accessToken}`;
     
@@ -190,6 +239,9 @@ Deno.serve(async (req) => {
       const cplAction = insight.cost_per_action_type?.find((a: any) => a.action_type === 'lead' || a.action_type === 'leadgen_grouped');
       const costPerLead = cplAction ? parseFloat(cplAction.value) : 0;
 
+      // Get campaign status
+      const campaignStatus = campaignStatuses[insight.campaign_id];
+
       return {
         date: insight.date_start, // Use date_start as the single date field
         campaign_id: insight.campaign_id,
@@ -201,15 +253,17 @@ Deno.serve(async (req) => {
         leads,
         cost_per_lead: costPerLead,
         spend: parseFloat(insight.spend) || 0,
+        effective_status: campaignStatus?.effective_status || null,
+        configured_status: campaignStatus?.configured_status || null,
       };
     });
 
     console.log(`Got ${insights.length} daily campaign insights`);
 
     // Make sure fields exist for Facebook Insights table
-    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend'];
-    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'עלות לליד', 'הוצאה'];
-    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number'];
+    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend', 'effective_status', 'configured_status'];
+    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'עלות לליד', 'הוצאה', 'סטטוס בפועל', 'סטטוס מוגדר'];
+    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'text'];
     
     for (let i = 0; i < fieldKeys.length; i++) {
       const { data: existingField } = await supabase
@@ -253,13 +307,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Update last_sync_at in integration_settings
+    // Update last_sync_at and account status in integration_settings
     await supabase
       .from('crm_tables')
       .update({
         integration_settings: {
           ...settings,
           last_sync_at: new Date().toISOString(),
+          account_status: accountStatus,
+          account_disable_reason: accountDisableReason,
         }
       })
       .eq('id', table_id);
@@ -269,6 +325,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ 
       success: true,
       records_synced: insights.length,
+      account_status: accountStatus,
       last_sync_at: new Date().toISOString()
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
