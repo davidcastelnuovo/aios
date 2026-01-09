@@ -333,7 +333,8 @@ function calculateMetric(
   const filtered = records.filter((r) => {
     const recordDate = r.data?.date || r.data?.Date;
     if (!recordDate) return false;
-    return recordDate >= startStr && recordDate <= endStr;
+    // Use >= startStr and < endStr to avoid overlap between periods
+    return recordDate >= startStr && recordDate < endStr;
   });
 
   if (filtered.length === 0) return 0;
