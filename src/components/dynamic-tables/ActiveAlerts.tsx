@@ -22,6 +22,8 @@ interface ReportAlert {
 
 interface TriggeredAlert {
   alert: ReportAlert;
+  campaignId?: string;
+  campaignName?: string;
   currentValue: number;
   previousValue: number;
   changePercent: number;
@@ -70,6 +72,8 @@ export function ActiveAlerts({ tableId, records }: ActiveAlertsProps) {
       
       return blockingAlerts.map(alert => ({
         alert,
+        campaignId: undefined,
+        campaignName: undefined,
         currentValue: 0,
         previousValue: 0,
         changePercent: 0,
@@ -78,27 +82,36 @@ export function ActiveAlerts({ tableId, records }: ActiveAlertsProps) {
       }));
     }
 
+    // Group records by campaign
+    const campaignGroups = groupRecordsByCampaign(records);
+
     for (const alert of alerts) {
-      // Handle blocking/no-data alerts
+      // Handle blocking/no-data alerts - check per campaign
       if (alert.comparison_type === "no_data" || alert.operator === "no_data_days") {
         const daysThreshold = alert.threshold || 2;
         const recentDate = subDays(today, daysThreshold);
         const recentDateStr = format(recentDate, "yyyy-MM-dd");
         
-        const hasRecentData = records.some(r => {
-          const recordDate = r.data?.date || r.data?.Date;
-          return recordDate && recordDate >= recentDateStr;
-        });
-        
-        if (!hasRecentData) {
-          triggered.push({
-            alert,
-            currentValue: 0,
-            previousValue: 0,
-            changePercent: 0,
-            isNegative: true,
-            isBlocking: true,
+        // Check each campaign for recent data
+        for (const [campaignId, campaignRecords] of Object.entries(campaignGroups)) {
+          const campaignName = getCampaignName(campaignRecords as any[]);
+          const hasRecentData = (campaignRecords as any[]).some(r => {
+            const recordDate = r.data?.date || r.data?.Date;
+            return recordDate && recordDate >= recentDateStr;
           });
+          
+          if (!hasRecentData) {
+            triggered.push({
+              alert,
+              campaignId,
+              campaignName,
+              currentValue: 0,
+              previousValue: 0,
+              changePercent: 0,
+              isNegative: true,
+              isBlocking: true,
+            });
+          }
         }
         continue;
       }
@@ -120,71 +133,82 @@ export function ActiveAlerts({ tableId, records }: ActiveAlertsProps) {
         previousPeriodEnd = subDays(today, 30);
         previousPeriodStart = subDays(today, 60);
       } else {
-        // vs_target - compare current value to threshold
-        const currentMetrics = calculateMetrics(records, subDays(today, 7), today, alert.metric);
-        const currentValue = currentMetrics;
-        
-        if (
-          (alert.operator === "above" && currentValue > alert.threshold) ||
-          (alert.operator === "below" && currentValue < alert.threshold)
-        ) {
-          triggered.push({
-            alert,
-            currentValue,
-            previousValue: alert.threshold,
-            changePercent: ((currentValue - alert.threshold) / alert.threshold) * 100,
-            isNegative: alert.operator === "above" ? 
-              (alert.metric === "cost_per_lead" || alert.metric === "cpm") : 
-              (alert.metric !== "cost_per_lead" && alert.metric !== "cpm"),
-            isBlocking: false,
-          });
+        // vs_target - compare current value to threshold per campaign
+        for (const [campaignId, campaignRecords] of Object.entries(campaignGroups)) {
+          const campaignName = getCampaignName(campaignRecords as any[]);
+          const currentMetrics = calculateMetrics(campaignRecords as any[], subDays(today, 7), today, alert.metric);
+          const currentValue = currentMetrics;
+          
+          if (
+            (alert.operator === "above" && currentValue > alert.threshold) ||
+            (alert.operator === "below" && currentValue < alert.threshold)
+          ) {
+            triggered.push({
+              alert,
+              campaignId,
+              campaignName,
+              currentValue,
+              previousValue: alert.threshold,
+              changePercent: ((currentValue - alert.threshold) / alert.threshold) * 100,
+              isNegative: alert.operator === "above" ? 
+                (alert.metric === "cost_per_lead" || alert.metric === "cpm") : 
+                (alert.metric !== "cost_per_lead" && alert.metric !== "cpm"),
+              isBlocking: false,
+            });
+          }
         }
         continue;
       }
 
-      // Calculate metrics for both periods
-      const currentValue = calculateMetrics(
-        records,
-        currentPeriodStart,
-        currentPeriodEnd,
-        alert.metric
-      );
-      const previousValue = calculateMetrics(
-        records,
-        previousPeriodStart,
-        previousPeriodEnd,
-        alert.metric
-      );
+      // Calculate metrics for each campaign separately
+      for (const [campaignId, campaignRecords] of Object.entries(campaignGroups)) {
+        const campaignName = getCampaignName(campaignRecords as any[]);
+        
+        const currentValue = calculateMetrics(
+          campaignRecords as any[],
+          currentPeriodStart,
+          currentPeriodEnd,
+          alert.metric
+        );
+        const previousValue = calculateMetrics(
+          campaignRecords as any[],
+          previousPeriodStart,
+          previousPeriodEnd,
+          alert.metric
+        );
 
-      if (previousValue === 0) continue;
+        if (previousValue === 0) continue;
 
-      const changePercent = ((currentValue - previousValue) / previousValue) * 100;
+        const changePercent = ((currentValue - previousValue) / previousValue) * 100;
 
-      // Check if alert should trigger
-      let shouldTrigger = false;
-      if (alert.operator === "increase" && changePercent > alert.threshold) {
-        shouldTrigger = true;
-      } else if (alert.operator === "decrease" && changePercent < -alert.threshold) {
-        shouldTrigger = true;
-      }
+        // Check if alert should trigger
+        let shouldTrigger = false;
+        if (alert.operator === "increase" && changePercent > alert.threshold) {
+          shouldTrigger = true;
+        } else if (alert.operator === "decrease" && changePercent < -alert.threshold) {
+          shouldTrigger = true;
+        }
 
-      if (shouldTrigger) {
-        // Determine if this is a negative change (bad for user)
-        const isNegative =
-          (alert.metric === "cost_per_lead" || alert.metric === "cpm" || alert.metric === "spend") &&
-          alert.operator === "increase"
-            ? true
-            : (alert.metric !== "cost_per_lead" && alert.metric !== "cpm" && alert.metric !== "spend") &&
-              alert.operator === "decrease";
+        if (shouldTrigger) {
+          // Determine if this is a negative change (bad for user)
+          const isNegative =
+            (alert.metric === "cost_per_lead" || alert.metric === "cpm" || alert.metric === "spend") &&
+            alert.operator === "increase"
+              ? true
+              : (alert.metric !== "cost_per_lead" && alert.metric !== "cpm" && alert.metric !== "spend") &&
+                alert.operator === "decrease";
 
-        triggered.push({
-          alert,
-          currentValue,
-          previousValue,
-          changePercent,
-          isNegative,
-          isBlocking: false,
-        });
+          triggered.push({
+            alert,
+            campaignId,
+            campaignName,
+            currentValue,
+            previousValue,
+            changePercent,
+            isNegative,
+            isBlocking: false,
+          });
+        }
       }
     }
 
@@ -195,8 +219,8 @@ export function ActiveAlerts({ tableId, records }: ActiveAlertsProps) {
 
   return (
     <div className="space-y-2 mb-4">
-      {triggeredAlerts.map((item) => (
-        <AlertCard key={item.alert.id} {...item} />
+      {triggeredAlerts.map((item, index) => (
+        <AlertCard key={`${item.alert.id}-${item.campaignId ?? index}`} {...item} />
       ))}
     </div>
   );
@@ -204,6 +228,7 @@ export function ActiveAlerts({ tableId, records }: ActiveAlertsProps) {
 
 function AlertCard({
   alert,
+  campaignName,
   currentValue,
   previousValue,
   changePercent,
@@ -218,7 +243,10 @@ function AlertCard({
       <div className="rounded-lg p-3 flex items-start gap-3 bg-destructive/10 border border-destructive/30 text-destructive">
         <Ban className="h-5 w-5 mt-0.5 flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <div className="font-medium">{alert.name}</div>
+          <div className="font-medium">
+            {campaignName && <span className="text-xs bg-destructive/20 px-2 py-0.5 rounded ml-2">{campaignName}</span>}
+            {alert.name}
+          </div>
           <div className="text-sm opacity-80">
             אין נתונים חדשים - ייתכן שיש חסימת חשבון או בעיית אשראי
           </div>
@@ -237,7 +265,16 @@ function AlertCard({
     >
       <Icon className="h-5 w-5 mt-0.5 flex-shrink-0" />
       <div className="flex-1 min-w-0">
-        <div className="font-medium flex items-center gap-2">
+        <div className="font-medium flex items-center gap-2 flex-wrap">
+          {campaignName && (
+            <span className={`text-xs px-2 py-0.5 rounded ${
+              isNegative 
+                ? "bg-destructive/20" 
+                : "bg-green-500/20"
+            }`}>
+              {campaignName}
+            </span>
+          )}
           {alert.name}
           <TrendIcon className="h-4 w-4" />
           <span className="text-sm">
@@ -253,6 +290,26 @@ function AlertCard({
       </div>
     </div>
   );
+}
+
+function groupRecordsByCampaign(records: any[]): Record<string, any[]> {
+  const groups: Record<string, any[]> = {};
+  
+  for (const record of records) {
+    const campaignId = record.data?.campaign_id || record.data?.campaignId || record.data?.campaign_name || "unknown";
+    if (!groups[campaignId]) {
+      groups[campaignId] = [];
+    }
+    groups[campaignId].push(record);
+  }
+  
+  return groups;
+}
+
+function getCampaignName(records: any[]): string {
+  if (records.length === 0) return "";
+  const firstRecord = records[0];
+  return firstRecord.data?.campaign_name || firstRecord.data?.campaignName || firstRecord.data?.campaign_id || "";
 }
 
 function calculateMetrics(
