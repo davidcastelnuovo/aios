@@ -236,18 +236,12 @@ Deno.serve(async (req) => {
               .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
           }
 
-          // Extract cost per lead - try aggregate first, then calculate
+          // Extract cost per lead - always calculate as spend / leads for accuracy
+          // This ensures CPL matches what Facebook shows when aggregating
           let costPerLead = 0;
-          const allCpl = [
-            ...(insight.cost_per_action_type ?? []),
-            ...(insight.cost_per_conversion ?? []),
-          ];
-          const cplAction = allCpl.find((a: any) => a.action_type === 'lead');
-          if (cplAction) {
-            costPerLead = parseFloat(cplAction.value) || 0;
-          } else if (leads > 0) {
-            // Calculate CPL manually if not provided
-            costPerLead = (parseFloat(insight.spend) || 0) / leads;
+          const spend = parseFloat(insight.spend) || 0;
+          if (leads > 0) {
+            costPerLead = spend / leads;
           }
 
           // Get campaign status
