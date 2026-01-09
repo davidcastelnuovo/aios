@@ -88,7 +88,8 @@ export function ActiveAlerts({ tableId, records }: ActiveAlertsProps) {
     for (const alert of alerts) {
       // Handle blocking/no-data alerts - check per campaign
       if (alert.comparison_type === "no_data" || alert.operator === "no_data_days") {
-        const daysThreshold = alert.threshold || 2;
+        // Default to 5 days since Facebook data can be delayed 1-2 days
+        const daysThreshold = alert.threshold || 5;
         const recentDate = subDays(today, daysThreshold);
         const recentDateStr = format(recentDate, "yyyy-MM-dd");
         
