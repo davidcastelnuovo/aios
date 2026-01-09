@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -92,13 +92,16 @@ export function LeadFiltersDialog({
     return allTags.filter(t => t.name.toLowerCase().includes(searchLower));
   }, [allTags, tagSearch]);
 
-  // Sync with current filters when dialog opens
-  const handleOpenChange = (isOpen: boolean) => {
-    if (isOpen) {
+  // Sync with current filters when dialog opens or when currentFilters change while dialog is open
+  useEffect(() => {
+    if (open) {
       setFilters(currentFilters);
       setStatusSearch("");
       setTagSearch("");
     }
+  }, [open, currentFilters]);
+
+  const handleOpenChange = (isOpen: boolean) => {
     onOpenChange(isOpen);
   };
 
