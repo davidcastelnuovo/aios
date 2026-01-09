@@ -47,12 +47,14 @@ const METRICS = [
   { value: "clicks", label: "קליקים" },
   { value: "ctr", label: "CTR" },
   { value: "cpm", label: "CPM" },
+  { value: "account_status", label: "חסימת חשבון/אשראי" },
 ];
 
 const COMPARISON_TYPES = [
   { value: "week_over_week", label: "שבוע מול שבוע קודם" },
   { value: "month_over_month", label: "חודש מול חודש קודם" },
   { value: "vs_target", label: "מול יעד קבוע" },
+  { value: "no_data", label: "אין נתונים (חסימה)" },
 ];
 
 const OPERATORS = [
@@ -60,6 +62,7 @@ const OPERATORS = [
   { value: "decrease", label: "ירידה של יותר מ-" },
   { value: "above", label: "מעל" },
   { value: "below", label: "מתחת ל-" },
+  { value: "no_data_days", label: "אין נתונים במשך X ימים" },
 ];
 
 export function AlertsManagementDialog({

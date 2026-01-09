@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook, Building2, User, X, Check, ChevronsUpDown, TrendingUp } from "lucide-react";
+import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook, Building2, User, X, Check, ChevronsUpDown, TrendingUp, AlertTriangle } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -20,6 +20,7 @@ import { GoogleAdsTableDialog } from "@/components/dynamic-tables/GoogleAdsTable
 import { GoogleAnalyticsTableDialog } from "@/components/dynamic-tables/GoogleAnalyticsTableDialog";
 import { GoogleSearchConsoleTableDialog } from "@/components/dynamic-tables/GoogleSearchConsoleTableDialog";
 import { AhrefsTableDialog } from "@/components/dynamic-tables/AhrefsTableDialog";
+import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -441,6 +442,10 @@ export default function DynamicTables() {
                     </div>
                     {table.description && (
                       <CardDescription>{table.description}</CardDescription>
+                    )}
+                    {/* Table Card Alerts */}
+                    {table.integration_type === 'facebook_insights' && (
+                      <TableCardAlerts tableId={table.id} />
                     )}
                   </CardHeader>
                   <CardContent>
