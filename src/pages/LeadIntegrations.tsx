@@ -118,7 +118,7 @@ export default function LeadIntegrations() {
                   <li><code className="bg-muted px-1 py-0.5 rounded">contact_name</code> - שם איש קשר</li>
                   <li><code className="bg-muted px-1 py-0.5 rounded">email</code> - כתובת אימייל</li>
                   <li><code className="bg-muted px-1 py-0.5 rounded">phone</code> - מספר טלפון</li>
-                  <li><code className="bg-muted px-1 py-0.5 rounded">source</code> - מקור הליד (website/referral/linkedin/facebook/other)</li>
+                  <li><code className="bg-muted px-1 py-0.5 rounded">source</code> - מקור הליד (website/referral/social_media/paid_ads/cold_call/email_campaign/event/other)</li>
                   <li><code className="bg-muted px-1 py-0.5 rounded">notes</code> - הערות</li>
                   <li><code className="bg-muted px-1 py-0.5 rounded">monthly_budget</code> - תקציב חודשי</li>
                   <li><code className="bg-muted px-1 py-0.5 rounded">three_month_budget</code> - תקציב ל-3 חודשים</li>
