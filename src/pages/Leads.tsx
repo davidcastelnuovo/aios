@@ -530,8 +530,8 @@ export default function Leads() {
   // Filter states
   const [filterSalesPerson, setFilterSalesPerson] = useState<string>("all");
   const [filterStage, setFilterStage] = useState<string>("all");
-  const [filterResponseStatus, setFilterResponseStatus] = useState<string>("all");
-  const [filterTag, setFilterTag] = useState<string>("all");
+  const [filterResponseStatus, setFilterResponseStatus] = useState<string[]>([]);
+  const [filterTagIds, setFilterTagIds] = useState<string[]>([]);
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
@@ -577,7 +577,7 @@ export default function Leads() {
   // Reset page to 1 when filters change to prevent showing empty results
   useEffect(() => {
     setPage(1);
-  }, [selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTag, startDate, endDate]);
+  }, [selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate, endDate]);
   
   // Kanban limiting state - how many leads to show per stage
   const KANBAN_LEADS_PER_STAGE = 30;
@@ -618,27 +618,22 @@ export default function Leads() {
 
   // Fetch total count for pagination - includes server-side filters
   const { data: totalLeadsCount = 0 } = useQuery({
-    queryKey: ["leads-count", tenantId, selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTag, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["leads-count", tenantId, selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!tenantId) return 0;
       
       // For tag filtering, first get matching lead IDs
       let tagFilterLeadIds: string[] | null = null;
-      if (filterTag !== "all") {
-        if (filterTag === "none") {
-          // Will handle in main query - leads without tags
-          tagFilterLeadIds = null;
-        } else {
-          const { data: taggedLeads } = await supabase
-            .from("chat_contact_tags")
-            .select("lead_id")
-            .eq("tag_id", filterTag)
-            .eq("tenant_id", tenantId)
-            .not("lead_id", "is", null);
-          
-          if (!taggedLeads || taggedLeads.length === 0) return 0;
-          tagFilterLeadIds = taggedLeads.map(t => t.lead_id!);
-        }
+      if (filterTagIds.length > 0 && !filterTagIds.includes("none")) {
+        const { data: taggedLeads } = await supabase
+          .from("chat_contact_tags")
+          .select("lead_id")
+          .in("tag_id", filterTagIds)
+          .eq("tenant_id", tenantId)
+          .not("lead_id", "is", null);
+        
+        if (!taggedLeads || taggedLeads.length === 0) return 0;
+        tagFilterLeadIds = [...new Set(taggedLeads.map(t => t.lead_id!))];
       }
       
       let query = supabase
@@ -668,12 +663,14 @@ export default function Leads() {
         }
       }
       
-      if (filterResponseStatus !== "all") {
-        if (filterResponseStatus === "none") {
+      // Multi-select response status filter
+      if (filterResponseStatus.length > 0) {
+        if (filterResponseStatus.includes("none") && filterResponseStatus.length === 1) {
           query = query.is("response_status", null);
-        } else {
-          query = query.eq("response_status", filterResponseStatus);
+        } else if (!filterResponseStatus.includes("none")) {
+          query = query.in("response_status", filterResponseStatus);
         }
+        // If both "none" and other statuses are selected, we need OR logic (handled client-side)
       }
       
       if (startDate) {
@@ -703,35 +700,22 @@ export default function Leads() {
   });
 
   const { data: leads, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["leads", tenantId, selectedAgency, page, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTag, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["leads", tenantId, selectedAgency, page, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
       
       // For tag filtering, first get matching lead IDs
       let tagFilterLeadIds: string[] | null = null;
-      if (filterTag !== "all") {
-        if (filterTag === "none") {
-          // Get leads that have NO tags
-          const { data: allLeadTags } = await supabase
-            .from("chat_contact_tags")
-            .select("lead_id")
-            .eq("tenant_id", tenantId)
-            .not("lead_id", "is", null);
-          
-          const leadsWithTags = new Set(allLeadTags?.map(t => t.lead_id) || []);
-          // We'll filter these out after fetching
-          tagFilterLeadIds = null; // Will handle with post-filter
-        } else {
-          const { data: taggedLeads } = await supabase
-            .from("chat_contact_tags")
-            .select("lead_id")
-            .eq("tag_id", filterTag)
-            .eq("tenant_id", tenantId)
-            .not("lead_id", "is", null);
-          
-          if (!taggedLeads || taggedLeads.length === 0) return [];
-          tagFilterLeadIds = taggedLeads.map(t => t.lead_id!);
-        }
+      if (filterTagIds.length > 0 && !filterTagIds.includes("none")) {
+        const { data: taggedLeads } = await supabase
+          .from("chat_contact_tags")
+          .select("lead_id")
+          .in("tag_id", filterTagIds)
+          .eq("tenant_id", tenantId)
+          .not("lead_id", "is", null);
+        
+        if (!taggedLeads || taggedLeads.length === 0) return [];
+        tagFilterLeadIds = [...new Set(taggedLeads.map(t => t.lead_id!))];
       }
       
       const from = (page - 1) * LEADS_PER_PAGE;
@@ -789,12 +773,14 @@ export default function Leads() {
         }
       }
       
-      if (filterResponseStatus !== "all") {
-        if (filterResponseStatus === "none") {
+      // Multi-select response status filter
+      if (filterResponseStatus.length > 0) {
+        if (filterResponseStatus.includes("none") && filterResponseStatus.length === 1) {
           query = query.is("response_status", null);
-        } else {
-          query = query.eq("response_status", filterResponseStatus);
+        } else if (!filterResponseStatus.includes("none")) {
+          query = query.in("response_status", filterResponseStatus);
         }
+        // If both "none" and other statuses are selected, we handle complex OR logic client-side
       }
       
       if (startDate) {
@@ -1184,27 +1170,42 @@ export default function Leads() {
   const filteredLeads = useMemo(() => {
     if (!secureFilteredLeads) return [];
 
-    // Only client-side filter needed: "none" tag filter (leads without any tags)
-    if (filterTag === "none") {
-      return secureFilteredLeads.filter((lead: any) => {
+    let result = secureFilteredLeads;
+
+    // Client-side filter for "none" tag filter (leads without any tags)
+    if (filterTagIds.includes("none")) {
+      result = result.filter((lead: any) => {
         const leadTags = leadsTagsMap[lead.id] || [];
-        return leadTags.length === 0;
+        // If only "none" selected, show leads without tags
+        if (filterTagIds.length === 1) {
+          return leadTags.length === 0;
+        }
+        // If "none" and other tags selected, show leads without tags OR with selected tags
+        const otherTagIds = filterTagIds.filter(t => t !== "none");
+        return leadTags.length === 0 || leadTags.some((t: string) => otherTagIds.includes(t));
       });
     }
 
-    // All other filters are already applied server-side
-    return secureFilteredLeads;
-  }, [secureFilteredLeads, filterTag, leadsTagsMap]);
+    // Client-side filter for complex response status (when "none" + other statuses selected)
+    if (filterResponseStatus.includes("none") && filterResponseStatus.length > 1) {
+      const otherStatuses = filterResponseStatus.filter(s => s !== "none");
+      result = result.filter((lead: any) => {
+        return lead.response_status === null || otherStatuses.includes(lead.response_status);
+      });
+    }
+
+    return result;
+  }, [secureFilteredLeads, filterTagIds, filterResponseStatus, leadsTagsMap]);
 
   // Helper to check if any filters are active
   const hasActiveFilters = useMemo(() => {
     return filterSalesPerson !== "all" ||
       filterStage !== "all" ||
-      filterResponseStatus !== "all" ||
-      filterTag !== "all" ||
+      filterResponseStatus.length > 0 ||
+      filterTagIds.length > 0 ||
       startDate !== undefined ||
       endDate !== undefined;
-  }, [filterSalesPerson, filterStage, filterResponseStatus, filterTag, startDate, endDate]);
+  }, [filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate, endDate]);
 
   // Current filter state for dialog
   const currentFilters: FilterState = useMemo(() => ({
@@ -1212,10 +1213,10 @@ export default function Leads() {
     salesPersonId: filterSalesPerson,
     stageId: filterStage,
     responseStatus: filterResponseStatus,
-    tagId: filterTag,
+    tagIds: filterTagIds,
     startDate,
     endDate,
-  }), [searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTag, startDate, endDate]);
+  }), [searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate, endDate]);
 
   // Handle applying filters from dialog
   const handleApplyFilters = (filters: FilterState) => {
@@ -1223,7 +1224,7 @@ export default function Leads() {
     setFilterSalesPerson(filters.salesPersonId);
     setFilterStage(filters.stageId);
     setFilterResponseStatus(filters.responseStatus);
-    setFilterTag(filters.tagId);
+    setFilterTagIds(filters.tagIds);
     setStartDate(filters.startDate);
     setEndDate(filters.endDate);
     setActivePresetId(null); // Clear preset when manually applying
@@ -1235,19 +1236,29 @@ export default function Leads() {
       // Reset all filters
       setFilterSalesPerson("all");
       setFilterStage("all");
-      setFilterResponseStatus("all");
-      setFilterTag("all");
+      setFilterResponseStatus([]);
+      setFilterTagIds([]);
       setStartDate(undefined);
       setEndDate(undefined);
       setSearchQuery("");
       setActivePresetId(null);
     } else {
-      // Apply preset filters
+      // Apply preset filters - handle both old (string) and new (array) format
       const f = preset.filters;
       setFilterSalesPerson(f.salesPersonId || "all");
       setFilterStage(f.stageId || "all");
-      setFilterResponseStatus(f.responseStatus || "all");
-      setFilterTag(f.tagId || "all");
+      // Handle legacy string format for responseStatus
+      if (typeof f.responseStatus === 'string') {
+        setFilterResponseStatus(f.responseStatus === 'all' ? [] : [f.responseStatus]);
+      } else {
+        setFilterResponseStatus(f.responseStatus || []);
+      }
+      // Handle legacy tagId format
+      if ('tagId' in f && typeof f.tagId === 'string') {
+        setFilterTagIds(f.tagId === 'all' ? [] : [f.tagId]);
+      } else {
+        setFilterTagIds(f.tagIds || []);
+      }
       setStartDate(f.startDate ? new Date(f.startDate) : undefined);
       setEndDate(f.endDate ? new Date(f.endDate) : undefined);
       setSearchQuery(f.searchQuery || "");

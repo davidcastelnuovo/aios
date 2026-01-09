@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarIcon, Save, RotateCcw, X } from "lucide-react";
+import { Calendar as CalendarIcon, Save, RotateCcw, X, Search, Check } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -26,13 +26,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useQueryClient } from "@tanstack/react-query";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 
 export interface FilterState {
   searchQuery: string;
   salesPersonId: string;
   stageId: string;
-  responseStatus: string;
-  tagId: string;
+  responseStatus: string[]; // Changed to array for multi-select
+  tagIds: string[]; // Changed from tagId to tagIds for multi-select
   startDate: Date | undefined;
   endDate: Date | undefined;
 }
@@ -67,11 +70,34 @@ export function LeadFiltersDialog({
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Search states for multi-select dropdowns
+  const [statusSearch, setStatusSearch] = useState("");
+  const [tagSearch, setTagSearch] = useState("");
+  
+  // Popover open states
+  const [statusPopoverOpen, setStatusPopoverOpen] = useState(false);
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
+
+  // Filtered options based on search
+  const filteredStatuses = useMemo(() => {
+    if (!statusSearch.trim()) return leadStatuses;
+    const searchLower = statusSearch.toLowerCase();
+    return leadStatuses.filter(s => s.label.toLowerCase().includes(searchLower));
+  }, [leadStatuses, statusSearch]);
+
+  const filteredTags = useMemo(() => {
+    if (!tagSearch.trim()) return allTags;
+    const searchLower = tagSearch.toLowerCase();
+    return allTags.filter(t => t.name.toLowerCase().includes(searchLower));
+  }, [allTags, tagSearch]);
 
   // Sync with current filters when dialog opens
   const handleOpenChange = (isOpen: boolean) => {
     if (isOpen) {
       setFilters(currentFilters);
+      setStatusSearch("");
+      setTagSearch("");
     }
     onOpenChange(isOpen);
   };
@@ -86,8 +112,8 @@ export function LeadFiltersDialog({
       searchQuery: "",
       salesPersonId: "all",
       stageId: "all",
-      responseStatus: "all",
-      tagId: "all",
+      responseStatus: [],
+      tagIds: [],
       startDate: undefined,
       endDate: undefined,
     };
@@ -112,7 +138,7 @@ export function LeadFiltersDialog({
         salesPersonId: filters.salesPersonId,
         stageId: filters.stageId,
         responseStatus: filters.responseStatus,
-        tagId: filters.tagId,
+        tagIds: filters.tagIds,
         startDate: filters.startDate?.toISOString() || null,
         endDate: filters.endDate?.toISOString() || null,
       };
@@ -146,11 +172,69 @@ export function LeadFiltersDialog({
     }
   };
 
+  // Toggle status selection
+  const toggleStatus = (statusKey: string) => {
+    setFilters(prev => {
+      const currentStatuses = prev.responseStatus;
+      if (currentStatuses.includes(statusKey)) {
+        return { ...prev, responseStatus: currentStatuses.filter(s => s !== statusKey) };
+      } else {
+        return { ...prev, responseStatus: [...currentStatuses, statusKey] };
+      }
+    });
+  };
+
+  // Toggle tag selection
+  const toggleTag = (tagId: string) => {
+    setFilters(prev => {
+      const currentTags = prev.tagIds;
+      if (currentTags.includes(tagId)) {
+        return { ...prev, tagIds: currentTags.filter(t => t !== tagId) };
+      } else {
+        return { ...prev, tagIds: [...currentTags, tagId] };
+      }
+    });
+  };
+
+  // Get selected status labels for display
+  const selectedStatusLabels = useMemo(() => {
+    if (filters.responseStatus.length === 0) return "כל הסטטוסים";
+    if (filters.responseStatus.includes("none")) {
+      const otherLabels = filters.responseStatus
+        .filter(s => s !== "none")
+        .map(s => leadStatuses.find(ls => ls.status_key === s)?.label)
+        .filter(Boolean);
+      if (otherLabels.length === 0) return "ללא סטטוס";
+      return ["ללא סטטוס", ...otherLabels].join(", ");
+    }
+    return filters.responseStatus
+      .map(s => leadStatuses.find(ls => ls.status_key === s)?.label)
+      .filter(Boolean)
+      .join(", ");
+  }, [filters.responseStatus, leadStatuses]);
+
+  // Get selected tag labels for display
+  const selectedTagLabels = useMemo(() => {
+    if (filters.tagIds.length === 0) return "כל התגיות";
+    if (filters.tagIds.includes("none")) {
+      const otherLabels = filters.tagIds
+        .filter(t => t !== "none")
+        .map(t => allTags.find(at => at.id === t)?.name)
+        .filter(Boolean);
+      if (otherLabels.length === 0) return "ללא תגית";
+      return ["ללא תגית", ...otherLabels].join(", ");
+    }
+    return filters.tagIds
+      .map(t => allTags.find(at => at.id === t)?.name)
+      .filter(Boolean)
+      .join(", ");
+  }, [filters.tagIds, allTags]);
+
   const hasActiveFilters = 
     filters.salesPersonId !== "all" ||
     filters.stageId !== "all" ||
-    filters.responseStatus !== "all" ||
-    filters.tagId !== "all" ||
+    filters.responseStatus.length > 0 ||
+    filters.tagIds.length > 0 ||
     filters.startDate ||
     filters.endDate;
 
@@ -206,70 +290,172 @@ export function LeadFiltersDialog({
               </Select>
             </div>
 
-            {/* Response Status */}
+            {/* Response Status - Multi-select with search */}
             <div className="space-y-2">
               <Label>סטטוס תגובה</Label>
-              <Select 
-                value={filters.responseStatus} 
-                onValueChange={(val) => setFilters(prev => ({ ...prev, responseStatus: val }))}
-              >
-                <SelectTrigger
-                  style={{
-                    backgroundColor: filters.responseStatus !== "all" && filters.responseStatus !== "none"
-                      ? leadStatuses.find(s => s.status_key === filters.responseStatus)?.color
-                      : undefined,
-                    color: filters.responseStatus !== "all" && filters.responseStatus !== "none" ? "#fff" : undefined,
-                  }}
-                >
-                  <SelectValue placeholder="בחר סטטוס" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">כל הסטטוסים</SelectItem>
-                  <SelectItem value="none">ללא סטטוס</SelectItem>
-                  {leadStatuses?.map((status) => (
-                    <SelectItem 
-                      key={status.status_key} 
-                      value={status.status_key}
-                      style={{ backgroundColor: status.color, color: "#fff" }}
-                    >
-                      {status.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={statusPopoverOpen} onOpenChange={setStatusPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className="truncate">{selectedStatusLabels}</span>
+                    {filters.responseStatus.length > 0 && (
+                      <Badge variant="secondary" className="mr-2 shrink-0">
+                        {filters.responseStatus.length}
+                      </Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0 bg-popover" align="start">
+                  <div className="p-2 border-b">
+                    <div className="relative">
+                      <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="חיפוש סטטוס..."
+                        value={statusSearch}
+                        onChange={(e) => setStatusSearch(e.target.value)}
+                        className="pr-9"
+                      />
+                    </div>
+                  </div>
+                  <ScrollArea className="max-h-[200px]">
+                    <div className="p-2 space-y-1">
+                      {/* "None" option */}
+                      <div
+                        className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent"
+                        onClick={() => toggleStatus("none")}
+                      >
+                        <Checkbox
+                          checked={filters.responseStatus.includes("none")}
+                          onCheckedChange={() => toggleStatus("none")}
+                        />
+                        <span>ללא סטטוס</span>
+                      </div>
+                      {filteredStatuses.map((status) => (
+                        <div
+                          key={status.status_key}
+                          className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent"
+                          onClick={() => toggleStatus(status.status_key)}
+                        >
+                          <Checkbox
+                            checked={filters.responseStatus.includes(status.status_key)}
+                            onCheckedChange={() => toggleStatus(status.status_key)}
+                          />
+                          <div
+                            className="w-3 h-3 rounded-full shrink-0"
+                            style={{ backgroundColor: status.color }}
+                          />
+                          <span>{status.label}</span>
+                        </div>
+                      ))}
+                      {filteredStatuses.length === 0 && (
+                        <div className="text-center text-muted-foreground py-2">
+                          לא נמצאו סטטוסים
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                  {filters.responseStatus.length > 0 && (
+                    <div className="p-2 border-t">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => setFilters(prev => ({ ...prev, responseStatus: [] }))}
+                      >
+                        <X className="h-4 w-4 ml-2" />
+                        נקה בחירה
+                      </Button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
             </div>
 
-            {/* Tag */}
+            {/* Tags - Multi-select with search */}
             <div className="space-y-2">
               <Label>תגית</Label>
-              <Select 
-                value={filters.tagId} 
-                onValueChange={(val) => setFilters(prev => ({ ...prev, tagId: val }))}
-              >
-                <SelectTrigger
-                  style={{
-                    backgroundColor: filters.tagId !== "all" && filters.tagId !== "none"
-                      ? allTags.find(t => t.id === filters.tagId)?.color
-                      : undefined,
-                    color: filters.tagId !== "all" && filters.tagId !== "none" ? "#fff" : undefined,
-                  }}
-                >
-                  <SelectValue placeholder="בחר תגית" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">כל התגיות</SelectItem>
-                  <SelectItem value="none">ללא תגית</SelectItem>
-                  {allTags?.map((tag) => (
-                    <SelectItem 
-                      key={tag.id} 
-                      value={tag.id}
-                      style={{ backgroundColor: tag.color, color: "#fff" }}
-                    >
-                      {tag.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className="truncate">{selectedTagLabels}</span>
+                    {filters.tagIds.length > 0 && (
+                      <Badge variant="secondary" className="mr-2 shrink-0">
+                        {filters.tagIds.length}
+                      </Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0 bg-popover" align="start">
+                  <div className="p-2 border-b">
+                    <div className="relative">
+                      <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="חיפוש תגית..."
+                        value={tagSearch}
+                        onChange={(e) => setTagSearch(e.target.value)}
+                        className="pr-9"
+                      />
+                    </div>
+                  </div>
+                  <ScrollArea className="max-h-[200px]">
+                    <div className="p-2 space-y-1">
+                      {/* "None" option */}
+                      <div
+                        className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent"
+                        onClick={() => toggleTag("none")}
+                      >
+                        <Checkbox
+                          checked={filters.tagIds.includes("none")}
+                          onCheckedChange={() => toggleTag("none")}
+                        />
+                        <span>ללא תגית</span>
+                      </div>
+                      {filteredTags.map((tag) => (
+                        <div
+                          key={tag.id}
+                          className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent"
+                          onClick={() => toggleTag(tag.id)}
+                        >
+                          <Checkbox
+                            checked={filters.tagIds.includes(tag.id)}
+                            onCheckedChange={() => toggleTag(tag.id)}
+                          />
+                          <div
+                            className="w-3 h-3 rounded-full shrink-0"
+                            style={{ backgroundColor: tag.color }}
+                          />
+                          <span>{tag.name}</span>
+                        </div>
+                      ))}
+                      {filteredTags.length === 0 && (
+                        <div className="text-center text-muted-foreground py-2">
+                          לא נמצאו תגיות
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                  {filters.tagIds.length > 0 && (
+                    <div className="p-2 border-t">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => setFilters(prev => ({ ...prev, tagIds: [] }))}
+                      >
+                        <X className="h-4 w-4 ml-2" />
+                        נקה בחירה
+                      </Button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* Date Range */}

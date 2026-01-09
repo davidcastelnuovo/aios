@@ -26,15 +26,16 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { FilterState } from "./LeadFiltersDialog";
 
-interface FilterPreset {
+export interface FilterPreset {
   id: string;
   name: string;
   filters: {
     searchQuery?: string | null;
     salesPersonId?: string;
     stageId?: string;
-    responseStatus?: string;
-    tagId?: string;
+    responseStatus?: string | string[]; // Support both old (string) and new (array) format
+    tagId?: string; // Legacy format
+    tagIds?: string[]; // New format
     startDate?: string | null;
     endDate?: string | null;
   };
@@ -248,4 +249,4 @@ export function LeadFilterPresetTabs({
   );
 }
 
-export type { FilterPreset };
+
