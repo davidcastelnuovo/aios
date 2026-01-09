@@ -3278,6 +3278,7 @@ export type Database = {
         | "email_campaign"
         | "event"
         | "other"
+        | "whatsapp"
       lead_status:
         | "new"
         | "contacted"
@@ -3495,6 +3496,7 @@ export const Constants = {
         "email_campaign",
         "event",
         "other",
+        "whatsapp",
       ],
       lead_status: [
         "new",
