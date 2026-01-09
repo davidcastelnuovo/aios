@@ -417,38 +417,76 @@ function calculateMetrics(
 
   if (filtered.length === 0) return 0;
 
-  // Map metric names to possible data keys
+  // For cost_per_lead: calculate as total spend / total leads
+  if (metric === "cost_per_lead") {
+    let totalSpend = 0;
+    let totalLeads = 0;
+    
+    for (const record of filtered) {
+      const spend = parseFloat(record.data?.spend) || parseFloat(record.data?.amount_spent) || parseFloat(record.data?.Spend) || 0;
+      const leads = parseFloat(record.data?.leads) || parseFloat(record.data?.results) || parseFloat(record.data?.Leads) || 0;
+      totalSpend += spend;
+      totalLeads += leads;
+    }
+    
+    if (totalLeads === 0) return 0;
+    return totalSpend / totalLeads;
+  }
+
+  // For CPM: calculate as (total spend / total impressions) * 1000
+  if (metric === "cpm") {
+    let totalSpend = 0;
+    let totalImpressions = 0;
+    
+    for (const record of filtered) {
+      const spend = parseFloat(record.data?.spend) || parseFloat(record.data?.amount_spent) || parseFloat(record.data?.Spend) || 0;
+      const impressions = parseFloat(record.data?.impressions) || parseFloat(record.data?.Impressions) || 0;
+      totalSpend += spend;
+      totalImpressions += impressions;
+    }
+    
+    if (totalImpressions === 0) return 0;
+    return (totalSpend / totalImpressions) * 1000;
+  }
+
+  // For CTR: calculate as (total clicks / total impressions) * 100
+  if (metric === "ctr") {
+    let totalClicks = 0;
+    let totalImpressions = 0;
+    
+    for (const record of filtered) {
+      const clicks = parseFloat(record.data?.clicks) || parseFloat(record.data?.link_clicks) || parseFloat(record.data?.Clicks) || 0;
+      const impressions = parseFloat(record.data?.impressions) || parseFloat(record.data?.Impressions) || 0;
+      totalClicks += clicks;
+      totalImpressions += impressions;
+    }
+    
+    if (totalImpressions === 0) return 0;
+    return (totalClicks / totalImpressions) * 100;
+  }
+
+  // For other metrics: sum them up
   const metricKeys: Record<string, string[]> = {
-    cost_per_lead: ["cost_per_lead", "costPerLead", "cost_per_result"],
     spend: ["spend", "amount_spent", "Spend"],
     leads: ["leads", "results", "Leads"],
     impressions: ["impressions", "Impressions"],
     clicks: ["clicks", "link_clicks", "Clicks"],
-    ctr: ["ctr", "CTR"],
-    cpm: ["cpm", "CPM"],
   };
 
   const keys = metricKeys[metric] || [metric];
-
-  // Sum or average based on metric type
-  const isAverageMetric = ["cost_per_lead", "ctr", "cpm"].includes(metric);
-
   let total = 0;
-  let count = 0;
 
   for (const record of filtered) {
     for (const key of keys) {
       const value = parseFloat(record.data?.[key]);
       if (!isNaN(value)) {
         total += value;
-        count++;
         break;
       }
     }
   }
 
-  if (count === 0) return 0;
-  return isAverageMetric ? total / count : total;
+  return total;
 }
 
 function formatValue(value: number, metric: string): string {
