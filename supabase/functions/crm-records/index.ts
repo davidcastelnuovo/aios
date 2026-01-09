@@ -138,6 +138,46 @@ Deno.serve(async (req) => {
         });
       }
 
+      // Fetch table info to determine access and correct tenant_id for filtering
+      const { data: tableInfo, error: tableError } = await supabase
+        .from('crm_tables')
+        .select('tenant_id, agency_id')
+        .eq('id', table_id)
+        .single();
+
+      if (tableError || !tableInfo) {
+        console.error('Table not found:', table_id);
+        return new Response(JSON.stringify({ error: 'Table not found' }), {
+          status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Check access: user's tenant matches table's tenant OR table's agency is shared with user's tenant
+      let hasAccess = tableInfo.tenant_id === tenantId;
+      
+      if (!hasAccess && tableInfo.agency_id) {
+        // Check if this agency is shared with the user's tenant
+        const { data: sharedAccess } = await supabase
+          .from('agency_tenant_access')
+          .select('id')
+          .eq('agency_id', tableInfo.agency_id)
+          .eq('accessing_tenant_id', tenantId)
+          .limit(1);
+        
+        hasAccess = !!(sharedAccess && sharedAccess.length > 0);
+      }
+
+      if (!hasAccess) {
+        console.error('Access denied: user tenant', tenantId, 'cannot access table from tenant', tableInfo.tenant_id);
+        return new Response(JSON.stringify({ error: 'Access denied' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Use the TABLE's tenant_id for filtering records, not the user's tenant_id
+      const effectiveTenantId = tableInfo.tenant_id;
+      console.log(`📊 User tenant: ${tenantId}, Table tenant: ${effectiveTenantId}, Agency: ${tableInfo.agency_id}`);
+
       // Check if aggregated data is requested (for dashboards like Search Console)
       if (aggregated === 'search_console') {
         console.log(`📊 Fetching aggregated Search Console data for table ${table_id}`);
@@ -150,7 +190,7 @@ Deno.serve(async (req) => {
             .from('crm_records')
             .select('id, data')
             .eq('table_id', table_id)
-            .eq('tenant_id', tenantId)
+            .eq('tenant_id', effectiveTenantId)
             .range(from, from + pageSize - 1);
 
           if (error) throw error;
@@ -222,7 +262,7 @@ Deno.serve(async (req) => {
           .from('crm_records')
           .select('*')
           .eq('table_id', table_id)
-          .eq('tenant_id', tenantId)
+          .eq('tenant_id', effectiveTenantId)
           .order('created_at', { ascending: false })
           .range(from, to);
 
