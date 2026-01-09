@@ -2166,12 +2166,14 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
             { 
               id: "tags", 
               label: "תגיות", 
-              width: 150,
+              width: 200,
               render: (lead: any) => {
                 const tagIds = leadsTagsMap[lead.id] || [];
                 return (
-                  <div className="flex items-center gap-1">
-                    <LeadTagBadges allTags={allTags} tagIds={tagIds} />
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                      <LeadTagBadges allTags={allTags} tagIds={tagIds} />
+                    </div>
                     <LeadTagSelector leadId={lead.id} initialTagIds={tagIds} />
                   </div>
                 );
