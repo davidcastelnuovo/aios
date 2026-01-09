@@ -15,9 +15,9 @@ interface Field {
   exampleValue: string;
 }
 
-// Base fields with default labels
-const baseFields: Field[] = [
-  { key: "tenant_slug", label: "🔑 מזהה ארגון (חובה)", exampleValue: "your-tenant-slug" },
+// Base fields with default labels (tenant_slug exampleValue is set dynamically)
+const getBaseFields = (tenantSlug: string): Field[] => [
+  { key: "tenant_slug", label: "🔑 מזהה ארגון (חובה)", exampleValue: tenantSlug || "your-tenant-slug" },
   { key: "company_name", label: "שם החברה", exampleValue: "שם החברה" },
   { key: "contact_name", label: "שם איש קשר", exampleValue: "שם איש הקשר" },
   { key: "email", label: "אימייל", exampleValue: "email@example.com" },
@@ -37,6 +37,9 @@ export default function JsonLeadBuilder() {
   const { toast } = useToast();
   const { tenant } = useCurrentTenant();
   const [selectedFields, setSelectedFields] = useState<string[]>(["tenant_slug", "company_name"]);
+
+  // Get base fields with dynamic tenant slug
+  const baseFields = useMemo(() => getBaseFields(tenant?.slug || ''), [tenant?.slug]);
 
   // Fetch custom field labels for leads
   const { data: customFields } = useQuery({
