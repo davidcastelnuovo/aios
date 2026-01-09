@@ -191,7 +191,7 @@ Deno.serve(async (req) => {
         }
 
         // Fetch insights from Facebook
-        const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,cost_per_action_type,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&limit=500&access_token=${accessToken}`;
+        const insightsUrl = `https://graph.facebook.com/v21.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,impressions,clicks,cpm,ctr,actions,conversions,cost_per_action_type,cost_per_conversion,spend&time_range={"since":"${sinceStr}","until":"${untilStr}"}&time_increment=1&limit=500&access_token=${accessToken}`;
         
         const response = await fetch(insightsUrl);
         const data = await response.json();
@@ -203,32 +203,46 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // All lead action types to count (including landing page leads)
+        // All lead action types to count.
+        // Note: when the account uses a Custom Conversion as the "Result",
+        // Facebook returns it as action_type like: offsite_conversion.custom.*
         const leadActionTypes = [
-          'lead',  // Aggregate lead count
-          'leadgen_grouped',  // Facebook Lead Forms
-          'offsite_conversion.fb_pixel_lead',  // Landing page leads!
-          'onsite_conversion.lead_grouped',  // On-site leads
-          'app_custom_event.fb_mobile_lead',  // App leads
+          'lead', // Aggregate lead count
+          'leadgen_grouped', // Facebook Lead Forms
+          'offsite_conversion.fb_pixel_lead', // Landing page leads (standard pixel event)
+          'onsite_conversion.lead_grouped', // On-site leads
+          'app_custom_event.fb_mobile_lead', // App leads
         ];
 
         const insights: InsightRecord[] = (data.data || []).map((insight: any) => {
-          // Extract lead count from all lead action types
+          const allActions = [...(insight.actions ?? []), ...(insight.conversions ?? [])];
+
+          // Extract lead count
           let leads = 0;
-          const aggregateLeadAction = insight.actions?.find((a: any) => a.action_type === 'lead');
+          const aggregateLeadAction = allActions.find((a: any) => a.action_type === 'lead');
           if (aggregateLeadAction) {
             // If 'lead' exists, it's the aggregate - use it
             leads = parseInt(aggregateLeadAction.value) || 0;
           } else {
-            // Otherwise, sum up all other lead types
-            leads = insight.actions
-              ?.filter((a: any) => leadActionTypes.slice(1).includes(a.action_type))
-              .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0) || 0;
+            // Otherwise, sum up all other lead-like types + custom conversions
+            leads = allActions
+              .filter((a: any) => {
+                const type = String(a.action_type || '');
+                return (
+                  leadActionTypes.slice(1).includes(type) ||
+                  type.startsWith('offsite_conversion.custom')
+                );
+              })
+              .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
           }
-          
+
           // Extract cost per lead - try aggregate first, then calculate
           let costPerLead = 0;
-          const cplAction = insight.cost_per_action_type?.find((a: any) => a.action_type === 'lead');
+          const allCpl = [
+            ...(insight.cost_per_action_type ?? []),
+            ...(insight.cost_per_conversion ?? []),
+          ];
+          const cplAction = allCpl.find((a: any) => a.action_type === 'lead');
           if (cplAction) {
             costPerLead = parseFloat(cplAction.value) || 0;
           } else if (leads > 0) {
