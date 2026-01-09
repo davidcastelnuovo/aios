@@ -185,23 +185,23 @@ export function LeadFilterPresetTabs({
             
             {/* Preset list */}
             {presets.map((preset) => (
-              <div key={preset.id} className="flex items-center group">
-                <DropdownMenuItem
-                  onClick={() => onPresetSelect(preset)}
-                  className={cn(
-                    "flex-1 gap-2",
-                    activePresetId === preset.id && "bg-accent"
-                  )}
-                >
-                  {preset.name}
-                </DropdownMenuItem>
-                <div className="flex items-center gap-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <DropdownMenuItem
+                key={preset.id}
+                onClick={() => onPresetSelect(preset)}
+                className={cn(
+                  "flex items-center justify-between gap-2 group",
+                  activePresetId === preset.id && "bg-accent"
+                )}
+              >
+                <span>{preset.name}</span>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6"
                     onClick={(e) => {
                       e.stopPropagation();
+                      e.preventDefault();
                       handleEditClick(preset);
                     }}
                   >
@@ -213,13 +213,14 @@ export function LeadFilterPresetTabs({
                     className="h-6 w-6 text-destructive hover:text-destructive"
                     onClick={(e) => {
                       e.stopPropagation();
+                      e.preventDefault();
                       handleDeleteClick(preset);
                     }}
                   >
                     <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
-              </div>
+              </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
