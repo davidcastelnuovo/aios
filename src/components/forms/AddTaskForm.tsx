@@ -306,6 +306,10 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
       if (!currentTenantId) throw new Error("לא נמצא טנט פעיל");
       const tenantId = currentTenantId;
       
+      // Get current user ID for created_by field
+      const { data: sessionData } = await supabase.auth.getSession();
+      const currentUserId = sessionData?.session?.user?.id;
+
       const { error } = await supabase.from("tasks").insert([{
         title: values.title,
         notes: values.notes || null,
@@ -319,6 +323,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         priority: values.priority,
         task_type: "other",
         tenant_id: tenantId,
+        created_by: currentUserId,
       }]);
       if (error) throw error;
 

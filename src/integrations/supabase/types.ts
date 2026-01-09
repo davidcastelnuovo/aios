@@ -2369,6 +2369,7 @@ export type Database = {
           campaigner_id: string | null
           client_id: string | null
           created_at: string
+          created_by: string | null
           due_date: string | null
           due_time: string | null
           duration_minutes: number | null
@@ -2391,6 +2392,7 @@ export type Database = {
           campaigner_id?: string | null
           client_id?: string | null
           created_at?: string
+          created_by?: string | null
           due_date?: string | null
           due_time?: string | null
           duration_minutes?: number | null
@@ -2413,6 +2415,7 @@ export type Database = {
           campaigner_id?: string | null
           client_id?: string | null
           created_at?: string
+          created_by?: string | null
           due_date?: string | null
           due_time?: string | null
           duration_minutes?: number | null

@@ -2182,10 +2182,19 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
             { 
               id: "actions", 
               label: "פעולות", 
-              width: 90,
+              width: 120,
               render: (lead: any) => (
-                <div className="flex justify-center">
+                <div className="flex justify-center gap-1">
                   <EditLeadDialog lead={lead} />
+                  <AddTaskForm
+                    leadId={lead.id}
+                    agencyId={lead.agency_id || undefined}
+                    triggerButton={
+                      <Button variant="ghost" size="icon" className="h-8 w-8" title="הוסף משימה">
+                        <CheckSquare className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
                 </div>
               )
             },
