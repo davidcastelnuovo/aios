@@ -79,6 +79,13 @@ export function LeadFiltersDialog({
   const [statusPopoverOpen, setStatusPopoverOpen] = useState(false);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
 
+  // Handle wheel scroll inside popover
+  const handleScrollWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const target = e.currentTarget;
+    target.scrollTop += e.deltaY;
+  };
+
   // Filtered options based on search
   const filteredStatuses = useMemo(() => {
     if (!statusSearch.trim()) return leadStatuses;
@@ -323,7 +330,7 @@ export function LeadFiltersDialog({
                       />
                     </div>
                   </div>
-                  <div className="max-h-[200px] overflow-y-auto">
+                  <div className="max-h-[200px] overflow-y-auto" onWheel={handleScrollWheel}>
                     <div className="p-2 space-y-1">
                       {/* "None" option */}
                       <label
@@ -405,7 +412,7 @@ export function LeadFiltersDialog({
                       />
                     </div>
                   </div>
-                  <div className="max-h-[200px] overflow-y-auto">
+                  <div className="max-h-[200px] overflow-y-auto" onWheel={handleScrollWheel}>
                     <div className="p-2 space-y-1">
                       {/* "None" option */}
                       <label
