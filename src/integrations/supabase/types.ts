@@ -2080,6 +2080,69 @@ export type Database = {
           },
         ]
       }
+      report_alerts: {
+        Row: {
+          comparison_type: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_active: boolean | null
+          is_percentage: boolean | null
+          metric: string
+          name: string
+          operator: string
+          table_id: string
+          tenant_id: string
+          threshold: number
+          updated_at: string | null
+        }
+        Insert: {
+          comparison_type: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_percentage?: boolean | null
+          metric: string
+          name: string
+          operator: string
+          table_id: string
+          tenant_id: string
+          threshold: number
+          updated_at?: string | null
+        }
+        Update: {
+          comparison_type?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_percentage?: boolean | null
+          metric?: string
+          name?: string
+          operator?: string
+          table_id?: string
+          tenant_id?: string
+          threshold?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "report_alerts_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "crm_tables"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "report_alerts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sales_people: {
         Row: {
           active: boolean
