@@ -172,24 +172,67 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Map source if needed
+    // Map source into DB enum values (lead_source)
+    // Allowed enum values: website, referral, social_media, paid_ads, cold_call, email_campaign, event, other
     const sourceMap: Record<string, string> = {
+      // website
       'website': 'website',
-      'אתר': 'website',
+      'site': 'website',
       'form': 'website',
       'contact_form': 'website',
+      'אתר': 'website',
+      'טופס': 'website',
+
+      // referral
+      'referral': 'referral',
+      'recommendation': 'referral',
+      'המלצה': 'referral',
+
+      // social media
+      'social': 'social_media',
+      'social_media': 'social_media',
+      'facebook': 'social_media',
+      'instagram': 'social_media',
+      'linkedin': 'social_media',
+      'tiktok': 'social_media',
+      'סושיאל': 'social_media',
+
+      // paid ads
+      'paid_ads': 'paid_ads',
+      'ads': 'paid_ads',
+      'google_ads': 'paid_ads',
+      'facebook_ads': 'paid_ads',
+      'ממומן': 'paid_ads',
+
+      // cold call
+      'cold_call': 'cold_call',
+      'call': 'cold_call',
+      'phone_call': 'cold_call',
+      'שיחה': 'cold_call',
+
+      // email campaign
+      'email_campaign': 'email_campaign',
+      'email': 'email_campaign',
+      'newsletter': 'email_campaign',
+      'דיוור': 'email_campaign',
+
+      // event
+      'event': 'event',
+      'webinar': 'event',
+      'conference': 'event',
+      'כנס': 'event',
+
+      // tooling / misc
       'make': 'other',
       'zapier': 'other',
-      'referral': 'referral',
-      'linkedin': 'linkedin',
-      'facebook': 'facebook',
-      'ווטסאפ': 'whatsapp',
-      'whatsapp': 'whatsapp',
+
+      // messaging channels (no dedicated enum currently)
+      'whatsapp': 'other',
+      'ווטסאפ': 'other',
     }
-    
-    const leadSource = payload.source 
-      ? (sourceMap[payload.source.toLowerCase()] || 'other')
-      : 'other'
+
+    const normalizedSource = payload.source?.toString().trim().toLowerCase() || ''
+    const leadSource = normalizedSource ? (sourceMap[normalizedSource] || 'other') : 'other'
 
     // Insert lead - all fields optional
     const { data: lead, error } = await supabase
