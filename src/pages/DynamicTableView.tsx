@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -36,6 +36,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnalyticsDashboard";
 import { SearchConsoleDashboard } from "@/components/dynamic-tables/SearchConsoleDashboard";
+import { AlertsManagementDialog } from "@/components/dynamic-tables/AlertsManagementDialog";
+import { ActiveAlerts } from "@/components/dynamic-tables/ActiveAlerts";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -90,6 +92,7 @@ export default function DynamicTableView() {
   const [activeTab, setActiveTab] = useState<string>("main"); // 'main' | 'facebook' | 'google_ads' | 'combined'
   const [showGoogleSettingsDialog, setShowGoogleSettingsDialog] = useState(false);
   const [selectedGoogleAccount, setSelectedGoogleAccount] = useState<string>("");
+  const [showAlertsDialog, setShowAlertsDialog] = useState(false);
   const cellInputRef = useRef<HTMLInputElement>(null);
 
   const dateFilterOptions = [
@@ -864,6 +867,14 @@ export default function DynamicTableView() {
               >
                 <Settings className="h-4 w-4" />
               </Button>
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => setShowAlertsDialog(true)}
+                title="הגדרות התראות"
+              >
+                <Bell className="h-4 w-4" />
+              </Button>
             </div>
           )}
           
@@ -1099,6 +1110,20 @@ export default function DynamicTableView() {
           </DropdownMenu>
         </div>
       </div>
+
+      {/* Active Alerts for Facebook Insights */}
+      {hasFacebook && table?.id && records && records.length > 0 && (
+        <ActiveAlerts tableId={table.id} records={records} />
+      )}
+
+      {/* Alerts Management Dialog */}
+      {table?.id && (
+        <AlertsManagementDialog
+          open={showAlertsDialog}
+          onOpenChange={setShowAlertsDialog}
+          tableId={table.id}
+        />
+      )}
 
       {/* Summary Stats for Facebook Insights */}
       {hasFacebook && records && records.length > 0 && (
