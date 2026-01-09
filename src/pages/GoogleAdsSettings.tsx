@@ -94,7 +94,7 @@ export default function GoogleAdsSettings() {
   // Check status mutation
   const checkStatusMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('google-ads-auth?action=check_connection', {
+      const { data, error } = await supabase.functions.invoke('google-ads-auth?action=check_status', {
         body: {
           tenant_id: currentTenant?.id,
           user_id: user?.id,
