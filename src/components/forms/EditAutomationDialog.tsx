@@ -30,7 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Info } from "lucide-react";
+import { Info, Copy, ExternalLink } from "lucide-react";
 import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 import { MessageTemplateBuilder } from "./MessageTemplateBuilder";
 
@@ -48,8 +48,9 @@ const formSchema = z.object({
     "meeting_created",
     "task_calendar_created",
     "task_overdue",
+    "inbound_webhook_task",
   ]),
-  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber", "send_greenapi_message", "send_greenapi_to_campaigner", "add_lead_update", "add_client_update"]),
+  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber", "send_greenapi_message", "send_greenapi_to_campaigner", "add_lead_update", "add_client_update", "create_task"]),
   // Green API connection selection
   green_api_integration_id: z.string().optional(),
   campaigner_send_target: z.enum(["phone", "group"]).optional(),
@@ -388,6 +389,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                       <SelectItem value="meeting_created">נוצרה פגישה</SelectItem>
                       <SelectItem value="task_calendar_created">משימה נוספה ליומן</SelectItem>
                       <SelectItem value="task_overdue">משימה לא הושלמה בזמן</SelectItem>
+                      <SelectItem value="inbound_webhook_task">קבלת משימה מ-Webhook</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -429,6 +431,36 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                   </FormItem>
                 )}
               />
+            )}
+
+            {triggerType === "inbound_webhook_task" && (
+              <div className="p-4 rounded-lg bg-muted/50 border space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <ExternalLink className="h-4 w-4" />
+                  <span>Webhook URL לקליטת משימות</span>
+                </div>
+                <div className="flex gap-2">
+                  <Input 
+                    readOnly 
+                    value={`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-task-intake`}
+                    className="font-mono text-xs bg-background"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-task-intake`);
+                      toast.success("הועתק!");
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  שלח POST request עם JSON לכתובת זו. חובה לכלול tenant_slug ו-title.
+                </p>
+              </div>
             )}
 
             <FormField

@@ -38,6 +38,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   onboarding_status_changed: "סטטוס קליטה השתנה",
   meeting_created: "נוצרה פגישה",
   task_overdue: "משימה לא הושלמה בזמן",
+  inbound_webhook_task: "קבלת משימה מ-Webhook",
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -50,6 +51,7 @@ const ACTION_LABELS: Record<string, string> = {
   send_greenapi_message: "שלח WhatsApp (Green API)",
   add_lead_update: "הוסף עדכון לליד",
   add_client_update: "הוסף עדכון ללקוח",
+  create_task: "צור משימה",
 };
 
 export default function Automations() {
