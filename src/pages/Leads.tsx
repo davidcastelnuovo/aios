@@ -951,7 +951,7 @@ export default function Leads() {
   }, [leads]);
 
   const updateLeadStatus = useMutation({
-    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "meeting_scheduled" | "negotiation" | "transferred_to_onboarding" | "closed" }) => {
+    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "meeting_scheduled" | "negotiation" | "transferred_to_onboarding" | "closed" | "won" | "lost" }) => {
       // Get lead data before update to know old status
       const { data: leadBefore } = await supabase
         .from("leads")
@@ -961,7 +961,7 @@ export default function Leads() {
 
       const { error } = await supabase
         .from("leads")
-        .update({ status: newStatus })
+        .update({ status: newStatus as any })
         .eq("id", leadId);
 
       if (error) throw error;
@@ -1500,7 +1500,7 @@ export default function Leads() {
                             onStatusChange={(leadId, newStatus) => 
                               updateLeadStatus.mutate({ 
                                 leadId, 
-                                newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
+                                newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "meeting_scheduled" | "negotiation" | "transferred_to_onboarding" | "closed" | "won" | "lost" 
                               })
                             }
                             onResponseStatusChange={(leadId, responseStatus) =>
