@@ -5,6 +5,8 @@ import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -13,12 +15,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, CalendarIcon } from "lucide-react";
+import { Plus, CalendarIcon, Settings2, Tag, Settings } from "lucide-react";
 import { useAgency } from "@/contexts/AgencyContext";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
+import { useLeadStatuses } from "@/hooks/useLeadStatuses";
+import { useLeadPipelineStages } from "@/hooks/useLeadPipelineStages";
+import { ManageLeadStatusesDialog } from "./ManageLeadStatusesDialog";
+import { ManagePipelineStagesDialog } from "./ManagePipelineStagesDialog";
+import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 const formSchema = z.object({
   company_name: z.string().optional().default(""),
@@ -43,11 +51,37 @@ type FormValues = z.infer<typeof formSchema>;
 
 export function AddLeadForm() {
   const [open, setOpen] = useState(false);
+  const [responseSelectOpen, setResponseSelectOpen] = useState(false);
+  const [stageSelectOpen, setStageSelectOpen] = useState(false);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [isTagsPopoverOpen, setIsTagsPopoverOpen] = useState(false);
+  const [isTagsManagerOpen, setIsTagsManagerOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
+  const { userId } = useCurrentUser();
   const { getFieldLabel, isFieldVisible } = useCustomFieldLabels('lead');
+  const { activeStatuses: leadStatuses } = useLeadStatuses();
+  const { activeStages: pipelineStages } = useLeadPipelineStages();
+
+  // Fetch all available tags
+  const { data: allTags = [] } = useQuery({
+    queryKey: ['chat-tags', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from('chat_tags')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('sort_order', { ascending: true });
+      
+      if (error) throw error;
+      return data as Array<{ id: string; name: string; color: string }>;
+    },
+    enabled: !!tenantId && open,
+    staleTime: 60000,
+  });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -57,7 +91,7 @@ export function AddLeadForm() {
       email: "",
       phone: "",
       source: "",
-      status: "new",
+      status: pipelineStages[0]?.stage_key || "new",
       response_status: "",
       estimated_deal_value: "",
       monthly_budget: "",
@@ -154,6 +188,24 @@ export function AddLeadForm() {
     onSuccess: async (data) => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
       
+      // Add selected tags to the newly created lead
+      if (data && selectedTags.length > 0 && userId && tenantId) {
+        for (const tagId of selectedTags) {
+          try {
+            await supabase
+              .from('chat_contact_tags')
+              .insert({
+                tag_id: tagId,
+                user_id: userId,
+                tenant_id: tenantId,
+                lead_id: data.id,
+              });
+          } catch (tagError) {
+            console.error('Error adding tag:', tagError);
+          }
+        }
+      }
+      
       // Trigger lead_created automation
       if (data && tenantId) {
         try {
@@ -185,6 +237,7 @@ export function AddLeadForm() {
       });
       setOpen(false);
       form.reset();
+      setSelectedTags([]);
     },
     onError: (error: any) => {
       toast({
@@ -328,6 +381,121 @@ export function AddLeadForm() {
             <div className="grid grid-cols-3 gap-4">
               <FormField
                 control={form.control}
+                name="response_status"
+                render={({ field }) => {
+                  const selectedStatus = leadStatuses.find(s => s.status_key === field.value);
+                  return (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">סטטוס תגובה</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        defaultValue={field.value}
+                        open={responseSelectOpen}
+                        onOpenChange={setResponseSelectOpen}
+                      >
+                        <FormControl>
+                          <SelectTrigger 
+                            className="rounded-lg border-2 h-11"
+                            style={{ 
+                              backgroundColor: selectedStatus?.color || undefined,
+                              color: field.value ? '#fff' : undefined 
+                            }}
+                          >
+                            <SelectValue placeholder="בחר סטטוס" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          <SelectItem value="none">ללא סטטוס</SelectItem>
+                          {leadStatuses.map((status) => (
+                            <SelectItem 
+                              key={status.status_key} 
+                              value={status.status_key}
+                              style={{ backgroundColor: status.color, color: '#fff' }}
+                            >
+                              {status.label}
+                            </SelectItem>
+                          ))}
+                          <div className="border-t mt-1 pt-1">
+                            <ManageLeadStatusesDialog 
+                              trigger={
+                                <button 
+                                  type="button"
+                                  className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
+                                >
+                                  <Settings2 className="h-4 w-4" />
+                                  ניהול סטטוסים
+                                </button>
+                              }
+                              onDialogOpen={() => setResponseSelectOpen(false)}
+                            />
+                          </div>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
+              />
+
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => {
+                  const selectedStage = pipelineStages.find(s => s.stage_key === field.value);
+                  return (
+                    <FormItem>
+                      <FormLabel className="text-sm font-medium">שלב במשפך</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        defaultValue={field.value}
+                        open={stageSelectOpen}
+                        onOpenChange={setStageSelectOpen}
+                      >
+                        <FormControl>
+                          <SelectTrigger 
+                            className="rounded-lg border-2 h-11"
+                            style={{ 
+                              backgroundColor: selectedStage?.color || undefined,
+                              color: field.value ? '#fff' : undefined 
+                            }}
+                          >
+                            <SelectValue placeholder="בחר שלב" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          {pipelineStages.map((stage) => (
+                            <SelectItem 
+                              key={stage.stage_key} 
+                              value={stage.stage_key}
+                              style={{ backgroundColor: stage.color, color: '#fff' }}
+                            >
+                              {stage.label}
+                            </SelectItem>
+                          ))}
+                          <div className="border-t mt-1 pt-1">
+                            <ManagePipelineStagesDialog 
+                              trigger={
+                                <button 
+                                  type="button"
+                                  className="w-full flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-muted rounded cursor-pointer"
+                                >
+                                  <Settings2 className="h-4 w-4" />
+                                  ניהול שלבי משפך
+                                </button>
+                              }
+                              onDialogOpen={() => setStageSelectOpen(false)}
+                            />
+                          </div>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  );
+                }}
+              />
+
+              <FormField
+                control={form.control}
                 name="source"
                 render={({ field }) => (
                   <FormItem>
@@ -339,13 +507,11 @@ export function AddLeadForm() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent className="bg-background z-[100]">
+                        <SelectItem value="phone">טלפון</SelectItem>
                         <SelectItem value="website">אתר</SelectItem>
+                        <SelectItem value="facebook">פייסבוק</SelectItem>
+                        <SelectItem value="google">גוגל</SelectItem>
                         <SelectItem value="referral">הפניה</SelectItem>
-                        <SelectItem value="social_media">רשתות חברתיות</SelectItem>
-                        <SelectItem value="paid_ads">פרסום ממומן</SelectItem>
-                        <SelectItem value="cold_call">שיחה קרה</SelectItem>
-                        <SelectItem value="email_campaign">קמפיין מייל</SelectItem>
-                        <SelectItem value="event">אירוע</SelectItem>
                         <SelectItem value="other">אחר</SelectItem>
                       </SelectContent>
                     </Select>
@@ -353,57 +519,83 @@ export function AddLeadForm() {
                   </FormItem>
                 )}
               />
+            </div>
 
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">שלב במשפך</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger className="rounded-lg border-2 h-11">
-                          <SelectValue placeholder="בחר שלב" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-background z-[100]">
-                        <SelectItem value="new">ליד חדש</SelectItem>
-                        <SelectItem value="contacted">נוצר קשר</SelectItem>
-                        <SelectItem value="follow_up">תהליך פולואפ</SelectItem>
-                        <SelectItem value="proposal_sent">נשלחה הצעה</SelectItem>
-                        <SelectItem value="closed">נסגר</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="response_status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-sm font-medium">סטטוס</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                       <FormControl>
-                        <SelectTrigger className="rounded-lg border-2 h-11">
-                          <SelectValue placeholder="בחר סטטוס" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent className="bg-background z-[100]">
-                        <SelectItem value="no_answer_1">אין מענה 1</SelectItem>
-                        <SelectItem value="no_answer_2">אין מענה 2</SelectItem>
-                        <SelectItem value="no_answer_3">אין מענה 3</SelectItem>
-                        <SelectItem value="no_answer_4">אין מענה 4</SelectItem>
-                        <SelectItem value="denies_contact">מכחיש פניה</SelectItem>
-                        <SelectItem value="not_relevant">לא רלוונטי</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            {/* Tags Section */}
+            <div className="space-y-2">
+              <FormLabel className="text-sm font-medium">תגיות</FormLabel>
+              <div className="flex flex-wrap gap-2 items-center">
+                {selectedTags.length > 0 && allTags.filter(t => selectedTags.includes(t.id)).map((tag) => (
+                  <Badge
+                    key={tag.id}
+                    variant="outline"
+                    className="cursor-pointer"
+                    style={{ 
+                      backgroundColor: `${tag.color}20`,
+                      borderColor: tag.color,
+                      color: tag.color 
+                    }}
+                    onClick={() => setSelectedTags(prev => prev.filter(id => id !== tag.id))}
+                  >
+                    {tag.name} ×
+                  </Badge>
+                ))}
+                <Popover open={isTagsPopoverOpen} onOpenChange={setIsTagsPopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8">
+                      <Tag className="h-4 w-4 ml-1" />
+                      הוסף תגית
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-2 bg-background z-[100]" align="start" dir="rtl">
+                    <div className="space-y-1">
+                      {allTags.length === 0 ? (
+                        <div className="text-center text-muted-foreground text-sm py-2">
+                          אין תגיות זמינות
+                        </div>
+                      ) : (
+                        allTags.map((tag) => {
+                          const isSelected = selectedTags.includes(tag.id);
+                          return (
+                            <div
+                              key={tag.id}
+                              className="flex items-center gap-2 p-2 rounded-md hover:bg-muted cursor-pointer"
+                              onClick={() => {
+                                setSelectedTags(prev => 
+                                  isSelected 
+                                    ? prev.filter(id => id !== tag.id)
+                                    : [...prev, tag.id]
+                                );
+                              }}
+                            >
+                              <Checkbox checked={isSelected} />
+                              <div
+                                className="w-3 h-3 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: tag.color }}
+                              />
+                              <span className="text-sm flex-1">{tag.name}</span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                    <div className="border-t border-border mt-2 pt-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-start text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setIsTagsPopoverOpen(false);
+                          setIsTagsManagerOpen(true);
+                        }}
+                      >
+                        <Settings className="h-4 w-4 ml-2" />
+                        ניהול תגיות
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -560,6 +752,13 @@ export function AddLeadForm() {
           </form>
         </Form>
       </DialogContent>
+
+      {/* Tags Manager Dialog */}
+      <ChatTagsManager
+        open={isTagsManagerOpen}
+        onOpenChange={setIsTagsManagerOpen}
+        showTrigger={false}
+      />
     </Dialog>
   );
 }
