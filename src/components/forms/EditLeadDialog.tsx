@@ -193,7 +193,8 @@ const updateMutation = useMutation({
         contact_name: values.contact_name || null,
         email: values.email || null,
         phone: values.phone || null,
-        source: (values.source as any) || null,
+        // "source" is optional in UI, but stored as "other" when empty to satisfy DB constraints
+        source: (values.source as any) || 'other',
         status: (values.status as any) || 'new',
         response_status: values.response_status && values.response_status !== 'none' ? (values.response_status as any) : null,
         estimated_deal_value: values.estimated_deal_value 
