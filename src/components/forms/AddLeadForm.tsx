@@ -119,17 +119,16 @@ export function AddLeadForm() {
       // Use contact_name as company_name if company_name is empty
       const companyName = values.company_name?.trim() || values.contact_name?.trim() || "ליד חדש";
       
-      const submitData: any = {
-        company_name: companyName,
-        contact_name: values.contact_name || null,
-        email: values.email || null,
-        phone: values.phone || null,
-        source: (values.source as any) || null,
-        status: (values.status as any) || 'new',
-        response_status: (values.response_status as any) || null,
-        estimated_deal_value: values.estimated_deal_value 
-          ? parseFloat(values.estimated_deal_value) 
-          : null,
+        const submitData: any = {
+          company_name: companyName,
+          contact_name: values.contact_name || null,
+          email: values.email || null,
+          phone: values.phone || null,
+          // "source" is NOT required in the UI, but the DB column is non-null.
+          // When empty, we store "other" to prevent insert errors.
+          source: (values.source as any) || 'other',
+          status: (values.status as any) || 'new',
+          response_status: (values.response_status as any) || null,
         monthly_budget: values.monthly_budget 
           ? parseFloat(values.monthly_budget) 
           : null,
