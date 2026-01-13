@@ -6,7 +6,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tag, Settings } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Tag, Settings, Search } from "lucide-react";
 import { toast } from "sonner";
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 
@@ -27,6 +28,13 @@ export function LeadTagSelector({ leadId, initialTagIds }: LeadTagSelectorProps)
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [isManagerOpen, setIsManagerOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Reset search when popover closes
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (!open) setSearchQuery("");
+  };
 
   // Fetch all available tags
   const { data: allTags = [] } = useQuery({
@@ -67,6 +75,10 @@ export function LeadTagSelector({ leadId, initialTagIds }: LeadTagSelectorProps)
   });
 
   const contactTags = initialTagIds ?? fetchedContactTags;
+  
+  const filteredTags = allTags.filter(tag => 
+    tag.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const toggleTagMutation = useMutation({
     mutationFn: async ({ tagId, isAssigned }: { tagId: string; isAssigned: boolean }) => {
@@ -131,20 +143,39 @@ export function LeadTagSelector({ leadId, initialTagIds }: LeadTagSelectorProps)
 
   return (
     <>
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <Popover open={isOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button variant="outline" size="icon" className="h-8 w-8" title="תגיות">
             <Tag className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-56 p-2 bg-background z-[100]" align="start" dir="rtl">
-          <div className="space-y-1">
+        <PopoverContent className="w-64 p-2 bg-background z-[100]" align="start" dir="rtl">
+          {/* Search input */}
+          {allTags.length > 3 && (
+            <div className="relative mb-2">
+              <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="חיפוש תגית..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pr-8 h-8 text-sm"
+                dir="rtl"
+              />
+            </div>
+          )}
+
+          {/* Tags list with scroll */}
+          <div className="space-y-1 max-h-[250px] overflow-y-auto">
             {allTags.length === 0 ? (
               <div className="text-center text-muted-foreground text-sm py-2">
                 אין תגיות זמינות
               </div>
+            ) : filteredTags.length === 0 ? (
+              <div className="text-center text-muted-foreground text-sm py-2">
+                לא נמצאו תגיות
+              </div>
             ) : (
-              allTags.map((tag) => {
+              filteredTags.map((tag) => {
                 const isAssigned = contactTags.includes(tag.id);
                 return (
                   <div
