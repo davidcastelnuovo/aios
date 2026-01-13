@@ -2115,6 +2115,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
               width: 150,
               render: (lead: any) => {
                 const status = leadStatuses.find(s => s.status_key === lead.response_status);
+                const displayLabel = status?.label || (lead.response_status ? lead.response_status : null);
                 return (
                   <Select
                     value={lead.response_status || "none"}
@@ -2132,7 +2133,11 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                         color: status?.color ? '#fff' : undefined 
                       }}
                     >
-                      <SelectValue placeholder={isStatusesLoading ? "טוען..." : "בחר סטטוס"} />
+                      {lead.response_status && displayLabel ? (
+                        <span className="truncate">{displayLabel}</span>
+                      ) : (
+                        <SelectValue placeholder={isStatusesLoading ? "טוען..." : "ללא סטטוס"} />
+                      )}
                     </SelectTrigger>
                     <SelectContent className="bg-background z-50">
                       <SelectItem value="none">ללא סטטוס</SelectItem>
@@ -2169,10 +2174,15 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
               width: 200,
               render: (lead: any) => {
                 const tagIds = leadsTagsMap[lead.id] || [];
+                const hasAssignedTags = tagIds.length > 0;
                 return (
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="flex-1 min-w-0 overflow-hidden">
-                      <LeadTagBadges allTags={allTags} tagIds={tagIds} />
+                      {hasAssignedTags ? (
+                        <LeadTagBadges allTags={allTags} tagIds={tagIds} />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">אין תגיות</span>
+                      )}
                     </div>
                     <LeadTagSelector leadId={lead.id} initialTagIds={tagIds} />
                   </div>
