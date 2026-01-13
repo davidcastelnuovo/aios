@@ -42,6 +42,25 @@ export function ResizableTable({
   const [resizing, setResizing] = useState<{ columnId: string; startX: number; startWidth: number } | null>(null);
   const tableRef = useRef<HTMLDivElement>(null);
 
+  // Sync columns with initialColumns when they change (e.g., after data loads)
+  // Preserve user-modified properties (width, sticky) while updating render functions
+  useEffect(() => {
+    setColumns(prevColumns => {
+      return initialColumns.map(newCol => {
+        const existingCol = prevColumns.find(c => c.id === newCol.id);
+        if (existingCol) {
+          // Preserve user-modified width and sticky, but update render and other props
+          return {
+            ...newCol,
+            width: existingCol.width,
+            sticky: existingCol.sticky,
+          };
+        }
+        return newCol;
+      });
+    });
+  }, [initialColumns]);
+
   const updateColumn = useCallback((columnId: string, updates: Partial<ColumnConfig>) => {
     setColumns(prev => {
       const newColumns = prev.map(col => 
