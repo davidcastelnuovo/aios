@@ -567,7 +567,10 @@ export function AddLeadForm() {
                         />
                       </div>
                     )}
-                    <div className="space-y-1 max-h-[250px] overflow-y-auto">
+                    <div 
+                      className="space-y-1 max-h-[250px] overflow-y-auto"
+                      onWheel={(e) => e.stopPropagation()}
+                    >
                       {allTags.length === 0 ? (
                         <div className="text-center text-muted-foreground text-sm py-2">
                           אין תגיות זמינות
