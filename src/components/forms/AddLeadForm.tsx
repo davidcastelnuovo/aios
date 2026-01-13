@@ -162,15 +162,15 @@ export function AddLeadForm() {
           // When empty, we store "other" to prevent insert errors.
           source: (values.source as any) || 'other',
           status: (values.status as any) || 'new',
-          response_status: (values.response_status as any) || null,
+        response_status: values.response_status && values.response_status !== 'none' ? (values.response_status as any) : null,
         monthly_budget: values.monthly_budget 
           ? parseFloat(values.monthly_budget) 
           : null,
         industry: values.industry || null,
         products: values.products || null,
         notes: values.notes || null,
-        sales_person_id: values.sales_person_id || null,
-        agency_id: values.agency_id || null,
+        sales_person_id: values.sales_person_id && values.sales_person_id !== 'none' ? values.sales_person_id : null,
+        agency_id: values.agency_id && values.agency_id !== 'none' ? values.agency_id : null,
         folder_link: values.folder_link || null,
         created_at: values.created_at || new Date(),
         tenant_id: tenantId,
