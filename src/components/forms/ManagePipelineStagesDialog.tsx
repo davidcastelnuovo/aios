@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Settings2, GripVertical, Plus, Trash2 } from "lucide-react";
+import { Settings2, GripVertical, Plus, Trash2, Search } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useLeadPipelineStages, useLeadPipelineStageMutations, LeadPipelineStage } from "@/hooks/useLeadPipelineStages";
 
@@ -114,6 +114,7 @@ export function ManagePipelineStagesDialog({
 
   const [newLabel, setNewLabel] = useState("");
   const [newColor, setNewColor] = useState("#3b82f6");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { stages, isLoading } = useLeadPipelineStages();
   const { updateStage, createStage, deleteStage } = useLeadPipelineStageMutations();
@@ -147,18 +148,33 @@ export function ManagePipelineStagesDialog({
           <DialogTitle>ניהול שלבי משפך</DialogTitle>
         </DialogHeader>
         
+        {stages.length > 3 && (
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="חיפוש שלב..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pr-9 h-9 text-sm"
+              dir="rtl"
+            />
+          </div>
+        )}
+        
         <div className="space-y-2 max-h-[400px] overflow-y-auto">
           {isLoading ? (
             <p className="text-sm text-muted-foreground">טוען...</p>
           ) : (
-            stages.map((stage) => (
-              <StageRow
-                key={stage.id}
-                stage={stage}
-                onUpdate={(updates) => updateStage.mutate({ id: stage.id, ...updates })}
-                onDelete={() => deleteStage.mutate(stage.id)}
-              />
-            ))
+            stages
+              .filter(stage => stage.label.toLowerCase().includes(searchQuery.toLowerCase()))
+              .map((stage) => (
+                <StageRow
+                  key={stage.id}
+                  stage={stage}
+                  onUpdate={(updates) => updateStage.mutate({ id: stage.id, ...updates })}
+                  onDelete={() => deleteStage.mutate(stage.id)}
+                />
+              ))
           )}
         </div>
 

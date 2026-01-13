@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Settings2, Plus, Trash2, GripVertical } from "lucide-react";
+import { Settings2, Plus, Trash2, GripVertical, Search } from "lucide-react";
 import { useLeadStatuses, useLeadStatusMutations, LeadStatus } from "@/hooks/useLeadStatuses";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -202,6 +202,7 @@ export function ManageLeadStatusesDialog({
 
   const [newLabel, setNewLabel] = useState("");
   const [newColor, setNewColor] = useState("#3b82f6");
+  const [searchQuery, setSearchQuery] = useState("");
   const { statuses } = useLeadStatuses();
   const { updateStatus, createStatus, deleteStatus, updateSortOrders } = useLeadStatusMutations();
 
@@ -278,6 +279,19 @@ export function ManageLeadStatusesDialog({
           <DialogTitle>ניהול סטטוסי תגובה</DialogTitle>
         </DialogHeader>
         
+        {localStatuses.length > 3 && (
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="חיפוש סטטוס..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pr-9 h-9 text-sm"
+              dir="rtl"
+            />
+          </div>
+        )}
+        
         <div className="space-y-1 max-h-[400px] overflow-y-auto">
           <DndContext
             sensors={sensors}
@@ -285,17 +299,19 @@ export function ManageLeadStatusesDialog({
             onDragEnd={handleDragEnd}
           >
             <SortableContext
-              items={localStatuses.map((s) => s.id)}
+              items={localStatuses.filter(s => s.label.toLowerCase().includes(searchQuery.toLowerCase())).map((s) => s.id)}
               strategy={verticalListSortingStrategy}
             >
-              {localStatuses.map((status) => (
-                <SortableStatusRow
-                  key={status.id}
-                  status={status}
-                  onUpdate={handleUpdate}
-                  onDelete={handleDelete}
-                />
-              ))}
+              {localStatuses
+                .filter(status => status.label.toLowerCase().includes(searchQuery.toLowerCase()))
+                .map((status) => (
+                  <SortableStatusRow
+                    key={status.id}
+                    status={status}
+                    onUpdate={handleUpdate}
+                    onDelete={handleDelete}
+                  />
+                ))}
             </SortableContext>
           </DndContext>
         </div>
