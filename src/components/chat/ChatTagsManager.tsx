@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Tags, Plus, Trash2, GripVertical } from "lucide-react";
+import { Tags, Plus, Trash2, GripVertical, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   DndContext,
@@ -192,6 +192,7 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#3b82f6");
   const [localTags, setLocalTags] = useState<ChatTag[] | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
@@ -221,6 +222,9 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
   });
 
   const displayTags = localTags ?? tags;
+  const filteredTags = displayTags.filter(tag => 
+    tag.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const createTagMutation = useMutation({
     mutationFn: async () => {
@@ -353,6 +357,20 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
           </Button>
         </div>
 
+        {/* Search tags */}
+        {displayTags.length > 0 && (
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="חיפוש תגית..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pr-9 h-9 text-sm"
+              dir="rtl"
+            />
+          </div>
+        )}
+
         {/* Existing tags */}
         <div className="space-y-2 max-h-[300px] overflow-y-auto">
           {isLoading ? (
@@ -361,6 +379,10 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
             <div className="text-center text-muted-foreground py-4">
               אין תגיות עדיין. הוסף תגית חדשה למעלה.
             </div>
+          ) : filteredTags.length === 0 ? (
+            <div className="text-center text-muted-foreground py-4">
+              לא נמצאו תגיות התואמות לחיפוש
+            </div>
           ) : (
             <DndContext
               sensors={sensors}
@@ -368,10 +390,10 @@ export function ChatTagsManager({ trigger, open: controlledOpen, onOpenChange, s
               onDragEnd={handleDragEnd}
             >
               <SortableContext
-                items={displayTags.map((t) => t.id)}
+                items={filteredTags.map((t) => t.id)}
                 strategy={verticalListSortingStrategy}
               >
-                {displayTags.map((tag) => (
+                {filteredTags.map((tag) => (
                   <SortableTagRow
                     key={tag.id}
                     tag={tag}
