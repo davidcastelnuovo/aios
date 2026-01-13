@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, CalendarIcon, Settings2, Tag, Settings } from "lucide-react";
+import { Plus, CalendarIcon, Settings2, Tag, Settings, Search } from "lucide-react";
 import { useAgency } from "@/contexts/AgencyContext";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -56,6 +56,7 @@ export function AddLeadForm() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isTagsPopoverOpen, setIsTagsPopoverOpen] = useState(false);
   const [isTagsManagerOpen, setIsTagsManagerOpen] = useState(false);
+  const [tagSearchQuery, setTagSearchQuery] = useState('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { selectedAgency } = useAgency();
@@ -540,43 +541,63 @@ export function AddLeadForm() {
                     {tag.name} ×
                   </Badge>
                 ))}
-                <Popover open={isTagsPopoverOpen} onOpenChange={setIsTagsPopoverOpen}>
+                <Popover 
+                  open={isTagsPopoverOpen} 
+                  onOpenChange={(open) => {
+                    setIsTagsPopoverOpen(open);
+                    if (!open) setTagSearchQuery('');
+                  }}
+                >
                   <PopoverTrigger asChild>
                     <Button variant="outline" size="sm" className="h-8">
                       <Tag className="h-4 w-4 ml-1" />
                       הוסף תגית
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-56 p-2 bg-background z-[100]" align="start" dir="rtl">
-                    <div className="space-y-1">
+                  <PopoverContent className="w-64 p-2 bg-background z-[100]" align="start" dir="rtl">
+                    {allTags.length > 3 && (
+                      <div className="relative mb-2">
+                        <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="חיפוש תגית..."
+                          value={tagSearchQuery}
+                          onChange={(e) => setTagSearchQuery(e.target.value)}
+                          className="pr-8 h-8 text-sm"
+                          dir="rtl"
+                        />
+                      </div>
+                    )}
+                    <div className="space-y-1 max-h-[250px] overflow-y-auto">
                       {allTags.length === 0 ? (
                         <div className="text-center text-muted-foreground text-sm py-2">
                           אין תגיות זמינות
                         </div>
                       ) : (
-                        allTags.map((tag) => {
-                          const isSelected = selectedTags.includes(tag.id);
-                          return (
-                            <div
-                              key={tag.id}
-                              className="flex items-center gap-2 p-2 rounded-md hover:bg-muted cursor-pointer"
-                              onClick={() => {
-                                setSelectedTags(prev => 
-                                  isSelected 
-                                    ? prev.filter(id => id !== tag.id)
-                                    : [...prev, tag.id]
-                                );
-                              }}
-                            >
-                              <Checkbox checked={isSelected} />
+                        allTags
+                          .filter(tag => tag.name.toLowerCase().includes(tagSearchQuery.toLowerCase()))
+                          .map((tag) => {
+                            const isSelected = selectedTags.includes(tag.id);
+                            return (
                               <div
-                                className="w-3 h-3 rounded-full flex-shrink-0"
-                                style={{ backgroundColor: tag.color }}
-                              />
-                              <span className="text-sm flex-1">{tag.name}</span>
-                            </div>
-                          );
-                        })
+                                key={tag.id}
+                                className="flex items-center gap-2 p-2 rounded-md hover:bg-muted cursor-pointer"
+                                onClick={() => {
+                                  setSelectedTags(prev => 
+                                    isSelected 
+                                      ? prev.filter(id => id !== tag.id)
+                                      : [...prev, tag.id]
+                                  );
+                                }}
+                              >
+                                <Checkbox checked={isSelected} />
+                                <div
+                                  className="w-3 h-3 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: tag.color }}
+                                />
+                                <span className="text-sm flex-1">{tag.name}</span>
+                              </div>
+                            );
+                          })
                       )}
                     </div>
                     <div className="border-t border-border mt-2 pt-2">
