@@ -22,6 +22,21 @@ interface EventPeriod {
   };
 }
 
+interface CampaignPeriodData {
+  campaignName: string;
+  eventDate: string;
+  impressions: number;
+  clicks: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+  leads: number;
+  costPerLead: number;
+  lpViews: number;
+  lpConversionRate: number;
+  spend: number;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -65,6 +80,7 @@ serve(async (req) => {
     // Parse event dates and calculate periods
     const currentYear = new Date().getFullYear();
     const eventPeriods: EventPeriod[] = [];
+    const campaignPeriodData: CampaignPeriodData[] = [];
 
     for (const dateStr of eventDates) {
       // Parse date in format "D.M" or "DD.MM"
@@ -86,6 +102,7 @@ serve(async (req) => {
 
       const eventDateStr = eventDate.toISOString().split('T')[0];
       const startDateStr = startDate.toISOString().split('T')[0];
+      const eventDateDisplay = `${day}.${month}`;
 
       // Filter records for this period
       const periodRecords = records.filter(record => {
@@ -101,7 +118,87 @@ serve(async (req) => {
         return recordDate >= startDateStr && recordDate <= eventDateStr;
       });
 
-      // Calculate metrics for this period
+      // For raw_table: aggregate by campaign within this period
+      if (analysisType === 'raw_table') {
+        const campaignMap = new Map<string, {
+          impressions: number;
+          clicks: number;
+          leads: number;
+          spend: number;
+          lpViews: number;
+          ctrSum: number;
+          ctrCount: number;
+          cpmSum: number;
+          cpmCount: number;
+        }>();
+
+        for (const record of periodRecords) {
+          const data = record.data;
+          const campaignName = data?.campaign_name || 'לא צוין';
+          
+          if (!campaignMap.has(campaignName)) {
+            campaignMap.set(campaignName, {
+              impressions: 0,
+              clicks: 0,
+              leads: 0,
+              spend: 0,
+              lpViews: 0,
+              ctrSum: 0,
+              ctrCount: 0,
+              cpmSum: 0,
+              cpmCount: 0,
+            });
+          }
+          
+          const campaign = campaignMap.get(campaignName)!;
+          campaign.impressions += parseInt(data?.impressions) || 0;
+          campaign.clicks += parseInt(data?.clicks) || 0;
+          campaign.leads += parseInt(data?.leads) || 0;
+          campaign.spend += parseFloat(data?.spend) || 0;
+          campaign.lpViews += parseInt(data?.lp_views) || parseInt(data?.landing_page_views) || 0;
+          
+          if (data?.ctr) {
+            campaign.ctrSum += parseFloat(data.ctr);
+            campaign.ctrCount++;
+          }
+          if (data?.cpm) {
+            campaign.cpmSum += parseFloat(data.cpm);
+            campaign.cpmCount++;
+          }
+        }
+
+        // Convert to array
+        for (const [campaignName, metrics] of campaignMap) {
+          const ctr = metrics.clicks > 0 && metrics.impressions > 0 
+            ? (metrics.clicks / metrics.impressions) * 100 
+            : (metrics.ctrCount > 0 ? metrics.ctrSum / metrics.ctrCount : 0);
+          
+          const cpc = metrics.clicks > 0 ? metrics.spend / metrics.clicks : 0;
+          const cpm = metrics.impressions > 0 
+            ? (metrics.spend / metrics.impressions) * 1000 
+            : (metrics.cpmCount > 0 ? metrics.cpmSum / metrics.cpmCount : 0);
+          
+          const costPerLead = metrics.leads > 0 ? metrics.spend / metrics.leads : 0;
+          const lpConversionRate = metrics.lpViews > 0 ? (metrics.leads / metrics.lpViews) * 100 : 0;
+
+          campaignPeriodData.push({
+            campaignName,
+            eventDate: eventDateDisplay,
+            impressions: metrics.impressions,
+            clicks: metrics.clicks,
+            ctr: Math.round(ctr * 100) / 100,
+            cpc: Math.round(cpc * 100) / 100,
+            cpm: Math.round(cpm * 100) / 100,
+            leads: metrics.leads,
+            costPerLead: Math.round(costPerLead * 100) / 100,
+            lpViews: metrics.lpViews,
+            lpConversionRate: Math.round(lpConversionRate * 100) / 100,
+            spend: Math.round(metrics.spend * 100) / 100,
+          });
+        }
+      }
+
+      // Calculate aggregate metrics for this period (for all analysis types)
       let totalSpend = 0;
       let totalLeads = 0;
       let totalClicks = 0;
@@ -138,7 +235,7 @@ serve(async (req) => {
       const avgCpm = cpmCount > 0 ? cpmSum / cpmCount : 0;
 
       eventPeriods.push({
-        eventDate: `${day}.${month}`,
+        eventDate: eventDateDisplay,
         startDate: startDateStr,
         endDate: eventDateStr,
         metrics: {
@@ -161,6 +258,29 @@ serve(async (req) => {
       if (monthA !== monthB) return monthB - monthA;
       return dayB - dayA;
     });
+
+    // For raw_table, return data without AI analysis
+    if (analysisType === 'raw_table') {
+      // Sort campaign data by event date then campaign name
+      campaignPeriodData.sort((a, b) => {
+        const [dayA, monthA] = a.eventDate.split('.').map(Number);
+        const [dayB, monthB] = b.eventDate.split('.').map(Number);
+        if (monthA !== monthB) return monthB - monthA;
+        if (dayA !== dayB) return dayB - dayA;
+        return a.campaignName.localeCompare(b.campaignName);
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          periods: eventPeriods,
+          campaignData: campaignPeriodData,
+          analysisType: 'raw_table',
+          daysBeforeEvent,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Prepare prompt for AI
     let analysisPrompt = '';
