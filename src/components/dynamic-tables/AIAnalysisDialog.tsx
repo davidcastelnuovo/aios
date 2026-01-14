@@ -54,7 +54,7 @@ interface CampaignPeriodData {
   costPerLead: number;
   lpViews: number | null;
   lpConversionRate: number | null;
-  conversionMinusCtr: number | null;
+  costPerView: number | null;
   spend: number;
 }
 
@@ -120,7 +120,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
     
     if (result.analysisType === 'raw_table' && result.campaignData) {
       // Copy table as TSV for Excel compatibility
-      const headers = ['קמפיין', 'תקופה', 'חשיפות', 'קליקים', 'CTR %', 'CPC ₪', 'CPM ₪', 'לידים', 'עלות לליד ₪', 'צפיות LP', 'המרה LP %', 'פער (המרה-CTR) %', 'הוצאה ₪'];
+      const headers = ['קמפיין', 'תקופה', 'חשיפות', 'קליקים', 'CTR %', 'CPC ₪', 'CPM ₪', 'לידים', 'עלות לליד ₪', 'צפיות LP', 'המרה LP %', 'עלות לצפייה ₪', 'הוצאה ₪'];
       const rows = result.campaignData.map(row => [
         row.campaignName,
         row.eventDate,
@@ -133,7 +133,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
         row.costPerLead,
         row.lpViews ?? '',
         row.lpConversionRate ?? '',
-        row.conversionMinusCtr ?? '',
+        row.costPerView ?? '',
         row.spend
       ].join('\t'));
       
@@ -365,7 +365,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                         const totalCpm = totals.impressions > 0 ? ((totals.spend / totals.impressions) * 1000).toFixed(2) : '0';
                         const totalCostPerLead = totals.leads > 0 ? Math.round(totals.spend / totals.leads) : 0;
                         const totalLpConversion = totals.lpViews && totals.lpViews > 0 ? ((totals.leads / totals.lpViews) * 100).toFixed(2) : null;
-                        const totalConversionMinusCtr = totalLpConversion !== null ? (parseFloat(totalLpConversion) - parseFloat(totalCtr)).toFixed(2) : null;
+                        const totalCostPerView = totals.lpViews && totals.lpViews > 0 ? (totals.spend / totals.lpViews).toFixed(2) : null;
 
                         return (
                           <Card key={eventDate} className="overflow-hidden">
@@ -392,7 +392,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                                       <TableHead className="text-center font-bold">עלות לליד</TableHead>
                               <TableHead className="text-center font-bold" title="צפיות בדף נחיתה או פתיחות טופס ליד (לפי סוג הקמפיין)">צפיות/פתיחות</TableHead>
                               <TableHead className="text-center font-bold" title="אחוז המרה מצפיות/פתיחות ללידים">המרה</TableHead>
-                              <TableHead className="text-center font-bold" title="הפרש בין אחוז המרה ל-CTR">פער</TableHead>
+                              <TableHead className="text-center font-bold" title="עלות לצפייה בדף נחיתה או פתיחת טופס (הוצאה / צפיות)">עלות לצפייה</TableHead>
                                       <TableHead className="text-center font-bold">הוצאה</TableHead>
                                     </TableRow>
                                   </TableHeader>
@@ -413,12 +413,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                                         <TableCell className="text-center">{row.lpViews === null ? '-' : row.lpViews.toLocaleString()}</TableCell>
                                         <TableCell className="text-center">{row.lpConversionRate === null ? '-' : `${row.lpConversionRate}%`}</TableCell>
                                         <TableCell className="text-center">
-                                          {row.conversionMinusCtr === null
-                                            ? '-'
-                                            : <span className={row.conversionMinusCtr > 0 ? 'text-green-600' : row.conversionMinusCtr < 0 ? 'text-red-600' : ''}>
-                                                {row.conversionMinusCtr > 0 ? '+' : ''}{row.conversionMinusCtr}%
-                                              </span>
-                                          }
+                                          {row.costPerView === null ? '-' : `₪${row.costPerView}`}
                                         </TableCell>
                                         <TableCell className="text-center font-medium">₪{row.spend.toLocaleString()}</TableCell>
                                       </TableRow>
@@ -436,12 +431,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                                       <TableCell className="text-center">{totals.lpViews ? totals.lpViews.toLocaleString() : '-'}</TableCell>
                                       <TableCell className="text-center">{totalLpConversion ? `${totalLpConversion}%` : '-'}</TableCell>
                                       <TableCell className="text-center">
-                                        {totalConversionMinusCtr === null
-                                          ? '-'
-                                          : <span className={parseFloat(totalConversionMinusCtr) > 0 ? 'text-green-600' : parseFloat(totalConversionMinusCtr) < 0 ? 'text-red-600' : ''}>
-                                              {parseFloat(totalConversionMinusCtr) > 0 ? '+' : ''}{totalConversionMinusCtr}%
-                                            </span>
-                                        }
+                                        {totalCostPerView ? `₪${totalCostPerView}` : '-'}
                                       </TableCell>
                                       <TableCell className="text-center">₪{totals.spend.toLocaleString()}</TableCell>
                                     </TableRow>
