@@ -22,17 +22,16 @@ export function ManyChatControls({ contactId, contactType, subscriberId, tenantI
   const queryClient = useQueryClient();
 
   // Fetch ManyChat tags
-  const { data: tags } = useQuery({
-    queryKey: ["manychat-tags", subscriberId, tenantId],
+  const { data: tags, isError: tagsError } = useQuery({
+    queryKey: ["manychat-tags", tenantId],
     queryFn: async () => {
-      if (!subscriberId) return [];
       const { data, error } = await supabase.functions.invoke("get-manychat-tags", {
-        body: { subscriber_id: subscriberId },
+        body: { tenantId },
       });
       if (error) throw error;
       return data?.tags || [];
     },
-    enabled: !!subscriberId,
+    enabled: !!tenantId,
   });
 
   // Update subscriber ID mutation
@@ -61,15 +60,16 @@ export function ManyChatControls({ contactId, contactType, subscriberId, tenantI
     mutationFn: async (tagId: number) => {
       const { error } = await supabase.functions.invoke("add-manychat-tag", {
         body: {
-          subscriber_id: subscriberId,
-          tag_id: tagId,
+          subscriberId,
+          tagId,
+          tenantId,
         },
       });
       if (error) throw error;
     },
     onSuccess: () => {
       toast.success("הטאג נוסף בהצלחה");
-      queryClient.invalidateQueries({ queryKey: ["manychat-tags", subscriberId, tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["manychat-tags", tenantId] });
     },
     onError: (error) => {
       toast.error("שגיאה בהוספת טאג");
@@ -130,27 +130,33 @@ export function ManyChatControls({ contactId, contactType, subscriberId, tenantI
       </div>
 
       {/* Tags */}
-      {subscriberId && tags && tags.length > 0 && (
+      {subscriberId && (
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground flex items-center gap-1">
             <Tag className="h-3 w-3" />
             הוסף טאג
           </Label>
-          <Select
-            onValueChange={(value) => addTagMutation.mutate(parseInt(value))}
-            disabled={addTagMutation.isPending}
-          >
-            <SelectTrigger className="h-8 text-sm">
-              <SelectValue placeholder="בחר טאג..." />
-            </SelectTrigger>
-            <SelectContent>
-              {tags.map((tag: any) => (
-                <SelectItem key={tag.id} value={tag.id.toString()}>
-                  {tag.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {tagsError ? (
+            <p className="text-xs text-destructive">לא ניתן לטעון תגיות. בדוק שהאינטגרציה פעילה בהגדרות ManyChat.</p>
+          ) : tags && tags.length > 0 ? (
+            <Select
+              onValueChange={(value) => addTagMutation.mutate(parseInt(value))}
+              disabled={addTagMutation.isPending}
+            >
+              <SelectTrigger className="h-8 text-sm">
+                <SelectValue placeholder="בחר טאג..." />
+              </SelectTrigger>
+              <SelectContent>
+                {tags.map((tag: any) => (
+                  <SelectItem key={tag.id} value={tag.id.toString()}>
+                    {tag.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : (
+            <p className="text-xs text-muted-foreground">אין תגיות זמינות</p>
+          )}
         </div>
       )}
     </div>
