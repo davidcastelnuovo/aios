@@ -5,7 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon, Sparkles } from "lucide-react";
+import { AIAnalysisDialog } from "@/components/dynamic-tables/AIAnalysisDialog";
 import { format, subDays, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -1002,24 +1003,35 @@ export default function DynamicTableView() {
           
           {/* Campaign Search Filter - Only for Facebook/Google Ads tables */}
           {(hasFacebook || hasGoogleAds) && (
-            <div className="flex items-center gap-2 w-full md:w-auto justify-center relative">
-              <SearchIcon className="h-4 w-4 text-muted-foreground absolute right-3 pointer-events-none" />
-              <Input
-                type="text"
-                placeholder="חפש קמפיין..."
-                value={campaignSearch}
-                onChange={(e) => setCampaignSearch(e.target.value)}
-                className="w-full md:w-[200px] pr-9 h-9"
-              />
-              {campaignSearch && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute left-1 h-7 w-7"
-                  onClick={() => setCampaignSearch("")}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
+            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+              <div className="relative">
+                <SearchIcon className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Input
+                  type="text"
+                  placeholder="חפש קמפיין..."
+                  value={campaignSearch}
+                  onChange={(e) => setCampaignSearch(e.target.value)}
+                  className="w-full md:w-[200px] pr-9 h-9"
+                />
+                {campaignSearch && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute left-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                    onClick={() => setCampaignSearch("")}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+              
+              {/* AI Analysis Button */}
+              {table && (
+                <AIAnalysisDialog 
+                  tableId={table.id} 
+                  tableName={table.name}
+                  campaignFilter={debouncedCampaignSearch || undefined}
+                />
               )}
             </div>
           )}
