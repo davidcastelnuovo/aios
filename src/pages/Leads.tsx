@@ -1374,11 +1374,40 @@ export default function Leads() {
     <div className="space-y-6 p-3 md:p-6">
       {/* Mobile Header */}
       <div className="block md:hidden space-y-4">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold">לידים - Pipeline</h1>
-          <Badge variant="secondary" className="text-sm px-2 py-0.5">
-            {isFetching ? '...' : filteredLeads?.length || 0}
-          </Badge>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold">לידים - Pipeline</h1>
+            <Badge variant="secondary" className="text-sm px-2 py-0.5">
+              {isFetching ? '...' : `${filteredLeads?.length || 0}${totalPages > 1 ? ` / ${totalLeadsCount}` : ''}`}
+            </Badge>
+          </div>
+          
+          {/* Mobile Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1 || isFetching}
+                className="h-8 px-2"
+              >
+                ←
+              </Button>
+              <span className="text-xs text-muted-foreground whitespace-nowrap px-1">
+                {page}/{totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages || isFetching}
+                className="h-8 px-2"
+              >
+                →
+              </Button>
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -1444,6 +1473,31 @@ export default function Leads() {
                 <>מציג: {filteredLeads?.length || 0} {totalPages > 1 && `(מתוך ${totalLeadsCount})`}</>
               )}
             </Badge>
+            
+            {/* Pagination controls in header */}
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2 mr-4 border-r pr-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1 || isFetching}
+                >
+                  ← הקודם
+                </Button>
+                <span className="text-sm text-muted-foreground whitespace-nowrap">
+                  עמוד {page} מתוך {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages || isFetching}
+                >
+                  הבא →
+                </Button>
+              </div>
+            )}
           </div>
           <div className="flex gap-3 items-center">
             {/* View mode toggle */}
