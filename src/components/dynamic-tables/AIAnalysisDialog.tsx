@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sparkles, Loader2, Download, Copy, TrendingUp, BarChart3, Lightbulb } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,6 +46,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
   const [eventDates, setEventDates] = useState("");
   const [daysBeforeEvent, setDaysBeforeEvent] = useState("7");
   const [analysisType, setAnalysisType] = useState("comparison");
+  const [customInstructions, setCustomInstructions] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
 
@@ -71,6 +73,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
           daysBeforeEvent: parseInt(daysBeforeEvent),
           campaignFilter: campaignFilter || undefined,
           analysisType,
+          customInstructions: customInstructions.trim() || undefined,
         },
       });
 
@@ -191,6 +194,20 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>הנחיות נוספות (אופציונלי)</Label>
+                <Textarea
+                  placeholder="לדוגמה: התמקד בהשוואת עלות לליד, שים לב שהוובינר ב-23.12 היה על נושא אחר, תן דגש על המלצות תקציב..."
+                  value={customInstructions}
+                  onChange={(e) => setCustomInstructions(e.target.value)}
+                  rows={3}
+                  className="resize-none"
+                />
+                <p className="text-xs text-muted-foreground">
+                  הוסף הנחיות ספציפיות לניתוח - שאלות, נקודות להתמקד בהן, או הקשר נוסף
+                </p>
               </div>
 
               {campaignFilter && (

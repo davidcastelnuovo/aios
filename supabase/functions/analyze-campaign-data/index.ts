@@ -28,7 +28,7 @@ serve(async (req) => {
   }
 
   try {
-    const { tableId, eventDates, daysBeforeEvent = 7, campaignFilter, analysisType = 'comparison' } = await req.json();
+    const { tableId, eventDates, daysBeforeEvent = 7, campaignFilter, analysisType = 'comparison', customInstructions } = await req.json();
 
     if (!tableId || !eventDates || eventDates.length === 0) {
       return new Response(
@@ -207,6 +207,11 @@ ${eventPeriods.map(p => `📅 ${p.eventDate}: ₪${p.metrics.totalSpend} הוצ�
 
 תן 5 המלצות קונקרטיות ומעשיות לשיפור הביצועים.
 פורמט: עברית, ממוספר, אימוג'ים.`;
+    }
+
+    // Add custom instructions if provided
+    if (customInstructions) {
+      analysisPrompt += `\n\n**הנחיות נוספות מהמשתמש:**\n${customInstructions}`;
     }
 
     // Call Lovable AI
