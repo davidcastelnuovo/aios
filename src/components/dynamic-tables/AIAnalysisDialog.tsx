@@ -121,7 +121,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
           ניתוח AI
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+      <DialogContent className="max-w-3xl h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
