@@ -5,23 +5,13 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { MoreHorizontal, Pencil, Trash2, Filter } from "lucide-react";
+import { Pencil, Trash2, Filter, Settings2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import type { FilterState } from "./LeadFiltersDialog";
@@ -29,6 +19,7 @@ import type { FilterState } from "./LeadFiltersDialog";
 export interface FilterPreset {
   id: string;
   name: string;
+  user_id?: string;
   filters: {
     searchQuery?: string | null;
     salesPersonId?: string;
@@ -46,6 +37,7 @@ interface LeadFilterPresetTabsProps {
   activePresetId: string | null;
   onPresetSelect: (preset: FilterPreset | null) => void;
   onOpenFiltersDialog: () => void;
+  onEditPreset: (preset: FilterPreset) => void;
   hasActiveFilters: boolean;
 }
 
@@ -53,6 +45,7 @@ export function LeadFilterPresetTabs({
   activePresetId,
   onPresetSelect,
   onOpenFiltersDialog,
+  onEditPreset,
   hasActiveFilters,
 }: LeadFilterPresetTabsProps) {
   const { tenantId } = useCurrentTenant();
@@ -60,25 +53,21 @@ export function LeadFilterPresetTabs({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [editingPreset, setEditingPreset] = useState<FilterPreset | null>(null);
-  const [editName, setEditName] = useState("");
-
+  // Fetch ALL presets for the tenant (not just user's)
   const { data: presets = [], isLoading } = useQuery({
-    queryKey: ["lead-filter-presets", tenantId, userId],
+    queryKey: ["lead-filter-presets", tenantId],
     queryFn: async () => {
-      if (!tenantId || !userId) return [];
+      if (!tenantId) return [];
       const { data, error } = await supabase
         .from("lead_filter_presets")
         .select("*")
         .eq("tenant_id", tenantId)
-        .eq("user_id", userId)
         .order("sort_order", { ascending: true });
 
       if (error) throw error;
       return data as FilterPreset[];
     },
-    enabled: !!tenantId && !!userId,
+    enabled: !!tenantId,
   });
 
   const deletePresetMutation = useMutation({
@@ -88,11 +77,12 @@ export function LeadFilterPresetTabs({
         .delete()
         .eq("id", presetId);
       if (error) throw error;
+      return presetId;
     },
-    onSuccess: () => {
+    onSuccess: (deletedPresetId) => {
       queryClient.invalidateQueries({ queryKey: ["lead-filter-presets"] });
       toast({ title: "פריסט נמחק בהצלחה" });
-      if (activePresetId === editingPreset?.id) {
+      if (activePresetId === deletedPresetId) {
         onPresetSelect(null);
       }
     },
@@ -105,33 +95,8 @@ export function LeadFilterPresetTabs({
     },
   });
 
-  const updatePresetMutation = useMutation({
-    mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const { error } = await supabase
-        .from("lead_filter_presets")
-        .update({ name })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lead-filter-presets"] });
-      toast({ title: "פריסט עודכן בהצלחה" });
-      setEditDialogOpen(false);
-      setEditingPreset(null);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "שגיאה בעדכון פריסט",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const handleEditClick = (preset: FilterPreset) => {
-    setEditingPreset(preset);
-    setEditName(preset.name);
-    setEditDialogOpen(true);
+  const handleEditFiltersClick = (preset: FilterPreset) => {
+    onEditPreset(preset);
   };
 
   const handleDeleteClick = (preset: FilterPreset) => {
@@ -140,10 +105,8 @@ export function LeadFilterPresetTabs({
     }
   };
 
-  const handleSaveEdit = () => {
-    if (!editingPreset || !editName.trim()) return;
-    updatePresetMutation.mutate({ id: editingPreset.id, name: editName.trim() });
-  };
+  // Check if current user owns this preset
+  const userOwnsPreset = (preset: FilterPreset) => preset.user_id === userId;
 
   // Get the active preset for display
   const activePreset = presets.find(p => p.id === activePresetId);
@@ -194,32 +157,36 @@ export function LeadFilterPresetTabs({
                 )}
               >
                 <span>{preset.name}</span>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      handleEditClick(preset);
-                    }}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-destructive hover:text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      handleDeleteClick(preset);
-                    }}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
+                {/* Only show edit/delete for presets owned by current user */}
+                {userOwnsPreset(preset) && (
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleEditFiltersClick(preset);
+                      }}
+                      title="ערוך פילטרים"
+                    >
+                      <Settings2 className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-destructive hover:text-destructive"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleDeleteClick(preset);
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
@@ -244,35 +211,6 @@ export function LeadFilterPresetTabs({
           )}
         </Button>
       </div>
-
-      {/* Edit Dialog */}
-      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="sm:max-w-[400px]" dir="rtl">
-          <DialogHeader>
-            <DialogTitle>עריכת שם פריסט</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="edit-name">שם הפריסט</Label>
-            <Input
-              id="edit-name"
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              className="mt-2"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-              ביטול
-            </Button>
-            <Button 
-              onClick={handleSaveEdit} 
-              disabled={updatePresetMutation.isPending}
-            >
-              {updatePresetMutation.isPending ? "שומר..." : "שמור"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

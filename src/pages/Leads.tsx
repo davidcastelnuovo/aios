@@ -539,6 +539,7 @@ export default function Leads() {
   // Filters dialog and preset states
   const [filtersDialogOpen, setFiltersDialogOpen] = useState(false);
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
+  const [editingPreset, setEditingPreset] = useState<{ id: string; name: string } | null>(null);
   
   // Convert dynamic pipeline stages to format compatible with existing code
   const PIPELINE_STAGES = useMemo(() => {
@@ -1266,6 +1267,16 @@ export default function Leads() {
     }
   };
 
+  // Handle editing a preset
+  const handleEditPreset = (preset: FilterPreset) => {
+    // Apply the preset filters first
+    handlePresetSelect(preset);
+    // Set the editing state
+    setEditingPreset({ id: preset.id, name: preset.name });
+    // Open the filters dialog in edit mode
+    setFiltersDialogOpen(true);
+  };
+
   // Export filtered leads to CSV
   const handleExportCSV = () => {
     if (!filteredLeads || filteredLeads.length === 0) {
@@ -1496,7 +1507,11 @@ export default function Leads() {
             <LeadFilterPresetTabs
               activePresetId={activePresetId}
               onPresetSelect={handlePresetSelect}
-              onOpenFiltersDialog={() => setFiltersDialogOpen(true)}
+              onOpenFiltersDialog={() => {
+                setEditingPreset(null); // Clear editing mode when opening fresh
+                setFiltersDialogOpen(true);
+              }}
+              onEditPreset={handleEditPreset}
               hasActiveFilters={hasActiveFilters}
             />
           </div>
@@ -1534,13 +1549,22 @@ export default function Leads() {
       {/* Filters Dialog */}
       <LeadFiltersDialog
         open={filtersDialogOpen}
-        onOpenChange={setFiltersDialogOpen}
+        onOpenChange={(open) => {
+          setFiltersDialogOpen(open);
+          if (!open) {
+            setEditingPreset(null); // Clear editing mode when closing
+          }
+        }}
         currentFilters={currentFilters}
         onApply={handleApplyFilters}
         salesPeople={salesPeople || []}
         pipelineStages={PIPELINE_STAGES}
         leadStatuses={leadStatuses}
         allTags={allTags}
+        editingPreset={editingPreset}
+        onPresetUpdated={() => {
+          setEditingPreset(null);
+        }}
       />
 
       {leads?.length === 0 ? (

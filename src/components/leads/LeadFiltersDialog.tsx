@@ -40,6 +40,11 @@ export interface FilterState {
   endDate: Date | undefined;
 }
 
+interface EditingPreset {
+  id: string;
+  name: string;
+}
+
 interface LeadFiltersDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -49,6 +54,8 @@ interface LeadFiltersDialogProps {
   pipelineStages: Array<{ id: string; label: string; color?: string; hexColor?: string }>;
   leadStatuses: Array<{ status_key: string; label: string; color: string }>;
   allTags: Array<{ id: string; name: string; color: string }>;
+  editingPreset?: EditingPreset | null;
+  onPresetUpdated?: () => void;
 }
 
 export function LeadFiltersDialog({
@@ -60,6 +67,8 @@ export function LeadFiltersDialog({
   pipelineStages,
   leadStatuses,
   allTags,
+  editingPreset,
+  onPresetUpdated,
 }: LeadFiltersDialogProps) {
   const { toast } = useToast();
   const { tenantId } = useCurrentTenant();
@@ -70,6 +79,7 @@ export function LeadFiltersDialog({
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   
   // Search states for multi-select dropdowns
   const [statusSearch, setStatusSearch] = useState("");
@@ -182,6 +192,47 @@ export function LeadFiltersDialog({
     }
   };
 
+  // Update existing preset
+  const handleUpdatePreset = async () => {
+    if (!editingPreset || !tenantId) return;
+
+    setIsUpdating(true);
+    try {
+      const filtersToSave = {
+        searchQuery: filters.searchQuery || null,
+        salesPersonId: filters.salesPersonId,
+        stageId: filters.stageId,
+        responseStatus: filters.responseStatus,
+        tagIds: filters.tagIds,
+        startDate: filters.startDate?.toISOString() || null,
+        endDate: filters.endDate?.toISOString() || null,
+      };
+
+      const { error } = await supabase
+        .from("lead_filter_presets")
+        .update({ filters: filtersToSave })
+        .eq("id", editingPreset.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "פריסט עודכן בהצלחה",
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["lead-filter-presets"] });
+      onPresetUpdated?.();
+      onOpenChange(false);
+    } catch (error: any) {
+      toast({
+        title: "שגיאה בעדכון פריסט",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   // Toggle status selection
   const toggleStatus = (statusKey: string) => {
     setFilters(prev => {
@@ -259,7 +310,9 @@ export function LeadFiltersDialog({
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="sm:max-w-[500px]" dir="rtl">
           <DialogHeader>
-            <DialogTitle className="text-xl">סינון לידים</DialogTitle>
+            <DialogTitle className="text-xl">
+              {editingPreset ? `עריכת פריסט: ${editingPreset.name}` : "סינון לידים"}
+            </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-5 py-4">
@@ -538,18 +591,31 @@ export function LeadFiltersDialog({
               <RotateCcw className="h-4 w-4" />
               איפוס
             </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => setSaveDialogOpen(true)}
-              disabled={!hasActiveFilters}
-              className="gap-2"
-            >
-              <Save className="h-4 w-4" />
-              שמור כפריסט
-            </Button>
-            <Button onClick={handleApply} className="gap-2">
-              החל פילטרים
-            </Button>
+            {editingPreset ? (
+              <Button 
+                onClick={handleUpdatePreset} 
+                disabled={isUpdating}
+                className="gap-2"
+              >
+                <Save className="h-4 w-4" />
+                {isUpdating ? "מעדכן..." : "עדכן פריסט"}
+              </Button>
+            ) : (
+              <>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setSaveDialogOpen(true)}
+                  disabled={!hasActiveFilters}
+                  className="gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  שמור כפריסט
+                </Button>
+                <Button onClick={handleApply} className="gap-2">
+                  החל פילטרים
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
