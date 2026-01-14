@@ -32,8 +32,9 @@ interface CampaignPeriodData {
   cpm: number;
   leads: number;
   costPerLead: number;
-  lpViews: number;
-  lpConversionRate: number;
+  lpViews: number | null;
+  lpConversionRate: number | null;
+  conversionMinusCtr: number | null;
   spend: number;
 }
 
@@ -125,7 +126,7 @@ serve(async (req) => {
           clicks: number;
           leads: number;
           spend: number;
-          lpViews: number;
+          lpViews: number | null;
           ctrSum: number;
           ctrCount: number;
           cpmSum: number;
@@ -142,7 +143,7 @@ serve(async (req) => {
               clicks: 0,
               leads: 0,
               spend: 0,
-              lpViews: 0,
+              lpViews: null,
               ctrSum: 0,
               ctrCount: 0,
               cpmSum: 0,
@@ -155,7 +156,15 @@ serve(async (req) => {
           campaign.clicks += parseInt(data?.clicks) || 0;
           campaign.leads += parseInt(data?.leads) || 0;
           campaign.spend += parseFloat(data?.spend) || 0;
-          campaign.lpViews += parseInt(data?.lp_views) || parseInt(data?.landing_page_views) || 0;
+
+          const lpViewsRaw = (data?.lp_views ?? data?.landing_page_views ?? data?.landing_page_view ?? data?.lpViews ?? null);
+          const lpViewsParsed = (lpViewsRaw === null || lpViewsRaw === undefined || lpViewsRaw === '')
+            ? null
+            : (parseInt(String(lpViewsRaw).replace(/,/g, '')) || 0);
+
+          if (lpViewsParsed !== null) {
+            campaign.lpViews = (campaign.lpViews ?? 0) + lpViewsParsed;
+          }
           
           if (data?.ctr) {
             campaign.ctrSum += parseFloat(data.ctr);
@@ -179,7 +188,14 @@ serve(async (req) => {
             : (metrics.cpmCount > 0 ? metrics.cpmSum / metrics.cpmCount : 0);
           
           const costPerLead = metrics.leads > 0 ? metrics.spend / metrics.leads : 0;
-          const lpConversionRate = metrics.lpViews > 0 ? (metrics.leads / metrics.lpViews) * 100 : 0;
+
+          const lpConversionRate = metrics.lpViews === null
+            ? null
+            : (metrics.lpViews > 0 ? (metrics.leads / metrics.lpViews) * 100 : 0);
+
+          const conversionMinusCtr = lpConversionRate === null
+            ? null
+            : (lpConversionRate - ctr);
 
           campaignPeriodData.push({
             campaignName,
@@ -192,7 +208,8 @@ serve(async (req) => {
             leads: metrics.leads,
             costPerLead: Math.round(costPerLead * 100) / 100,
             lpViews: metrics.lpViews,
-            lpConversionRate: Math.round(lpConversionRate * 100) / 100,
+            lpConversionRate: lpConversionRate === null ? null : (Math.round(lpConversionRate * 100) / 100),
+            conversionMinusCtr: conversionMinusCtr === null ? null : (Math.round(conversionMinusCtr * 100) / 100),
             spend: Math.round(metrics.spend * 100) / 100,
           });
         }

@@ -52,8 +52,9 @@ interface CampaignPeriodData {
   cpm: number;
   leads: number;
   costPerLead: number;
-  lpViews: number;
-  lpConversionRate: number;
+  lpViews: number | null;
+  lpConversionRate: number | null;
+  conversionMinusCtr: number | null;
   spend: number;
 }
 
@@ -119,7 +120,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
     
     if (result.analysisType === 'raw_table' && result.campaignData) {
       // Copy table as TSV for Excel compatibility
-      const headers = ['קמפיין', 'תקופה', 'חשיפות', 'קליקים', 'CTR %', 'CPC ₪', 'CPM ₪', 'לידים', 'עלות לליד ₪', 'צפיות LP', 'המרה LP %', 'הוצאה ₪'];
+      const headers = ['קמפיין', 'תקופה', 'חשיפות', 'קליקים', 'CTR %', 'CPC ₪', 'CPM ₪', 'לידים', 'עלות לליד ₪', 'צפיות LP', 'המרה LP %', 'פער (המרה-CTR) %', 'הוצאה ₪'];
       const rows = result.campaignData.map(row => [
         row.campaignName,
         row.eventDate,
@@ -130,8 +131,9 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
         row.cpm,
         row.leads,
         row.costPerLead,
-        row.lpViews,
-        row.lpConversionRate,
+        row.lpViews ?? '',
+        row.lpConversionRate ?? '',
+        row.conversionMinusCtr ?? '',
         row.spend
       ].join('\t'));
       
@@ -362,6 +364,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                               <TableHead className="text-center">עלות לליד</TableHead>
                               <TableHead className="text-center">צפיות LP</TableHead>
                               <TableHead className="text-center">המרה LP</TableHead>
+                              <TableHead className="text-center">פער (המרה-CTR)</TableHead>
                               <TableHead className="text-center">הוצאה</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -379,8 +382,13 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                                 <TableCell className="text-center">₪{row.cpm}</TableCell>
                                 <TableCell className="text-center font-medium">{row.leads}</TableCell>
                                 <TableCell className="text-center font-medium">₪{row.costPerLead}</TableCell>
-                                <TableCell className="text-center">{row.lpViews || '-'}</TableCell>
-                                <TableCell className="text-center">{row.lpConversionRate ? `${row.lpConversionRate}%` : '-'}</TableCell>
+                                <TableCell className="text-center">{row.lpViews === null ? '-' : row.lpViews.toLocaleString()}</TableCell>
+                                <TableCell className="text-center">{row.lpConversionRate === null ? '-' : `${row.lpConversionRate}%`}</TableCell>
+                                <TableCell className="text-center">
+                                  {row.conversionMinusCtr === null
+                                    ? '-'
+                                    : `${row.conversionMinusCtr > 0 ? '+' : ''}${row.conversionMinusCtr}%`}
+                                </TableCell>
                                 <TableCell className="text-center font-medium">₪{row.spend.toLocaleString()}</TableCell>
                               </TableRow>
                             ))}

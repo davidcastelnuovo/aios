@@ -12,6 +12,7 @@ interface InsightRecord {
   campaign_name: string;
   impressions: number;
   clicks: number;
+  landing_page_views: number;
   cpm: number;
   ctr: number;
   leads: number;
@@ -263,6 +264,11 @@ Deno.serve(async (req) => {
           .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
       }
 
+      // Extract landing page views (Facebook action)
+      const landingPageViews = allActions
+        .filter((a: any) => String(a.action_type || '') === 'landing_page_view')
+        .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
+
       // Extract cost per lead - always calculate as spend / leads for accuracy
       // This ensures CPL matches what Facebook shows when aggregating
       let costPerLead = 0;
@@ -280,6 +286,7 @@ Deno.serve(async (req) => {
         campaign_name: insight.campaign_name,
         impressions: parseInt(insight.impressions) || 0,
         clicks: parseInt(insight.clicks) || 0,
+        landing_page_views: landingPageViews,
         cpm: parseFloat(insight.cpm) || 0,
         ctr: parseFloat(insight.ctr) || 0,
         leads,
@@ -293,9 +300,9 @@ Deno.serve(async (req) => {
     console.log(`Got ${insights.length} daily campaign insights`);
 
     // Make sure fields exist for Facebook Insights table
-    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend', 'effective_status', 'configured_status'];
-    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'עלות לליד', 'הוצאה', 'סטטוס בפועל', 'סטטוס מוגדר'];
-    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'text'];
+    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'landing_page_views', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend', 'effective_status', 'configured_status'];
+    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'צפיות בעמוד נחיתה', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'עלות לליד', 'הוצאה', 'סטטוס בפועל', 'סטטוס מוגדר'];
+    const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'text'];
     
     for (let i = 0; i < fieldKeys.length; i++) {
       const { data: existingField } = await supabase
