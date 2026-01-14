@@ -390,9 +390,9 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                                       <TableHead className="text-center font-bold">CPM</TableHead>
                                       <TableHead className="text-center font-bold">לידים</TableHead>
                                       <TableHead className="text-center font-bold">עלות לליד</TableHead>
-                              <TableHead className="text-center font-bold" title="צפיות בדף נחיתה בלבד - לידים מ-Lead Forms לא נספרים כאן">צפיות LP</TableHead>
-                              <TableHead className="text-center font-bold" title="אחוז המרה מצפיות LP ללידים - ייתכן שיעלה על 100% אם יש לידים מ-Lead Forms">המרה LP</TableHead>
-                              <TableHead className="text-center font-bold" title="הפרש בין המרה LP ל-CTR">פער</TableHead>
+                              <TableHead className="text-center font-bold" title="צפיות בדף נחיתה או פתיחות טופס ליד (לפי סוג הקמפיין)">צפיות/פתיחות</TableHead>
+                              <TableHead className="text-center font-bold" title="אחוז המרה מצפיות/פתיחות ללידים">המרה</TableHead>
+                              <TableHead className="text-center font-bold" title="הפרש בין אחוז המרה ל-CTR">פער</TableHead>
                                       <TableHead className="text-center font-bold">הוצאה</TableHead>
                                     </TableRow>
                                   </TableHeader>

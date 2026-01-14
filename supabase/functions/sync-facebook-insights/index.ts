@@ -12,7 +12,7 @@ interface InsightRecord {
   campaign_name: string;
   impressions: number;
   clicks: number;
-  landing_page_views: number;
+  lp_or_form_views: number;
   cpm: number;
   ctr: number;
   leads: number;
@@ -269,6 +269,17 @@ Deno.serve(async (req) => {
         .filter((a: any) => String(a.action_type || '') === 'landing_page_view')
         .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
 
+      // Extract form opens for Lead Form campaigns
+      const formOpens = allActions
+        .filter((a: any) => {
+          const type = String(a.action_type || '');
+          return type === 'leadgen_form_opened' || type === 'lead_form_open';
+        })
+        .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
+
+      // Use landing page views OR form opens (whichever is relevant for the campaign type)
+      const lpOrFormViews = landingPageViews > 0 ? landingPageViews : formOpens;
+
       // Extract cost per lead - always calculate as spend / leads for accuracy
       // This ensures CPL matches what Facebook shows when aggregating
       let costPerLead = 0;
@@ -286,7 +297,7 @@ Deno.serve(async (req) => {
         campaign_name: insight.campaign_name,
         impressions: parseInt(insight.impressions) || 0,
         clicks: parseInt(insight.clicks) || 0,
-        landing_page_views: landingPageViews,
+        lp_or_form_views: lpOrFormViews,
         cpm: parseFloat(insight.cpm) || 0,
         ctr: parseFloat(insight.ctr) || 0,
         leads,
@@ -300,8 +311,8 @@ Deno.serve(async (req) => {
     console.log(`Got ${insights.length} daily campaign insights`);
 
     // Make sure fields exist for Facebook Insights table
-    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'landing_page_views', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend', 'effective_status', 'configured_status'];
-    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'צפיות בעמוד נחיתה', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'עלות לליד', 'הוצאה', 'סטטוס בפועל', 'סטטוס מוגדר'];
+    const fieldKeys = ['date', 'campaign_name', 'campaign_id', 'impressions', 'clicks', 'lp_or_form_views', 'cpm', 'ctr', 'leads', 'cost_per_lead', 'spend', 'effective_status', 'configured_status'];
+    const fieldNames = ['תאריך', 'שם הקמפיין', 'מזהה קמפיין', 'חשיפות', 'קליקים', 'צפיות LP / פתיחות טופס', 'עלות ל-1000 חשיפות', 'אחוז קליקים', 'לידים', 'עלות לליד', 'הוצאה', 'סטטוס בפועל', 'סטטוס מוגדר'];
     const fieldTypes = ['date', 'text', 'text', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'number', 'text', 'text'];
     
     for (let i = 0; i < fieldKeys.length; i++) {
@@ -323,11 +334,11 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Delete old fields that are no longer needed (date_start, date_stop)
+    // Delete old fields that are no longer needed (date_start, date_stop, landing_page_views)
     await supabase.from('crm_fields')
       .delete()
       .eq('table_id', table_id)
-      .in('key', ['date_start', 'date_stop']);
+      .in('key', ['date_start', 'date_stop', 'landing_page_views']);
 
     // Delete existing records and insert new ones
     await supabase
