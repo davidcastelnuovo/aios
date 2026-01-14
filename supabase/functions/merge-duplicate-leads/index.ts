@@ -59,13 +59,32 @@ serve(async (req: Request) => {
       console.log("RPC not found, running manual query...");
     }
 
-    // Manual query to find duplicates
-    const { data: allLeads, error: leadsError } = await supabase
-      .from('leads')
-      .select('id, company_name, phone, status, response_status, created_at, updated_at')
-      .eq('tenant_id', tenant_id)
-      .not('phone', 'is', null)
-      .neq('phone', '');
+    // Manual query to find duplicates - need to paginate to get all leads
+    let allLeads: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    
+    while (true) {
+      const { data: pageLeads, error: pageError } = await supabase
+        .from('leads')
+        .select('id, company_name, phone, status, response_status, created_at, updated_at')
+        .eq('tenant_id', tenant_id)
+        .not('phone', 'is', null)
+        .neq('phone', '')
+        .range(from, from + pageSize - 1);
+      
+      if (pageError) throw pageError;
+      
+      if (!pageLeads || pageLeads.length === 0) break;
+      
+      allLeads = [...allLeads, ...pageLeads];
+      console.log(`Fetched ${pageLeads.length} leads, total: ${allLeads.length}`);
+      
+      if (pageLeads.length < pageSize) break;
+      from += pageSize;
+    }
+    
+    const leadsError = null;
 
     if (leadsError) throw leadsError;
 
