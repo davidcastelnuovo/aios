@@ -69,6 +69,7 @@ export default function ManyChatSettings() {
         tenant_id: tenantId,
         integration_type: 'manychat',
         api_key: apiKey,
+        is_active: apiKey.trim().length > 0,
         auto_sync_enabled: false,
         settings: {
           meeting_trigger_name: meetingTriggerName,
@@ -100,6 +101,7 @@ export default function ManyChatSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manychat-integration', tenantId] });
+      queryClient.invalidateQueries({ queryKey: ['manychat-tags', tenantId] });
       toast.success('הגדרות ManyChat נשמרו בהצלחה');
     },
     onError: (error: any) => {
