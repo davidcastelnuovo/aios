@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -1266,6 +1266,80 @@ export default function Leads() {
     }
   };
 
+  // Export filtered leads to CSV
+  const handleExportCSV = () => {
+    if (!filteredLeads || filteredLeads.length === 0) {
+      toast({
+        title: "אין נתונים לייצוא",
+        description: "לא נמצאו לידים לייצוא",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Define CSV headers and mapping
+    const headers = [
+      "שם איש קשר",
+      "שם חברה",
+      "טלפון",
+      "אימייל",
+      "שלב",
+      "סטטוס תגובה",
+      "מקור",
+      "תעשייה",
+      "ערך עסקה משוער",
+      "איש מכירות",
+      "סוכנות",
+      "הערות",
+      "תאריך יצירה",
+    ];
+
+    const rows = filteredLeads.map((lead: any) => {
+      const stageName = PIPELINE_STAGES.find(s => s.id === lead.status)?.label || lead.status;
+      const statusName = leadStatuses.find(s => s.status_key === lead.response_status)?.label || lead.response_status || "";
+      const sourceName = SOURCE_LABELS[lead.source] || lead.source || "";
+      
+      return [
+        lead.contact_name || "",
+        lead.company_name || "",
+        lead.phone || "",
+        lead.email || "",
+        stageName || "",
+        statusName,
+        sourceName,
+        lead.industry || "",
+        lead.estimated_deal_value || "",
+        lead.sales_people?.full_name || "",
+        lead.agencies?.name || "",
+        lead.notes || "",
+        lead.created_at ? new Date(lead.created_at).toLocaleDateString('he-IL') : "",
+      ];
+    });
+
+    // Create CSV content with BOM for Hebrew support
+    const BOM = "\uFEFF";
+    const csvContent = BOM + [
+      headers.join(","),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    // Download file
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `leads_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: "הקובץ יוצא בהצלחה",
+      description: `${filteredLeads.length} לידים יוצאו לקובץ CSV`,
+    });
+  };
+
   const getLeadsByStage = (stageId: string, limit?: number) => {
     const stageLeads = filteredLeads?.filter((lead: any) => lead.status === stageId) || [];
     if (limit && !expandedStages[stageId]) {
@@ -1331,6 +1405,15 @@ export default function Leads() {
           >
             <Download className={`h-4 w-4 ${syncFacebookLeadsMutation.isPending ? 'animate-spin' : ''}`} />
             {syncFacebookLeadsMutation.isPending ? 'מסנכרן...' : 'סנכרן מפייסבוק'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportCSV}
+            className="gap-1"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            ייצוא CSV
           </Button>
           <AddLeadForm />
           <ImportLeadsWithMapping />
@@ -1435,6 +1518,16 @@ export default function Leads() {
               </Button>
             }
           />
+          
+          {/* Export CSV Button */}
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={handleExportCSV}
+            title="ייצוא לקובץ CSV"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+          </Button>
         </div>
       </div>
       
