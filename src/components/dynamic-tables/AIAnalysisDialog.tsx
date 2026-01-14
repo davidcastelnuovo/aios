@@ -121,7 +121,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
           ניתוח AI
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[90vh]">
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
@@ -129,150 +129,146 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Input Section */}
-          <div className="grid gap-4 p-4 bg-muted/50 rounded-lg">
-            <div className="space-y-2">
-              <Label>תאריכי אירועים (וובינרים, השקות וכו')</Label>
-              <Input
-                placeholder="לדוגמה: 6.1, 23.12, 9.12, 23.11, 9.11"
-                value={eventDates}
-                onChange={(e) => setEventDates(e.target.value)}
-                dir="ltr"
-                className="text-left"
-              />
-              <p className="text-xs text-muted-foreground">
-                הזן תאריכים בפורמט יום.חודש, מופרדים בפסיק
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
+        <ScrollArea className="flex-1 min-h-0">
+          <div className="space-y-4 pr-4">
+            {/* Input Section */}
+            <div className="grid gap-4 p-4 bg-muted/50 rounded-lg">
               <div className="space-y-2">
-                <Label>ימים לפני האירוע</Label>
-                <Select value={daysBeforeEvent} onValueChange={setDaysBeforeEvent}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="3">3 ימים</SelectItem>
-                    <SelectItem value="7">7 ימים</SelectItem>
-                    <SelectItem value="14">14 ימים</SelectItem>
-                    <SelectItem value="30">30 ימים</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>תאריכי אירועים (וובינרים, השקות וכו')</Label>
+                <Input
+                  placeholder="לדוגמה: 6.1, 23.12, 9.12, 23.11, 9.11"
+                  value={eventDates}
+                  onChange={(e) => setEventDates(e.target.value)}
+                  dir="ltr"
+                  className="text-left"
+                />
+                <p className="text-xs text-muted-foreground">
+                  הזן תאריכים בפורמט יום.חודש, מופרדים בפסיק
+                </p>
               </div>
 
-              <div className="space-y-2">
-                <Label>סוג ניתוח</Label>
-                <Select value={analysisType} onValueChange={setAnalysisType}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="comparison">
-                      <div className="flex items-center gap-2">
-                        <BarChart3 className="h-4 w-4" />
-                        השוואה בין תקופות
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="trends">
-                      <div className="flex items-center gap-2">
-                        <TrendingUp className="h-4 w-4" />
-                        מגמות וטרנדים
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="recommendations">
-                      <div className="flex items-center gap-2">
-                        <Lightbulb className="h-4 w-4" />
-                        המלצות לשיפור
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>ימים לפני האירוע</Label>
+                  <Select value={daysBeforeEvent} onValueChange={setDaysBeforeEvent}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="3">3 ימים</SelectItem>
+                      <SelectItem value="7">7 ימים</SelectItem>
+                      <SelectItem value="14">14 ימים</SelectItem>
+                      <SelectItem value="30">30 ימים</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            {campaignFilter && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>סינון פעיל:</span>
-                <Badge variant="secondary">{campaignFilter}</Badge>
+                <div className="space-y-2">
+                  <Label>סוג ניתוח</Label>
+                  <Select value={analysisType} onValueChange={setAnalysisType}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="comparison">
+                        <div className="flex items-center gap-2">
+                          <BarChart3 className="h-4 w-4" />
+                          השוואה בין תקופות
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="trends">
+                        <div className="flex items-center gap-2">
+                          <TrendingUp className="h-4 w-4" />
+                          מגמות וטרנדים
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="recommendations">
+                        <div className="flex items-center gap-2">
+                          <Lightbulb className="h-4 w-4" />
+                          המלצות לשיפור
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-            )}
 
-            <Button onClick={handleAnalyze} disabled={isLoading} className="w-full gap-2">
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  מנתח נתונים...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  הפק דוח
-                </>
+              {campaignFilter && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>סינון פעיל:</span>
+                  <Badge variant="secondary">{campaignFilter}</Badge>
+                </div>
               )}
-            </Button>
-          </div>
 
-          {/* Results Section */}
-          {result && (
-            <div className="space-y-4">
-              {/* Period Summary Cards */}
-              <div className="flex gap-2 overflow-x-auto pb-2">
-                {result.periods.map((period) => (
-                  <Card key={period.eventDate} className="min-w-[180px] flex-shrink-0">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm flex items-center justify-between">
-                        <span>📅 {period.eventDate}</span>
+              <Button onClick={handleAnalyze} disabled={isLoading} className="w-full gap-2">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    מנתח נתונים...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    הפק דוח
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Results Section */}
+            {result && (
+              <div className="space-y-4">
+                {/* Period Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                  {result.periods.map((period) => (
+                    <Card key={period.eventDate} className="p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium">📅 {period.eventDate}</span>
                         <Badge variant="outline" className="text-xs">
                           {period.metrics.totalLeads} לידים
                         </Badge>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">הוצאה:</span>
-                        <span className="font-medium">₪{period.metrics.totalSpend.toLocaleString()}</span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">עלות לליד:</span>
-                        <span className="font-medium">₪{period.metrics.avgCostPerLead}</span>
+                      <div className="space-y-1 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">הוצאה:</span>
+                          <span className="font-medium">₪{period.metrics.totalSpend.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">עלות לליד:</span>
+                          <span className="font-medium">₪{period.metrics.avgCostPerLead}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">CTR:</span>
+                          <span className="font-medium">{period.metrics.avgCtr}%</span>
+                        </div>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">CTR:</span>
-                        <span className="font-medium">{period.metrics.avgCtr}%</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
+                    </Card>
+                  ))}
+                </div>
 
-              {/* AI Analysis */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      {getAnalysisTypeIcon(result.analysisType)}
-                      {getAnalysisTypeLabel(result.analysisType)}
-                    </div>
-                    <div className="flex gap-2">
+                {/* AI Analysis */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {getAnalysisTypeIcon(result.analysisType)}
+                        {getAnalysisTypeLabel(result.analysisType)}
+                      </div>
                       <Button variant="ghost" size="icon" onClick={copyToClipboard}>
                         <Copy className="h-4 w-4" />
                       </Button>
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ScrollArea className="h-[300px]">
-                    <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap text-sm leading-relaxed">
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap text-sm leading-relaxed max-h-[250px] overflow-y-auto">
                       {result.analysis}
                     </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );
