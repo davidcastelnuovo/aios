@@ -206,38 +206,44 @@ export function LeadFiltersDialog({
     });
   };
 
-  // Get selected status labels for display
+  // Get selected status labels for display - show max 2 items then "+X"
   const selectedStatusLabels = useMemo(() => {
     if (filters.responseStatus.length === 0) return "כל הסטטוסים";
+    
+    const labels: string[] = [];
     if (filters.responseStatus.includes("none")) {
-      const otherLabels = filters.responseStatus
-        .filter(s => s !== "none")
-        .map(s => leadStatuses.find(ls => ls.status_key === s)?.label)
-        .filter(Boolean);
-      if (otherLabels.length === 0) return "ללא סטטוס";
-      return ["ללא סטטוס", ...otherLabels].join(", ");
+      labels.push("ללא סטטוס");
     }
-    return filters.responseStatus
+    const otherLabels = filters.responseStatus
+      .filter(s => s !== "none")
       .map(s => leadStatuses.find(ls => ls.status_key === s)?.label)
-      .filter(Boolean)
-      .join(", ");
+      .filter(Boolean) as string[];
+    labels.push(...otherLabels);
+    
+    if (labels.length <= 2) {
+      return labels.join(", ");
+    }
+    return `${labels.slice(0, 2).join(", ")} +${labels.length - 2}`;
   }, [filters.responseStatus, leadStatuses]);
 
-  // Get selected tag labels for display
+  // Get selected tag labels for display - show max 2 items then "+X"
   const selectedTagLabels = useMemo(() => {
     if (filters.tagIds.length === 0) return "כל התגיות";
+    
+    const labels: string[] = [];
     if (filters.tagIds.includes("none")) {
-      const otherLabels = filters.tagIds
-        .filter(t => t !== "none")
-        .map(t => allTags.find(at => at.id === t)?.name)
-        .filter(Boolean);
-      if (otherLabels.length === 0) return "ללא תגית";
-      return ["ללא תגית", ...otherLabels].join(", ");
+      labels.push("ללא תגית");
     }
-    return filters.tagIds
+    const otherLabels = filters.tagIds
+      .filter(t => t !== "none")
       .map(t => allTags.find(at => at.id === t)?.name)
-      .filter(Boolean)
-      .join(", ");
+      .filter(Boolean) as string[];
+    labels.push(...otherLabels);
+    
+    if (labels.length <= 2) {
+      return labels.join(", ");
+    }
+    return `${labels.slice(0, 2).join(", ")} +${labels.length - 2}`;
   }, [filters.tagIds, allTags]);
 
   const hasActiveFilters = 
