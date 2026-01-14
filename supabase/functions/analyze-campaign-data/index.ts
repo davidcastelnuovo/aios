@@ -158,7 +158,7 @@ serve(async (req) => {
           campaign.leads += parseInt(data?.leads) || 0;
           campaign.spend += parseFloat(data?.spend) || 0;
 
-          const lpViewsRaw = (data?.lp_views ?? data?.landing_page_views ?? data?.landing_page_view ?? data?.lpViews ?? null);
+          const lpViewsRaw = (data?.lp_or_form_views ?? data?.lp_views ?? data?.landing_page_views ?? data?.landing_page_view ?? data?.lpViews ?? null);
           const lpViewsParsed = (lpViewsRaw === null || lpViewsRaw === undefined || lpViewsRaw === '')
             ? null
             : (parseInt(String(lpViewsRaw).replace(/,/g, '')) || 0);
