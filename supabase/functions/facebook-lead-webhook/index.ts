@@ -6,6 +6,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Normalize phone for comparison
+function normalizePhone(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  return phone.replace(/[\s\-\(\)\.+]/g, '').replace(/^0/, '972');
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -183,7 +189,134 @@ serve(async (req) => {
                 leadRecord.phone = fieldData.phone_number || fieldData.phone;
               }
 
-              // Insert lead
+              // ========== DEDUPLICATION LOGIC ==========
+              const normalizedPhone = normalizePhone(leadRecord.phone);
+              const normalizedEmail = leadRecord.email?.trim().toLowerCase() || null;
+              
+              let existingLead = null;
+              
+              if (normalizedPhone || normalizedEmail) {
+                console.log(`🔍 Checking for existing lead - phone: ${normalizedPhone}, email: ${normalizedEmail}`);
+                
+                // First try to find by phone
+                if (normalizedPhone) {
+                  const { data: leadsByPhone } = await supabase
+                    .from('leads')
+                    .select('*')
+                    .eq('tenant_id', integration.tenant_id);
+                  
+                  existingLead = leadsByPhone?.find(l => normalizePhone(l.phone) === normalizedPhone) || null;
+                  
+                  if (existingLead) {
+                    console.log(`📌 Found existing lead by phone: ${existingLead.id} (${existingLead.company_name})`);
+                  }
+                }
+                
+                // If not found by phone, try email
+                if (!existingLead && normalizedEmail) {
+                  const { data: leadByEmail } = await supabase
+                    .from('leads')
+                    .select('*')
+                    .eq('tenant_id', integration.tenant_id)
+                    .ilike('email', normalizedEmail)
+                    .limit(1)
+                    .maybeSingle();
+                  
+                  if (leadByEmail) {
+                    existingLead = leadByEmail;
+                    console.log(`📌 Found existing lead by email: ${existingLead.id} (${existingLead.company_name})`);
+                  }
+                }
+              }
+              
+              // If existing lead found - update with new info if available
+              if (existingLead) {
+                console.log(`🔄 Lead already exists, checking for new information to update...`);
+                
+                const updates: Record<string, any> = {};
+                let hasUpdates = false;
+                
+                // Only update fields that are empty in existing lead but have values in new lead
+                if (!existingLead.contact_name && leadRecord.contact_name) {
+                  updates.contact_name = leadRecord.contact_name;
+                  hasUpdates = true;
+                }
+                if (!existingLead.email && leadRecord.email) {
+                  updates.email = leadRecord.email;
+                  hasUpdates = true;
+                }
+                if (!existingLead.phone && leadRecord.phone) {
+                  updates.phone = leadRecord.phone;
+                  hasUpdates = true;
+                }
+                if (!existingLead.sales_person_id && leadRecord.sales_person_id) {
+                  updates.sales_person_id = leadRecord.sales_person_id;
+                  hasUpdates = true;
+                }
+                
+                // Append to notes about this duplicate lead
+                const newNote = `\n\n[${new Date().toISOString()}] Facebook Lead Ads duplicate: leadgen_id=${leadgenId}`;
+                const existingNotes = existingLead.notes || '';
+                if (!existingNotes.includes(leadgenId)) {
+                  updates.notes = existingNotes + newNote;
+                  hasUpdates = true;
+                }
+                
+                if (hasUpdates) {
+                  updates.updated_at = new Date().toISOString();
+                  
+                  const { error: updateError } = await supabase
+                    .from('leads')
+                    .update(updates)
+                    .eq('id', existingLead.id);
+                  
+                  if (updateError) {
+                    console.error('❌ Error updating existing lead:', updateError);
+                  } else {
+                    console.log(`✅ Updated existing lead with new info:`, Object.keys(updates));
+                  }
+                } else {
+                  console.log(`ℹ️ No new information to add, ignoring duplicate lead`);
+                }
+                
+                // Apply tag to existing lead if configured
+                if (formMappings.tag_id) {
+                  const { data: existingTagLink } = await supabase
+                    .from('chat_contact_tags')
+                    .select('id')
+                    .eq('lead_id', existingLead.id)
+                    .eq('tag_id', formMappings.tag_id)
+                    .maybeSingle();
+                  
+                  if (!existingTagLink) {
+                    const { error: tagError } = await supabase
+                      .from('chat_contact_tags')
+                      .insert({
+                        tag_id: formMappings.tag_id,
+                        lead_id: existingLead.id,
+                        tenant_id: integration.tenant_id,
+                        user_id: '00000000-0000-0000-0000-000000000000',
+                      });
+                    
+                    if (tagError) {
+                      console.error('Error applying tag to existing lead:', tagError);
+                    } else {
+                      console.log('New tag applied to existing lead:', formMappings.tag_id);
+                    }
+                  }
+                }
+                
+                // Update last_sync_at
+                await supabase
+                  .from('tenant_integrations')
+                  .update({ last_sync_at: new Date().toISOString() })
+                  .eq('id', integration.id);
+                  
+                continue; // Skip to next lead
+              }
+              // ========== END DEDUPLICATION LOGIC ==========
+
+              // Insert new lead
               const { data: newLead, error: insertError } = await supabase
                 .from('leads')
                 .insert(leadRecord)

@@ -23,6 +23,12 @@ interface LeadPayload {
   tenant_id?: string
 }
 
+// Normalize phone for comparison
+function normalizePhone(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  return phone.replace(/[\s\-\(\)\.+]/g, '').replace(/^0/, '972');
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -234,7 +240,188 @@ Deno.serve(async (req) => {
     const normalizedSource = payload.source?.toString().trim().toLowerCase() || ''
     const leadSource = normalizedSource ? (sourceMap[normalizedSource] || 'other') : 'other'
 
-    // Insert lead - all fields optional
+    // ========== DEDUPLICATION LOGIC ==========
+    // Check for existing lead by phone or email
+    const normalizedPhone = normalizePhone(payload.phone);
+    const normalizedEmail = payload.email?.trim().toLowerCase() || null;
+    
+    let existingLead = null;
+    
+    if (normalizedPhone || normalizedEmail) {
+      console.log(`🔍 Checking for existing lead - phone: ${normalizedPhone}, email: ${normalizedEmail}`);
+      
+      // First try to find by phone
+      if (normalizedPhone) {
+        const { data: leadsByPhone } = await supabase
+          .from('leads')
+          .select('*')
+          .eq('tenant_id', tenantId);
+        
+        // Check with normalized phone comparison
+        existingLead = leadsByPhone?.find(l => normalizePhone(l.phone) === normalizedPhone) || null;
+        
+        if (existingLead) {
+          console.log(`📌 Found existing lead by phone: ${existingLead.id} (${existingLead.company_name})`);
+        }
+      }
+      
+      // If not found by phone, try email
+      if (!existingLead && normalizedEmail) {
+        const { data: leadByEmail } = await supabase
+          .from('leads')
+          .select('*')
+          .eq('tenant_id', tenantId)
+          .ilike('email', normalizedEmail)
+          .limit(1)
+          .maybeSingle();
+        
+        if (leadByEmail) {
+          existingLead = leadByEmail;
+          console.log(`📌 Found existing lead by email: ${existingLead.id} (${existingLead.company_name})`);
+        }
+      }
+    }
+    
+    // If existing lead found - update with new info if available
+    if (existingLead) {
+      console.log(`🔄 Lead already exists, checking for new information to update...`);
+      
+      const updates: Record<string, any> = {};
+      let hasUpdates = false;
+      
+      // Only update fields that are empty in existing lead but have values in payload
+      if (!existingLead.contact_name && payload.contact_name) {
+        updates.contact_name = payload.contact_name;
+        hasUpdates = true;
+      }
+      if (!existingLead.email && payload.email) {
+        updates.email = payload.email;
+        hasUpdates = true;
+      }
+      if (!existingLead.phone && payload.phone) {
+        updates.phone = payload.phone;
+        hasUpdates = true;
+      }
+      if (!existingLead.monthly_budget && payload.monthly_budget) {
+        updates.monthly_budget = payload.monthly_budget;
+        hasUpdates = true;
+      }
+      if (!existingLead.three_month_budget && payload.three_month_budget) {
+        updates.three_month_budget = payload.three_month_budget;
+        hasUpdates = true;
+      }
+      if (!existingLead.products && payload.products) {
+        updates.products = payload.products;
+        hasUpdates = true;
+      }
+      if (!existingLead.industry && payload.industry) {
+        updates.industry = payload.industry;
+        hasUpdates = true;
+      }
+      if (!existingLead.manychat_subscriber_id && payload.manychat_subscriber_id) {
+        updates.manychat_subscriber_id = payload.manychat_subscriber_id;
+        hasUpdates = true;
+      }
+      
+      // Append notes if there are new notes
+      if (payload.notes && payload.notes.trim()) {
+        const existingNotes = existingLead.notes || '';
+        if (!existingNotes.includes(payload.notes.trim())) {
+          updates.notes = existingNotes 
+            ? `${existingNotes}\n\n[${new Date().toISOString()}] ${payload.notes.trim()}`
+            : payload.notes.trim();
+          hasUpdates = true;
+        }
+      }
+      
+      if (hasUpdates) {
+        updates.updated_at = new Date().toISOString();
+        
+        const { error: updateError } = await supabase
+          .from('leads')
+          .update(updates)
+          .eq('id', existingLead.id);
+        
+        if (updateError) {
+          console.error('❌ Error updating existing lead:', updateError);
+        } else {
+          console.log(`✅ Updated existing lead with new info:`, Object.keys(updates));
+        }
+      } else {
+        console.log(`ℹ️ No new information to add, ignoring duplicate lead`);
+      }
+      
+      // Handle tag_name for existing lead
+      if (payload.tag_name && tenantId) {
+        try {
+          const tagName = payload.tag_name.trim();
+          console.log(`🏷️ Processing tag_name for existing lead: "${tagName}"`);
+          
+          const { data: existingTag } = await supabase
+            .from('chat_tags')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('name', tagName)
+            .maybeSingle();
+          
+          let tagId = existingTag?.id;
+          
+          if (!tagId) {
+            const { data: newTag } = await supabase
+              .from('chat_tags')
+              .insert({
+                tenant_id: tenantId,
+                name: tagName,
+                color: '#3b82f6'
+              })
+              .select('id')
+              .single();
+            tagId = newTag?.id;
+          }
+          
+          if (tagId) {
+            // Check if tag already applied
+            const { data: existingTagLink } = await supabase
+              .from('chat_contact_tags')
+              .select('id')
+              .eq('lead_id', existingLead.id)
+              .eq('tag_id', tagId)
+              .maybeSingle();
+            
+            if (!existingTagLink) {
+              await supabase
+                .from('chat_contact_tags')
+                .insert({
+                  tenant_id: tenantId,
+                  tag_id: tagId,
+                  lead_id: existingLead.id,
+                  user_id: '00000000-0000-0000-0000-000000000000'
+                });
+              console.log(`✅ New tag applied to existing lead`);
+            }
+          }
+        } catch (tagError) {
+          console.error('⚠️ Error processing tag for existing lead:', tagError);
+        }
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          lead_id: existingLead.id,
+          message: hasUpdates ? 'Existing lead updated with new information' : 'Lead already exists, no new information',
+          duplicate: true,
+          updated: hasUpdates
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+    // ========== END DEDUPLICATION LOGIC ==========
+
+    // Insert new lead - all fields optional
     const { data: lead, error } = await supabase
       .from('leads')
       .insert({
@@ -379,7 +566,8 @@ Deno.serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         lead_id: lead.id,
-        message: 'Lead created successfully'
+        message: 'Lead created successfully',
+        duplicate: false
       }),
       { 
         status: 200, 

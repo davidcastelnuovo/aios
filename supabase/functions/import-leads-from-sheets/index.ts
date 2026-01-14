@@ -5,6 +5,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Normalize phone for comparison
+function normalizePhone(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  return phone.replace(/[\s\-\(\)\.+]/g, '').replace(/^0/, '972');
+}
+
 // Source mappings
 const sourceMappings: Record<string, string> = {
   'facebook': 'facebook',
@@ -351,24 +357,27 @@ Deno.serve(async (req) => {
       }
 
       try {
-        // Check if lead exists by phone or email
+        // Check if lead exists by phone or email using normalized comparison
         let existingLead = null
-        if (leadData.phone) {
-          const { data } = await supabaseAdmin
+        const normalizedPhone = normalizePhone(leadData.phone);
+        const normalizedEmail = leadData.email?.trim().toLowerCase() || null;
+        
+        if (normalizedPhone) {
+          // Fetch all leads to do normalized phone comparison
+          const { data: leadsByPhone } = await supabaseAdmin
             .from('leads')
-            .select('id')
+            .select('id, phone, email, company_name, contact_name, notes, monthly_budget, three_month_budget, products, campaign_name, industry, folder_link, source, status')
             .eq('tenant_id', tenantId)
-            .eq('phone', leadData.phone)
-            .maybeSingle()
-          existingLead = data
+          
+          existingLead = leadsByPhone?.find(l => normalizePhone(l.phone) === normalizedPhone) || null
         }
         
-        if (!existingLead && leadData.email) {
+        if (!existingLead && normalizedEmail) {
           const { data } = await supabaseAdmin
             .from('leads')
-            .select('id')
+            .select('id, phone, email, company_name, contact_name, notes, monthly_budget, three_month_budget, products, campaign_name, industry, folder_link, source, status')
             .eq('tenant_id', tenantId)
-            .eq('email', leadData.email)
+            .ilike('email', normalizedEmail)
             .maybeSingle()
           existingLead = data
         }
@@ -376,21 +385,48 @@ Deno.serve(async (req) => {
         let leadId: string
 
         if (existingLead) {
-          // Update existing lead
-          const { error: updateError } = await supabaseAdmin
-            .from('leads')
-            .update({
-              ...leadData,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existingLead.id)
+          // Only update fields that are empty in existing lead but have values in new data
+          const updates: Record<string, any> = {}
+          let hasUpdates = false
+          
+          const existingLeadRecord = existingLead as Record<string, any>
+          
+          // Fields to check and update if empty
+          const fieldsToCheck = [
+            'contact_name', 'email', 'phone', 'notes', 'monthly_budget', 
+            'three_month_budget', 'products', 'campaign_name', 'industry', 'folder_link'
+          ]
+          
+          for (const field of fieldsToCheck) {
+            if (!existingLeadRecord[field] && leadData[field]) {
+              updates[field] = leadData[field]
+              hasUpdates = true
+            }
+          }
+          
+          // Always update if new status is more advanced (not 'new')
+          if (leadData.status && leadData.status !== 'new' && existingLead.status === 'new') {
+            updates.status = leadData.status
+            hasUpdates = true
+          }
+          
+          if (hasUpdates) {
+            updates.updated_at = new Date().toISOString()
+            
+            const { error: updateError } = await supabaseAdmin
+              .from('leads')
+              .update(updates)
+              .eq('id', existingLead.id)
 
-          if (updateError) {
-            throw updateError
+            if (updateError) {
+              throw updateError
+            }
+            updatedCount++
+            console.log(`Updated lead ${existingLead.id} with fields:`, Object.keys(updates))
+          } else {
+            console.log(`Skipping duplicate lead - no new information: ${existingLead.id}`)
           }
           leadId = existingLead.id
-          updatedCount++
-          console.log(`Updated lead: ${leadId}`)
         } else {
           // Insert new lead
           const { data: newLead, error: insertError } = await supabaseAdmin
