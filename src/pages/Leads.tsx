@@ -62,6 +62,7 @@ import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 import { LeadTagSelector, LeadTagBadges } from "@/components/leads/LeadTagSelector";
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 import { ImportLeadsSheet } from "@/components/forms/ImportLeadsSheet";
+import { DuplicateLeadsManager } from "@/components/leads/DuplicateLeadsManager";
 
 // Helper functions for dynamic pipeline stages
 function hexToLightBg(hex: string): string {
@@ -1543,6 +1544,9 @@ export default function Leads() {
           >
             <FileSpreadsheet className="h-4 w-4" />
           </Button>
+          
+          {/* Duplicate Leads Manager */}
+          <DuplicateLeadsManager />
         </div>
       </div>
       
