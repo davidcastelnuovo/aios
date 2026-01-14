@@ -250,8 +250,16 @@ Deno.serve(async (req) => {
             })
             .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
 
-          // Use landing page views OR form opens (whichever is relevant for the campaign type)
-          const lpOrFormViews = landingPageViews > 0 ? landingPageViews : formOpens;
+          // Detect Lead Form campaigns (so we don't accidentally use landing page views)
+          const leadFormLeads = allActions
+            .filter((a: any) => String(a.action_type || '') === 'leadgen_grouped')
+            .reduce((sum: number, a: any) => sum + (parseInt(a.value) || 0), 0);
+
+          const isLeadFormCampaign = leadFormLeads > 0 || formOpens > 0;
+
+          // For Lead Form campaigns: use *form opens*.
+          // For Website/LP campaigns: use *landing page views*.
+          const lpOrFormViews = isLeadFormCampaign ? formOpens : landingPageViews;
 
           // Extract cost per lead - always calculate as spend / leads for accuracy
           // This ensures CPL matches what Facebook shows when aggregating
