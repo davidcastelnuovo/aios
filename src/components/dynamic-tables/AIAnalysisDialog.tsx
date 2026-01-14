@@ -348,19 +348,8 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                       </Button>
                     </div>
 
-                    {/* Period Cards */}
+                    {/* Period Cards - keep original order from input */}
                     {Object.entries(groupedCampaignData)
-                      .sort(([a], [b]) => {
-                        // Parse dates for proper sorting (format: DD.MM)
-                        const parseDate = (d: string) => {
-                          const parts = d.split('.');
-                          if (parts.length === 2) {
-                            return new Date(2025, parseInt(parts[1]) - 1, parseInt(parts[0]));
-                          }
-                          return new Date(d);
-                        };
-                        return parseDate(b).getTime() - parseDate(a).getTime();
-                      })
                       .map(([eventDate, campaigns]) => {
                         // Calculate totals for this period
                         const totals = campaigns.reduce((acc, c) => ({
@@ -401,9 +390,9 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                                       <TableHead className="text-center font-bold">CPM</TableHead>
                                       <TableHead className="text-center font-bold">לידים</TableHead>
                                       <TableHead className="text-center font-bold">עלות לליד</TableHead>
-                                      <TableHead className="text-center font-bold">צפיות LP</TableHead>
-                                      <TableHead className="text-center font-bold">המרה LP</TableHead>
-                                      <TableHead className="text-center font-bold">פער</TableHead>
+                              <TableHead className="text-center font-bold" title="צפיות בדף נחיתה בלבד - לידים מ-Lead Forms לא נספרים כאן">צפיות LP</TableHead>
+                              <TableHead className="text-center font-bold" title="אחוז המרה מצפיות LP ללידים - ייתכן שיעלה על 100% אם יש לידים מ-Lead Forms">המרה LP</TableHead>
+                              <TableHead className="text-center font-bold" title="הפרש בין המרה LP ל-CTR">פער</TableHead>
                                       <TableHead className="text-center font-bold">הוצאה</TableHead>
                                     </TableRow>
                                   </TableHeader>
