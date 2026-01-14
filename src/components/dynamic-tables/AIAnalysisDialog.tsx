@@ -247,8 +247,8 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                 </div>
 
                 {/* AI Analysis */}
-                <Card>
-                  <CardHeader className="pb-2">
+                <Card className="flex flex-col">
+                  <CardHeader className="pb-2 flex-shrink-0">
                     <CardTitle className="text-sm flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         {getAnalysisTypeIcon(result.analysisType)}
@@ -259,10 +259,12 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                       </Button>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap text-sm leading-relaxed max-h-[250px] overflow-y-auto">
-                      {result.analysis}
-                    </div>
+                  <CardContent className="flex-1 min-h-0">
+                    <ScrollArea className="h-[300px]">
+                      <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap text-sm leading-relaxed pr-4">
+                        {result.analysis}
+                      </div>
+                    </ScrollArea>
                   </CardContent>
                 </Card>
               </div>
