@@ -34,7 +34,7 @@ interface CampaignPeriodData {
   costPerLead: number;
   lpViews: number | null;
   lpConversionRate: number | null;
-  conversionMinusCtr: number | null;
+  costPerView: number | null;
   spend: number;
 }
 
@@ -194,9 +194,9 @@ serve(async (req) => {
             ? null
             : (metrics.lpViews > 0 ? (metrics.leads / metrics.lpViews) * 100 : 0);
 
-          const conversionMinusCtr = lpConversionRate === null
+          const costPerView = metrics.lpViews === null
             ? null
-            : (lpConversionRate - ctr);
+            : (metrics.lpViews > 0 ? metrics.spend / metrics.lpViews : 0);
 
           campaignPeriodData.push({
             campaignName,
@@ -210,7 +210,7 @@ serve(async (req) => {
             costPerLead: Math.round(costPerLead * 100) / 100,
             lpViews: metrics.lpViews,
             lpConversionRate: lpConversionRate === null ? null : (Math.round(lpConversionRate * 100) / 100),
-            conversionMinusCtr: conversionMinusCtr === null ? null : (Math.round(conversionMinusCtr * 100) / 100),
+            costPerView: costPerView === null ? null : (Math.round(costPerView * 100) / 100),
             spend: Math.round(metrics.spend * 100) / 100,
           });
         }
