@@ -184,7 +184,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
           ניתוח AI
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-5xl h-[90vh] flex flex-col overflow-hidden">
+      <DialogContent className="max-w-5xl h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
@@ -192,7 +192,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
           </DialogTitle>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div className="space-y-4 pr-4">
             {/* Input Section */}
             <div className="grid gap-4 p-4 bg-muted/50 rounded-lg">
@@ -389,9 +389,8 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                                 <Badge variant="secondary">{campaigns.length} קמפיינים</Badge>
                               </CardTitle>
                             </CardHeader>
-                            <CardContent className="p-0">
-                              <div className="overflow-x-auto">
-                                <Table dir="rtl">
+                            <CardContent className="p-0 overflow-x-auto">
+                              <Table dir="rtl" className="min-w-[1100px]">
                                   <TableHeader>
                                     <TableRow className="bg-muted/80">
                                       <TableHead className="text-right font-bold min-w-[200px]">קמפיין</TableHead>
@@ -459,7 +458,6 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                                     </TableRow>
                                   </TableBody>
                                 </Table>
-                              </div>
                             </CardContent>
                           </Card>
                         );
@@ -493,7 +491,7 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );

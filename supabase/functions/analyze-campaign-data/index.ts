@@ -103,7 +103,8 @@ serve(async (req) => {
 
       const eventDateStr = eventDate.toISOString().split('T')[0];
       const startDateStr = startDate.toISOString().split('T')[0];
-      const eventDateDisplay = `${day}.${month}`;
+      // Use original date string as key to preserve uniqueness
+      const eventDateDisplay = dateStr.trim();
 
       // Filter records for this period
       const periodRecords = records.filter(record => {
