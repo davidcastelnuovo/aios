@@ -333,99 +333,138 @@ export function AIAnalysisDialog({ tableId, tableName, campaignFilter }: AIAnaly
                   </div>
                 )}
 
-                {/* Raw Table Display */}
-                {result.analysisType === 'raw_table' && result.campaignData && (
-                  <Card>
-                    <CardHeader className="pb-2 flex-shrink-0">
-                      <CardTitle className="text-sm flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <TableIcon className="h-4 w-4" />
-                          טבלת נתונים גולמיים
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={copyToClipboard} className="gap-2">
-                          <Copy className="h-4 w-4" />
-                          העתק לאקסל
-                        </Button>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="text-right min-w-[200px]">קמפיין</TableHead>
-                              <TableHead className="text-center">תקופה</TableHead>
-                              <TableHead className="text-center">חשיפות</TableHead>
-                              <TableHead className="text-center">קליקים</TableHead>
-                              <TableHead className="text-center">CTR</TableHead>
-                              <TableHead className="text-center">CPC</TableHead>
-                              <TableHead className="text-center">CPM</TableHead>
-                              <TableHead className="text-center">לידים</TableHead>
-                              <TableHead className="text-center">עלות לליד</TableHead>
-                              <TableHead className="text-center">צפיות LP</TableHead>
-                              <TableHead className="text-center">המרה LP</TableHead>
-                              <TableHead className="text-center">פער (המרה-CTR)</TableHead>
-                              <TableHead className="text-center">הוצאה</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {result.campaignData.map((row, index) => (
-                              <TableRow key={`${row.campaignName}-${row.eventDate}-${index}`}>
-                                <TableCell className="font-medium text-right">{row.campaignName}</TableCell>
-                                <TableCell className="text-center">
-                                  <Badge variant="outline">{row.eventDate}</Badge>
-                                </TableCell>
-                                <TableCell className="text-center">{row.impressions.toLocaleString()}</TableCell>
-                                <TableCell className="text-center">{row.clicks.toLocaleString()}</TableCell>
-                                <TableCell className="text-center">{row.ctr}%</TableCell>
-                                <TableCell className="text-center">₪{row.cpc}</TableCell>
-                                <TableCell className="text-center">₪{row.cpm}</TableCell>
-                                <TableCell className="text-center font-medium">{row.leads}</TableCell>
-                                <TableCell className="text-center font-medium">₪{row.costPerLead}</TableCell>
-                                <TableCell className="text-center">{row.lpViews === null ? '-' : row.lpViews.toLocaleString()}</TableCell>
-                                <TableCell className="text-center">{row.lpConversionRate === null ? '-' : `${row.lpConversionRate}%`}</TableCell>
-                                <TableCell className="text-center">
-                                  {row.conversionMinusCtr === null
-                                    ? '-'
-                                    : `${row.conversionMinusCtr > 0 ? '+' : ''}${row.conversionMinusCtr}%`}
-                                </TableCell>
-                                <TableCell className="text-center font-medium">₪{row.spend.toLocaleString()}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
+                {/* Raw Table Display - RTL Format by Period */}
+                {result.analysisType === 'raw_table' && result.campaignData && groupedCampaignData && (
+                  <div className="space-y-6" dir="rtl">
+                    {/* Header with copy button */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <TableIcon className="h-5 w-5" />
+                        <span className="font-medium">דוח ביצועים לפי תקופות</span>
                       </div>
-                      
-                      {/* Summary row per period */}
-                      {groupedCampaignData && Object.keys(groupedCampaignData).length > 0 && (
-                        <div className="mt-4 pt-4 border-t">
-                          <h4 className="text-sm font-medium mb-2">סיכום לפי תקופה:</h4>
-                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
-                            {Object.entries(groupedCampaignData).map(([eventDate, campaigns]) => {
-                              const totals = campaigns.reduce((acc, c) => ({
-                                impressions: acc.impressions + c.impressions,
-                                clicks: acc.clicks + c.clicks,
-                                leads: acc.leads + c.leads,
-                                spend: acc.spend + c.spend,
-                              }), { impressions: 0, clicks: 0, leads: 0, spend: 0 });
-                              
-                              return (
-                                <Card key={eventDate} className="p-3 bg-muted/30">
-                                  <div className="text-sm font-medium mb-1">📅 {eventDate}</div>
-                                  <div className="space-y-0.5 text-xs">
-                                    <div>חשיפות: {totals.impressions.toLocaleString()}</div>
-                                    <div>לידים: {totals.leads}</div>
-                                    <div>הוצאה: ₪{totals.spend.toLocaleString()}</div>
-                                    <div>עלות לליד: ₪{totals.leads > 0 ? Math.round(totals.spend / totals.leads) : 0}</div>
-                                  </div>
-                                </Card>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                      <Button variant="outline" size="sm" onClick={copyToClipboard} className="gap-2">
+                        <Copy className="h-4 w-4" />
+                        העתק לאקסל
+                      </Button>
+                    </div>
+
+                    {/* Period Cards */}
+                    {Object.entries(groupedCampaignData)
+                      .sort(([a], [b]) => {
+                        // Parse dates for proper sorting (format: DD.MM)
+                        const parseDate = (d: string) => {
+                          const parts = d.split('.');
+                          if (parts.length === 2) {
+                            return new Date(2025, parseInt(parts[1]) - 1, parseInt(parts[0]));
+                          }
+                          return new Date(d);
+                        };
+                        return parseDate(b).getTime() - parseDate(a).getTime();
+                      })
+                      .map(([eventDate, campaigns]) => {
+                        // Calculate totals for this period
+                        const totals = campaigns.reduce((acc, c) => ({
+                          impressions: acc.impressions + c.impressions,
+                          clicks: acc.clicks + c.clicks,
+                          leads: acc.leads + c.leads,
+                          spend: acc.spend + c.spend,
+                          lpViews: (acc.lpViews ?? 0) + (c.lpViews ?? 0),
+                        }), { impressions: 0, clicks: 0, leads: 0, spend: 0, lpViews: 0 as number | null });
+
+                        const totalCtr = totals.impressions > 0 ? ((totals.clicks / totals.impressions) * 100).toFixed(2) : '0';
+                        const totalCpc = totals.clicks > 0 ? (totals.spend / totals.clicks).toFixed(2) : '0';
+                        const totalCpm = totals.impressions > 0 ? ((totals.spend / totals.impressions) * 1000).toFixed(2) : '0';
+                        const totalCostPerLead = totals.leads > 0 ? Math.round(totals.spend / totals.leads) : 0;
+                        const totalLpConversion = totals.lpViews && totals.lpViews > 0 ? ((totals.leads / totals.lpViews) * 100).toFixed(2) : null;
+                        const totalConversionMinusCtr = totalLpConversion !== null ? (parseFloat(totalLpConversion) - parseFloat(totalCtr)).toFixed(2) : null;
+
+                        return (
+                          <Card key={eventDate} className="overflow-hidden">
+                            <CardHeader className="bg-primary/10 py-3">
+                              <CardTitle className="flex items-center justify-between text-base">
+                                <div className="flex items-center gap-3">
+                                  <Badge className="text-sm px-3 py-1">{eventDate}</Badge>
+                                  <span>תקופה לפני האירוע</span>
+                                </div>
+                                <Badge variant="secondary">{campaigns.length} קמפיינים</Badge>
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                              <div className="overflow-x-auto">
+                                <Table dir="rtl">
+                                  <TableHeader>
+                                    <TableRow className="bg-muted/80">
+                                      <TableHead className="text-right font-bold min-w-[200px]">קמפיין</TableHead>
+                                      <TableHead className="text-center font-bold">חשיפות</TableHead>
+                                      <TableHead className="text-center font-bold">קליקים</TableHead>
+                                      <TableHead className="text-center font-bold">CTR</TableHead>
+                                      <TableHead className="text-center font-bold">CPC</TableHead>
+                                      <TableHead className="text-center font-bold">CPM</TableHead>
+                                      <TableHead className="text-center font-bold">לידים</TableHead>
+                                      <TableHead className="text-center font-bold">עלות לליד</TableHead>
+                                      <TableHead className="text-center font-bold">צפיות LP</TableHead>
+                                      <TableHead className="text-center font-bold">המרה LP</TableHead>
+                                      <TableHead className="text-center font-bold">פער</TableHead>
+                                      <TableHead className="text-center font-bold">הוצאה</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {campaigns.map((row, index) => (
+                                      <TableRow 
+                                        key={`${row.campaignName}-${index}`}
+                                        className={index % 2 === 0 ? 'bg-background' : 'bg-muted/30'}
+                                      >
+                                        <TableCell className="font-medium text-right">{row.campaignName}</TableCell>
+                                        <TableCell className="text-center">{row.impressions.toLocaleString()}</TableCell>
+                                        <TableCell className="text-center">{row.clicks.toLocaleString()}</TableCell>
+                                        <TableCell className="text-center">{row.ctr}%</TableCell>
+                                        <TableCell className="text-center">₪{row.cpc}</TableCell>
+                                        <TableCell className="text-center">₪{row.cpm}</TableCell>
+                                        <TableCell className="text-center font-medium">{row.leads}</TableCell>
+                                        <TableCell className="text-center font-medium">₪{row.costPerLead}</TableCell>
+                                        <TableCell className="text-center">{row.lpViews === null ? '-' : row.lpViews.toLocaleString()}</TableCell>
+                                        <TableCell className="text-center">{row.lpConversionRate === null ? '-' : `${row.lpConversionRate}%`}</TableCell>
+                                        <TableCell className="text-center">
+                                          {row.conversionMinusCtr === null
+                                            ? '-'
+                                            : <span className={row.conversionMinusCtr > 0 ? 'text-green-600' : row.conversionMinusCtr < 0 ? 'text-red-600' : ''}>
+                                                {row.conversionMinusCtr > 0 ? '+' : ''}{row.conversionMinusCtr}%
+                                              </span>
+                                          }
+                                        </TableCell>
+                                        <TableCell className="text-center font-medium">₪{row.spend.toLocaleString()}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                    {/* Summary Row */}
+                                    <TableRow className="bg-muted font-bold border-t-2 border-primary/30">
+                                      <TableCell className="text-right">סה״כ</TableCell>
+                                      <TableCell className="text-center">{totals.impressions.toLocaleString()}</TableCell>
+                                      <TableCell className="text-center">{totals.clicks.toLocaleString()}</TableCell>
+                                      <TableCell className="text-center">{totalCtr}%</TableCell>
+                                      <TableCell className="text-center">₪{totalCpc}</TableCell>
+                                      <TableCell className="text-center">₪{totalCpm}</TableCell>
+                                      <TableCell className="text-center">{totals.leads}</TableCell>
+                                      <TableCell className="text-center">₪{totalCostPerLead}</TableCell>
+                                      <TableCell className="text-center">{totals.lpViews ? totals.lpViews.toLocaleString() : '-'}</TableCell>
+                                      <TableCell className="text-center">{totalLpConversion ? `${totalLpConversion}%` : '-'}</TableCell>
+                                      <TableCell className="text-center">
+                                        {totalConversionMinusCtr === null
+                                          ? '-'
+                                          : <span className={parseFloat(totalConversionMinusCtr) > 0 ? 'text-green-600' : parseFloat(totalConversionMinusCtr) < 0 ? 'text-red-600' : ''}>
+                                              {parseFloat(totalConversionMinusCtr) > 0 ? '+' : ''}{totalConversionMinusCtr}%
+                                            </span>
+                                        }
+                                      </TableCell>
+                                      <TableCell className="text-center">₪{totals.spend.toLocaleString()}</TableCell>
+                                    </TableRow>
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                  </div>
                 )}
 
                 {/* AI Analysis */}
