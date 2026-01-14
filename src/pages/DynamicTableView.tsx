@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon } from "lucide-react";
 import { format, subDays, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -100,7 +100,10 @@ export default function DynamicTableView() {
   const [showGoogleSettingsDialog, setShowGoogleSettingsDialog] = useState(false);
   const [selectedGoogleAccount, setSelectedGoogleAccount] = useState<string>("");
   const [showAlertsDialog, setShowAlertsDialog] = useState(false);
+  const [campaignSearch, setCampaignSearch] = useState("");
   const cellInputRef = useRef<HTMLInputElement>(null);
+
+  const debouncedCampaignSearch = useDebouncedValue(campaignSearch, 300);
 
   const dateFilterOptions = [
     { value: "all", label: "כל התאריכים" },
@@ -200,6 +203,16 @@ export default function DynamicTableView() {
     },
     enabled: !!table?.id && (dateFilter !== 'custom' || (!!customDateRange.from && !!customDateRange.to)),
   });
+
+  // Filter records by campaign name search
+  const filteredRecords = useMemo(() => {
+    if (!records || !debouncedCampaignSearch.trim()) return records;
+    const searchTerm = debouncedCampaignSearch.toLowerCase();
+    return records.filter(record => {
+      const campaignName = String(record.data?.campaign_name || '').toLowerCase();
+      return campaignName.includes(searchTerm);
+    });
+  }, [records, debouncedCampaignSearch]);
 
   const addColumnMutation = useMutation({
     mutationFn: async (columnName: string) => {
@@ -987,6 +1000,30 @@ export default function DynamicTableView() {
             </div>
           )}
           
+          {/* Campaign Search Filter - Only for Facebook/Google Ads tables */}
+          {(hasFacebook || hasGoogleAds) && (
+            <div className="flex items-center gap-2 w-full md:w-auto justify-center relative">
+              <SearchIcon className="h-4 w-4 text-muted-foreground absolute right-3 pointer-events-none" />
+              <Input
+                type="text"
+                placeholder="חפש קמפיין..."
+                value={campaignSearch}
+                onChange={(e) => setCampaignSearch(e.target.value)}
+                className="w-full md:w-[200px] pr-9 h-9"
+              />
+              {campaignSearch && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute left-1 h-7 w-7"
+                  onClick={() => setCampaignSearch("")}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+          )}
+          
           {/* Hide date filter for Analytics and Search Console - they have internal filtering */}
           {!hasGoogleAnalytics && !hasGoogleSearchConsole && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center">
@@ -1237,11 +1274,11 @@ export default function DynamicTableView() {
       )}
 
       {/* Summary Stats for Facebook Insights */}
-      {hasFacebook && records && records.length > 0 && (
+      {hasFacebook && filteredRecords && filteredRecords.length > 0 && (
         <Card className="mb-4 overflow-hidden">
           {(() => {
             // Group records by campaign_name
-            const campaignGroups = records.reduce((acc, record) => {
+            const campaignGroups = filteredRecords.reduce((acc, record) => {
               const campaignName = String(record.data?.campaign_name || 'ללא קמפיין');
               if (!acc[campaignName]) {
                 acc[campaignName] = { impressions: 0, clicks: 0, leads: 0, spend: 0 };
@@ -1314,10 +1351,10 @@ export default function DynamicTableView() {
       )}
 
       {/* Summary Stats for Google Ads */}
-      {hasGoogleAds && records && records.length > 0 && (
+      {hasGoogleAds && filteredRecords && filteredRecords.length > 0 && (
         <Card className="mb-4 overflow-hidden">
           {(() => {
-            const campaignGroups = records.reduce((acc, record) => {
+            const campaignGroups = filteredRecords.reduce((acc, record) => {
               const campaignName = String(record.data?.campaign_name || 'ללא קמפיין');
               if (!acc[campaignName]) {
                 acc[campaignName] = { impressions: 0, clicks: 0, conversions: 0, cost: 0 };
@@ -1382,8 +1419,8 @@ export default function DynamicTableView() {
       )}
 
       {/* Google Analytics Dashboard */}
-      {hasGoogleAnalytics && records && records.length > 0 && (
-        <GoogleAnalyticsDashboard records={records} />
+      {hasGoogleAnalytics && filteredRecords && filteredRecords.length > 0 && (
+        <GoogleAnalyticsDashboard records={filteredRecords} />
       )}
 
       {/* Google Search Console Dashboard */}
@@ -1498,7 +1535,7 @@ export default function DynamicTableView() {
               </div>
 
               {/* Rows */}
-              {records?.map((record) => (
+              {filteredRecords?.map((record) => (
                 <div key={record.id} className="flex border-b hover:bg-muted/20 transition-colors group">
                   <div className="w-12 flex-shrink-0 border-l p-2 flex items-center justify-center bg-muted/10">
                     <Button 
@@ -1587,10 +1624,10 @@ export default function DynamicTableView() {
               ))}
 
               {/* Empty state */}
-              {(!records || records.length === 0) && (
+              {(!filteredRecords || filteredRecords.length === 0) && (
                 <div className="flex items-center justify-center p-12 text-center">
                   <div>
-                    <p className="text-muted-foreground mb-3">אין שורות בטבלה</p>
+                    <p className="text-muted-foreground mb-3">{campaignSearch ? 'לא נמצאו קמפיינים תואמים' : 'אין שורות בטבלה'}</p>
                     <Button
                       variant="outline"
                       size="sm"
