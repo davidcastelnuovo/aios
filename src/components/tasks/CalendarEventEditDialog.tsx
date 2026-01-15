@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { format, parseISO } from "date-fns";
+import { format, parseISO, differenceInMinutes } from "date-fns";
 import { he } from "date-fns/locale";
 import {
   Dialog,
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar, Clock, Trash2 } from "lucide-react";
+import { Calendar, Clock, Trash2, ListTodo } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -46,6 +46,13 @@ interface CalendarEventEditDialogProps {
     end: string;
   }) => void;
   onDelete: (eventId: string) => void;
+  onCreateTask?: (data: {
+    title: string;
+    notes: string;
+    dueDate: string;
+    dueTime: string;
+    durationMinutes: number;
+  }) => void;
   isLoading?: boolean;
 }
 
@@ -55,6 +62,7 @@ export function CalendarEventEditDialog({
   onOpenChange,
   onSave,
   onDelete,
+  onCreateTask,
   isLoading,
 }: CalendarEventEditDialogProps) {
   const [title, setTitle] = useState("");
@@ -102,6 +110,35 @@ export function CalendarEventEditDialog({
   const handleDelete = () => {
     if (!event) return;
     onDelete(event.id);
+  };
+
+  const handleCreateTask = () => {
+    if (!event || !onCreateTask) return;
+    
+    try {
+      const start = parseISO(event.start);
+      const end = parseISO(event.end);
+      const durationMinutes = differenceInMinutes(end, start);
+      
+      onCreateTask({
+        title,
+        notes: description,
+        dueDate: startDate,
+        dueTime: startTime,
+        durationMinutes: durationMinutes > 0 ? durationMinutes : 30,
+      });
+      onOpenChange(false);
+    } catch {
+      // Use current form values if parsing fails
+      onCreateTask({
+        title,
+        notes: description,
+        dueDate: startDate,
+        dueTime: startTime,
+        durationMinutes: 30,
+      });
+      onOpenChange(false);
+    }
   };
 
   if (!event) return null;
@@ -182,26 +219,35 @@ export function CalendarEventEditDialog({
         </div>
 
         <DialogFooter className="flex justify-between sm:justify-between">
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm" className="gap-1">
-                <Trash2 className="h-4 w-4" />
-                מחק
+          <div className="flex gap-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" className="gap-1">
+                  <Trash2 className="h-4 w-4" />
+                  מחק
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent dir="rtl">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>האם למחוק את האירוע?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    פעולה זו תמחק את האירוע מיומן Google שלך ולא ניתן יהיה לשחזר אותו.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>ביטול</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete}>מחק</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            
+            {onCreateTask && (
+              <Button variant="outline" size="sm" className="gap-1" onClick={handleCreateTask}>
+                <ListTodo className="h-4 w-4" />
+                צור משימה
               </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent dir="rtl">
-              <AlertDialogHeader>
-                <AlertDialogTitle>האם למחוק את האירוע?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  פעולה זו תמחק את האירוע מיומן Google שלך ולא ניתן יהיה לשחזר אותו.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>ביטול</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDelete}>מחק</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+            )}
+          </div>
           
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>
