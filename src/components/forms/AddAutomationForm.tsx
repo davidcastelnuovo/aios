@@ -78,6 +78,11 @@ const formSchema = z.object({
   field_mapping_time: z.string().optional(),
   field_mapping_location: z.string().optional(),
   field_mapping_contact: z.string().optional(),
+  // Create task fields
+  task_title_template: z.string().optional(),
+  task_notes_template: z.string().optional(),
+  task_priority: z.number().optional(),
+  task_due_days: z.number().optional(),
 }).refine((data) => {
   if (data.action_type === "webhook" && !data.webhook_url) {
     return false;
@@ -160,6 +165,10 @@ export function AddAutomationForm() {
       update_template: "אין מענה בתאריך {{date}} בשעה {{time}}",
       campaigner_send_target: "phone",
       green_api_integration_id: "",
+      task_title_template: "{{company_name}} - משימה חדשה",
+      task_notes_template: "",
+      task_priority: 5,
+      task_due_days: 0,
     },
   });
 
@@ -331,6 +340,13 @@ export function AddAutomationForm() {
       } else if (values.action_type === "add_lead_update" || values.action_type === "add_client_update") {
         configuration = {
           update_template: values.update_template || "",
+        };
+      } else if (values.action_type === "create_task") {
+        configuration = {
+          task_title_template: values.task_title_template || "{{company_name}} - משימה חדשה",
+          task_notes_template: values.task_notes_template || "",
+          task_priority: values.task_priority || 5,
+          task_due_days: values.task_due_days || 0,
         };
       }
 
@@ -549,6 +565,7 @@ export function AddAutomationForm() {
                       <SelectItem value="send_greenapi_to_campaigner">שלח WhatsApp לקמפיינר (Green API)</SelectItem>
                       <SelectItem value="add_lead_update">הוסף עדכון לליד</SelectItem>
                       <SelectItem value="add_client_update">הוסף עדכון ללקוח</SelectItem>
+                      <SelectItem value="create_task">צור משימה</SelectItem>
                       <SelectItem value="email" disabled>אימייל (בקרוב)</SelectItem>
                       <SelectItem value="notification" disabled>התראה (בקרוב)</SelectItem>
                     </SelectContent>
@@ -1016,6 +1033,102 @@ export function AddAutomationForm() {
                   </FormItem>
                 )}
               />
+            )}
+
+            {actionType === "create_task" && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="task_title_template"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <MessageTemplateBuilder 
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          label="תבנית כותרת המשימה *"
+                          placeholder="{{company_name}} - משימה חדשה"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="task_notes_template"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <MessageTemplateBuilder 
+                          value={field.value || ""}
+                          onChange={field.onChange}
+                          label="תבנית הערות למשימה (אופציונלי)"
+                          placeholder="ליצור קשר עם {{contact_name}} בנוגע ל-{{company_name}}"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="task_priority"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>עדיפות (1-10)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number"
+                            min={1}
+                            max={10}
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 5)}
+                          />
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          1 = נמוכה, 10 = גבוהה
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="task_due_days"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>ימים לביצוע</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number"
+                            min={0}
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                          />
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          0 = היום, 1 = מחר וכו'
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-sm">
+                  <p className="font-medium text-blue-600 dark:text-blue-400">כיצד זה עובד?</p>
+                  <ul className="text-muted-foreground text-xs mt-1 space-y-1">
+                    <li>• כשהטריגר מופעל, תיווצר משימה חדשה במערכת</li>
+                    <li>• המשימה תשויך לליד/לקוח שהפעיל את האוטומציה</li>
+                    <li>• ניתן להשתמש במשתנים דינמיים בכותרת ובהערות</li>
+                  </ul>
+                </div>
+              </>
             )}
 
             <FormField

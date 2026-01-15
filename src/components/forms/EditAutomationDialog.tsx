@@ -72,6 +72,11 @@ const formSchema = z.object({
   field_mapping_time: z.string().optional(),
   field_mapping_location: z.string().optional(),
   field_mapping_contact: z.string().optional(),
+  // Create task fields
+  task_title_template: z.string().optional(),
+  task_notes_template: z.string().optional(),
+  task_priority: z.number().optional(),
+  task_due_days: z.number().optional(),
 }).refine((data) => {
   if (data.action_type === "webhook" && !data.webhook_url) {
     return false;
@@ -141,6 +146,10 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       update_template: automation.configuration?.update_template || "אין מענה בתאריך {{date}} בשעה {{time}}",
       campaigner_send_target: automation.configuration?.send_target || "phone",
       green_api_integration_id: automation.configuration?.integration_id || "",
+      task_title_template: automation.configuration?.task_title_template || "{{company_name}} - משימה חדשה",
+      task_notes_template: automation.configuration?.task_notes_template || "",
+      task_priority: automation.configuration?.task_priority || 5,
+      task_due_days: automation.configuration?.task_due_days || 0,
     },
   });
 
@@ -293,6 +302,13 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       } else if (values.action_type === "add_lead_update" || values.action_type === "add_client_update") {
         configuration = {
           update_template: values.update_template || "",
+        };
+      } else if (values.action_type === "create_task") {
+        configuration = {
+          task_title_template: values.task_title_template || "{{company_name}} - משימה חדשה",
+          task_notes_template: values.task_notes_template || "",
+          task_priority: values.task_priority || 5,
+          task_due_days: values.task_due_days || 0,
         };
       }
 
@@ -484,6 +500,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                       <SelectItem value="send_greenapi_to_campaigner">שלח WhatsApp לקמפיינר (Green API)</SelectItem>
                       <SelectItem value="add_lead_update">הוסף עדכון לליד</SelectItem>
                       <SelectItem value="add_client_update">הוסף עדכון ללקוח</SelectItem>
+                      <SelectItem value="create_task">צור משימה</SelectItem>
                       <SelectItem value="email">אימייל (בקרוב)</SelectItem>
                       <SelectItem value="notification">התראה (בקרוב)</SelectItem>
                     </SelectContent>
