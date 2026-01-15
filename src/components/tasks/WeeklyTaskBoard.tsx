@@ -1283,6 +1283,38 @@ export function WeeklyTaskBoard() {
           });
         }}
         onDelete={(eventId) => deleteCalendarEvent.mutate(eventId)}
+        onCreateTask={(data) => {
+          // Create a new task from calendar event
+          if (!tenantId || !firstAgency?.id) {
+            toast.error("לא ניתן ליצור משימה כרגע");
+            return;
+          }
+          
+          const myCampaignerId = userProfile?.campaigner_id || null;
+          const mySalesPersonId = userProfile?.sales_person_id || null;
+          
+          supabase.from("tasks").insert({
+            title: data.title,
+            notes: data.notes || null,
+            status: "open",
+            priority: 5,
+            tenant_id: tenantId,
+            agency_id: firstAgency.id,
+            campaigner_id: myCampaignerId,
+            sales_person_id: myCampaignerId ? null : mySalesPersonId,
+            due_date: data.dueDate,
+            due_time: data.dueTime + ":00",
+            duration_minutes: data.durationMinutes,
+          }).select().single().then(({ data: newTask, error }) => {
+            if (error) {
+              toast.error("שגיאה ביצירת משימה");
+              console.error("Error creating task from calendar event:", error);
+              return;
+            }
+            queryClient.invalidateQueries({ queryKey: ["tasks"] });
+            toast.success("משימה נוצרה בהצלחה");
+          });
+        }}
         isLoading={updateCalendarEvent.isPending || deleteCalendarEvent.isPending}
       />
 
