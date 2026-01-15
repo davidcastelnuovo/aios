@@ -77,6 +77,8 @@ Deno.serve(async (req) => {
             response = await executeAddLeadUpdate(supabase, automation.configuration, payload.data, payload.tenant_id)
           } else if (automation.action_type === 'add_client_update') {
             response = await executeAddClientUpdate(supabase, automation.configuration, payload.data, payload.tenant_id)
+          } else if (automation.action_type === 'create_task') {
+            response = await executeCreateTask(supabase, automation.configuration, payload.data, payload.tenant_id)
           }
 
           const executionTime = Date.now() - startTime
@@ -1244,5 +1246,70 @@ async function executeAddClientUpdate(supabase: any, config: any, data: any, ten
     success: true,
     update_id: insertedUpdate.id,
     content: updateContent,
+  }
+}
+
+// Execute create task action
+async function executeCreateTask(supabase: any, config: any, data: any, tenantId: string) {
+  const { task_title_template, task_notes_template, task_priority, task_due_days } = config
+  
+  // Get tenant slug for template variables
+  const { data: tenant } = await supabase
+    .from('tenants')
+    .select('slug')
+    .eq('id', tenantId)
+    .single()
+  
+  const tenantSlug = tenant?.slug || ''
+  
+  // Replace template variables
+  const title = replaceTemplateVariables(task_title_template || '{{company_name}} - משימה חדשה', data, tenantSlug)
+  const notes = task_notes_template ? replaceTemplateVariables(task_notes_template, data, tenantSlug) : null
+  
+  // Calculate due date
+  const dueDate = new Date()
+  dueDate.setDate(dueDate.getDate() + (task_due_days || 0))
+  const dueDateStr = dueDate.toISOString().split('T')[0]
+  
+  // Get first agency for the tenant
+  const { data: agency } = await supabase
+    .from('agencies')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .limit(1)
+    .single()
+  
+  if (!agency) {
+    throw new Error('לא נמצאה סוכנות בארגון')
+  }
+  
+  // Insert task
+  const { data: newTask, error: insertError } = await supabase
+    .from('tasks')
+    .insert({
+      title,
+      notes,
+      status: 'open',
+      priority: task_priority || 5,
+      due_date: dueDateStr,
+      tenant_id: tenantId,
+      agency_id: agency.id,
+      lead_id: data.lead_id || null,
+      client_id: data.client_id || null,
+    })
+    .select()
+    .single()
+  
+  if (insertError) {
+    console.error('Error creating task:', insertError)
+    throw new Error(`שגיאה ביצירת משימה: ${insertError.message}`)
+  }
+  
+  console.log('Task created:', newTask)
+  
+  return {
+    success: true,
+    task_id: newTask.id,
+    title,
   }
 }
