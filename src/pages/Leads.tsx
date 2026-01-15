@@ -953,7 +953,7 @@ export default function Leads() {
   }, [leads]);
 
   const updateLeadStatus = useMutation({
-    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "meeting_scheduled" | "negotiation" | "transferred_to_onboarding" | "closed" | "won" | "lost" }) => {
+    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: string }) => {
       // Get lead data before update to know old status
       const { data: leadBefore } = await supabase
         .from("leads")
@@ -968,8 +968,9 @@ export default function Leads() {
 
       if (error) throw error;
       
-      // Trigger bubble animation when status changes to "closed"
-      if (newStatus === "closed") {
+      // Trigger bubble animation when status changes to a final stage (won/lost/closed)
+      const finalStages = ['closed', 'won', 'lost'];
+      if (finalStages.includes(newStatus)) {
         playBubbleAnimation();
       }
 
@@ -1158,11 +1159,11 @@ export default function Leads() {
       if (overLead) targetStatus = overLead.status;
     }
 
-    // Validate final status
+    // Validate final status - only update if target is a valid stage
     if (PIPELINE_STAGES.find((stage) => stage.id === targetStatus)) {
       updateLeadStatus.mutate({
         leadId,
-        newStatus: targetStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed",
+        newStatus: targetStatus,
       });
     }
   };
