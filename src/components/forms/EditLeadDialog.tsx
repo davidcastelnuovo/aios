@@ -30,6 +30,7 @@ import { useLeadStatuses } from "@/hooks/useLeadStatuses";
 import { useLeadPipelineStages } from "@/hooks/useLeadPipelineStages";
 import { ManagePipelineStagesDialog } from "./ManagePipelineStagesDialog";
 import { LeadUpdatesTab } from "@/components/leads/LeadUpdatesTab";
+import { LeadTagSelector, LeadTagBadgesEditable } from "@/components/leads/LeadTagSelector";
 
 const formSchema = z.object({
   company_name: z.string().min(1, "שם העסק הוא שדה חובה"),
@@ -167,6 +168,39 @@ const form = useForm<FormValues>({
       return data;
     },
     enabled: !!tenantId,
+  });
+
+  // Fetch lead's tags
+  const { data: leadTagIds = [] } = useQuery({
+    queryKey: ['lead-tags', lead.id],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from('chat_contact_tags')
+        .select('tag_id')
+        .eq('lead_id', lead.id)
+        .eq('tenant_id', tenantId);
+      if (error) throw error;
+      return data.map(ct => ct.tag_id);
+    },
+    enabled: !!tenantId && !!lead.id && open,
+  });
+
+  // Fetch all tags for displaying badges
+  const { data: allTags = [] } = useQuery({
+    queryKey: ['chat-tags', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from('chat_tags')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId && open,
+    staleTime: 60000,
   });
 
   const { data: leadUpdates, refetch: refetchUpdates } = useQuery({
@@ -857,6 +891,19 @@ const updateMutation = useMutation({
                       </FormItem>
                     )}
                   />
+                </div>
+
+                {/* Tags field */}
+                <div className="space-y-2">
+                  <FormLabel className="text-sm font-medium">תגיות</FormLabel>
+                  <div className="flex items-start gap-2 flex-wrap">
+                    <LeadTagSelector leadId={lead.id} initialTagIds={leadTagIds} />
+                    <LeadTagBadgesEditable 
+                      leadId={lead.id}
+                      allTags={allTags} 
+                      tagIds={leadTagIds} 
+                    />
+                  </div>
                 </div>
 
                 <FormField
