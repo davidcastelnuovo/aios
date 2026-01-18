@@ -14,7 +14,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Users, 
   Package, 
-  UserCheck, 
   Search, 
   Building2,
   TrendingUp,
@@ -126,53 +125,6 @@ export default function AccountingIntegrations() {
     enabled: !!currentTenantId,
   });
 
-  // Fetch campaigners (team)
-  const { data: campaigners, isLoading: campaignersLoading } = useQuery({
-    queryKey: ["accounting-campaigners", currentTenantId],
-    queryFn: async () => {
-      if (!currentTenantId) return [];
-      const { data, error } = await supabase
-        .from("campaigners")
-        .select(`
-          id,
-          full_name,
-          email,
-          phone,
-          role,
-          active,
-          campaigner_agencies (
-            agency_id,
-            agencies (id, name)
-          )
-        `)
-        .eq("tenant_id", currentTenantId);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenantId,
-  });
-
-  // Fetch sales people
-  const { data: salesPeople, isLoading: salesPeopleLoading } = useQuery({
-    queryKey: ["accounting-salespeople", currentTenantId],
-    queryFn: async () => {
-      if (!currentTenantId) return [];
-      const { data, error } = await supabase
-        .from("sales_people")
-        .select(`
-          id,
-          full_name,
-          email,
-          phone,
-          active,
-          agencies (id, name)
-        `)
-        .eq("tenant_id", currentTenantId);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenantId,
-  });
 
   // Fetch finance summary - income from retainers, expenses from suppliers
   const { data: financeData } = useQuery({
@@ -235,9 +187,13 @@ export default function AccountingIntegrations() {
     });
   }, [clients, searchQuery, agencyFilter, clientStatusFilter]);
 
+  // Filter suppliers - only show those with payments
   const filteredSuppliers = useMemo(() => {
     if (!suppliers) return [];
     return suppliers.filter(supplier => {
+      const hasPayments = (supplier.payment_1 || 0) + (supplier.payment_2 || 0) + (supplier.payment_3 || 0) > 0;
+      if (!hasPayments) return false;
+      
       const matchesSearch = supplier.name?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesAgency = agencyFilter === "all" || 
         supplier.agency_id_1 === agencyFilter ||
@@ -247,15 +203,33 @@ export default function AccountingIntegrations() {
     });
   }, [suppliers, searchQuery, agencyFilter]);
 
-  const filteredTeam = useMemo(() => {
-    if (!campaigners) return [];
-    return campaigners.filter(member => {
-      const matchesSearch = member.full_name?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesAgency = agencyFilter === "all" || 
-        member.campaigner_agencies?.some((ca: any) => ca.agency_id === agencyFilter);
-      return matchesSearch && matchesAgency;
+  // Combined expenses list (suppliers + team with payments)
+  const combinedExpenses = useMemo(() => {
+    const expenses: Array<{
+      id: string;
+      name: string;
+      type: 'supplier' | 'team';
+      totalPayment: number;
+    }> = [];
+
+    // Add suppliers with payments
+    filteredSuppliers.forEach(supplier => {
+      const total = (supplier.payment_1 || 0) + (supplier.payment_2 || 0) + (supplier.payment_3 || 0);
+      if (total > 0) {
+        expenses.push({
+          id: supplier.id,
+          name: supplier.name,
+          type: 'supplier',
+          totalPayment: total,
+        });
+      }
     });
-  }, [campaigners, searchQuery, agencyFilter]);
+
+    // Note: Team payments would need to come from client_team table
+    // For now, we only show suppliers with payments
+
+    return expenses.sort((a, b) => b.totalPayment - a.totalPayment);
+  }, [filteredSuppliers]);
 
   const formatCurrency = (amount: number | null) => {
     if (amount === null || amount === undefined) return "-";
@@ -379,18 +353,14 @@ export default function AccountingIntegrations() {
 
       {/* Tabs */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab} dir="rtl">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="clients" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             לקוחות ({filteredClients.length})
           </TabsTrigger>
-          <TabsTrigger value="suppliers" className="flex items-center gap-2">
+          <TabsTrigger value="expenses" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
-            ספקים ({filteredSuppliers.length})
-          </TabsTrigger>
-          <TabsTrigger value="team" className="flex items-center gap-2">
-            <UserCheck className="h-4 w-4" />
-            צוות ({filteredTeam.length})
+            הוצאות ({combinedExpenses.length})
           </TabsTrigger>
         </TabsList>
 
@@ -442,8 +412,8 @@ export default function AccountingIntegrations() {
           </Card>
         </TabsContent>
 
-        {/* Suppliers Tab */}
-        <TabsContent value="suppliers">
+        {/* Expenses Tab - Combined Suppliers & Team */}
+        <TabsContent value="expenses">
           <Card>
             <CardContent className="pt-6">
               {suppliersLoading ? (
@@ -457,105 +427,29 @@ export default function AccountingIntegrations() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-right">שם ספק</TableHead>
-                        <TableHead className="text-right">סוג</TableHead>
-                        <TableHead className="text-right">סוכנות 1</TableHead>
-                        <TableHead className="text-right">תשלום 1</TableHead>
-                        <TableHead className="text-right">סוכנות 2</TableHead>
-                        <TableHead className="text-right">תשלום 2</TableHead>
-                        <TableHead className="text-right">סוכנות 3</TableHead>
-                        <TableHead className="text-right">תשלום 3</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredSuppliers.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center text-muted-foreground">
-                            לא נמצאו ספקים
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredSuppliers.map((supplier) => (
-                          <TableRow key={supplier.id}>
-                            <TableCell className="font-medium text-right">{supplier.name}</TableCell>
-                            <TableCell className="text-right">
-                              <Badge variant="outline">{supplier.type}</Badge>
-                            </TableCell>
-                            <TableCell className="text-right">{getAgencyName(supplier.agency_id_1)}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(supplier.payment_1)}</TableCell>
-                            <TableCell className="text-right">{getAgencyName(supplier.agency_id_2)}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(supplier.payment_2)}</TableCell>
-                            <TableCell className="text-right">{getAgencyName(supplier.agency_id_3)}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(supplier.payment_3)}</TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Team Tab */}
-        <TabsContent value="team">
-          <Card>
-            <CardContent className="pt-6">
-              {campaignersLoading ? (
-                <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
                         <TableHead className="text-right">שם</TableHead>
-                        <TableHead className="text-right">תפקיד</TableHead>
-                        <TableHead className="text-right">סוכנויות</TableHead>
-                        <TableHead className="text-right">אימייל</TableHead>
-                        <TableHead className="text-right">טלפון</TableHead>
-                        <TableHead className="text-right">סטטוס</TableHead>
+                        <TableHead className="text-right">סוג</TableHead>
+                        <TableHead className="text-right">סכום לתשלום</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredTeam.length === 0 ? (
+                      {combinedExpenses.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center text-muted-foreground">
-                            לא נמצאו חברי צוות
+                          <TableCell colSpan={3} className="text-center text-muted-foreground">
+                            לא נמצאו הוצאות
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredTeam.map((member) => (
-                          <TableRow key={member.id}>
-                            <TableCell className="font-medium text-right">{member.full_name}</TableCell>
+                        combinedExpenses.map((expense) => (
+                          <TableRow key={expense.id}>
+                            <TableCell className="font-medium text-right">{expense.name}</TableCell>
                             <TableCell className="text-right">
-                              <div className="flex flex-wrap gap-1 justify-end">
-                                {member.role?.map((r: string, i: number) => (
-                                  <Badge key={i} variant="outline" className="text-xs">
-                                    {r}
-                                  </Badge>
-                                )) || "-"}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <div className="flex flex-wrap gap-1 justify-end">
-                                {member.campaigner_agencies?.map((ca: any, i: number) => (
-                                  <Badge key={i} variant="secondary" className="text-xs">
-                                    {ca.agencies?.name}
-                                  </Badge>
-                                )) || "-"}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right">{member.email || "-"}</TableCell>
-                            <TableCell dir="ltr" className="text-left">{member.phone || "-"}</TableCell>
-                            <TableCell className="text-right">
-                              <Badge variant={member.active ? "default" : "secondary"}>
-                                {member.active ? "פעיל" : "לא פעיל"}
+                              <Badge variant="outline">
+                                {expense.type === 'supplier' ? 'ספק' : 'צוות'}
                               </Badge>
+                            </TableCell>
+                            <TableCell className="text-right font-medium text-red-600">
+                              {formatCurrency(expense.totalPayment)}
                             </TableCell>
                           </TableRow>
                         ))
