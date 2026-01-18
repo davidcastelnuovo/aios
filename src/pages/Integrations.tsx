@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator } from "lucide-react";
+import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -122,6 +122,23 @@ export default function Integrations() {
         .select('*')
         .eq('tenant_id', currentTenantId)
         .eq('integration_type', 'google_ads')
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
+  // Check Make.com (Google Ads via Make) integration status
+  const { data: makeIntegration } = useQuery({
+    queryKey: ['make-integration', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .eq('integration_type', 'google_ads_make')
         .eq('is_active', true)
         .maybeSingle();
       return data;
@@ -329,6 +346,19 @@ export default function Integrations() {
       isConnected: !!sumitIntegration,
       route: "accounting-settings",
       gradient: "bg-gradient-to-r from-emerald-600 to-teal-700",
+    },
+    {
+      icon: <Zap className="h-6 w-6" />,
+      title: "Make.com",
+      description: "אוטומציות וחיבור לשירותי Google ללא צורך באישור API",
+      features: [
+        "חיבור ל-Google Ads ללא Developer Token",
+        "אוטומציות תזמון סנכרון",
+        "חיבור פשוט ומהיר",
+      ],
+      isConnected: !!makeIntegration,
+      route: "google-ads-settings?tab=make",
+      gradient: "bg-gradient-to-r from-violet-600 to-purple-700",
     },
   ];
 
