@@ -234,18 +234,23 @@ export default function AccountingIntegrations() {
           .in("agency_id", agencyIds);
 
         const clientIds = (clientsForTeam || []).map(c => c.id);
+        console.log('clientIds for team expenses:', clientIds.length);
+        
         if (clientIds.length > 0) {
-          const { data: teamData } = await supabase
+          const { data: teamData, error: teamError } = await supabase
             .from("client_team")
             .select("campaigner_payment")
             .in("client_id", clientIds)
             .gt("campaigner_payment", 0);
           
+          console.log('teamData:', teamData?.length, 'error:', teamError);
           campaignerExpenses = teamData?.reduce((sum, t) => sum + (t.campaigner_payment || 0), 0) || 0;
+          console.log('campaignerExpenses calculated:', campaignerExpenses);
         }
       }
       
       const expenses = supplierExpenses + campaignerExpenses;
+      console.log('Total expenses:', expenses, '(suppliers:', supplierExpenses, '+ campaigners:', campaignerExpenses, ')');
       
       return { income, expenses };
     },
