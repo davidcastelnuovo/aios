@@ -380,7 +380,6 @@ export default function AccountingIntegrations() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="text-right">שם לקוח</TableHead>
-                        <TableHead className="text-right">איש קשר</TableHead>
                         <TableHead className="text-right">סוכנות</TableHead>
                         <TableHead className="text-right">ריטיינר חודשי</TableHead>
                         <TableHead className="text-right">תקציב חודשי</TableHead>
@@ -390,7 +389,7 @@ export default function AccountingIntegrations() {
                     <TableBody>
                       {filteredClients.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center text-muted-foreground">
+                          <TableCell colSpan={5} className="text-center text-muted-foreground">
                             לא נמצאו לקוחות
                           </TableCell>
                         </TableRow>
@@ -398,7 +397,6 @@ export default function AccountingIntegrations() {
                         filteredClients.map((client) => (
                           <TableRow key={client.id}>
                             <TableCell className="font-medium text-right">{client.name}</TableCell>
-                            <TableCell className="text-right">{client.contact_name || "-"}</TableCell>
                             <TableCell className="text-right">{(client.agencies as any)?.name || "-"}</TableCell>
                             <TableCell className="text-right">{formatCurrency(client.retainer)}</TableCell>
                             <TableCell className="text-right">{formatCurrency(client.monthly_budget)}</TableCell>
