@@ -417,16 +417,46 @@ export default function Chat() {
   };
 
   // Multi-select handlers
-  const toggleChatSelection = (contactId: string) => {
-    setSelectedChatIds(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(contactId)) {
-        newSet.delete(contactId);
-      } else {
-        newSet.add(contactId);
-      }
-      return newSet;
-    });
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+
+  const toggleChatSelection = (contactId: string, shiftKey?: boolean) => {
+    const currentIndex = filteredContacts.findIndex(c => c.id === contactId);
+    
+    if (shiftKey && lastSelectedIndex !== null && currentIndex !== -1) {
+      // Shift+Click: select range
+      const start = Math.min(lastSelectedIndex, currentIndex);
+      const end = Math.max(lastSelectedIndex, currentIndex);
+      
+      setSelectedChatIds(prev => {
+        const newSet = new Set(prev);
+        for (let i = start; i <= end; i++) {
+          newSet.add(filteredContacts[i].id);
+        }
+        return newSet;
+      });
+    } else {
+      // Normal click: toggle single
+      setSelectedChatIds(prev => {
+        const newSet = new Set(prev);
+        if (newSet.has(contactId)) {
+          newSet.delete(contactId);
+        } else {
+          newSet.add(contactId);
+        }
+        return newSet;
+      });
+      setLastSelectedIndex(currentIndex);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedChatIds.size === filteredContacts.length) {
+      // Deselect all if all are selected
+      setSelectedChatIds(new Set());
+    } else {
+      // Select all
+      setSelectedChatIds(new Set(filteredContacts.map(c => c.id)));
+    }
   };
 
   const getSelectedContacts = () => {
@@ -496,7 +526,9 @@ export default function Chat() {
             <ChatMultiSelectToolbar
               selectedContacts={getSelectedContacts()}
               onClearSelection={() => setSelectedChatIds(new Set())}
+              onSelectAll={handleSelectAll}
               tenantId={tenantId}
+              totalCount={filteredContacts.length}
             />
           )}
 
@@ -601,6 +633,10 @@ export default function Chat() {
                       <Checkbox
                         checked={isChecked}
                         onCheckedChange={() => toggleChatSelection(contact.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleChatSelection(contact.id, e.shiftKey);
+                        }}
                         className="flex-shrink-0"
                       />
                     )}
