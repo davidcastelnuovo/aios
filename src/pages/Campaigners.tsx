@@ -28,7 +28,7 @@ export default function Campaigners() {
     queryFn: async () => {
       if (!tenantId) return [];
       
-      // Fetch all campaigners visible via RLS (includes cross-tenant ones via the new policy)
+      // Fetch ONLY campaigners belonging to the current tenant
       const { data, error } = await supabase
         .from("campaigners")
         .select(`
@@ -45,6 +45,7 @@ export default function Campaigners() {
             clients(id, name, status, agency_id)
           )
         `)
+        .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false });
       
       if (error) throw error;
@@ -55,8 +56,6 @@ export default function Campaigners() {
         client_team: campaigner.client_team?.filter((ct: any) => 
           ct.clients?.status === "active" || ct.clients?.status === "onboarding"
         ) || [],
-        // Mark if campaigner is from another organization
-        isExternal: campaigner.tenant_id !== tenantId
       }));
       
       return filteredData;
@@ -159,15 +158,10 @@ export default function Campaigners() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {!campaigner.isExternal && <EditCampaignerDialog campaigner={campaigner} />}
+                  <EditCampaignerDialog campaigner={campaigner} />
                   <Badge variant="outline" className={campaigner.active ? "bg-success/10 text-success border-success/20" : "bg-muted"}>
                     {campaigner.active ? "פעיל" : "לא פעיל"}
                   </Badge>
-                  {campaigner.isExternal && (
-                    <Badge variant="secondary" className="text-xs">
-                      חיצוני
-                    </Badge>
-                  )}
                 </div>
               </div>
             </CardHeader>
