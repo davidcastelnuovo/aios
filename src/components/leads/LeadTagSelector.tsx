@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Tag, Settings, Search } from "lucide-react";
+import { Tag, Settings, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 
@@ -242,6 +242,81 @@ export function LeadTagBadges({ allTags, tagIds }: LeadTagBadgesProps) {
           }}
         >
           {tag.name}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
+interface LeadTagBadgesEditableProps {
+  leadId: string;
+  allTags: ChatTag[];
+  tagIds: string[];
+}
+
+export function LeadTagBadgesEditable({ leadId, allTags, tagIds }: LeadTagBadgesEditableProps) {
+  const queryClient = useQueryClient();
+  
+  const removeTagMutation = useMutation({
+    mutationFn: async (tagId: string) => {
+      const { error } = await supabase
+        .from('chat_contact_tags')
+        .delete()
+        .eq('tag_id', tagId)
+        .eq('lead_id', leadId);
+      if (error) throw error;
+    },
+    onMutate: async (tagId) => {
+      await queryClient.cancelQueries({ queryKey: ['lead-tags', leadId] });
+      const previousTags = queryClient.getQueryData<string[]>(['lead-tags', leadId]);
+      queryClient.setQueryData<string[]>(['lead-tags', leadId], (old = []) => 
+        old.filter(id => id !== tagId)
+      );
+      return { previousTags };
+    },
+    onError: (_err, _tagId, context) => {
+      if (context?.previousTags) {
+        queryClient.setQueryData(['lead-tags', leadId], context.previousTags);
+      }
+      toast.error('שגיאה בהסרת התגית');
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['lead-tags', leadId] });
+      queryClient.invalidateQueries({ queryKey: ['leads-tags-visible'] });
+      queryClient.invalidateQueries({ queryKey: ['leads-tags-table'] });
+    },
+  });
+
+  const assignedTags = allTags.filter(tag => tagIds.includes(tag.id));
+  
+  if (assignedTags.length === 0) return null;
+  
+  return (
+    <div className="flex flex-wrap gap-1">
+      {assignedTags.map((tag) => (
+        <Badge
+          key={tag.id}
+          variant="outline"
+          className="text-xs px-2 py-0.5 flex items-center gap-1"
+          style={{ 
+            backgroundColor: `${tag.color}20`,
+            borderColor: tag.color,
+            color: tag.color 
+          }}
+        >
+          {tag.name}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              removeTagMutation.mutate(tag.id);
+            }}
+            className="hover:bg-black/10 rounded-full p-0.5 -mr-0.5"
+            disabled={removeTagMutation.isPending}
+          >
+            <X className="h-3 w-3" />
+          </button>
         </Badge>
       ))}
     </div>
