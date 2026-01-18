@@ -149,11 +149,12 @@ export default function AccountingIntegrations() {
 
       if (agencyIds.length === 0) return [];
 
-      // Get client IDs for these agencies
+      // Get client IDs for these agencies (only active + onboarding to match Campaigners view)
       const { data: clientsData } = await supabase
         .from("clients")
         .select("id")
-        .in("agency_id", agencyIds);
+        .in("agency_id", agencyIds)
+        .in("status", ["active", "onboarding"]);
 
       const clientIds = (clientsData || []).map(c => c.id);
       if (clientIds.length === 0) return [];
@@ -225,33 +226,34 @@ export default function AccountingIntegrations() {
       const supplierExpenses = suppliersData?.reduce((sum, s) => 
         sum + (s.payment_1 || 0) + (s.payment_2 || 0) + (s.payment_3 || 0), 0) || 0;
       
-      // Get campaigner payments from client_team
+      // Get campaigner payments from client_team (only active + onboarding clients)
       let campaignerExpenses = 0;
       if (agencyIds.length > 0) {
-        const { data: clientsForTeam } = await supabase
+        const { data: clientsForTeam, error: clientsForTeamError } = await supabase
           .from("clients")
           .select("id")
-          .in("agency_id", agencyIds);
+          .in("agency_id", agencyIds)
+          .in("status", ["active", "onboarding"]);
+
+        if (clientsForTeamError) throw clientsForTeamError;
 
         const clientIds = (clientsForTeam || []).map(c => c.id);
-        console.log('clientIds for team expenses:', clientIds.length);
-        
         if (clientIds.length > 0) {
           const { data: teamData, error: teamError } = await supabase
             .from("client_team")
             .select("campaigner_payment")
             .in("client_id", clientIds)
             .gt("campaigner_payment", 0);
-          
-          console.log('teamData:', teamData?.length, 'error:', teamError);
-          campaignerExpenses = teamData?.reduce((sum, t) => sum + (t.campaigner_payment || 0), 0) || 0;
-          console.log('campaignerExpenses calculated:', campaignerExpenses);
+
+          if (teamError) throw teamError;
+
+          campaignerExpenses =
+            teamData?.reduce((sum, t) => sum + (t.campaigner_payment || 0), 0) || 0;
         }
       }
-      
+
       const expenses = supplierExpenses + campaignerExpenses;
-      console.log('Total expenses:', expenses, '(suppliers:', supplierExpenses, '+ campaigners:', campaignerExpenses, ')');
-      
+
       return { income, expenses };
     },
     enabled: !!currentTenantId,
