@@ -952,8 +952,8 @@ export default function Leads() {
     }
   }, [leads]);
 
-  const updateLeadStatus = useMutation({
-    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: string }) => {
+  const updateLeadStatus = useMutation<void, Error, { leadId: string; newStatus: string }, { previousLeads: unknown }>({
+    mutationFn: async ({ leadId, newStatus }) => {
       // Get lead data before update to know old status
       const { data: leadBefore } = await supabase
         .from("leads")
@@ -1673,7 +1673,7 @@ export default function Leads() {
                             onStatusChange={(leadId, newStatus) => 
                               updateLeadStatus.mutate({ 
                                 leadId, 
-                                newStatus: newStatus as "new" | "contacted" | "follow_up" | "proposal_sent" | "meeting_scheduled" | "negotiation" | "transferred_to_onboarding" | "closed" | "won" | "lost" 
+                                newStatus
                               })
                             }
                             onResponseStatusChange={(leadId, responseStatus) =>
@@ -2002,11 +2002,11 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   const [manageStagesOpen, setManageStagesOpen] = useState(false);
   const [manageStatusesOpen, setManageStatusesOpen] = useState(false);
 
-  const updateLeadStatus = useMutation({
-    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: "new" | "contacted" | "follow_up" | "proposal_sent" | "meeting_scheduled" | "negotiation" | "transferred_to_onboarding" | "closed" }) => {
+  const updateLeadStatus = useMutation<void, Error, { leadId: string; newStatus: string }>({
+    mutationFn: async ({ leadId, newStatus }) => {
       const { error } = await supabase
         .from("leads")
-        .update({ status: newStatus })
+        .update({ status: newStatus as any })
         .eq("id", leadId);
 
       if (error) throw error;
@@ -2237,13 +2237,13 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                 const stage = PIPELINE_STAGES.find(s => s.id === lead.status);
                 return (
                   <Select
-                    value={lead.status}
-                    onValueChange={(value) => 
-                      updateLeadStatus.mutate({ 
+                    value={lead.status as string}
+                    onValueChange={(value) => {
+                      (updateLeadStatus as any).mutate({ 
                         leadId: lead.id, 
-                        newStatus: value as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" 
-                      })
-                    }
+                        newStatus: value
+                      });
+                    }}
                   >
                     <SelectTrigger 
                       className="h-8 w-full border-2"
