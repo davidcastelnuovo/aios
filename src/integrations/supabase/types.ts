@@ -1233,6 +1233,56 @@ export type Database = {
         }
         Relationships: []
       }
+      expense_payments: {
+        Row: {
+          amount: number
+          created_at: string | null
+          expense_id: string
+          expense_name: string
+          expense_type: string
+          id: string
+          notes: string | null
+          paid_at: string | null
+          paid_by: string | null
+          payment_month: string
+          tenant_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          expense_id: string
+          expense_name: string
+          expense_type: string
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          payment_month: string
+          tenant_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          expense_id?: string
+          expense_name?: string
+          expense_type?: string
+          id?: string
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          payment_month?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expense_payments_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       finance: {
         Row: {
           agency_id: string
@@ -1439,6 +1489,60 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "import_history_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      income_payments: {
+        Row: {
+          amount: number
+          client_id: string
+          client_name: string
+          created_at: string | null
+          id: string
+          notes: string | null
+          payment_month: string
+          received_at: string | null
+          received_by: string | null
+          tenant_id: string
+        }
+        Insert: {
+          amount: number
+          client_id: string
+          client_name: string
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          payment_month: string
+          received_at?: string | null
+          received_by?: string | null
+          tenant_id: string
+        }
+        Update: {
+          amount?: number
+          client_id?: string
+          client_name?: string
+          created_at?: string | null
+          id?: string
+          notes?: string | null
+          payment_month?: string
+          received_at?: string | null
+          received_by?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "income_payments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "income_payments_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
