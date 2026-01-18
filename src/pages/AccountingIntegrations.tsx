@@ -48,7 +48,7 @@ export default function AccountingIntegrations() {
     enabled: !!currentTenantId,
   });
 
-  // Fetch clients with financial data
+  // Fetch clients with financial data from client_tenant_financial_data
   const { data: clients, isLoading: clientsLoading } = useQuery({
     queryKey: ["accounting-clients", currentTenantId, selectedAgency],
     queryFn: async () => {
@@ -73,9 +73,28 @@ export default function AccountingIntegrations() {
         query = query.eq("agency_id", selectedAgency);
       }
 
-      const { data, error } = await query;
+      const { data: clientsData, error } = await query;
       if (error) throw error;
-      return data || [];
+      
+      // Fetch tenant-specific financial data
+      const clientIds = (clientsData || []).map(c => c.id);
+      const { data: financialData } = await supabase
+        .from("client_tenant_financial_data")
+        .select("client_id, retainer, monthly_budget")
+        .eq("tenant_id", currentTenantId)
+        .in("client_id", clientIds);
+      
+      // Create a map for quick lookup
+      const financialMap = new Map(
+        (financialData || []).map(f => [f.client_id, f])
+      );
+      
+      // Map data to use financial data from tenant-specific table
+      return (clientsData || []).map(client => ({
+        ...client,
+        retainer: financialMap.get(client.id)?.retainer ?? client.retainer,
+        monthly_budget: financialMap.get(client.id)?.monthly_budget ?? client.monthly_budget,
+      }));
     },
     enabled: !!currentTenantId,
   });
