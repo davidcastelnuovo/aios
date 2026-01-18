@@ -257,7 +257,53 @@ Deno.serve(async (req) => {
 
     console.log('✅ Task created successfully:', task.id)
 
-    // Trigger task_assigned automation if campaigner was assigned
+    // Trigger inbound_webhook_task automation
+    if (tenantId) {
+      try {
+        console.log('🔄 Triggering inbound_webhook_task automation...')
+        const automationResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${supabaseKey}`,
+          },
+          body: JSON.stringify({
+            trigger_type: 'inbound_webhook_task',
+            data: {
+              id: task.id,
+              task_id: task.id,
+              title: task.title,
+              notes: task.notes,
+              due_date: task.due_date,
+              due_time: task.due_time,
+              priority: task.priority,
+              status: task.status,
+              campaigner_id: campaignerId,
+              campaigner_name: payload.campaigner_name,
+              client_id: clientId,
+              client_name: payload.client_name,
+              lead_id: leadId,
+              lead_name: payload.lead_name,
+              sales_person_id: salesPersonId,
+              sales_person_name: payload.sales_person_name,
+              agency_id: agencyId,
+            },
+            tenant_id: tenantId,
+          }),
+        });
+        
+        if (automationResponse.ok) {
+          const automationResult = await automationResponse.json();
+          console.log('✅ inbound_webhook_task automation triggered successfully:', automationResult);
+        } else {
+          console.error('⚠️ Failed to trigger inbound_webhook_task automation:', await automationResponse.text());
+        }
+      } catch (automationError) {
+        console.error('⚠️ Error triggering inbound_webhook_task automation:', automationError);
+      }
+    }
+    
+    // Also trigger task_assigned automation if campaigner was assigned
     if (campaignerId && tenantId) {
       try {
         const automationResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
@@ -287,7 +333,7 @@ Deno.serve(async (req) => {
         if (automationResponse.ok) {
           console.log('✅ task_assigned automation triggered successfully');
         } else {
-          console.error('⚠️ Failed to trigger automation:', await automationResponse.text());
+          console.error('⚠️ Failed to trigger task_assigned automation:', await automationResponse.text());
         }
       } catch (automationError) {
         console.error('⚠️ Error triggering task_assigned automation:', automationError);
