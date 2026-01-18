@@ -131,3 +131,6 @@ verify_jwt = true
 
 [functions.create-sumit-payment]
 verify_jwt = true
+
+[functions.webhook-google-ads-sync]
+verify_jwt = false
