@@ -6,13 +6,21 @@ const corsHeaders = {
 }
 
 interface TaskPayload {
+  // For updating existing task
+  action?: 'create' | 'update'
+  task_id?: string
+  
+  // Common fields
   tenant_slug?: string
   tenant_id?: string
-  title: string
+  title?: string
   notes?: string
   due_date?: string
   due_time?: string
   priority?: number
+  status?: string
+  
+  // Associations
   campaigner_name?: string
   campaigner_id?: string
   client_name?: string
@@ -22,7 +30,6 @@ interface TaskPayload {
   lead_id?: string
   sales_person_name?: string
   sales_person_id?: string
-  status?: string
 }
 
 Deno.serve(async (req) => {
@@ -42,7 +49,135 @@ Deno.serve(async (req) => {
     const payload: TaskPayload = await req.json()
     console.log('📦 Received payload:', JSON.stringify(payload, null, 2))
 
-    // Validate required field
+    const action = payload.action || 'create'
+    console.log(`📋 Action: ${action}`)
+
+    // Handle UPDATE action
+    if (action === 'update') {
+      if (!payload.task_id) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Missing required field for update: task_id',
+          }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+
+      console.log(`🔄 Updating task: ${payload.task_id}`)
+      
+      // Build update object with only provided fields
+      const updateData: Record<string, any> = {}
+      if (payload.status !== undefined) updateData.status = payload.status
+      if (payload.title !== undefined) updateData.title = payload.title
+      if (payload.notes !== undefined) updateData.notes = payload.notes
+      if (payload.due_date !== undefined) updateData.due_date = payload.due_date
+      if (payload.due_time !== undefined) updateData.due_time = payload.due_time
+      if (payload.priority !== undefined) updateData.priority = payload.priority
+      if (payload.campaigner_id !== undefined) updateData.campaigner_id = payload.campaigner_id
+      if (payload.client_id !== undefined) updateData.client_id = payload.client_id
+      if (payload.lead_id !== undefined) updateData.lead_id = payload.lead_id
+      if (payload.sales_person_id !== undefined) updateData.sales_person_id = payload.sales_person_id
+
+      if (Object.keys(updateData).length === 0) {
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'No fields to update provided',
+          }),
+          { 
+            status: 400, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+
+      console.log('📝 Update data:', JSON.stringify(updateData, null, 2))
+
+      const { data: updatedTask, error: updateError } = await supabase
+        .from('tasks')
+        .update(updateData)
+        .eq('id', payload.task_id)
+        .select()
+        .single()
+
+      if (updateError) {
+        console.error('❌ Error updating task:', updateError)
+        return new Response(
+          JSON.stringify({ 
+            success: false, 
+            error: 'Failed to update task',
+            details: updateError.message,
+            code: updateError.code
+          }),
+          { 
+            status: 500, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        )
+      }
+
+      console.log('✅ Task updated successfully:', updatedTask.id)
+
+      // Trigger task_status_changed automation if status was updated
+      if (payload.status && updatedTask.tenant_id) {
+        try {
+          console.log('🔄 Triggering task_status_changed automation...')
+          const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+          const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+          
+          const automationResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseKey}`,
+            },
+            body: JSON.stringify({
+              trigger_type: 'task_status_changed',
+              data: {
+                id: updatedTask.id,
+                task_id: updatedTask.id,
+                title: updatedTask.title,
+                status: updatedTask.status,
+                previous_status: 'unknown', // We don't track previous status
+                campaigner_id: updatedTask.campaigner_id,
+                client_id: updatedTask.client_id,
+                lead_id: updatedTask.lead_id,
+              },
+              tenant_id: updatedTask.tenant_id,
+            }),
+          });
+          
+          if (automationResponse.ok) {
+            console.log('✅ task_status_changed automation triggered successfully');
+          } else {
+            console.error('⚠️ Failed to trigger automation:', await automationResponse.text());
+          }
+        } catch (automationError) {
+          console.error('⚠️ Error triggering automation:', automationError);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          task_id: updatedTask.id,
+          message: 'Task updated successfully',
+          updated_fields: Object.keys(updateData),
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
+
+    // === CREATE action (existing logic) ===
+    
+    // Validate required field for create
     if (!payload.title) {
       return new Response(
         JSON.stringify({ 
