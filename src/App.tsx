@@ -55,6 +55,7 @@ const FacebookSettings = lazy(() => import("./pages/FacebookSettings"));
 const FacebookCallback = lazy(() => import("./pages/FacebookCallback"));
 const GoogleAdsSettings = lazy(() => import("./pages/GoogleAdsSettings"));
 const GoogleAnalyticsSettings = lazy(() => import("./pages/GoogleAnalyticsSettings"));
+const MakeSettings = lazy(() => import("./pages/MakeSettings"));
 const GoogleSearchConsoleSettings = lazy(() => import("./pages/GoogleSearchConsoleSettings"));
 const AhrefsSettings = lazy(() => import("./pages/AhrefsSettings"));
 const Integrations = lazy(() => import("./pages/Integrations"));
@@ -157,6 +158,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/google-analytics-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><GoogleAnalyticsSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/google-search-console-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><GoogleSearchConsoleSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/ahrefs-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><AhrefsSettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/make-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><MakeSettings /></AppLayout></ProtectedRoute>} />
                   
                   {/* Legacy route - redirect to root */}
                   

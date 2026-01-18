@@ -350,14 +350,14 @@ export default function Integrations() {
     {
       icon: <Zap className="h-6 w-6" />,
       title: "Make.com",
-      description: "אוטומציות וחיבור לשירותי Google ללא צורך באישור API",
+      description: "חיבור API ישיר ל-Make.com - גישה לכל ה-Connections והסינריואים",
       features: [
-        "חיבור ל-Google Ads ללא Developer Token",
-        "אוטומציות תזמון סנכרון",
-        "חיבור פשוט ומהיר",
+        "חיבור לכל שירותי Make.com",
+        "הפעלת Scenarios מהמערכת",
+        "צפייה בכל ה-Connections",
       ],
       isConnected: !!makeIntegration,
-      route: "google-ads-settings?tab=make",
+      route: "make-settings",
       gradient: "bg-gradient-to-r from-violet-600 to-purple-700",
     },
   ];

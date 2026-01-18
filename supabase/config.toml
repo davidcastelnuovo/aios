@@ -134,3 +134,6 @@ verify_jwt = true
 
 [functions.webhook-google-ads-sync]
 verify_jwt = false
+
+[functions.make-api]
+verify_jwt = true
