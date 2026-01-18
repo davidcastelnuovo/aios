@@ -522,6 +522,130 @@ Deno.serve(async (req) => {
       });
     }
     
+    // Handle incomingMessageStatus - sync read status from WhatsApp phone/web
+    const isIncomingStatus = typeWebhook === 'incomingMessageStatus';
+    
+    if (isIncomingStatus) {
+      const status = webhookData.status;
+      const chatId = webhookData.chatId;
+      
+      console.log('📖 Incoming message status:', status, 'for chat:', chatId);
+      
+      // Only process 'read' status
+      if (status === 'read' && chatId) {
+        const phoneNumber = chatId.split('@')[0];
+        const normalizedPhone = normalizePhone(phoneNumber);
+        const isGroup = chatId.endsWith('@g.us');
+        
+        console.log('✅ Syncing read status from WhatsApp for:', phoneNumber);
+        
+        if (isGroup) {
+          // Find the group and mark messages as read
+          const { data: group } = await supabaseClient
+            .from('whatsapp_groups')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('group_chat_id', chatId)
+            .maybeSingle();
+          
+          if (group) {
+            const { error } = await supabaseClient
+              .from('chat_messages')
+              .update({ read_at: new Date().toISOString() })
+              .eq('tenant_id', tenantId)
+              .eq('connection_user_id', connectionUserId)
+              .eq('group_id', group.id)
+              .eq('direction', 'inbound')
+              .is('read_at', null);
+            
+            if (error) {
+              console.error('❌ Error updating group read status:', error);
+            } else {
+              console.log('✅ Group messages marked as read');
+            }
+          }
+        } else {
+          // For individual chats - find client or lead
+          const { data: client } = await supabaseClient
+            .from('clients')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .or(`phone.ilike.%${normalizedPhone}%,phone.ilike.%${phoneNumber}%`)
+            .maybeSingle();
+          
+          if (client) {
+            const { error } = await supabaseClient
+              .from('chat_messages')
+              .update({ read_at: new Date().toISOString() })
+              .eq('tenant_id', tenantId)
+              .eq('connection_user_id', connectionUserId)
+              .eq('client_id', client.id)
+              .eq('direction', 'inbound')
+              .is('read_at', null);
+            
+            if (error) {
+              console.error('❌ Error updating client read status:', error);
+            } else {
+              console.log('✅ Client messages marked as read');
+            }
+          } else {
+            // Try lead
+            const { data: lead } = await supabaseClient
+              .from('leads')
+              .select('id')
+              .eq('tenant_id', tenantId)
+              .or(`phone.ilike.%${normalizedPhone}%,phone.ilike.%${phoneNumber}%`)
+              .maybeSingle();
+            
+            if (lead) {
+              const { error } = await supabaseClient
+                .from('chat_messages')
+                .update({ read_at: new Date().toISOString() })
+                .eq('tenant_id', tenantId)
+                .eq('connection_user_id', connectionUserId)
+                .eq('lead_id', lead.id)
+                .eq('direction', 'inbound')
+                .is('read_at', null);
+              
+              if (error) {
+                console.error('❌ Error updating lead read status:', error);
+              } else {
+                console.log('✅ Lead messages marked as read');
+              }
+            } else {
+              // Try unknown contact by phone
+              const { error } = await supabaseClient
+                .from('chat_messages')
+                .update({ read_at: new Date().toISOString() })
+                .eq('tenant_id', tenantId)
+                .eq('connection_user_id', connectionUserId)
+                .eq('sender_phone', phoneNumber)
+                .is('client_id', null)
+                .is('lead_id', null)
+                .is('group_id', null)
+                .eq('direction', 'inbound')
+                .is('read_at', null);
+              
+              if (error) {
+                console.error('❌ Error updating unknown contact read status:', error);
+              } else {
+                console.log('✅ Unknown contact messages marked as read');
+              }
+            }
+          }
+        }
+        
+        return new Response(JSON.stringify({ success: true, readSynced: true }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      // Ignore other statuses
+      return new Response(JSON.stringify({ received: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
     // For non-message webhooks, ignore
     if (!isIncoming && !isOutgoing) {
       console.log('⏭️ Ignoring non-message webhook:', typeWebhook);
