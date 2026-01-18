@@ -126,21 +126,40 @@ export default function AccountingIntegrations() {
   });
 
 
-  // Fetch finance summary - income from retainers, expenses from suppliers
+  // Fetch finance summary - income from retainers (directly from clients table), expenses from suppliers
   const { data: financeData } = useQuery({
     queryKey: ["finance-summary", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return { income: 0, expenses: 0 };
       
-      // Get income from client retainers
-      const { data: financialData, error: financialError } = await supabase
-        .from("client_tenant_financial_data")
-        .select("retainer")
+      // Get income from client retainers - directly from clients table
+      // First get all agencies for this tenant (owned + shared)
+      const { data: ownedAgencies } = await supabase
+        .from("agencies")
+        .select("id")
         .eq("tenant_id", currentTenantId);
       
-      if (financialError) throw financialError;
+      const { data: sharedAgencies } = await supabase
+        .from("agency_tenant_access")
+        .select("agency_id")
+        .eq("accessing_tenant_id", currentTenantId);
       
-      const income = financialData?.reduce((sum, f) => sum + (f.retainer || 0), 0) || 0;
+      const agencyIds = [
+        ...(ownedAgencies || []).map(a => a.id),
+        ...(sharedAgencies || []).map(a => a.agency_id)
+      ];
+      
+      let income = 0;
+      if (agencyIds.length > 0) {
+        const { data: clientsData, error: clientsError } = await supabase
+          .from("clients")
+          .select("retainer")
+          .in("agency_id", agencyIds);
+        
+        if (clientsError) throw clientsError;
+        
+        income = clientsData?.reduce((sum, c) => sum + (c.retainer || 0), 0) || 0;
+      }
       
       // Get expenses from suppliers (sum of all payments)
       const { data: suppliersData, error: suppliersError } = await supabase
