@@ -283,15 +283,6 @@ export default function AccountingIntegrations() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col md:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="חיפוש..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pr-10"
-              />
-            </div>
             <Select value={agencyFilter} onValueChange={setAgencyFilter}>
               <SelectTrigger className="w-full md:w-[200px]">
                 <Building2 className="h-4 w-4 ml-2" />
@@ -306,12 +297,21 @@ export default function AccountingIntegrations() {
                 ))}
               </SelectContent>
             </Select>
+            <div className="relative flex-1">
+              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="חיפוש..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pr-10"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>
 
       {/* Tabs */}
-      <Tabs value={selectedTab} onValueChange={setSelectedTab}>
+      <Tabs value={selectedTab} onValueChange={setSelectedTab} dir="rtl">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="clients" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
@@ -338,38 +338,40 @@ export default function AccountingIntegrations() {
                   ))}
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>שם לקוח</TableHead>
-                      <TableHead>איש קשר</TableHead>
-                      <TableHead>סוכנות</TableHead>
-                      <TableHead>ריטיינר חודשי</TableHead>
-                      <TableHead>תקציב חודשי</TableHead>
-                      <TableHead>סטטוס</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredClients.length === 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground">
-                          לא נמצאו לקוחות
-                        </TableCell>
+                        <TableHead className="text-right">שם לקוח</TableHead>
+                        <TableHead className="text-right">איש קשר</TableHead>
+                        <TableHead className="text-right">סוכנות</TableHead>
+                        <TableHead className="text-right">ריטיינר חודשי</TableHead>
+                        <TableHead className="text-right">תקציב חודשי</TableHead>
+                        <TableHead className="text-right">סטטוס</TableHead>
                       </TableRow>
-                    ) : (
-                      filteredClients.map((client) => (
-                        <TableRow key={client.id}>
-                          <TableCell className="font-medium">{client.name}</TableCell>
-                          <TableCell>{client.contact_name || "-"}</TableCell>
-                          <TableCell>{(client.agencies as any)?.name || "-"}</TableCell>
-                          <TableCell>{formatCurrency(client.retainer)}</TableCell>
-                          <TableCell>{formatCurrency(client.monthly_budget)}</TableCell>
-                          <TableCell>{getStatusBadge(client.status)}</TableCell>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredClients.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center text-muted-foreground">
+                            לא נמצאו לקוחות
+                          </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                      ) : (
+                        filteredClients.map((client) => (
+                          <TableRow key={client.id}>
+                            <TableCell className="font-medium text-right">{client.name}</TableCell>
+                            <TableCell className="text-right">{client.contact_name || "-"}</TableCell>
+                            <TableCell className="text-right">{(client.agencies as any)?.name || "-"}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(client.retainer)}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(client.monthly_budget)}</TableCell>
+                            <TableCell className="text-right">{getStatusBadge(client.status)}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -386,44 +388,46 @@ export default function AccountingIntegrations() {
                   ))}
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>שם ספק</TableHead>
-                      <TableHead>סוג</TableHead>
-                      <TableHead>סוכנות 1</TableHead>
-                      <TableHead>תשלום 1</TableHead>
-                      <TableHead>סוכנות 2</TableHead>
-                      <TableHead>תשלום 2</TableHead>
-                      <TableHead>סוכנות 3</TableHead>
-                      <TableHead>תשלום 3</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredSuppliers.length === 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground">
-                          לא נמצאו ספקים
-                        </TableCell>
+                        <TableHead className="text-right">שם ספק</TableHead>
+                        <TableHead className="text-right">סוג</TableHead>
+                        <TableHead className="text-right">סוכנות 1</TableHead>
+                        <TableHead className="text-right">תשלום 1</TableHead>
+                        <TableHead className="text-right">סוכנות 2</TableHead>
+                        <TableHead className="text-right">תשלום 2</TableHead>
+                        <TableHead className="text-right">סוכנות 3</TableHead>
+                        <TableHead className="text-right">תשלום 3</TableHead>
                       </TableRow>
-                    ) : (
-                      filteredSuppliers.map((supplier) => (
-                        <TableRow key={supplier.id}>
-                          <TableCell className="font-medium">{supplier.name}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{supplier.type}</Badge>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredSuppliers.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center text-muted-foreground">
+                            לא נמצאו ספקים
                           </TableCell>
-                          <TableCell>{getAgencyName(supplier.agency_id_1)}</TableCell>
-                          <TableCell>{formatCurrency(supplier.payment_1)}</TableCell>
-                          <TableCell>{getAgencyName(supplier.agency_id_2)}</TableCell>
-                          <TableCell>{formatCurrency(supplier.payment_2)}</TableCell>
-                          <TableCell>{getAgencyName(supplier.agency_id_3)}</TableCell>
-                          <TableCell>{formatCurrency(supplier.payment_3)}</TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                      ) : (
+                        filteredSuppliers.map((supplier) => (
+                          <TableRow key={supplier.id}>
+                            <TableCell className="font-medium text-right">{supplier.name}</TableCell>
+                            <TableCell className="text-right">
+                              <Badge variant="outline">{supplier.type}</Badge>
+                            </TableCell>
+                            <TableCell className="text-right">{getAgencyName(supplier.agency_id_1)}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(supplier.payment_1)}</TableCell>
+                            <TableCell className="text-right">{getAgencyName(supplier.agency_id_2)}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(supplier.payment_2)}</TableCell>
+                            <TableCell className="text-right">{getAgencyName(supplier.agency_id_3)}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(supplier.payment_3)}</TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
@@ -440,58 +444,60 @@ export default function AccountingIntegrations() {
                   ))}
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>שם</TableHead>
-                      <TableHead>תפקיד</TableHead>
-                      <TableHead>סוכנויות</TableHead>
-                      <TableHead>אימייל</TableHead>
-                      <TableHead>טלפון</TableHead>
-                      <TableHead>סטטוס</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredTeam.length === 0 ? (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={6} className="text-center text-muted-foreground">
-                          לא נמצאו חברי צוות
-                        </TableCell>
+                        <TableHead className="text-right">שם</TableHead>
+                        <TableHead className="text-right">תפקיד</TableHead>
+                        <TableHead className="text-right">סוכנויות</TableHead>
+                        <TableHead className="text-right">אימייל</TableHead>
+                        <TableHead className="text-right">טלפון</TableHead>
+                        <TableHead className="text-right">סטטוס</TableHead>
                       </TableRow>
-                    ) : (
-                      filteredTeam.map((member) => (
-                        <TableRow key={member.id}>
-                          <TableCell className="font-medium">{member.full_name}</TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {member.role?.map((r: string, i: number) => (
-                                <Badge key={i} variant="outline" className="text-xs">
-                                  {r}
-                                </Badge>
-                              )) || "-"}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex flex-wrap gap-1">
-                              {member.campaigner_agencies?.map((ca: any, i: number) => (
-                                <Badge key={i} variant="secondary" className="text-xs">
-                                  {ca.agencies?.name}
-                                </Badge>
-                              )) || "-"}
-                            </div>
-                          </TableCell>
-                          <TableCell>{member.email || "-"}</TableCell>
-                          <TableCell dir="ltr" className="text-right">{member.phone || "-"}</TableCell>
-                          <TableCell>
-                            <Badge variant={member.active ? "default" : "secondary"}>
-                              {member.active ? "פעיל" : "לא פעיל"}
-                            </Badge>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredTeam.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="text-center text-muted-foreground">
+                            לא נמצאו חברי צוות
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                      ) : (
+                        filteredTeam.map((member) => (
+                          <TableRow key={member.id}>
+                            <TableCell className="font-medium text-right">{member.full_name}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex flex-wrap gap-1 justify-end">
+                                {member.role?.map((r: string, i: number) => (
+                                  <Badge key={i} variant="outline" className="text-xs">
+                                    {r}
+                                  </Badge>
+                                )) || "-"}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex flex-wrap gap-1 justify-end">
+                                {member.campaigner_agencies?.map((ca: any, i: number) => (
+                                  <Badge key={i} variant="secondary" className="text-xs">
+                                    {ca.agencies?.name}
+                                  </Badge>
+                                )) || "-"}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">{member.email || "-"}</TableCell>
+                            <TableCell dir="ltr" className="text-left">{member.phone || "-"}</TableCell>
+                            <TableCell className="text-right">
+                              <Badge variant={member.active ? "default" : "secondary"}>
+                                {member.active ? "פעיל" : "לא פעיל"}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
               )}
             </CardContent>
           </Card>
