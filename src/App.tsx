@@ -41,6 +41,7 @@ const Tenants = lazy(() => import("./pages/Tenants"));
 const Automations = lazy(() => import("./pages/Automations"));
 const Products = lazy(() => import("./pages/Products"));
 const AccountingIntegrations = lazy(() => import("./pages/AccountingIntegrations"));
+const AccountingSettings = lazy(() => import("./pages/AccountingSettings"));
 const AISupport = lazy(() => import("./pages/AISupport"));
 const MenuManagement = lazy(() => import("./pages/MenuManagement"));
 const FieldsManagement = lazy(() => import("./pages/FieldsManagement"));
@@ -137,6 +138,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/products" element={<ProtectedRoute requiredPermission="leads"><AppLayout><Products /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/branding" element={<ProtectedRoute requiredPermission="branding"><AppLayout><Branding /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/accounting-integrations" element={<ProtectedRoute requiredPermission="accounting"><AppLayout><AccountingIntegrations /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/accounting-settings" element={<ProtectedRoute requiredPermission="accounting"><AppLayout><AccountingSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/ai-support" element={<ProtectedRoute requiredPermission="ai_support"><AppLayout><AISupport /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/menu-management" element={<ProtectedRoute requiredPermission="menu_management"><AppLayout><MenuManagement /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/fields-management" element={<ProtectedRoute requiredPermission="fields_management"><AppLayout><FieldsManagement /></AppLayout></ProtectedRoute>} />

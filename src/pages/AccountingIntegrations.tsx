@@ -1,243 +1,502 @@
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { Button } from "@/components/ui/button";
+import { useTenant } from "@/contexts/TenantContext";
+import { useAgency } from "@/contexts/AgencyContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Switch } from "@/components/ui/switch";
-import { toast } from "sonner";
-import { Loader2, Link as LinkIcon, CheckCircle2, XCircle } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { 
+  Users, 
+  Package, 
+  UserCheck, 
+  Search, 
+  Building2,
+  TrendingUp,
+  TrendingDown,
+  DollarSign
+} from "lucide-react";
+import { format } from "date-fns";
+import { he } from "date-fns/locale";
 
 export default function AccountingIntegrations() {
   const { tenantId } = useCurrentTenant();
-  const queryClient = useQueryClient();
-  const [apiKey, setApiKey] = useState("");
-  const [companyId, setCompanyId] = useState("");
-  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const { currentTenantId } = useTenant();
+  const { selectedAgency } = useAgency();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTab, setSelectedTab] = useState("clients");
+  const [agencyFilter, setAgencyFilter] = useState<string>("all");
 
-  // Fetch current integration settings
-  const { data: integration, isLoading } = useQuery({
-    queryKey: ["tenant-integration", tenantId],
+  // Fetch agencies
+  const { data: agencies } = useQuery({
+    queryKey: ["agencies", currentTenantId],
     queryFn: async () => {
-      if (!tenantId) return null;
+      if (!currentTenantId) return [];
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", currentTenantId);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenantId,
+  });
+
+  // Fetch clients with financial data
+  const { data: clients, isLoading: clientsLoading } = useQuery({
+    queryKey: ["accounting-clients", currentTenantId, selectedAgency],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      
+      let query = supabase
+        .from("clients")
+        .select(`
+          id,
+          name,
+          contact_name,
+          status,
+          retainer,
+          monthly_budget,
+          agency_id,
+          agencies (id, name)
+        `)
+        .eq("tenant_id", currentTenantId);
+
+      if (selectedAgency && selectedAgency !== "all") {
+        query = query.eq("agency_id", selectedAgency);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenantId,
+  });
+
+  // Fetch suppliers
+  const { data: suppliers, isLoading: suppliersLoading } = useQuery({
+    queryKey: ["accounting-suppliers", currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      const { data, error } = await supabase
+        .from("suppliers")
+        .select(`
+          id,
+          name,
+          phone,
+          email,
+          type,
+          agency_id_1,
+          agency_id_2,
+          agency_id_3,
+          payment_1,
+          payment_2,
+          payment_3
+        `)
+        .eq("tenant_id", currentTenantId);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenantId,
+  });
+
+  // Fetch campaigners (team)
+  const { data: campaigners, isLoading: campaignersLoading } = useQuery({
+    queryKey: ["accounting-campaigners", currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      const { data, error } = await supabase
+        .from("campaigners")
+        .select(`
+          id,
+          full_name,
+          email,
+          phone,
+          role,
+          active,
+          campaigner_agencies (
+            agency_id,
+            agencies (id, name)
+          )
+        `)
+        .eq("tenant_id", currentTenantId);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenantId,
+  });
+
+  // Fetch sales people
+  const { data: salesPeople, isLoading: salesPeopleLoading } = useQuery({
+    queryKey: ["accounting-salespeople", currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      const { data, error } = await supabase
+        .from("sales_people")
+        .select(`
+          id,
+          full_name,
+          email,
+          phone,
+          active,
+          agencies (id, name)
+        `)
+        .eq("tenant_id", currentTenantId);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenantId,
+  });
+
+  // Fetch finance summary
+  const { data: financeData } = useQuery({
+    queryKey: ["finance-summary", currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return { income: 0, expenses: 0 };
       
       const { data, error } = await supabase
-        .from("tenant_integrations")
-        .select("*")
-        .eq("tenant_id", tenantId)
-        .eq("integration_type", "sumit")
-        .maybeSingle();
-
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!tenantId,
-  });
-
-  // Update integration settings
-  const updateIntegration = useMutation({
-    mutationFn: async (data: {
-      api_key?: string;
-      company_id?: string;
-      is_active?: boolean;
-      auto_sync_enabled?: boolean;
-    }) => {
-      if (!tenantId) throw new Error("No tenant selected");
-
-      if (integration) {
-        const { error } = await supabase
-          .from("tenant_integrations")
-          .update({
-            ...data,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", integration.id);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("tenant_integrations")
-          .insert({
-            tenant_id: tenantId,
-            integration_type: "sumit",
-            ...data,
-          });
-
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tenant-integration"] });
-      toast.success("הגדרות האינטגרציה עודכנו בהצלחה");
-    },
-    onError: (error) => {
-      console.error("Error updating integration:", error);
-      toast.error("שגיאה בעדכון הגדרות האינטגרציה");
-    },
-  });
-
-  const handleTestConnection = async () => {
-    if (!apiKey || !companyId) {
-      toast.error("יש למלא מפתח API ומזהה חברה");
-      return;
-    }
-
-    setIsTestingConnection(true);
-    try {
-      // TODO: Implement actual Sumit API test
-      // For now, just simulate a test
-      await new Promise(resolve => setTimeout(resolve, 1500));
+        .from("finance")
+        .select("amount, type")
+        .eq("tenant_id", currentTenantId);
       
-      toast.success("החיבור ל-Sumit הצליח!");
-      await updateIntegration.mutateAsync({
-        api_key: apiKey,
-        company_id: companyId,
-        is_active: true,
-      });
-    } catch (error) {
-      console.error("Connection test failed:", error);
-      toast.error("החיבור נכשל. אנא בדוק את הפרטים");
-    } finally {
-      setIsTestingConnection(false);
-    }
+      if (error) throw error;
+      
+      const income = data?.filter(f => f.type === "income").reduce((sum, f) => sum + f.amount, 0) || 0;
+      const expenses = data?.filter(f => f.type === "expense").reduce((sum, f) => sum + f.amount, 0) || 0;
+      
+      return { income, expenses };
+    },
+    enabled: !!currentTenantId,
+  });
+
+  // Filter functions
+  const filteredClients = useMemo(() => {
+    if (!clients) return [];
+    return clients.filter(client => {
+      const matchesSearch = 
+        client.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        client.contact_name?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesAgency = agencyFilter === "all" || client.agency_id === agencyFilter;
+      return matchesSearch && matchesAgency;
+    });
+  }, [clients, searchQuery, agencyFilter]);
+
+  const filteredSuppliers = useMemo(() => {
+    if (!suppliers) return [];
+    return suppliers.filter(supplier => {
+      const matchesSearch = supplier.name?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesAgency = agencyFilter === "all" || 
+        supplier.agency_id_1 === agencyFilter ||
+        supplier.agency_id_2 === agencyFilter ||
+        supplier.agency_id_3 === agencyFilter;
+      return matchesSearch && matchesAgency;
+    });
+  }, [suppliers, searchQuery, agencyFilter]);
+
+  const filteredTeam = useMemo(() => {
+    if (!campaigners) return [];
+    return campaigners.filter(member => {
+      const matchesSearch = member.full_name?.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesAgency = agencyFilter === "all" || 
+        member.campaigner_agencies?.some((ca: any) => ca.agency_id === agencyFilter);
+      return matchesSearch && matchesAgency;
+    });
+  }, [campaigners, searchQuery, agencyFilter]);
+
+  const formatCurrency = (amount: number | null) => {
+    if (amount === null || amount === undefined) return "-";
+    return `₪${amount.toLocaleString("he-IL")}`;
   };
 
-  const handleSaveSettings = async () => {
-    try {
-      await updateIntegration.mutateAsync({
-        api_key: apiKey || integration?.api_key,
-        company_id: companyId || integration?.company_id,
-      });
-    } catch (error) {
-      console.error("Error saving settings:", error);
-    }
+  const getStatusBadge = (status: string) => {
+    const statusMap: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
+      active: { variant: "default", label: "פעיל" },
+      inactive: { variant: "secondary", label: "לא פעיל" },
+      pending: { variant: "outline", label: "ממתין" },
+    };
+    const config = statusMap[status] || { variant: "secondary", label: status };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  const handleToggleAutoSync = async (enabled: boolean) => {
-    try {
-      await updateIntegration.mutateAsync({
-        auto_sync_enabled: enabled,
-      });
-    } catch (error) {
-      console.error("Error toggling auto sync:", error);
-    }
+  const getAgencyName = (agencyId: string | null) => {
+    if (!agencyId || !agencies) return "-";
+    const agency = agencies.find(a => a.id === agencyId);
+    return agency?.name || "-";
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
+  const profit = (financeData?.income || 0) - (financeData?.expenses || 0);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">אינטגרציות הנהלת חשבונות</h1>
+        <h1 className="text-3xl font-bold">הנהלת חשבונות</h1>
         <p className="text-muted-foreground mt-2">
-          חבר את המערכת לתוכנת הנהלת החשבונות שלך
+          ניהול פיננסי של לקוחות, ספקים וצוות
         </p>
       </div>
 
+      {/* Financial Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">הכנסות</CardTitle>
+            <TrendingUp className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {formatCurrency(financeData?.income || 0)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">הוצאות</CardTitle>
+            <TrendingDown className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {formatCurrency(financeData?.expenses || 0)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">רווח</CardTitle>
+            <DollarSign className={`h-4 w-4 ${profit >= 0 ? "text-green-600" : "text-red-600"}`} />
+          </CardHeader>
+          <CardContent>
+            <div className={`text-2xl font-bold ${profit >= 0 ? "text-green-600" : "text-red-600"}`}>
+              {formatCurrency(profit)}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <LinkIcon className="h-6 w-6" />
-              <div>
-                <CardTitle>Sumit - מערכת לניהול חשבונות</CardTitle>
-                <CardDescription>
-                  סנכרון אוטומטי של לקוחות וחשבוניות
-                </CardDescription>
-              </div>
-            </div>
-            {integration?.is_active ? (
-              <div className="flex items-center gap-2 text-green-600">
-                <CheckCircle2 className="h-5 w-5" />
-                <span className="text-sm font-medium">מחובר</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <XCircle className="h-5 w-5" />
-                <span className="text-sm font-medium">לא מחובר</span>
-              </div>
-            )}
-          </div>
-        </CardHeader>
-
-        <CardContent className="space-y-6">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="api-key">מפתח API</Label>
+        <CardContent className="pt-6">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="relative flex-1">
+              <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                id="api-key"
-                type="password"
-                placeholder="הזן את מפתח ה-API מ-Sumit"
-                value={apiKey || integration?.api_key || ""}
-                onChange={(e) => setApiKey(e.target.value)}
-              />
-              <p className="text-sm text-muted-foreground">
-                ניתן למצוא את המפתח בהגדרות החשבון ב-Sumit
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="company-id">מזהה חברה</Label>
-              <Input
-                id="company-id"
-                placeholder="הזן את מזהה החברה"
-                value={companyId || integration?.company_id || ""}
-                onChange={(e) => setCompanyId(e.target.value)}
+                placeholder="חיפוש..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pr-10"
               />
             </div>
-
-            <div className="flex gap-3">
-              <Button
-                onClick={handleTestConnection}
-                disabled={isTestingConnection || !apiKey || !companyId}
-                variant="outline"
-              >
-                {isTestingConnection && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                בדוק חיבור
-              </Button>
-              <Button
-                onClick={handleSaveSettings}
-                disabled={updateIntegration.isPending}
-              >
-                {updateIntegration.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                שמור הגדרות
-              </Button>
-            </div>
+            <Select value={agencyFilter} onValueChange={setAgencyFilter}>
+              <SelectTrigger className="w-full md:w-[200px]">
+                <Building2 className="h-4 w-4 ml-2" />
+                <SelectValue placeholder="כל הסוכנויות" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">כל הסוכנויות</SelectItem>
+                {agencies?.map((agency) => (
+                  <SelectItem key={agency.id} value={agency.id}>
+                    {agency.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-
-          {integration?.is_active && (
-            <div className="pt-6 border-t space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="space-y-0.5">
-                  <Label>סנכרון אוטומטי</Label>
-                  <p className="text-sm text-muted-foreground">
-                    סנכרן לקוחות וחשבוניות באופן אוטומטי
-                  </p>
-                </div>
-                <Switch
-                  checked={integration.auto_sync_enabled}
-                  onCheckedChange={handleToggleAutoSync}
-                  disabled={updateIntegration.isPending}
-                />
-              </div>
-
-              {integration.last_sync_at && (
-                <p className="text-sm text-muted-foreground">
-                  סנכרון אחרון: {new Date(integration.last_sync_at).toLocaleString("he-IL")}
-                </p>
-              )}
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      {/* Tabs */}
+      <Tabs value={selectedTab} onValueChange={setSelectedTab}>
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="clients" className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            לקוחות ({filteredClients.length})
+          </TabsTrigger>
+          <TabsTrigger value="suppliers" className="flex items-center gap-2">
+            <Package className="h-4 w-4" />
+            ספקים ({filteredSuppliers.length})
+          </TabsTrigger>
+          <TabsTrigger value="team" className="flex items-center gap-2">
+            <UserCheck className="h-4 w-4" />
+            צוות ({filteredTeam.length})
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Clients Tab */}
+        <TabsContent value="clients">
+          <Card>
+            <CardContent className="pt-6">
+              {clientsLoading ? (
+                <div className="space-y-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>שם לקוח</TableHead>
+                      <TableHead>איש קשר</TableHead>
+                      <TableHead>סוכנות</TableHead>
+                      <TableHead>ריטיינר חודשי</TableHead>
+                      <TableHead>תקציב חודשי</TableHead>
+                      <TableHead>סטטוס</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredClients.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground">
+                          לא נמצאו לקוחות
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredClients.map((client) => (
+                        <TableRow key={client.id}>
+                          <TableCell className="font-medium">{client.name}</TableCell>
+                          <TableCell>{client.contact_name || "-"}</TableCell>
+                          <TableCell>{(client.agencies as any)?.name || "-"}</TableCell>
+                          <TableCell>{formatCurrency(client.retainer)}</TableCell>
+                          <TableCell>{formatCurrency(client.monthly_budget)}</TableCell>
+                          <TableCell>{getStatusBadge(client.status)}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Suppliers Tab */}
+        <TabsContent value="suppliers">
+          <Card>
+            <CardContent className="pt-6">
+              {suppliersLoading ? (
+                <div className="space-y-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>שם ספק</TableHead>
+                      <TableHead>סוג</TableHead>
+                      <TableHead>סוכנות 1</TableHead>
+                      <TableHead>תשלום 1</TableHead>
+                      <TableHead>סוכנות 2</TableHead>
+                      <TableHead>תשלום 2</TableHead>
+                      <TableHead>סוכנות 3</TableHead>
+                      <TableHead>תשלום 3</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredSuppliers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center text-muted-foreground">
+                          לא נמצאו ספקים
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredSuppliers.map((supplier) => (
+                        <TableRow key={supplier.id}>
+                          <TableCell className="font-medium">{supplier.name}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{supplier.type}</Badge>
+                          </TableCell>
+                          <TableCell>{getAgencyName(supplier.agency_id_1)}</TableCell>
+                          <TableCell>{formatCurrency(supplier.payment_1)}</TableCell>
+                          <TableCell>{getAgencyName(supplier.agency_id_2)}</TableCell>
+                          <TableCell>{formatCurrency(supplier.payment_2)}</TableCell>
+                          <TableCell>{getAgencyName(supplier.agency_id_3)}</TableCell>
+                          <TableCell>{formatCurrency(supplier.payment_3)}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Team Tab */}
+        <TabsContent value="team">
+          <Card>
+            <CardContent className="pt-6">
+              {campaignersLoading ? (
+                <div className="space-y-4">
+                  {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>שם</TableHead>
+                      <TableHead>תפקיד</TableHead>
+                      <TableHead>סוכנויות</TableHead>
+                      <TableHead>אימייל</TableHead>
+                      <TableHead>טלפון</TableHead>
+                      <TableHead>סטטוס</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTeam.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground">
+                          לא נמצאו חברי צוות
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredTeam.map((member) => (
+                        <TableRow key={member.id}>
+                          <TableCell className="font-medium">{member.full_name}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {member.role?.map((r: string, i: number) => (
+                                <Badge key={i} variant="outline" className="text-xs">
+                                  {r}
+                                </Badge>
+                              )) || "-"}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {member.campaigner_agencies?.map((ca: any, i: number) => (
+                                <Badge key={i} variant="secondary" className="text-xs">
+                                  {ca.agencies?.name}
+                                </Badge>
+                              )) || "-"}
+                            </div>
+                          </TableCell>
+                          <TableCell>{member.email || "-"}</TableCell>
+                          <TableCell dir="ltr" className="text-right">{member.phone || "-"}</TableCell>
+                          <TableCell>
+                            <Badge variant={member.active ? "default" : "secondary"}>
+                              {member.active ? "פעיל" : "לא פעיל"}
+                            </Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
