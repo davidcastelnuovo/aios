@@ -125,6 +125,59 @@ export default function AccountingIntegrations() {
     enabled: !!currentTenantId,
   });
 
+  // Fetch campaigner payments from client_team
+  const { data: campaignerPayments, isLoading: campaignerPaymentsLoading } = useQuery({
+    queryKey: ["accounting-campaigner-payments", currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      
+      // Get agencies for this tenant
+      const { data: ownedAgencies } = await supabase
+        .from("agencies")
+        .select("id")
+        .eq("tenant_id", currentTenantId);
+      
+      const { data: sharedAgencies } = await supabase
+        .from("agency_tenant_access")
+        .select("agency_id")
+        .eq("accessing_tenant_id", currentTenantId);
+      
+      const agencyIds = [
+        ...(ownedAgencies || []).map(a => a.id),
+        ...(sharedAgencies || []).map(a => a.agency_id)
+      ];
+
+      if (agencyIds.length === 0) return [];
+
+      // Get client IDs for these agencies
+      const { data: clientsData } = await supabase
+        .from("clients")
+        .select("id")
+        .in("agency_id", agencyIds);
+
+      const clientIds = (clientsData || []).map(c => c.id);
+      if (clientIds.length === 0) return [];
+
+      // Get campaigner payments for these clients
+      const { data, error } = await supabase
+        .from("client_team")
+        .select(`
+          id,
+          campaigner_payment,
+          campaigner_id,
+          client_id,
+          campaigners (id, full_name),
+          clients (id, name, agency_id)
+        `)
+        .in("client_id", clientIds)
+        .gt("campaigner_payment", 0);
+      
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenantId,
+  });
+
 
   // Fetch finance summary - income from retainers (directly from clients table), expenses from suppliers
   const { data: financeData } = useQuery({
@@ -169,8 +222,30 @@ export default function AccountingIntegrations() {
       
       if (suppliersError) throw suppliersError;
       
-      const expenses = suppliersData?.reduce((sum, s) => 
+      const supplierExpenses = suppliersData?.reduce((sum, s) => 
         sum + (s.payment_1 || 0) + (s.payment_2 || 0) + (s.payment_3 || 0), 0) || 0;
+      
+      // Get campaigner payments from client_team
+      let campaignerExpenses = 0;
+      if (agencyIds.length > 0) {
+        const { data: clientsForTeam } = await supabase
+          .from("clients")
+          .select("id")
+          .in("agency_id", agencyIds);
+
+        const clientIds = (clientsForTeam || []).map(c => c.id);
+        if (clientIds.length > 0) {
+          const { data: teamData } = await supabase
+            .from("client_team")
+            .select("campaigner_payment")
+            .in("client_id", clientIds)
+            .gt("campaigner_payment", 0);
+          
+          campaignerExpenses = teamData?.reduce((sum, t) => sum + (t.campaigner_payment || 0), 0) || 0;
+        }
+      }
+      
+      const expenses = supplierExpenses + campaignerExpenses;
       
       return { income, expenses };
     },
@@ -227,8 +302,9 @@ export default function AccountingIntegrations() {
     const expenses: Array<{
       id: string;
       name: string;
-      type: 'supplier' | 'team';
+      type: 'supplier' | 'campaigner';
       totalPayment: number;
+      details?: string;
     }> = [];
 
     // Add suppliers with payments
@@ -244,11 +320,52 @@ export default function AccountingIntegrations() {
       }
     });
 
-    // Note: Team payments would need to come from client_team table
-    // For now, we only show suppliers with payments
+    // Add campaigner payments - aggregate by campaigner
+    if (campaignerPayments && campaignerPayments.length > 0) {
+      const campaignerTotals = new Map<string, { name: string; total: number; clients: string[] }>();
+      
+      campaignerPayments.forEach(payment => {
+        const campaignerId = payment.campaigner_id;
+        const campaignerName = (payment.campaigners as any)?.full_name || 'קמפיינר לא ידוע';
+        const clientName = (payment.clients as any)?.name || '';
+        const clientAgencyId = (payment.clients as any)?.agency_id;
+        
+        // Filter by agency if needed
+        if (agencyFilter !== "all" && clientAgencyId !== agencyFilter) {
+          return;
+        }
+        
+        // Filter by search
+        if (searchQuery && !campaignerName.toLowerCase().includes(searchQuery.toLowerCase())) {
+          return;
+        }
+        
+        const existing = campaignerTotals.get(campaignerId);
+        if (existing) {
+          existing.total += payment.campaigner_payment || 0;
+          if (clientName) existing.clients.push(clientName);
+        } else {
+          campaignerTotals.set(campaignerId, {
+            name: campaignerName,
+            total: payment.campaigner_payment || 0,
+            clients: clientName ? [clientName] : []
+          });
+        }
+      });
+      
+      campaignerTotals.forEach((data, id) => {
+        expenses.push({
+          id: `campaigner-${id}`,
+          name: data.name,
+          type: 'campaigner',
+          totalPayment: data.total,
+          details: `${data.clients.length} לקוחות`
+        });
+      });
+    }
 
     return expenses.sort((a, b) => b.totalPayment - a.totalPayment);
-  }, [filteredSuppliers]);
+  }, [filteredSuppliers, campaignerPayments, agencyFilter, searchQuery]);
 
   const formatCurrency = (amount: number | null) => {
     if (amount === null || amount === undefined) return "-";
@@ -435,7 +552,7 @@ export default function AccountingIntegrations() {
         <TabsContent value="expenses">
           <Card>
             <CardContent className="pt-6">
-              {suppliersLoading ? (
+              {(suppliersLoading || campaignerPaymentsLoading) ? (
                 <div className="space-y-4">
                   {[...Array(5)].map((_, i) => (
                     <Skeleton key={i} className="h-12 w-full" />
@@ -448,13 +565,14 @@ export default function AccountingIntegrations() {
                       <TableRow>
                         <TableHead className="text-right">שם</TableHead>
                         <TableHead className="text-right">סוג</TableHead>
+                        <TableHead className="text-right">פרטים</TableHead>
                         <TableHead className="text-right">סכום לתשלום</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {combinedExpenses.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={3} className="text-center text-muted-foreground">
+                          <TableCell colSpan={4} className="text-center text-muted-foreground">
                             לא נמצאו הוצאות
                           </TableCell>
                         </TableRow>
@@ -463,9 +581,12 @@ export default function AccountingIntegrations() {
                           <TableRow key={expense.id}>
                             <TableCell className="font-medium text-right">{expense.name}</TableCell>
                             <TableCell className="text-right">
-                              <Badge variant="outline">
-                                {expense.type === 'supplier' ? 'ספק' : 'צוות'}
+                              <Badge variant={expense.type === 'campaigner' ? 'default' : 'outline'}>
+                                {expense.type === 'supplier' ? 'ספק' : 'קמפיינר'}
                               </Badge>
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">
+                              {expense.details || '-'}
                             </TableCell>
                             <TableCell className="text-right font-medium text-red-600">
                               {formatCurrency(expense.totalPayment)}
