@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenant } from "@/contexts/TenantContext";
@@ -11,6 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { 
   Users, 
   Package, 
@@ -18,19 +21,51 @@ import {
   Building2,
   TrendingUp,
   TrendingDown,
-  DollarSign
+  DollarSign,
+  Check,
+  History,
+  Trash2
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
+
+// Helper function to get month options
+const getMonthOptions = () => {
+  const months = [];
+  for (let i = 0; i < 12; i++) {
+    const date = subMonths(new Date(), i);
+    months.push({
+      value: format(date, "yyyy-MM"),
+      label: format(date, "MMMM yyyy", { locale: he })
+    });
+  }
+  return months;
+};
 
 export default function AccountingIntegrations() {
   const { tenantId } = useCurrentTenant();
   const { currentTenantId } = useTenant();
   const { selectedAgency } = useAgency();
+  const queryClient = useQueryClient();
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("clients");
   const [agencyFilter, setAgencyFilter] = useState<string>("all");
   const [clientStatusFilter, setClientStatusFilter] = useState<string>("active_relevant");
+  
+  // Payment tracking state
+  const [selectedMonth, setSelectedMonth] = useState(() => format(subMonths(new Date(), 1), "yyyy-MM"));
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    type: 'expense' | 'income';
+    id: string;
+    name: string;
+    amount: number;
+    expenseType?: 'supplier' | 'campaigner';
+  } | null>(null);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+
+  const monthOptions = useMemo(() => getMonthOptions(), []);
 
   // Fetch agencies
   const { data: agencies } = useQuery({
@@ -46,6 +81,189 @@ export default function AccountingIntegrations() {
     },
     enabled: !!currentTenantId,
   });
+
+  // Fetch expense payments for selected month
+  const { data: expensePayments } = useQuery({
+    queryKey: ["expense-payments", currentTenantId, selectedMonth],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      const { data, error } = await supabase
+        .from("expense_payments")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("payment_month", selectedMonth);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenantId,
+  });
+
+  // Fetch income payments for selected month
+  const { data: incomePayments } = useQuery({
+    queryKey: ["income-payments", currentTenantId, selectedMonth],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      const { data, error } = await supabase
+        .from("income_payments")
+        .select("*")
+        .eq("tenant_id", currentTenantId)
+        .eq("payment_month", selectedMonth);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenantId,
+  });
+
+  // Fetch all payment history
+  const { data: paymentHistory } = useQuery({
+    queryKey: ["payment-history", currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return { expenses: [], incomes: [] };
+      
+      const [expenseRes, incomeRes] = await Promise.all([
+        supabase
+          .from("expense_payments")
+          .select("*")
+          .eq("tenant_id", currentTenantId)
+          .order("paid_at", { ascending: false })
+          .limit(100),
+        supabase
+          .from("income_payments")
+          .select("*")
+          .eq("tenant_id", currentTenantId)
+          .order("received_at", { ascending: false })
+          .limit(100)
+      ]);
+      
+      return {
+        expenses: expenseRes.data || [],
+        incomes: incomeRes.data || []
+      };
+    },
+    enabled: !!currentTenantId && historyDialogOpen,
+  });
+
+  // Create expense payment mutation
+  const createExpensePayment = useMutation({
+    mutationFn: async (data: { 
+      expense_type: 'supplier' | 'campaigner';
+      expense_id: string;
+      expense_name: string;
+      amount: number;
+    }) => {
+      const { error } = await supabase
+        .from("expense_payments")
+        .insert({
+          tenant_id: currentTenantId,
+          expense_type: data.expense_type,
+          expense_id: data.expense_id,
+          expense_name: data.expense_name,
+          amount: data.amount,
+          payment_month: selectedMonth,
+        });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expense-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["payment-history"] });
+      toast.success("התשלום סומן כשולם");
+      setConfirmDialog(null);
+    },
+    onError: () => {
+      toast.error("שגיאה בשמירת התשלום");
+    }
+  });
+
+  // Create income payment mutation
+  const createIncomePayment = useMutation({
+    mutationFn: async (data: { 
+      client_id: string;
+      client_name: string;
+      amount: number;
+    }) => {
+      const { error } = await supabase
+        .from("income_payments")
+        .insert({
+          tenant_id: currentTenantId,
+          client_id: data.client_id,
+          client_name: data.client_name,
+          amount: data.amount,
+          payment_month: selectedMonth,
+        });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["income-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["payment-history"] });
+      toast.success("התשלום סומן כהתקבל");
+      setConfirmDialog(null);
+    },
+    onError: () => {
+      toast.error("שגיאה בשמירת התשלום");
+    }
+  });
+
+  // Delete expense payment mutation
+  const deleteExpensePayment = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("expense_payments")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["expense-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["payment-history"] });
+      toast.success("התשלום בוטל");
+    },
+    onError: () => {
+      toast.error("שגיאה במחיקת התשלום");
+    }
+  });
+
+  // Delete income payment mutation
+  const deleteIncomePayment = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("income_payments")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["income-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["payment-history"] });
+      toast.success("התשלום בוטל");
+    },
+    onError: () => {
+      toast.error("שגיאה במחיקת התשלום");
+    }
+  });
+
+  // Check if expense is paid
+  const isExpensePaid = (expenseId: string, expenseType: 'supplier' | 'campaigner') => {
+    return expensePayments?.some(
+      p => p.expense_id === expenseId && p.expense_type === expenseType
+    );
+  };
+
+  // Check if client payment received
+  const isIncomeReceived = (clientId: string) => {
+    return incomePayments?.some(p => p.client_id === clientId);
+  };
+
+  // Get expense payment record
+  const getExpensePayment = (expenseId: string, expenseType: 'supplier' | 'campaigner') => {
+    return expensePayments?.find(
+      p => p.expense_id === expenseId && p.expense_type === expenseType
+    );
+  };
+
+  // Get income payment record
+  const getIncomePayment = (clientId: string) => {
+    return incomePayments?.find(p => p.client_id === clientId);
+  };
 
   // Fetch clients with financial data from client_tenant_financial_data
   const { data: clients, isLoading: clientsLoading } = useQuery({
@@ -312,6 +530,7 @@ export default function AccountingIntegrations() {
       type: 'supplier' | 'campaigner';
       totalPayment: number;
       details?: string;
+      originalId: string;
     }> = [];
 
     // Add suppliers with payments
@@ -320,6 +539,7 @@ export default function AccountingIntegrations() {
       if (total > 0) {
         expenses.push({
           id: supplier.id,
+          originalId: supplier.id,
           name: supplier.name,
           type: 'supplier',
           totalPayment: total,
@@ -363,6 +583,7 @@ export default function AccountingIntegrations() {
       campaignerTotals.forEach((data, id) => {
         expenses.push({
           id: `campaigner-${id}`,
+          originalId: id,
           name: data.name,
           type: 'campaigner',
           totalPayment: data.total,
@@ -374,6 +595,15 @@ export default function AccountingIntegrations() {
     return expenses.sort((a, b) => b.totalPayment - a.totalPayment);
   }, [filteredSuppliers, campaignerPayments, agencyFilter, searchQuery]);
 
+  // Calculate paid amounts for summary
+  const paidExpensesTotal = useMemo(() => {
+    return expensePayments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
+  }, [expensePayments]);
+
+  const receivedIncomeTotal = useMemo(() => {
+    return incomePayments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
+  }, [incomePayments]);
+
   const formatCurrency = (amount: number | null) => {
     if (amount === null || amount === undefined) return "-";
     return `₪${amount.toLocaleString("he-IL")}`;
@@ -384,26 +614,31 @@ export default function AccountingIntegrations() {
       active: { variant: "default", label: "פעיל" },
       inactive: { variant: "secondary", label: "לא פעיל" },
       pending: { variant: "outline", label: "ממתין" },
+      onboarding: { variant: "outline", label: "בקליטה" },
+      paused: { variant: "secondary", label: "מושהה" },
+      ended: { variant: "destructive", label: "סיים" },
     };
     const config = statusMap[status] || { variant: "secondary", label: status };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  const getAgencyName = (agencyId: string | null) => {
-    if (!agencyId || !agencies) return "-";
-    const agency = agencies.find(a => a.id === agencyId);
-    return agency?.name || "-";
-  };
-
   const profit = (financeData?.income || 0) - (financeData?.expenses || 0);
+
+  const selectedMonthLabel = monthOptions.find(m => m.value === selectedMonth)?.label || selectedMonth;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">הנהלת חשבונות</h1>
-        <p className="text-muted-foreground mt-2">
-          ניהול פיננסי של לקוחות, ספקים וצוות
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">הנהלת חשבונות</h1>
+          <p className="text-muted-foreground mt-2">
+            ניהול פיננסי של לקוחות, ספקים וצוות
+          </p>
+        </div>
+        <Button variant="outline" onClick={() => setHistoryDialogOpen(true)}>
+          <History className="h-4 w-4 ml-2" />
+          היסטוריית תשלומים
+        </Button>
       </div>
 
       {/* Financial Summary */}
@@ -417,6 +652,9 @@ export default function AccountingIntegrations() {
             <div className="text-2xl font-bold text-green-600">
               {formatCurrency(financeData?.income || 0)}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              התקבל ב{selectedMonthLabel}: {formatCurrency(receivedIncomeTotal)}
+            </p>
           </CardContent>
         </Card>
 
@@ -429,6 +667,9 @@ export default function AccountingIntegrations() {
             <div className="text-2xl font-bold text-red-600">
               {formatCurrency(financeData?.expenses || 0)}
             </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              שולם ב{selectedMonthLabel}: {formatCurrency(paidExpensesTotal)}
+            </p>
           </CardContent>
         </Card>
 
@@ -449,6 +690,19 @@ export default function AccountingIntegrations() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col md:flex-row gap-4">
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="w-full md:w-[200px]">
+                <SelectValue placeholder="בחר חודש" />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((month) => (
+                  <SelectItem key={month.value} value={month.value}>
+                    {month.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Select value={agencyFilter} onValueChange={setAgencyFilter}>
               <SelectTrigger className="w-full md:w-[200px]">
                 <Building2 className="h-4 w-4 ml-2" />
@@ -527,25 +781,62 @@ export default function AccountingIntegrations() {
                         <TableHead className="text-right">ריטיינר חודשי</TableHead>
                         <TableHead className="text-right">תקציב חודשי</TableHead>
                         <TableHead className="text-right">סטטוס</TableHead>
+                        <TableHead className="text-right">התקבל תשלום</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredClients.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-center text-muted-foreground">
+                          <TableCell colSpan={6} className="text-center text-muted-foreground">
                             לא נמצאו לקוחות
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredClients.map((client) => (
-                          <TableRow key={client.id}>
-                            <TableCell className="font-medium text-right">{client.name}</TableCell>
-                            <TableCell className="text-right">{(client.agencies as any)?.name || "-"}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(client.retainer)}</TableCell>
-                            <TableCell className="text-right">{formatCurrency(client.monthly_budget)}</TableCell>
-                            <TableCell className="text-right">{getStatusBadge(client.status)}</TableCell>
-                          </TableRow>
-                        ))
+                        filteredClients.map((client) => {
+                          const isPaid = isIncomeReceived(client.id);
+                          const payment = getIncomePayment(client.id);
+                          return (
+                            <TableRow key={client.id}>
+                              <TableCell className="font-medium text-right">{client.name}</TableCell>
+                              <TableCell className="text-right">{(client.agencies as any)?.name || "-"}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(client.retainer)}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(client.monthly_budget)}</TableCell>
+                              <TableCell className="text-right">{getStatusBadge(client.status)}</TableCell>
+                              <TableCell className="text-right">
+                                {isPaid ? (
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="default" className="bg-green-600">
+                                      <Check className="h-3 w-3 ml-1" />
+                                      התקבל
+                                    </Badge>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => payment && deleteIncomePayment.mutate(payment.id)}
+                                    >
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setConfirmDialog({
+                                      open: true,
+                                      type: 'income',
+                                      id: client.id,
+                                      name: client.name,
+                                      amount: client.retainer || 0
+                                    })}
+                                    disabled={!client.retainer}
+                                  >
+                                    סמן התקבל
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       )}
                     </TableBody>
                   </Table>
@@ -574,32 +865,69 @@ export default function AccountingIntegrations() {
                         <TableHead className="text-right">סוג</TableHead>
                         <TableHead className="text-right">פרטים</TableHead>
                         <TableHead className="text-right">סכום לתשלום</TableHead>
+                        <TableHead className="text-right">סטטוס תשלום</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {combinedExpenses.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={4} className="text-center text-muted-foreground">
+                          <TableCell colSpan={5} className="text-center text-muted-foreground">
                             לא נמצאו הוצאות
                           </TableCell>
                         </TableRow>
                       ) : (
-                        combinedExpenses.map((expense) => (
-                          <TableRow key={expense.id}>
-                            <TableCell className="font-medium text-right">{expense.name}</TableCell>
-                            <TableCell className="text-right">
-                              <Badge variant={expense.type === 'campaigner' ? 'default' : 'outline'}>
-                                {expense.type === 'supplier' ? 'ספק' : 'קמפיינר'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right text-muted-foreground">
-                              {expense.details || '-'}
-                            </TableCell>
-                            <TableCell className="text-right font-medium text-red-600">
-                              {formatCurrency(expense.totalPayment)}
-                            </TableCell>
-                          </TableRow>
-                        ))
+                        combinedExpenses.map((expense) => {
+                          const isPaid = isExpensePaid(expense.originalId, expense.type);
+                          const payment = getExpensePayment(expense.originalId, expense.type);
+                          return (
+                            <TableRow key={expense.id}>
+                              <TableCell className="font-medium text-right">{expense.name}</TableCell>
+                              <TableCell className="text-right">
+                                <Badge variant={expense.type === 'campaigner' ? 'default' : 'outline'}>
+                                  {expense.type === 'supplier' ? 'ספק' : 'קמפיינר'}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-right text-muted-foreground">
+                                {expense.details || '-'}
+                              </TableCell>
+                              <TableCell className="text-right font-medium text-red-600">
+                                {formatCurrency(expense.totalPayment)}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {isPaid ? (
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="default" className="bg-green-600">
+                                      <Check className="h-3 w-3 ml-1" />
+                                      שולם
+                                    </Badge>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => payment && deleteExpensePayment.mutate(payment.id)}
+                                    >
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setConfirmDialog({
+                                      open: true,
+                                      type: 'expense',
+                                      id: expense.originalId,
+                                      name: expense.name,
+                                      amount: expense.totalPayment,
+                                      expenseType: expense.type
+                                    })}
+                                  >
+                                    סמן שולם
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
                       )}
                     </TableBody>
                   </Table>
@@ -609,6 +937,164 @@ export default function AccountingIntegrations() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Confirm Payment Dialog */}
+      <Dialog open={!!confirmDialog?.open} onOpenChange={(open) => !open && setConfirmDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmDialog?.type === 'expense' ? 'אישור תשלום' : 'אישור קבלת תשלום'}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmDialog?.type === 'expense' 
+                ? `האם לסמן תשלום עבור ${confirmDialog?.name}?`
+                : `האם לסמן שהתקבל תשלום מ${confirmDialog?.name}?`
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
+              <span className="font-medium">סכום:</span>
+              <span className="text-xl font-bold">{formatCurrency(confirmDialog?.amount || 0)}</span>
+            </div>
+            <div className="flex justify-between items-center p-4 mt-2">
+              <span className="font-medium">עבור חודש:</span>
+              <span>{selectedMonthLabel}</span>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirmDialog(null)}>
+              ביטול
+            </Button>
+            <Button
+              onClick={() => {
+                if (confirmDialog?.type === 'expense' && confirmDialog.expenseType) {
+                  createExpensePayment.mutate({
+                    expense_type: confirmDialog.expenseType,
+                    expense_id: confirmDialog.id,
+                    expense_name: confirmDialog.name,
+                    amount: confirmDialog.amount
+                  });
+                } else if (confirmDialog?.type === 'income') {
+                  createIncomePayment.mutate({
+                    client_id: confirmDialog.id,
+                    client_name: confirmDialog.name,
+                    amount: confirmDialog.amount
+                  });
+                }
+              }}
+              disabled={createExpensePayment.isPending || createIncomePayment.isPending}
+            >
+              {confirmDialog?.type === 'expense' ? 'אישור תשלום' : 'אישור קבלה'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment History Dialog */}
+      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>היסטוריית תשלומים</DialogTitle>
+          </DialogHeader>
+          <Tabs defaultValue="expenses" dir="rtl">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="expenses">תשלומים ששולמו</TabsTrigger>
+              <TabsTrigger value="incomes">תשלומים שהתקבלו</TabsTrigger>
+            </TabsList>
+            <TabsContent value="expenses">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right">שם</TableHead>
+                    <TableHead className="text-right">סוג</TableHead>
+                    <TableHead className="text-right">סכום</TableHead>
+                    <TableHead className="text-right">חודש</TableHead>
+                    <TableHead className="text-right">תאריך תשלום</TableHead>
+                    <TableHead className="text-right">פעולות</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paymentHistory?.expenses.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground">
+                        אין היסטוריית תשלומים
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paymentHistory?.expenses.map((payment: any) => (
+                      <TableRow key={payment.id}>
+                        <TableCell className="font-medium text-right">{payment.expense_name}</TableCell>
+                        <TableCell className="text-right">
+                          <Badge variant={payment.expense_type === 'campaigner' ? 'default' : 'outline'}>
+                            {payment.expense_type === 'supplier' ? 'ספק' : 'קמפיינר'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">{formatCurrency(payment.amount)}</TableCell>
+                        <TableCell className="text-right">{payment.payment_month}</TableCell>
+                        <TableCell className="text-right">
+                          {format(new Date(payment.paid_at), "dd/MM/yyyy HH:mm", { locale: he })}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteExpensePayment.mutate(payment.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TabsContent>
+            <TabsContent value="incomes">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right">לקוח</TableHead>
+                    <TableHead className="text-right">סכום</TableHead>
+                    <TableHead className="text-right">חודש</TableHead>
+                    <TableHead className="text-right">תאריך קבלה</TableHead>
+                    <TableHead className="text-right">פעולות</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paymentHistory?.incomes.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        אין היסטוריית תשלומים
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paymentHistory?.incomes.map((payment: any) => (
+                      <TableRow key={payment.id}>
+                        <TableCell className="font-medium text-right">{payment.client_name}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(payment.amount)}</TableCell>
+                        <TableCell className="text-right">{payment.payment_month}</TableCell>
+                        <TableCell className="text-right">
+                          {format(new Date(payment.received_at), "dd/MM/yyyy HH:mm", { locale: he })}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteIncomePayment.mutate(payment.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
