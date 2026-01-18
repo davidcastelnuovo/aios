@@ -174,21 +174,32 @@ export default function AccountingIntegrations() {
     enabled: !!currentTenantId,
   });
 
-  // Fetch finance summary
+  // Fetch finance summary - income from retainers, expenses from suppliers
   const { data: financeData } = useQuery({
     queryKey: ["finance-summary", currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return { income: 0, expenses: 0 };
       
-      const { data, error } = await supabase
-        .from("finance")
-        .select("amount, type")
+      // Get income from client retainers
+      const { data: financialData, error: financialError } = await supabase
+        .from("client_tenant_financial_data")
+        .select("retainer")
         .eq("tenant_id", currentTenantId);
       
-      if (error) throw error;
+      if (financialError) throw financialError;
       
-      const income = data?.filter(f => f.type === "income").reduce((sum, f) => sum + f.amount, 0) || 0;
-      const expenses = data?.filter(f => f.type === "expense").reduce((sum, f) => sum + f.amount, 0) || 0;
+      const income = financialData?.reduce((sum, f) => sum + (f.retainer || 0), 0) || 0;
+      
+      // Get expenses from suppliers (sum of all payments)
+      const { data: suppliersData, error: suppliersError } = await supabase
+        .from("suppliers")
+        .select("payment_1, payment_2, payment_3")
+        .eq("tenant_id", currentTenantId);
+      
+      if (suppliersError) throw suppliersError;
+      
+      const expenses = suppliersData?.reduce((sum, s) => 
+        sum + (s.payment_1 || 0) + (s.payment_2 || 0) + (s.payment_3 || 0), 0) || 0;
       
       return { income, expenses };
     },
