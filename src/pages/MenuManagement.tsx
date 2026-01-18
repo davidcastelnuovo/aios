@@ -356,7 +356,7 @@ export default function MenuManagement() {
     enabled: !!tenantId,
   });
 
-  const isRootOrg = tenantData?.org_type === 'root_organization';
+  const isRootOrg = tenantData?.org_type === 'root';
 
   const groupSensors = useSensors(
     useSensor(PointerSensor, {
