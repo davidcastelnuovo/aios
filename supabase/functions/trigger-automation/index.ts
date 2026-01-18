@@ -1251,7 +1251,9 @@ async function executeAddClientUpdate(supabase: any, config: any, data: any, ten
 
 // Execute create task action
 async function executeCreateTask(supabase: any, config: any, data: any, tenantId: string) {
-  const { task_title_template, task_notes_template, task_priority, task_due_days } = config
+  const { task_title_template, task_notes_template, task_priority, task_due_days, default_campaigner_id, default_agency_id } = config
+  
+  console.log('Executing create_task action:', { config, data, tenantId })
   
   // Get tenant slug for template variables
   const { data: tenant } = await supabase
@@ -1271,32 +1273,121 @@ async function executeCreateTask(supabase: any, config: any, data: any, tenantId
   dueDate.setDate(dueDate.getDate() + (task_due_days || 0))
   const dueDateStr = dueDate.toISOString().split('T')[0]
   
-  // Get first agency for the tenant
-  const { data: agency } = await supabase
-    .from('agencies')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .limit(1)
-    .single()
+  // Get agency - prefer from data, then from config default, then first tenant agency
+  let agencyId = data.agency_id || default_agency_id || null
   
-  if (!agency) {
+  if (!agencyId) {
+    const { data: agency } = await supabase
+      .from('agencies')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle()
+    
+    agencyId = agency?.id
+  }
+  
+  if (!agencyId) {
     throw new Error('לא נמצאה סוכנות בארגון')
   }
+  
+  // Get campaigner - prefer from data, then from config default
+  let campaignerId = data.campaigner_id || default_campaigner_id || null
+  
+  // If campaigner_name provided in data, try to resolve it
+  if (!campaignerId && data.campaigner_name) {
+    console.log(`Searching for campaigner by name: "${data.campaigner_name}"`)
+    const { data: campaigner } = await supabase
+      .from('campaigners')
+      .select('id, full_name')
+      .eq('tenant_id', tenantId)
+      .ilike('full_name', `%${data.campaigner_name}%`)
+      .limit(1)
+      .maybeSingle()
+    
+    if (campaigner) {
+      campaignerId = campaigner.id
+      console.log(`Found campaigner: ${campaigner.full_name} (${campaignerId})`)
+    }
+  }
+  
+  // Get sales person from data
+  let salesPersonId = data.sales_person_id || null
+  
+  // If sales_person_name provided in data, try to resolve it
+  if (!salesPersonId && data.sales_person_name) {
+    console.log(`Searching for sales person by name: "${data.sales_person_name}"`)
+    const { data: salesPerson } = await supabase
+      .from('sales_people')
+      .select('id, full_name')
+      .eq('tenant_id', tenantId)
+      .ilike('full_name', `%${data.sales_person_name}%`)
+      .limit(1)
+      .maybeSingle()
+    
+    if (salesPerson) {
+      salesPersonId = salesPerson.id
+      console.log(`Found sales person: ${salesPerson.full_name} (${salesPersonId})`)
+    }
+  }
+  
+  // Resolve client by name if needed
+  let clientId = data.client_id || null
+  if (!clientId && data.client_name) {
+    console.log(`Searching for client by name: "${data.client_name}"`)
+    const { data: client } = await supabase
+      .from('clients')
+      .select('id, name')
+      .eq('tenant_id', tenantId)
+      .ilike('name', `%${data.client_name}%`)
+      .limit(1)
+      .maybeSingle()
+    
+    if (client) {
+      clientId = client.id
+      console.log(`Found client: ${client.name} (${clientId})`)
+    }
+  }
+  
+  // Resolve lead by name if needed
+  let leadId = data.lead_id || null
+  if (!leadId && data.lead_name) {
+    console.log(`Searching for lead by name: "${data.lead_name}"`)
+    const { data: lead } = await supabase
+      .from('leads')
+      .select('id, company_name')
+      .eq('tenant_id', tenantId)
+      .ilike('company_name', `%${data.lead_name}%`)
+      .limit(1)
+      .maybeSingle()
+    
+    if (lead) {
+      leadId = lead.id
+      console.log(`Found lead: ${lead.company_name} (${leadId})`)
+    }
+  }
+  
+  const taskRecord = {
+    title,
+    notes,
+    status: 'open',
+    priority: task_priority || 5,
+    due_date: dueDateStr,
+    tenant_id: tenantId,
+    agency_id: agencyId,
+    campaigner_id: campaignerId,
+    sales_person_id: salesPersonId,
+    lead_id: leadId,
+    client_id: clientId,
+  }
+  
+  console.log('Creating task with record:', taskRecord)
   
   // Insert task
   const { data: newTask, error: insertError } = await supabase
     .from('tasks')
-    .insert({
-      title,
-      notes,
-      status: 'open',
-      priority: task_priority || 5,
-      due_date: dueDateStr,
-      tenant_id: tenantId,
-      agency_id: agency.id,
-      lead_id: data.lead_id || null,
-      client_id: data.client_id || null,
-    })
+    .insert(taskRecord)
     .select()
     .single()
   
