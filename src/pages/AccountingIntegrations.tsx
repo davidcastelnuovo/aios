@@ -31,6 +31,7 @@ export default function AccountingIntegrations() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTab, setSelectedTab] = useState("clients");
   const [agencyFilter, setAgencyFilter] = useState<string>("all");
+  const [clientStatusFilter, setClientStatusFilter] = useState<string>("active_relevant");
 
   // Fetch agencies
   const { data: agencies } = useQuery({
@@ -63,6 +64,7 @@ export default function AccountingIntegrations() {
           retainer,
           monthly_budget,
           agency_id,
+          updated_at,
           agencies (id, name)
         `)
         .eq("tenant_id", currentTenantId);
@@ -177,14 +179,31 @@ export default function AccountingIntegrations() {
   // Filter functions
   const filteredClients = useMemo(() => {
     if (!clients) return [];
+    
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
     return clients.filter(client => {
       const matchesSearch = 
         client.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         client.contact_name?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesAgency = agencyFilter === "all" || client.agency_id === agencyFilter;
-      return matchesSearch && matchesAgency;
+      
+      // Status filter logic
+      let matchesStatus = true;
+      if (clientStatusFilter === "active_relevant") {
+        // Show active, onboarding, OR paused that changed in last 30 days
+        const isActiveOrOnboarding = client.status === "active" || client.status === "onboarding";
+        const isPausedRecently = client.status === "paused" && 
+          client.updated_at && new Date(client.updated_at) >= thirtyDaysAgo;
+        matchesStatus = isActiveOrOnboarding || isPausedRecently;
+      } else if (clientStatusFilter !== "all") {
+        matchesStatus = client.status === clientStatusFilter;
+      }
+      
+      return matchesSearch && matchesAgency && matchesStatus;
     });
-  }, [clients, searchQuery, agencyFilter]);
+  }, [clients, searchQuery, agencyFilter, clientStatusFilter]);
 
   const filteredSuppliers = useMemo(() => {
     if (!suppliers) return [];
@@ -297,6 +316,24 @@ export default function AccountingIntegrations() {
                 ))}
               </SelectContent>
             </Select>
+            
+            {selectedTab === "clients" && (
+              <Select value={clientStatusFilter} onValueChange={setClientStatusFilter}>
+                <SelectTrigger className="w-full md:w-[220px]">
+                  <Users className="h-4 w-4 ml-2" />
+                  <SelectValue placeholder="סטטוס לקוחות" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active_relevant">פעילים + עזבו ב-30 יום</SelectItem>
+                  <SelectItem value="all">כל הסטטוסים</SelectItem>
+                  <SelectItem value="active">פעילים בלבד</SelectItem>
+                  <SelectItem value="onboarding">בקליטה</SelectItem>
+                  <SelectItem value="paused">מושהים</SelectItem>
+                  <SelectItem value="ended">סיימו</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            
             <div className="relative flex-1">
               <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
