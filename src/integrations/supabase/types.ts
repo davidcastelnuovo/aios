@@ -1744,7 +1744,7 @@ export type Database = {
           sale_date: string | null
           sales_person_id: string | null
           source: Database["public"]["Enums"]["lead_source"]
-          status: Database["public"]["Enums"]["lead_status"]
+          status: string
           tenant_id: string | null
           three_month_budget: number | null
           updated_at: string
@@ -1786,7 +1786,7 @@ export type Database = {
           sale_date?: string | null
           sales_person_id?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
-          status?: Database["public"]["Enums"]["lead_status"]
+          status?: string
           tenant_id?: string | null
           three_month_budget?: number | null
           updated_at?: string
@@ -1828,7 +1828,7 @@ export type Database = {
           sale_date?: string | null
           sales_person_id?: string | null
           source?: Database["public"]["Enums"]["lead_source"]
-          status?: Database["public"]["Enums"]["lead_status"]
+          status?: string
           tenant_id?: string | null
           three_month_budget?: number | null
           updated_at?: string

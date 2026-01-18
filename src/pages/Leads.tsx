@@ -952,7 +952,7 @@ export default function Leads() {
     }
   }, [leads]);
 
-  const updateLeadStatus = useMutation<void, Error, { leadId: string; newStatus: string }, { previousLeads: unknown }>({
+  const updateLeadStatus = useMutation<void, Error, { leadId: string; newStatus: string }, { previousLeads: unknown; fullQueryKey: unknown[] }>({
     mutationFn: async ({ leadId, newStatus }) => {
       // Get lead data before update to know old status
       const { data: leadBefore } = await supabase
@@ -1003,27 +1003,30 @@ export default function Leads() {
       }
     },
     onMutate: async ({ leadId, newStatus }) => {
+      // Use the EXACT same query key as the useQuery to ensure optimistic updates work
+      const fullQueryKey = ["leads", tenantId, selectedAgency, page, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate?.toISOString(), endDate?.toISOString()];
+      
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ["leads", tenantId, selectedAgency, page] });
+      await queryClient.cancelQueries({ queryKey: fullQueryKey });
 
       // Snapshot the previous value
-      const previousLeads = queryClient.getQueryData(["leads", tenantId, selectedAgency, page]);
+      const previousLeads = queryClient.getQueryData(fullQueryKey);
 
       // Optimistically update to the new value
-      queryClient.setQueryData(["leads", tenantId, selectedAgency, page], (old: any) => {
+      queryClient.setQueryData(fullQueryKey, (old: any) => {
         if (!old) return old;
         return old.map((lead: any) => 
           lead.id === leadId ? { ...lead, status: newStatus } : lead
         );
       });
 
-      // Return context with the snapshot
-      return { previousLeads };
+      // Return context with the snapshot and key
+      return { previousLeads, fullQueryKey };
     },
     onError: (error: any, variables, context) => {
       // Rollback to the previous value if error
-      if (context?.previousLeads) {
-        queryClient.setQueryData(["leads", tenantId, selectedAgency, page], context.previousLeads);
+      if (context?.previousLeads && context?.fullQueryKey) {
+        queryClient.setQueryData(context.fullQueryKey, context.previousLeads);
       }
       toast({
         title: "שגיאה בעדכון סטטוס",
@@ -2002,8 +2005,8 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   const [manageStagesOpen, setManageStagesOpen] = useState(false);
   const [manageStatusesOpen, setManageStatusesOpen] = useState(false);
 
-  const updateLeadStatus = useMutation<void, Error, { leadId: string; newStatus: string }>({
-    mutationFn: async ({ leadId, newStatus }) => {
+  const updateLeadStatus = useMutation({
+    mutationFn: async ({ leadId, newStatus }: { leadId: string; newStatus: string }) => {
       const { error } = await supabase
         .from("leads")
         .update({ status: newStatus as any })
@@ -2078,10 +2081,10 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   });
 
   const bulkUpdateStatus = useMutation({
-    mutationFn: async ({ leadIds, status }: { leadIds: string[]; status: "new" | "contacted" | "follow_up" | "proposal_sent" | "meeting_scheduled" | "negotiation" | "transferred_to_onboarding" | "closed" }) => {
+    mutationFn: async ({ leadIds, status }: { leadIds: string[]; status: string }) => {
       const { error } = await supabase
         .from("leads")
-        .update({ status })
+        .update({ status: status as any })
         .in("id", leadIds);
 
       if (error) throw error;
