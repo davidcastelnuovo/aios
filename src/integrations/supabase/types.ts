@@ -2082,6 +2082,69 @@ export type Database = {
         }
         Relationships: []
       }
+      payment_links: {
+        Row: {
+          amount: number
+          client_id: string
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          expires_at: string | null
+          id: string
+          paid_at: string | null
+          payment_url: string
+          send_email: boolean | null
+          status: string | null
+          sumit_payment_id: string | null
+          tenant_id: string
+        }
+        Insert: {
+          amount: number
+          client_id: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          paid_at?: string | null
+          payment_url: string
+          send_email?: boolean | null
+          status?: string | null
+          sumit_payment_id?: string | null
+          tenant_id: string
+        }
+        Update: {
+          amount?: number
+          client_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          expires_at?: string | null
+          id?: string
+          paid_at?: string | null
+          payment_url?: string
+          send_email?: boolean | null
+          status?: string | null
+          sumit_payment_id?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_links_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           active: boolean

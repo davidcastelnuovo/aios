@@ -24,8 +24,10 @@ import {
   DollarSign,
   Check,
   History,
-  Trash2
+  Trash2,
+  CreditCard
 } from "lucide-react";
+import { CreatePaymentLinkDialog } from "@/components/forms/CreatePaymentLinkDialog";
 import { format, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
 
@@ -64,6 +66,13 @@ export default function AccountingIntegrations() {
     expenseType?: 'supplier' | 'campaigner';
   } | null>(null);
   const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [paymentLinkClient, setPaymentLinkClient] = useState<{
+    id: string;
+    name: string;
+    email?: string;
+    phone?: string;
+    retainer?: number;
+  } | null>(null);
 
   const monthOptions = useMemo(() => getMonthOptions(), []);
 
@@ -277,6 +286,8 @@ export default function AccountingIntegrations() {
           id,
           name,
           contact_name,
+          email,
+          phone,
           status,
           retainer,
           monthly_budget,
@@ -782,12 +793,13 @@ export default function AccountingIntegrations() {
                         <TableHead className="text-right">תקציב חודשי</TableHead>
                         <TableHead className="text-right">סטטוס</TableHead>
                         <TableHead className="text-right">התקבל תשלום</TableHead>
+                        <TableHead className="text-right">קישור תשלום</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredClients.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center text-muted-foreground">
+                          <TableCell colSpan={7} className="text-center text-muted-foreground">
                             לא נמצאו לקוחות
                           </TableCell>
                         </TableRow>
@@ -833,6 +845,24 @@ export default function AccountingIntegrations() {
                                     סמן התקבל
                                   </Button>
                                 )}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setPaymentLinkClient({
+                                    id: client.id,
+                                    name: client.name,
+                                    email: client.email || undefined,
+                                    phone: client.phone || undefined,
+                                    retainer: client.retainer || undefined
+                                  })}
+                                  disabled={!client.retainer}
+                                  className="gap-1"
+                                >
+                                  <CreditCard className="h-4 w-4" />
+                                  שלח קישור
+                                </Button>
                               </TableCell>
                             </TableRow>
                           );
@@ -1095,6 +1125,13 @@ export default function AccountingIntegrations() {
           </Tabs>
         </DialogContent>
       </Dialog>
+
+      {/* Payment Link Dialog */}
+      <CreatePaymentLinkDialog
+        open={!!paymentLinkClient}
+        onOpenChange={(open) => !open && setPaymentLinkClient(null)}
+        client={paymentLinkClient}
+      />
     </div>
   );
 }
