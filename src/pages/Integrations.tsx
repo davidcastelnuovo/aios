@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp } from "lucide-react";
+import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -180,6 +180,23 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
+  // Check Sumit integration status
+  const { data: sumitIntegration } = useQuery({
+    queryKey: ['sumit-integration', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .eq('integration_type', 'sumit')
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   const integrations: IntegrationCardProps[] = [
     {
       icon: <Webhook className="h-6 w-6" />,
@@ -299,6 +316,19 @@ export default function Integrations() {
       isConnected: !!ahrefsIntegration,
       route: "ahrefs-settings",
       gradient: "bg-gradient-to-r from-orange-500 to-red-600",
+    },
+    {
+      icon: <Calculator className="h-6 w-6" />,
+      title: "Sumit",
+      description: "סנכרון אוטומטי של לקוחות וחשבוניות לתוכנת הנה\"ח",
+      features: [
+        "סנכרון לקוחות",
+        "יצירת חשבוניות אוטומטית",
+        "מעקב תשלומים",
+      ],
+      isConnected: !!sumitIntegration,
+      route: "accounting-settings",
+      gradient: "bg-gradient-to-r from-emerald-600 to-teal-700",
     },
   ];
 
