@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -31,7 +31,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, X, Calendar as CalendarIcon, Clock, CheckCircle2 } from "lucide-react";
+import { Loader2, X, Calendar as CalendarIcon, Clock, CheckCircle2, Paperclip } from "lucide-react";
+import { FolderLinksField, FolderLink } from "@/components/forms/FolderLinksField";
+import { AttachmentsField, Attachment } from "@/components/forms/AttachmentsField";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -80,6 +82,43 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
   const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [sendWhatsappNotification, setSendWhatsappNotification] = useState(false);
+
+  // Folder links & attachments state
+  const [folderLinks, setFolderLinks] = useState<FolderLink[]>([]);
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
+
+  // Parse folder_links and attachments from client
+  useEffect(() => {
+    if (client?.folder_links) {
+      try {
+        const parsed = typeof client.folder_links === 'string' 
+          ? JSON.parse(client.folder_links) 
+          : client.folder_links;
+        setFolderLinks(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        // Fallback to old folder_link field
+        if (client.folder_link) {
+          setFolderLinks([{ name: 'קישור', url: client.folder_link }]);
+        }
+      }
+    } else if (client?.folder_link) {
+      setFolderLinks([{ name: 'קישור', url: client.folder_link }]);
+    }
+    
+    if (client?.attachments) {
+      try {
+        const parsed = typeof client.attachments === 'string'
+          ? JSON.parse(client.attachments)
+          : client.attachments;
+        setAttachments(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        setAttachments([]);
+      }
+    }
+  }, [client]);
+
+  // Count for files tab badge
+  const filesCount = useMemo(() => folderLinks.length + attachments.length, [folderLinks, attachments]);
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -238,7 +277,9 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
           agency_id: values.agency_id,
           phone: values.phone || null,
           email: values.email || null,
-          folder_link: values.folder_link || null,
+          folder_link: folderLinks[0]?.url || values.folder_link || null,
+          folder_links: folderLinks as unknown as any,
+          attachments: attachments as unknown as any,
           website: values.website || null,
           notes: values.notes || null,
           status: values.status,
@@ -454,11 +495,20 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         </DialogHeader>
 
         <Tabs defaultValue="details" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
             <TabsTrigger value="details">פרטי לקוח</TabsTrigger>
+            <TabsTrigger value="files" className="flex items-center gap-1">
+              <Paperclip className="h-3 w-3" />
+              קבצים
+              {filesCount > 0 && (
+                <Badge variant="secondary" className="mr-1 h-5 px-1.5 text-xs">
+                  {filesCount}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="meeting" className="flex items-center gap-1">
               <CalendarIcon className="h-3 w-3" />
-              קביעת פגישה
+              פגישה
             </TabsTrigger>
             <TabsTrigger value="updates">עדכונים</TabsTrigger>
           </TabsList>
@@ -895,6 +945,19 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                 </div>
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="files" className="mt-4 space-y-6">
+            <FolderLinksField
+              links={folderLinks}
+              onChange={setFolderLinks}
+            />
+            <AttachmentsField
+              attachments={attachments}
+              onChange={setAttachments}
+              entityType="client"
+              entityId={client.id}
+            />
           </TabsContent>
 
           <TabsContent value="updates" className="mt-4">
