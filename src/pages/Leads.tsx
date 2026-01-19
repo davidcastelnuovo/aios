@@ -635,21 +635,7 @@ export default function Leads() {
           .not("lead_id", "is", null);
         
         if (!taggedLeads || taggedLeads.length === 0) return 0;
-        
-        // AND logic: Count how many of the selected tags each lead has
-        const leadTagCounts = new Map<string, number>();
-        taggedLeads.forEach(t => {
-          if (t.lead_id) {
-            leadTagCounts.set(t.lead_id, (leadTagCounts.get(t.lead_id) || 0) + 1);
-          }
-        });
-        
-        // Only include leads that have ALL selected tags
-        tagFilterLeadIds = [...leadTagCounts.entries()]
-          .filter(([_, count]) => count === filterTagIds.length)
-          .map(([leadId]) => leadId);
-        
-        if (tagFilterLeadIds.length === 0) return 0;
+        tagFilterLeadIds = [...new Set(taggedLeads.map(t => t.lead_id!))];
       }
       
       let query = supabase
@@ -731,21 +717,7 @@ export default function Leads() {
           .not("lead_id", "is", null);
         
         if (!taggedLeads || taggedLeads.length === 0) return [];
-        
-        // AND logic: Count how many of the selected tags each lead has
-        const leadTagCounts = new Map<string, number>();
-        taggedLeads.forEach(t => {
-          if (t.lead_id) {
-            leadTagCounts.set(t.lead_id, (leadTagCounts.get(t.lead_id) || 0) + 1);
-          }
-        });
-        
-        // Only include leads that have ALL selected tags
-        tagFilterLeadIds = [...leadTagCounts.entries()]
-          .filter(([_, count]) => count === filterTagIds.length)
-          .map(([leadId]) => leadId);
-        
-        if (tagFilterLeadIds.length === 0) return [];
+        tagFilterLeadIds = [...new Set(taggedLeads.map(t => t.lead_id!))];
       }
       
       const from = (page - 1) * LEADS_PER_PAGE;
