@@ -919,6 +919,7 @@ export type Database = {
           created_at: string
           email: string | null
           folder_link: string | null
+          folder_links: Json
           id: string
           industry: string | null
           is_seo_client: boolean | null
@@ -946,6 +947,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           folder_link?: string | null
+          folder_links?: Json
           id?: string
           industry?: string | null
           is_seo_client?: boolean | null
@@ -973,6 +975,7 @@ export type Database = {
           created_at?: string
           email?: string | null
           folder_link?: string | null
+          folder_links?: Json
           id?: string
           industry?: string | null
           is_seo_client?: boolean | null
