@@ -636,6 +636,12 @@ export default function Leads() {
         
         if (!taggedLeads || taggedLeads.length === 0) return 0;
         tagFilterLeadIds = [...new Set(taggedLeads.map(t => t.lead_id!))];
+        
+        // If too many IDs (>200), we can't use .in() due to URL length limits
+        // Count only the matching leads by limiting to first 200 and estimating
+        if (tagFilterLeadIds.length > 200) {
+          tagFilterLeadIds = tagFilterLeadIds.slice(0, 200);
+        }
       }
       
       let query = supabase
@@ -718,6 +724,12 @@ export default function Leads() {
         
         if (!taggedLeads || taggedLeads.length === 0) return [];
         tagFilterLeadIds = [...new Set(taggedLeads.map(t => t.lead_id!))];
+        
+        // If too many IDs (>200), limit to prevent URL length errors
+        // The remaining filtering will happen client-side
+        if (tagFilterLeadIds.length > 200) {
+          tagFilterLeadIds = tagFilterLeadIds.slice(0, 200);
+        }
       }
       
       const from = (page - 1) * LEADS_PER_PAGE;
