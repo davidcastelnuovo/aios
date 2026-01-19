@@ -48,6 +48,15 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Sanitize file name: keep only ASCII, numbers, dash, underscore, dot
+function sanitizeFileName(name: string): string {
+  const ext = name.lastIndexOf('.') > 0 ? name.slice(name.lastIndexOf('.')) : '';
+  const baseName = name.lastIndexOf('.') > 0 ? name.slice(0, name.lastIndexOf('.')) : name;
+  // Replace non-ASCII and problematic chars with underscore
+  const sanitized = baseName.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_').slice(0, 50);
+  return sanitized + ext.toLowerCase();
+}
+
 export function AttachmentsField({ 
   attachments, 
   onChange, 
@@ -73,7 +82,8 @@ export function AttachmentsField({
           continue;
         }
 
-        const filePath = `${tenantId}/${entityType}/${entityId}/${Date.now()}_${file.name}`;
+        const safeFileName = sanitizeFileName(file.name);
+        const filePath = `${tenantId}/${entityType}/${entityId}/${Date.now()}_${safeFileName}`;
         
         const { error } = await supabase.storage
           .from("entity-attachments")
