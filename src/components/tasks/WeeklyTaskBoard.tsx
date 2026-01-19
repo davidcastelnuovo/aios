@@ -327,6 +327,9 @@ export function WeeklyTaskBoard() {
       const myCampaignerId = userProfile?.campaigner_id || null;
       const mySalesPersonId = userProfile?.sales_person_id || null;
 
+      // Validate date is a valid Date object
+      const validDate = date instanceof Date && !isNaN(date.getTime()) ? date : null;
+      
       const insertData: any = {
         title,
         status: "open",
@@ -337,19 +340,21 @@ export function WeeklyTaskBoard() {
         sales_person_id: myCampaignerId ? null : mySalesPersonId,
         client_id: null,
       };
-      if (date) {
-        insertData.due_date = format(date, "yyyy-MM-dd");
+      if (validDate) {
+        insertData.due_date = format(validDate, "yyyy-MM-dd");
+        // Only save time if we have a valid date
+        if (time) {
+          insertData.due_time = time + ":00";
+        }
       }
-      if (time) {
-        insertData.due_time = time + ":00";
-      }
+      // Note: time without date is not saved to prevent orphaned times
       const { data: newTask, error } = await supabase.from("tasks").insert(insertData).select().single();
       if (error) throw error;
 
       // אם יש תאריך ושעה - יצור גם אירוע ביומן גוגל ושמור את ה-eventId
-      if (date && time) {
+      if (validDate && time) {
         try {
-          const startDateTime = new Date(`${format(date, "yyyy-MM-dd")}T${time}:00`);
+          const startDateTime = new Date(`${format(validDate, "yyyy-MM-dd")}T${time}:00`);
           const endDateTime = new Date(startDateTime.getTime() + 30 * 60000); // 30 דקות
           
           const { data: calendarResult } = await supabase.functions.invoke("add-calendar-event", {
