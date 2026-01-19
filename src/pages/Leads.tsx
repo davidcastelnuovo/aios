@@ -624,24 +624,20 @@ export default function Leads() {
     queryFn: async () => {
       if (!tenantId) return 0;
       
-      // For tag filtering, first get matching lead IDs
-      let tagFilterLeadIds: string[] | null = null;
+      // Use RPC for tag filtering - efficient server-side filtering
       if (filterTagIds.length > 0 && !filterTagIds.includes("none")) {
-        const { data: taggedLeads } = await supabase
-          .from("chat_contact_tags")
-          .select("lead_id")
-          .in("tag_id", filterTagIds)
-          .eq("tenant_id", tenantId)
-          .not("lead_id", "is", null);
+        const agencyIds = selectedAgency && selectedAgency !== "all" 
+          ? [selectedAgency]
+          : agencies?.map(a => a.id) || null;
         
-        if (!taggedLeads || taggedLeads.length === 0) return 0;
-        tagFilterLeadIds = [...new Set(taggedLeads.map(t => t.lead_id!))];
+        const { data, error } = await supabase.rpc('count_leads_by_tags', {
+          p_tenant_id: tenantId,
+          p_tag_ids: filterTagIds,
+          p_agency_ids: agencyIds
+        });
         
-        // If too many IDs (>200), we can't use .in() due to URL length limits
-        // Count only the matching leads by limiting to first 200 and estimating
-        if (tagFilterLeadIds.length > 200) {
-          tagFilterLeadIds = tagFilterLeadIds.slice(0, 200);
-        }
+        if (error) throw error;
+        return data || 0;
       }
       
       let query = supabase
@@ -678,7 +674,6 @@ export default function Leads() {
         } else if (!filterResponseStatus.includes("none")) {
           query = query.in("response_status", filterResponseStatus);
         }
-        // If both "none" and other statuses are selected, we need OR logic (handled client-side)
       }
       
       if (startDate) {
@@ -694,17 +689,13 @@ export default function Leads() {
         const q = searchQuery.trim();
         query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%`);
       }
-      
-      if (tagFilterLeadIds) {
-        query = query.in("id", tagFilterLeadIds);
-      }
 
       const { count, error } = await query;
       if (error) throw error;
       return count || 0;
     },
     enabled: !!tenantId,
-    staleTime: 1000 * 60 * 2, // Reduced to 2 minutes since filters are now server-side
+    staleTime: 1000 * 60 * 2,
   });
 
   const { data: leads, isLoading, refetch, isFetching } = useQuery({
@@ -712,27 +703,63 @@ export default function Leads() {
     queryFn: async () => {
       if (!tenantId) return [] as any[];
       
-      // For tag filtering, first get matching lead IDs
-      let tagFilterLeadIds: string[] | null = null;
+      const from = (page - 1) * LEADS_PER_PAGE;
+      
+      // Use RPC for tag filtering - efficient server-side filtering with pagination
       if (filterTagIds.length > 0 && !filterTagIds.includes("none")) {
-        const { data: taggedLeads } = await supabase
-          .from("chat_contact_tags")
-          .select("lead_id")
-          .in("tag_id", filterTagIds)
-          .eq("tenant_id", tenantId)
-          .not("lead_id", "is", null);
+        const agencyIds = selectedAgency && selectedAgency !== "all" 
+          ? [selectedAgency]
+          : agencies?.map(a => a.id) || null;
         
-        if (!taggedLeads || taggedLeads.length === 0) return [];
-        tagFilterLeadIds = [...new Set(taggedLeads.map(t => t.lead_id!))];
+        const { data: rpcLeads, error: rpcError } = await supabase.rpc('get_leads_by_tags', {
+          p_tenant_id: tenantId,
+          p_tag_ids: filterTagIds,
+          p_agency_ids: agencyIds,
+          p_limit: LEADS_PER_PAGE,
+          p_offset: from
+        });
         
-        // If too many IDs (>200), limit to prevent URL length errors
-        // The remaining filtering will happen client-side
-        if (tagFilterLeadIds.length > 200) {
-          tagFilterLeadIds = tagFilterLeadIds.slice(0, 200);
+        if (rpcError) throw rpcError;
+        
+        // Fetch related data (agencies, sales_people) for the RPC results
+        if (rpcLeads && rpcLeads.length > 0) {
+          const leadIds = rpcLeads.map((l: any) => l.id);
+          const { data: leadsWithRelations } = await supabase
+            .from("leads")
+            .select(`
+              id,
+              tenant_id,
+              contact_name,
+              company_name,
+              phone,
+              email,
+              status,
+              response_status,
+              source,
+              industry,
+              products,
+              estimated_deal_value,
+              proposal_date,
+              sale_date,
+              lost_reason,
+              folder_link,
+              notes,
+              agency_id,
+              sales_person_id,
+              created_at,
+              updated_at,
+              agencies (name),
+              sales_people (full_name)
+            `)
+            .in("id", leadIds)
+            .order("created_at", { ascending: false });
+          
+          return leadsWithRelations || [];
         }
+        
+        return [];
       }
       
-      const from = (page - 1) * LEADS_PER_PAGE;
       const to = from + LEADS_PER_PAGE - 1;
       
       let query = supabase
@@ -794,7 +821,6 @@ export default function Leads() {
         } else if (!filterResponseStatus.includes("none")) {
           query = query.in("response_status", filterResponseStatus);
         }
-        // If both "none" and other statuses are selected, we handle complex OR logic client-side
       }
       
       if (startDate) {
@@ -809,10 +835,6 @@ export default function Leads() {
       if (searchQuery.trim()) {
         const q = searchQuery.trim();
         query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%`);
-      }
-      
-      if (tagFilterLeadIds) {
-        query = query.in("id", tagFilterLeadIds);
       }
       
       // Apply pagination after all filters
