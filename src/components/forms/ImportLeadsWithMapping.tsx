@@ -717,7 +717,7 @@ export function ImportLeadsWithMapping() {
           agency_id: defaultAgencyId,
         };
 
-        if (defaultSalesPersonId) {
+        if (defaultSalesPersonId && defaultSalesPersonId !== "none") {
           lead.sales_person_id = defaultSalesPersonId;
         }
 
