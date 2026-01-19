@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -16,7 +16,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
-import { Pencil, CalendarIcon, FileText, DollarSign, MessageSquare, Send, Trash2, Settings2, Clock, Users, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Pencil, CalendarIcon, FileText, DollarSign, MessageSquare, Send, Trash2, Settings2, Clock, Users, AlertCircle, CheckCircle2, Paperclip } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ManageLeadStatusesDialog } from "./ManageLeadStatusesDialog";
 import { format } from "date-fns";
@@ -31,6 +31,8 @@ import { useLeadPipelineStages } from "@/hooks/useLeadPipelineStages";
 import { ManagePipelineStagesDialog } from "./ManagePipelineStagesDialog";
 import { LeadUpdatesTab } from "@/components/leads/LeadUpdatesTab";
 import { LeadTagSelector, LeadTagBadgesEditable } from "@/components/leads/LeadTagSelector";
+import { FolderLinksField, type FolderLink } from "./FolderLinksField";
+import { AttachmentsField, type Attachment } from "./AttachmentsField";
 
 const formSchema = z.object({
   company_name: z.string().min(1, "שם העסק הוא שדה חובה"),
@@ -74,6 +76,24 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
   const [editingUpdateContent, setEditingUpdateContent] = useState("");
   const [responseSelectOpen, setResponseSelectOpen] = useState(false);
   const [stageSelectOpen, setStageSelectOpen] = useState(false);
+  
+  // Folder links and attachments state
+  const [folderLinks, setFolderLinks] = useState<FolderLink[]>(() => {
+    try {
+      const parsed = lead.folder_links;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+  const [attachments, setAttachments] = useState<Attachment[]>(() => {
+    try {
+      const parsed = lead.attachments;
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
   
   // Meeting scheduling state
   const [meetingDate, setMeetingDate] = useState<Date | undefined>(undefined);
@@ -247,6 +267,9 @@ const updateMutation = useMutation({
         folder_link: values.folder_link || null,
         lost_reason: values.lost_reason || null,
         created_at: values.created_at || new Date(),
+        // Save folder_links and attachments
+        folder_links: folderLinks,
+        attachments: attachments,
       };
 
       const { data, error } = await supabase
@@ -597,7 +620,7 @@ const updateMutation = useMutation({
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto gap-1 bg-muted/50 p-1 rounded-lg shadow-sm">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto gap-1 bg-muted/50 p-1 rounded-lg shadow-sm">
             <TabsTrigger 
               value="details" 
               className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
@@ -611,6 +634,18 @@ const updateMutation = useMutation({
             >
               <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
               הצעות מחיר
+            </TabsTrigger>
+            <TabsTrigger 
+              value="files" 
+              className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
+            >
+              <Paperclip className="h-3 w-3 sm:h-4 sm:w-4" />
+              קבצים
+              {(folderLinks.length + attachments.length) > 0 && (
+                <span className="mr-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-xs">
+                  {folderLinks.length + attachments.length}
+                </span>
+              )}
             </TabsTrigger>
             <TabsTrigger 
               value="meeting" 
@@ -962,20 +997,6 @@ const updateMutation = useMutation({
 
                 <FormField
                   control={form.control}
-                  name="folder_link"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-sm font-medium">קישור לתיקייה</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="https://..." className="text-right rounded-lg border-2 h-11 px-4" dir="rtl" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
                   name="notes"
                   render={({ field }) => (
                     <FormItem>
@@ -990,6 +1011,25 @@ const updateMutation = useMutation({
 
                 <Button type="submit" disabled={updateMutation.isPending} className="w-full">
                   {updateMutation.isPending ? "מעדכן..." : "עדכן ליד"}
+                </Button>
+              </TabsContent>
+
+              {/* Tab: Files & Links */}
+              <TabsContent value="files" className="space-y-6 mt-0">
+                <FolderLinksField 
+                  links={folderLinks} 
+                  onChange={setFolderLinks} 
+                />
+                
+                <AttachmentsField
+                  attachments={attachments}
+                  onChange={setAttachments}
+                  entityType="lead"
+                  entityId={lead.id}
+                />
+
+                <Button type="submit" disabled={updateMutation.isPending} className="w-full">
+                  {updateMutation.isPending ? "מעדכן..." : "שמור שינויים"}
                 </Button>
               </TabsContent>
 
