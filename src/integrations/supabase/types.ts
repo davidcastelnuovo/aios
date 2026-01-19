@@ -3280,6 +3280,14 @@ export type Database = {
         Args: { _source_tenant_id: string; _target_tenant_id: string }
         Returns: undefined
       }
+      count_leads_by_tags: {
+        Args: {
+          p_agency_ids?: string[]
+          p_tag_ids: string[]
+          p_tenant_id: string
+        }
+        Returns: number
+      }
       get_chat_contacts: {
         Args: { p_tenant_id?: string }
         Returns: {
@@ -3309,6 +3317,65 @@ export type Database = {
         Returns: Json
       }
       get_effective_tenant_id: { Args: never; Returns: string }
+      get_leads_by_tags: {
+        Args: {
+          p_agency_ids?: string[]
+          p_limit?: number
+          p_offset?: number
+          p_tag_ids: string[]
+          p_tenant_id: string
+        }
+        Returns: {
+          active_chat_provider:
+            | Database["public"]["Enums"]["chat_provider"]
+            | null
+          agency_id: string | null
+          attachments: Json
+          campaign_name: string | null
+          closing_date: string | null
+          company_name: string
+          contact_name: string | null
+          created_at: string
+          email: string | null
+          estimated_deal_value: number | null
+          folder_link: string | null
+          folder_links: Json
+          general_status: string | null
+          id: string
+          industry: string | null
+          itai_meeting_date: string | null
+          lost_reason: string | null
+          manychat_subscriber_id: string | null
+          meeting_date: string | null
+          meeting_location: string | null
+          meeting_reminder_day_after_sent_at: string | null
+          meeting_reminder_same_day_sent_at: string | null
+          meeting_set_date: string | null
+          meeting_time: string | null
+          monthly_budget: number | null
+          notes: string | null
+          phone: string | null
+          products: string | null
+          proposal_date: string | null
+          proposal_sent_date: string | null
+          response_status: string | null
+          sale_date: string | null
+          sales_person_id: string | null
+          source: Database["public"]["Enums"]["lead_source"]
+          status: string
+          tenant_id: string | null
+          three_month_budget: number | null
+          updated_at: string
+          whatsapp_avatar_url: string | null
+          won_date: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "leads"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_unknown_chat_contacts:
         | {
             Args: never
