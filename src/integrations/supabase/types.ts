@@ -914,6 +914,7 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id: string
+          attachments: Json
           contact_name: string | null
           created_at: string
           email: string | null
@@ -940,6 +941,7 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id: string
+          attachments?: Json
           contact_name?: string | null
           created_at?: string
           email?: string | null
@@ -966,6 +968,7 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id?: string
+          attachments?: Json
           contact_name?: string | null
           created_at?: string
           email?: string | null
@@ -1818,6 +1821,7 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id: string | null
+          attachments: Json
           campaign_name: string | null
           closing_date: string | null
           company_name: string
@@ -1826,6 +1830,7 @@ export type Database = {
           email: string | null
           estimated_deal_value: number | null
           folder_link: string | null
+          folder_links: Json
           general_status: string | null
           id: string
           industry: string | null
@@ -1860,6 +1865,7 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id?: string | null
+          attachments?: Json
           campaign_name?: string | null
           closing_date?: string | null
           company_name: string
@@ -1868,6 +1874,7 @@ export type Database = {
           email?: string | null
           estimated_deal_value?: number | null
           folder_link?: string | null
+          folder_links?: Json
           general_status?: string | null
           id?: string
           industry?: string | null
@@ -1902,6 +1909,7 @@ export type Database = {
             | Database["public"]["Enums"]["chat_provider"]
             | null
           agency_id?: string | null
+          attachments?: Json
           campaign_name?: string | null
           closing_date?: string | null
           company_name?: string
@@ -1910,6 +1918,7 @@ export type Database = {
           email?: string | null
           estimated_deal_value?: number | null
           folder_link?: string | null
+          folder_links?: Json
           general_status?: string | null
           id?: string
           industry?: string | null
