@@ -37,7 +37,17 @@ import { useLeadStatuses, LeadStatus } from "@/hooks/useLeadStatuses";
 import { useLeadPipelineStages, LeadPipelineStage } from "@/hooks/useLeadPipelineStages";
 import { LeadFiltersDialog, FilterState } from "@/components/leads/LeadFiltersDialog";
 import { LeadFilterPresetTabs, FilterPreset } from "@/components/leads/LeadFilterPresetTabs";
-import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable } from "@dnd-kit/core";
+import {
+  DndContext,
+  DragCancelEvent,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  closestCorners,
+  defaultDropAnimationSideEffects,
+  useDroppable,
+  type DropAnimation,
+} from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -63,6 +73,21 @@ import { LeadTagSelector, LeadTagBadges } from "@/components/leads/LeadTagSelect
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 import { ImportLeadsSheet } from "@/components/forms/ImportLeadsSheet";
 import { FollowUpDatePicker } from "@/components/leads/FollowUpDatePicker";
+
+
+const DROP_ANIMATION_MS = 220;
+
+const dropAnimationConfig: DropAnimation = {
+  duration: DROP_ANIMATION_MS,
+  easing: "cubic-bezier(0.2, 0.8, 0.2, 1)",
+  sideEffects: defaultDropAnimationSideEffects({
+    styles: {
+      active: {
+        opacity: "0",
+      },
+    },
+  }),
+};
 
 
 // Helper functions for dynamic pipeline stages
@@ -180,9 +205,17 @@ function LeadCard({
     animateLayoutChanges: () => false, // Prevent layout animations that cause jumpy behavior
   });
 
+  // dnd-kit sometimes reports a 0ms linear transition right after drop; forcing a non-zero
+  // transition removes the tiny "jump" users see when the item snaps into place.
+  const resolvedTransition = isDragging
+    ? undefined
+    : transition && !transition.includes("0ms")
+      ? transition
+      : "transform 200ms ease";
+
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition: transition || 'transform 200ms ease',
+    transition: resolvedTransition,
     opacity: isDragging ? 0.5 : 1,
   };
 
@@ -1202,15 +1235,25 @@ export default function Leads() {
     },
   });
 
+  const clearActiveIdWithDelay = () => {
+    window.setTimeout(() => setActiveId(null), DROP_ANIMATION_MS);
+  };
+
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
   };
 
+  const handleDragCancel = (_event: DragCancelEvent) => {
+    setActiveId(null);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    setActiveId(null);
 
-    if (!over) return;
+    if (!over) {
+      clearActiveIdWithDelay();
+      return;
+    }
 
     const leadId = active.id as string;
 
@@ -1230,6 +1273,9 @@ export default function Leads() {
         newStatus: targetStatus,
       });
     }
+
+    // Keep the DragOverlay mounted long enough for dropAnimation to complete.
+    clearActiveIdWithDelay();
   };
 
   // Filters are now applied server-side, but we still need to handle "none" tag filter client-side
@@ -1709,6 +1755,7 @@ export default function Leads() {
               collisionDetection={closestCorners}
               onDragStart={handleDragStart}
               onDragEnd={handleDragEnd}
+              onDragCancel={handleDragCancel}
             >
               {PIPELINE_STAGES.map((stage) => {
                 if (stage.id !== selectedMobileStage) return null;
@@ -1758,7 +1805,7 @@ export default function Leads() {
                   </div>
                 );
               })}
-              <DragOverlay>
+              <DragOverlay dropAnimation={dropAnimationConfig}>
                 {activeId && activeLead ? (
                   <LeadCard 
                     lead={activeLead}
@@ -1824,6 +1871,7 @@ export default function Leads() {
             collisionDetection={closestCorners}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
           >
             <div className="hidden md:grid grid-cols-5 gap-0">
               {PIPELINE_STAGES.map((stage, index) => {
@@ -1897,7 +1945,7 @@ export default function Leads() {
               })}
             </div>
 
-            <DragOverlay>
+             <DragOverlay dropAnimation={dropAnimationConfig}>
               {activeId && activeLead ? (
                 <LeadCard 
                   lead={activeLead}
