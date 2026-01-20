@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo } from "react";
-import { Calendar, momentLocalizer, Event as BigCalendarEvent } from "react-big-calendar";
-import moment from "moment";
+import { Calendar, dateFnsLocalizer, Event as BigCalendarEvent } from "react-big-calendar";
+import { format, parse, startOfWeek, getDay } from "date-fns";
+import { he } from "date-fns/locale";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -13,8 +14,17 @@ import { toast } from "sonner";
 import { Loader2, Trash2 } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
-moment.locale('he');
-const localizer = momentLocalizer(moment);
+const locales = {
+  'he': he,
+};
+
+const localizer = dateFnsLocalizer({
+  format,
+  parse,
+  startOfWeek,
+  getDay,
+  locales,
+});
 
 interface CalendarEvent {
   id: string;
@@ -162,8 +172,8 @@ export function InteractiveCalendar() {
     setSelectedEvent(event);
     setEditSummary(event.title as string);
     setEditDescription(event.description || '');
-    setEditStart(moment(event.start).format('YYYY-MM-DDTHH:mm'));
-    setEditEnd(moment(event.end).format('YYYY-MM-DDTHH:mm'));
+    setEditStart(format(event.start, "yyyy-MM-dd'T'HH:mm"));
+    setEditEnd(format(event.end, "yyyy-MM-dd'T'HH:mm"));
   }, []);
 
   const handleUpdateEvent = () => {
@@ -283,11 +293,11 @@ export function InteractiveCalendar() {
             )}
             <div>
               <Label>התחלה</Label>
-              <p className="text-sm">{moment(selectedEvent?.start).format('DD/MM/YYYY HH:mm')}</p>
+              <p className="text-sm">{selectedEvent?.start && format(selectedEvent.start, 'dd/MM/yyyy HH:mm')}</p>
             </div>
             <div>
               <Label>סיום</Label>
-              <p className="text-sm">{moment(selectedEvent?.end).format('DD/MM/YYYY HH:mm')}</p>
+              <p className="text-sm">{selectedEvent?.end && format(selectedEvent.end, 'dd/MM/yyyy HH:mm')}</p>
             </div>
           </div>
           <DialogFooter className="gap-2">
