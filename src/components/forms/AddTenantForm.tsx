@@ -385,20 +385,27 @@ export function AddTenantForm({
     );
   }
 
+  // If controlled externally (open prop is provided), don't show trigger
+  const isControlled = controlledOpen !== undefined;
+
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>
-          <Button className="w-full md:w-auto">
-            <Plus className="h-4 w-4 ml-2" />
-            ארגון חדש
-          </Button>
-        </DialogTrigger>
+        {!isControlled && (
+          <DialogTrigger asChild>
+            <Button className="w-full md:w-auto">
+              <Plus className="h-4 w-4 ml-2" />
+              ארגון חדש
+            </Button>
+          </DialogTrigger>
+        )}
         <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>הוספת ארגון חדש</DialogTitle>
+            <DialogTitle>{parentTenantId ? "הוספת תת-ארגון" : "הוספת ארגון חדש"}</DialogTitle>
             <DialogDescription>
-              צור ארגון חדש והזמן owner לניהול הארגון. ה-owner יקבל גישה מלאה לכל המודולים.
+              {parentTenantId 
+                ? "צור תת-ארגון חדש תחת הארגון הנבחר והזמן owner לניהול."
+                : "צור ארגון חדש והזמן owner לניהול הארגון. ה-owner יקבל גישה מלאה לכל המודולים."}
             </DialogDescription>
           </DialogHeader>
           {formContent}
