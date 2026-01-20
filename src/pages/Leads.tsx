@@ -179,7 +179,8 @@ function DroppableStage({ stage, children }: { stage: any; children: ReactNode }
   );
 }
 
-function LeadCard({ 
+// Pure UI component - no drag logic
+function LeadCardContent({ 
   lead, 
   onStatusChange, 
   onResponseStatusChange,
@@ -188,7 +189,10 @@ function LeadCard({
   pipelineStages = [],
   isCompanyNameVisible = true,
   allTags = [],
-  leadTagIds = []
+  leadTagIds = [],
+  dragHandleProps,
+  style,
+  innerRef,
 }: { 
   lead: any; 
   onStatusChange: (leadId: string, newStatus: string) => void;
@@ -199,34 +203,16 @@ function LeadCard({
   isCompanyNameVisible?: boolean;
   allTags?: Array<{ id: string; name: string; color: string }>;
   leadTagIds?: string[];
+  dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
+  style?: React.CSSProperties;
+  innerRef?: React.Ref<HTMLDivElement>;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: lead.id,
-    animateLayoutChanges: () => false, // Prevent layout animations that cause jumpy behavior
-  });
-
-  // dnd-kit sometimes reports a 0ms linear transition right after drop; forcing a non-zero
-  // transition removes the tiny "jump" users see when the item snaps into place.
-  const resolvedTransition = isDragging
-    ? undefined
-    : transition && !transition.includes("0ms")
-      ? transition
-      : "transform 200ms ease";
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition: resolvedTransition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
   const { toast } = useToast();
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [stageSelectOpen, setStageSelectOpen] = useState(false);
   const [responseSelectOpen, setResponseSelectOpen] = useState(false);
   const [manageStagesOpen, setManageStagesOpen] = useState(false);
   const [manageStatusesOpen, setManageStatusesOpen] = useState(false);
-  const isMobile = useIsMobile();
 
   const handleDelete = async (id: string) => {
     try {
@@ -252,7 +238,7 @@ function LeadCard({
 
   return (
     <Card
-      ref={setNodeRef}
+      ref={innerRef}
       style={style}
       className="mb-3 hover:shadow-lg transition-all"
     >
@@ -268,9 +254,11 @@ function LeadCard({
             <User className="h-4 w-4 text-primary shrink-0" />
             <span className="font-bold truncate">{lead.contact_name || 'ללא שם איש קשר'}</span>
           </div>
-          <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing" aria-label="גרור כרטיס">
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
-          </div>
+          {dragHandleProps && (
+            <div {...dragHandleProps} className="cursor-grab active:cursor-grabbing" aria-label="גרור כרטיס">
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
+            </div>
+          )}
         </CardTitle>
         {isCompanyNameVisible && lead.company_name && (
           <div className="flex items-center gap-2 mt-1">
@@ -457,6 +445,65 @@ function LeadCard({
   );
 }
 
+// Sortable wrapper component - adds drag functionality
+function SortableLeadCard({ 
+  lead, 
+  onStatusChange, 
+  onResponseStatusChange,
+  productsLookup = {},
+  leadStatuses = [],
+  pipelineStages = [],
+  isCompanyNameVisible = true,
+  allTags = [],
+  leadTagIds = []
+}: { 
+  lead: any; 
+  onStatusChange: (leadId: string, newStatus: string) => void;
+  onResponseStatusChange: (leadId: string, responseStatus: string | null) => void;
+  productsLookup?: Record<string, { name: string; price: number }>;
+  leadStatuses?: LeadStatus[];
+  pipelineStages?: Array<{ id: string; label: string; color: string; bgClass: string; borderColor: string; hexColor?: string }>;
+  isCompanyNameVisible?: boolean;
+  allTags?: Array<{ id: string; name: string; color: string }>;
+  leadTagIds?: string[];
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: lead.id,
+    animateLayoutChanges: () => false,
+  });
+
+  const resolvedTransition = isDragging
+    ? undefined
+    : transition && !transition.includes("0ms")
+      ? transition
+      : "transform 200ms ease";
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition: resolvedTransition,
+    opacity: isDragging ? 0.4 : 1,
+  };
+
+  const dragHandleProps = { ...attributes, ...listeners };
+
+  return (
+    <LeadCardContent
+      lead={lead}
+      onStatusChange={onStatusChange}
+      onResponseStatusChange={onResponseStatusChange}
+      productsLookup={productsLookup}
+      leadStatuses={leadStatuses}
+      pipelineStages={pipelineStages}
+      isCompanyNameVisible={isCompanyNameVisible}
+      allTags={allTags}
+      leadTagIds={leadTagIds}
+      dragHandleProps={dragHandleProps}
+      style={style}
+      innerRef={setNodeRef}
+    />
+  );
+}
+
 function StageTable({ stage, stageLeads, isOpen, onToggle }: { 
   stage: any; 
   stageLeads: any[]; 
@@ -628,6 +675,9 @@ export default function Leads() {
   // Kanban limiting state - how many leads to show per stage
   const KANBAN_LEADS_PER_STAGE = 30;
   const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({});
+  
+  // Optimistic status map - instantly shows lead in new column before backend confirms
+  const [optimisticStatusByLeadId, setOptimisticStatusByLeadId] = useState<Record<string, string>>({});
 
   // Fetch lead data for auto-open from URL
   const { data: autoOpenLead } = useQuery({
@@ -1112,21 +1162,33 @@ export default function Leads() {
         );
       });
 
-      // Return context with the snapshot and key
-      return { previousLeads, fullQueryKey };
+      // Return context with the snapshot, key, and leadId for cleanup
+      return { previousLeads, fullQueryKey, leadId };
     },
     onError: (error: any, variables, context) => {
       // Rollback to the previous value if error
       if (context?.previousLeads && context?.fullQueryKey) {
         queryClient.setQueryData(context.fullQueryKey, context.previousLeads);
       }
+      // Clear the optimistic status on error so lead goes back to original position
+      setOptimisticStatusByLeadId(prev => {
+        const next = { ...prev };
+        delete next[variables.leadId];
+        return next;
+      });
       toast({
         title: "שגיאה בעדכון סטטוס",
         description: error.message,
         variant: "destructive",
       });
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
+      // Clear the optimistic status after successful backend update
+      setOptimisticStatusByLeadId(prev => {
+        const next = { ...prev };
+        delete next[variables.leadId];
+        return next;
+      });
       toast({
         title: "סטטוס ליד עודכן בהצלחה",
       });
@@ -1262,12 +1324,21 @@ export default function Leads() {
 
     // If over.id is not one of the stage IDs, try to resolve it via the lead it hovers over
     if (!PIPELINE_STAGES.some((s) => s.id === targetStatus)) {
-      const overLead = filteredLeads?.find((l: any) => l.id === over.id);
-      if (overLead) targetStatus = overLead.status;
+      // Check optimistic status first, then actual lead status
+      const overLeadOptimisticStatus = optimisticStatusByLeadId[over.id as string];
+      if (overLeadOptimisticStatus) {
+        targetStatus = overLeadOptimisticStatus;
+      } else {
+        const overLead = filteredLeads?.find((l: any) => l.id === over.id);
+        if (overLead) targetStatus = overLead.status;
+      }
     }
 
     // Validate final status - only update if target is a valid stage
     if (PIPELINE_STAGES.find((stage) => stage.id === targetStatus)) {
+      // IMMEDIATELY update optimistic state so lead moves to new column without waiting
+      setOptimisticStatusByLeadId(prev => ({ ...prev, [leadId]: targetStatus }));
+      
       updateLeadStatus.mutate({
         leadId,
         newStatus: targetStatus,
@@ -1468,8 +1539,12 @@ export default function Leads() {
     });
   };
 
+  // Use effective status (optimistic first, then actual) for stage filtering
   const getLeadsByStage = (stageId: string, limit?: number) => {
-    const stageLeads = filteredLeads?.filter((lead: any) => lead.status === stageId) || [];
+    const stageLeads = filteredLeads?.filter((lead: any) => {
+      const effectiveStatus = optimisticStatusByLeadId[lead.id] ?? lead.status;
+      return effectiveStatus === stageId;
+    }) || [];
     if (limit && !expandedStages[stageId]) {
       return stageLeads.slice(0, limit);
     }
@@ -1477,7 +1552,10 @@ export default function Leads() {
   };
   
   const getLeadsCountByStage = (stageId: string) => {
-    return filteredLeads?.filter((lead: any) => lead.status === stageId)?.length || 0;
+    return filteredLeads?.filter((lead: any) => {
+      const effectiveStatus = optimisticStatusByLeadId[lead.id] ?? lead.status;
+      return effectiveStatus === stageId;
+    })?.length || 0;
   };
 
   const activeLead = filteredLeads?.find((lead: any) => lead.id === activeId);
@@ -1777,7 +1855,7 @@ export default function Leads() {
                         strategy={verticalListSortingStrategy}
                       >
                         {stageLeads.map((lead: any) => (
-                          <LeadCard 
+                          <SortableLeadCard 
                             key={lead.id} 
                             lead={lead}
                             productsLookup={productsLookup}
@@ -1807,7 +1885,7 @@ export default function Leads() {
               })}
               <DragOverlay dropAnimation={dropAnimationConfig}>
                 {activeId && activeLead ? (
-                  <LeadCard 
+                  <LeadCardContent 
                     lead={activeLead}
                     productsLookup={productsLookup}
                     leadStatuses={leadStatuses}
@@ -1895,7 +1973,7 @@ export default function Leads() {
                         strategy={verticalListSortingStrategy}
                       >
                         {stageLeads.map((lead: any) => (
-                          <LeadCard 
+                          <SortableLeadCard 
                             key={lead.id} 
                             lead={lead}
                             productsLookup={productsLookup}
@@ -1947,7 +2025,7 @@ export default function Leads() {
 
              <DragOverlay dropAnimation={dropAnimationConfig}>
               {activeId && activeLead ? (
-                <LeadCard 
+                <LeadCardContent 
                   lead={activeLead}
                   productsLookup={productsLookup}
                   leadStatuses={leadStatuses}
