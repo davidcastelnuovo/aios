@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -397,9 +397,8 @@ export default function Tenants() {
                 </TableHeader>
                 <TableBody>
                   {organizations.map((org: any) => (
-                    <>
+                    <React.Fragment key={org.id}>
                       <TableRow
-                        key={org.id}
                         className={
                           currentTenantId === org.id
                             ? "bg-green-50 dark:bg-green-950/20 border-r-4 border-r-green-500"
@@ -509,7 +508,7 @@ export default function Tenants() {
                             </TableCell>
                           </TableRow>
                         ))}
-                    </>
+                    </React.Fragment>
                   ))}
                 </TableBody>
               </Table>
@@ -550,6 +549,19 @@ export default function Tenants() {
           tenant={selectedTenantForTemplate}
         />
       )}
+
+      {/* Add Sub-Organization Dialog */}
+      <AddTenantForm
+        parentTenantId={subTenantParentId || undefined}
+        open={!!subTenantParentId}
+        onOpenChange={(open) => {
+          if (!open) setSubTenantParentId(null);
+        }}
+        onSuccess={() => {
+          setSubTenantParentId(null);
+          refetch();
+        }}
+      />
     </div>
   );
 }
