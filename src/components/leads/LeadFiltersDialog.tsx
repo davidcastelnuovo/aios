@@ -38,6 +38,7 @@ export interface FilterState {
   tagIds: string[]; // Changed from tagId to tagIds for multi-select
   startDate: Date | undefined;
   endDate: Date | undefined;
+  followUpToday: boolean; // Filter for leads with follow-up date today
 }
 
 interface EditingPreset {
@@ -136,6 +137,7 @@ export function LeadFiltersDialog({
       tagIds: [],
       startDate: undefined,
       endDate: undefined,
+      followUpToday: false,
     };
     setFilters(resetFilters);
     onApply(resetFilters);
@@ -161,6 +163,7 @@ export function LeadFiltersDialog({
         tagIds: filters.tagIds,
         startDate: filters.startDate?.toISOString() || null,
         endDate: filters.endDate?.toISOString() || null,
+        followUpToday: filters.followUpToday,
       };
 
       const { error } = await supabase
@@ -206,6 +209,7 @@ export function LeadFiltersDialog({
         tagIds: filters.tagIds,
         startDate: filters.startDate?.toISOString() || null,
         endDate: filters.endDate?.toISOString() || null,
+        followUpToday: filters.followUpToday,
       };
 
       const { error } = await supabase
@@ -303,7 +307,8 @@ export function LeadFiltersDialog({
     filters.responseStatus.length > 0 ||
     filters.tagIds.length > 0 ||
     filters.startDate ||
-    filters.endDate;
+    filters.endDate ||
+    filters.followUpToday;
 
   return (
     <>
@@ -583,6 +588,22 @@ export function LeadFiltersDialog({
                   </Button>
                 )}
               </div>
+            </div>
+
+            {/* Follow Up Today Filter */}
+            <div className="space-y-2">
+              <label className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent/50 transition-colors">
+                <Checkbox
+                  checked={filters.followUpToday}
+                  onCheckedChange={(checked) => 
+                    setFilters(prev => ({ ...prev, followUpToday: checked === true }))
+                  }
+                />
+                <div className="flex flex-col">
+                  <span className="font-medium">לידים לחזרה היום</span>
+                  <span className="text-xs text-muted-foreground">הצג רק לידים עם תאריך חזרה להיום</span>
+                </div>
+              </label>
             </div>
           </div>
 

@@ -1834,6 +1834,7 @@ export type Database = {
           estimated_deal_value: number | null
           folder_link: string | null
           folder_links: Json
+          follow_up_date: string | null
           general_status: string | null
           id: string
           industry: string | null
@@ -1878,6 +1879,7 @@ export type Database = {
           estimated_deal_value?: number | null
           folder_link?: string | null
           folder_links?: Json
+          follow_up_date?: string | null
           general_status?: string | null
           id?: string
           industry?: string | null
@@ -1922,6 +1924,7 @@ export type Database = {
           estimated_deal_value?: number | null
           folder_link?: string | null
           folder_links?: Json
+          follow_up_date?: string | null
           general_status?: string | null
           id?: string
           industry?: string | null
@@ -3340,6 +3343,7 @@ export type Database = {
           estimated_deal_value: number | null
           folder_link: string | null
           folder_links: Json
+          follow_up_date: string | null
           general_status: string | null
           id: string
           industry: string | null
