@@ -62,6 +62,7 @@ import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 import { LeadTagSelector, LeadTagBadges } from "@/components/leads/LeadTagSelector";
 import { ChatTagsManager } from "@/components/chat/ChatTagsManager";
 import { ImportLeadsSheet } from "@/components/forms/ImportLeadsSheet";
+import { FollowUpDatePicker } from "@/components/leads/FollowUpDatePicker";
 
 
 // Helper functions for dynamic pipeline stages
@@ -371,6 +372,10 @@ function LeadCard({
             onOpenChange={setEditDialogOpen}
           />
           <LeadTagSelector leadId={lead.id} initialTagIds={leadTagIds} />
+          <FollowUpDatePicker 
+            leadId={lead.id} 
+            currentDate={lead.follow_up_date}
+          />
           <AddTaskForm
             leadId={lead.id}
             agencyId={lead.agency_id || undefined}
@@ -535,6 +540,7 @@ export default function Leads() {
   const [filterTagIds, setFilterTagIds] = useState<string[]>([]);
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [filterFollowUpToday, setFilterFollowUpToday] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState("");
   
   // Filters dialog and preset states
@@ -579,7 +585,7 @@ export default function Leads() {
   // Reset page to 1 when filters change to prevent showing empty results
   useEffect(() => {
     setPage(1);
-  }, [selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate, endDate]);
+  }, [selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate]);
   
   // Kanban limiting state - how many leads to show per stage
   const KANBAN_LEADS_PER_STAGE = 30;
@@ -620,7 +626,7 @@ export default function Leads() {
 
   // Fetch total count for pagination - includes server-side filters
   const { data: totalLeadsCount = 0 } = useQuery({
-    queryKey: ["leads-count", tenantId, selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["leads-count", tenantId, selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!tenantId) return 0;
       
@@ -676,6 +682,12 @@ export default function Leads() {
         }
       }
       
+      // Follow-up today filter
+      if (filterFollowUpToday) {
+        const today = new Date().toISOString().split('T')[0];
+        query = query.eq("follow_up_date", today);
+      }
+      
       if (startDate) {
         query = query.gte("created_at", startDate.toISOString());
       }
@@ -699,7 +711,7 @@ export default function Leads() {
   });
 
   const { data: leads, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["leads", tenantId, selectedAgency, page, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["leads", tenantId, selectedAgency, page, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
       
@@ -746,6 +758,7 @@ export default function Leads() {
               notes,
               agency_id,
               sales_person_id,
+              follow_up_date,
               created_at,
               updated_at,
               agencies (name),
@@ -784,6 +797,7 @@ export default function Leads() {
           notes,
           agency_id,
           sales_person_id,
+          follow_up_date,
           created_at,
           updated_at,
           agencies (name),
@@ -821,6 +835,12 @@ export default function Leads() {
         } else if (!filterResponseStatus.includes("none")) {
           query = query.in("response_status", filterResponseStatus);
         }
+      }
+      
+      // Follow-up today filter
+      if (filterFollowUpToday) {
+        const today = new Date().toISOString().split('T')[0];
+        query = query.eq("follow_up_date", today);
       }
       
       if (startDate) {
@@ -1244,8 +1264,9 @@ export default function Leads() {
       filterResponseStatus.length > 0 ||
       filterTagIds.length > 0 ||
       startDate !== undefined ||
-      endDate !== undefined;
-  }, [filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate, endDate]);
+      endDate !== undefined ||
+      filterFollowUpToday;
+  }, [filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate, endDate, filterFollowUpToday]);
 
   // Current filter state for dialog
   const currentFilters: FilterState = useMemo(() => ({
@@ -1256,7 +1277,8 @@ export default function Leads() {
     tagIds: filterTagIds,
     startDate,
     endDate,
-  }), [searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate, endDate]);
+    followUpToday: filterFollowUpToday,
+  }), [searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate, endDate, filterFollowUpToday]);
 
   // Handle applying filters from dialog
   const handleApplyFilters = (filters: FilterState) => {
@@ -1267,6 +1289,7 @@ export default function Leads() {
     setFilterTagIds(filters.tagIds);
     setStartDate(filters.startDate);
     setEndDate(filters.endDate);
+    setFilterFollowUpToday(filters.followUpToday);
     setActivePresetId(null); // Clear preset when manually applying
   };
 
@@ -1280,6 +1303,7 @@ export default function Leads() {
       setFilterTagIds([]);
       setStartDate(undefined);
       setEndDate(undefined);
+      setFilterFollowUpToday(false);
       setSearchQuery("");
       setActivePresetId(null);
     } else {
@@ -1301,6 +1325,7 @@ export default function Leads() {
       }
       setStartDate(f.startDate ? new Date(f.startDate) : undefined);
       setEndDate(f.endDate ? new Date(f.endDate) : undefined);
+      setFilterFollowUpToday(f.followUpToday || false);
       setSearchQuery(f.searchQuery || "");
       setActivePresetId(preset.id);
     }
@@ -2398,6 +2423,17 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                   </div>
                 );
               }
+            },
+            { 
+              id: "follow_up_date", 
+              label: "תאריך לחזרה", 
+              width: 100,
+              render: (lead: any) => (
+                <FollowUpDatePicker 
+                  leadId={lead.id} 
+                  currentDate={lead.follow_up_date}
+                />
+              )
             },
             { 
               id: "actions", 

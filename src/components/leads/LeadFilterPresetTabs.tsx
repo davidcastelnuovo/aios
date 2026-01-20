@@ -29,6 +29,7 @@ export interface FilterPreset {
     tagIds?: string[]; // New format
     startDate?: string | null;
     endDate?: string | null;
+    followUpToday?: boolean; // Filter for leads with follow-up date today
   };
   sort_order: number;
 }
