@@ -177,11 +177,12 @@ function LeadCard({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: lead.id,
+    animateLayoutChanges: () => false, // Prevent layout animations that cause jumpy behavior
   });
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: transition || 'transform 200ms ease',
     opacity: isDragging ? 0.5 : 1,
   };
 
@@ -1062,7 +1063,7 @@ export default function Leads() {
     },
     onMutate: async ({ leadId, newStatus }) => {
       // Use the EXACT same query key as the useQuery to ensure optimistic updates work
-      const fullQueryKey = ["leads", tenantId, selectedAgency, page, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate?.toISOString(), endDate?.toISOString()];
+      const fullQueryKey = ["leads", tenantId, selectedAgency, page, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate?.toISOString(), endDate?.toISOString(), filterFollowUpToday];
       
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: fullQueryKey });
@@ -1098,9 +1099,11 @@ export default function Leads() {
       });
     },
     onSettled: () => {
-      // Always refetch after error or success - invalidate all pages
-      queryClient.invalidateQueries({ queryKey: ["leads", tenantId, selectedAgency] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId, selectedAgency] });
+      // Delay refetch to allow drop animation to complete smoothly
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ["leads", tenantId, selectedAgency] });
+        queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId, selectedAgency] });
+      }, 300);
     },
   });
 
