@@ -130,24 +130,32 @@ export function FollowUpDatePicker({
 
   return (
     <>
-      <Button
-        variant="ghost"
-        size="icon"
-        className={cn(
-          "h-8 w-8 relative",
-          isToday && "text-primary bg-primary/10"
-        )}
-        onClick={(e) => {
-          e.stopPropagation();
-          setDialogOpen(true);
-        }}
-        title={currentDate ? `תאריך לחזרה: ${format(new Date(currentDate), "dd/MM/yyyy", { locale: he })}` : "הגדר תאריך לחזרה"}
-      >
-        <CalendarClock className="h-4 w-4" />
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-8 w-8 relative shrink-0",
+            isToday && "text-green-600 bg-green-100"
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            setDialogOpen(true);
+          }}
+          title={currentDate ? `תאריך לחזרה: ${format(new Date(currentDate), "dd/MM/yyyy", { locale: he })}` : "הגדר תאריך לחזרה"}
+        >
+          <CalendarClock className="h-4 w-4" />
+        </Button>
         {currentDate && (
-          <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-primary" />
-        )}
-      </Button>
+          <span
+            className={cn(
+              "text-sm font-medium whitespace-nowrap",
+              isToday && "text-green-600 bg-green-100 px-2 py-0.5 rounded-md"
+            )}
+          >
+            {format(new Date(currentDate), "dd/MM/yyyy", { locale: he })}
+          </span>
+        )}</div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[350px]" dir="rtl">
