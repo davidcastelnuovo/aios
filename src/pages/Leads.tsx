@@ -364,6 +364,14 @@ function LeadCard({
           </Select>
         </div>
 
+        {/* Follow-up date row */}
+        <div className="pt-2 border-t" onClick={(e) => e.stopPropagation()}>
+          <FollowUpDatePicker 
+            leadId={lead.id} 
+            currentDate={lead.follow_up_date}
+          />
+        </div>
+
         {/* Actions */}
         <div className="flex gap-2 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
           <EditLeadDialog 
@@ -372,10 +380,6 @@ function LeadCard({
             onOpenChange={setEditDialogOpen}
           />
           <LeadTagSelector leadId={lead.id} initialTagIds={leadTagIds} />
-          <FollowUpDatePicker 
-            leadId={lead.id} 
-            currentDate={lead.follow_up_date}
-          />
           <AddTaskForm
             leadId={lead.id}
             agencyId={lead.agency_id || undefined}
