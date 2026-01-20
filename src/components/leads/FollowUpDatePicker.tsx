@@ -41,9 +41,18 @@ export function FollowUpDatePicker({
 
   const updateFollowUpDate = useMutation({
     mutationFn: async (date: Date | null) => {
+      let dateString: string | null = null;
+      if (date) {
+        // Use local date to avoid timezone issues
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        dateString = `${year}-${month}-${day}`;
+      }
+      
       const { error } = await supabase
         .from("leads")
-        .update({ follow_up_date: date ? date.toISOString().split("T")[0] : null })
+        .update({ follow_up_date: dateString })
         .eq("id", leadId);
 
       if (error) throw error;
