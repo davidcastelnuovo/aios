@@ -1146,7 +1146,21 @@ export default function Leads() {
     },
     onMutate: async ({ leadId, newStatus }) => {
       // Use the EXACT same query key as the useQuery to ensure optimistic updates work
-      const fullQueryKey = ["leads", tenantId, selectedAgency, page, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate?.toISOString(), endDate?.toISOString(), filterFollowUpToday];
+      // IMPORTANT: must exactly match the main leads useQuery queryKey ordering
+      const fullQueryKey = [
+        "leads",
+        tenantId,
+        selectedAgency,
+        page,
+        searchQuery,
+        filterSalesPerson,
+        filterStage,
+        filterResponseStatus,
+        filterTagIds,
+        filterFollowUpToday,
+        startDate?.toISOString(),
+        endDate?.toISOString(),
+      ];
       
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: fullQueryKey });
