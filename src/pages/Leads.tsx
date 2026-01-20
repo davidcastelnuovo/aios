@@ -2431,7 +2431,7 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
             { 
               id: "follow_up_date", 
               label: "תאריך לחזרה", 
-              width: 100,
+              width: 150,
               render: (lead: any) => (
                 <FollowUpDatePicker 
                   leadId={lead.id} 
