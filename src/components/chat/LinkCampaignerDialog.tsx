@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTerminology } from "@/hooks/useTerminology";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -38,6 +39,7 @@ export function LinkCampaignerDialog({
   onSuccess,
 }: LinkCampaignerDialogProps) {
   const { tenantId } = useCurrentTenant();
+  const { t } = useTerminology();
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCampaignerId, setSelectedCampaignerId] = useState<string>("");
@@ -83,7 +85,7 @@ export function LinkCampaignerDialog({
       return selectedCampaignerId;
     },
     onSuccess: (campaignerId) => {
-      toast.success("מספר הטלפון עודכן בהצלחה לקמפיינר");
+      toast.success(`מספר הטלפון עודכן בהצלחה ל${t('role_campaigner')}`);
       queryClient.invalidateQueries({ queryKey: ["active-chats"] });
       queryClient.invalidateQueries({ queryKey: ["unknown-contacts"] });
       queryClient.invalidateQueries({ queryKey: ["chat-messages"] });
@@ -95,14 +97,14 @@ export function LinkCampaignerDialog({
     },
     onError: (error: any) => {
       console.error("Link to campaigner error:", error);
-      toast.error(error.message || "שגיאה בשיוך לקמפיינר");
+      toast.error(error.message || `שגיאה בשיוך ל${t('role_campaigner')}`);
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedCampaignerId) {
-      toast.error("יש לבחור קמפיינר");
+      toast.error(`יש לבחור ${t('role_campaigner')}`);
       return;
     }
     linkMutation.mutate();
@@ -112,9 +114,9 @@ export function LinkCampaignerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]" dir="rtl">
         <DialogHeader>
-          <DialogTitle>שיוך לקמפיינר</DialogTitle>
+          <DialogTitle>שיוך ל{t('role_campaigner')}</DialogTitle>
           <DialogDescription>
-            שייך את המספר {senderPhone} לקמפיינר במערכת
+            שייך את המספר {senderPhone} ל{t('role_campaigner')} במערכת
           </DialogDescription>
         </DialogHeader>
 
@@ -126,14 +128,14 @@ export function LinkCampaignerDialog({
               <Input
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="חפש קמפיינר..."
+                placeholder={`חפש ${t('role_campaigner')}...`}
                 className="pr-10"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label>בחר קמפיינר</Label>
+            <Label>בחר {t('role_campaigner')}</Label>
             {isLoading ? (
               <div className="flex items-center justify-center p-4">
                 <Loader2 className="h-6 w-6 animate-spin" />
@@ -144,12 +146,12 @@ export function LinkCampaignerDialog({
                 onValueChange={setSelectedCampaignerId}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="בחר קמפיינר..." />
+                  <SelectValue placeholder={`בחר ${t('role_campaigner')}...`} />
                 </SelectTrigger>
                 <SelectContent>
                   {campaigners.length === 0 ? (
                     <div className="p-2 text-center text-sm text-muted-foreground">
-                      לא נמצאו קמפיינרים
+                      לא נמצאו {t('role_campaigner', true)}
                     </div>
                   ) : (
                     campaigners.map((campaigner) => (

@@ -8,12 +8,14 @@ import { useAgency } from "@/contexts/AgencyContext";
 import { useUserAgencies } from "@/hooks/useUserAgencies";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTerminology } from "@/hooks/useTerminology";
 
 export default function Dashboard() {
   const { selectedAgency } = useAgency();
   const { tenantId } = useCurrentTenant();
   const { userAgencyIds } = useUserAgencies();
   const { isOwner } = useUserRole();
+  const { t } = useTerminology();
   const [selectedClient, setSelectedClient] = useState<string>("all");
   const [selectedSupplier, setSelectedSupplier] = useState<string>("all");
   const queryClient = useQueryClient();
@@ -354,7 +356,7 @@ export default function Dashboard() {
       bg: "bg-accent/10",
     },
     {
-      title: "קמפיינרים",
+      title: t('role_campaigner', true),
       value: stats?.campaignersCount || 0,
       icon: Megaphone,
       color: "text-success",

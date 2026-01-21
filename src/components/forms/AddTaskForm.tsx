@@ -482,7 +482,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                           <CommandList>
                             <CommandEmpty>לא נמצאו אנשי צוות</CommandEmpty>
                             {visibleCampaigners && visibleCampaigners.length > 0 && (
-                              <CommandGroup heading={t('campaigner', true)}>
+                              <CommandGroup heading={t('role_campaigner', true)}>
                                 {visibleCampaigners.map((campaigner) => (
                                   <CommandItem
                                     key={`campaigner:${campaigner.id}`}
@@ -505,7 +505,7 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
                               </CommandGroup>
                             )}
                             {salesPeople && salesPeople.length > 0 && (
-                              <CommandGroup heading={t('sales_person', true)}>
+                              <CommandGroup heading={t('role_sales_person', true)}>
                                 {salesPeople.map((salesPerson) => (
                                   <CommandItem
                                     key={`sales:${salesPerson.id}`}
