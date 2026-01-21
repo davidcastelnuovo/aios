@@ -23,8 +23,56 @@ function normalizePhone(phone: string): string {
 
 function formatPhoneForManyChat(phone: string): string {
   const cleaned = normalizePhone(phone);
-  // ManyChat expects 972 format for Israeli numbers (without +)
+  // Default canonical form for lookups
   return `972${cleaned}`;
+}
+
+function getPhoneLookupCandidates(phone: string): string[] {
+  const cleaned = normalizePhone(phone);
+  if (!cleaned) return [];
+
+  const withCountry = `972${cleaned}`;
+  return [
+    `+${withCountry}`,
+    withCountry,
+    `0${cleaned}`,
+    cleaned,
+  ].filter(Boolean);
+}
+
+async function safeJson(res: Response): Promise<any> {
+  const contentType = res.headers.get('content-type') || '';
+  const text = await res.text();
+  if (!contentType.includes('application/json')) {
+    return { __nonJson: true, status: res.status, text: text.slice(0, 500) };
+  }
+  try {
+    return JSON.parse(text);
+  } catch (_e) {
+    return { __parseError: true, status: res.status, text: text.slice(0, 500) };
+  }
+}
+
+async function findSubscriberIdByPhone(apiKey: string, phoneCandidates: string[]): Promise<string | null> {
+  for (const candidate of phoneCandidates) {
+    const url = `https://api.manychat.com/fb/subscriber/findBySystemField?phone=${encodeURIComponent(candidate)}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await safeJson(res);
+    console.log(`Find subscriber (${candidate}) response:`, JSON.stringify(data));
+
+    // Expected: { status: 'success', data: { id: ... } }
+    if (data?.status === 'success' && data?.data?.id) {
+      return String(data.data.id);
+    }
+  }
+  return null;
 }
 
 Deno.serve(async (req) => {
@@ -60,7 +108,8 @@ Deno.serve(async (req) => {
     }
 
     // Get parameters from request - now processing ONE lead at a time
-    const { tenantId, tagId = 79380109 } = await req.json();
+    // Keep compatibility with previous payload shape
+    const { tenantId, tagId = 79380109, delayMs = 10000 } = await req.json();
     
     if (!tenantId) {
       return new Response(
@@ -132,6 +181,7 @@ Deno.serve(async (req) => {
 
     const lead = leads[0];
     const formattedPhone = formatPhoneForManyChat(lead.phone);
+    const phoneCandidates = getPhoneLookupCandidates(lead.phone);
     const displayName = lead.contact_name || lead.company_name || 'Unknown';
     
     console.log(`Processing lead ${lead.id}: ${displayName}, phone: ${formattedPhone}`);
@@ -139,26 +189,11 @@ Deno.serve(async (req) => {
     let subscriberId: string | null = null;
     let wasExisting = false;
 
-    // Step 1: Try to find existing subscriber using getInfoByPhone (WhatsApp)
-    try {
-      const findRes = await fetch(`https://api.manychat.com/fb/subscriber/getInfoByPhone?phone=${formattedPhone}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const findData = await findRes.json();
-      console.log('Find subscriber response:', JSON.stringify(findData));
-
-      if (findData.status === 'success' && findData.data?.id) {
-        subscriberId = findData.data.id;
-        wasExisting = true;
-        console.log(`Found existing subscriber: ${subscriberId}`);
-      }
-    } catch (findError) {
-      console.log('Find subscriber failed, will try to create:', findError);
+    // Step 1: Try to find existing subscriber by phone (robust multi-format search)
+    subscriberId = await findSubscriberIdByPhone(apiKey, phoneCandidates);
+    if (subscriberId) {
+      wasExisting = true;
+      console.log(`Found existing subscriber: ${subscriberId}`);
     }
 
     // Step 2: If not found, create new subscriber
@@ -176,44 +211,33 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           first_name: firstName,
           last_name: lastName,
+          // ManyChat docs: phone OR email is required. Keep minimal payload to avoid permission warnings.
           phone: `+${formattedPhone}`,
-          whatsapp_phone: `+${formattedPhone}`,
-          has_opt_in_sms: true,
-          has_opt_in_email: !!lead.email,
-          consent_phrase: 'אני מאשר קבלת הודעות',
+          email: lead.email || undefined,
+          has_opt_in_sms: false,
+          has_opt_in_email: false,
         }),
       });
 
-      const createData = await createRes.json();
+      const createData = await safeJson(createRes);
       console.log('Create subscriber response:', JSON.stringify(createData));
 
       if (createData.status === 'success' && createData.data?.id) {
         subscriberId = createData.data.id;
         console.log(`Created new subscriber: ${subscriberId}`);
-      } else if (createData.details?.messages?.wa_id?.message?.[0]?.includes('already exists')) {
-        // WhatsApp ID already exists - try to extract the ID from search again
-        console.log('Subscriber already exists, trying alternative search...');
-        
-        // Try findBySystemField with whatsapp_phone
-        const altFindRes = await fetch('https://api.manychat.com/fb/subscriber/findBySystemField', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            field_name: 'phone',
-            field_value: `+${formattedPhone}`,
-          }),
-        });
+      } else {
+        // If creation failed because subscriber already exists, do a lookup again and continue
+        const waAlreadyExists =
+          String(createData?.details?.messages?.wa_id?.message?.[0] || '').includes('already exists') ||
+          String(createData?.details?.messages?.phone?.message?.[0] || '').includes('already exists');
 
-        const altFindData = await altFindRes.json();
-        console.log('Alternative find response:', JSON.stringify(altFindData));
-
-        if (altFindData.status === 'success' && altFindData.data?.id) {
-          subscriberId = altFindData.data.id;
-          wasExisting = true;
-          console.log(`Found via alternative search: ${subscriberId}`);
+        if (waAlreadyExists) {
+          console.log('Subscriber already exists according to createSubscriber, retrying lookup...');
+          subscriberId = await findSubscriberIdByPhone(apiKey, phoneCandidates);
+          if (subscriberId) {
+            wasExisting = true;
+            console.log(`Found after create conflict: ${subscriberId}`);
+          }
         }
       }
       
@@ -235,8 +259,12 @@ Deno.serve(async (req) => {
       }),
     });
 
-    const tagData = await tagRes.json();
+    const tagData = await safeJson(tagRes);
     console.log('Add tag response:', JSON.stringify(tagData));
+
+    if (tagData?.status !== 'success') {
+      throw new Error(`Failed to add tag: ${JSON.stringify(tagData)}`);
+    }
 
     // Step 4: Update lead in database with subscriber ID
     const { error: updateError } = await supabase
@@ -255,6 +283,12 @@ Deno.serve(async (req) => {
       .eq('tenant_id', tenantId)
       .is('manychat_subscriber_id', null)
       .not('phone', 'is', null);
+
+    // Throttle next call to avoid ManyChat rate limits (only if there is more work)
+    if ((remainingCount || 0) > 0 && delayMs > 0) {
+      console.log(`Throttling next call: waiting ${delayMs}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
 
     return new Response(
       JSON.stringify({
@@ -275,6 +309,10 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Bulk sync error:', error);
+
+    // Basic throttle on error to avoid hammering ManyChat
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+
     return new Response(
       JSON.stringify({ 
         error: error instanceof Error ? error.message : 'Unknown error',
@@ -282,6 +320,7 @@ Deno.serve(async (req) => {
         processed: 0,
         failed: 1,
         results: [{
+          leadId: null,
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error',
         }]
