@@ -3002,6 +3002,50 @@ export type Database = {
           },
         ]
       }
+      terminology_presets: {
+        Row: {
+          created_at: string | null
+          created_by_tenant_id: string | null
+          created_by_user_id: string | null
+          description: string | null
+          id: string
+          is_public: boolean | null
+          name: string
+          terms: Json
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by_tenant_id?: string | null
+          created_by_user_id?: string | null
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          name: string
+          terms: Json
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by_tenant_id?: string | null
+          created_by_user_id?: string | null
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          name?: string
+          terms?: Json
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "terminology_presets_created_by_tenant_id_fkey"
+            columns: ["created_by_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       time_entries: {
         Row: {
           campaigner_id: string
