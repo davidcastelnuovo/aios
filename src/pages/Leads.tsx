@@ -1224,7 +1224,7 @@ export default function Leads() {
     }
   }, [leads]);
 
-  const updateLeadStatus = useMutation<void, Error, { leadId: string; newStatus: string }, { previousLeads: unknown; fullQueryKey: unknown[] }>({
+  const updateLeadStatus = useMutation<void, Error, { leadId: string; newStatus: string }, { previousKanban: unknown; previousTable: unknown; kanbanQueryKey: unknown[]; tableQueryKey: unknown[]; leadId: string }>({
     mutationFn: async ({ leadId, newStatus }) => {
       // Get lead data before update to know old status
       const { data: leadBefore } = await supabase
@@ -1275,13 +1275,26 @@ export default function Leads() {
       }
     },
     onMutate: async ({ leadId, newStatus }) => {
-      // Use the EXACT same query key as the useQuery to ensure optimistic updates work
-      // IMPORTANT: must exactly match the main leads useQuery queryKey ordering
-      const fullQueryKey = [
-        "leads",
+      // Build query keys for both Kanban and Table views
+      const kanbanQueryKey = [
+        "leads-kanban",
         tenantId,
         selectedAgency,
-        page,
+        searchQuery,
+        filterSalesPerson,
+        filterResponseStatus,
+        filterTagIds,
+        filterFollowUpToday,
+        startDate?.toISOString(),
+        endDate?.toISOString(),
+        PIPELINE_STAGES.map(s => s.id).join(','),
+      ];
+      
+      const tableQueryKey = [
+        "leads-table",
+        tenantId,
+        selectedAgency,
+        effectivePage,
         searchQuery,
         filterSalesPerson,
         filterStage,
@@ -1292,27 +1305,47 @@ export default function Leads() {
         endDate?.toISOString(),
       ];
       
-      // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: fullQueryKey });
+      // Cancel any outgoing refetches for both views
+      await queryClient.cancelQueries({ queryKey: kanbanQueryKey });
+      await queryClient.cancelQueries({ queryKey: tableQueryKey });
 
-      // Snapshot the previous value
-      const previousLeads = queryClient.getQueryData(fullQueryKey);
+      // Snapshot the previous values
+      const previousKanban = queryClient.getQueryData(kanbanQueryKey);
+      const previousTable = queryClient.getQueryData(tableQueryKey);
 
-      // Optimistically update to the new value
-      queryClient.setQueryData(fullQueryKey, (old: any) => {
+      // Optimistically update Kanban data (nested structure with stages)
+      queryClient.setQueryData(kanbanQueryKey, (old: any) => {
+        if (!old) return old;
+        // Kanban data is an object with stage keys containing lead arrays
+        const updated = { ...old };
+        for (const stageKey in updated) {
+          if (Array.isArray(updated[stageKey])) {
+            updated[stageKey] = updated[stageKey].map((lead: any) =>
+              lead.id === leadId ? { ...lead, status: newStatus } : lead
+            );
+          }
+        }
+        return updated;
+      });
+
+      // Optimistically update Table data (flat array)
+      queryClient.setQueryData(tableQueryKey, (old: any) => {
         if (!old) return old;
         return old.map((lead: any) => 
           lead.id === leadId ? { ...lead, status: newStatus } : lead
         );
       });
 
-      // Return context with the snapshot, key, and leadId for cleanup
-      return { previousLeads, fullQueryKey, leadId };
+      // Return context with the snapshots for rollback
+      return { previousKanban, previousTable, kanbanQueryKey, tableQueryKey, leadId };
     },
     onError: (error: any, variables, context) => {
-      // Rollback to the previous value if error
-      if (context?.previousLeads && context?.fullQueryKey) {
-        queryClient.setQueryData(context.fullQueryKey, context.previousLeads);
+      // Rollback to the previous values if error
+      if (context?.previousKanban && context?.kanbanQueryKey) {
+        queryClient.setQueryData(context.kanbanQueryKey, context.previousKanban);
+      }
+      if (context?.previousTable && context?.tableQueryKey) {
+        queryClient.setQueryData(context.tableQueryKey, context.previousTable);
       }
       // Clear the optimistic status on error so lead goes back to original position
       setOptimisticStatusByLeadId(prev => {
@@ -1340,8 +1373,10 @@ export default function Leads() {
     onSettled: () => {
       // Delay refetch to allow drop animation to complete smoothly
       setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ["leads", tenantId, selectedAgency] });
-        queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId, selectedAgency] });
+        // Invalidate both Kanban and Table views with correct query key prefixes
+        queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+        queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+        queryClient.invalidateQueries({ queryKey: ["leads-count"] });
       }, 300);
     },
   });
@@ -1383,8 +1418,9 @@ export default function Leads() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads", tenantId, selectedAgency] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count", tenantId, selectedAgency] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
       toast({
         title: "סטטוס תגובה עודכן בהצלחה",
       });
