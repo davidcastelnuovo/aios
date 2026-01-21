@@ -3403,6 +3403,21 @@ export type Database = {
         Returns: Json
       }
       get_effective_tenant_id: { Args: never; Returns: string }
+      get_leads_by_stages: {
+        Args: {
+          p_agency_ids?: string[]
+          p_end_date?: string
+          p_follow_up_today?: boolean
+          p_limit_per_stage?: number
+          p_response_statuses?: string[]
+          p_sales_person_id?: string
+          p_search_query?: string
+          p_stages?: string[]
+          p_start_date?: string
+          p_tenant_id: string
+        }
+        Returns: Json
+      }
       get_leads_by_tags: {
         Args: {
           p_agency_ids?: string[]
