@@ -665,8 +665,8 @@ export default function Leads() {
   
   // Pagination state
   const [page, setPage] = useState(1);
-  const TABLE_LEADS_PER_PAGE = 100;
-  const KANBAN_FETCH_LIMIT = 1000;
+  const TABLE_LEADS_PER_PAGE = 50;
+  const KANBAN_FETCH_LIMIT = 500;
 
   const isKanbanView = viewMode === "kanban";
   const effectivePage = isKanbanView ? 1 : page;
@@ -683,7 +683,7 @@ export default function Leads() {
   }, [selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate]);
   
   // Kanban limiting state - how many leads to show per stage
-  const KANBAN_LEADS_PER_STAGE = 30;
+  const KANBAN_LEADS_PER_STAGE = 20;
   const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({});
   
   // Optimistic status map - instantly shows lead in new column before backend confirms
@@ -722,7 +722,7 @@ export default function Leads() {
     }
   }, [PIPELINE_STAGES, selectedMobileStage]);
 
-  // Fetch total count for pagination - includes server-side filters
+  // Fetch total count for pagination - skip for Kanban view (not needed)
   const { data: totalLeadsCount = 0 } = useQuery({
     queryKey: ["leads-count", tenantId, selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
@@ -804,8 +804,8 @@ export default function Leads() {
       if (error) throw error;
       return count || 0;
     },
-    enabled: !!tenantId,
-    staleTime: 1000 * 60 * 2,
+    enabled: !!tenantId && !isKanbanView, // Skip count for Kanban view
+    staleTime: 1000 * 60 * 5, // 5 minutes - count rarely changes
   });
 
   const { data: leads, isLoading, refetch, isFetching } = useQuery({
@@ -964,7 +964,8 @@ export default function Leads() {
       return data;
     },
     enabled: !!tenantId,
-    staleTime: 1000 * 60 * 2,
+    staleTime: 1000 * 60 * 3, // 3 minutes
+    gcTime: 1000 * 60 * 10, // Keep in cache for 10 minutes
     placeholderData: (previousData) => previousData,
   });
 
