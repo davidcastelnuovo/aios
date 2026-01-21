@@ -25,9 +25,13 @@ import {
   Check,
   History,
   Trash2,
-  CreditCard
+  CreditCard,
+  Pencil
 } from "lucide-react";
 import { CreatePaymentLinkDialog } from "@/components/forms/CreatePaymentLinkDialog";
+import { EditSupplierDialog } from "@/components/forms/EditSupplierDialog";
+import { EditCampaignerDialog } from "@/components/forms/EditCampaignerDialog";
+import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { format, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
 
@@ -73,6 +77,11 @@ export default function AccountingIntegrations() {
     phone?: string;
     retainer?: number;
   } | null>(null);
+  
+  // Edit dialog states
+  const [editingSupplier, setEditingSupplier] = useState<any | null>(null);
+  const [editingCampaigner, setEditingCampaigner] = useState<any | null>(null);
+  const [editingClient, setEditingClient] = useState<any | null>(null);
 
   const monthOptions = useMemo(() => getMonthOptions(), []);
 
@@ -340,6 +349,9 @@ export default function AccountingIntegrations() {
           phone,
           email,
           type,
+          folder_link,
+          notes,
+          related_campaigner_id,
           agency_id_1,
           agency_id_2,
           agency_id_3,
@@ -719,6 +731,25 @@ export default function AccountingIntegrations() {
 
   const selectedMonthLabel = monthOptions.find(m => m.value === selectedMonth)?.label || selectedMonth;
 
+  // Handle expense edit click
+  const handleEditExpense = async (expense: { type: 'supplier' | 'campaigner'; originalId: string }) => {
+    if (expense.type === 'supplier') {
+      const supplier = suppliers?.find(s => s.id === expense.originalId);
+      if (supplier) setEditingSupplier(supplier);
+    } else {
+      // Fetch full campaigner data
+      const { data: campaignerData } = await supabase
+        .from("campaigners")
+        .select(`
+          id, full_name, phone, email, folder_link, notes, active, role, whatsapp_group_id,
+          campaigner_agencies (agencies (name))
+        `)
+        .eq("id", expense.originalId)
+        .single();
+      if (campaignerData) setEditingCampaigner(campaignerData);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -892,7 +923,16 @@ export default function AccountingIntegrations() {
                           const payment = getIncomePayment(client.id);
                           return (
                             <TableRow key={client.id}>
-                              <TableCell className="font-medium text-right">{client.name}</TableCell>
+                              <TableCell className="font-medium text-right">
+                                <Button
+                                  variant="link"
+                                  className="p-0 h-auto font-medium text-foreground hover:underline"
+                                  onClick={() => setEditingClient(client)}
+                                >
+                                  {client.name}
+                                  <Pencil className="h-3 w-3 mr-1 opacity-50" />
+                                </Button>
+                              </TableCell>
                               <TableCell className="text-right">{(client.agencies as any)?.name || "-"}</TableCell>
                               <TableCell className="text-right">{formatCurrency(client.retainer)}</TableCell>
                               <TableCell className="text-right">{formatCurrency(client.monthly_budget)}</TableCell>
@@ -994,7 +1034,16 @@ export default function AccountingIntegrations() {
                           const payment = getExpensePayment(expense.originalId, expense.type);
                           return (
                             <TableRow key={expense.id}>
-                              <TableCell className="font-medium text-right">{expense.name}</TableCell>
+                              <TableCell className="font-medium text-right">
+                                <Button
+                                  variant="link"
+                                  className="p-0 h-auto font-medium text-foreground hover:underline"
+                                  onClick={() => handleEditExpense(expense)}
+                                >
+                                  {expense.name}
+                                  <Pencil className="h-3 w-3 mr-1 opacity-50" />
+                                </Button>
+                              </TableCell>
                               <TableCell className="text-right">
                                 <Badge variant={expense.type === 'campaigner' ? 'default' : 'outline'}>
                                   {expense.type === 'supplier' ? 'ספק' : 'קמפיינר'}
@@ -1215,6 +1264,33 @@ export default function AccountingIntegrations() {
         onOpenChange={(open) => !open && setPaymentLinkClient(null)}
         client={paymentLinkClient}
       />
+
+      {/* Edit Supplier Dialog */}
+      {editingSupplier && (
+        <EditSupplierDialog
+          supplier={editingSupplier}
+          open={!!editingSupplier}
+          onOpenChange={(open) => !open && setEditingSupplier(null)}
+        />
+      )}
+
+      {/* Edit Campaigner Dialog */}
+      {editingCampaigner && (
+        <EditCampaignerDialog
+          campaigner={editingCampaigner}
+          open={!!editingCampaigner}
+          onOpenChange={(open) => !open && setEditingCampaigner(null)}
+        />
+      )}
+
+      {/* Edit Client Dialog */}
+      {editingClient && (
+        <EditClientDialog
+          client={editingClient}
+          open={!!editingClient}
+          onOpenChange={(open) => !open && setEditingClient(null)}
+        />
+      )}
     </div>
   );
 }

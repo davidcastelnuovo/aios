@@ -32,10 +32,18 @@ interface EditCampaignerDialogProps {
     active: boolean;
     whatsapp_group_id?: string | null;
   };
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) {
-  const [open, setOpen] = useState(false);
+export function EditCampaignerDialog({ campaigner, open: externalOpen, onOpenChange }: EditCampaignerDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = externalOpen !== undefined;
+  const open = isControlled ? externalOpen : internalOpen;
+  const setOpen = (value: boolean) => {
+    if (onOpenChange) onOpenChange(value);
+    if (!isControlled) setInternalOpen(value);
+  };
   const { teamRoles, isLoading: rolesLoading } = useTeamRoles();
   const [formData, setFormData] = useState({
     full_name: campaigner.full_name,
@@ -173,11 +181,13 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <Pencil className="h-4 w-4" />
-        </Button>
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button variant="ghost" size="icon">
+            <Pencil className="h-4 w-4" />
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader className="relative">
           <DialogTitle>ערוך איש צוות</DialogTitle>
