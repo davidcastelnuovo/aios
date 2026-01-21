@@ -227,6 +227,7 @@ serve(async (req: Request) => {
         .maybeSingle();
 
       // Add user to tenant if not already there
+      let wasAddedToTenant = false;
       if (!tenantUser) {
         await supabaseAdmin
           .from("tenant_users")
@@ -235,14 +236,31 @@ serve(async (req: Request) => {
             tenant_id: tenantIdFinal,
             role: role || "member",
           });
+        wasAddedToTenant = true;
+        console.log(`User ${email} was added to tenant ${tenantIdFinal}`);
       }
 
-      // Return EMAIL_EXISTS so UI can offer "delete existing user" action
+      // If user was added to a new tenant, return success
+      if (wasAddedToTenant) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "המשתמש הקיים נוסף לארגון בהצלחה",
+            addedToExistingUser: true,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // User already exists in this tenant - return error
       return new Response(
         JSON.stringify({
           success: false,
-          error: "EMAIL_EXISTS",
-          message: "User already exists in authentication",
+          error: "EMAIL_EXISTS_IN_TENANT",
+          message: "המשתמש כבר קיים בארגון זה",
         }),
         {
           status: 200,
