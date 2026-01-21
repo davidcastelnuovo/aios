@@ -666,11 +666,11 @@ export default function Leads() {
   // Pagination state
   const [page, setPage] = useState(1);
   const TABLE_LEADS_PER_PAGE = 50;
-  const KANBAN_FETCH_LIMIT = 500;
+  const KANBAN_LEADS_PER_STAGE_LIMIT = 50; // How many leads to fetch per stage from DB
 
   const isKanbanView = viewMode === "kanban";
   const effectivePage = isKanbanView ? 1 : page;
-  const effectiveLimit = isKanbanView ? KANBAN_FETCH_LIMIT : TABLE_LEADS_PER_PAGE;
+  const effectiveLimit = TABLE_LEADS_PER_PAGE;
 
   // Kanban is not paginated (we cap to KANBAN_FETCH_LIMIT); keep page locked to 1 there.
   useEffect(() => {
@@ -682,9 +682,12 @@ export default function Leads() {
     setPage(1);
   }, [selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate]);
   
-  // Kanban limiting state - how many leads to show per stage
-  const KANBAN_LEADS_PER_STAGE = 20;
+  // Kanban limiting state - how many leads to SHOW per stage initially (can expand)
+  const KANBAN_LEADS_PER_STAGE_DISPLAY = 20;
   const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({});
+  
+  // Stage-based data for Kanban view
+  const [stageLeadsData, setStageLeadsData] = useState<Record<string, { leads: any[]; totalCount: number }>>({});
   
   // Optimistic status map - instantly shows lead in new column before backend confirms
   const [optimisticStatusByLeadId, setOptimisticStatusByLeadId] = useState<Record<string, string>>({});
@@ -808,8 +811,90 @@ export default function Leads() {
     staleTime: 1000 * 60 * 5, // 5 minutes - count rarely changes
   });
 
-  const { data: leads, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["leads", tenantId, selectedAgency, viewMode, effectivePage, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString()],
+  // Kanban view: use RPC that fetches leads per stage
+  const { data: kanbanStageData, isLoading: isKanbanLoading, refetch: refetchKanban, isFetching: isKanbanFetching } = useQuery({
+    queryKey: ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPerson, filterResponseStatus, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(',')],
+    queryFn: async () => {
+      if (!tenantId) return null;
+      
+      const agencyIds = selectedAgency && selectedAgency !== "all" 
+        ? [selectedAgency]
+        : agencies?.map(a => a.id) || null;
+      
+      const stageIds = PIPELINE_STAGES.map(s => s.id);
+      
+      const { data, error } = await supabase.rpc('get_leads_by_stages', {
+        p_tenant_id: tenantId,
+        p_agency_ids: agencyIds,
+        p_stages: stageIds,
+        p_limit_per_stage: KANBAN_LEADS_PER_STAGE_LIMIT,
+        p_search_query: searchQuery.trim() || null,
+        p_sales_person_id: filterSalesPerson !== "all" && filterSalesPerson !== "none" ? filterSalesPerson : null,
+        p_response_statuses: filterResponseStatus.length > 0 && !filterResponseStatus.includes("none") ? filterResponseStatus : null,
+        p_follow_up_today: filterFollowUpToday,
+        p_start_date: startDate?.toISOString() || null,
+        p_end_date: endDate ? new Date(endDate.setHours(23, 59, 59, 999)).toISOString() : null
+      });
+      
+      if (error) throw error;
+      
+      // Transform RPC result to map: { [stageId]: { leads: [...], totalCount: number } }
+      const stageMap: Record<string, { leads: any[]; totalCount: number }> = {};
+      if (Array.isArray(data)) {
+        for (const stageData of data as any[]) {
+          stageMap[stageData.stage] = {
+            leads: stageData.leads || [],
+            totalCount: stageData.total_count || 0
+          };
+        }
+      }
+      
+      // Now fetch relations (agencies, sales_people) for all leads
+      const allLeadIds: string[] = [];
+      for (const stageId of Object.keys(stageMap)) {
+        for (const lead of stageMap[stageId].leads) {
+          allLeadIds.push(lead.id);
+        }
+      }
+      
+      if (allLeadIds.length > 0) {
+        const { data: leadsWithRelations } = await supabase
+          .from("leads")
+          .select(`
+            id,
+            agencies (name),
+            sales_people (full_name)
+          `)
+          .in("id", allLeadIds);
+        
+        // Merge relations into leads
+        const relationsMap: Record<string, any> = {};
+        if (leadsWithRelations) {
+          for (const rel of leadsWithRelations) {
+            relationsMap[rel.id] = rel;
+          }
+        }
+        
+        for (const stageId of Object.keys(stageMap)) {
+          stageMap[stageId].leads = stageMap[stageId].leads.map((lead: any) => ({
+            ...lead,
+            agencies: relationsMap[lead.id]?.agencies || null,
+            sales_people: relationsMap[lead.id]?.sales_people || null
+          }));
+        }
+      }
+      
+      return stageMap;
+    },
+    enabled: !!tenantId && isKanbanView && PIPELINE_STAGES.length > 0,
+    staleTime: 1000 * 60 * 3,
+    gcTime: 1000 * 60 * 10,
+    placeholderData: (previousData) => previousData,
+  });
+  
+  // Table view: use regular paginated query
+  const { data: tableLeads, isLoading: isTableLoading, refetch: refetchTable, isFetching: isTableFetching } = useQuery({
+    queryKey: ["leads-table", tenantId, selectedAgency, effectivePage, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
       
@@ -863,7 +948,7 @@ export default function Leads() {
               sales_people (full_name)
             `)
             .in("id", leadIds)
-            .order(isKanbanView ? "updated_at" : "created_at", { ascending: false });
+            .order("created_at", { ascending: false });
           
           return leadsWithRelations || [];
         }
@@ -901,7 +986,7 @@ export default function Leads() {
           agencies (name),
           sales_people (full_name)
         `)
-        .order(isKanbanView ? "updated_at" : "created_at", { ascending: false });
+        .order("created_at", { ascending: false });
 
       // 🔒 CRITICAL SECURITY: Filter by tenant_id OR accessible agencies
       if (selectedAgency && selectedAgency !== "all") {
@@ -955,19 +1040,38 @@ export default function Leads() {
         query = query.or(`contact_name.ilike.%${q}%,company_name.ilike.%${q}%,phone.ilike.%${q}%`);
       }
       
-      // Apply pagination after all filters
-      // Kanban view: fetch up to KANBAN_FETCH_LIMIT so stages can show all relevant leads.
-      query = isKanbanView ? query.range(0, effectiveLimit - 1) : query.range(from, to);
+      // Apply pagination
+      query = query.range(from, to);
 
       const { data, error } = await query;
       if (error) throw error;
       return data;
     },
-    enabled: !!tenantId,
-    staleTime: 1000 * 60 * 3, // 3 minutes
-    gcTime: 1000 * 60 * 10, // Keep in cache for 10 minutes
+    enabled: !!tenantId && !isKanbanView,
+    staleTime: 1000 * 60 * 3,
+    gcTime: 1000 * 60 * 10,
     placeholderData: (previousData) => previousData,
   });
+  
+  // Combine loading/fetching states
+  const isLoading = isKanbanView ? isKanbanLoading : isTableLoading;
+  const isFetching = isKanbanView ? isKanbanFetching : isTableFetching;
+  const refetch = isKanbanView ? refetchKanban : refetchTable;
+  
+  // For table view, use tableLeads directly
+  // For kanban view, flatten all stage leads into single array for compatibility
+  const leads = useMemo(() => {
+    if (!isKanbanView) {
+      return tableLeads || [];
+    }
+    if (!kanbanStageData) return [];
+    
+    const allLeads: any[] = [];
+    for (const stageId of Object.keys(kanbanStageData)) {
+      allLeads.push(...kanbanStageData[stageId].leads);
+    }
+    return allLeads;
+  }, [isKanbanView, tableLeads, kanbanStageData]);
 
   const totalPages = Math.ceil(totalLeadsCount / TABLE_LEADS_PER_PAGE);
   const hasMorePages = page < totalPages;
@@ -1567,6 +1671,33 @@ export default function Leads() {
 
   // Use effective status (optimistic first, then actual) for stage filtering
   const getLeadsByStage = (stageId: string, limit?: number) => {
+    // For Kanban view: use stage data directly from RPC (already pre-filtered per stage)
+    if (isKanbanView && kanbanStageData) {
+      const stageData = kanbanStageData[stageId];
+      if (!stageData) return [];
+      
+      // Apply optimistic updates
+      let stageLeads = stageData.leads.filter((lead: any) => {
+        const effectiveStatus = optimisticStatusByLeadId[lead.id];
+        // If optimistic status exists and differs from stageId, remove from this stage
+        if (effectiveStatus && effectiveStatus !== stageId) return false;
+        return true;
+      });
+      
+      // Add leads that were moved here optimistically
+      const movedHere = filteredLeads?.filter((lead: any) => {
+        const effectiveStatus = optimisticStatusByLeadId[lead.id];
+        return effectiveStatus === stageId && lead.status !== stageId;
+      }) || [];
+      stageLeads = [...stageLeads, ...movedHere];
+      
+      if (limit && !expandedStages[stageId]) {
+        return stageLeads.slice(0, limit);
+      }
+      return stageLeads;
+    }
+    
+    // For Table view: use filtered leads
     const stageLeads = filteredLeads?.filter((lead: any) => {
       const effectiveStatus = optimisticStatusByLeadId[lead.id] ?? lead.status;
       return effectiveStatus === stageId;
@@ -1578,6 +1709,34 @@ export default function Leads() {
   };
   
   const getLeadsCountByStage = (stageId: string) => {
+    // For Kanban view: use total_count from RPC (includes leads beyond display limit)
+    if (isKanbanView && kanbanStageData) {
+      const stageData = kanbanStageData[stageId];
+      if (!stageData) return 0;
+      
+      // Adjust for optimistic moves
+      let count = stageData.totalCount;
+      
+      // Count optimistic moves out of this stage
+      const movedOut = Object.entries(optimisticStatusByLeadId).filter(([leadId, newStatus]) => {
+        const originalLead = stageData.leads.find((l: any) => l.id === leadId);
+        return originalLead && newStatus !== stageId;
+      }).length;
+      
+      // Count optimistic moves into this stage
+      const movedIn = Object.entries(optimisticStatusByLeadId).filter(([leadId, newStatus]) => {
+        if (newStatus !== stageId) return false;
+        // Check if lead originally wasn't in this stage
+        const inOtherStage = Object.values(kanbanStageData).some((sd: any) => 
+          sd !== stageData && sd.leads.some((l: any) => l.id === leadId)
+        );
+        return inOtherStage;
+      }).length;
+      
+      return count - movedOut + movedIn;
+    }
+    
+    // For Table view
     return filteredLeads?.filter((lead: any) => {
       const effectiveStatus = optimisticStatusByLeadId[lead.id] ?? lead.status;
       return effectiveStatus === stageId;
@@ -1984,10 +2143,10 @@ export default function Leads() {
               }}
             >
               {PIPELINE_STAGES.map((stage, index) => {
-                const stageLeads = getLeadsByStage(stage.id, KANBAN_LEADS_PER_STAGE);
+                const stageLeads = getLeadsByStage(stage.id, KANBAN_LEADS_PER_STAGE_DISPLAY);
                 const totalInStage = getLeadsCountByStage(stage.id);
                 const isExpanded = expandedStages[stage.id];
-                const hasMore = !isExpanded && totalInStage > KANBAN_LEADS_PER_STAGE;
+                const hasMore = !isExpanded && totalInStage > KANBAN_LEADS_PER_STAGE_DISPLAY;
                 
                 return (
                   <div 
@@ -2034,10 +2193,10 @@ export default function Leads() {
                             className="w-full mt-2"
                             onClick={() => setExpandedStages(prev => ({ ...prev, [stage.id]: true }))}
                           >
-                            הצג עוד {totalInStage - KANBAN_LEADS_PER_STAGE} לידים
+                            הצג עוד {totalInStage - KANBAN_LEADS_PER_STAGE_DISPLAY} לידים
                           </Button>
                         )}
-                        {isExpanded && totalInStage > KANBAN_LEADS_PER_STAGE && (
+                        {isExpanded && totalInStage > KANBAN_LEADS_PER_STAGE_DISPLAY && (
                           <Button
                             variant="ghost"
                             size="sm"
