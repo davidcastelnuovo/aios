@@ -426,7 +426,7 @@ export default function AccountingIntegrations() {
 
   // Fetch finance summary - income from retainers (directly from clients table), expenses from suppliers
   const { data: financeData } = useQuery({
-    queryKey: ["finance-summary", currentTenantId, selectedAgency],
+    queryKey: ["finance-summary", currentTenantId, selectedAgency, clientStatusFilter],
     queryFn: async () => {
       if (!currentTenantId) return { income: 0, expenses: 0 };
       
@@ -451,16 +451,46 @@ export default function AccountingIntegrations() {
         agencyIds = agencyIds.filter(id => id === selectedAgency);
       }
       
+      // Determine which statuses to filter
+      type ClientStatus = "active" | "ended" | "onboarding" | "paused";
+      const getStatusFilter = (): ClientStatus[] | null => {
+        if (clientStatusFilter === "all") return null;
+        if (clientStatusFilter === "active_relevant") return ["active", "onboarding", "paused"];
+        if (clientStatusFilter === "active_onboarding") return ["active", "onboarding"];
+        return [clientStatusFilter as ClientStatus];
+      };
+      
+      const statusFilter = getStatusFilter();
+      
       let income = 0;
       if (agencyIds.length > 0) {
-        const { data: clientsData, error: clientsError } = await supabase
+        let clientsQuery = supabase
           .from("clients")
-          .select("retainer")
+          .select("retainer, status, updated_at")
           .in("agency_id", agencyIds);
+        
+        if (statusFilter) {
+          clientsQuery = clientsQuery.in("status", statusFilter);
+        }
+        
+        const { data: clientsData, error: clientsError } = await clientsQuery;
         
         if (clientsError) throw clientsError;
         
-        income = clientsData?.reduce((sum, c) => sum + (c.retainer || 0), 0) || 0;
+        // For active_relevant, filter paused clients by date
+        let filteredClients = clientsData || [];
+        if (clientStatusFilter === "active_relevant") {
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          filteredClients = filteredClients.filter(c => {
+            if (c.status === "paused") {
+              return c.updated_at && new Date(c.updated_at) >= thirtyDaysAgo;
+            }
+            return true;
+          });
+        }
+        
+        income = filteredClients.reduce((sum, c) => sum + (c.retainer || 0), 0);
       }
       
       // Get expenses from suppliers (sum of payments, filtered by agency)
@@ -487,11 +517,14 @@ export default function AccountingIntegrations() {
       // Get campaigner payments from client_team (only active + onboarding clients)
       let campaignerExpenses = 0;
       if (agencyIds.length > 0) {
+        // For campaigner expenses, we use the status filter but treat active_relevant like active_onboarding
+        const campaignerStatusFilter: ("active" | "onboarding")[] = ["active", "onboarding"];
+        
         const { data: clientsForTeam, error: clientsForTeamError } = await supabase
           .from("clients")
           .select("id")
           .in("agency_id", agencyIds)
-          .in("status", ["active", "onboarding"]);
+          .in("status", campaignerStatusFilter);
 
         if (clientsForTeamError) throw clientsForTeamError;
 
@@ -538,6 +571,8 @@ export default function AccountingIntegrations() {
         const isPausedRecently = client.status === "paused" && 
           client.updated_at && new Date(client.updated_at) >= thirtyDaysAgo;
         matchesStatus = isActiveOrOnboarding || isPausedRecently;
+      } else if (clientStatusFilter === "active_onboarding") {
+        matchesStatus = client.status === "active" || client.status === "onboarding";
       } else if (clientStatusFilter !== "all") {
         matchesStatus = client.status === clientStatusFilter;
       }
@@ -767,6 +802,7 @@ export default function AccountingIntegrations() {
                 <SelectContent>
                   <SelectItem value="active_relevant">פעילים + עזבו ב-30 יום</SelectItem>
                   <SelectItem value="all">כל הסטטוסים</SelectItem>
+                  <SelectItem value="active_onboarding">פעילים + בקליטה</SelectItem>
                   <SelectItem value="active">פעילים בלבד</SelectItem>
                   <SelectItem value="onboarding">בקליטה</SelectItem>
                   <SelectItem value="paused">מושהים</SelectItem>
