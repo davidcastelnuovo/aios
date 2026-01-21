@@ -31,8 +31,10 @@ import { useLeadPipelineStages } from "@/hooks/useLeadPipelineStages";
 import { ManagePipelineStagesDialog } from "./ManagePipelineStagesDialog";
 import { LeadUpdatesTab } from "@/components/leads/LeadUpdatesTab";
 import { LeadTagSelector, LeadTagBadgesEditable } from "@/components/leads/LeadTagSelector";
-import { FolderLinksField, type FolderLink } from "./FolderLinksField";
-import { AttachmentsField, type Attachment } from "./AttachmentsField";
+import { FolderLinksField } from "./FolderLinksField";
+import { AttachmentsField } from "./AttachmentsField";
+import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
+import { useMeetingScheduler } from "@/hooks/useMeetingScheduler";
 
 const formSchema = z.object({
   company_name: z.string().min(1, "שם העסק הוא שדה חובה"),
@@ -76,36 +78,11 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
   const [editingUpdateContent, setEditingUpdateContent] = useState("");
   const [responseSelectOpen, setResponseSelectOpen] = useState(false);
   const [stageSelectOpen, setStageSelectOpen] = useState(false);
-  
-  // Folder links and attachments state
-  const [folderLinks, setFolderLinks] = useState<FolderLink[]>(() => {
-    try {
-      const parsed = lead.folder_links;
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
-  const [attachments, setAttachments] = useState<Attachment[]>(() => {
-    try {
-      const parsed = lead.attachments;
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
-  
-  // Meeting scheduling state
-  const [meetingDate, setMeetingDate] = useState<Date | undefined>(undefined);
-  const [meetingTime, setMeetingTime] = useState("10:00");
-  const [meetingSubject, setMeetingSubject] = useState("");
-  const [personalMessage, setPersonalMessage] = useState("");
-  const [meetingLocation, setMeetingLocation] = useState("");
-  const [sendWhatsAppNotification, setSendWhatsAppNotification] = useState(true);
-  const [isSchedulingMeeting, setIsSchedulingMeeting] = useState(false);
-  const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
-  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
-  const [calendarError, setCalendarError] = useState<string | null>(null);
+
+  // Shared hooks
+  const { folderLinks, setFolderLinks, attachments, setAttachments } =
+    useFolderLinksAndAttachments(lead);
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { userId } = useCurrentUser();
@@ -113,6 +90,8 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
   const { activeStatuses: leadStatuses } = useLeadStatuses();
   const { activeStages: pipelineStages } = useLeadPipelineStages();
   const { tenantId } = useCurrentTenant();
+
+  const meetingScheduler = useMeetingScheduler(tenantId);
 
 const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -417,195 +396,23 @@ const updateMutation = useMutation({
     }
   };
 
+  // Wrapper for scheduling meeting with lead details
   const handleScheduleMeeting = async () => {
-    if (!meetingDate || !meetingTime) {
-      sonnerToast.error("נא לבחור תאריך ושעה");
-      return;
-    }
-
-    setIsSchedulingMeeting(true);
-
-    try {
-      // Combine date and time
-      const [hours, minutes] = meetingTime.split(':').map(Number);
-      const startDateTime = new Date(meetingDate);
-      startDateTime.setHours(hours, minutes, 0, 0);
-      
-      const endDateTime = new Date(startDateTime);
-      endDateTime.setHours(startDateTime.getHours() + 1); // 1 hour meeting
-
-      const subject = meetingSubject || `פגישה עם ${lead.contact_name || lead.company_name}`;
-
-      // Create calendar event with attendee - Google will send the invitation automatically
-      const attendees = lead.email ? [lead.email] : [];
-      
-      const { data: calendarData, error: calendarError } = await supabase.functions.invoke('add-calendar-event', {
-        body: {
-          summary: subject,
-          description: personalMessage || `פגישה עם ליד: ${lead.company_name}`,
-          start: startDateTime.toISOString(),
-          end: endDateTime.toISOString(),
-          attendees,
-        }
-      });
-
-      if (calendarError) {
-        console.error('Calendar error:', calendarError);
-        sonnerToast.error("שגיאה ביצירת הפגישה ביומן");
-      } else {
-        // Save meeting details to lead for reminder tracking
-        const meetingDateFormatted = format(meetingDate, "yyyy-MM-dd");
-        const { error: updateError } = await supabase
-          .from("leads")
-          .update({
-            meeting_set_date: new Date().toISOString(),
-            meeting_date: meetingDateFormatted,
-            meeting_time: meetingTime,
-            meeting_location: meetingLocation || subject,
-            // Reset reminder flags when new meeting is set
-            meeting_reminder_day_after_sent_at: null,
-            meeting_reminder_same_day_sent_at: null,
-          })
-          .eq("id", lead.id);
-
-        if (updateError) {
-          console.error('Error saving meeting details:', updateError);
-        }
-
-        // Trigger meeting_created automations
-        try {
-          const formattedDate = format(meetingDate, "dd/MM/yyyy");
-          await supabase.functions.invoke('trigger-automation', {
-            body: {
-              trigger_type: 'meeting_created',
-              tenant_id: tenantId,
-              data: {
-                lead_id: lead.id,
-                contact_name: lead.contact_name || lead.company_name,
-                meeting_date: formattedDate,
-                meeting_time: meetingTime,
-                meeting_location: meetingLocation || subject,
-              }
-            }
-          });
-        } catch (autoErr) {
-          console.error('Automation trigger error:', autoErr);
-        }
-
-        if (lead.email) {
-          sonnerToast.success("הפגישה נוצרה וזימון נשלח למייל!");
-        } else {
-          sonnerToast.success("הפגישה נוספה ליומן!");
-        }
-
-        // Invalidate leads query to refresh data
+    await meetingScheduler.scheduleMeeting({
+      contactName: lead.contact_name || lead.company_name,
+      contactEmail: lead.email,
+      contactId: lead.id,
+      contactType: 'lead',
+      onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["leads"] });
-      }
-
-      // Reset form
-      setMeetingDate(undefined);
-      setMeetingTime("10:00");
-      setMeetingSubject("");
-      setPersonalMessage("");
-      setMeetingLocation("");
-      setSendWhatsAppNotification(true);
-
-    } catch (error: any) {
-      console.error('Meeting scheduling error:', error);
-      sonnerToast.error(`שגיאה בקביעת פגישה: ${error.message}`);
-    } finally {
-      setIsSchedulingMeeting(false);
-    }
+      },
+    });
   };
 
   const showLostReason = form.watch("status") === "closed";
 
-  // Fetch calendar events when date changes
-  const fetchCalendarEvents = async (selectedDate: Date) => {
-    setIsLoadingCalendar(true);
-    setCalendarError(null);
-    setCalendarEvents([]);
-    
-    try {
-      const startOfDay = new Date(selectedDate);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(selectedDate);
-      endOfDay.setHours(23, 59, 59, 999);
-      
-      const { data, error } = await supabase.functions.invoke('get-calendar-events', {
-        body: {
-          timeMin: startOfDay.toISOString(),
-          timeMax: endOfDay.toISOString(),
-        },
-      });
-      
-      if (error) throw error;
-      
-      if (data?.needsReconnect) {
-        setCalendarError('היומן לא מחובר. יש לחבר את יומן Google.');
-        return;
-      }
-      
-      if (data?.events) {
-        setCalendarEvents(data.events);
-      }
-    } catch (err: any) {
-      console.error('Error fetching calendar events:', err);
-      setCalendarError(err.message || 'שגיאה בטעינת היומן');
-    } finally {
-      setIsLoadingCalendar(false);
-    }
-  };
-
-  // Handle date selection
-  const handleDateSelect = (date: Date | undefined) => {
-    setMeetingDate(date);
-    if (date) {
-      fetchCalendarEvents(date);
-    } else {
-      setCalendarEvents([]);
-    }
-  };
-
-  // Generate time options - all possible slots
-  const allTimeOptions: string[] = [];
-  for (let h = 7; h <= 21; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      allTimeOptions.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
-    }
-  }
-
-  // Filter available time slots based on calendar events
-  const getAvailableTimeSlots = () => {
-    if (!meetingDate || calendarEvents.length === 0) {
-      return allTimeOptions.map(time => ({ time, available: true }));
-    }
-
-    return allTimeOptions.map(time => {
-      const [hours, minutes] = time.split(':').map(Number);
-      const slotStart = new Date(meetingDate);
-      slotStart.setHours(hours, minutes, 0, 0);
-      const slotEnd = new Date(slotStart);
-      slotEnd.setMinutes(slotEnd.getMinutes() + 30);
-
-      // Check if this slot overlaps with any event (skip all-day events)
-      const isOccupied = calendarEvents.some(event => {
-        // Skip all-day events - they have date instead of dateTime
-        if (!event.start?.dateTime || !event.end?.dateTime) {
-          return false;
-        }
-        const eventStart = new Date(event.start.dateTime);
-        const eventEnd = new Date(event.end.dateTime);
-        
-        // Check for overlap
-        return slotStart < eventEnd && slotEnd > eventStart;
-      });
-
-      return { time, available: !isOccupied };
-    });
-  };
-
-  const timeSlots = getAvailableTimeSlots();
+  // Get available time slots from the meeting scheduler hook
+  const timeSlots = meetingScheduler.getAvailableTimeSlots();
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -1286,8 +1093,8 @@ const updateMutation = useMutation({
                       <Card className="p-2">
                         <Calendar
                           mode="single"
-                          selected={meetingDate}
-                          onSelect={handleDateSelect}
+                          selected={meetingScheduler.meetingDate}
+                          onSelect={meetingScheduler.handleDateSelect}
                           disabled={(date) => date < new Date()}
                           className="pointer-events-auto"
                           locale={he}
@@ -1302,19 +1109,19 @@ const updateMutation = useMutation({
                           <Clock className="h-4 w-4" />
                           שעת הפגישה
                         </label>
-                        <Select value={meetingTime} onValueChange={setMeetingTime}>
+                        <Select value={meetingScheduler.meetingTime} onValueChange={meetingScheduler.setMeetingTime}>
                           <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
                             <SelectValue placeholder="בחר שעה" />
                           </SelectTrigger>
                           <SelectContent className="bg-background z-50 max-h-[200px]">
-                            {isLoadingCalendar ? (
+                            {meetingScheduler.isLoadingCalendar ? (
                               <div className="p-2 text-center text-sm text-muted-foreground">טוען יומן...</div>
-                            ) : calendarError ? (
-                              <div className="p-2 text-center text-sm text-destructive">{calendarError}</div>
+                            ) : meetingScheduler.calendarError ? (
+                              <div className="p-2 text-center text-sm text-destructive">{meetingScheduler.calendarError}</div>
                             ) : (
                               timeSlots.map(({ time, available }) => (
-                                <SelectItem 
-                                  key={time} 
+                                <SelectItem
+                                  key={time}
                                   value={time}
                                   disabled={!available}
                                   className={cn(!available && "text-muted-foreground line-through")}
@@ -1330,8 +1137,8 @@ const updateMutation = useMutation({
                       <div className="space-y-2">
                         <label className="text-sm font-medium">נושא הפגישה</label>
                         <Input
-                          value={meetingSubject}
-                          onChange={(e) => setMeetingSubject(e.target.value)}
+                          value={meetingScheduler.meetingSubject}
+                          onChange={(e) => meetingScheduler.setMeetingSubject(e.target.value)}
                           placeholder={`פגישה עם ${lead.contact_name || lead.company_name}`}
                           className="text-right rounded-lg border-2 h-11 px-4"
                           dir="rtl"
@@ -1341,8 +1148,8 @@ const updateMutation = useMutation({
                       <div className="space-y-2">
                         <label className="text-sm font-medium">מיקום הפגישה (אופציונלי)</label>
                         <Input
-                          value={meetingLocation}
-                          onChange={(e) => setMeetingLocation(e.target.value)}
+                          value={meetingScheduler.meetingLocation}
+                          onChange={(e) => meetingScheduler.setMeetingLocation(e.target.value)}
                           placeholder="למשל: זום, משרד, כתובת..."
                           className="text-right rounded-lg border-2 h-11 px-4"
                           dir="rtl"
@@ -1352,8 +1159,8 @@ const updateMutation = useMutation({
                       <div className="space-y-2">
                         <label className="text-sm font-medium">הודעה אישית (אופציונלי)</label>
                         <Textarea
-                          value={personalMessage}
-                          onChange={(e) => setPersonalMessage(e.target.value)}
+                          value={meetingScheduler.personalMessage}
+                          onChange={(e) => meetingScheduler.setPersonalMessage(e.target.value)}
                           placeholder="הוסף הודעה אישית לזימון..."
                           rows={3}
                           className="text-right rounded-lg border-2 px-4 py-3"
@@ -1361,24 +1168,12 @@ const updateMutation = useMutation({
                         />
                       </div>
 
-                      {/* WhatsApp notification toggle */}
-                      <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
-                        <Checkbox
-                          id="sendWhatsApp"
-                          checked={sendWhatsAppNotification}
-                          onCheckedChange={(checked) => setSendWhatsAppNotification(checked === true)}
-                        />
-                        <label htmlFor="sendWhatsApp" className="text-sm cursor-pointer">
-                          שלח הודעת WhatsApp לליד (דרך ManyChat)
-                        </label>
-                      </div>
-
-                      {meetingDate && (
+                      {meetingScheduler.meetingDate && (
                         <Card className="p-3 bg-primary/5 border-primary/20">
                           <div className="flex items-center gap-2 text-sm">
                             <CheckCircle2 className="h-4 w-4 text-primary" />
                             <span className="font-medium">
-                              {format(meetingDate, "EEEE, d בMMMM yyyy", { locale: he })} בשעה {meetingTime}
+                              {format(meetingScheduler.meetingDate, "EEEE, d בMMMM yyyy", { locale: he })} בשעה {meetingScheduler.meetingTime}
                             </span>
                           </div>
                         </Card>
@@ -1387,10 +1182,10 @@ const updateMutation = useMutation({
                       <Button
                         type="button"
                         onClick={handleScheduleMeeting}
-                        disabled={!meetingDate || isSchedulingMeeting}
+                        disabled={!meetingScheduler.meetingDate || meetingScheduler.isSchedulingMeeting}
                         className="w-full h-11"
                       >
-                        {isSchedulingMeeting ? (
+                        {meetingScheduler.isSchedulingMeeting ? (
                           "קובע פגישה..."
                         ) : lead.email ? (
                           <>

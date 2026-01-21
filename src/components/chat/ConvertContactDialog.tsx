@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -26,33 +25,18 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from "lucide-react";
+import {
+  convertClientSchema,
+  convertLeadSchema,
+  convertGroupSchema,
+  type ConvertClientFormValues,
+  type ConvertLeadFormValues,
+  type ConvertGroupFormValues,
+} from "@/lib/formSchemas";
 
-const clientSchema = z.object({
-  name: z.string().min(1, "שם הוא שדה חובה"),
-  agency_id: z.string().min(1, "סוכנות היא שדה חובה"),
-  phone: z.string().optional(),
-  email: z.string().email().optional().or(z.literal("")),
-  notes: z.string().optional(),
-});
-
-const leadSchema = z.object({
-  company_name: z.string().min(1, "שם החברה הוא שדה חובה"),
-  contact_name: z.string().optional(),
-  agency_id: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().email().optional().or(z.literal("")),
-  notes: z.string().optional(),
-});
-
-const groupSchema = z.object({
-  group_name: z.string().min(1, "שם הקבוצה הוא שדה חובה"),
-  agency_id: z.string().optional(),
-  description: z.string().optional(),
-});
-
-type ClientFormValues = z.infer<typeof clientSchema>;
-type LeadFormValues = z.infer<typeof leadSchema>;
-type GroupFormValues = z.infer<typeof groupSchema>;
+type ClientFormValues = ConvertClientFormValues;
+type LeadFormValues = ConvertLeadFormValues;
+type GroupFormValues = ConvertGroupFormValues;
 
 interface ConvertContactDialogProps {
   open: boolean;
@@ -78,7 +62,7 @@ export function ConvertContactDialog({
 
   const form = useForm<ClientFormValues | LeadFormValues | GroupFormValues>({
     resolver: zodResolver(
-      type === "client" ? clientSchema : type === "lead" ? leadSchema : groupSchema
+      type === "client" ? convertClientSchema : type === "lead" ? convertLeadSchema : convertGroupSchema
     ),
     defaultValues: {
       phone: senderPhone,
