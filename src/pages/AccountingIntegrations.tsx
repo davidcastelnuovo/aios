@@ -329,7 +329,7 @@ export default function AccountingIntegrations() {
 
   // Fetch suppliers
   const { data: suppliers, isLoading: suppliersLoading } = useQuery({
-    queryKey: ["accounting-suppliers", currentTenantId, selectedAgency],
+    queryKey: ["accounting-suppliers", currentTenantId, agencyFilter],
     queryFn: async () => {
       if (!currentTenantId) return [];
       const { data, error } = await supabase
@@ -350,12 +350,12 @@ export default function AccountingIntegrations() {
         .eq("tenant_id", currentTenantId);
       if (error) throw error;
       
-      // Filter suppliers by selected agency if not "all"
-      if (selectedAgency && selectedAgency !== "all") {
+      // Filter suppliers by agency filter if not "all"
+      if (agencyFilter && agencyFilter !== "all") {
         return (data || []).filter(s => 
-          s.agency_id_1 === selectedAgency || 
-          s.agency_id_2 === selectedAgency || 
-          s.agency_id_3 === selectedAgency
+          s.agency_id_1 === agencyFilter || 
+          s.agency_id_2 === agencyFilter || 
+          s.agency_id_3 === agencyFilter
         );
       }
       
@@ -366,7 +366,7 @@ export default function AccountingIntegrations() {
 
   // Fetch campaigner payments from client_team
   const { data: campaignerPayments, isLoading: campaignerPaymentsLoading } = useQuery({
-    queryKey: ["accounting-campaigner-payments", currentTenantId, selectedAgency],
+    queryKey: ["accounting-campaigner-payments", currentTenantId, agencyFilter],
     queryFn: async () => {
       if (!currentTenantId) return [];
       
@@ -386,9 +386,9 @@ export default function AccountingIntegrations() {
         ...(sharedAgencies || []).map(a => a.agency_id)
       ];
 
-      // Filter by selected agency if not "all"
-      if (selectedAgency && selectedAgency !== "all") {
-        agencyIds = agencyIds.filter(id => id === selectedAgency);
+      // Filter by agency filter if not "all"
+      if (agencyFilter && agencyFilter !== "all") {
+        agencyIds = agencyIds.filter(id => id === agencyFilter);
       }
 
       if (agencyIds.length === 0) return [];
@@ -426,7 +426,7 @@ export default function AccountingIntegrations() {
 
   // Fetch finance summary - income from retainers (directly from clients table), expenses from suppliers
   const { data: financeData } = useQuery({
-    queryKey: ["finance-summary", currentTenantId, selectedAgency, clientStatusFilter],
+    queryKey: ["finance-summary", currentTenantId, agencyFilter, clientStatusFilter],
     queryFn: async () => {
       if (!currentTenantId) return { income: 0, expenses: 0 };
       
@@ -446,9 +446,9 @@ export default function AccountingIntegrations() {
         ...(sharedAgencies || []).map(a => a.agency_id)
       ];
       
-      // Filter by selected agency if not "all"
-      if (selectedAgency && selectedAgency !== "all") {
-        agencyIds = agencyIds.filter(id => id === selectedAgency);
+      // Filter by agency filter if not "all"
+      if (agencyFilter && agencyFilter !== "all") {
+        agencyIds = agencyIds.filter(id => id === agencyFilter);
       }
       
       // Determine which statuses to filter
@@ -503,11 +503,11 @@ export default function AccountingIntegrations() {
       
       let supplierExpenses = 0;
       suppliersData?.forEach(s => {
-        if (selectedAgency && selectedAgency !== "all") {
+        if (agencyFilter && agencyFilter !== "all") {
           // Only sum payments for the selected agency
-          if (s.agency_id_1 === selectedAgency) supplierExpenses += (s.payment_1 || 0);
-          if (s.agency_id_2 === selectedAgency) supplierExpenses += (s.payment_2 || 0);
-          if (s.agency_id_3 === selectedAgency) supplierExpenses += (s.payment_3 || 0);
+          if (s.agency_id_1 === agencyFilter) supplierExpenses += (s.payment_1 || 0);
+          if (s.agency_id_2 === agencyFilter) supplierExpenses += (s.payment_2 || 0);
+          if (s.agency_id_3 === agencyFilter) supplierExpenses += (s.payment_3 || 0);
         } else {
           // Sum all payments
           supplierExpenses += (s.payment_1 || 0) + (s.payment_2 || 0) + (s.payment_3 || 0);
