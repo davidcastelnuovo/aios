@@ -71,6 +71,50 @@ export default function GreenAPISettings() {
     enabled: !!tenantId && !!userId,
   });
 
+  // Fetch integrations the user has permission to use (from other users)
+  const { data: permittedIntegrations = [] } = useQuery({
+    queryKey: ['permitted-green-api-for-user', tenantId, userId],
+    queryFn: async () => {
+      if (!tenantId || !userId) return [];
+      
+      const { data: permissions } = await supabase
+        .from('integration_user_permissions')
+        .select('integration_id')
+        .eq('user_id', userId);
+      
+      if (!permissions?.length) return [];
+      
+      const integrationIds = permissions.map(p => p.integration_id);
+      
+      const { data: integrations } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .in('id', integrationIds)
+        .eq('integration_type', 'green_api');
+      
+      if (!integrations?.length) return [];
+      
+      // Get owner profiles
+      const ownerIds = [...new Set(integrations.map(i => i.user_id).filter(Boolean))];
+      if (ownerIds.length === 0) return integrations.map(i => ({ ...i, owner_name: 'משתמש לא ידוע' }));
+      
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', ownerIds);
+      
+      const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+      
+      return integrations.map(i => ({
+        ...i,
+        owner_name: i.user_id && profileMap.get(i.user_id) 
+          ? (profileMap.get(i.user_id)?.full_name || profileMap.get(i.user_id)?.email) 
+          : 'משתמש לא ידוע',
+      }));
+    },
+    enabled: !!tenantId && !!userId,
+  });
+
   // Fetch tenant users for assignment
   const { data: tenantUsers = [] } = useQuery({
     queryKey: ['tenant-users-for-assignment', tenantId],
@@ -326,6 +370,27 @@ export default function GreenAPISettings() {
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Info about shared integrations */}
+      {permittedIntegrations.length > 0 && (
+        <Alert className="mb-6">
+          <Share2 className="h-4 w-4" />
+          <AlertDescription>
+            <strong>יש לך גישה לאינטגרציות של משתמשים אחרים לשימוש באוטומציות:</strong>
+            <ul className="mt-2 list-disc list-inside">
+              {permittedIntegrations.map((perm: any) => (
+                <li key={perm.id}>
+                  Green API של {perm.owner_name}
+                  {perm.is_active && <Badge variant="outline" className="mr-2 text-xs">פעיל</Badge>}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs mt-2 text-muted-foreground">
+              אינטגרציות אלו זמינות לך לשימוש באוטומציות בלבד. אם אתה רוצה לשלוח הודעות מהצ'אט שלך, עליך להגדיר אינטגרציה משלך.
+            </p>
+          </AlertDescription>
+        </Alert>
       )}
 
       <div className="grid gap-6">

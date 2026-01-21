@@ -8,12 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MessageCircle, Webhook, Settings, CheckCircle2, XCircle, Users, Shield } from "lucide-react";
+import { MessageCircle, Webhook, Settings, CheckCircle2, XCircle, Users, Shield, Share2 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { ManageIntegrationPermissionsDialog } from "@/components/forms/ManageIntegrationPermissionsDialog";
-
 export default function ChatIntegrations() {
   const { tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
@@ -66,6 +65,60 @@ export default function ChatIntegrations() {
 
       if (error) throw error;
       return data;
+    },
+    enabled: !!tenantId && !!userId,
+  });
+
+  // Fetch Green API integrations the user has permission to use (from other users)
+  const { data: permittedGreenApiIntegrations = [] } = useQuery({
+    queryKey: ['permitted-green-api-integrations', tenantId, userId],
+    queryFn: async () => {
+      if (!tenantId || !userId) return [];
+      
+      // First get permissions granted to the current user
+      const { data: permissions, error: permError } = await supabase
+        .from('integration_user_permissions')
+        .select('integration_id')
+        .eq('user_id', userId);
+      
+      if (permError) {
+        console.error('Error fetching permissions:', permError);
+        return [];
+      }
+      
+      if (!permissions?.length) return [];
+      
+      const integrationIds = permissions.map(p => p.integration_id);
+      
+      // Fetch the integrations with owner profile info
+      const { data: integrations, error: intError } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .in('id', integrationIds)
+        .eq('integration_type', 'green_api');
+      
+      if (intError) {
+        console.error('Error fetching permitted integrations:', intError);
+        return [];
+      }
+      
+      if (!integrations?.length) return [];
+      
+      // Get owner profiles
+      const ownerIds = [...new Set(integrations.map(i => i.user_id).filter(Boolean))];
+      if (ownerIds.length === 0) return integrations.map(i => ({ ...i, owner_profile: null }));
+      
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', ownerIds);
+      
+      const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+      
+      return integrations.map(i => ({
+        ...i,
+        owner_profile: i.user_id ? profileMap.get(i.user_id) : null,
+      }));
     },
     enabled: !!tenantId && !!userId,
   });
@@ -332,6 +385,64 @@ export default function ChatIntegrations() {
           );
         })}
       </div>
+
+      {/* Shared Integrations Section */}
+      {permittedGreenApiIntegrations.length > 0 && (
+        <Card className="mt-8">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Share2 className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle>אינטגרציות משותפות איתך</CardTitle>
+                <CardDescription>
+                  אינטגרציות שמשתמשים אחרים שיתפו איתך לשימוש באוטומציות
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {permittedGreenApiIntegrations.map((integration: any) => (
+                <div 
+                  key={integration.id}
+                  className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="p-2 rounded-lg bg-green-500/10">
+                      <Webhook className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">Green API</span>
+                        <Badge variant="secondary" className="bg-primary/10 text-primary">
+                          גישה משותפת
+                        </Badge>
+                        {integration.is_active ? (
+                          <Badge variant="default" className="bg-green-500/10 text-green-700 dark:text-green-400">
+                            <CheckCircle2 className="h-3 w-3 ml-1" />
+                            פעיל
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary">
+                            <XCircle className="h-3 w-3 ml-1" />
+                            לא פעיל
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        שותף על ידי: {integration.owner_profile?.full_name || integration.owner_profile?.email || 'משתמש לא ידוע'}
+                      </p>
+                    </div>
+                  </div>
+                  <Badge variant="outline">לשימוש באוטומציות</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Permissions Dialog */}
       <ManageIntegrationPermissionsDialog
