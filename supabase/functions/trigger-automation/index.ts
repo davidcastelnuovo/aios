@@ -400,7 +400,9 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         body: JSON.stringify({
           first_name: contactRecord?.contact_name || 'Unknown',
           whatsapp_phone: whatsappPhone,
-          consent_phrase: 'Opted in via CRM automation'
+          has_opt_in_sms: true,
+          has_opt_in_email: true,
+          consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
         }),
       })
       
@@ -627,7 +629,9 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
     body: JSON.stringify({
       first_name: contactName,
       whatsapp_phone: whatsappPhone,
-      consent_phrase: 'Opted in via CRM automation'
+      has_opt_in_sms: true,
+      has_opt_in_email: true,
+      consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
     }),
   })
   
