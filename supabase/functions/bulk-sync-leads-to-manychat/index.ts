@@ -40,6 +40,13 @@ function getPhoneLookupCandidates(phone: string): string[] {
   ].filter(Boolean);
 }
 
+function getWaIdCandidates(phone: string): string[] {
+  const cleaned = normalizePhone(phone);
+  if (!cleaned) return [];
+  // ManyChat wa_id errors show digits without '+'
+  return [`972${cleaned}`, cleaned].filter(Boolean);
+}
+
 async function safeJson(res: Response): Promise<any> {
   const contentType = res.headers.get('content-type') || '';
   const text = await res.text();
@@ -68,6 +75,27 @@ async function findSubscriberIdByPhone(apiKey: string, phoneCandidates: string[]
     console.log(`Find subscriber (${candidate}) response:`, JSON.stringify(data));
 
     // Expected: { status: 'success', data: { id: ... } }
+    if (data?.status === 'success' && data?.data?.id) {
+      return String(data.data.id);
+    }
+  }
+  return null;
+}
+
+async function findSubscriberIdByWaId(apiKey: string, waIdCandidates: string[]): Promise<string | null> {
+  for (const candidate of waIdCandidates) {
+    const url = `https://api.manychat.com/fb/subscriber/findBySystemField?wa_id=${encodeURIComponent(candidate)}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await safeJson(res);
+    console.log(`Find subscriber wa_id (${candidate}) response:`, JSON.stringify(data));
+
     if (data?.status === 'success' && data?.data?.id) {
       return String(data.data.id);
     }
@@ -182,6 +210,7 @@ Deno.serve(async (req) => {
     const lead = leads[0];
     const formattedPhone = formatPhoneForManyChat(lead.phone);
     const phoneCandidates = getPhoneLookupCandidates(lead.phone);
+    const waIdCandidates = getWaIdCandidates(lead.phone);
     const displayName = lead.contact_name || lead.company_name || 'Unknown';
     
     console.log(`Processing lead ${lead.id}: ${displayName}, phone: ${formattedPhone}`);
@@ -189,8 +218,11 @@ Deno.serve(async (req) => {
     let subscriberId: string | null = null;
     let wasExisting = false;
 
-    // Step 1: Try to find existing subscriber by phone (robust multi-format search)
-    subscriberId = await findSubscriberIdByPhone(apiKey, phoneCandidates);
+    // Step 1: Try to find existing subscriber by wa_id first (WhatsApp), then by phone
+    subscriberId = await findSubscriberIdByWaId(apiKey, waIdCandidates);
+    if (!subscriberId) {
+      subscriberId = await findSubscriberIdByPhone(apiKey, phoneCandidates);
+    }
     if (subscriberId) {
       wasExisting = true;
       console.log(`Found existing subscriber: ${subscriberId}`);
@@ -211,11 +243,8 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           first_name: firstName,
           last_name: lastName,
-          // ManyChat docs: phone OR email is required. Keep minimal payload to avoid permission warnings.
-          phone: `+${formattedPhone}`,
-          email: lead.email || undefined,
-          has_opt_in_sms: false,
-          has_opt_in_email: false,
+          // For WhatsApp channel use wa_id (digits). Avoid importing phone/email (permission issue).
+          wa_id: waIdCandidates[0] || formattedPhone,
         }),
       });
 
@@ -233,7 +262,10 @@ Deno.serve(async (req) => {
 
         if (waAlreadyExists) {
           console.log('Subscriber already exists according to createSubscriber, retrying lookup...');
-          subscriberId = await findSubscriberIdByPhone(apiKey, phoneCandidates);
+          subscriberId = await findSubscriberIdByWaId(apiKey, waIdCandidates);
+          if (!subscriberId) {
+            subscriberId = await findSubscriberIdByPhone(apiKey, phoneCandidates);
+          }
           if (subscriberId) {
             wasExisting = true;
             console.log(`Found after create conflict: ${subscriberId}`);
