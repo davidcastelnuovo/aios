@@ -665,7 +665,17 @@ export default function Leads() {
   
   // Pagination state
   const [page, setPage] = useState(1);
-  const LEADS_PER_PAGE = 100;
+  const TABLE_LEADS_PER_PAGE = 100;
+  const KANBAN_FETCH_LIMIT = 1000;
+
+  const isKanbanView = viewMode === "kanban";
+  const effectivePage = isKanbanView ? 1 : page;
+  const effectiveLimit = isKanbanView ? KANBAN_FETCH_LIMIT : TABLE_LEADS_PER_PAGE;
+
+  // Kanban is not paginated (we cap to KANBAN_FETCH_LIMIT); keep page locked to 1 there.
+  useEffect(() => {
+    if (isKanbanView) setPage(1);
+  }, [isKanbanView]);
   
   // Reset page to 1 when filters change to prevent showing empty results
   useEffect(() => {
@@ -799,11 +809,11 @@ export default function Leads() {
   });
 
   const { data: leads, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["leads", tenantId, selectedAgency, page, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["leads", tenantId, selectedAgency, viewMode, effectivePage, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
       
-      const from = (page - 1) * LEADS_PER_PAGE;
+      const from = (effectivePage - 1) * effectiveLimit;
       
       // Use RPC for tag filtering - efficient server-side filtering with pagination
       if (filterTagIds.length > 0 && !filterTagIds.includes("none")) {
@@ -815,7 +825,7 @@ export default function Leads() {
           p_tenant_id: tenantId,
           p_tag_ids: filterTagIds,
           p_agency_ids: agencyIds,
-          p_limit: LEADS_PER_PAGE,
+          p_limit: effectiveLimit,
           p_offset: from
         });
         
@@ -853,7 +863,7 @@ export default function Leads() {
               sales_people (full_name)
             `)
             .in("id", leadIds)
-            .order("created_at", { ascending: false });
+            .order(isKanbanView ? "updated_at" : "created_at", { ascending: false });
           
           return leadsWithRelations || [];
         }
@@ -861,7 +871,7 @@ export default function Leads() {
         return [];
       }
       
-      const to = from + LEADS_PER_PAGE - 1;
+      const to = from + effectiveLimit - 1;
       
       let query = supabase
         .from("leads")
@@ -891,7 +901,7 @@ export default function Leads() {
           agencies (name),
           sales_people (full_name)
         `)
-        .order("created_at", { ascending: false });
+        .order(isKanbanView ? "updated_at" : "created_at", { ascending: false });
 
       // 🔒 CRITICAL SECURITY: Filter by tenant_id OR accessible agencies
       if (selectedAgency && selectedAgency !== "all") {
@@ -946,7 +956,8 @@ export default function Leads() {
       }
       
       // Apply pagination after all filters
-      query = query.range(from, to);
+      // Kanban view: fetch up to KANBAN_FETCH_LIMIT so stages can show all relevant leads.
+      query = isKanbanView ? query.range(0, effectiveLimit - 1) : query.range(from, to);
 
       const { data, error } = await query;
       if (error) throw error;
@@ -957,7 +968,7 @@ export default function Leads() {
     placeholderData: (previousData) => previousData,
   });
 
-  const totalPages = Math.ceil(totalLeadsCount / LEADS_PER_PAGE);
+  const totalPages = Math.ceil(totalLeadsCount / TABLE_LEADS_PER_PAGE);
   const hasMorePages = page < totalPages;
 
   // 🔒 SECURITY GUARD: Filter leads by current tenant and accessible agencies
