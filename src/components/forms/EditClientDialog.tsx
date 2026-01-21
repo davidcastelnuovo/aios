@@ -32,8 +32,8 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, X, Calendar as CalendarIcon, Clock, CheckCircle2, Paperclip } from "lucide-react";
-import { FolderLinksField, FolderLink } from "@/components/forms/FolderLinksField";
-import { AttachmentsField, Attachment } from "@/components/forms/AttachmentsField";
+import { FolderLinksField } from "@/components/forms/FolderLinksField";
+import { AttachmentsField } from "@/components/forms/AttachmentsField";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -44,6 +44,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Card } from "@/components/ui/card";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
+import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
+import { useMeetingScheduler } from "@/hooks/useMeetingScheduler";
 const formSchema = z.object({
   name: z.string().min(1, "שם הלקוח נדרש"),
   contact_name: z.string().optional(),
@@ -71,54 +73,11 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
   const { tenantId } = useCurrentTenant();
   const { getFieldLabel } = useCustomFieldLabels('client');
 
-  // Calendar meeting state
-  const [meetingDate, setMeetingDate] = useState<Date | undefined>(undefined);
-  const [meetingTime, setMeetingTime] = useState("10:00");
-  const [meetingSubject, setMeetingSubject] = useState("");
-  const [meetingLocation, setMeetingLocation] = useState("");
-  const [personalMessage, setPersonalMessage] = useState("");
-  const [isSchedulingMeeting, setIsSchedulingMeeting] = useState(false);
-  const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
-  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
-  const [calendarError, setCalendarError] = useState<string | null>(null);
-  const [sendWhatsappNotification, setSendWhatsappNotification] = useState(false);
+  // Shared hooks
+  const { folderLinks, setFolderLinks, attachments, setAttachments, filesCount } =
+    useFolderLinksAndAttachments(client);
 
-  // Folder links & attachments state
-  const [folderLinks, setFolderLinks] = useState<FolderLink[]>([]);
-  const [attachments, setAttachments] = useState<Attachment[]>([]);
-
-  // Parse folder_links and attachments from client
-  useEffect(() => {
-    if (client?.folder_links) {
-      try {
-        const parsed = typeof client.folder_links === 'string' 
-          ? JSON.parse(client.folder_links) 
-          : client.folder_links;
-        setFolderLinks(Array.isArray(parsed) ? parsed : []);
-      } catch {
-        // Fallback to old folder_link field
-        if (client.folder_link) {
-          setFolderLinks([{ name: 'קישור', url: client.folder_link }]);
-        }
-      }
-    } else if (client?.folder_link) {
-      setFolderLinks([{ name: 'קישור', url: client.folder_link }]);
-    }
-    
-    if (client?.attachments) {
-      try {
-        const parsed = typeof client.attachments === 'string'
-          ? JSON.parse(client.attachments)
-          : client.attachments;
-        setAttachments(Array.isArray(parsed) ? parsed : []);
-      } catch {
-        setAttachments([]);
-      }
-    }
-  }, [client]);
-
-  // Count for files tab badge
-  const filesCount = useMemo(() => folderLinks.length + attachments.length, [folderLinks, attachments]);
+  const meetingScheduler = useMeetingScheduler(tenantId);
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -324,164 +283,20 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
     mutation.mutate(values);
   };
 
-  // Calendar functions
-  const fetchCalendarEvents = async (selectedDate: Date) => {
-    setIsLoadingCalendar(true);
-    setCalendarError(null);
-    setCalendarEvents([]);
-    
-    try {
-      const startOfDay = new Date(selectedDate);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(selectedDate);
-      endOfDay.setHours(23, 59, 59, 999);
-      
-      const { data, error } = await supabase.functions.invoke('get-calendar-events', {
-        body: {
-          timeMin: startOfDay.toISOString(),
-          timeMax: endOfDay.toISOString(),
-        },
-      });
-      
-      if (error) throw error;
-      
-      if (data?.needsReconnect) {
-        setCalendarError('היומן לא מחובר. יש לחבר את יומן Google.');
-        return;
-      }
-      
-      if (data?.events) {
-        setCalendarEvents(data.events);
-      }
-    } catch (err: any) {
-      console.error('Error fetching calendar events:', err);
-      setCalendarError(err.message || 'שגיאה בטעינת היומן');
-    } finally {
-      setIsLoadingCalendar(false);
-    }
-  };
+  // Get available time slots from the meeting scheduler hook
+  const timeSlots = meetingScheduler.getAvailableTimeSlots();
 
-  const handleMeetingDateSelect = (date: Date | undefined) => {
-    setMeetingDate(date);
-    if (date) {
-      fetchCalendarEvents(date);
-    } else {
-      setCalendarEvents([]);
-    }
-  };
-
-  const allTimeOptions: string[] = [];
-  for (let h = 7; h <= 21; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      allTimeOptions.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
-    }
-  }
-
-  const getAvailableTimeSlots = () => {
-    if (!meetingDate || calendarEvents.length === 0) {
-      return allTimeOptions.map(time => ({ time, available: true }));
-    }
-
-    return allTimeOptions.map(time => {
-      const [hours, minutes] = time.split(':').map(Number);
-      const slotStart = new Date(meetingDate);
-      slotStart.setHours(hours, minutes, 0, 0);
-      const slotEnd = new Date(slotStart);
-      slotEnd.setMinutes(slotEnd.getMinutes() + 30);
-
-      // Skip all-day events - they have date instead of dateTime
-      const isOccupied = calendarEvents.some(event => {
-        if (!event.start?.dateTime || !event.end?.dateTime) {
-          return false;
-        }
-        const eventStart = new Date(event.start.dateTime);
-        const eventEnd = new Date(event.end.dateTime);
-        return slotStart < eventEnd && slotEnd > eventStart;
-      });
-
-      return { time, available: !isOccupied };
-    });
-  };
-
-  const timeSlots = getAvailableTimeSlots();
-
+  // Wrapper for scheduling meeting with client details
   const handleScheduleMeeting = async () => {
-    if (!meetingDate || !meetingTime) {
-      toast.error("נא לבחור תאריך ושעה");
-      return;
-    }
-
-    setIsSchedulingMeeting(true);
-
-    try {
-      const [hours, minutes] = meetingTime.split(':').map(Number);
-      const startDateTime = new Date(meetingDate);
-      startDateTime.setHours(hours, minutes, 0, 0);
-      
-      const endDateTime = new Date(startDateTime);
-      endDateTime.setHours(startDateTime.getHours() + 1);
-
-      const subject = meetingSubject || `פגישה עם ${client.name}`;
-
-      // Create calendar event
-      const { data: calendarData, error: calError } = await supabase.functions.invoke('add-calendar-event', {
-        body: {
-          summary: subject,
-          description: personalMessage || `פגישה עם לקוח: ${client.name}`,
-          start: startDateTime.toISOString(),
-          end: endDateTime.toISOString(),
-          location: meetingLocation || undefined,
-          attendees: client.email ? [{ email: client.email }] : undefined,
-        }
-      });
-
-      if (calError) {
-        console.error('Calendar error:', calError);
-        toast.error("שגיאה ביצירת הפגישה ביומן");
-      } else {
-        toast.success("הפגישה נוספה ליומן!");
-        
-        // Trigger meeting_created automation
-        if (tenantId) {
-          try {
-            await supabase.functions.invoke('trigger-automation', {
-              body: {
-                trigger_type: 'meeting_created',
-                data: {
-                  client_id: client.id,
-                  client_name: client.name,
-                  contact_name: client.contact_name,
-                  phone: client.phone,
-                  email: client.email,
-                  meeting_date: format(meetingDate, 'yyyy-MM-dd'),
-                  meeting_time: meetingTime,
-                  meeting_subject: subject,
-                  meeting_location: meetingLocation,
-                  personal_message: personalMessage,
-                },
-                tenant_id: tenantId
-              }
-            });
-          } catch (automationError) {
-            console.error('Automation trigger error:', automationError);
-          }
-        }
-      }
-
-      // Reset form
-      setMeetingDate(undefined);
-      setMeetingTime("10:00");
-      setMeetingSubject("");
-      setMeetingLocation("");
-      setPersonalMessage("");
-      setSendWhatsappNotification(false);
-
-    } catch (error: any) {
-      console.error('Meeting scheduling error:', error);
-      toast.error(`שגיאה בקביעת פגישה: ${error.message}`);
-    } finally {
-      setIsSchedulingMeeting(false);
-    }
+    await meetingScheduler.scheduleMeeting({
+      contactName: client.name,
+      contactEmail: client.email,
+      contactId: client.id,
+      contactType: 'client',
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["clients"] });
+      },
+    });
   };
 
   return (
@@ -838,8 +653,8 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                   <Card className="p-2">
                     <Calendar
                       mode="single"
-                      selected={meetingDate}
-                      onSelect={handleMeetingDateSelect}
+                      selected={meetingScheduler.meetingDate}
+                      onSelect={meetingScheduler.handleDateSelect}
                       disabled={(date) => date < new Date()}
                       className="pointer-events-auto"
                       locale={he}
@@ -854,19 +669,19 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                       <Clock className="h-4 w-4" />
                       שעה
                     </label>
-                    <Select value={meetingTime} onValueChange={setMeetingTime}>
+                    <Select value={meetingScheduler.meetingTime} onValueChange={meetingScheduler.setMeetingTime}>
                       <SelectTrigger className="w-full text-right rounded-lg border-2 h-11">
                         <SelectValue placeholder="בחר שעה" />
                       </SelectTrigger>
                       <SelectContent className="bg-background z-50 max-h-[200px]">
-                        {isLoadingCalendar ? (
+                        {meetingScheduler.isLoadingCalendar ? (
                           <SelectItem value="loading" disabled>טוען יומן...</SelectItem>
-                        ) : calendarError ? (
-                          <SelectItem value="error" disabled>{calendarError}</SelectItem>
+                        ) : meetingScheduler.calendarError ? (
+                          <SelectItem value="error" disabled>{meetingScheduler.calendarError}</SelectItem>
                         ) : (
                           timeSlots.map(({ time, available }) => (
-                            <SelectItem 
-                              key={time} 
+                            <SelectItem
+                              key={time}
                               value={time}
                               disabled={!available}
                               className={!available ? "text-muted-foreground line-through" : ""}
@@ -882,8 +697,8 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                   <div className="space-y-2">
                     <label className="text-sm font-medium">נושא הפגישה</label>
                     <Input
-                      value={meetingSubject}
-                      onChange={(e) => setMeetingSubject(e.target.value)}
+                      value={meetingScheduler.meetingSubject}
+                      onChange={(e) => meetingScheduler.setMeetingSubject(e.target.value)}
                       placeholder={`פגישה עם ${client.name}`}
                     />
                   </div>
@@ -891,8 +706,8 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                   <div className="space-y-2">
                     <label className="text-sm font-medium">מיקום (אופציונלי)</label>
                     <Input
-                      value={meetingLocation}
-                      onChange={(e) => setMeetingLocation(e.target.value)}
+                      value={meetingScheduler.meetingLocation}
+                      onChange={(e) => meetingScheduler.setMeetingLocation(e.target.value)}
                       placeholder="Google Meet / משרד / זום"
                     />
                   </div>
@@ -900,8 +715,8 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                   <div className="space-y-2">
                     <label className="text-sm font-medium">הודעה אישית (אופציונלי)</label>
                     <Textarea
-                      value={personalMessage}
-                      onChange={(e) => setPersonalMessage(e.target.value)}
+                      value={meetingScheduler.personalMessage}
+                      onChange={(e) => meetingScheduler.setPersonalMessage(e.target.value)}
                       placeholder="הוסף הודעה אישית שתופיע בהזמנה..."
                       rows={3}
                     />
@@ -914,23 +729,23 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                   )}
 
                   {/* Summary Card */}
-                  {meetingDate && (
+                  {meetingScheduler.meetingDate && (
                     <Card className="p-4 bg-primary/5 border-primary/20">
                       <div className="flex items-center gap-2 text-sm">
                         <CheckCircle2 className="h-4 w-4 text-primary" />
                         <span className="font-medium">
-                          {format(meetingDate, 'EEEE, d בMMMM yyyy', { locale: he })} בשעה {meetingTime}
+                          {format(meetingScheduler.meetingDate, 'EEEE, d בMMMM yyyy', { locale: he })} בשעה {meetingScheduler.meetingTime}
                         </span>
                       </div>
                     </Card>
                   )}
 
-                  <Button 
+                  <Button
                     onClick={handleScheduleMeeting}
-                    disabled={!meetingDate || !meetingTime || isSchedulingMeeting}
+                    disabled={!meetingScheduler.meetingDate || !meetingScheduler.meetingTime || meetingScheduler.isSchedulingMeeting}
                     className="w-full"
                   >
-                    {isSchedulingMeeting ? (
+                    {meetingScheduler.isSchedulingMeeting ? (
                       <>
                         <Loader2 className="ml-2 h-4 w-4 animate-spin" />
                         קובע פגישה...
