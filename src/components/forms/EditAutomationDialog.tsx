@@ -54,6 +54,10 @@ const formSchema = z.object({
   // Green API connection selection
   green_api_integration_id: z.string().optional(),
   campaigner_send_target: z.enum(["phone", "group"]).optional(),
+  // Green API manual target fields
+  greenapi_send_to_type: z.enum(["contact", "manual_phone", "manual_group"]).optional(),
+  greenapi_manual_phone: z.string().optional(),
+  greenapi_manual_group_id: z.string().optional(),
   // Green API / update template fields
   message_template: z.string().optional(),
   update_template: z.string().optional(),
@@ -146,6 +150,9 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
       update_template: automation.configuration?.update_template || "אין מענה בתאריך {{date}} בשעה {{time}}",
       campaigner_send_target: automation.configuration?.send_target || "phone",
       green_api_integration_id: automation.configuration?.integration_id || "",
+      greenapi_send_to_type: automation.configuration?.send_to_type || "contact",
+      greenapi_manual_phone: automation.configuration?.manual_phone || "",
+      greenapi_manual_group_id: automation.configuration?.manual_group_id || "",
       task_title_template: automation.configuration?.task_title_template || "{{company_name}} - משימה חדשה",
       task_notes_template: automation.configuration?.task_notes_template || "",
       task_priority: automation.configuration?.task_priority || 5,
@@ -292,6 +299,9 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
         configuration = {
           message_template: values.message_template || "",
           integration_id: values.green_api_integration_id || null,
+          send_to_type: values.greenapi_send_to_type || "contact",
+          manual_phone: values.greenapi_manual_phone || null,
+          manual_group_id: values.greenapi_manual_group_id || null,
         };
       } else if (values.action_type === "send_greenapi_to_campaigner") {
         configuration = {
@@ -846,6 +856,71 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                     </FormItem>
                   )}
                 />
+                
+                <FormField
+                  control={form.control}
+                  name="greenapi_send_to_type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>שלח ל *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || "contact"}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר יעד" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background z-[100]">
+                          <SelectItem value="contact">איש קשר (ליד/לקוח)</SelectItem>
+                          <SelectItem value="manual_phone">מספר טלפון ידני</SelectItem>
+                          <SelectItem value="manual_group">קבוצת WhatsApp</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-xs">
+                        בחר אם לשלוח לאיש הקשר מהטריגר או ליעד קבוע
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {form.watch("greenapi_send_to_type") === "manual_phone" && (
+                  <FormField
+                    control={form.control}
+                    name="greenapi_manual_phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>מספר טלפון</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="0501234567" />
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          הזן מספר טלפון ישראלי (יתורגם אוטומטית ל-972)
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
+                {form.watch("greenapi_send_to_type") === "manual_group" && (
+                  <FormField
+                    control={form.control}
+                    name="greenapi_manual_group_id"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>מזהה קבוצה</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="120363..." />
+                        </FormControl>
+                        <FormDescription className="text-xs">
+                          הזן את מזהה הקבוצה (ניתן למצוא בהגדרות הקבוצה או מ-WhatsApp Web)
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                
                 <FormField
                   control={form.control}
                   name="message_template"
