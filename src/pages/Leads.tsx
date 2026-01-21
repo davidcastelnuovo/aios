@@ -1073,6 +1073,19 @@ export default function Leads() {
     return allLeads;
   }, [isKanbanView, tableLeads, kanbanStageData]);
 
+  // Calculate total leads count for Kanban view from RPC data
+  const kanbanTotalLeadsCount = useMemo(() => {
+    if (!kanbanStageData) return 0;
+    let total = 0;
+    for (const stageId of Object.keys(kanbanStageData)) {
+      total += kanbanStageData[stageId].totalCount;
+    }
+    return total;
+  }, [kanbanStageData]);
+
+  // Use appropriate total count based on view mode
+  const displayTotalCount = isKanbanView ? kanbanTotalLeadsCount : totalLeadsCount;
+
   const totalPages = Math.ceil(totalLeadsCount / TABLE_LEADS_PER_PAGE);
   const hasMorePages = page < totalPages;
 
@@ -1848,6 +1861,8 @@ export default function Leads() {
             <Badge variant="secondary" className="text-base px-3 py-1">
               {isFetching ? (
                 <span className="animate-pulse">טוען...</span>
+              ) : isKanbanView ? (
+                <>סה"כ: {displayTotalCount.toLocaleString()}</>
               ) : (
                 <>מציג: {filteredLeads?.length || 0} {totalPages > 1 && `(מתוך ${totalLeadsCount})`}</>
               )}
