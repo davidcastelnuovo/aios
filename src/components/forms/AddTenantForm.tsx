@@ -62,9 +62,9 @@ export function AddTenantForm({
     contact_email: "",
     notes: "",
     allow_super_admin_access: true,
-    business_type: "marketing_agency" as "marketing_agency" | "general_business",
   });
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [selectedTerminologyPresetId, setSelectedTerminologyPresetId] = useState<string>("");
 
   // Use controlled or internal state
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -101,10 +101,23 @@ export function AddTenantForm({
     },
   });
 
+  // Fetch available terminology presets
+  const { data: terminologyPresets } = useQuery({
+    queryKey: ["terminology-presets"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("terminology_presets" as any)
+        .select("id, name, description, is_public")
+        .order("name");
+      if (error) throw error;
+      return data as unknown as { id: string; name: string; description: string | null; is_public: boolean }[];
+    },
+  });
+
   const [selectedParentTenant, setSelectedParentTenant] = useState<string>(parentTenantId || "");
 
   const addTenantMutation = useMutation({
-    mutationFn: async (data: typeof formData & { parent_tenant_id?: string; template_id?: string }) => {
+    mutationFn: async (data: typeof formData & { parent_tenant_id?: string; template_id?: string; terminology_preset_id?: string }) => {
       // Call edge function to create tenant with owner invitation
       const { data: result, error } = await supabase.functions.invoke(
         "create-tenant-with-owner",
@@ -117,7 +130,7 @@ export function AddTenantForm({
             parent_tenant_id: data.parent_tenant_id || null,
             allow_super_admin_access: data.allow_super_admin_access,
             template_id: data.template_id || null,
-            business_type: data.business_type,
+            terminology_preset_id: data.terminology_preset_id || null,
           },
         }
       );
@@ -161,10 +174,10 @@ export function AddTenantForm({
         contact_email: "",
         notes: "",
         allow_super_admin_access: true,
-        business_type: "marketing_agency",
       });
       setSelectedParentTenant("");
       setSelectedTemplateId("");
+      setSelectedTerminologyPresetId("");
       setOpen(false);
       
       // Show switch dialog
@@ -207,38 +220,49 @@ export function AddTenantForm({
     // If template is selected, get its source_tenant_id
     const template = templates?.find(t => t.id === templateId);
     
+    // Get terminology preset id
+    const terminologyPresetId = selectedTerminologyPresetId && selectedTerminologyPresetId !== "__none__" 
+      ? selectedTerminologyPresetId 
+      : undefined;
+    
     addTenantMutation.mutate({
       ...formData,
       parent_tenant_id: finalParentId,
       template_id: template?.source_tenant_id || undefined,
+      terminology_preset_id: terminologyPresetId,
     });
   };
 
   const formContent = (
     <form onSubmit={handleSubmit} className="space-y-4" dir="rtl">
-      {/* Business Type Selection - First field */}
-      <div className="space-y-2">
-        <Label htmlFor="business_type">סוג עסק *</Label>
-        <Select 
-          value={formData.business_type} 
-          onValueChange={(value: "marketing_agency" | "general_business") => 
-            setFormData({ ...formData, business_type: value })
-          }
-        >
-          <SelectTrigger id="business_type">
-            <SelectValue placeholder="בחר סוג עסק" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="marketing_agency">סוכנות שיווק / פרסום</SelectItem>
-            <SelectItem value="general_business">עסק כללי</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">
-          {formData.business_type === "marketing_agency" 
-            ? "מותאם לסוכנויות שיווק: קמפיינרים, SEO, לקוחות קמפיינים" 
-            : "מותאם לעסקים כלליים: עובדים, מחלקות, פרויקטים"}
-        </p>
-      </div>
+      {/* Terminology Preset Selection - First field */}
+      {terminologyPresets && terminologyPresets.length > 0 && (
+        <div className="space-y-2">
+          <Label htmlFor="terminology_preset">פריסט טרמינולוגיה *</Label>
+          <Select 
+            value={selectedTerminologyPresetId || "__none__"} 
+            onValueChange={setSelectedTerminologyPresetId}
+          >
+            <SelectTrigger id="terminology_preset">
+              <SelectValue placeholder="בחר סוג עסק / פריסט" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">בחר פריסט...</SelectItem>
+              {terminologyPresets.map((preset) => (
+                <SelectItem key={preset.id} value={preset.id}>
+                  {preset.name}
+                  {preset.is_public && !preset.description?.includes("מותאם") && " (ברירת מחדל)"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedTerminologyPresetId && selectedTerminologyPresetId !== "__none__" && (
+            <p className="text-xs text-muted-foreground">
+              {terminologyPresets.find(p => p.id === selectedTerminologyPresetId)?.description || ""}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="name">שם הארגון *</Label>
