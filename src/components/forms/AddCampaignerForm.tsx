@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTeamRoles } from "@/hooks/useTeamRoles";
 
 const formSchema = z.object({
   full_name: z.string().min(1, "שם מלא הוא שדה חובה"),
@@ -50,6 +51,7 @@ export function AddCampaignerForm() {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { teamRoles, isLoading: rolesLoading } = useTeamRoles();
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies", tenantId],
@@ -242,25 +244,29 @@ export function AddCampaignerForm() {
                 <FormItem>
                   <FormLabel>תפקידים</FormLabel>
                   <div className="space-y-2">
-                    {["קמפיינר", "SEO", "מנהל צוות"].map((role) => (
-                      <div key={role} className="flex items-center space-x-2 space-x-reverse">
-                        <input
-                          type="checkbox"
-                          id={`role-${role}`}
-                          checked={field.value?.includes(role)}
-                          onChange={(e) => {
-                            const newValue = e.target.checked
-                              ? [...(field.value || []), role]
-                              : (field.value || []).filter(r => r !== role);
-                            field.onChange(newValue);
-                          }}
-                          className="rounded border-gray-300"
-                        />
-                        <label htmlFor={`role-${role}`} className="text-sm cursor-pointer">
-                          {role}
-                        </label>
-                      </div>
-                    ))}
+                    {rolesLoading ? (
+                      <p className="text-sm text-muted-foreground">טוען תפקידים...</p>
+                    ) : (
+                      teamRoles.map((role) => (
+                        <div key={role.key} className="flex items-center space-x-2 space-x-reverse">
+                          <input
+                            type="checkbox"
+                            id={`role-${role.key}`}
+                            checked={field.value?.includes(role.label)}
+                            onChange={(e) => {
+                              const newValue = e.target.checked
+                                ? [...(field.value || []), role.label]
+                                : (field.value || []).filter(r => r !== role.label);
+                              field.onChange(newValue);
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <label htmlFor={`role-${role.key}`} className="text-sm cursor-pointer">
+                            {role.label}
+                          </label>
+                        </div>
+                      ))
+                    )}
                   </div>
                   <FormMessage />
                 </FormItem>

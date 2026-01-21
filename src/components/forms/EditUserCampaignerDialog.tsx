@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useAutoCreateTeamMember } from "@/hooks/useAutoCreateTeamMember";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTeamRoles } from "@/hooks/useTeamRoles";
 import { Checkbox } from "@/components/ui/checkbox";
 
 interface EditUserCampaignerDialogProps {
@@ -42,6 +43,7 @@ export function EditUserCampaignerDialog({
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { createCampaigner } = useAutoCreateTeamMember();
+  const { teamRoles, isLoading: rolesLoading } = useTeamRoles();
 
   const [selectedCampaignerId, setSelectedCampaignerId] = useState<string>("");
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -291,24 +293,28 @@ export function EditUserCampaignerDialog({
             <div>
               <Label>תפקידים</Label>
               <div className="space-y-2 mt-2">
-                {["קמפיינר", "SEO", "מנהל צוות"].map((role) => (
-                  <div key={role} className="flex items-center space-x-2 space-x-reverse">
-                    <Checkbox
-                      id={`role-${role}`}
-                      checked={selectedRoles.includes(role)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedRoles([...selectedRoles, role]);
-                        } else {
-                          setSelectedRoles(selectedRoles.filter(r => r !== role));
-                        }
-                      }}
-                    />
-                    <label htmlFor={`role-${role}`} className="text-sm cursor-pointer">
-                      {role}
-                    </label>
-                  </div>
-                ))}
+                {rolesLoading ? (
+                  <p className="text-sm text-muted-foreground">טוען תפקידים...</p>
+                ) : (
+                  teamRoles.map((role) => (
+                    <div key={role.key} className="flex items-center space-x-2 space-x-reverse">
+                      <Checkbox
+                        id={`role-${role.key}`}
+                        checked={selectedRoles.includes(role.label)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedRoles([...selectedRoles, role.label]);
+                          } else {
+                            setSelectedRoles(selectedRoles.filter(r => r !== role.label));
+                          }
+                        }}
+                      />
+                      <label htmlFor={`role-${role.key}`} className="text-sm cursor-pointer">
+                        {role.label}
+                      </label>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
