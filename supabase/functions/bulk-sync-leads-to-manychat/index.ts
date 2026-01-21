@@ -102,6 +102,14 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Track result for this lead
+  let leadId: string | null = null;
+  let leadName = 'Unknown';
+  let errorMessage: string | null = null;
+  let wasSkipped = false;
+  let subscriberId: string | null = null;
+  let wasExisting = false;
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -129,7 +137,6 @@ Deno.serve(async (req) => {
     }
 
     // Get parameters from request - now processing ONE lead at a time
-    // Keep compatibility with previous payload shape
     const { tenantId, tagId = 79380109, delayMs = 10000 } = await req.json();
     
     if (!tenantId) {
@@ -163,7 +170,7 @@ Deno.serve(async (req) => {
 
     const apiKey = integration.api_key;
 
-    // Fetch ONE lead without manychat_subscriber_id
+    // Fetch ONE lead without manychat_subscriber_id (excluding SYNC_CONFLICT)
     const { data: leads, error: leadsError } = await supabase
       .from('leads')
       .select('id, contact_name, phone, email, company_name')
@@ -193,6 +200,7 @@ Deno.serve(async (req) => {
           success: true, 
           message: 'No leads to sync',
           processed: 0,
+          failed: 0,
           remaining: remainingCount || 0,
           results: []
         }),
@@ -201,14 +209,12 @@ Deno.serve(async (req) => {
     }
 
     const lead = leads[0];
+    leadId = lead.id;
     const formattedPhone = formatPhoneForManyChat(lead.phone);
     const phoneCandidates = getPhoneLookupCandidates(lead.phone);
-    const displayName = lead.contact_name || lead.company_name || 'Unknown';
+    leadName = lead.contact_name || lead.company_name || 'Unknown';
     
-    console.log(`Processing lead ${lead.id}: ${displayName}, phone: ${formattedPhone}`);
-
-    let subscriberId: string | null = null;
-    let wasExisting = false;
+    console.log(`Processing lead ${lead.id}: ${leadName}, phone: ${formattedPhone}`);
 
     // Step 1: Try to find existing subscriber (phone first, then email)
     subscriberId = await findSubscriberIdByPhone(apiKey, phoneCandidates);
@@ -236,10 +242,9 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           first_name: firstName,
           last_name: lastName,
-          // ManyChat requires at least one identifier: phone OR email OR whatsapp_phone.
-          // For WhatsApp contacts, whatsapp_phone is the most reliable.
+          // IMPORTANT: Add BOTH phone and whatsapp_phone for reliable future lookups
+          phone: `+${formattedPhone}`,
           whatsapp_phone: `+${formattedPhone}`,
-          // Keep email only if exists (may be blocked by ManyChat permissions, but doesn't hurt if allowed)
           email: lead.email || undefined,
           has_opt_in_sms: true,
           has_opt_in_email: !!lead.email,
@@ -254,10 +259,9 @@ Deno.serve(async (req) => {
         subscriberId = createData.data.id;
         console.log(`Created new subscriber: ${subscriberId}`);
       } else {
-        // If creation failed because subscriber already exists, do a lookup again and continue
-        const waAlreadyExists =
-          String(createData?.details?.messages?.wa_id?.message?.[0] || '').includes('already exists') ||
-          String(createData?.details?.messages?.phone?.message?.[0] || '').includes('already exists');
+        // If creation failed because subscriber already exists, try lookup again
+        const alreadyExistsMsg = JSON.stringify(createData).toLowerCase();
+        const waAlreadyExists = alreadyExistsMsg.includes('already exists');
 
         if (waAlreadyExists) {
           console.log('Subscriber already exists according to createSubscriber, retrying lookup...');
@@ -270,42 +274,54 @@ Deno.serve(async (req) => {
         }
       }
       
+      // SKIP & CONTINUE: If still no subscriber ID, mark as conflict and continue
       if (!subscriberId) {
-        throw new Error(`Failed to get subscriber ID: ${JSON.stringify(createData)}`);
+        wasSkipped = true;
+        errorMessage = `Could not find or create subscriber: ${JSON.stringify(createData)}`;
+        console.log(`Skipping lead ${lead.id}: ${errorMessage}`);
+        
+        // Mark lead with special value so we don't keep trying it
+        await supabase
+          .from('leads')
+          .update({ manychat_subscriber_id: 'SYNC_CONFLICT' })
+          .eq('id', lead.id);
       }
     }
 
-    // Step 3: Add tag to subscriber
-    const tagRes = await fetch('https://api.manychat.com/fb/subscriber/addTag', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        subscriber_id: subscriberId,
-        tag_id: tagId,
-      }),
-    });
+    // Step 3: Add tag to subscriber (only if we have a valid subscriber ID)
+    if (subscriberId && !wasSkipped) {
+      const tagRes = await fetch('https://api.manychat.com/fb/subscriber/addTag', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subscriber_id: subscriberId,
+          tag_id: tagId,
+        }),
+      });
 
-    const tagData = await safeJson(tagRes);
-    console.log('Add tag response:', JSON.stringify(tagData));
+      const tagData = await safeJson(tagRes);
+      console.log('Add tag response:', JSON.stringify(tagData));
 
-    if (tagData?.status !== 'success') {
-      throw new Error(`Failed to add tag: ${JSON.stringify(tagData)}`);
+      if (tagData?.status !== 'success') {
+        // Tag failed but we still have the subscriber - mark it anyway
+        console.log(`Tag failed for ${subscriberId}, but continuing: ${JSON.stringify(tagData)}`);
+      }
+
+      // Step 4: Update lead in database with subscriber ID
+      const { error: updateError } = await supabase
+        .from('leads')
+        .update({ manychat_subscriber_id: subscriberId })
+        .eq('id', lead.id);
+
+      if (updateError) {
+        console.error(`Failed to update lead ${lead.id}:`, updateError);
+      }
     }
 
-    // Step 4: Update lead in database with subscriber ID
-    const { error: updateError } = await supabase
-      .from('leads')
-      .update({ manychat_subscriber_id: subscriberId })
-      .eq('id', lead.id);
-
-    if (updateError) {
-      console.error(`Failed to update lead ${lead.id}:`, updateError);
-    }
-
-    // Count remaining leads
+    // Count remaining leads (excluding SYNC_CONFLICT)
     const { count: remainingCount } = await supabase
       .from('leads')
       .select('id', { count: 'exact', head: true })
@@ -313,24 +329,35 @@ Deno.serve(async (req) => {
       .is('manychat_subscriber_id', null)
       .not('phone', 'is', null);
 
+    // Also count conflicts for reporting
+    const { count: conflictCount } = await supabase
+      .from('leads')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId)
+      .eq('manychat_subscriber_id', 'SYNC_CONFLICT');
+
     // Throttle next call to avoid ManyChat rate limits (only if there is more work)
     if ((remainingCount || 0) > 0 && delayMs > 0) {
       console.log(`Throttling next call: waiting ${delayMs}ms...`);
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 
+    // ALWAYS return 200 with detailed results
     return new Response(
       JSON.stringify({
         success: true,
         processed: 1,
-        failed: 0,
+        failed: wasSkipped ? 1 : 0,
         remaining: remainingCount || 0,
+        conflicts: conflictCount || 0,
         results: [{
           leadId: lead.id,
-          leadName: displayName,
-          success: true,
-          subscriberId,
+          leadName,
+          success: !wasSkipped,
+          subscriberId: wasSkipped ? null : subscriberId,
           wasExisting,
+          skipped: wasSkipped,
+          error: errorMessage,
         }],
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -338,23 +365,28 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Bulk sync error:', error);
+    errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
     // Basic throttle on error to avoid hammering ManyChat
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
+    // ALWAYS return 200 so the sync loop continues
     return new Response(
       JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'Unknown error',
-        success: false,
-        processed: 0,
+        success: true, // The request succeeded, even if the lead failed
+        processed: 1,
         failed: 1,
+        remaining: -1, // Unknown due to error
+        conflicts: 0,
         results: [{
-          leadId: null,
+          leadId,
+          leadName,
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          skipped: true,
+          error: errorMessage,
         }]
       }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
