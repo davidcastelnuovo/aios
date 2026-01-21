@@ -1691,7 +1691,7 @@ export default function Leads() {
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1 || isFetching}
                 >
-                  ← הקודם
+                  הקודם →
                 </Button>
                 <span className="text-sm text-muted-foreground whitespace-nowrap">
                   עמוד {page} מתוך {totalPages}
@@ -1702,7 +1702,7 @@ export default function Leads() {
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages || isFetching}
                 >
-                  הבא →
+                  ← הבא
                 </Button>
               </div>
             )}
@@ -2080,7 +2080,7 @@ export default function Leads() {
             onClick={() => setPage(p => Math.max(1, p - 1))}
             disabled={page === 1 || isFetching}
           >
-            הקודם
+            הקודם →
           </Button>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>עמוד {page} מתוך {totalPages}</span>
@@ -2092,7 +2092,7 @@ export default function Leads() {
             onClick={() => setPage(p => Math.min(totalPages, p + 1))}
             disabled={page === totalPages || isFetching}
           >
-            הבא
+            ← הבא
           </Button>
         </div>
       )}
