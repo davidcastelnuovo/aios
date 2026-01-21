@@ -19,15 +19,18 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface SyncResult {
   leadId: string;
+  leadName?: string;
   success: boolean;
   error?: string;
   subscriberId?: string;
+  skipped?: boolean;
 }
 
 interface SyncProgress {
   processed: number;
   failed: number;
   remaining: number;
+  conflicts: number;
   total: number;
   results: SyncResult[];
   isRunning: boolean;
@@ -54,6 +57,7 @@ export default function ManyChatSettings() {
     processed: 0,
     failed: 0,
     remaining: 0,
+    conflicts: 0,
     total: 0,
     results: [],
     isRunning: false,
@@ -96,7 +100,7 @@ export default function ManyChatSettings() {
   const { data: leadsToSync, refetch: refetchLeadsCount } = useQuery({
     queryKey: ['leads-to-sync', tenantId],
     queryFn: async () => {
-      if (!tenantId) return { count: 0 };
+      if (!tenantId) return { count: 0, conflicts: 0 };
       
       const { count, error } = await supabase
         .from('leads')
@@ -105,8 +109,15 @@ export default function ManyChatSettings() {
         .is('manychat_subscriber_id', null)
         .not('phone', 'is', null);
       
+      // Count conflicts separately
+      const { count: conflictCount } = await supabase
+        .from('leads')
+        .select('id', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId)
+        .eq('manychat_subscriber_id', 'SYNC_CONFLICT');
+      
       if (error) throw error;
-      return { count: count || 0 };
+      return { count: count || 0, conflicts: conflictCount || 0 };
     },
     enabled: !!tenantId && !!integration?.is_active,
   });
@@ -191,6 +202,7 @@ export default function ManyChatSettings() {
       processed: 0,
       failed: 0,
       remaining: totalLeads,
+      conflicts: 0,
       total: totalLeads,
       results: [],
       isRunning: true,
@@ -207,38 +219,42 @@ export default function ManyChatSettings() {
     
     let totalProcessed = 0;
     let totalFailed = 0;
+    let totalConflicts = 0;
     let allResults: SyncResult[] = [];
     let remaining = totalLeads;
     
-    // Process in batches
+    // Process one lead at a time - the function handles the delay
     while (remaining > 0 && !stopSyncRef.current) {
       try {
         const response = await supabase.functions.invoke('bulk-sync-leads-to-manychat', {
           body: {
             tenantId,
             tagId: parseInt(selectedTagId),
-            batchSize: 5,
             delayMs: 10000,
           },
           headers: { Authorization: `Bearer ${session.access_token}` },
         });
         
-        if (response.error) {
+        // The function now always returns 200, check the data
+        const data = response.data;
+        
+        if (response.error && !data) {
           console.error('Batch error:', response.error);
           toast.error(`שגיאה בסנכרון: ${response.error.message}`);
           break;
         }
         
-        const data = response.data;
         totalProcessed += data.processed || 0;
         totalFailed += data.failed || 0;
-        remaining = data.remaining || 0;
+        totalConflicts = data.conflicts || totalConflicts;
+        remaining = data.remaining >= 0 ? data.remaining : remaining - 1;
         allResults = [...allResults, ...(data.results || [])];
         
         setSyncProgress({
           processed: totalProcessed,
           failed: totalFailed,
           remaining,
+          conflicts: totalConflicts,
           total: totalLeads,
           results: allResults,
           isRunning: remaining > 0 && !stopSyncRef.current,
@@ -251,8 +267,8 @@ export default function ManyChatSettings() {
         
       } catch (error) {
         console.error('Sync error:', error);
-        toast.error('שגיאה בתהליך הסנכרון');
-        break;
+        // Don't break on error - try to continue
+        remaining--;
       }
     }
     
@@ -490,14 +506,18 @@ export default function ManyChatSettings() {
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Stats */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <Card className="p-4">
                   <div className="text-2xl font-bold">{leadsToSync?.count || 0}</div>
                   <div className="text-sm text-muted-foreground">לידים לסנכרון</div>
                 </Card>
                 <Card className="p-4">
-                  <div className="text-2xl font-bold">{syncProgress.processed}</div>
+                  <div className="text-2xl font-bold text-primary">{syncProgress.processed}</div>
                   <div className="text-sm text-muted-foreground">סונכרנו בהצלחה</div>
+                </Card>
+                <Card className="p-4">
+                  <div className="text-2xl font-bold text-destructive">{(leadsToSync?.conflicts || 0) + syncProgress.failed}</div>
+                  <div className="text-sm text-muted-foreground">קונפליקטים</div>
                 </Card>
               </div>
               
@@ -568,11 +588,13 @@ export default function ManyChatSettings() {
                       {syncProgress.results.map((result, idx) => (
                         <div 
                           key={idx} 
-                          className={result.success ? 'text-emerald-600' : 'text-destructive'}
+                          className={result.success ? 'text-primary' : result.skipped ? 'text-amber-600' : 'text-destructive'}
                         >
                           {result.success 
-                            ? `✓ ליד ${result.leadId.slice(0, 8)}... → ${result.subscriberId}`
-                            : `✗ ליד ${result.leadId.slice(0, 8)}... - ${result.error}`
+                            ? `✓ ${result.leadName || result.leadId?.slice(0, 8)} → ${result.subscriberId}`
+                            : result.skipped
+                              ? `⚠ ${result.leadName || result.leadId?.slice(0, 8)} - דילוג (${result.error?.slice(0, 50)}...)`
+                              : `✗ ${result.leadName || result.leadId?.slice(0, 8)} - ${result.error}`
                           }
                         </div>
                       ))}
