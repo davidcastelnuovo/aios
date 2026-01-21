@@ -2065,8 +2065,8 @@ export default function Users() {
         <div className="mb-4 md:mb-6 p-3 md:p-4 bg-white dark:bg-gray-900 rounded-lg border">
           <h3 className="font-semibold mb-2 text-sm md:text-base">ההבדל בין ניהול משתמשים לניהול ארגונים:</h3>
           <ul className="text-xs md:text-sm space-y-2 mr-4">
-            <li><strong>• ניהול משתמשים (דף זה):</strong> הוספת עובדים/קמפיינרים לארגון שלך. הם לא מקבלים חשבון נפרד, אלא נכנסים למערכת שלך.</li>
-            <li><strong>• ניהול ארגונים (רק Super Admin):</strong> יצירת לקוחות SaaS חדשים שמקבלים חשבון נפרד לחלוטין.</li>
+            <li><strong>• ניהול משתמשים (דף זה):</strong> הוספת עובדים/{t('role_campaigner', true)} לארגון שלך. הם לא מקבלים חשבון נפרד, אלא נכנסים למערכת שלך.</li>
+            <li><strong>• ניהול ארגונים (רק {t('role_super_admin')}):</strong> יצירת לקוחות SaaS חדשים שמקבלים חשבון נפרד לחלוטין.</li>
           </ul>
         </div>
         

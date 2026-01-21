@@ -38,6 +38,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useUserPermissions } from "@/hooks/useUserPermissions";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
+import { useTerminology } from "@/hooks/useTerminology";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
 import { Calendar } from "@/components/ui/calendar";
@@ -72,6 +73,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { getFieldLabel } = useCustomFieldLabels('client');
+  const { t } = useTerminology();
 
   // Shared hooks
   const { folderLinks, setFolderLinks, attachments, setAttachments, filesCount } =
@@ -130,7 +132,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         .maybeSingle();
 
       if (existing) {
-        toast.info("הקמפיינר כבר משויך ללקוח");
+        toast.info(`ה${t('role_campaigner')} כבר משויך ללקוח`);
         return;
       }
 
@@ -144,7 +146,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("הקמפיינר שויך בהצלחה");
+      toast.success(`ה${t('role_campaigner')} שויך בהצלחה`);
       refetchAssigned();
     },
     onError: () => {
@@ -580,7 +582,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
 
             <div className="space-y-3 pt-4 border-t">
               <div>
-                <FormLabel>קמפיינרים משויכים</FormLabel>
+                <FormLabel>{t('role_campaigner', true)} משויכים</FormLabel>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {assignedCampaigners && assignedCampaigners.length > 0 ? (
                     assignedCampaigners.map((assignment: any) => (
@@ -596,18 +598,18 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                       </Badge>
                     ))
                   ) : (
-                    <p className="text-sm text-muted-foreground">אין קמפיינרים משויכים</p>
+                    <p className="text-sm text-muted-foreground">אין {t('role_campaigner', true)} משויכים</p>
                   )}
                 </div>
               </div>
 
               <div>
-                <FormLabel>הוסף קמפיינר</FormLabel>
+                <FormLabel>הוסף {t('role_campaigner')}</FormLabel>
                 <Select
                   onValueChange={(value) => assignCampaignerMutation.mutate(value)}
                 >
                   <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="בחר קמפיינר" />
+                    <SelectValue placeholder={`בחר ${t('role_campaigner')}`} />
                   </SelectTrigger>
                   <SelectContent className="bg-background">
                     {campaigners?.map((campaigner) => (

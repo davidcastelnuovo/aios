@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useTerminology } from "@/hooks/useTerminology";
 
 export interface TaskFilterState {
   campaignerId: string;
@@ -55,6 +56,7 @@ export function TaskFiltersDialog({
   onApply,
 }: TaskFiltersDialogProps) {
   const { tenantId } = useCurrentTenant();
+  const { t } = useTerminology();
   const [filters, setFilters] = useState<TaskFilterState>(currentFilters);
 
   // Sync with current filters when dialog opens
@@ -115,7 +117,7 @@ export function TaskFiltersDialog({
         <div className="space-y-5 py-4">
           {/* Campaigner */}
           <div className="space-y-2">
-            <Label>קמפיינר</Label>
+            <Label>{t('role_campaigner')}</Label>
             <Select
               value={filters.campaignerId}
               onValueChange={(val) =>
@@ -123,10 +125,10 @@ export function TaskFiltersDialog({
               }
             >
               <SelectTrigger>
-                <SelectValue placeholder="בחר קמפיינר" />
+                <SelectValue placeholder={`בחר ${t('role_campaigner')}`} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">כל הקמפיינרים</SelectItem>
+                <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
                 <SelectItem value="mine">שלי בלבד</SelectItem>
                 <SelectItem value="none">ללא שיוך</SelectItem>
                 {campaigners?.map((c) => (

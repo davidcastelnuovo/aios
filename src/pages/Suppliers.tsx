@@ -9,11 +9,13 @@ import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTerminology } from "@/hooks/useTerminology";
 
 export default function Suppliers() {
   const [editingSupplier, setEditingSupplier] = useState<any>(null);
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
+  const { t } = useTerminology();
   
   const { data: suppliers, isLoading } = useQuery({
     queryKey: ["suppliers", tenantId],
@@ -72,7 +74,7 @@ export default function Suppliers() {
 
   const getTypeText = (type: string) => {
     const types: Record<string, string> = {
-      campaigner: "קמפיינר",
+      campaigner: t('role_campaigner'),
       media: "מדיה",
       design: "עיצוב",
       creative: "קריאייטיב",

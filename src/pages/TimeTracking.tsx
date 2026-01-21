@@ -32,9 +32,11 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTerminology } from "@/hooks/useTerminology";
 
 export default function TimeTracking() {
   const { tenantId } = useCurrentTenant();
+  const { t } = useTerminology();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [selectedCampaigner, setSelectedCampaigner] = useState<string>("me");
   const [editingEntry, setEditingEntry] = useState<any>(null);
@@ -427,11 +429,11 @@ export default function TimeTracking() {
           <div className="w-full md:w-48">
             <Select value={selectedCampaigner} onValueChange={setSelectedCampaigner}>
               <SelectTrigger>
-                <SelectValue placeholder="בחר קמפיינר" />
+                <SelectValue placeholder={`בחר ${t('role_campaigner')}`} />
               </SelectTrigger>
               <SelectContent className="bg-background">
                 <SelectItem value="me">השעון שלי</SelectItem>
-                <SelectItem value="all">כל הקמפיינרים</SelectItem>
+                <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
                 {campaigners?.map((campaigner) => (
                   <SelectItem key={campaigner.id} value={campaigner.id}>
                     {campaigner.full_name}
