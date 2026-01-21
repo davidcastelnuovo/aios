@@ -25,19 +25,7 @@ const sourceMappings: Record<string, string> = {
   'אחר': 'other',
 }
 
-// Status mappings
-const statusMappings: Record<string, string> = {
-  'new': 'new',
-  'חדש': 'new',
-  'contacted': 'contacted',
-  'יצרנו קשר': 'contacted',
-  'follow_up': 'follow_up',
-  'מעקב': 'follow_up',
-  'proposal_sent': 'proposal_sent',
-  'נשלחה הצעה': 'proposal_sent',
-  'closed': 'closed',
-  'נסגר': 'closed',
-}
+// Status mappings will be loaded dynamically from lead_statuses table
 
 const parseDate = (val: string): string | null => {
   if (!val) return null;
@@ -258,6 +246,22 @@ Deno.serve(async (req) => {
     // Use service role for inserts
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 
+    // Load lead statuses dynamically from the tenant's lead_statuses table
+    const { data: tenantStatuses } = await supabaseAdmin
+      .from('lead_statuses')
+      .select('status_key, label')
+      .eq('tenant_id', tenantId)
+    
+    // Build dynamic status mapping (label -> status_key)
+    const statusMappings: Record<string, string> = {}
+    if (tenantStatuses) {
+      for (const status of tenantStatuses) {
+        statusMappings[status.label.toLowerCase().trim()] = status.status_key
+        statusMappings[status.status_key.toLowerCase().trim()] = status.status_key
+      }
+    }
+    console.log(`Loaded ${Object.keys(statusMappings).length / 2} lead statuses for tenant`)
+
     let importedCount = 0
     let updatedCount = 0
     let updatesAddedCount = 0
@@ -312,7 +316,12 @@ Deno.serve(async (req) => {
             leadData.source = sourceMappings[strValue.toLowerCase()] || 'other'
             break
           case 'status':
-            leadData.status = statusMappings[strValue.toLowerCase()] || 'new'
+            // Map status to response_status using dynamic tenant statuses
+            const matchedStatus = statusMappings[strValue.toLowerCase().trim()]
+            if (matchedStatus) {
+              leadData.response_status = matchedStatus
+            }
+            // Don't set a default - leave as null if not matched
             break
           case 'monthly_budget':
           case 'three_month_budget':
