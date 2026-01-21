@@ -120,22 +120,25 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   // Fetch active chat provider - use currentTenant for unknown contacts
   const tenantIdForProvider = contactType === "unknown" ? currentTenant?.id : contact?.tenant_id;
   
-  const { data: activeProvider } = useQuery({
-    queryKey: ["active-chat-provider", tenantIdForProvider],
+  const { data: chatIntegration } = useQuery({
+    queryKey: ["chat-integration", tenantIdForProvider],
     queryFn: async () => {
       if (!tenantIdForProvider) return null;
       const { data, error } = await supabase
         .from("tenant_integrations")
-        .select("integration_type")
+        .select("integration_type, user_id")
         .eq("tenant_id", tenantIdForProvider)
         .eq("is_active", true)
         .in("integration_type", ["manychat", "green_api"])
         .single();
       if (error) return null;
-      return data?.integration_type as "manychat" | "green_api" | null;
+      return data;
     },
     enabled: !!tenantIdForProvider,
   });
+
+  const activeProvider = chatIntegration?.integration_type as "manychat" | "green_api" | null;
+  const connectionUserId = chatIntegration?.user_id;
 
 
   // Mark messages as read mutation + remove "unread" tag
@@ -328,17 +331,23 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
   // Fetch chat messages
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
-    queryKey: ["chat-messages", contactId, contactType, senderPhone],
+    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId],
     queryFn: async () => {
-      console.log("🔵 Fetching messages for:", { contactId, contactType, senderPhone });
+      console.log("🔵 Fetching messages for:", { contactId, contactType, senderPhone, connectionUserId });
       
       if (contactType === "unknown") {
-        const { data, error } = await supabase
+        let query = supabase
           .from("chat_messages")
           .select("*")
           .eq("sender_phone", senderPhone || contactId)
-          .eq("is_blocked", false)
-          .order("created_at", { ascending: true });
+          .eq("is_blocked", false);
+
+        // Filter by connection_user_id to prevent message leaking between users
+        if (connectionUserId) {
+          query = query.eq("connection_user_id", connectionUserId);
+        }
+
+        const { data, error } = await query.order("created_at", { ascending: true });
 
         if (error) {
           console.error("❌ Error fetching unknown messages:", error);
@@ -359,12 +368,18 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
 
       console.log("🔍 Query filter:", filter);
 
-      const { data, error } = await supabase
+      let query = supabase
         .from("chat_messages")
         .select("*")
         .match(filter)
-        .eq("is_blocked", false)
-        .order("created_at", { ascending: true });
+        .eq("is_blocked", false);
+
+      // Filter by connection_user_id to prevent message leaking between users
+      if (connectionUserId) {
+        query = query.eq("connection_user_id", connectionUserId);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: true });
 
       if (error) {
         console.error("❌ Error fetching messages:", error);
