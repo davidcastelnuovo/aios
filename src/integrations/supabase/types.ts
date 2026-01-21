@@ -3416,7 +3416,11 @@ export type Database = {
           p_start_date?: string
           p_tenant_id: string
         }
-        Returns: Json
+        Returns: {
+          leads: Json
+          stage: string
+          total_count: number
+        }[]
       }
       get_leads_by_tags: {
         Args: {
