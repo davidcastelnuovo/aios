@@ -62,6 +62,7 @@ export function AddTenantForm({
     contact_email: "",
     notes: "",
     allow_super_admin_access: true,
+    business_type: "marketing_agency" as "marketing_agency" | "general_business",
   });
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
 
@@ -116,6 +117,7 @@ export function AddTenantForm({
             parent_tenant_id: data.parent_tenant_id || null,
             allow_super_admin_access: data.allow_super_admin_access,
             template_id: data.template_id || null,
+            business_type: data.business_type,
           },
         }
       );
@@ -159,6 +161,7 @@ export function AddTenantForm({
         contact_email: "",
         notes: "",
         allow_super_admin_access: true,
+        business_type: "marketing_agency",
       });
       setSelectedParentTenant("");
       setSelectedTemplateId("");
@@ -213,6 +216,30 @@ export function AddTenantForm({
 
   const formContent = (
     <form onSubmit={handleSubmit} className="space-y-4" dir="rtl">
+      {/* Business Type Selection - First field */}
+      <div className="space-y-2">
+        <Label htmlFor="business_type">סוג עסק *</Label>
+        <Select 
+          value={formData.business_type} 
+          onValueChange={(value: "marketing_agency" | "general_business") => 
+            setFormData({ ...formData, business_type: value })
+          }
+        >
+          <SelectTrigger id="business_type">
+            <SelectValue placeholder="בחר סוג עסק" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="marketing_agency">סוכנות שיווק / פרסום</SelectItem>
+            <SelectItem value="general_business">עסק כללי</SelectItem>
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {formData.business_type === "marketing_agency" 
+            ? "מותאם לסוכנויות שיווק: קמפיינרים, SEO, לקוחות קמפיינים" 
+            : "מותאם לעסקים כלליים: עובדים, מחלקות, פרויקטים"}
+        </p>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="name">שם הארגון *</Label>
         <Input

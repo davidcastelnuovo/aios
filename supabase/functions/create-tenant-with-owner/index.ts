@@ -14,6 +14,7 @@ interface CreateTenantRequest {
   parent_tenant_id?: string;
   allow_super_admin_access?: boolean;
   template_id?: string; // source_tenant_id to copy from
+  business_type?: "marketing_agency" | "general_business";
 }
 
 serve(async (req: Request) => {
@@ -205,6 +206,19 @@ serve(async (req: Request) => {
         console.error("Error initializing custom fields:", customFieldsError);
       } else {
         console.log("✅ Custom fields initialized");
+      }
+
+      // Initialize terminology based on business type
+      const businessType = payload.business_type || "marketing_agency";
+      const { error: terminologyError } = await supabase.rpc("initialize_tenant_terminology", {
+        _tenant_id: newTenant.id,
+        _business_type: businessType
+      });
+
+      if (terminologyError) {
+        console.error("Error initializing terminology:", terminologyError);
+      } else {
+        console.log("✅ Terminology initialized for:", businessType);
       }
     }
 

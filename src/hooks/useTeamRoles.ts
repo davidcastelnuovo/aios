@@ -94,7 +94,10 @@ export function useTeamRoles() {
         .maybeSingle();
 
       if (error && error.code !== "PGRST116") throw error;
-      return data?.setting_value as TeamRole[] | null;
+      if (data?.setting_value && Array.isArray(data.setting_value)) {
+        return data.setting_value as unknown as TeamRole[];
+      }
+      return null;
     },
     enabled: !!tenantId,
   });
@@ -112,8 +115,9 @@ export function useTeamRoles() {
     }
 
     // הגדרות מטבלת tenants (שדה settings)
-    if (tenant?.settings?.team_roles && Array.isArray(tenant.settings.team_roles)) {
-      return tenant.settings.team_roles as TeamRole[];
+    const settings = tenant?.settings as Record<string, unknown> | null;
+    if (settings?.team_roles && Array.isArray(settings.team_roles)) {
+      return settings.team_roles as TeamRole[];
     }
 
     // ברירת מחדל לפי org_type

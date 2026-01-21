@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,7 +35,7 @@ export function TeamRolesManager() {
   const [hasChanges, setHasChanges] = useState(false);
 
   // עדכון customRoles כאשר teamRoles משתנה
-  useState(() => {
+  useEffect(() => {
     setCustomRoles(teamRoles);
   }, [teamRoles]);
 
