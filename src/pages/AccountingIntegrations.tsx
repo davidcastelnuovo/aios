@@ -276,7 +276,7 @@ export default function AccountingIntegrations() {
 
   // Fetch clients with financial data from client_tenant_financial_data
   const { data: clients, isLoading: clientsLoading } = useQuery({
-    queryKey: ["accounting-clients", currentTenantId, selectedAgency],
+    queryKey: ["accounting-clients", currentTenantId, agencyFilter],
     queryFn: async () => {
       if (!currentTenantId) return [];
       
@@ -297,8 +297,8 @@ export default function AccountingIntegrations() {
         `)
         .eq("tenant_id", currentTenantId);
 
-      if (selectedAgency && selectedAgency !== "all") {
-        query = query.eq("agency_id", selectedAgency);
+      if (agencyFilter && agencyFilter !== "all") {
+        query = query.eq("agency_id", agencyFilter);
       }
 
       const { data: clientsData, error } = await query;
@@ -466,7 +466,7 @@ export default function AccountingIntegrations() {
       if (agencyIds.length > 0) {
         let clientsQuery = supabase
           .from("clients")
-          .select("retainer, status, updated_at")
+          .select("id, retainer, status, updated_at")
           .in("agency_id", agencyIds);
         
         if (statusFilter) {
@@ -490,7 +490,25 @@ export default function AccountingIntegrations() {
           });
         }
         
-        income = filteredClients.reduce((sum, c) => sum + (c.retainer || 0), 0);
+        // Fetch tenant-specific financial data to get correct retainer values
+        const clientIds = filteredClients.map(c => c.id);
+        if (clientIds.length > 0) {
+          const { data: financialData } = await supabase
+            .from("client_tenant_financial_data")
+            .select("client_id, retainer")
+            .eq("tenant_id", currentTenantId)
+            .in("client_id", clientIds);
+          
+          const financialMap = new Map(
+            (financialData || []).map(f => [f.client_id, f.retainer])
+          );
+          
+          // Use tenant-specific retainer if available, otherwise fall back to client retainer
+          income = filteredClients.reduce((sum, c) => {
+            const tenantRetainer = financialMap.get(c.id);
+            return sum + (tenantRetainer ?? c.retainer ?? 0);
+          }, 0);
+        }
       }
       
       // Get expenses from suppliers (sum of payments, filtered by agency)
