@@ -1976,7 +1976,12 @@ export default function Leads() {
             onDragEnd={handleDragEnd}
             onDragCancel={handleDragCancel}
           >
-            <div className="hidden md:grid grid-cols-5 gap-0">
+            <div 
+              className="hidden md:grid gap-0"
+              style={{ 
+                gridTemplateColumns: `repeat(${PIPELINE_STAGES.length}, minmax(0, 1fr))` 
+              }}
+            >
               {PIPELINE_STAGES.map((stage, index) => {
                 const stageLeads = getLeadsByStage(stage.id, KANBAN_LEADS_PER_STAGE);
                 const totalInStage = getLeadsCountByStage(stage.id);
