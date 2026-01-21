@@ -813,7 +813,7 @@ export default function Leads() {
 
   // Kanban view: use RPC that fetches leads per stage
   const { data: kanbanStageData, isLoading: isKanbanLoading, refetch: refetchKanban, isFetching: isKanbanFetching } = useQuery({
-    queryKey: ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPerson, filterResponseStatus, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(',')],
+    queryKey: ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPerson, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(',')],
     queryFn: async () => {
       if (!tenantId) return null;
       
@@ -833,7 +833,8 @@ export default function Leads() {
         p_response_statuses: filterResponseStatus.length > 0 && !filterResponseStatus.includes("none") ? filterResponseStatus : null,
         p_follow_up_today: filterFollowUpToday,
         p_start_date: startDate?.toISOString() || null,
-        p_end_date: endDate ? new Date(endDate.setHours(23, 59, 59, 999)).toISOString() : null
+        p_end_date: endDate ? new Date(endDate.setHours(23, 59, 59, 999)).toISOString() : null,
+        p_tag_ids: filterTagIds.length > 0 && !filterTagIds.includes("none") ? filterTagIds : null
       });
       
       if (error) throw error;
