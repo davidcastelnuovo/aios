@@ -329,7 +329,7 @@ export default function AccountingIntegrations() {
 
   // Fetch suppliers
   const { data: suppliers, isLoading: suppliersLoading } = useQuery({
-    queryKey: ["accounting-suppliers", currentTenantId],
+    queryKey: ["accounting-suppliers", currentTenantId, selectedAgency],
     queryFn: async () => {
       if (!currentTenantId) return [];
       const { data, error } = await supabase
@@ -349,6 +349,16 @@ export default function AccountingIntegrations() {
         `)
         .eq("tenant_id", currentTenantId);
       if (error) throw error;
+      
+      // Filter suppliers by selected agency if not "all"
+      if (selectedAgency && selectedAgency !== "all") {
+        return (data || []).filter(s => 
+          s.agency_id_1 === selectedAgency || 
+          s.agency_id_2 === selectedAgency || 
+          s.agency_id_3 === selectedAgency
+        );
+      }
+      
       return data || [];
     },
     enabled: !!currentTenantId,
@@ -356,7 +366,7 @@ export default function AccountingIntegrations() {
 
   // Fetch campaigner payments from client_team
   const { data: campaignerPayments, isLoading: campaignerPaymentsLoading } = useQuery({
-    queryKey: ["accounting-campaigner-payments", currentTenantId],
+    queryKey: ["accounting-campaigner-payments", currentTenantId, selectedAgency],
     queryFn: async () => {
       if (!currentTenantId) return [];
       
@@ -371,10 +381,15 @@ export default function AccountingIntegrations() {
         .select("agency_id")
         .eq("accessing_tenant_id", currentTenantId);
       
-      const agencyIds = [
+      let agencyIds = [
         ...(ownedAgencies || []).map(a => a.id),
         ...(sharedAgencies || []).map(a => a.agency_id)
       ];
+
+      // Filter by selected agency if not "all"
+      if (selectedAgency && selectedAgency !== "all") {
+        agencyIds = agencyIds.filter(id => id === selectedAgency);
+      }
 
       if (agencyIds.length === 0) return [];
 
@@ -411,12 +426,11 @@ export default function AccountingIntegrations() {
 
   // Fetch finance summary - income from retainers (directly from clients table), expenses from suppliers
   const { data: financeData } = useQuery({
-    queryKey: ["finance-summary", currentTenantId],
+    queryKey: ["finance-summary", currentTenantId, selectedAgency],
     queryFn: async () => {
       if (!currentTenantId) return { income: 0, expenses: 0 };
       
-      // Get income from client retainers - directly from clients table
-      // First get all agencies for this tenant (owned + shared)
+      // Get all agencies for this tenant (owned + shared)
       const { data: ownedAgencies } = await supabase
         .from("agencies")
         .select("id")
@@ -427,10 +441,15 @@ export default function AccountingIntegrations() {
         .select("agency_id")
         .eq("accessing_tenant_id", currentTenantId);
       
-      const agencyIds = [
+      let agencyIds = [
         ...(ownedAgencies || []).map(a => a.id),
         ...(sharedAgencies || []).map(a => a.agency_id)
       ];
+      
+      // Filter by selected agency if not "all"
+      if (selectedAgency && selectedAgency !== "all") {
+        agencyIds = agencyIds.filter(id => id === selectedAgency);
+      }
       
       let income = 0;
       if (agencyIds.length > 0) {
@@ -444,16 +463,26 @@ export default function AccountingIntegrations() {
         income = clientsData?.reduce((sum, c) => sum + (c.retainer || 0), 0) || 0;
       }
       
-      // Get expenses from suppliers (sum of all payments)
+      // Get expenses from suppliers (sum of payments, filtered by agency)
       const { data: suppliersData, error: suppliersError } = await supabase
         .from("suppliers")
-        .select("payment_1, payment_2, payment_3")
+        .select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3")
         .eq("tenant_id", currentTenantId);
       
       if (suppliersError) throw suppliersError;
       
-      const supplierExpenses = suppliersData?.reduce((sum, s) => 
-        sum + (s.payment_1 || 0) + (s.payment_2 || 0) + (s.payment_3 || 0), 0) || 0;
+      let supplierExpenses = 0;
+      suppliersData?.forEach(s => {
+        if (selectedAgency && selectedAgency !== "all") {
+          // Only sum payments for the selected agency
+          if (s.agency_id_1 === selectedAgency) supplierExpenses += (s.payment_1 || 0);
+          if (s.agency_id_2 === selectedAgency) supplierExpenses += (s.payment_2 || 0);
+          if (s.agency_id_3 === selectedAgency) supplierExpenses += (s.payment_3 || 0);
+        } else {
+          // Sum all payments
+          supplierExpenses += (s.payment_1 || 0) + (s.payment_2 || 0) + (s.payment_3 || 0);
+        }
+      });
       
       // Get campaigner payments from client_team (only active + onboarding clients)
       let campaignerExpenses = 0;
