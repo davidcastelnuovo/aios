@@ -105,8 +105,27 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Check if user's tenant matches the contact's tenant
-    if (tenantId !== userTenantData) {
+    // Check if user's tenant matches the contact's tenant OR if user has shared integration access
+    let hasAccess = tenantId === userTenantData;
+    
+    if (!hasAccess) {
+      // Check if user has access via shared integration
+      const { data: sharedAccess } = await supabase
+        .from('integration_tenant_access')
+        .select(`
+          id,
+          integration_id,
+          tenant_integrations!inner(tenant_id)
+        `)
+        .eq('accessing_tenant_id', userTenantData)
+        .eq('tenant_integrations.tenant_id', tenantId)
+        .limit(1);
+      
+      hasAccess = !!(sharedAccess && sharedAccess.length > 0);
+      console.log('Shared integration access check:', hasAccess);
+    }
+
+    if (!hasAccess) {
       console.error('User trying to access messages from different tenant');
       return new Response(
         JSON.stringify({ error: 'Access denied - different tenant' }),
@@ -114,12 +133,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Build query - filter by tenant, connection_user, and contact
+    // Build query - filter by tenant and contact
+    // For shared access, we don't filter by connection_user_id since user is viewing shared data
     let query = supabase
       .from('chat_messages')
       .select('*')
       .eq('tenant_id', tenantId)
-      .eq('connection_user_id', user.id)
       .order('created_at', { ascending: true })
       .limit(limit);
 

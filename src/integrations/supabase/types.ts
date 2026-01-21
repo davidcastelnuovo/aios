@@ -1556,6 +1556,45 @@ export type Database = {
           },
         ]
       }
+      integration_tenant_access: {
+        Row: {
+          accessing_tenant_id: string
+          granted_at: string
+          granted_by: string | null
+          id: string
+          integration_id: string
+        }
+        Insert: {
+          accessing_tenant_id: string
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          integration_id: string
+        }
+        Update: {
+          accessing_tenant_id?: string
+          granted_at?: string
+          granted_by?: string | null
+          id?: string
+          integration_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_tenant_access_accessing_tenant_id_fkey"
+            columns: ["accessing_tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_tenant_access_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "tenant_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integration_user_permissions: {
         Row: {
           created_at: string

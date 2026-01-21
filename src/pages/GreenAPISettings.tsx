@@ -12,7 +12,8 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ArrowRight, Webhook, Key, CheckCircle2, AlertCircle, Copy, ExternalLink, UserPlus } from "lucide-react";
+import { ArrowRight, Webhook, Key, CheckCircle2, AlertCircle, Copy, ExternalLink, UserPlus, Share2 } from "lucide-react";
+import { ShareIntegrationTenantsDialog } from "@/components/forms/ShareIntegrationTenantsDialog";
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,7 @@ export default function GreenAPISettings() {
   const [instanceId, setInstanceId] = useState("");
   const [apiToken, setApiToken] = useState("");
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>("");
 
   // Fetch existing integration for current user
@@ -292,7 +294,7 @@ export default function GreenAPISettings() {
                 <CheckCircle2 className="h-5 w-5" />
                 <span className="font-semibold">האינטגרציה פעילה ומוכנה לשימוש</span>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 <Button
                   variant="outline"
                   size="sm"
@@ -300,6 +302,14 @@ export default function GreenAPISettings() {
                   disabled={reconfigureMutation.isPending}
                 >
                   {reconfigureMutation.isPending ? "מעדכן..." : "רענן הגדרות Webhook"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShareDialogOpen(true)}
+                >
+                  <Share2 className="h-4 w-4 ml-2" />
+                  שתף עם ארגונים
                 </Button>
                 <Button
                   variant="outline"
@@ -542,6 +552,16 @@ export default function GreenAPISettings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Share with Tenants Dialog */}
+      {integration && (
+        <ShareIntegrationTenantsDialog
+          open={shareDialogOpen}
+          onOpenChange={setShareDialogOpen}
+          integrationId={integration.id}
+          integrationName="Green API"
+        />
+      )}
     </div>
   );
 }
