@@ -346,7 +346,7 @@ Deno.serve(async (req) => {
               leadData.won_date = wonDate
               leadData.sale_date = wonDate
               leadData.closing_date = wonDate
-              leadData.status = 'closed'
+              // Don't automatically set status to 'closed' - let the user control pipeline stages
             }
             break
         }
