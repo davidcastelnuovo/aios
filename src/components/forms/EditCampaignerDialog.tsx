@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useTeamRoles } from "@/hooks/useTeamRoles";
 
 interface EditCampaignerDialogProps {
   campaigner: {
@@ -35,6 +36,7 @@ interface EditCampaignerDialogProps {
 
 export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) {
   const [open, setOpen] = useState(false);
+  const { teamRoles, isLoading: rolesLoading } = useTeamRoles();
   const [formData, setFormData] = useState({
     full_name: campaigner.full_name,
     agency_ids: [] as string[],
@@ -225,25 +227,29 @@ export function EditCampaignerDialog({ campaigner }: EditCampaignerDialogProps) 
           <div className="space-y-2">
             <Label>תפקידים</Label>
             <div className="space-y-2">
-              {["קמפיינר", "SEO", "מנהל צוות"].map((role) => (
-                <div key={role} className="flex items-center space-x-2 space-x-reverse">
-                  <input
-                    type="checkbox"
-                    id={`edit-role-${role}`}
-                    checked={formData.roles.includes(role)}
-                    onChange={(e) => {
-                      const newValue = e.target.checked
-                        ? [...formData.roles, role]
-                        : formData.roles.filter(r => r !== role);
-                      setFormData({ ...formData, roles: newValue });
-                    }}
-                    className="rounded border-gray-300"
-                  />
-                  <label htmlFor={`edit-role-${role}`} className="text-sm cursor-pointer">
-                    {role}
-                  </label>
-                </div>
-              ))}
+              {rolesLoading ? (
+                <p className="text-sm text-muted-foreground">טוען תפקידים...</p>
+              ) : (
+                teamRoles.map((role) => (
+                  <div key={role.key} className="flex items-center space-x-2 space-x-reverse">
+                    <input
+                      type="checkbox"
+                      id={`edit-role-${role.key}`}
+                      checked={formData.roles.includes(role.label)}
+                      onChange={(e) => {
+                        const newValue = e.target.checked
+                          ? [...formData.roles, role.label]
+                          : formData.roles.filter(r => r !== role.label);
+                        setFormData({ ...formData, roles: newValue });
+                      }}
+                      className="rounded border-gray-300"
+                    />
+                    <label htmlFor={`edit-role-${role.key}`} className="text-sm cursor-pointer">
+                      {role.label}
+                    </label>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
