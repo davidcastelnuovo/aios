@@ -751,7 +751,7 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   console.log('Executing Green API message:', config)
   console.log('Data:', data)
   
-  const { message_template, integration_id } = config
+  const { message_template, integration_id, send_to_type, manual_phone, manual_group_id } = config
   
   if (!message_template) {
     throw new Error('תבנית הודעה לא הוגדרה')
@@ -765,31 +765,51 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     .single()
   const tenantSlug = tenant?.slug
   
-  // Get contact phone from lead or client
-  let contactPhone: string | null = null
+  // Determine chatId based on send_to_type
+  let chatId: string
   let contactRecord: any = null
   
-  if (data.lead_id || data.id) {
-    const leadId = data.lead_id || data.id
-    const { data: lead } = await supabase
-      .from('leads')
-      .select('id, phone, contact_name, company_name')
-      .eq('id', leadId)
-      .single()
-    contactRecord = lead
-    contactPhone = lead?.phone
-  } else if (data.client_id) {
-    const { data: client } = await supabase
-      .from('clients')
-      .select('id, phone, contact_name, name')
-      .eq('id', data.client_id)
-      .single()
-    contactRecord = client
-    contactPhone = client?.phone
-  }
-  
-  if (!contactPhone) {
-    throw new Error('לא נמצא מספר טלפון לשליחה')
+  if (send_to_type === "manual_group" && manual_group_id) {
+    // Send to manual group
+    chatId = manual_group_id.includes("@g.us") ? manual_group_id : `${manual_group_id}@g.us`
+    console.log(`Sending to manual group: ${chatId}`)
+  } else if (send_to_type === "manual_phone" && manual_phone) {
+    // Send to manual phone number
+    const cleanPhone = manual_phone.replace(/\D/g, '')
+    const last9 = cleanPhone.slice(-9)
+    chatId = `972${last9}@c.us`
+    console.log(`Sending to manual phone: ${chatId}`)
+  } else {
+    // Default: send to contact (lead/client)
+    let contactPhone: string | null = null
+    
+    if (data.lead_id || data.id) {
+      const leadId = data.lead_id || data.id
+      const { data: lead } = await supabase
+        .from('leads')
+        .select('id, phone, contact_name, company_name')
+        .eq('id', leadId)
+        .single()
+      contactRecord = lead
+      contactPhone = lead?.phone
+    } else if (data.client_id) {
+      const { data: client } = await supabase
+        .from('clients')
+        .select('id, phone, contact_name, name')
+        .eq('id', data.client_id)
+        .single()
+      contactRecord = client
+      contactPhone = client?.phone
+    }
+    
+    if (!contactPhone) {
+      throw new Error('לא נמצא מספר טלפון לשליחה')
+    }
+    
+    // Format phone for Green API
+    const cleanPhone = contactPhone.replace(/\D/g, '')
+    const last9 = cleanPhone.slice(-9)
+    chatId = `972${last9}@c.us`
   }
   
   // Find Green API integration - use specified ID or fall back to first active
@@ -848,11 +868,6 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     ...data,
     ...contactRecord,
   }, tenantSlug)
-  
-  // Format phone for Green API
-  const cleanPhone = contactPhone.replace(/\D/g, '')
-  const last9 = cleanPhone.slice(-9)
-  const chatId = `972${last9}@c.us`
   
   // Send message via Green API
   const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
