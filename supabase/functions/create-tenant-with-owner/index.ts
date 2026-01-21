@@ -14,7 +14,7 @@ interface CreateTenantRequest {
   parent_tenant_id?: string;
   allow_super_admin_access?: boolean;
   template_id?: string; // source_tenant_id to copy from
-  business_type?: "marketing_agency" | "general_business";
+  terminology_preset_id?: string; // preset ID to use for terminology
 }
 
 serve(async (req: Request) => {
@@ -208,17 +208,30 @@ serve(async (req: Request) => {
         console.log("✅ Custom fields initialized");
       }
 
-      // Initialize terminology based on business type
-      const businessType = payload.business_type || "marketing_agency";
-      const { error: terminologyError } = await supabase.rpc("initialize_tenant_terminology", {
-        _tenant_id: newTenant.id,
-        _business_type: businessType
-      });
+      // Initialize terminology from preset if provided
+      if (payload.terminology_preset_id) {
+        const { error: terminologyError } = await supabase.rpc("initialize_tenant_terminology_from_preset", {
+          _tenant_id: newTenant.id,
+          _preset_id: payload.terminology_preset_id
+        });
 
-      if (terminologyError) {
-        console.error("Error initializing terminology:", terminologyError);
+        if (terminologyError) {
+          console.error("Error initializing terminology from preset:", terminologyError);
+        } else {
+          console.log("✅ Terminology initialized from preset:", payload.terminology_preset_id);
+        }
       } else {
-        console.log("✅ Terminology initialized for:", businessType);
+        // Fallback to default marketing agency terminology
+        const { error: terminologyError } = await supabase.rpc("initialize_tenant_terminology", {
+          _tenant_id: newTenant.id,
+          _business_type: "marketing_agency"
+        });
+
+        if (terminologyError) {
+          console.error("Error initializing terminology:", terminologyError);
+        } else {
+          console.log("✅ Terminology initialized with default");
+        }
       }
     }
 

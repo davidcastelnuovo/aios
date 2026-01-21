@@ -2,18 +2,22 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Save, RotateCcw, Edit } from "lucide-react";
+import { Save, RotateCcw, Edit, Bookmark } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -64,10 +68,13 @@ const CATEGORY_TITLES: Record<TerminologyCategory, { title: string; description:
 
 export default function TerminologyManagement({ category = 'modules' }: TerminologyManagementProps) {
   const { tenantId } = useCurrentTenant();
+  const { userId } = useCurrentUser();
   const queryClient = useQueryClient();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isSavePresetDialogOpen, setIsSavePresetDialogOpen] = useState(false);
   const [editingTerm, setEditingTerm] = useState<TerminologyItem | null>(null);
   const [editForm, setEditForm] = useState({ singular: '', plural: '' });
+  const [presetForm, setPresetForm] = useState({ name: '', description: '', isPublic: false });
 
   const { data: termsData, isLoading } = useQuery({
     queryKey: ['terminology', tenantId],
@@ -133,6 +140,40 @@ export default function TerminologyManagement({ category = 'modules' }: Terminol
     },
   });
 
+  // Save as preset mutation
+  const savePresetMutation = useMutation({
+    mutationFn: async ({ name, description, isPublic }: { name: string; description: string; isPublic: boolean }) => {
+      // Build terms array from all terminology
+      const terms = allTerms.map(term => ({
+        key: term.term_key,
+        singular: term.singular,
+        plural: term.plural,
+      }));
+
+      const { error } = await supabase
+        .from('terminology_presets' as any)
+        .insert({
+          name,
+          description,
+          is_public: isPublic,
+          created_by_tenant_id: tenantId,
+          created_by_user_id: userId,
+          terms,
+        });
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['terminology-presets'] });
+      toast.success('הפריסט נשמר בהצלחה');
+      setIsSavePresetDialogOpen(false);
+      setPresetForm({ name: '', description: '', isPublic: false });
+    },
+    onError: (error: Error) => {
+      toast.error('שגיאה בשמירת פריסט: ' + error.message);
+    },
+  });
+
   const openEditDialog = (term: TerminologyItem) => {
     setEditingTerm(term);
     setEditForm({ singular: term.singular, plural: term.plural });
@@ -146,6 +187,14 @@ export default function TerminologyManagement({ category = 'modules' }: Terminol
       singular: editForm.singular,
       plural: editForm.plural,
     });
+  };
+
+  const handleSavePreset = () => {
+    if (!presetForm.name.trim()) {
+      toast.error('יש להזין שם לפריסט');
+      return;
+    }
+    savePresetMutation.mutate(presetForm);
   };
 
   const getTermLabel = (key: string): string => {
@@ -188,11 +237,23 @@ export default function TerminologyManagement({ category = 'modules' }: Terminol
   return (
     <div className="space-y-6" dir="rtl">
       <Card>
-        <CardHeader>
-          <CardTitle className="text-right">{categoryConfig.title}</CardTitle>
-          <p className="text-sm text-muted-foreground text-right">
-            {categoryConfig.description}
-          </p>
+        <CardHeader className="flex flex-row items-start justify-between">
+          <div>
+            <CardTitle className="text-right">{categoryConfig.title}</CardTitle>
+            <p className="text-sm text-muted-foreground text-right">
+              {categoryConfig.description}
+            </p>
+          </div>
+          {allTerms.length > 0 && category === 'modules' && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsSavePresetDialogOpen(true)}
+            >
+              <Bookmark className="h-4 w-4 ml-2" />
+              שמור כפריסט
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {!terms || terms.length === 0 ? (
@@ -291,6 +352,63 @@ export default function TerminologyManagement({ category = 'modules' }: Terminol
             <Button onClick={handleSave} className="w-full" disabled={updateMutation.isPending}>
               <Save className="h-4 w-4 ml-2" />
               שמור שינויים
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save as Preset Dialog */}
+      <Dialog open={isSavePresetDialogOpen} onOpenChange={setIsSavePresetDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>שמירת טרמינולוגיה כפריסט</DialogTitle>
+            <DialogDescription>
+              שמור את הגדרות הטרמינולוגיה הנוכחיות כפריסט שניתן להשתמש בו בארגונים חדשים
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="preset_name">שם הפריסט *</Label>
+              <Input
+                id="preset_name"
+                value={presetForm.name}
+                onChange={(e) => setPresetForm({ ...presetForm, name: e.target.value })}
+                placeholder="לדוגמה: סוכנות נדל״ן"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="preset_description">תיאור</Label>
+              <Textarea
+                id="preset_description"
+                value={presetForm.description}
+                onChange={(e) => setPresetForm({ ...presetForm, description: e.target.value })}
+                placeholder="טרמינולוגיה מותאמת לסוכנויות נדל״ן..."
+                rows={2}
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-3 border rounded-lg">
+              <div>
+                <Label htmlFor="preset_public" className="font-medium">פריסט ציבורי</Label>
+                <p className="text-xs text-muted-foreground">
+                  אפשר לכל הארגונים להשתמש בפריסט זה
+                </p>
+              </div>
+              <Switch
+                id="preset_public"
+                checked={presetForm.isPublic}
+                onCheckedChange={(checked) => setPresetForm({ ...presetForm, isPublic: checked })}
+              />
+            </div>
+
+            <Button 
+              onClick={handleSavePreset} 
+              className="w-full" 
+              disabled={savePresetMutation.isPending || !presetForm.name.trim()}
+            >
+              <Bookmark className="h-4 w-4 ml-2" />
+              {savePresetMutation.isPending ? "שומר..." : "שמור פריסט"}
             </Button>
           </div>
         </DialogContent>
