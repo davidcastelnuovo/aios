@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FormLabel } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import { Link, Plus, Trash2, ExternalLink } from "lucide-react";
 
 export interface FolderLink {
@@ -47,7 +47,7 @@ export function FolderLinksField({ links, onChange, readOnly = false }: FolderLi
 
   return (
     <div className="space-y-3">
-      <FormLabel className="text-sm font-medium">קישורים</FormLabel>
+      <Label className="text-sm font-medium">קישורים</Label>
       
       {/* Existing links */}
       {links.length > 0 && (
