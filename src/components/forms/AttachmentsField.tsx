@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { FormLabel } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { toast } from "sonner";
@@ -177,7 +177,7 @@ export function AttachmentsField({
 
   return (
     <div className="space-y-3">
-      <FormLabel className="text-sm font-medium">קבצים מצורפים</FormLabel>
+      <Label className="text-sm font-medium">קבצים מצורפים</Label>
       
       {/* Existing attachments */}
       {attachments.length > 0 && (
