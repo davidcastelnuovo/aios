@@ -9,35 +9,152 @@ const corsHeaders = {
 function normalizePhone(phone: string): string {
   if (!phone) return '';
   let cleaned = phone.replace(/\D/g, '');
+  // Handle Israeli numbers
   if (cleaned.startsWith('972')) {
-    cleaned = '0' + cleaned.substring(3);
+    cleaned = cleaned.slice(3);
+  }
+  if (cleaned.startsWith('0')) {
+    cleaned = cleaned.slice(1);
   }
   return cleaned;
 }
 
-// Generate phone variations
-function getPhoneVariations(phone: string): string[] {
-  const normalized = normalizePhone(phone);
-  if (!normalized) return [];
-  
-  const variations = [normalized];
-  
-  // Add version with 972 prefix
-  if (normalized.startsWith('0')) {
-    variations.push('972' + normalized.substring(1));
+// Format phone for ManyChat API
+function formatPhoneForManyChat(phone: string): string {
+  const cleaned = normalizePhone(phone);
+  return `972${cleaned}`;
+}
+
+// Generate phone variations for lookup
+function getPhoneLookupCandidates(phone: string): string[] {
+  const cleaned = normalizePhone(phone);
+  if (!cleaned) return [];
+
+  const withCountry = `972${cleaned}`;
+  return [
+    `+${withCountry}`,
+    withCountry,
+    `0${cleaned}`,
+    cleaned,
+  ].filter(Boolean);
+}
+
+// Safe JSON parsing helper
+async function safeJson(res: Response): Promise<any> {
+  const contentType = res.headers.get('content-type') || '';
+  const text = await res.text();
+  if (!contentType.includes('application/json')) {
+    return { __nonJson: true, status: res.status, text: text.slice(0, 500) };
   }
-  
-  // Add version with +972 prefix
-  if (normalized.startsWith('0')) {
-    variations.push('+972' + normalized.substring(1));
+  try {
+    return JSON.parse(text);
+  } catch (_e) {
+    return { __parseError: true, status: res.status, text: text.slice(0, 500) };
   }
-  
-  // Add version with spaces
-  if (normalized.startsWith('0') && normalized.length === 10) {
-    variations.push(`${normalized.substring(0, 3)}-${normalized.substring(3, 6)}-${normalized.substring(6)}`);
+}
+
+// Find subscriber by phone in ManyChat
+async function findSubscriberByPhone(apiKey: string, phoneCandidates: string[]): Promise<string | null> {
+  for (const candidate of phoneCandidates) {
+    const url = `https://api.manychat.com/fb/subscriber/findBySystemField?phone=${encodeURIComponent(candidate)}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    const data = await safeJson(res);
+    console.log(`📱 Find subscriber (${candidate}) response:`, JSON.stringify(data));
+
+    if (data?.status === 'success' && data?.data?.id) {
+      return String(data.data.id);
+    }
   }
-  
-  return variations;
+  return null;
+}
+
+// Find subscriber by email in ManyChat
+async function findSubscriberByEmail(apiKey: string, email?: string | null): Promise<string | null> {
+  if (!email) return null;
+  const url = `https://api.manychat.com/fb/subscriber/findBySystemField?email=${encodeURIComponent(email)}`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+  });
+
+  const data = await safeJson(res);
+  console.log(`📧 Find subscriber (email=${email}) response:`, JSON.stringify(data));
+
+  if (data?.status === 'success' && data?.data?.id) {
+    return String(data.data.id);
+  }
+  return null;
+}
+
+// Create new subscriber in ManyChat
+async function createManyChatSubscriber(
+  apiKey: string,
+  lead: { contact_name?: string | null; company_name: string; phone: string; email?: string | null }
+): Promise<{ id: string } | null> {
+  const formattedPhone = formatPhoneForManyChat(lead.phone);
+  const nameParts = (lead.contact_name || '').split(' ');
+  const firstName = nameParts[0] || lead.company_name || 'Lead';
+  const lastName = nameParts.slice(1).join(' ') || '';
+
+  const createRes = await fetch('https://api.manychat.com/fb/subscriber/createSubscriber', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({
+      first_name: firstName,
+      last_name: lastName,
+      // IMPORTANT: Add BOTH phone and whatsapp_phone for reliable future lookups
+      phone: `+${formattedPhone}`,
+      whatsapp_phone: `+${formattedPhone}`,
+      email: lead.email || undefined,
+      has_opt_in_sms: true,
+      has_opt_in_email: !!lead.email,
+      consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
+    }),
+  });
+
+  const createData = await safeJson(createRes);
+  console.log('🆕 Create subscriber response:', JSON.stringify(createData));
+
+  if (createData.status === 'success' && createData.data?.id) {
+    return { id: String(createData.data.id) };
+  }
+
+  return null;
+}
+
+// Add tag to subscriber
+async function addTagToSubscriber(apiKey: string, subscriberId: string, tagId: number): Promise<boolean> {
+  const tagRes = await fetch('https://api.manychat.com/fb/subscriber/addTag', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      subscriber_id: subscriberId,
+      tag_id: tagId,
+    }),
+  });
+
+  const tagData = await safeJson(tagRes);
+  console.log('🏷️ Add tag response:', JSON.stringify(tagData));
+
+  return tagData?.status === 'success';
 }
 
 Deno.serve(async (req) => {
@@ -65,7 +182,7 @@ Deno.serve(async (req) => {
     // Fetch the lead
     const { data: lead, error: leadError } = await supabase
       .from('leads')
-      .select('id, phone, company_name, tenant_id')
+      .select('id, phone, company_name, contact_name, email, tenant_id')
       .eq('id', lead_id)
       .single();
 
@@ -86,70 +203,97 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Fetch chat messages to build subscriber map
-    const { data: messages, error: messagesError } = await supabase
-      .from('chat_messages')
-      .select('raw_provider_data')
+    // Fetch ManyChat integration settings
+    const { data: integration, error: integrationError } = await supabase
+      .from('tenant_integrations')
+      .select('api_key, is_active, settings')
       .eq('tenant_id', lead.tenant_id)
-      .not('raw_provider_data', 'is', null);
+      .eq('integration_type', 'manychat')
+      .single();
 
-    if (messagesError) {
-      console.error('Error fetching messages:', messagesError);
+    if (integrationError || !integration) {
+      console.log('ManyChat integration not found for tenant:', lead.tenant_id);
       return new Response(
-        JSON.stringify({ error: 'Error fetching messages', details: messagesError }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ message: 'ManyChat integration not configured', synced: false }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Build subscriber map by phone
-    const subscriberMap = new Map<string, string>();
-    
-    if (messages) {
-      for (const msg of messages) {
-        const rawData = msg.raw_provider_data as any;
-        if (rawData?.subscriber?.id) {
-          let phone = rawData?.subscriber?.phone;
-          
-          // If phone is a template placeholder, try to use subscriber.id as phone
-          if (!phone || phone.startsWith('{{') || phone === '') {
-            const possiblePhone = rawData?.subscriber?.id;
-            // Check if ID looks like a phone number (starts with 972 or 05)
-            if (possiblePhone && (possiblePhone.startsWith('972') || possiblePhone.startsWith('05'))) {
-              phone = possiblePhone;
-              console.log(`📱 Using subscriber.id as phone: ${possiblePhone}`);
-            }
-          }
-          
-          if (phone && !phone.startsWith('{{')) {
-            const normalizedPhone = normalizePhone(phone);
-            if (normalizedPhone) {
-              subscriberMap.set(normalizedPhone, rawData.subscriber.id);
-            }
-          }
+    if (!integration.is_active) {
+      console.log('ManyChat integration is not active');
+      return new Response(
+        JSON.stringify({ message: 'ManyChat integration is not active', synced: false }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const apiKey = integration.api_key;
+    // Get default tag ID from settings or use default
+    const settings = integration.settings as { defaultTagId?: number } | null;
+    const defaultTagId = settings?.defaultTagId || 79380109;
+
+    const phoneCandidates = getPhoneLookupCandidates(lead.phone);
+    const leadName = lead.contact_name || lead.company_name || 'Unknown';
+
+    console.log(`📱 Searching for subscriber with phone candidates:`, phoneCandidates);
+
+    // Step 1: Try to find existing subscriber by phone
+    let subscriberId = await findSubscriberByPhone(apiKey, phoneCandidates);
+    let wasExisting = false;
+
+    if (subscriberId) {
+      wasExisting = true;
+      console.log(`✅ Found existing subscriber: ${subscriberId}`);
+    } else {
+      // Step 2: Try to find by email
+      subscriberId = await findSubscriberByEmail(apiKey, lead.email);
+      if (subscriberId) {
+        wasExisting = true;
+        console.log(`✅ Found existing subscriber by email: ${subscriberId}`);
+      }
+    }
+
+    // Step 3: If not found, create new subscriber
+    if (!subscriberId) {
+      console.log('🆕 No existing subscriber found, creating new one...');
+      const newSubscriber = await createManyChatSubscriber(apiKey, {
+        contact_name: lead.contact_name,
+        company_name: lead.company_name,
+        phone: lead.phone,
+        email: lead.email
+      });
+
+      if (newSubscriber?.id) {
+        subscriberId = newSubscriber.id;
+        console.log(`✅ Created new subscriber: ${subscriberId}`);
+
+        // Step 4: Add tag to trigger automation (only for new subscribers)
+        console.log(`🏷️ Adding tag ${defaultTagId} to new subscriber...`);
+        const tagAdded = await addTagToSubscriber(apiKey, subscriberId, defaultTagId);
+        if (tagAdded) {
+          console.log('✅ Tag added successfully');
+        } else {
+          console.log('⚠️ Failed to add tag, but subscriber was created');
+        }
+      } else {
+        // If creation failed, try lookup again (might be "already exists" conflict)
+        console.log('⚠️ Create failed, retrying lookup...');
+        subscriberId = await findSubscriberByPhone(apiKey, phoneCandidates);
+        if (!subscriberId) {
+          subscriberId = await findSubscriberByEmail(apiKey, lead.email);
+        }
+        if (subscriberId) {
+          wasExisting = true;
+          console.log(`✅ Found subscriber after create conflict: ${subscriberId}`);
         }
       }
     }
 
-    console.log(`📱 Found ${subscriberMap.size} ManyChat subscribers`);
-
-    // Try to match lead by phone
-    const phoneVariations = getPhoneVariations(lead.phone);
-    let matchedSubscriberId: string | null = null;
-
-    for (const variation of phoneVariations) {
-      const normalized = normalizePhone(variation);
-      if (subscriberMap.has(normalized)) {
-        matchedSubscriberId = subscriberMap.get(normalized)!;
-        console.log(`✅ Matched lead ${lead.company_name} with subscriber ${matchedSubscriberId}`);
-        break;
-      }
-    }
-
-    // Update lead if match found
-    if (matchedSubscriberId) {
+    // Step 5: Update lead with subscriber ID
+    if (subscriberId) {
       const { error: updateError } = await supabase
         .from('leads')
-        .update({ manychat_subscriber_id: matchedSubscriberId })
+        .update({ manychat_subscriber_id: subscriberId })
         .eq('id', lead.id);
 
       if (updateError) {
@@ -160,22 +304,30 @@ Deno.serve(async (req) => {
         );
       }
 
-      console.log('✅ Lead synced successfully');
+      console.log(`✅ Lead "${leadName}" synced successfully to ManyChat`);
       return new Response(
         JSON.stringify({ 
           message: 'Lead synced successfully', 
           synced: true,
           lead_id: lead.id,
-          subscriber_id: matchedSubscriberId
+          subscriber_id: subscriberId,
+          was_existing: wasExisting
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else {
-      console.log('❌ No match found for lead');
+      // Mark as SYNC_CONFLICT to avoid repeated attempts
+      console.log('❌ Could not find or create subscriber, marking as SYNC_CONFLICT');
+      await supabase
+        .from('leads')
+        .update({ manychat_subscriber_id: 'SYNC_CONFLICT' })
+        .eq('id', lead.id);
+
       return new Response(
         JSON.stringify({ 
-          message: 'No ManyChat subscriber found for this phone number', 
-          synced: false 
+          message: 'Could not sync lead to ManyChat - marked as conflict', 
+          synced: false,
+          conflict: true
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
