@@ -20,7 +20,8 @@ interface MakeAPIRequest {
     | "run_and_sync_google_ads"
     | "clone_scenario"
     | "get_scenario_blueprint"
-    | "activate_scenario";
+    | "activate_scenario"
+    | "patch_scenario_blueprint";
   api_token?: string;
   team_id?: string;
   region?: string;
@@ -28,6 +29,7 @@ interface MakeAPIRequest {
   connection_id?: string;
   data?: Record<string, unknown>;
   table_id?: string;
+  tenant_id?: string;
   customer_id?: string;
   date_range?: string;
   webhook_url?: string;
@@ -156,6 +158,7 @@ serve(async (req) => {
       connection_id, 
       data, 
       table_id,
+      tenant_id,
       customer_id,
       date_range,
       webhook_url,
@@ -302,6 +305,13 @@ serve(async (req) => {
           result = { success: true, message: "Scenario activated successfully", ...activateResult };
         } catch (activateError) {
           if (activateError instanceof MakeApiError) {
+            // IM306 means "Scenario is already running" - treat as success
+            if (activateError.parsedBody?.code === "IM306" || 
+                (typeof activateError.rawBody === "string" && activateError.rawBody.includes("IM306"))) {
+              console.log(`Scenario ${scenario_id} is already running (IM306) - treating as success`);
+              result = { success: true, message: "Scenario is already running", already_running: true };
+              break;
+            }
             throw activateError;
           }
           throw new Error(`Failed to activate scenario: ${activateError}`);
@@ -684,13 +694,38 @@ serve(async (req) => {
                 if (module.mapper) {
                   module.mapper.url = webhook_url;
                   
-                  // Update the body/data with new table_id
+                  // Handle jsonStringBodyContent (Make.com uses this for raw JSON body)
+                  if (module.mapper.jsonStringBodyContent) {
+                    try {
+                      let bodyObj = JSON.parse(module.mapper.jsonStringBodyContent);
+                      bodyObj.table_id = table_id;
+                      if (tenant_id) {
+                        bodyObj.tenant_id = tenant_id;
+                      }
+                      module.mapper.jsonStringBodyContent = JSON.stringify(bodyObj);
+                      console.log("Updated jsonStringBodyContent with new table_id");
+                    } catch (e) {
+                      // If parsing fails, try string replacement
+                      console.warn("Failed to parse jsonStringBodyContent, trying regex replace");
+                      if (typeof module.mapper.jsonStringBodyContent === 'string') {
+                        module.mapper.jsonStringBodyContent = module.mapper.jsonStringBodyContent.replace(
+                          /"table_id"\s*:\s*"[^"]*"/,
+                          `"table_id": "${table_id}"`
+                        );
+                      }
+                    }
+                  }
+                  
+                  // Update the body/data with new table_id (fallback for other template formats)
                   if (module.mapper.data) {
                     try {
                       let dataObj = typeof module.mapper.data === 'string' 
                         ? JSON.parse(module.mapper.data) 
                         : module.mapper.data;
                       dataObj.table_id = table_id;
+                      if (tenant_id) {
+                        dataObj.tenant_id = tenant_id;
+                      }
                       module.mapper.data = JSON.stringify(dataObj);
                     } catch {
                       // If data is not JSON, try to replace table_id in the string
@@ -810,6 +845,134 @@ serve(async (req) => {
             success: false,
             error: runError instanceof Error ? runError.message : String(runError),
             message: "Failed to run the sync scenario"
+          };
+        }
+        break;
+      }
+
+      case "patch_scenario_blueprint": {
+        // Patch an existing scenario's blueprint to fix table_id/tenant_id mismatch
+        if (!scenario_id) {
+          return new Response(
+            JSON.stringify({ error: "Scenario ID is required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        if (!table_id) {
+          return new Response(
+            JSON.stringify({ error: "Table ID is required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        const patchWebhookUrl = webhook_url || `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-google-ads-sync`;
+        
+        console.log(`Patching scenario ${scenario_id} to use table_id: ${table_id}`);
+        
+        try {
+          // Step 1: Get the current blueprint
+          const blueprintResponse = await makeAPICall(
+            api_token,
+            region,
+            `/scenarios/${scenario_id}/blueprint`
+          );
+          
+          // Extract the actual blueprint from the API response wrapper
+          let blueprintData = blueprintResponse;
+          if (typeof blueprintResponse === 'string') {
+            blueprintData = JSON.parse(blueprintResponse);
+          }
+          
+          if (blueprintData.response?.blueprint) {
+            blueprintData = blueprintData.response.blueprint;
+          } else if (blueprintData.blueprint) {
+            blueprintData = blueprintData.blueprint;
+          }
+          
+          // Remove any unwanted properties
+          delete blueprintData.code;
+          delete blueprintData.response;
+          
+          let patchedHttpModule = false;
+          
+          // Step 2: Update HTTP modules in the flow
+          if (blueprintData.flow && Array.isArray(blueprintData.flow)) {
+            for (const module of blueprintData.flow) {
+              if (module.module && (
+                module.module.includes('http:') || 
+                module.module === 'http:ActionMakeRequest' ||
+                module.module.includes('http')
+              )) {
+                console.log("Found HTTP module to patch");
+                if (module.mapper) {
+                  module.mapper.url = patchWebhookUrl;
+                  
+                  // Handle jsonStringBodyContent
+                  if (module.mapper.jsonStringBodyContent) {
+                    try {
+                      let bodyObj = JSON.parse(module.mapper.jsonStringBodyContent);
+                      bodyObj.table_id = table_id;
+                      if (tenant_id) {
+                        bodyObj.tenant_id = tenant_id;
+                      }
+                      module.mapper.jsonStringBodyContent = JSON.stringify(bodyObj);
+                      patchedHttpModule = true;
+                      console.log("Patched jsonStringBodyContent with new table_id");
+                    } catch (e) {
+                      console.warn("Failed to parse jsonStringBodyContent:", e);
+                    }
+                  }
+                  
+                  // Handle data field (fallback)
+                  if (module.mapper.data) {
+                    try {
+                      let dataObj = typeof module.mapper.data === 'string' 
+                        ? JSON.parse(module.mapper.data) 
+                        : module.mapper.data;
+                      dataObj.table_id = table_id;
+                      if (tenant_id) {
+                        dataObj.tenant_id = tenant_id;
+                      }
+                      module.mapper.data = JSON.stringify(dataObj);
+                      patchedHttpModule = true;
+                    } catch {
+                      // Ignore parse errors
+                    }
+                  }
+                }
+              }
+            }
+          }
+          
+          if (!patchedHttpModule) {
+            console.warn("Could not find HTTP module to patch in blueprint");
+          }
+          
+          // Step 3: Update the scenario with the patched blueprint
+          await makeAPICall(
+            api_token,
+            region,
+            `/scenarios/${scenario_id}`,
+            "PATCH",
+            {
+              blueprint: JSON.stringify(blueprintData)
+            }
+          );
+          
+          console.log(`Scenario ${scenario_id} blueprint patched successfully`);
+          
+          result = {
+            success: true,
+            message: "Scenario blueprint patched successfully",
+            patched_http_module: patchedHttpModule,
+          };
+        } catch (patchError) {
+          console.error("Failed to patch scenario blueprint:", patchError);
+          result = {
+            success: false,
+            error: patchError instanceof Error ? patchError.message : String(patchError),
+            message: "Failed to patch scenario blueprint"
           };
         }
         break;

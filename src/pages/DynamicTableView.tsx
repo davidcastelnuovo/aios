@@ -1040,6 +1040,57 @@ export default function DynamicTableView() {
     },
   });
 
+  // Patch scenario blueprint mutation - fixes table_id mismatch in existing scenarios
+  const patchScenarioBlueprintMutation = useMutation({
+    mutationFn: async () => {
+      const settings = (makeSettings?.settings as Record<string, any>) || {};
+      const scenarioId = table?.integration_settings?.make_scenario_id;
+      
+      if (!scenarioId) {
+        throw new Error('לא קיים סנריו לטבלה זו');
+      }
+      
+      if (!table?.id) {
+        throw new Error('לא נמצאה טבלה');
+      }
+      
+      if (!settings.api_token || !settings.team_id) {
+        throw new Error('Make.com לא מוגדר. נא להגדיר בהגדרות > Make Settings');
+      }
+
+      const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`;
+
+      const { data, error } = await supabase.functions.invoke('make-api', {
+        body: {
+          action: 'patch_scenario_blueprint',
+          api_token: settings.api_token,
+          team_id: settings.team_id,
+          region: settings.region || 'eu1',
+          scenario_id: String(scenarioId),
+          table_id: table.id,
+          tenant_id: table.tenant_id,
+          webhook_url: webhookUrl,
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || data?.message || 'תיקון הסנריו נכשל');
+
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('הסנריו תוקן! כעת הוא מחובר לטבלה הנכונה.');
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+      // Trigger sync after patching
+      setTimeout(() => {
+        syncMakeGoogleAdsMutation.mutate();
+      }, 1000);
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
   if (tablesLoading) {
     return (
       <div className="container mx-auto py-8 px-4">
@@ -1080,11 +1131,20 @@ export default function DynamicTableView() {
     table?.integration_settings?.data_source === 'make_api' &&
     !table?.integration_settings?.make_scenario_id;
 
-  // Check if scenario exists but might need activation (has make_scenario_id)
-  const hasScenarioButMayNeedActivation = 
+  // Check if scenario exists but has no data (might need patching or activation)
+  const hasScenarioButNoData = 
     table?.integration_type === 'google_ads' &&
     table?.integration_settings?.data_source === 'make_api' &&
-    table?.integration_settings?.make_scenario_id;
+    table?.integration_settings?.make_scenario_id &&
+    !table?.integration_settings?.last_sync_at &&
+    (!records || records.length === 0);
+  
+  // Check if scenario exists and has synced before (no alert needed)
+  const scenarioIsWorking = 
+    table?.integration_type === 'google_ads' &&
+    table?.integration_settings?.data_source === 'make_api' &&
+    table?.integration_settings?.make_scenario_id &&
+    (table?.integration_settings?.last_sync_at || (records && records.length > 0));
 
   return (
     <div className="container mx-auto py-8 px-4">
@@ -1123,31 +1183,47 @@ export default function DynamicTableView() {
         </Alert>
       )}
 
-      {/* Alert for tables with scenario that may need activation */}
-      {hasScenarioButMayNeedActivation && !activateScenarioMutation.isSuccess && (
-        <Alert className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
-          <AlertCircle className="h-4 w-4 text-blue-600" />
-          <AlertTitle className="text-blue-800 dark:text-blue-200">
-            סנריו קיים - ניתן להפעיל אם יש בעיית סנכרון
+      {/* Alert for tables with scenario but no data - offer fix options */}
+      {hasScenarioButNoData && !activateScenarioMutation.isSuccess && !patchScenarioBlueprintMutation.isSuccess && (
+        <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertTitle className="text-amber-800 dark:text-amber-200">
+            סנריו קיים אבל אין נתונים בטבלה
           </AlertTitle>
-          <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
-            <span className="text-blue-700 dark:text-blue-300">
-              הסנריו נוצר אבל ייתכן שהוא לא פעיל ב-Make.com. לחץ להפעלה אם הסנכרון נכשל.
+          <AlertDescription className="flex flex-col gap-3 mt-2">
+            <span className="text-amber-700 dark:text-amber-300">
+              הסנריו נוצר אבל לא הגיעו נתונים. ייתכן שהסנריו מחובר לטבלה אחרת או לא פעיל.
             </span>
-            <Button 
-              onClick={() => activateScenarioMutation.mutate()}
-              disabled={activateScenarioMutation.isPending}
-              size="sm"
-              variant="outline"
-              className="shrink-0"
-            >
-              {activateScenarioMutation.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin ml-2" />
-              ) : (
-                <Play className="h-4 w-4 ml-2" />
-              )}
-              הפעל סנריו
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button 
+                onClick={() => patchScenarioBlueprintMutation.mutate()}
+                disabled={patchScenarioBlueprintMutation.isPending}
+                size="sm"
+                variant="default"
+                className="shrink-0"
+              >
+                {patchScenarioBlueprintMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                ) : (
+                  <Link className="h-4 w-4 ml-2" />
+                )}
+                תקן חיבור לטבלה
+              </Button>
+              <Button 
+                onClick={() => activateScenarioMutation.mutate()}
+                disabled={activateScenarioMutation.isPending}
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+              >
+                {activateScenarioMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                ) : (
+                  <Play className="h-4 w-4 ml-2" />
+                )}
+                הפעל סנריו
+              </Button>
+            </div>
           </AlertDescription>
         </Alert>
       )}
