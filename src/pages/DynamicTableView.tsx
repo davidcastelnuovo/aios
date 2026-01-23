@@ -469,9 +469,19 @@ export default function DynamicTableView() {
   });
 
   // Google Ads sync mutation
+  // Check if this Google Ads table uses Make.com for sync (not Direct API)
+  const isGoogleAdsMakeTable = table?.integration_type === 'google_ads' && 
+    (table?.integration_settings?.data_source === 'make_api' || table?.integration_settings?.data_source === 'webhook');
+
   const syncGoogleAdsMutation = useMutation({
     mutationFn: async () => {
       if (!table?.id) throw new Error('No table');
+      
+      // If this table uses Make.com, don't call the sync function - just show info
+      if (isGoogleAdsMakeTable) {
+        return { uses_make: true, data_source: table.integration_settings?.data_source };
+      }
+      
       const response = await supabase.functions.invoke('sync-google-ads-data', {
         method: 'POST',
         body: { table_id: table.id },
@@ -480,6 +490,10 @@ export default function DynamicTableView() {
       return response.data;
     },
     onSuccess: (data) => {
+      if (data?.uses_make) {
+        toast.info('טבלה זו משתמשת ב-Make.com לסנכרון נתונים. הגדר Scenario ב-Make.com כדי לסנכרן את הנתונים.');
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       toast.success(`נתוני Google Ads סונכרנו בהצלחה (${data?.records_synced || 0} שורות)`);
@@ -908,16 +922,29 @@ export default function DynamicTableView() {
           {/* Google Ads Sync Controls */}
           {hasGoogleAds && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center">
-              <Button 
-                variant="outline" 
-                onClick={() => syncGoogleAdsMutation.mutate()}
-                disabled={syncGoogleAdsMutation.isPending}
-                className="flex-1 md:flex-none gap-2"
-              >
-                <GoogleAdsIcon className="h-4 w-4" />
-                <RefreshCw className={`h-4 w-4 ${syncGoogleAdsMutation.isPending ? 'animate-spin' : ''}`} />
-                {syncGoogleAdsMutation.isPending ? 'מסנכרן Google Ads...' : 'סנכרן Google Ads'}
-              </Button>
+              {isGoogleAdsMakeTable ? (
+                // For Make.com tables, show info button instead of sync
+                <Button 
+                  variant="outline" 
+                  onClick={() => toast.info('טבלה זו משתמשת ב-Make.com לסנכרון נתונים. הגדר Scenario ב-Make.com כדי לסנכרן את הנתונים.')}
+                  className="flex-1 md:flex-none gap-2"
+                >
+                  <GoogleAdsIcon className="h-4 w-4" />
+                  <span>סנכרון דרך Make.com</span>
+                </Button>
+              ) : (
+                // For Direct API tables, show sync button
+                <Button 
+                  variant="outline" 
+                  onClick={() => syncGoogleAdsMutation.mutate()}
+                  disabled={syncGoogleAdsMutation.isPending}
+                  className="flex-1 md:flex-none gap-2"
+                >
+                  <GoogleAdsIcon className="h-4 w-4" />
+                  <RefreshCw className={`h-4 w-4 ${syncGoogleAdsMutation.isPending ? 'animate-spin' : ''}`} />
+                  {syncGoogleAdsMutation.isPending ? 'מסנכרן Google Ads...' : 'סנכרן Google Ads'}
+                </Button>
+              )}
               <Button 
                 variant="outline" 
                 size="icon"
