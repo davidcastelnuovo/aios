@@ -76,6 +76,20 @@ Deno.serve(async (req) => {
     }
 
     const settings = table.integration_settings || {};
+    const dataSource = settings.data_source || 'direct_api';
+    
+    // Check if this table uses Make.com or Webhook for syncing
+    if (dataSource === 'make_api' || dataSource === 'webhook') {
+      return new Response(JSON.stringify({ 
+        error: 'This table uses Make.com for data sync',
+        message: 'טבלה זו משתמשת ב-Make.com לסנכרון נתונים. הגדר Scenario ב-Make.com כדי לסנכרן את הנתונים.',
+        data_source: dataSource
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+    
     const customerId = settings.customer_id;
     const dateRange = settings.date_range || 'last_30_days';
 
