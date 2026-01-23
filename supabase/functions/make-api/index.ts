@@ -712,11 +712,12 @@ serve(async (req) => {
                     try {
                       let bodyObj = JSON.parse(module.mapper.jsonStringBodyContent);
                       bodyObj.table_id = table_id;
+                      bodyObj.campaign_type = campaign_type || bodyObj.campaign_type || 'leads';
                       if (tenant_id) {
                         bodyObj.tenant_id = tenant_id;
                       }
                       module.mapper.jsonStringBodyContent = JSON.stringify(bodyObj);
-                      console.log("Updated jsonStringBodyContent with new table_id");
+                      console.log("Updated jsonStringBodyContent with new table_id and campaign_type");
                     } catch (e) {
                       // If parsing fails, try string replacement
                       console.warn("Failed to parse jsonStringBodyContent, trying regex replace");
@@ -736,6 +737,7 @@ serve(async (req) => {
                         ? JSON.parse(module.mapper.data) 
                         : module.mapper.data;
                       dataObj.table_id = table_id;
+                      dataObj.campaign_type = campaign_type || dataObj.campaign_type || 'leads';
                       if (tenant_id) {
                         dataObj.tenant_id = tenant_id;
                       }
@@ -912,17 +914,44 @@ serve(async (req) => {
           
           let patchedHttpModule = false;
           
+          // Define metrics based on campaign type
+          const metricsForLeads = [
+            "metrics.impressions",
+            "metrics.clicks", 
+            "metrics.cost_micros",
+            "metrics.conversions",
+            "metrics.ctr",
+            "metrics.average_cpc"
+          ];
+          
+          const metricsForEcommerce = [
+            "metrics.impressions",
+            "metrics.clicks",
+            "metrics.cost_micros",
+            "metrics.conversions",
+            "metrics.conversions_value",
+            "metrics.all_conversions",
+            "metrics.all_conversions_value"
+          ];
+          
           // Step 2: Update HTTP modules and Google Ads modules in the flow
           if (blueprintData.flow && Array.isArray(blueprintData.flow)) {
             for (const module of blueprintData.flow) {
               // Update Google Ads module if customer_id is provided
               if (customer_id && module.module && isGoogleAdsModule(module.module)) {
-                console.log(`Patching Google Ads module (${module.module}) with accountId`);
+                console.log(`Patching Google Ads module (${module.module}) with accountId and metrics for ${campaign_type}`);
                 if (module.mapper) {
                   const formattedCustomerId = customer_id.replace(/-/g, '');
                   module.mapper.customerId = formattedCustomerId;
                   module.mapper.customer_id = formattedCustomerId;
                   module.mapper.accountId = formattedCustomerId;
+                  
+                  // Update metrics based on campaign type
+                  if (campaign_type) {
+                    const selectedMetrics = campaign_type === "ecommerce" ? metricsForEcommerce : metricsForLeads;
+                    module.mapper.metrics = selectedMetrics;
+                    console.log(`Updated metrics for campaign_type: ${campaign_type}`);
+                  }
                 }
               }
               
@@ -936,12 +965,13 @@ serve(async (req) => {
                     try {
                       let bodyObj = JSON.parse(module.mapper.jsonStringBodyContent);
                       bodyObj.table_id = table_id;
+                      bodyObj.campaign_type = campaign_type || bodyObj.campaign_type || 'leads';
                       if (tenant_id) {
                         bodyObj.tenant_id = tenant_id;
                       }
                       module.mapper.jsonStringBodyContent = JSON.stringify(bodyObj);
                       patchedHttpModule = true;
-                      console.log("Patched jsonStringBodyContent with new table_id");
+                      console.log("Patched jsonStringBodyContent with new table_id and campaign_type");
                     } catch (e) {
                       console.warn("Failed to parse jsonStringBodyContent:", e);
                     }
@@ -954,6 +984,7 @@ serve(async (req) => {
                         ? JSON.parse(module.mapper.data) 
                         : module.mapper.data;
                       dataObj.table_id = table_id;
+                      dataObj.campaign_type = campaign_type || dataObj.campaign_type || 'leads';
                       if (tenant_id) {
                         dataObj.tenant_id = tenant_id;
                       }
