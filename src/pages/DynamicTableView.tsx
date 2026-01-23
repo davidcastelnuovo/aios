@@ -1832,24 +1832,40 @@ export default function DynamicTableView() {
       {hasGoogleAds && filteredRecords && filteredRecords.length > 0 && (
         <Card className="mb-4 overflow-hidden">
           {(() => {
+            const isEcommerce = table?.integration_settings?.campaign_type === 'ecommerce';
+            
             const campaignGroups = filteredRecords.reduce((acc, record) => {
               const campaignName = String(record.data?.campaign_name || 'ללא קמפיין');
               if (!acc[campaignName]) {
-                acc[campaignName] = { impressions: 0, clicks: 0, conversions: 0, cost: 0 };
+                acc[campaignName] = { 
+                  impressions: 0, 
+                  clicks: 0, 
+                  conversions: 0, 
+                  cost: 0,
+                  conversions_value: 0,
+                  all_conversions: 0,
+                  all_conversions_value: 0
+                };
               }
               acc[campaignName].impressions += Number(record.data?.impressions) || 0;
               acc[campaignName].clicks += Number(record.data?.clicks) || 0;
               acc[campaignName].conversions += Number(record.data?.conversions) || 0;
               acc[campaignName].cost += Number(record.data?.cost) || 0;
+              acc[campaignName].conversions_value += Number(record.data?.conversions_value) || 0;
+              acc[campaignName].all_conversions += Number(record.data?.all_conversions) || 0;
+              acc[campaignName].all_conversions_value += Number(record.data?.all_conversions_value) || 0;
               return acc;
-            }, {} as Record<string, { impressions: number; clicks: number; conversions: number; cost: number }>);
+            }, {} as Record<string, { impressions: number; clicks: number; conversions: number; cost: number; conversions_value: number; all_conversions: number; all_conversions_value: number }>);
 
             const totals = Object.values(campaignGroups).reduce((acc, campaign) => ({
               impressions: acc.impressions + campaign.impressions,
               clicks: acc.clicks + campaign.clicks,
               conversions: acc.conversions + campaign.conversions,
               cost: acc.cost + campaign.cost,
-            }), { impressions: 0, clicks: 0, conversions: 0, cost: 0 });
+              conversions_value: acc.conversions_value + campaign.conversions_value,
+              all_conversions: acc.all_conversions + campaign.all_conversions,
+              all_conversions_value: acc.all_conversions_value + campaign.all_conversions_value,
+            }), { impressions: 0, clicks: 0, conversions: 0, cost: 0, conversions_value: 0, all_conversions: 0, all_conversions_value: 0 });
 
             return (
               <div className="overflow-x-auto">
@@ -1861,20 +1877,35 @@ export default function DynamicTableView() {
                       <th className="p-2 text-center font-medium">קליקים</th>
                       <th className="p-2 text-center font-medium">המרות</th>
                       <th className="p-2 text-center font-medium">עלות</th>
-                      <th className="p-2 text-center font-medium">עלות להמרה</th>
+                      {isEcommerce ? (
+                        <>
+                          <th className="p-2 text-center font-medium">ערך המרות</th>
+                          <th className="p-2 text-center font-medium">ROAS</th>
+                        </>
+                      ) : (
+                        <th className="p-2 text-center font-medium">עלות להמרה</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {Object.entries(campaignGroups).map(([campaignName, data]) => {
                       const costPerConversion = data.conversions > 0 ? data.cost / data.conversions : 0;
+                      const roas = data.cost > 0 ? data.conversions_value / data.cost : 0;
                       return (
                         <tr key={campaignName} className="border-b hover:bg-muted/30">
                           <td className="p-2 text-right font-medium">{campaignName}</td>
                           <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
                           <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
-                          <td className="p-2 text-center text-green-600 font-medium">{data.conversions.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center text-green-600 font-medium">{data.conversions.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
                           <td className="p-2 text-center">₪{data.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          <td className="p-2 text-center text-blue-600 font-medium">₪{costPerConversion.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                          {isEcommerce ? (
+                            <>
+                              <td className="p-2 text-center text-purple-600 font-medium">₪{data.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                              <td className="p-2 text-center text-blue-600 font-medium">{roas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
+                            </>
+                          ) : (
+                            <td className="p-2 text-center text-blue-600 font-medium">₪{costPerConversion.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                          )}
                         </tr>
                       );
                     })}
@@ -1884,9 +1915,16 @@ export default function DynamicTableView() {
                       <td className="p-2 text-right">סה״כ</td>
                       <td className="p-2 text-center">{totals.impressions.toLocaleString('he-IL')}</td>
                       <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
-                      <td className="p-2 text-center text-green-600">{totals.conversions.toLocaleString('he-IL')}</td>
+                      <td className="p-2 text-center text-green-600">{totals.conversions.toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
                       <td className="p-2 text-center">₪{totals.cost.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                      <td className="p-2 text-center text-blue-600">₪{(totals.conversions > 0 ? totals.cost / totals.conversions : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                      {isEcommerce ? (
+                        <>
+                          <td className="p-2 text-center text-purple-600">₪{totals.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                          <td className="p-2 text-center text-blue-600">{(totals.cost > 0 ? totals.conversions_value / totals.cost : 0).toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
+                        </>
+                      ) : (
+                        <td className="p-2 text-center text-blue-600">₪{(totals.conversions > 0 ? totals.cost / totals.conversions : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
+                      )}
                     </tr>
                   </tfoot>
                 </table>
