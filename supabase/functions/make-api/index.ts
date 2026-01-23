@@ -275,9 +275,24 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        // Activate a scenario so it can be run
+        // First, update the scenario scheduling to be valid, then activate
         try {
+          console.log(`Setting scheduling for scenario ${scenario_id}...`);
+          
+          // Step 1: Update scenario with valid scheduling (on-demand / indefinitely)
+          await makeAPICall(
+            api_token,
+            region,
+            `/scenarios/${scenario_id}`,
+            "PATCH",
+            {
+              scheduling: JSON.stringify({ type: "indefinitely" })
+            }
+          );
+          
           console.log(`Activating scenario ${scenario_id}...`);
+          
+          // Step 2: Now activate the scenario
           const activateResult = await makeAPICall(
             api_token,
             region,
