@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook, Building2, User, X, Check, ChevronsUpDown, TrendingUp, AlertTriangle, ShoppingCart } from "lucide-react";
+import { Plus, Table2, FileSpreadsheet, Pencil, Trash2, ChevronDown, ChevronRight, Facebook, Building2, User, X, Check, ChevronsUpDown, TrendingUp, AlertTriangle, ShoppingCart, LayoutDashboard } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { cn } from "@/lib/utils";
@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SimpleTableDialog } from "@/components/dynamic-tables/SimpleTableDialog";
 import { FacebookTableDialog } from "@/components/dynamic-tables/FacebookTableDialog";
 import { FacebookEcommerceTableDialog } from "@/components/dynamic-tables/FacebookEcommerceTableDialog";
@@ -22,6 +23,7 @@ import { GoogleAnalyticsTableDialog } from "@/components/dynamic-tables/GoogleAn
 import { GoogleSearchConsoleTableDialog } from "@/components/dynamic-tables/GoogleSearchConsoleTableDialog";
 import { AhrefsTableDialog } from "@/components/dynamic-tables/AhrefsTableDialog";
 import { TableCardAlerts } from "@/components/dynamic-tables/TableCardAlerts";
+import { CreateDashboardDialog } from "@/components/dynamic-tables/CreateDashboardDialog";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -94,6 +96,8 @@ export default function DynamicTables() {
   const [editClientId, setEditClientId] = useState<string>("");
   const [clientPopoverOpen, setClientPopoverOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [showCreateDashboardDialog, setShowCreateDashboardDialog] = useState(false);
+  const [mainTab, setMainTab] = useState<string>("tables");
 
   // Fetch agencies and clients for displaying names
   const { data: agencies = [] } = useQuery({
@@ -146,6 +150,21 @@ export default function DynamicTables() {
     enabled: !!tenantId,
   });
 
+  // Fetch dashboards
+  const { data: dashboards = [], isLoading: dashboardsLoading } = useQuery({
+    queryKey: ['crm-dashboards', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from('crm_dashboards')
+        .select('*, clients(name), agencies(name)')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
   // Filter tables by selected agency
   const filteredTables = useMemo(() => {
     if (!tables) return [];
@@ -160,6 +179,24 @@ export default function DynamicTables() {
       table.agency_id === selectedAgency
     );
   }, [tables, selectedAgency]);
+
+  // Delete dashboard mutation
+  const deleteDashboardMutation = useMutation({
+    mutationFn: async (dashboardId: string) => {
+      const { error } = await supabase
+        .from('crm_dashboards')
+        .delete()
+        .eq('id', dashboardId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['crm-dashboards'] });
+      toast.success('הדשבורד נמחק בהצלחה');
+    },
+    onError: (error: any) => {
+      toast.error('שגיאה במחיקת הדשבורד: ' + error.message);
+    },
+  });
 
   const deleteTableMutation = useMutation({
     mutationFn: async (tableId: string) => {
@@ -297,83 +334,109 @@ export default function DynamicTables() {
     <div className="container mx-auto py-8 px-4">
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h1 className="text-3xl font-bold">ניהול טבלאות</h1>
+          <h1 className="text-3xl font-bold">ניהול טבלאות ודשבורדים</h1>
           <p className="text-muted-foreground mt-1">
-            צור וערוך טבלאות נתונים עם webhook integration
+            צור וערוך טבלאות נתונים ודשבורדים מאוחדים
           </p>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button>
-              <Plus className="ml-2 h-4 w-4" />
-              טבלה חדשה
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setShowCreateDialog(true)}>
-              <Table2 className="ml-2 h-4 w-4" />
-              טבלה רגילה
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setShowFacebookDialog(true)}>
-              <Facebook className="ml-2 h-4 w-4 text-blue-600" />
-              טבלת Facebook Insights (לידים)
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setShowFacebookEcommerceDialog(true)}>
-              <ShoppingCart className="ml-2 h-4 w-4 text-green-600" />
-              טבלת Facebook Ecommerce (מכירות)
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setShowGoogleAdsDialog(true)}>
-              <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
-                <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="#4285F4"/>
-              </svg>
-              טבלת Google Ads
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setShowGADialog(true)}>
-              <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
-                <path d="M22.84 2.998L12.842 20.998 2.84 2.998h20z" fill="#F9AB00"/>
-                <path d="M12.84 20.998l-5-9h10l-5 9z" fill="#E37400"/>
-              </svg>
-              טבלת Google Analytics
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setShowGSCDialog(true)}>
-              <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="#4285F4" strokeWidth="2" fill="none"/>
-                <path d="M12 6v6l4 2" stroke="#4285F4" strokeWidth="2" strokeLinecap="round"/>
-              </svg>
-              טבלת Search Console
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setShowAhrefsDialog(true)}>
-              <TrendingUp className="ml-2 h-4 w-4 text-orange-500" />
-              טבלת Ahrefs
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
 
-      {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-32" />
-                <Skeleton className="h-4 w-48 mt-2" />
-              </CardHeader>
-            </Card>
-          ))}
+      {/* Main Tabs: Tables / Dashboards */}
+      <Tabs value={mainTab} onValueChange={setMainTab} className="space-y-6">
+        <div className="flex items-center justify-between">
+          <TabsList>
+            <TabsTrigger value="tables" className="gap-2">
+              <Table2 className="h-4 w-4" />
+              טבלאות
+            </TabsTrigger>
+            <TabsTrigger value="dashboards" className="gap-2">
+              <LayoutDashboard className="h-4 w-4" />
+              דשבורדים
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Action buttons based on tab */}
+          {mainTab === 'tables' ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button>
+                  <Plus className="ml-2 h-4 w-4" />
+                  טבלה חדשה
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setShowCreateDialog(true)}>
+                  <Table2 className="ml-2 h-4 w-4" />
+                  טבלה רגילה
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowFacebookDialog(true)}>
+                  <Facebook className="ml-2 h-4 w-4" />
+                  טבלת Facebook Insights (לידים)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowFacebookEcommerceDialog(true)}>
+                  <ShoppingCart className="ml-2 h-4 w-4" />
+                  טבלת Facebook Ecommerce (מכירות)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowGoogleAdsDialog(true)}>
+                  <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <path d="M12.48 10.92v3.28h7.84c-.24 1.84-.853 3.187-1.787 4.133-1.147 1.147-2.933 2.4-6.053 2.4-4.827 0-8.6-3.893-8.6-8.72s3.773-8.72 8.6-8.72c2.6 0 4.507 1.027 5.907 2.347l2.307-2.307C18.747 1.44 16.133 0 12.48 0 5.867 0 .307 5.387.307 12s5.56 12 12.173 12c3.573 0 6.267-1.173 8.373-3.36 2.16-2.16 2.84-5.213 2.84-7.667 0-.76-.053-1.467-.173-2.053H12.48z" fill="#4285F4"/>
+                  </svg>
+                  טבלת Google Ads
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowGADialog(true)}>
+                  <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <path d="M22.84 2.998L12.842 20.998 2.84 2.998h20z" fill="#F9AB00"/>
+                    <path d="M12.84 20.998l-5-9h10l-5 9z" fill="#E37400"/>
+                  </svg>
+                  טבלת Google Analytics
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowGSCDialog(true)}>
+                  <svg className="ml-2 h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="#4285F4" strokeWidth="2" fill="none"/>
+                    <path d="M12 6v6l4 2" stroke="#4285F4" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  טבלת Search Console
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setShowAhrefsDialog(true)}>
+                  <TrendingUp className="ml-2 h-4 w-4" />
+                  טבלת Ahrefs
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Button onClick={() => setShowCreateDashboardDialog(true)}>
+              <Plus className="ml-2 h-4 w-4" />
+              דשבורד חדש
+            </Button>
+          )}
         </div>
-      ) : !filteredTables || filteredTables.length === 0 ? (
-        <Card className="p-12 text-center">
-          <Table2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">אין טבלאות עדיין</h3>
-          <p className="text-muted-foreground mb-4">
-            צור את הטבלה הראשונה שלך כדי להתחיל
-          </p>
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="ml-2 h-4 w-4" />
-            צור טבלה ראשונה
-          </Button>
-        </Card>
-      ) : (
+
+        {/* Tables Tab Content */}
+        <TabsContent value="tables">
+          {isLoading ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardHeader>
+                    <Skeleton className="h-6 w-32" />
+                    <Skeleton className="h-4 w-48 mt-2" />
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+          ) : !filteredTables || filteredTables.length === 0 ? (
+            <Card className="p-12 text-center">
+              <Table2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">אין טבלאות עדיין</h3>
+              <p className="text-muted-foreground mb-4">
+                צור את הטבלה הראשונה שלך כדי להתחיל
+              </p>
+              <Button onClick={() => setShowCreateDialog(true)}>
+                <Plus className="ml-2 h-4 w-4" />
+                צור טבלה ראשונה
+              </Button>
+            </Card>
+          ) : (
         <div className="space-y-6">
           {/* Horizontal Tabs */}
           <div className="flex flex-wrap gap-2 border-b pb-3">
@@ -491,11 +554,91 @@ export default function DynamicTables() {
                     </p>
                   </CardContent>
                 </Card>
-              ))}
+            ))}
             </div>
           )}
         </div>
-      )}
+          )}
+        </TabsContent>
+
+        {/* Dashboards Tab Content */}
+        <TabsContent value="dashboards">
+          {dashboardsLoading ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <Card key={i}>
+                  <CardHeader>
+                    <Skeleton className="h-6 w-32" />
+                    <Skeleton className="h-4 w-48 mt-2" />
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+          ) : dashboards.length === 0 ? (
+            <Card className="p-12 text-center">
+              <LayoutDashboard className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">אין דשבורדים עדיין</h3>
+              <p className="text-muted-foreground mb-4">
+                צור דשבורד כדי לראות נתונים מאוחדים מכל הפלטפורמות של לקוח
+              </p>
+              <Button onClick={() => setShowCreateDashboardDialog(true)}>
+                <Plus className="ml-2 h-4 w-4" />
+                צור דשבורד ראשון
+              </Button>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {dashboards.map((dashboard: any) => (
+                <Card
+                  key={dashboard.id}
+                  className="cursor-pointer hover:shadow-lg transition-shadow"
+                  onClick={() => navigate(buildPath(`/dashboard/${dashboard.id}`))}
+                >
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2">
+                        <LayoutDashboard className="h-5 w-5" />
+                        {dashboard.name}
+                      </CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('האם אתה בטוח שברצונך למחוק את הדשבורד?')) {
+                            deleteDashboardMutation.mutate(dashboard.id);
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {dashboard.clients?.name && (
+                        <Badge variant="secondary" className="text-xs">
+                          <User className="h-3 w-3 ml-1" />
+                          {dashboard.clients.name}
+                        </Badge>
+                      )}
+                      {dashboard.agencies?.name && (
+                        <Badge variant="outline" className="text-xs">
+                          <Building2 className="h-3 w-3 ml-1" />
+                          {dashboard.agencies.name}
+                        </Badge>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      נוצר {new Date(dashboard.created_at).toLocaleDateString('he-IL')}
+                    </p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       <SimpleTableDialog
         open={showCreateDialog}
@@ -691,6 +834,11 @@ export default function DynamicTables() {
       <FacebookEcommerceTableDialog
         open={showFacebookEcommerceDialog}
         onOpenChange={setShowFacebookEcommerceDialog}
+      />
+
+      <CreateDashboardDialog
+        open={showCreateDashboardDialog}
+        onOpenChange={setShowCreateDashboardDialog}
       />
     </div>
   );

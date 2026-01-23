@@ -1010,6 +1010,54 @@ export type Database = {
           },
         ]
       }
+      crm_dashboards: {
+        Row: {
+          agency_id: string | null
+          client_id: string | null
+          created_at: string | null
+          id: string
+          name: string
+          settings: Json | null
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          agency_id?: string | null
+          client_id?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          settings?: Json | null
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          agency_id?: string | null
+          client_id?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          settings?: Json | null
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_dashboards_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_dashboards_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_fields: {
         Row: {
           config: Json

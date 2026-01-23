@@ -47,6 +47,7 @@ const MenuManagement = lazy(() => import("./pages/MenuManagement"));
 const FieldsManagement = lazy(() => import("./pages/FieldsManagement"));
 const DynamicTables = lazy(() => import("./pages/DynamicTables"));
 const DynamicTableView = lazy(() => import("./pages/DynamicTableView"));
+const DashboardView = lazy(() => import("./pages/DashboardView"));
 const Chat = lazy(() => import("./pages/Chat"));
 const ManyChatSettings = lazy(() => import("./pages/ManyChatSettings"));
 const ChatIntegrations = lazy(() => import("./pages/ChatIntegrations"));
@@ -145,6 +146,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/fields-management" element={<ProtectedRoute requiredPermission="fields_management"><AppLayout><FieldsManagement /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/dynamic-tables" element={<ProtectedRoute requiredPermission="branding"><AppLayout><DynamicTables /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/table/:tableSlug" element={<ProtectedRoute><AppLayout><DynamicTableView /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/dashboard/:dashboardId" element={<ProtectedRoute><AppLayout><DashboardView /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/chat" element={<ProtectedRoute requiredPermission="chat"><AppLayout><Chat /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/chat/:clientId" element={<ProtectedRoute requiredPermission="chat"><AppLayout><Chat /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/chat-integrations" element={<ProtectedRoute requiredPermission="chat_integrations"><AppLayout><ChatIntegrations /></AppLayout></ProtectedRoute>} />
