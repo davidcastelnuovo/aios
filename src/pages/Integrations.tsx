@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap } from "lucide-react";
+import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -197,6 +197,23 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
+  // Check SerpAPI integration status
+  const { data: serpApiIntegration } = useQuery({
+    queryKey: ['serpapi-integration', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .eq('integration_type', 'serpapi')
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   // Check Sumit integration status
   const { data: sumitIntegration } = useQuery({
     queryKey: ['sumit-integration', currentTenantId],
@@ -333,6 +350,20 @@ export default function Integrations() {
       isConnected: !!ahrefsIntegration,
       route: "ahrefs-settings",
       gradient: "bg-gradient-to-r from-orange-500 to-red-600",
+    },
+    {
+      icon: <Search className="h-6 w-6" />,
+      title: "SerpAPI - Rank Tracking",
+      description: "מעקב דירוגים בזמן אמת - כמו Ahrefs, בעלות נמוכה",
+      features: [
+        "מיקום מדויק בזמן אמת",
+        "היסטוריית דירוגים וגרפים",
+        "מעקב אחרי מתחרים",
+        "התראות על שינויים",
+      ],
+      isConnected: !!serpApiIntegration,
+      route: "integrations/serpapi",
+      gradient: "bg-gradient-to-r from-emerald-500 to-teal-600",
     },
     {
       icon: <Calculator className="h-6 w-6" />,
