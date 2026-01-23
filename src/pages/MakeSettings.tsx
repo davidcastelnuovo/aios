@@ -7,8 +7,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Check, X, Loader2, Play, RefreshCw, Zap, Link2, Workflow, Settings, ExternalLink, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, Check, X, Loader2, Play, RefreshCw, Zap, Link2, Workflow, Settings, ExternalLink, Eye, EyeOff, ChevronsUpDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { supabase } from "@/integrations/supabase/client";
@@ -67,6 +69,25 @@ export default function MakeSettings() {
   const [googleAdsTemplateId, setGoogleAdsTemplateId] = useState("");
   const [showToken, setShowToken] = useState(false);
   const [activeTab, setActiveTab] = useState("settings");
+  const [templateSelectorOpen, setTemplateSelectorOpen] = useState(false);
+
+  // Fetch scenarios for template selector
+  const { data: templateScenarios, isLoading: isLoadingTemplateScenarios } = useQuery({
+    queryKey: ["make-scenarios-template", currentTenantId, apiToken, teamId, region],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("make-api", {
+        body: {
+          action: "list_scenarios",
+          api_token: apiToken,
+          team_id: teamId,
+          region,
+        },
+      });
+      if (error) throw error;
+      return (data?.scenarios || data) as MakeScenario[];
+    },
+    enabled: !!apiToken && !!teamId && !!region,
+  });
 
   // Fetch existing Make integration
   const { data: makeIntegration, isLoading: isLoadingIntegration } = useQuery({
@@ -448,16 +469,64 @@ export default function MakeSettings() {
 
               {/* Google Ads Template Scenario ID */}
               <div className="space-y-2 pt-4 border-t">
-                <Label htmlFor="google-ads-template">Google Ads Template Scenario ID</Label>
-                <Input
-                  id="google-ads-template"
-                  type="text"
-                  value={googleAdsTemplateId}
-                  onChange={(e) => setGoogleAdsTemplateId(e.target.value)}
-                  placeholder="הזן את ה-Scenario ID של הטמפלייט"
-                />
+                <Label>Google Ads Template Scenario</Label>
+                <Popover open={templateSelectorOpen} onOpenChange={setTemplateSelectorOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={templateSelectorOpen}
+                      className="w-full justify-between"
+                      disabled={!apiToken || !teamId}
+                    >
+                      {googleAdsTemplateId
+                        ? templateScenarios?.find(s => s.id.toString() === googleAdsTemplateId)?.name || `Scenario #${googleAdsTemplateId}`
+                        : "בחר סנריו טמפלייט..."}
+                      <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="חפש סנריו..." />
+                      <CommandList>
+                        <CommandEmpty>
+                          {isLoadingTemplateScenarios ? (
+                            <div className="flex items-center justify-center py-4">
+                              <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                              טוען סנריות...
+                            </div>
+                          ) : (
+                            "לא נמצאו סנריות"
+                          )}
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {templateScenarios?.map((scenario) => (
+                            <CommandItem
+                              key={scenario.id}
+                              value={`${scenario.name} ${scenario.id}`}
+                              onSelect={() => {
+                                setGoogleAdsTemplateId(scenario.id.toString());
+                                setTemplateSelectorOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={`ml-2 h-4 w-4 ${
+                                  googleAdsTemplateId === scenario.id.toString() ? "opacity-100" : "opacity-0"
+                                }`}
+                              />
+                              <div className="flex flex-col">
+                                <span>{scenario.name}</span>
+                                <span className="text-xs text-muted-foreground">ID: {scenario.id}</span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
                 <p className="text-xs text-muted-foreground">
-                  צור Scenario ב-Make.com עם 2 מודולים: Google Ads Report → HTTP POST, ושמור את ה-ID שלו כאן.
+                  צור Scenario ב-Make.com עם 2 מודולים: Google Ads Report → HTTP POST, ובחר אותו מהרשימה.
                   <br />
                   המערכת תשכפל אותו אוטומטית לכל טבלת Google Ads חדשה.
                 </p>
