@@ -136,7 +136,10 @@ export default function MakeSettings() {
         connected_at: new Date().toISOString(),
       };
 
-      if (makeIntegration) {
+      // Robust save: avoid 409 duplicate key by re-checking for existing integration and updating it.
+      const existingId = makeIntegration?.id;
+
+      if (existingId) {
         const { error } = await supabase
           .from("tenant_integrations")
           .update({
@@ -144,17 +147,73 @@ export default function MakeSettings() {
             is_active: true,
             updated_at: new Date().toISOString(),
           })
-          .eq("id", makeIntegration.id);
+          .eq("id", existingId);
         if (error) throw error;
-      } else {
-        const { error } = await supabase.from("tenant_integrations").insert([{
+        return;
+      }
+
+      // Try to find an existing row (in case cache/state is stale)
+      const { data: existingRow, error: existingLookupError } = await supabase
+        .from("tenant_integrations")
+        .select("id")
+        .eq("tenant_id", currentTenantId)
+        .eq("integration_type", "make_api")
+        .limit(1)
+        .maybeSingle();
+
+      if (existingLookupError) {
+        throw existingLookupError;
+      }
+
+      if (existingRow?.id) {
+        const { error } = await supabase
+          .from("tenant_integrations")
+          .update({
+            settings,
+            is_active: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingRow.id);
+        if (error) throw error;
+        return;
+      }
+
+      // No existing row found -> insert new
+      const { error: insertError } = await supabase.from("tenant_integrations").insert([
+        {
           tenant_id: currentTenantId,
           integration_type: "make_api",
           settings,
           is_active: true,
-        }]);
-        if (error) throw error;
+        },
+      ]);
+
+      // If a race condition happened and the row was created between lookup and insert, fall back to update.
+      if (insertError && (insertError as any)?.code === "23505") {
+        const { data: rowAfterConflict, error: conflictLookupError } = await supabase
+          .from("tenant_integrations")
+          .select("id")
+          .eq("tenant_id", currentTenantId)
+          .eq("integration_type", "make_api")
+          .limit(1)
+          .maybeSingle();
+
+        if (conflictLookupError) throw conflictLookupError;
+        if (!rowAfterConflict?.id) throw insertError;
+
+        const { error: updateAfterConflictError } = await supabase
+          .from("tenant_integrations")
+          .update({
+            settings,
+            is_active: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", rowAfterConflict.id);
+        if (updateAfterConflictError) throw updateAfterConflictError;
+        return;
       }
+
+      if (insertError) throw insertError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["make-integration"] });
