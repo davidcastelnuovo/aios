@@ -969,7 +969,7 @@ export default function DynamicTableView() {
           template_scenario_id: templateId,
           table_id: table.id,
           webhook_url: webhookUrl,
-          scenario_name: `Google Ads Sync - ${table.name}`,
+          scenario_name: `חיבור לגוגל - ${table.name}`,
           customer_id: integrationSettings.customer_id,
           campaign_type: integrationSettings.campaign_type || 'leads',
         },
