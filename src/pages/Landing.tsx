@@ -198,13 +198,13 @@ const Landing = () => {
 
             {/* Main Headline */}
             <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
-              <span className="text-white">לצמוח </span>
-              <span className="text-[#36d399]">בלי להשתעבד</span>
+              <span className="text-white">השותפים שלך </span>
+              <span className="text-[#36d399]">לצמיחה</span>
             </h1>
 
             {/* Subtitle */}
             <p className="text-xl md:text-2xl text-white/60 mb-10 max-w-2xl mx-auto leading-relaxed">
-              ניהול לידים, לקוחות, משימות ואוטומציות - הכל במקום אחד.
+              ניהול לידים לעסק שלך וללקוחות שלך
               <br />
               <span className="text-white/40">בנוי במיוחד עבור סוכנויות שיווק.</span>
             </p>
