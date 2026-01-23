@@ -1849,21 +1849,16 @@ export default function Leads() {
               className="pr-10"
             />
           </div>
-          <Button
-            variant="outline"
-            onClick={() => setFiltersDialogOpen(true)}
-            className={cn(
-              "gap-2 shrink-0",
-              hasActiveFilters && "border-primary text-primary"
-            )}
-          >
-            <Filter className="h-4 w-4" />
-            {hasActiveFilters && (
-              <Badge variant="secondary" className="h-5 w-5 p-0 flex items-center justify-center rounded-full text-xs">
-                ✓
-              </Badge>
-            )}
-          </Button>
+          <LeadFilterPresetTabs
+            activePresetId={activePresetId}
+            onPresetSelect={handlePresetSelect}
+            onOpenFiltersDialog={() => {
+              setEditingPreset(null);
+              setFiltersDialogOpen(true);
+            }}
+            onEditPreset={handleEditPreset}
+            hasActiveFilters={hasActiveFilters}
+          />
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button
