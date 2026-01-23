@@ -208,6 +208,7 @@ export default function DynamicTableView() {
       return Array.isArray(response.data) ? response.data as CrmRecord[] : [];
     },
     enabled: !!table?.id && (dateFilter !== 'custom' || (!!customDateRange.from && !!customDateRange.to)),
+    placeholderData: (previousData) => previousData, // Keep previous data while loading to prevent UI flash
   });
 
   // Filter records by campaign name search
@@ -1149,7 +1150,9 @@ export default function DynamicTableView() {
     !table?.integration_settings?.make_scenario_id;
 
   // Check if scenario exists but has no data (might need patching or activation)
+  // Don't show alert while loading to prevent UI flash when changing filters
   const hasScenarioButNoData = 
+    !recordsLoading &&
     table?.integration_type === 'google_ads' &&
     table?.integration_settings?.data_source === 'make_api' &&
     table?.integration_settings?.make_scenario_id &&
@@ -1161,7 +1164,7 @@ export default function DynamicTableView() {
     table?.integration_type === 'google_ads' &&
     table?.integration_settings?.data_source === 'make_api' &&
     table?.integration_settings?.make_scenario_id &&
-    (table?.integration_settings?.last_sync_at || (records && records.length > 0));
+    (table?.integration_settings?.last_sync_at || (!recordsLoading && records && records.length > 0));
 
   return (
     <div className="container mx-auto py-8 px-4">
