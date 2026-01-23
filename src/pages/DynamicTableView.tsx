@@ -106,6 +106,7 @@ export default function DynamicTableView() {
   const [showAlertsDialog, setShowAlertsDialog] = useState(false);
   const [showMakeWebhookDialog, setShowMakeWebhookDialog] = useState(false);
   const [campaignSearch, setCampaignSearch] = useState("");
+  const [isCloning, setIsCloning] = useState(false);
   const cellInputRef = useRef<HTMLInputElement>(null);
 
   const debouncedCampaignSearch = useDebouncedValue(campaignSearch, 300);
@@ -499,6 +500,11 @@ export default function DynamicTableView() {
     mutationFn: async () => {
       if (!table?.id) throw new Error('No table');
       
+      // Prevent double-cloning
+      if (isCloning) {
+        throw new Error('שכפול סנריו כבר מתבצע, אנא המתן');
+      }
+      
       const integrationSettings = table.integration_settings || {};
       const settings = makeSettings?.settings as Record<string, any> || {};
       const makeApiToken = settings.api_token;
@@ -537,6 +543,9 @@ export default function DynamicTableView() {
       if (!templateScenarioId) {
         throw new Error('לא נבחר סנריו. נא לבחור סנריו בהגדרות הטבלה (כפתור 🔗) או להגדיר Template Scenario ID בהגדרות Make Settings.');
       }
+      
+      // Lock cloning to prevent double execution
+      setIsCloning(true);
       
       const connectionId = integrationSettings.make_connection_id;
       const customerId = integrationSettings.customer_id;
@@ -626,6 +635,10 @@ export default function DynamicTableView() {
       toast.error(error.message || 'שגיאה בסנכרון דרך Make.com');
       // If automatic sync fails, show the manual setup dialog
       setShowMakeWebhookDialog(true);
+    },
+    onSettled: () => {
+      // Always unlock cloning when mutation completes (success or error)
+      setIsCloning(false);
     },
   });
 
