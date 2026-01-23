@@ -114,11 +114,31 @@ const GOOGLE_ADS_APP_NAMES = [
   "google ads",
   "googleads",
   "adwords",
+  "google-ads-reports",
 ];
 
 function isGoogleAdsConnection(connection: any): boolean {
   const appName = (connection.accountName || connection.typeName || connection.name || "").toLowerCase();
   return GOOGLE_ADS_APP_NAMES.some(name => appName.includes(name));
+}
+
+// Helper to identify Google Ads modules in blueprints
+function isGoogleAdsModule(moduleName: string): boolean {
+  if (!moduleName) return false;
+  const lowerName = moduleName.toLowerCase();
+  return lowerName.includes('google-ads') || 
+         lowerName.includes('googleads') ||
+         lowerName.includes('adwords') ||
+         lowerName.includes('google-ads-reports');
+}
+
+// Helper to identify HTTP modules in blueprints
+function isHttpModule(moduleName: string): boolean {
+  if (!moduleName) return false;
+  const lowerName = moduleName.toLowerCase();
+  return lowerName.includes('http:') || 
+         lowerName === 'http:actionmakerequest' ||
+         lowerName.includes('http');
 }
 
 serve(async (req) => {
@@ -667,30 +687,23 @@ serve(async (req) => {
             const selectedMetrics = campaign_type === "ecommerce" ? metricsForEcommerce : metricsForLeads;
             
             for (const module of blueprintData.flow) {
-              // Check if this is a Google Ads module - update customer_id and metrics
-              if (customer_id && module.module && (
-                module.module.includes('google-ads') || 
-                module.module.includes('googleads') ||
-                module.module.includes('adwords')
-              )) {
-                console.log(`Found Google Ads module, updating customer_id and metrics for ${campaign_type}`);
+              // Check if this is a Google Ads module - update customer_id, accountId and metrics
+              if (customer_id && module.module && isGoogleAdsModule(module.module)) {
+                console.log(`Found Google Ads module (${module.module}), updating customer_id, accountId and metrics for ${campaign_type}`);
                 if (module.mapper) {
                   // Format customer ID without dashes
                   const formattedCustomerId = customer_id.replace(/-/g, '');
                   module.mapper.customerId = formattedCustomerId;
                   module.mapper.customer_id = formattedCustomerId;
+                  module.mapper.accountId = formattedCustomerId; // Some templates use accountId
                   // Update metrics based on campaign type
                   module.mapper.metrics = selectedMetrics;
                 }
               }
               
               // Check if this is an HTTP module - update webhook URL and table_id
-              if (module.module && (
-                module.module.includes('http:') || 
-                module.module === 'http:ActionMakeRequest' ||
-                module.module.includes('http')
-              )) {
-                console.log("Found HTTP module, updating webhook URL and table_id");
+              if (module.module && isHttpModule(module.module)) {
+                console.log(`Found HTTP module (${module.module}), updating webhook URL and table_id`);
                 if (module.mapper) {
                   module.mapper.url = webhook_url;
                   
@@ -756,6 +769,9 @@ serve(async (req) => {
           
           // Step 4: Create new scenario with modified blueprint
           const newScenarioName = scenario_name || `חיבור לגוגל - ${table_id.slice(0, 8)}`;
+          
+          // Update the blueprint name itself (Make.com uses this for display)
+          blueprintData.name = newScenarioName;
           
           const createPayload = {
             name: newScenarioName,
@@ -896,14 +912,21 @@ serve(async (req) => {
           
           let patchedHttpModule = false;
           
-          // Step 2: Update HTTP modules in the flow
+          // Step 2: Update HTTP modules and Google Ads modules in the flow
           if (blueprintData.flow && Array.isArray(blueprintData.flow)) {
             for (const module of blueprintData.flow) {
-              if (module.module && (
-                module.module.includes('http:') || 
-                module.module === 'http:ActionMakeRequest' ||
-                module.module.includes('http')
-              )) {
+              // Update Google Ads module if customer_id is provided
+              if (customer_id && module.module && isGoogleAdsModule(module.module)) {
+                console.log(`Patching Google Ads module (${module.module}) with accountId`);
+                if (module.mapper) {
+                  const formattedCustomerId = customer_id.replace(/-/g, '');
+                  module.mapper.customerId = formattedCustomerId;
+                  module.mapper.customer_id = formattedCustomerId;
+                  module.mapper.accountId = formattedCustomerId;
+                }
+              }
+              
+              if (module.module && isHttpModule(module.module)) {
                 console.log("Found HTTP module to patch");
                 if (module.mapper) {
                   module.mapper.url = patchWebhookUrl;
