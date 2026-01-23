@@ -485,7 +485,7 @@ export default function DynamicTableView() {
         .from('tenant_integrations')
         .select('*')
         .eq('tenant_id', table.tenant_id)
-        .eq('integration_type', 'make')
+        .eq('integration_type', 'make_api')
         .maybeSingle();
       if (error) throw error;
       return data;
