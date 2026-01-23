@@ -1878,10 +1878,8 @@ export default function DynamicTableView() {
               roas_count: acc.roas_count + campaign.roas_count,
             }), { impressions: 0, clicks: 0, conversions: 0, cost: 0, conversions_value: 0, all_conversions: 0, all_conversions_value: 0, roas_sum: 0, roas_count: 0 });
             
-            // Calculate total ROAS - use average of pre-calculated ROAS if available, otherwise calculate
-            const totalRoas = totals.roas_count > 0 
-              ? totals.roas_sum / totals.roas_count 
-              : (totals.cost > 0 ? totals.conversions_value / totals.cost : 0);
+            // Calculate total ROAS - always use total conversions value / total cost
+            const totalRoas = totals.cost > 0 ? totals.conversions_value / totals.cost : 0;
 
             return (
               <div className="overflow-x-auto">
@@ -1906,10 +1904,8 @@ export default function DynamicTableView() {
                   <tbody>
                     {Object.entries(campaignGroups).map(([campaignName, data]) => {
                       const costPerConversion = data.conversions > 0 ? data.cost / data.conversions : 0;
-                      // Use pre-calculated ROAS average if available, otherwise calculate from values
-                      const roas = data.roas_count > 0 
-                        ? data.roas_sum / data.roas_count 
-                        : (data.cost > 0 ? data.conversions_value / data.cost : 0);
+                      // Calculate ROAS as conversions value / cost
+                      const roas = data.cost > 0 ? data.conversions_value / data.cost : 0;
                       return (
                         <tr key={campaignName} className="border-b hover:bg-muted/30">
                           <td className="p-2 text-right font-medium">{campaignName}</td>
