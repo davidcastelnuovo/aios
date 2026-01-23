@@ -96,7 +96,7 @@ export default function DynamicTableView() {
   const [editingFieldName, setEditingFieldName] = useState("");
   const [editingCell, setEditingCell] = useState<{ recordId: string; fieldKey: string; initialValue: string } | null>(null);
   const [cellValues, setCellValues] = useState<Record<string, string>>({});
-  const [dateFilter, setDateFilter] = useState<string>("last_7_days");
+  const [dateFilter, setDateFilter] = useState<string>("all");
   const [customDateRange, setCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
   const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
   const [selectedSyncDateRange, setSelectedSyncDateRange] = useState<string>("last_30_days");
