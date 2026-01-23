@@ -170,7 +170,8 @@ export default function RankTrackingProject() {
   });
 
   // Scan mutation with batching to avoid timeout
-  const BATCH_SIZE = 10;
+  // Reduced to 5 keywords per batch to stay well under 60s timeout with 1.5s delay per keyword
+  const BATCH_SIZE = 5;
   
   const scanMutation = useMutation({
     mutationFn: async (keywordIds?: string[]) => {
