@@ -151,6 +151,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
     api_token?: string; 
     team_id?: string; 
     region?: string;
+    google_ads_template_scenario_id?: string;
   } | null;
 
   const isMakeApiConnected = makeApiIntegration?.is_active && makeApiSettings?.api_token;
@@ -285,8 +286,57 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       toast.success('טבלת Google Ads נוצרה בהצלחה');
       
-      // Trigger initial sync only for direct API
-      if (dataSource === 'direct_api') {
+      // Auto-clone Template Scenario if using Make API and template is configured
+      if (dataSource === 'make_api' && makeApiSettings?.google_ads_template_scenario_id) {
+        try {
+          toast.info('משכפל Scenario אוטומטית מ-Make.com...');
+          
+          const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`;
+          const formattedCustomerId = customerIdInput.replace(/-/g, '');
+          
+          const cloneResult = await supabase.functions.invoke('make-api', {
+            body: {
+              action: 'clone_scenario',
+              api_token: makeApiSettings.api_token,
+              team_id: makeApiSettings.team_id,
+              region: makeApiSettings.region || 'eu1',
+              template_scenario_id: makeApiSettings.google_ads_template_scenario_id,
+              table_id: data.id,
+              webhook_url: webhookUrl,
+              scenario_name: tableName,
+              customer_id: formattedCustomerId,
+            },
+          });
+          
+          if (cloneResult.data?.success && cloneResult.data?.scenario_id) {
+            // Update the table with the cloned scenario_id
+            const currentSettings = data.integration_settings || {};
+            await supabase.functions.invoke('crm-tables', {
+              method: 'PATCH',
+              body: {
+                table_id: data.id,
+                integration_settings: {
+                  ...currentSettings,
+                  make_scenario_id: cloneResult.data.scenario_id,
+                },
+              },
+            });
+            
+            toast.success(`Scenario נוצר אוטומטית: #${cloneResult.data.scenario_id}`);
+          } else {
+            console.warn('Scenario clone incomplete:', cloneResult.data);
+            toast.warning('הטבלה נוצרה. שכפול ה-Scenario לא הצליח במלואו - ייתכן שתצטרך להגדיר ידנית.');
+          }
+        } catch (err) {
+          console.error('Failed to clone scenario:', err);
+          toast.warning('הטבלה נוצרה. לא ניתן לשכפל Scenario אוטומטית - הגדר ידנית ב-Make.com');
+        }
+      } else if (dataSource === 'make_api') {
+        toast.info('הטבלה נוצרה. הגדר Template Scenario בהגדרות Make ליצירה אוטומטית.');
+      } else if (dataSource === 'webhook') {
+        toast.info('הטבלה נוצרה. הגדר Scenario ב-Make.com כדי לסנכרן נתונים.');
+      } else if (dataSource === 'direct_api') {
+        // Trigger initial sync only for direct API
         try {
           toast.info('מסנכרן נתונים מ-Google Ads...');
           await supabase.functions.invoke('sync-google-ads-data', {
@@ -298,8 +348,6 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
           console.error('Initial sync failed:', err);
           toast.error('הטבלה נוצרה אך הסנכרון נכשל - נסה לסנכרן ידנית');
         }
-      } else if (dataSource === 'make_api' || dataSource === 'webhook') {
-        toast.info('הטבלה נוצרה. הגדר Scenario ב-Make.com כדי לסנכרן נתונים.');
       }
 
       handleClose();
