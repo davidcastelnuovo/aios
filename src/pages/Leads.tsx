@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet } from "lucide-react";
+import { Mail, Phone, ExternalLink, Trash2, Building2, DollarSign, LayoutGrid, Table as TableIcon, GripVertical, ChevronDown, ChevronUp, User, Calendar as CalendarIcon, Search, X, Settings2, CheckSquare, Download, Clock, Tag, Filter, FileSpreadsheet } from "lucide-react";
 import confetti from "canvas-confetti";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -2069,14 +2069,21 @@ export default function Leads() {
             >
               {PIPELINE_STAGES.map((stage) => {
                 if (stage.id !== selectedMobileStage) return null;
-                const stageLeads = getLeadsByStage(stage.id);
+                const allStageLeads = getLeadsByStage(stage.id);
+                const totalInStage = getLeadsCountByStage(stage.id);
+                const isExpanded = expandedStages[stage.id];
+                const displayLimit = isExpanded ? allStageLeads.length : KANBAN_LEADS_PER_STAGE_DISPLAY;
+                const stageLeads = allStageLeads.slice(0, displayLimit);
+                const hasMore = !isExpanded && allStageLeads.length > KANBAN_LEADS_PER_STAGE_DISPLAY;
+                const remainingCount = allStageLeads.length - KANBAN_LEADS_PER_STAGE_DISPLAY;
+                
                 return (
                   <div key={stage.id}>
                     <div className="mb-4">
                       <h2 className="text-xl font-bold flex items-center justify-between">
                         <span>{stage.label}</span>
                         <Badge variant="secondary" className="text-sm">
-                          {stageLeads.length} לידים
+                          {stageLeads.length}{totalInStage > stageLeads.length ? ` / ${totalInStage}` : ''} לידים
                         </Badge>
                       </h2>
                     </div>
@@ -2112,6 +2119,32 @@ export default function Leads() {
                         ))}
                       </SortableContext>
                     </DroppableStage>
+                    
+                    {/* Mobile Show More Button */}
+                    {hasMore && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full mt-3 gap-2"
+                        onClick={() => setExpandedStages(prev => ({ ...prev, [stage.id]: true }))}
+                      >
+                        <ChevronDown className="h-4 w-4" />
+                        הצג עוד {remainingCount} לידים
+                      </Button>
+                    )}
+                    
+                    {/* Collapse button when expanded */}
+                    {isExpanded && allStageLeads.length > KANBAN_LEADS_PER_STAGE_DISPLAY && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full mt-3 gap-2 text-muted-foreground"
+                        onClick={() => setExpandedStages(prev => ({ ...prev, [stage.id]: false }))}
+                      >
+                        <ChevronUp className="h-4 w-4" />
+                        הצג פחות
+                      </Button>
+                    )}
                   </div>
                 );
               })}
