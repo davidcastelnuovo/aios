@@ -169,6 +169,14 @@ export default function RankTrackingProject() {
     },
   });
 
+  // Helper function to check if keyword was scanned today
+  const isScannedToday = (keyword: Keyword): boolean => {
+    if (!keyword.last_checked_at) return false;
+    const lastChecked = new Date(keyword.last_checked_at);
+    const today = new Date();
+    return lastChecked.toDateString() === today.toDateString();
+  };
+
   // Scan mutation with batching to avoid timeout
   // Reduced to 5 keywords per batch to stay well under 60s timeout with 1.5s delay per keyword
   const BATCH_SIZE = 5;
@@ -178,10 +186,25 @@ export default function RankTrackingProject() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
-      const idsToScan = keywordIds || keywords?.map(k => k.id) || [];
+      let idsToScan: string[] = [];
+      let skippedCount = 0;
+
+      // If scanning all (no specific keywordIds provided), filter out keywords already scanned today
+      if (!keywordIds) {
+        const notScannedToday = keywords?.filter(k => !isScannedToday(k)) || [];
+        idsToScan = notScannedToday.map(k => k.id);
+        skippedCount = (keywords?.length || 0) - idsToScan.length;
+        
+        if (skippedCount > 0) {
+          toast.info(`דילוג על ${skippedCount} ביטויים שכבר נסרקו היום`);
+        }
+      } else {
+        // Scanning specific keywords (manual selection) - don't filter
+        idsToScan = keywordIds;
+      }
       
       if (idsToScan.length === 0) {
-        throw new Error("אין ביטויים לסריקה");
+        throw new Error("כל הביטויים כבר נסרקו היום");
       }
 
       // Split into batches
@@ -232,13 +255,14 @@ export default function RankTrackingProject() {
         queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords", projectId] });
       }
 
-      return { totalChecked, totalErrors };
+      return { totalChecked, totalErrors, skippedCount };
     },
     onSuccess: (data) => {
       setScanProgress(null);
+      const skippedMsg = data.skippedCount > 0 ? ` (דולגו ${data.skippedCount})` : '';
       const message = data.totalErrors > 0
-        ? `סריקה הושלמה! נבדקו ${data.totalChecked} ביטויים (${data.totalErrors} שגיאות)`
-        : `סריקה הושלמה! נבדקו ${data.totalChecked} ביטויים`;
+        ? `סריקה הושלמה! נבדקו ${data.totalChecked} ביטויים (${data.totalErrors} שגיאות)${skippedMsg}`
+        : `סריקה הושלמה! נבדקו ${data.totalChecked} ביטויים${skippedMsg}`;
       toast.success(message);
       queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords", projectId] });
       queryClient.invalidateQueries({ queryKey: ["rank-tracking-project", projectId] });
