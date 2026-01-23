@@ -1807,37 +1807,73 @@ export default function Leads() {
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold">לידים - Pipeline</h1>
             <Badge variant="secondary" className="text-sm px-2 py-0.5">
-              {isFetching ? '...' : `${filteredLeads?.length || 0}${totalPages > 1 ? ` / ${totalLeadsCount}` : ''}`}
+              {isFetching ? (
+                '...'
+              ) : isKanbanView ? (
+                `סה"כ: ${displayTotalCount.toLocaleString()}`
+              ) : (
+                `${filteredLeads?.length || 0}${totalPages > 1 ? ` / ${totalLeadsCount}` : ''}`
+              )}
             </Badge>
           </div>
-          
-          {/* Mobile Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center gap-1">
+
+          <div className="flex items-center gap-2">
+            {/* View mode toggle (was desktop-only) */}
+            <div className="flex gap-1 border rounded-md p-1">
               <Button
-                variant="outline"
+                variant={viewMode === "kanban" ? "default" : "ghost"}
                 size="sm"
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1 || isFetching}
-                className="h-8 px-2"
+                onClick={() => setViewMode("kanban")}
+                className="h-8 w-8 p-0"
+                title="קנבן"
               >
-                ←
+                <LayoutGrid className="h-4 w-4" />
               </Button>
-              <span className="text-xs text-muted-foreground whitespace-nowrap px-1">
-                {page}/{totalPages}
-              </span>
               <Button
-                variant="outline"
+                variant={viewMode === "table" ? "default" : "ghost"}
                 size="sm"
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages || isFetching}
-                className="h-8 px-2"
+                onClick={() => setViewMode("table")}
+                className="h-8 w-8 p-0"
+                title="טבלה"
               >
-                →
+                <TableIcon className="h-4 w-4" />
               </Button>
             </div>
-          )}
+
+            {/* Mobile Pagination (Table view only) */}
+            {!isKanbanView && totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page === 1 || isFetching}
+                  className="h-8 px-2"
+                >
+                  ←
+                </Button>
+                <span className="text-xs text-muted-foreground whitespace-nowrap px-1">
+                  {page}/{totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages || isFetching}
+                  className="h-8 px-2"
+                >
+                  →
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
+
+        {isKanbanView && (
+          <p className="text-xs text-muted-foreground">
+            בקנבן נטענים עד 50 לידים לכל שלב. כדי לעבור מעבר לזה—עברו לתצוגת טבלה.
+          </p>
+        )}
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
