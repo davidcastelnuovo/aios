@@ -15,7 +15,9 @@ interface MakeAPIRequest {
     | "get_connection_details"
     | "list_google_ads_connections"
     | "list_google_ads_scenarios"
-    | "run_google_ads_sync";
+    | "run_google_ads_sync"
+    | "create_google_ads_scenario"
+    | "run_and_sync_google_ads";
   api_token?: string;
   team_id?: string;
   region?: string;
@@ -23,6 +25,11 @@ interface MakeAPIRequest {
   connection_id?: string;
   data?: Record<string, unknown>;
   table_id?: string;
+  customer_id?: string;
+  date_range?: string;
+  webhook_url?: string;
+  webhook_secret?: string;
+  scenario_name?: string;
 }
 
 // Make.com API base URLs per region
@@ -135,7 +142,21 @@ serve(async (req) => {
     }
 
     const body: MakeAPIRequest = await req.json();
-    const { action, api_token, team_id, region = "eu1", scenario_id, connection_id, data, table_id } = body;
+    const { 
+      action, 
+      api_token, 
+      team_id, 
+      region = "eu1", 
+      scenario_id, 
+      connection_id, 
+      data, 
+      table_id,
+      customer_id,
+      date_range,
+      webhook_url,
+      webhook_secret,
+      scenario_name
+    } = body;
 
     console.log(`Make API action: ${action}, team_id: ${team_id}, region: ${region}`);
 
@@ -326,6 +347,180 @@ serve(async (req) => {
           execution: runResult,
           message: "Scenario triggered successfully. Data will be synced via webhook."
         };
+        break;
+      }
+
+      case "create_google_ads_scenario": {
+        // Create a scenario that syncs Google Ads data to our webhook
+        if (!connection_id) {
+          return new Response(
+            JSON.stringify({ error: "Connection ID is required to create scenario" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        if (!customer_id) {
+          return new Response(
+            JSON.stringify({ error: "Customer ID is required to create scenario" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        if (!webhook_url) {
+          return new Response(
+            JSON.stringify({ error: "Webhook URL is required to create scenario" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        if (!table_id) {
+          return new Response(
+            JSON.stringify({ error: "Table ID is required to create scenario" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Format customer ID (remove dashes if present)
+        const formattedCustomerId = customer_id.replace(/-/g, "");
+        
+        // Build the blueprint for Google Ads sync scenario
+        const scenarioBlueprint = {
+          name: scenario_name || `Google Ads Sync - Table ${table_id.slice(0, 8)}`,
+          teamId: parseInt(team_id || "0"),
+          scheduling: { type: "indefinitely" },
+          blueprint: JSON.stringify({
+            name: scenario_name || `Google Ads Sync`,
+            flow: [
+              {
+                id: 1,
+                module: "google-ads:getReport",
+                version: 1,
+                parameters: {
+                  __IMTCONN__: parseInt(connection_id)
+                },
+                mapper: {
+                  customerId: formattedCustomerId,
+                  resource: "campaign",
+                  dateRangeType: date_range || "LAST_30_DAYS",
+                  metrics: ["metrics.impressions", "metrics.clicks", "metrics.cost_micros", "metrics.conversions", "metrics.ctr", "metrics.average_cpc"],
+                  segments: ["segments.date"],
+                  attributes: ["campaign.id", "campaign.name"]
+                }
+              },
+              {
+                id: 2,
+                module: "http:ActionMakeRequest",
+                version: 3,
+                parameters: {},
+                mapper: {
+                  url: webhook_url,
+                  method: "POST",
+                  headers: [
+                    { name: "Content-Type", value: "application/json" },
+                    ...(webhook_secret ? [{ name: "x-webhook-secret", value: webhook_secret }] : [])
+                  ],
+                  qs: [],
+                  bodyType: "raw",
+                  parseResponse: true,
+                  contentType: "application/json",
+                  data: JSON.stringify({
+                    table_id: table_id,
+                    records: "{{map(1.results; \"item\"; $merge(item.campaign; item.metrics; item.segments))}}"
+                  })
+                }
+              }
+            ],
+            metadata: {
+              instant: false,
+              version: 1,
+              scenario: {
+                roundtrips: 1,
+                maxErrors: 3,
+                autoCommit: true,
+                autoCommitTriggerLast: true,
+                sequential: false,
+                confidential: false,
+                dataloss: false,
+                dlq: false,
+                freshVariables: false
+              },
+              designer: {
+                orphans: []
+              },
+              zone: region
+            }
+          })
+        };
+
+        console.log("Creating scenario with blueprint:", JSON.stringify(scenarioBlueprint).substring(0, 500));
+
+        try {
+          const createResult = await makeAPICall(
+            api_token,
+            region,
+            `/scenarios`,
+            "POST",
+            scenarioBlueprint
+          );
+          
+          result = {
+            success: true,
+            scenario: createResult,
+            scenario_id: createResult.scenario?.id || createResult.id,
+            message: "Scenario created successfully"
+          };
+        } catch (createError) {
+          console.error("Failed to create scenario:", createError);
+          // If blueprint creation fails, provide manual setup instructions
+          result = {
+            success: false,
+            error: createError instanceof Error ? createError.message : String(createError),
+            fallback: true,
+            message: "לא ניתן ליצור Scenario אוטומטי. נא להגדיר ידנית ב-Make.com",
+            webhook_url: webhook_url,
+            table_id: table_id,
+            connection_id: connection_id,
+            customer_id: customer_id
+          };
+        }
+        break;
+      }
+
+      case "run_and_sync_google_ads": {
+        // Combined action: Run a scenario and wait for sync
+        if (!scenario_id) {
+          return new Response(
+            JSON.stringify({ error: "Scenario ID is required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        console.log(`Running Google Ads sync scenario: ${scenario_id}`);
+
+        try {
+          // Run the scenario
+          const runResult = await makeAPICall(
+            api_token,
+            region,
+            `/scenarios/${scenario_id}/run`,
+            "POST",
+            { data: data || {} }
+          );
+
+          result = {
+            success: true,
+            execution: runResult,
+            execution_id: runResult.executionId || runResult.execution?.id,
+            message: "Scenario executed. Data will sync shortly via webhook."
+          };
+        } catch (runError) {
+          console.error("Failed to run scenario:", runError);
+          result = {
+            success: false,
+            error: runError instanceof Error ? runError.message : String(runError),
+            message: "Failed to run the sync scenario"
+          };
+        }
         break;
       }
 
