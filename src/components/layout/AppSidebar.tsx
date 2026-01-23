@@ -287,6 +287,7 @@ export function AppSidebar() {
       'chat': 'chat',
       'dynamic-tables': 'dynamic_tables',
       'site_analytics': 'clients', // אנליטיקס אתרים - מי שיש לו גישה ללקוחות יכול לראות
+      'rank_tracking': 'clients', // מעקב מיקומים - מי שיש לו גישה ללקוחות יכול לראות
     };
 
     // פריטים שאינם דורשים הרשאה מיוחדת (נגישים לכולם)
