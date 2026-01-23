@@ -386,6 +386,8 @@ Deno.serve(async (req) => {
             }));
           } else {
             // Use DataForSEO
+            console.log(`Searching for keyword: ${kw.keyword}`);
+            
             const searchResponse = await fetch("https://api.dataforseo.com/v3/serp/google/organic/live/advanced", {
               method: "POST",
               headers: {
@@ -402,13 +404,19 @@ Deno.serve(async (req) => {
             });
 
             if (!searchResponse.ok) {
-              results.push({ keyword_id: kw.id, error: "Search failed" });
+              const errorText = await searchResponse.text();
+              console.error(`DataForSEO error for ${kw.keyword}: ${searchResponse.status} - ${errorText}`);
+              results.push({ keyword_id: kw.id, error: `API ${searchResponse.status}: ${errorText.substring(0, 100)}` });
+              // Add delay before next request to avoid rate limiting
+              await new Promise(resolve => setTimeout(resolve, 2000));
               continue;
             }
 
             const searchData = await searchResponse.json();
+            console.log(`DataForSEO response for ${kw.keyword}: status=${searchData.status_code}`);
             
             if (searchData.status_code !== 20000) {
+              console.error(`DataForSEO status error for ${kw.keyword}: ${searchData.status_message}`);
               results.push({ keyword_id: kw.id, error: searchData.status_message || "API Error" });
               continue;
             }
@@ -490,9 +498,10 @@ Deno.serve(async (req) => {
             found_url: foundUrl,
           });
 
-          // Small delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 300));
+          // Longer delay to avoid rate limiting - DataForSEO recommends 1 request per second
+          await new Promise(resolve => setTimeout(resolve, 1500));
         } catch (err) {
+          console.error(`Error processing keyword ${kw.id}:`, err);
           results.push({ keyword_id: kw.id, error: String(err) });
         }
       }
