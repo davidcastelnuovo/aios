@@ -4,11 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, BarChart3, ExternalLink, Search } from "lucide-react";
+import { Loader2, BarChart3, ExternalLink, Search, Zap, AlertCircle, CheckCircle2 } from "lucide-react";
 
 interface GoogleAnalyticsTableDialogProps {
   open: boolean;
@@ -33,8 +36,9 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
   const [selectedClient, setSelectedClient] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [propertySearch, setPropertySearch] = useState("");
+  const [connectionMethod, setConnectionMethod] = useState<"make" | "direct">("make");
 
-  // Fetch GA integration
+  // Fetch direct API GA integration
   const { data: integration, isLoading: integrationLoading } = useQuery({
     queryKey: ['ga-integration', activeTenantId],
     queryFn: async () => {
@@ -52,10 +56,30 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
       
       return data;
     },
+    enabled: open && !!activeTenantId && connectionMethod === "direct",
+  });
+
+  // Fetch Make.com integration
+  const { data: makeIntegration, isLoading: makeLoading } = useQuery({
+    queryKey: ['make-integration', activeTenantId],
+    queryFn: async () => {
+      if (!activeTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', activeTenantId)
+        .eq('integration_type', 'make_api')
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
     enabled: open && !!activeTenantId,
   });
 
-  // Fetch properties
+  const makeSettings = makeIntegration?.settings as Record<string, unknown> | null;
+  const hasMakeConnection = !!makeIntegration?.is_active && !!makeSettings?.api_token;
+
+  // Fetch properties (only for direct API)
   const { data: properties, isLoading: propertiesLoading } = useQuery({
     queryKey: ['ga-properties', integration?.id],
     queryFn: async () => {
@@ -70,7 +94,7 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
       if (error) throw error;
       return (data?.properties || []) as GAProperty[];
     },
-    enabled: !!integration,
+    enabled: !!integration && connectionMethod === "direct",
   });
 
   // Fetch agencies
@@ -103,15 +127,39 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
   });
 
   const handleCreate = async () => {
-    if (!tableName.trim() || !selectedProperty || !integration) {
-      toast({ title: "נא למלא את כל השדות הנדרשים", variant: "destructive" });
+    if (!tableName.trim()) {
+      toast({ title: "נא למלא שם טבלה", variant: "destructive" });
+      return;
+    }
+
+    if (connectionMethod === "direct" && !selectedProperty) {
+      toast({ title: "נא לבחור Property", variant: "destructive" });
       return;
     }
 
     setIsCreating(true);
     try {
-      const selectedProp = properties?.find(p => p.id === selectedProperty);
       const slug = tableName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      
+      let integrationSettings: Record<string, unknown> = {};
+      let integrationType = "google_analytics";
+      
+      if (connectionMethod === "make") {
+        integrationType = "google_analytics_via_make";
+        integrationSettings = {
+          data_source: "make_api",
+          webhook_url: `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-analytics-sync`,
+        };
+      } else {
+        const selectedProp = properties?.find(p => p.id === selectedProperty);
+        integrationSettings = {
+          integrationId: integration?.id,
+          propertyId: selectedProperty,
+          propertyName: selectedProp?.name,
+          accountName: selectedProp?.accountName,
+          data_source: "direct_api",
+        };
+      }
 
       const { data, error } = await supabase.functions.invoke('crm-tables', {
         body: {
@@ -119,25 +167,15 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
           tenantId: activeTenantId,
           name: tableName,
           slug: `ga-${slug}-${Date.now()}`,
-          description: `Google Analytics - ${selectedProp?.name}`,
+          description: connectionMethod === "make" 
+            ? `Google Analytics (דרך Make.com)` 
+            : `Google Analytics - ${properties?.find(p => p.id === selectedProperty)?.name || ''}`,
           category,
           icon: 'BarChart3',
           agencyId: selectedAgency || null,
           clientId: selectedClient || null,
-          integration_type: 'google_analytics',
-          integration_settings: {
-            integrationId: integration.id,
-            propertyId: selectedProperty,
-            propertyName: selectedProp?.name,
-            accountName: selectedProp?.accountName,
-          },
-          integrations: [{
-            type: 'google_analytics',
-            integrationId: integration.id,
-            propertyId: selectedProperty,
-            propertyName: selectedProp?.name,
-            accountName: selectedProp?.accountName,
-          }]
+          integration_type: integrationType,
+          integration_settings: integrationSettings,
         }
       });
 
@@ -147,8 +185,9 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       onOpenChange(false);
       resetForm();
-    } catch (error: any) {
-      toast({ title: "שגיאה ביצירת הטבלה", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      toast({ title: "שגיאה ביצירת הטבלה", description: errorMessage, variant: "destructive" });
     } finally {
       setIsCreating(false);
     }
@@ -173,144 +212,266 @@ export function GoogleAnalyticsTableDialog({ open, onOpenChange }: GoogleAnalyti
     );
   }, [properties, propertySearch]);
 
-  const isLoading = integrationLoading || propertiesLoading;
+  const isLoading = (connectionMethod === "direct" ? integrationLoading || propertiesLoading : makeLoading);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md" dir="rtl">
+      <DialogContent className="max-w-lg" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-orange-500" />
             טבלת Google Analytics חדשה
           </DialogTitle>
           <DialogDescription>
-            חבר נכס Google Analytics וצפה בנתוני ביצועים
+            בחר את שיטת החיבור והגדר את הטבלה
           </DialogDescription>
         </DialogHeader>
 
-        {isLoading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : !integration ? (
-          <div className="text-center py-6 space-y-4">
-            <p className="text-muted-foreground">
-              לא נמצא חיבור Google Analytics פעיל
-            </p>
-            <Button variant="outline" asChild>
-              <a href={`/t/${currentTenant?.slug}/google-analytics-settings`}>
-                <ExternalLink className="h-4 w-4 ml-2" />
-                חבר Google Analytics
-              </a>
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>שם הטבלה *</Label>
-              <Input
-                value={tableName}
-                onChange={(e) => setTableName(e.target.value)}
-                placeholder="לדוגמה: נתוני GA - אתר ראשי"
-              />
-            </div>
+        <Tabs value={connectionMethod} onValueChange={(v) => setConnectionMethod(v as "make" | "direct")}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="make" className="flex items-center gap-2">
+              <Zap className="h-4 w-4" />
+              Make.com
+              <Badge variant="secondary" className="text-xs">מומלץ</Badge>
+            </TabsTrigger>
+            <TabsTrigger value="direct" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              API ישיר
+            </TabsTrigger>
+          </TabsList>
 
-            <div className="space-y-2">
-              <Label>נכס (Property) *</Label>
-              <Select value={selectedProperty} onValueChange={setSelectedProperty}>
-                <SelectTrigger>
-                  <SelectValue placeholder="בחר נכס" />
-                </SelectTrigger>
-                <SelectContent>
-                  <div className="p-2 sticky top-0 bg-popover">
-                    <div className="relative">
-                      <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="חפש נכס..."
-                        value={propertySearch}
-                        onChange={(e) => setPropertySearch(e.target.value)}
-                        className="pr-8"
-                        onClick={(e) => e.stopPropagation()}
-                        onKeyDown={(e) => e.stopPropagation()}
-                      />
-                    </div>
+          {/* Make.com Tab */}
+          <TabsContent value="make" className="space-y-4">
+            {isLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : !hasMakeConnection ? (
+              <div className="text-center py-6 space-y-4">
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    נא לחבר קודם את Make.com בהגדרות האינטגרציות
+                  </AlertDescription>
+                </Alert>
+                <Button variant="outline" asChild>
+                  <a href={`/t/${currentTenant?.slug}/make-settings`}>
+                    <ExternalLink className="h-4 w-4 ml-2" />
+                    חבר Make.com
+                  </a>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Alert className="border-primary/20 bg-primary/5">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  <AlertDescription>
+                    Make.com מחובר! לאחר יצירת הטבלה, תוכל להגדיר Scenario ב-Make לסנכרון נתונים.
+                  </AlertDescription>
+                </Alert>
+
+                <div className="space-y-2">
+                  <Label>שם הטבלה *</Label>
+                  <Input
+                    value={tableName}
+                    onChange={(e) => setTableName(e.target.value)}
+                    placeholder="לדוגמה: נתוני GA - אתר ראשי"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>קטגוריה</Label>
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="analytics">אנליטיקס</SelectItem>
+                      <SelectItem value="marketing">שיווק</SelectItem>
+                      <SelectItem value="reports">דוחות</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>סוכנות (אופציונלי)</Label>
+                  <Select value={selectedAgency || "all"} onValueChange={(v) => { setSelectedAgency(v === "all" ? "" : v); setSelectedClient(""); }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="כל הסוכנויות" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">כל הסוכנויות</SelectItem>
+                      {agencies?.map((agency) => (
+                        <SelectItem key={agency.id} value={agency.id}>
+                          {agency.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedAgency && (
+                  <div className="space-y-2">
+                    <Label>לקוח (אופציונלי)</Label>
+                    <Select value={selectedClient || "all"} onValueChange={(v) => setSelectedClient(v === "all" ? "" : v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="כל הלקוחות" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">כל הלקוחות</SelectItem>
+                        {clients?.map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  {filteredProperties.length === 0 ? (
-                    <div className="text-center py-4 text-muted-foreground text-sm">
-                      לא נמצאו תוצאות
-                    </div>
-                  ) : (
-                    filteredProperties.map((prop) => (
-                      <SelectItem key={prop.id} value={prop.id}>
-                        {prop.name} ({prop.accountName})
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+                )}
 
-            <div className="space-y-2">
-              <Label>קטגוריה</Label>
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="analytics">אנליטיקס</SelectItem>
-                  <SelectItem value="marketing">שיווק</SelectItem>
-                  <SelectItem value="reports">דוחות</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>סוכנות (אופציונלי)</Label>
-              <Select value={selectedAgency || "all"} onValueChange={(v) => { setSelectedAgency(v === "all" ? "" : v); setSelectedClient(""); }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="כל הסוכנויות" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">כל הסוכנויות</SelectItem>
-                  {agencies?.map((agency) => (
-                    <SelectItem key={agency.id} value={agency.id}>
-                      {agency.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {selectedAgency && (
-              <div className="space-y-2">
-                <Label>לקוח (אופציונלי)</Label>
-                <Select value={selectedClient || "all"} onValueChange={(v) => setSelectedClient(v === "all" ? "" : v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="כל הלקוחות" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">כל הלקוחות</SelectItem>
-                    {clients?.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2 pt-4">
+                  <Button onClick={handleCreate} disabled={isCreating} className="flex-1">
+                    {isCreating ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+                    צור טבלה
+                  </Button>
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    ביטול
+                  </Button>
+                </div>
               </div>
             )}
+          </TabsContent>
 
-            <div className="flex gap-2 pt-4">
-              <Button onClick={handleCreate} disabled={isCreating} className="flex-1">
-                {isCreating ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
-                צור טבלה
-              </Button>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
-                ביטול
-              </Button>
-            </div>
-          </div>
-        )}
+          {/* Direct API Tab */}
+          <TabsContent value="direct" className="space-y-4">
+            {isLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : !integration ? (
+              <div className="text-center py-6 space-y-4">
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    לא נמצא חיבור Google Analytics פעיל
+                  </AlertDescription>
+                </Alert>
+                <Button variant="outline" asChild>
+                  <a href={`/t/${currentTenant?.slug}/google-analytics-settings`}>
+                    <ExternalLink className="h-4 w-4 ml-2" />
+                    חבר Google Analytics
+                  </a>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>שם הטבלה *</Label>
+                  <Input
+                    value={tableName}
+                    onChange={(e) => setTableName(e.target.value)}
+                    placeholder="לדוגמה: נתוני GA - אתר ראשי"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>נכס (Property) *</Label>
+                  <Select value={selectedProperty} onValueChange={setSelectedProperty}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="בחר נכס" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <div className="p-2 sticky top-0 bg-popover">
+                        <div className="relative">
+                          <Search className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            placeholder="חפש נכס..."
+                            value={propertySearch}
+                            onChange={(e) => setPropertySearch(e.target.value)}
+                            className="pr-8"
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      </div>
+                      {filteredProperties.length === 0 ? (
+                        <div className="text-center py-4 text-muted-foreground text-sm">
+                          לא נמצאו תוצאות
+                        </div>
+                      ) : (
+                        filteredProperties.map((prop) => (
+                          <SelectItem key={prop.id} value={prop.id}>
+                            {prop.name} ({prop.accountName})
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>קטגוריה</Label>
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="analytics">אנליטיקס</SelectItem>
+                      <SelectItem value="marketing">שיווק</SelectItem>
+                      <SelectItem value="reports">דוחות</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>סוכנות (אופציונלי)</Label>
+                  <Select value={selectedAgency || "all"} onValueChange={(v) => { setSelectedAgency(v === "all" ? "" : v); setSelectedClient(""); }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="כל הסוכנויות" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">כל הסוכנויות</SelectItem>
+                      {agencies?.map((agency) => (
+                        <SelectItem key={agency.id} value={agency.id}>
+                          {agency.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedAgency && (
+                  <div className="space-y-2">
+                    <Label>לקוח (אופציונלי)</Label>
+                    <Select value={selectedClient || "all"} onValueChange={(v) => setSelectedClient(v === "all" ? "" : v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="כל הלקוחות" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">כל הלקוחות</SelectItem>
+                        {clients?.map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-4">
+                  <Button onClick={handleCreate} disabled={isCreating} className="flex-1">
+                    {isCreating ? <Loader2 className="h-4 w-4 animate-spin ml-2" /> : null}
+                    צור טבלה
+                  </Button>
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    ביטול
+                  </Button>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

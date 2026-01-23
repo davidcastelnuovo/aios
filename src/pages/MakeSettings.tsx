@@ -48,6 +48,7 @@ interface MakeSettings {
   region: string;
   connected_at?: string;
   google_ads_template_scenario_id?: string;
+  google_analytics_template_scenario_id?: string;
 }
 
 const REGIONS = [
@@ -67,9 +68,11 @@ export default function MakeSettings() {
   const [teamId, setTeamId] = useState("");
   const [region, setRegion] = useState("eu1");
   const [googleAdsTemplateId, setGoogleAdsTemplateId] = useState("");
+  const [googleAnalyticsTemplateId, setGoogleAnalyticsTemplateId] = useState("");
   const [showToken, setShowToken] = useState(false);
   const [activeTab, setActiveTab] = useState("settings");
   const [templateSelectorOpen, setTemplateSelectorOpen] = useState(false);
+  const [gaTemplateSelectorOpen, setGaTemplateSelectorOpen] = useState(false);
 
   // Fetch scenarios for template selector
   const { data: templateScenarios, isLoading: isLoadingTemplateScenarios } = useQuery({
@@ -113,6 +116,7 @@ export default function MakeSettings() {
       setTeamId(settings.team_id || "");
       setRegion(settings.region || "eu1");
       setGoogleAdsTemplateId(settings.google_ads_template_scenario_id || "");
+      setGoogleAnalyticsTemplateId(settings.google_analytics_template_scenario_id || "");
     }
   }, [makeIntegration]);
 
@@ -158,6 +162,7 @@ export default function MakeSettings() {
         team_id: teamId,
         region,
         google_ads_template_scenario_id: googleAdsTemplateId || undefined,
+        google_analytics_template_scenario_id: googleAnalyticsTemplateId || undefined,
         connected_at: new Date().toISOString(),
       };
 
@@ -529,6 +534,71 @@ export default function MakeSettings() {
                   צור Scenario ב-Make.com עם 2 מודולים: Google Ads Report → HTTP POST, ובחר אותו מהרשימה.
                   <br />
                   המערכת תשכפל אותו אוטומטית לכל טבלת Google Ads חדשה.
+                </p>
+              </div>
+
+              {/* Google Analytics Template Scenario ID */}
+              <div className="space-y-2 pt-4 border-t">
+                <Label>Google Analytics Template Scenario</Label>
+                <Popover open={gaTemplateSelectorOpen} onOpenChange={setGaTemplateSelectorOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={gaTemplateSelectorOpen}
+                      className="w-full justify-between"
+                      disabled={!apiToken || !teamId}
+                    >
+                      {googleAnalyticsTemplateId
+                        ? templateScenarios?.find(s => s.id.toString() === googleAnalyticsTemplateId)?.name || `Scenario #${googleAnalyticsTemplateId}`
+                        : "בחר סנריו טמפלייט ל-GA..."}
+                      <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="חפש סנריו..." />
+                      <CommandList>
+                        <CommandEmpty>
+                          {isLoadingTemplateScenarios ? (
+                            <div className="flex items-center justify-center py-4">
+                              <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                              טוען סנריות...
+                            </div>
+                          ) : (
+                            "לא נמצאו סנריות"
+                          )}
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {templateScenarios?.map((scenario) => (
+                            <CommandItem
+                              key={scenario.id}
+                              value={`${scenario.name} ${scenario.id}`}
+                              onSelect={() => {
+                                setGoogleAnalyticsTemplateId(scenario.id.toString());
+                                setGaTemplateSelectorOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={`ml-2 h-4 w-4 ${
+                                  googleAnalyticsTemplateId === scenario.id.toString() ? "opacity-100" : "opacity-0"
+                                }`}
+                              />
+                              <div className="flex flex-col">
+                                <span>{scenario.name}</span>
+                                <span className="text-xs text-muted-foreground">ID: {scenario.id}</span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                <p className="text-xs text-muted-foreground">
+                  צור Scenario ב-Make.com עם 2 מודולים: Google Analytics Report → HTTP POST, ובחר אותו מהרשימה.
+                  <br />
+                  המערכת תשכפל אותו אוטומטית לכל טבלת Google Analytics חדשה.
                 </p>
               </div>
 
