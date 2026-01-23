@@ -93,27 +93,29 @@ Deno.serve(async (req) => {
 
     const { data: dataforSeoIntegration } = await supabase
       .from("tenant_integrations")
-      .select("config")
+      .select("settings")
       .eq("tenant_id", tenantUser.tenant_id)
       .eq("integration_type", "dataforseo")
       .eq("is_active", true)
       .single();
 
-    if (dataforSeoIntegration?.config?.email && dataforSeoIntegration?.config?.password) {
-      base64Token = btoa(`${dataforSeoIntegration.config.email}:${dataforSeoIntegration.config.password}`);
+    const settings = dataforSeoIntegration?.settings as Record<string, any> | null;
+
+    if (settings?.email && settings?.password) {
+      base64Token = btoa(`${settings.email}:${settings.password}`);
     } else {
       // Fallback to SerpAPI
       const { data: serpIntegration } = await supabase
         .from("tenant_integrations")
-        .select("config")
+        .select("api_key")
         .eq("tenant_id", tenantUser.tenant_id)
         .eq("integration_type", "serpapi")
         .eq("is_active", true)
         .single();
 
-      if (serpIntegration?.config?.api_key) {
+      if (serpIntegration?.api_key) {
         usingSerpApi = true;
-        serpApiKey = serpIntegration.config.api_key;
+        serpApiKey = serpIntegration.api_key;
       }
     }
 
