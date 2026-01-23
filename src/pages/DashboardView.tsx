@@ -86,13 +86,14 @@ export default function DashboardView() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
 
-      // Fetch records from all tables in parallel
+      // Fetch records from all tables in parallel using GET with query params
       const recordsPromises = tables.map(async (table: any) => {
-        const response = await supabase.functions.invoke('crm-records', {
-          body: { 
-            table_id: table.id,
-            date_filter: dateFilter,
-          },
+        const params = new URLSearchParams({
+          table_id: table.id,
+          date_filter: dateFilter,
+        });
+        const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
+          method: 'GET',
         });
         
         if (response.error) {
