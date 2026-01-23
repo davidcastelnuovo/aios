@@ -573,10 +573,22 @@ serve(async (req) => {
           
           // Step 3: Modify the blueprint
           // Parse the flow and update the HTTP module with new webhook URL and table_id
+          // The API returns {code: "OK", response: {blueprint: {...}}} - extract the actual blueprint
           let blueprintData = blueprintResponse;
           if (typeof blueprintResponse === 'string') {
             blueprintData = JSON.parse(blueprintResponse);
           }
+          
+          // Extract the actual blueprint from the API response wrapper
+          if (blueprintData.response?.blueprint) {
+            blueprintData = blueprintData.response.blueprint;
+          } else if (blueprintData.blueprint) {
+            blueprintData = blueprintData.blueprint;
+          }
+          
+          // Remove any unwanted properties that Make.com API doesn't accept
+          delete blueprintData.code;
+          delete blueprintData.response;
           
           // Find and update modules in the flow
           if (blueprintData.flow && Array.isArray(blueprintData.flow)) {
@@ -671,6 +683,7 @@ serve(async (req) => {
           const createPayload = {
             name: newScenarioName,
             teamId: parseInt(team_id || "0"),
+            scheduling: JSON.stringify({ type: "indefinitely" }),
             blueprint: JSON.stringify(blueprintData),
           };
           
@@ -700,6 +713,7 @@ serve(async (req) => {
             message: "לא ניתן לשכפל את ה-Template Scenario"
           };
         }
+        break;
       }
 
       case "run_and_sync_google_ads": {
