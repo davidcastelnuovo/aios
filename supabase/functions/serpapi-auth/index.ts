@@ -35,14 +35,33 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get user's tenant
-    const { data: tenantUser } = await supabase
-      .from("tenant_users")
+    // Get user's tenant - check active tenant first, then fallback to tenant_users
+    let tenantId: string | null = null;
+    
+    // First try user_active_tenant
+    const { data: activeTenant } = await supabase
+      .from("user_active_tenant")
       .select("tenant_id")
       .eq("user_id", user.id)
       .single();
+    
+    if (activeTenant?.tenant_id) {
+      tenantId = activeTenant.tenant_id;
+    } else {
+      // Fallback to tenant_users
+      const { data: tenantUser } = await supabase
+        .from("tenant_users")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .limit(1)
+        .single();
+      
+      if (tenantUser?.tenant_id) {
+        tenantId = tenantUser.tenant_id;
+      }
+    }
 
-    if (!tenantUser) {
+    if (!tenantId) {
       return new Response(JSON.stringify({ error: "No tenant found" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -57,7 +76,7 @@ Deno.serve(async (req) => {
       const { data: integration } = await supabase
         .from("tenant_integrations")
         .select("id, is_active, config, created_at, updated_at")
-        .eq("tenant_id", tenantUser.tenant_id)
+        .eq("tenant_id", tenantId)
         .eq("integration_type", "serpapi")
         .single();
 
@@ -109,7 +128,7 @@ Deno.serve(async (req) => {
       const { data: existing } = await supabase
         .from("tenant_integrations")
         .select("id")
-        .eq("tenant_id", tenantUser.tenant_id)
+        .eq("tenant_id", tenantId)
         .eq("integration_type", "serpapi")
         .single();
 
@@ -130,7 +149,7 @@ Deno.serve(async (req) => {
           .eq("id", existing.id);
       } else {
         await supabase.from("tenant_integrations").insert({
-          tenant_id: tenantUser.tenant_id,
+          tenant_id: tenantId,
           user_id: user.id,
           integration_type: "serpapi",
           config: {
@@ -159,7 +178,7 @@ Deno.serve(async (req) => {
       await supabase
         .from("tenant_integrations")
         .update({ is_active: false })
-        .eq("tenant_id", tenantUser.tenant_id)
+        .eq("tenant_id", tenantId)
         .eq("integration_type", "serpapi");
 
       return new Response(JSON.stringify({ success: true }), {
@@ -172,7 +191,7 @@ Deno.serve(async (req) => {
       const { data: integration } = await supabase
         .from("tenant_integrations")
         .select("config")
-        .eq("tenant_id", tenantUser.tenant_id)
+        .eq("tenant_id", tenantId)
         .eq("integration_type", "serpapi")
         .eq("is_active", true)
         .single();
@@ -208,7 +227,7 @@ Deno.serve(async (req) => {
             this_month_searches: accountInfo.this_month_usage,
           },
         })
-        .eq("tenant_id", tenantUser.tenant_id)
+        .eq("tenant_id", tenantId)
         .eq("integration_type", "serpapi");
 
       return new Response(JSON.stringify({
