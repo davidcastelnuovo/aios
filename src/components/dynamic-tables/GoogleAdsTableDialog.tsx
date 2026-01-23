@@ -305,7 +305,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
               template_scenario_id: makeApiSettings.google_ads_template_scenario_id,
               table_id: data.id,
               webhook_url: webhookUrl,
-              scenario_name: tableName,
+              scenario_name: `חיבור לגוגל - ${tableName}`,
               customer_id: formattedCustomerId,
               campaign_type: campaignType,
             },

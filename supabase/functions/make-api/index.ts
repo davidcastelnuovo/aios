@@ -678,7 +678,7 @@ serve(async (req) => {
           }
           
           // Step 4: Create new scenario with modified blueprint
-          const newScenarioName = scenario_name || `Google Ads Sync - ${table_id.slice(0, 8)}`;
+          const newScenarioName = scenario_name || `חיבור לגוגל - ${table_id.slice(0, 8)}`;
           
           const createPayload = {
             name: newScenarioName,
