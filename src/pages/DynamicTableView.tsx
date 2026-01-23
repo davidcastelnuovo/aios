@@ -503,9 +503,14 @@ export default function DynamicTableView() {
       const makeApiToken = settings.api_token;
       const makeTeamId = settings.team_id;
       const makeRegion = settings.region || 'eu1';
+      const templateScenarioId = settings.google_ads_template_scenario_id;
       
       if (!makeApiToken || !makeTeamId) {
         throw new Error('Make.com לא מוגדר. נא להגדיר בהגדרות > Make Settings');
+      }
+      
+      if (!templateScenarioId) {
+        throw new Error('Template Scenario ID לא הוגדר. נא להגדיר בהגדרות Make Settings את ה-Template Scenario ID.');
       }
       
       const connectionId = integrationSettings.make_connection_id;
@@ -525,36 +530,34 @@ export default function DynamicTableView() {
       let scenarioId = integrationSettings.make_scenario_id;
       
       if (!scenarioId) {
-        // Create a new scenario
-        console.log('Creating new Make.com scenario for Google Ads sync...');
-        const createResponse = await supabase.functions.invoke('make-api', {
+        // Clone the template scenario
+        console.log('Cloning template scenario for Google Ads sync...');
+        const cloneResponse = await supabase.functions.invoke('make-api', {
           body: {
-            action: 'create_google_ads_scenario',
+            action: 'clone_scenario',
             api_token: makeApiToken,
             team_id: makeTeamId,
             region: makeRegion,
-            connection_id: connectionId,
-            customer_id: customerId,
+            template_scenario_id: templateScenarioId,
             table_id: table.id,
             webhook_url: webhookUrl,
             webhook_secret: integrationSettings.webhook_secret,
-            date_range: integrationSettings.date_range || 'LAST_30_DAYS',
             scenario_name: `Google Ads Sync - ${table.name}`,
           },
         });
         
-        if (createResponse.error) {
-          throw new Error(createResponse.error.message || 'Failed to create scenario');
+        if (cloneResponse.error) {
+          throw new Error(cloneResponse.error.message || 'Failed to clone scenario');
         }
         
-        const createData = createResponse.data;
+        const cloneData = cloneResponse.data;
         
-        if (!createData.success || createData.fallback) {
-          // Scenario creation failed, show manual setup
-          throw new Error(createData.message || 'לא ניתן ליצור Scenario אוטומטי');
+        if (!cloneData.success) {
+          // Clone failed - show the error
+          throw new Error(cloneData.message || cloneData.error || 'לא ניתן לשכפל את ה-Template Scenario');
         }
         
-        scenarioId = createData.scenario_id;
+        scenarioId = cloneData.scenario_id;
         
         // Save the scenario ID to the table settings
         await supabase

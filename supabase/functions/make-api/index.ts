@@ -17,7 +17,9 @@ interface MakeAPIRequest {
     | "list_google_ads_scenarios"
     | "run_google_ads_sync"
     | "create_google_ads_scenario"
-    | "run_and_sync_google_ads";
+    | "run_and_sync_google_ads"
+    | "clone_scenario"
+    | "get_scenario_blueprint";
   api_token?: string;
   team_id?: string;
   region?: string;
@@ -30,6 +32,7 @@ interface MakeAPIRequest {
   webhook_url?: string;
   webhook_secret?: string;
   scenario_name?: string;
+  template_scenario_id?: string;
 }
 
 // Make.com API base URLs per region
@@ -155,7 +158,8 @@ serve(async (req) => {
       date_range,
       webhook_url,
       webhook_secret,
-      scenario_name
+      scenario_name,
+      template_scenario_id
     } = body;
 
     console.log(`Make API action: ${action}, team_id: ${team_id}, region: ${region}`);
@@ -484,6 +488,174 @@ serve(async (req) => {
           };
         }
         break;
+      }
+
+      case "get_scenario_blueprint": {
+        // Get a scenario's blueprint for cloning
+        if (!scenario_id) {
+          return new Response(
+            JSON.stringify({ error: "Scenario ID is required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        console.log(`Getting blueprint for scenario: ${scenario_id}`);
+        
+        try {
+          const blueprint = await makeAPICall(
+            api_token,
+            region,
+            `/scenarios/${scenario_id}/blueprint`
+          );
+          
+          result = {
+            success: true,
+            blueprint: blueprint,
+          };
+        } catch (blueprintError) {
+          console.error("Failed to get blueprint:", blueprintError);
+          result = {
+            success: false,
+            error: blueprintError instanceof Error ? blueprintError.message : String(blueprintError),
+          };
+        }
+        break;
+      }
+
+      case "clone_scenario": {
+        // Clone a template scenario with modified webhook URL and table_id
+        if (!template_scenario_id) {
+          return new Response(
+            JSON.stringify({ error: "Template Scenario ID is required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        if (!webhook_url) {
+          return new Response(
+            JSON.stringify({ error: "Webhook URL is required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        if (!table_id) {
+          return new Response(
+            JSON.stringify({ error: "Table ID is required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        
+        console.log(`Cloning template scenario: ${template_scenario_id}`);
+        
+        try {
+          // Step 1: Get the template scenario details
+          const templateScenario = await makeAPICall(
+            api_token,
+            region,
+            `/scenarios/${template_scenario_id}`
+          );
+          
+          console.log("Template scenario:", JSON.stringify(templateScenario).substring(0, 300));
+          
+          // Step 2: Get the blueprint
+          const blueprintResponse = await makeAPICall(
+            api_token,
+            region,
+            `/scenarios/${template_scenario_id}/blueprint`
+          );
+          
+          console.log("Template blueprint:", JSON.stringify(blueprintResponse).substring(0, 500));
+          
+          // Step 3: Modify the blueprint
+          // Parse the flow and update the HTTP module with new webhook URL and table_id
+          let blueprintData = blueprintResponse;
+          if (typeof blueprintResponse === 'string') {
+            blueprintData = JSON.parse(blueprintResponse);
+          }
+          
+          // Find and update the HTTP module in the flow
+          if (blueprintData.flow && Array.isArray(blueprintData.flow)) {
+            for (const module of blueprintData.flow) {
+              // Check if this is an HTTP module
+              if (module.module && (
+                module.module.includes('http:') || 
+                module.module === 'http:ActionMakeRequest' ||
+                module.module.includes('http')
+              )) {
+                console.log("Found HTTP module, updating webhook URL and table_id");
+                if (module.mapper) {
+                  module.mapper.url = webhook_url;
+                  
+                  // Update the body/data with new table_id
+                  if (module.mapper.data) {
+                    try {
+                      let dataObj = typeof module.mapper.data === 'string' 
+                        ? JSON.parse(module.mapper.data) 
+                        : module.mapper.data;
+                      dataObj.table_id = table_id;
+                      module.mapper.data = JSON.stringify(dataObj);
+                    } catch {
+                      // If data is not JSON, try to replace table_id in the string
+                      if (typeof module.mapper.data === 'string') {
+                        module.mapper.data = module.mapper.data.replace(
+                          /"table_id"\s*:\s*"[^"]*"/,
+                          `"table_id": "${table_id}"`
+                        );
+                      }
+                    }
+                  }
+                  
+                  // Add webhook secret header if provided
+                  if (webhook_secret && module.mapper.headers) {
+                    const existingSecretHeader = module.mapper.headers.findIndex(
+                      (h: any) => h.name === 'x-webhook-secret'
+                    );
+                    if (existingSecretHeader >= 0) {
+                      module.mapper.headers[existingSecretHeader].value = webhook_secret;
+                    } else {
+                      module.mapper.headers.push({ name: 'x-webhook-secret', value: webhook_secret });
+                    }
+                  }
+                }
+              }
+            }
+          }
+          
+          // Step 4: Create new scenario with modified blueprint
+          const newScenarioName = scenario_name || `Google Ads Sync - ${table_id.slice(0, 8)}`;
+          
+          const createPayload = {
+            name: newScenarioName,
+            teamId: parseInt(team_id || "0"),
+            blueprint: JSON.stringify(blueprintData),
+          };
+          
+          console.log("Creating new scenario with payload:", JSON.stringify(createPayload).substring(0, 300));
+          
+          const createResult = await makeAPICall(
+            api_token,
+            region,
+            `/scenarios`,
+            "POST",
+            createPayload
+          );
+          
+          console.log("Scenario created:", JSON.stringify(createResult).substring(0, 300));
+          
+          result = {
+            success: true,
+            scenario: createResult,
+            scenario_id: createResult.scenario?.id || createResult.id,
+            message: "Scenario cloned successfully from template"
+          };
+        } catch (cloneError) {
+          console.error("Failed to clone scenario:", cloneError);
+          result = {
+            success: false,
+            error: cloneError instanceof Error ? cloneError.message : String(cloneError),
+            message: "לא ניתן לשכפל את ה-Template Scenario"
+          };
+        }
       }
 
       case "run_and_sync_google_ads": {
