@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon, Sparkles, Info, Copy, Loader2, AlertCircle } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon, Sparkles, Info, Copy, Loader2, AlertCircle, Play } from "lucide-react";
 import { AIAnalysisDialog } from "@/components/dynamic-tables/AIAnalysisDialog";
 import { format, subDays, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { he } from "date-fns/locale";
@@ -1002,6 +1002,44 @@ export default function DynamicTableView() {
     },
   });
 
+  // Activate scenario mutation for scenarios that exist but aren't activated
+  const activateScenarioMutation = useMutation({
+    mutationFn: async () => {
+      const settings = (makeSettings?.settings as Record<string, any>) || {};
+      const scenarioId = table?.integration_settings?.make_scenario_id;
+      
+      if (!scenarioId) {
+        throw new Error('לא קיים סנריו לטבלה זו');
+      }
+      
+      if (!settings.api_token || !settings.team_id) {
+        throw new Error('Make.com לא מוגדר. נא להגדיר בהגדרות > Make Settings');
+      }
+
+      const { data, error } = await supabase.functions.invoke('make-api', {
+        body: {
+          action: 'activate_scenario',
+          api_token: settings.api_token,
+          team_id: settings.team_id,
+          region: settings.region || 'eu1',
+          scenario_id: String(scenarioId),
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || data?.message || 'הפעלת הסנריו נכשלה');
+
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('הסנריו הופעל בהצלחה! כעת ניתן לסנכרן נתונים.');
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
   if (tablesLoading) {
     return (
       <div className="container mx-auto py-8 px-4">
@@ -1042,6 +1080,12 @@ export default function DynamicTableView() {
     table?.integration_settings?.data_source === 'make_api' &&
     !table?.integration_settings?.make_scenario_id;
 
+  // Check if scenario exists but might need activation (has make_scenario_id)
+  const hasScenarioButMayNeedActivation = 
+    table?.integration_type === 'google_ads' &&
+    table?.integration_settings?.data_source === 'make_api' &&
+    table?.integration_settings?.make_scenario_id;
+
   return (
     <div className="container mx-auto py-8 px-4">
       {/* Alert for tables that need scenario cloning */}
@@ -1074,6 +1118,35 @@ export default function DynamicTableView() {
                 <Copy className="h-4 w-4 ml-2" />
               )}
               שכפל סנריו
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Alert for tables with scenario that may need activation */}
+      {hasScenarioButMayNeedActivation && !activateScenarioMutation.isSuccess && (
+        <Alert className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+          <AlertCircle className="h-4 w-4 text-blue-600" />
+          <AlertTitle className="text-blue-800 dark:text-blue-200">
+            סנריו קיים - ניתן להפעיל אם יש בעיית סנכרון
+          </AlertTitle>
+          <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
+            <span className="text-blue-700 dark:text-blue-300">
+              הסנריו נוצר אבל ייתכן שהוא לא פעיל ב-Make.com. לחץ להפעלה אם הסנכרון נכשל.
+            </span>
+            <Button 
+              onClick={() => activateScenarioMutation.mutate()}
+              disabled={activateScenarioMutation.isPending}
+              size="sm"
+              variant="outline"
+              className="shrink-0"
+            >
+              {activateScenarioMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin ml-2" />
+              ) : (
+                <Play className="h-4 w-4 ml-2" />
+              )}
+              הפעל סנריו
             </Button>
           </AlertDescription>
         </Alert>
