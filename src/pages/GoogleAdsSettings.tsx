@@ -49,6 +49,11 @@ interface MakeConnection {
   valid?: boolean;
 }
 
+type MakeConnectionsResult = {
+  connections: MakeConnection[];
+  error?: string | null;
+};
+
 export default function GoogleAdsSettings() {
   const { tenant: currentTenant } = useCurrentTenant();
   const { user } = useCurrentUser();
@@ -135,25 +140,56 @@ export default function GoogleAdsSettings() {
   const isMakeApiConnected = makeApiIntegration?.is_active && makeApiSettings?.api_token;
 
   // Fetch Google Ads connections from Make.com
-  const { data: googleAdsConnections, isLoading: loadingConnections, refetch: refetchConnections } = useQuery({
+  const { data: googleAdsConnectionsResult, isLoading: loadingConnections, refetch: refetchConnections } = useQuery({
     queryKey: ['make-google-ads-connections', currentTenant?.id],
     queryFn: async () => {
-      if (!makeApiSettings?.api_token || !makeApiSettings?.team_id) return [];
+      if (!makeApiSettings?.api_token || !makeApiSettings?.team_id) {
+        return { connections: [], error: null } satisfies MakeConnectionsResult;
+      }
       
-      const { data, error } = await supabase.functions.invoke('make-api', {
-        body: {
-          action: 'list_google_ads_connections',
-          api_token: makeApiSettings.api_token,
-          team_id: makeApiSettings.team_id,
-          region: makeApiSettings.region || 'eu1',
-        },
-      });
-      
-      if (error) throw error;
-      return data?.connections || [];
+      try {
+        const { data, error } = await supabase.functions.invoke('make-api', {
+          body: {
+            action: 'list_google_ads_connections',
+            api_token: makeApiSettings.api_token,
+            team_id: makeApiSettings.team_id,
+            region: makeApiSettings.region || 'eu1',
+          },
+        });
+
+        if (error) {
+          const msg = error.message || 'שגיאה לא ידועה';
+          const is403 = msg.includes('403') || msg.includes('SC403') || msg.toLowerCase().includes('permission');
+          return {
+            connections: [],
+            error: is403
+              ? 'אין הרשאה לקרוא Connections ב‑Make.com. ודא שה‑API Token כולל הרשאות connections:read ושאתה משתמש ב‑Team ID הנכון.'
+              : msg,
+          } satisfies MakeConnectionsResult;
+        }
+
+        if (data?.error) {
+          const msg = String(data.error);
+          const is403 = msg.includes('403') || msg.includes('SC403') || msg.toLowerCase().includes('permission');
+          return {
+            connections: [],
+            error: is403
+              ? 'אין הרשאה לקרוא Connections ב‑Make.com. ודא שה‑API Token כולל הרשאות connections:read ושאתה משתמש ב‑Team ID הנכון.'
+              : msg,
+          } satisfies MakeConnectionsResult;
+        }
+
+        return { connections: data?.connections || [], error: null } satisfies MakeConnectionsResult;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return { connections: [], error: msg } satisfies MakeConnectionsResult;
+      }
     },
     enabled: !!isMakeApiConnected,
   });
+
+  const googleAdsConnections = (googleAdsConnectionsResult as any)?.connections ?? [];
+  const makeConnectionsError = (googleAdsConnectionsResult as any)?.error as string | null | undefined;
 
   // Pre-select connection if already saved
   useEffect(() => {
@@ -489,6 +525,26 @@ export default function GoogleAdsSettings() {
                       <Loader2 className="h-4 w-4 animate-spin" />
                       טוען חיבורי Google Ads מ-Make.com...
                     </div>
+                  ) : makeConnectionsError ? (
+                    <Alert className="border-amber-200 bg-amber-50 text-right">
+                      <AlertCircle className="h-4 w-4 text-amber-600" />
+                      <AlertTitle className="text-amber-800">אין הרשאה ל-Make API</AlertTitle>
+                      <AlertDescription className="text-amber-700">
+                        <p>{makeConnectionsError}</p>
+                        <p className="mt-2">פתרון מהיר:</p>
+                        <ol className="list-decimal list-inside mt-1 space-y-1">
+                          <li>ב-Make.com צור Token חדש עם הרשאות connections:read</li>
+                          <li>ודא שה-Team ID הוא של אותו Team שבו נמצאים החיבורים</li>
+                          <li>שמור בהגדרות Make במערכת וחזור לכאן</li>
+                        </ol>
+                        <div className="mt-3">
+                          <Button variant="outline" className="gap-2" onClick={() => navigate(buildPath('/make-settings'))}>
+                            <Settings className="h-4 w-4" />
+                            פתח הגדרות Make
+                          </Button>
+                        </div>
+                      </AlertDescription>
+                    </Alert>
                   ) : !googleAdsConnections?.length ? (
                     <Alert className="border-amber-200 bg-amber-50 text-right">
                       <AlertCircle className="h-4 w-4 text-amber-600" />

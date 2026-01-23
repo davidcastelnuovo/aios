@@ -169,8 +169,12 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
           region: makeApiSettings.region || 'eu1',
         },
       });
-      
-      if (error) throw error;
+
+      // Never throw here to avoid crashing the dialog on permission issues.
+      if (error || data?.error) {
+        return [];
+      }
+
       return data?.connections || [];
     },
     enabled: open && !!isMakeApiConnected && dataSource === 'make_api',
