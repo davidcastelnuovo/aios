@@ -33,6 +33,24 @@ const MAKE_API_REGIONS: Record<string, string> = {
   us2: "https://us2.make.com/api/v2",
 };
 
+class MakeApiError extends Error {
+  status: number;
+  rawBody: string;
+  parsedBody: any;
+
+  constructor(status: number, rawBody: string, parsedBody: any) {
+    const messageFromBody =
+      parsedBody?.message ||
+      parsedBody?.detail ||
+      (typeof parsedBody === "string" ? parsedBody : "");
+    super(`Make API error: ${status} - ${messageFromBody || rawBody}`);
+    this.name = "MakeApiError";
+    this.status = status;
+    this.rawBody = rawBody;
+    this.parsedBody = parsedBody;
+  }
+}
+
 async function makeAPICall(
   apiToken: string,
   region: string,
@@ -64,7 +82,13 @@ async function makeAPICall(
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`Make API error: ${response.status} - ${errorText}`);
-    throw new Error(`Make API error: ${response.status} - ${errorText}`);
+    let parsed: any = null;
+    try {
+      parsed = JSON.parse(errorText);
+    } catch {
+      parsed = null;
+    }
+    throw new MakeApiError(response.status, errorText, parsed);
   }
   
   return response.json();
@@ -139,12 +163,23 @@ serve(async (req) => {
       case "list_connections": {
         // Get all connections for the team
         // Make.com API uses query parameter for teamId, not path
-        const connections = await makeAPICall(
-          api_token,
-          region,
-          `/connections?teamId=${team_id}`
-        );
-        result = connections;
+        let connections;
+        try {
+          connections = await makeAPICall(api_token, region, `/connections?teamId=${team_id}`);
+          result = connections;
+        } catch (e) {
+          // Fallback: if the provided teamId is not accessible for this token/user, try default scope.
+          if (e instanceof MakeApiError && e.status === 403) {
+            connections = await makeAPICall(api_token, region, `/connections`);
+            result = {
+              ...connections,
+              warning: `Team ID ${team_id} not accessible. Returned connections from default scope instead.`,
+              fallback_used: true,
+            };
+          } else {
+            throw e;
+          }
+        }
         break;
       }
 
@@ -167,12 +202,22 @@ serve(async (req) => {
       case "list_scenarios": {
         // Get all scenarios for the team
         // Make.com API uses query parameter for teamId
-        const scenarios = await makeAPICall(
-          api_token,
-          region,
-          `/scenarios?teamId=${team_id}`
-        );
-        result = scenarios;
+        let scenarios;
+        try {
+          scenarios = await makeAPICall(api_token, region, `/scenarios?teamId=${team_id}`);
+          result = scenarios;
+        } catch (e) {
+          if (e instanceof MakeApiError && e.status === 403) {
+            scenarios = await makeAPICall(api_token, region, `/scenarios`);
+            result = {
+              ...scenarios,
+              warning: `Team ID ${team_id} not accessible. Returned scenarios from default scope instead.`,
+              fallback_used: true,
+            };
+          } else {
+            throw e;
+          }
+        }
         break;
       }
 
@@ -200,11 +245,18 @@ serve(async (req) => {
       case "list_google_ads_connections": {
         // Get all connections and filter for Google Ads
         // Make.com API uses query parameter for teamId
-        const allConnections = await makeAPICall(
-          api_token,
-          region,
-          `/connections?teamId=${team_id}`
-        );
+        let allConnections;
+        let usedFallback = false;
+        try {
+          allConnections = await makeAPICall(api_token, region, `/connections?teamId=${team_id}`);
+        } catch (e) {
+          if (e instanceof MakeApiError && e.status === 403) {
+            usedFallback = true;
+            allConnections = await makeAPICall(api_token, region, `/connections`);
+          } else {
+            throw e;
+          }
+        }
         
         // Filter for Google Ads connections
         const googleAdsConnections = (allConnections.connections || allConnections || [])
@@ -214,7 +266,8 @@ serve(async (req) => {
         
         result = { 
           connections: googleAdsConnections,
-          total: googleAdsConnections.length 
+          total: googleAdsConnections.length,
+          fallback_used: usedFallback,
         };
         break;
       }
@@ -222,11 +275,16 @@ serve(async (req) => {
       case "list_google_ads_scenarios": {
         // Get all scenarios that use Google Ads modules
         // Make.com API uses query parameter for teamId
-        const allScenarios = await makeAPICall(
-          api_token,
-          region,
-          `/scenarios?teamId=${team_id}`
-        );
+        let allScenarios;
+        try {
+          allScenarios = await makeAPICall(api_token, region, `/scenarios?teamId=${team_id}`);
+        } catch (e) {
+          if (e instanceof MakeApiError && e.status === 403) {
+            allScenarios = await makeAPICall(api_token, region, `/scenarios`);
+          } else {
+            throw e;
+          }
+        }
         
         // For each scenario, we'd need to check if it uses Google Ads modules
         // For now, return all scenarios and let the frontend filter or display them
@@ -286,6 +344,28 @@ serve(async (req) => {
     );
   } catch (err) {
     console.error("Error in make-api function:", err);
+
+    if (err instanceof MakeApiError) {
+      const isPermissionDenied =
+        err.status === 403 ||
+        err.parsedBody?.code === "SC403" ||
+        (typeof err.rawBody === "string" && err.rawBody.includes("SC403"));
+
+      const hint = isPermissionDenied
+        ? "Permission denied from Make.com. Verify the API Token has permissions for Connections/Scenarios (e.g. connections:read, scenarios:read) AND that the Team ID belongs to your user/team. If you generated a limited-scope token, create a new token with the required scopes."
+        : undefined;
+
+      return new Response(
+        JSON.stringify({
+          error: err.message,
+          status: err.status,
+          make_error: err.parsedBody ?? err.rawBody,
+          hint,
+        }),
+        { status: err.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     return new Response(
       JSON.stringify({ error: err instanceof Error ? err.message : String(err) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
