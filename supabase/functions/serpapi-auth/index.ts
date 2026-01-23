@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
       
       const { data: dataforSeoIntegration } = await supabase
         .from("tenant_integrations")
-        .select("id, is_active, config, created_at, updated_at")
+        .select("id, is_active, settings, created_at, updated_at")
         .eq("tenant_id", tenantId)
         .eq("integration_type", "dataforseo")
         .single();
@@ -88,16 +88,17 @@ Deno.serve(async (req) => {
         // Fallback to old serpapi integration
         const { data: serpIntegration } = await supabase
           .from("tenant_integrations")
-          .select("id, is_active, config, created_at, updated_at")
+          .select("id, is_active, api_key, settings, created_at, updated_at")
           .eq("tenant_id", tenantId)
           .eq("integration_type", "serpapi")
           .single();
         integration = serpIntegration;
       }
 
+      const settings = integration?.settings as Record<string, any> | null;
       return new Response(JSON.stringify({
         connected: !!integration?.is_active,
-        has_credentials: !!(integration?.config?.email && integration?.config?.password) || !!integration?.config?.api_key,
+        has_credentials: !!(settings?.email && settings?.password) || !!(integration as any)?.api_key,
         created_at: integration?.created_at,
         updated_at: integration?.updated_at,
       }), {
@@ -160,7 +161,7 @@ Deno.serve(async (req) => {
         .eq("integration_type", "dataforseo")
         .single();
 
-      const configData = { 
+      const settingsData = { 
         email,
         password,
         balance: userData?.money?.balance,
@@ -173,7 +174,7 @@ Deno.serve(async (req) => {
         await supabase
           .from("tenant_integrations")
           .update({
-            config: configData,
+            settings: settingsData,
             is_active: true,
             updated_at: new Date().toISOString(),
           })
@@ -183,7 +184,7 @@ Deno.serve(async (req) => {
           tenant_id: tenantId,
           user_id: user.id,
           integration_type: "dataforseo",
-          config: configData,
+          settings: settingsData,
           is_active: true,
         });
       }
@@ -226,21 +227,19 @@ Deno.serve(async (req) => {
 
     if (action === "account") {
       // Get current account info - check dataforseo first
-      let integration = null;
-      
       const { data: dataforSeoIntegration } = await supabase
         .from("tenant_integrations")
-        .select("id, config")
+        .select("id, settings")
         .eq("tenant_id", tenantId)
         .eq("integration_type", "dataforseo")
         .eq("is_active", true)
         .single();
       
-      if (dataforSeoIntegration?.config?.email && dataforSeoIntegration?.config?.password) {
-        integration = dataforSeoIntegration;
-        
+      const settings = dataforSeoIntegration?.settings as Record<string, any> | null;
+      
+      if (dataforSeoIntegration && settings?.email && settings?.password) {
         // Get fresh data from DataForSEO
-        const base64Token = btoa(`${integration.config.email}:${integration.config.password}`);
+        const base64Token = btoa(`${settings.email}:${settings.password}`);
         
         const accountResponse = await fetch("https://api.dataforseo.com/v3/appendix/user_data", {
           method: "GET",
@@ -264,14 +263,14 @@ Deno.serve(async (req) => {
         await supabase
           .from("tenant_integrations")
           .update({
-            config: {
-              ...integration.config,
+            settings: {
+              ...settings,
               balance: userData?.money?.balance,
               currency: userData?.money?.currency,
               login: userData?.login,
             },
           })
-          .eq("id", integration.id);
+          .eq("id", dataforSeoIntegration.id);
 
         return new Response(JSON.stringify({
           provider: "dataforseo",
@@ -287,14 +286,14 @@ Deno.serve(async (req) => {
       // Fallback to old serpapi
       const { data: serpIntegration } = await supabase
         .from("tenant_integrations")
-        .select("config")
+        .select("api_key")
         .eq("tenant_id", tenantId)
         .eq("integration_type", "serpapi")
         .eq("is_active", true)
         .single();
 
-      if (serpIntegration?.config?.api_key) {
-        const accountUrl = `https://serpapi.com/account.json?api_key=${serpIntegration.config.api_key}`;
+      if (serpIntegration?.api_key) {
+        const accountUrl = `https://serpapi.com/account.json?api_key=${serpIntegration.api_key}`;
         const accountResponse = await fetch(accountUrl);
 
         if (!accountResponse.ok) {
