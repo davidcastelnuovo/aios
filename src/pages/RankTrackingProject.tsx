@@ -390,13 +390,13 @@ export default function RankTrackingProject() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <div className="container mx-auto py-6 space-y-6" dir="rtl">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" asChild>
             <Link to={tenantPath("/rank-tracking")}>
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-5 w-5 rotate-180" />
             </Link>
           </Button>
           <div>
@@ -415,16 +415,16 @@ export default function RankTrackingProject() {
             disabled={scanMutation.isPending || !keywords?.length}
           >
             {scanMutation.isPending ? (
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
             ) : (
-              <Play className="h-4 w-4 mr-2" />
+              <Play className="h-4 w-4 ml-2" />
             )}
             סרוק הכל
           </Button>
           <Dialog open={isAddOpen} onOpenChange={handleDialogClose}>
             <DialogTrigger asChild>
               <Button>
-                <Plus className="h-4 w-4 mr-2" />
+                <Plus className="h-4 w-4 ml-2" />
                 הוסף ביטויים
               </Button>
             </DialogTrigger>
@@ -553,9 +553,9 @@ export default function RankTrackingProject() {
                     disabled={addKeywordsMutation.isPending || currentKeywordCount === 0}
                   >
                     {addKeywordsMutation.isPending ? (
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
                     ) : (
-                      <Plus className="h-4 w-4 mr-2" />
+                      <Plus className="h-4 w-4 ml-2" />
                     )}
                     הוסף
                   </Button>
@@ -610,11 +610,11 @@ export default function RankTrackingProject() {
       <Tabs defaultValue="keywords" className="space-y-4">
         <TabsList>
           <TabsTrigger value="keywords">
-            <Search className="h-4 w-4 mr-2" />
+            <Search className="h-4 w-4 ml-2" />
             ביטויים
           </TabsTrigger>
           <TabsTrigger value="history" disabled={!selectedKeywordId}>
-            <History className="h-4 w-4 mr-2" />
+            <History className="h-4 w-4 ml-2" />
             היסטוריה
           </TabsTrigger>
         </TabsList>
@@ -694,7 +694,7 @@ export default function RankTrackingProject() {
                   הוסף ביטויים כדי להתחיל לעקוב אחרי הדירוגים
                 </p>
                 <Button onClick={() => setIsAddOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
+                  <Plus className="h-4 w-4 ml-2" />
                   הוסף ביטויים
                 </Button>
               </CardContent>
