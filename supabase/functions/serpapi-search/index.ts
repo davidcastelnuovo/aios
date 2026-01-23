@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface SerpApiRequest {
+interface SearchRequest {
   action: "test" | "search" | "bulk_search";
   projectId?: string;
   keywordIds?: string[];
@@ -15,6 +15,31 @@ interface SerpApiRequest {
   language?: string;
   device?: string;
 }
+
+// Location code mapping for DataForSEO
+const locationCodes: Record<string, number> = {
+  "il": 2376,  // Israel
+  "us": 2840,  // United States
+  "uk": 2826,  // United Kingdom
+  "de": 2276,  // Germany
+  "fr": 2250,  // France
+  "es": 2724,  // Spain
+  "it": 2380,  // Italy
+  "nl": 2528,  // Netherlands
+  "au": 2036,  // Australia
+  "ca": 2124,  // Canada
+};
+
+// Language code mapping
+const languageCodes: Record<string, string> = {
+  "he": "he",
+  "en": "en",
+  "de": "de",
+  "fr": "fr",
+  "es": "es",
+  "it": "it",
+  "nl": "nl",
+};
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -61,37 +86,76 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get SerpAPI key from tenant_integrations
-    const { data: integration } = await supabase
+    // Get DataForSEO credentials - check dataforseo first, then fallback to serpapi
+    let base64Token: string | null = null;
+    let usingSerpApi = false;
+    let serpApiKey: string | null = null;
+
+    const { data: dataforSeoIntegration } = await supabase
       .from("tenant_integrations")
       .select("config")
       .eq("tenant_id", tenantUser.tenant_id)
-      .eq("integration_type", "serpapi")
+      .eq("integration_type", "dataforseo")
       .eq("is_active", true)
       .single();
 
-    const serpApiKey = integration?.config?.api_key;
-    if (!serpApiKey) {
-      return new Response(JSON.stringify({ error: "SerpAPI not configured" }), {
+    if (dataforSeoIntegration?.config?.email && dataforSeoIntegration?.config?.password) {
+      base64Token = btoa(`${dataforSeoIntegration.config.email}:${dataforSeoIntegration.config.password}`);
+    } else {
+      // Fallback to SerpAPI
+      const { data: serpIntegration } = await supabase
+        .from("tenant_integrations")
+        .select("config")
+        .eq("tenant_id", tenantUser.tenant_id)
+        .eq("integration_type", "serpapi")
+        .eq("is_active", true)
+        .single();
+
+      if (serpIntegration?.config?.api_key) {
+        usingSerpApi = true;
+        serpApiKey = serpIntegration.config.api_key;
+      }
+    }
+
+    if (!base64Token && !serpApiKey) {
+      return new Response(JSON.stringify({ error: "DataForSEO not configured" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const body: SerpApiRequest = await req.json();
+    const body: SearchRequest = await req.json();
     const { action } = body;
 
     if (action === "test") {
-      // Test API connection with a simple search
-      const testUrl = `https://serpapi.com/search.json?engine=google&q=test&api_key=${serpApiKey}&num=1`;
-      const testResponse = await fetch(testUrl);
-      
+      // Test API connection
+      if (usingSerpApi && serpApiKey) {
+        const testUrl = `https://serpapi.com/search.json?engine=google&q=test&api_key=${serpApiKey}&num=1`;
+        const testResponse = await fetch(testUrl);
+        
+        if (!testResponse.ok) {
+          return new Response(JSON.stringify({ success: false, error: "API key invalid" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({ success: true, provider: "serpapi" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Test DataForSEO
+      const testResponse = await fetch("https://api.dataforseo.com/v3/appendix/user_data", {
+        method: "GET",
+        headers: {
+          "Authorization": `Basic ${base64Token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
       if (!testResponse.ok) {
-        const errorData = await testResponse.json();
-        return new Response(JSON.stringify({ 
-          success: false, 
-          error: errorData.error || "API key invalid" 
-        }), {
+        return new Response(JSON.stringify({ success: false, error: "Invalid credentials" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -99,9 +163,9 @@ Deno.serve(async (req) => {
 
       const testData = await testResponse.json();
       return new Response(JSON.stringify({ 
-        success: true, 
-        account_info: testData.search_metadata?.google_url ? true : false,
-        searches_remaining: testData.search_metadata?.total_time_taken || "Unknown"
+        success: testData.status_code === 20000, 
+        provider: "dataforseo",
+        balance: testData.tasks?.[0]?.result?.[0]?.money?.balance,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -111,64 +175,81 @@ Deno.serve(async (req) => {
       // Single keyword search
       const { keyword, domain, country = "il", language = "he", device = "desktop" } = body;
       
-      const searchParams = new URLSearchParams({
-        engine: "google",
-        q: keyword,
-        google_domain: country === "il" ? "google.co.il" : "google.com",
-        gl: country,
-        hl: language,
-        device: device === "mobile" ? "mobile" : "desktop",
-        num: "100", // Get top 100 results
-        api_key: serpApiKey,
+      if (usingSerpApi && serpApiKey) {
+        // Use SerpAPI (legacy)
+        return await handleSerpApiSearch(keyword, domain, country, language, device, serpApiKey);
+      }
+
+      // Use DataForSEO
+      const locationCode = locationCodes[country] || 2376;
+      const languageCode = languageCodes[language] || "he";
+
+      const searchResponse = await fetch("https://api.dataforseo.com/v3/serp/google/organic/live/advanced", {
+        method: "POST",
+        headers: {
+          "Authorization": `Basic ${base64Token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify([{
+          keyword,
+          location_code: locationCode,
+          language_code: languageCode,
+          device: device === "mobile" ? "mobile" : "desktop",
+          depth: 100,
+        }]),
       });
 
-      const searchUrl = `https://serpapi.com/search.json?${searchParams}`;
-      const searchResponse = await fetch(searchUrl);
-      
       if (!searchResponse.ok) {
         const errorData = await searchResponse.json();
-        return new Response(JSON.stringify({ error: errorData.error }), {
+        return new Response(JSON.stringify({ error: errorData.status_message || "Search failed" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
       const searchData = await searchResponse.json();
-      const organicResults = searchData.organic_results || [];
+      
+      if (searchData.status_code !== 20000) {
+        return new Response(JSON.stringify({ error: searchData.status_message || "Search error" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const items = searchData.tasks?.[0]?.result?.[0]?.items || [];
+      const organicResults = items.filter((item: any) => item.type === "organic");
       
       // Find domain position
       let position: number | null = null;
       let foundUrl: string | null = null;
       const normalizedDomain = domain.replace(/^(https?:\/\/)?(www\.)?/, "").toLowerCase();
       
-      for (let i = 0; i < organicResults.length; i++) {
-        const resultDomain = organicResults[i].link
-          ?.replace(/^(https?:\/\/)?(www\.)?/, "")
-          .toLowerCase()
-          .split("/")[0];
-        
-        if (resultDomain?.includes(normalizedDomain)) {
-          position = i + 1;
-          foundUrl = organicResults[i].link;
+      for (const result of organicResults) {
+        const resultDomain = result.domain?.toLowerCase() || "";
+        if (resultDomain.includes(normalizedDomain)) {
+          position = result.rank_group;
+          foundUrl = result.url;
           break;
         }
       }
 
       // Get SERP features
       const serpFeatures: string[] = [];
-      if (searchData.answer_box) serpFeatures.push("answer_box");
-      if (searchData.knowledge_graph) serpFeatures.push("knowledge_graph");
-      if (searchData.local_results) serpFeatures.push("local_pack");
-      if (searchData.shopping_results) serpFeatures.push("shopping");
-      if (searchData.related_questions) serpFeatures.push("people_also_ask");
-      if (searchData.inline_videos) serpFeatures.push("videos");
-      if (searchData.inline_images) serpFeatures.push("images");
+      for (const item of items) {
+        if (item.type === "featured_snippet") serpFeatures.push("featured_snippet");
+        if (item.type === "knowledge_graph") serpFeatures.push("knowledge_graph");
+        if (item.type === "local_pack") serpFeatures.push("local_pack");
+        if (item.type === "shopping") serpFeatures.push("shopping");
+        if (item.type === "people_also_ask") serpFeatures.push("people_also_ask");
+        if (item.type === "video") serpFeatures.push("videos");
+        if (item.type === "images") serpFeatures.push("images");
+      }
 
       // Get top competitors
-      const competitors = organicResults.slice(0, 10).map((result: any, index: number) => ({
-        position: index + 1,
-        domain: result.link?.replace(/^(https?:\/\/)?(www\.)?/, "").split("/")[0],
-        url: result.link,
+      const competitors = organicResults.slice(0, 10).map((result: any) => ({
+        position: result.rank_group,
+        domain: result.domain,
+        url: result.url,
         title: result.title,
       }));
 
@@ -177,9 +258,9 @@ Deno.serve(async (req) => {
         keyword,
         position,
         found_url: foundUrl,
-        serp_features: serpFeatures,
+        serp_features: [...new Set(serpFeatures)],
         competitors,
-        total_results: searchData.search_information?.total_results,
+        total_results: searchData.tasks?.[0]?.result?.[0]?.se_results_count,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -226,47 +307,120 @@ Deno.serve(async (req) => {
 
       const results: any[] = [];
       const normalizedDomain = project.domain.replace(/^(https?:\/\/)?(www\.)?/, "").toLowerCase();
+      const locationCode = locationCodes[project.country] || 2376;
+      const languageCode = languageCodes[project.language] || "he";
 
       // Process each keyword
       for (const kw of keywords) {
-        const searchParams = new URLSearchParams({
-          engine: "google",
-          q: kw.keyword,
-          google_domain: project.country === "il" ? "google.co.il" : "google.com",
-          gl: project.country,
-          hl: project.language,
-          device: project.device === "mobile" ? "mobile" : "desktop",
-          num: "100",
-          api_key: serpApiKey,
-        });
-
         try {
-          const searchUrl = `https://serpapi.com/search.json?${searchParams}`;
-          const searchResponse = await fetch(searchUrl);
-          
-          if (!searchResponse.ok) {
-            results.push({ keyword_id: kw.id, error: "Search failed" });
-            continue;
-          }
-
-          const searchData = await searchResponse.json();
-          const organicResults = searchData.organic_results || [];
-
-          // Find position
           let position: number | null = null;
           let foundUrl: string | null = null;
+          let serpFeatures: string[] = [];
+          let competitorsData: any[] = [];
 
-          for (let i = 0; i < organicResults.length; i++) {
-            const resultDomain = organicResults[i].link
-              ?.replace(/^(https?:\/\/)?(www\.)?/, "")
-              .toLowerCase()
-              .split("/")[0];
+          if (usingSerpApi && serpApiKey) {
+            // Use SerpAPI (legacy)
+            const searchParams = new URLSearchParams({
+              engine: "google",
+              q: kw.keyword,
+              google_domain: project.country === "il" ? "google.co.il" : "google.com",
+              gl: project.country,
+              hl: project.language,
+              device: project.device === "mobile" ? "mobile" : "desktop",
+              num: "100",
+              api_key: serpApiKey,
+            });
 
-            if (resultDomain?.includes(normalizedDomain)) {
-              position = i + 1;
-              foundUrl = organicResults[i].link;
-              break;
+            const searchUrl = `https://serpapi.com/search.json?${searchParams}`;
+            const searchResponse = await fetch(searchUrl);
+            
+            if (!searchResponse.ok) {
+              results.push({ keyword_id: kw.id, error: "Search failed" });
+              continue;
             }
+
+            const searchData = await searchResponse.json();
+            const organicResults = searchData.organic_results || [];
+
+            for (let i = 0; i < organicResults.length; i++) {
+              const resultDomain = organicResults[i].link
+                ?.replace(/^(https?:\/\/)?(www\.)?/, "")
+                .toLowerCase()
+                .split("/")[0];
+
+              if (resultDomain?.includes(normalizedDomain)) {
+                position = i + 1;
+                foundUrl = organicResults[i].link;
+                break;
+              }
+            }
+
+            if (searchData.answer_box) serpFeatures.push("answer_box");
+            if (searchData.knowledge_graph) serpFeatures.push("knowledge_graph");
+            if (searchData.local_results) serpFeatures.push("local_pack");
+            if (searchData.shopping_results) serpFeatures.push("shopping");
+
+            competitorsData = organicResults.slice(0, 10).map((result: any, idx: number) => ({
+              position: idx + 1,
+              domain: result.link?.replace(/^(https?:\/\/)?(www\.)?/, "").split("/")[0],
+              url: result.link,
+            }));
+          } else {
+            // Use DataForSEO
+            const searchResponse = await fetch("https://api.dataforseo.com/v3/serp/google/organic/live/advanced", {
+              method: "POST",
+              headers: {
+                "Authorization": `Basic ${base64Token}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify([{
+                keyword: kw.keyword,
+                location_code: locationCode,
+                language_code: languageCode,
+                device: project.device === "mobile" ? "mobile" : "desktop",
+                depth: 100,
+              }]),
+            });
+
+            if (!searchResponse.ok) {
+              results.push({ keyword_id: kw.id, error: "Search failed" });
+              continue;
+            }
+
+            const searchData = await searchResponse.json();
+            
+            if (searchData.status_code !== 20000) {
+              results.push({ keyword_id: kw.id, error: searchData.status_message || "API Error" });
+              continue;
+            }
+
+            const items = searchData.tasks?.[0]?.result?.[0]?.items || [];
+            const organicResults = items.filter((item: any) => item.type === "organic");
+
+            // Find position
+            for (const result of organicResults) {
+              const resultDomain = result.domain?.toLowerCase() || "";
+              if (resultDomain.includes(normalizedDomain)) {
+                position = result.rank_group;
+                foundUrl = result.url;
+                break;
+              }
+            }
+
+            // Get SERP features
+            for (const item of items) {
+              if (item.type === "featured_snippet") serpFeatures.push("featured_snippet");
+              if (item.type === "knowledge_graph") serpFeatures.push("knowledge_graph");
+              if (item.type === "local_pack") serpFeatures.push("local_pack");
+              if (item.type === "shopping") serpFeatures.push("shopping");
+            }
+            serpFeatures = [...new Set(serpFeatures)];
+
+            competitorsData = organicResults.slice(0, 10).map((result: any) => ({
+              position: result.rank_group,
+              domain: result.domain,
+              url: result.url,
+            }));
           }
 
           // Calculate position change
@@ -299,20 +453,6 @@ Deno.serve(async (req) => {
             .update(updateData)
             .eq("id", kw.id);
 
-          // Get SERP features
-          const serpFeatures: string[] = [];
-          if (searchData.answer_box) serpFeatures.push("answer_box");
-          if (searchData.knowledge_graph) serpFeatures.push("knowledge_graph");
-          if (searchData.local_results) serpFeatures.push("local_pack");
-          if (searchData.shopping_results) serpFeatures.push("shopping");
-
-          // Get competitors data
-          const competitorsData = organicResults.slice(0, 10).map((result: any, idx: number) => ({
-            position: idx + 1,
-            domain: result.link?.replace(/^(https?:\/\/)?(www\.)?/, "").split("/")[0],
-            url: result.link,
-          }));
-
           // Insert history record
           await supabase.from("rank_tracking_history").insert({
             keyword_id: kw.id,
@@ -332,7 +472,7 @@ Deno.serve(async (req) => {
           });
 
           // Small delay to avoid rate limiting
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise(resolve => setTimeout(resolve, 300));
         } catch (err) {
           results.push({ keyword_id: kw.id, error: String(err) });
         }
@@ -361,10 +501,93 @@ Deno.serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("SerpAPI search error:", error);
+    console.error("Search error:", error);
     return new Response(JSON.stringify({ error: String(error) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
+
+// Helper function for legacy SerpAPI search
+async function handleSerpApiSearch(
+  keyword: string, 
+  domain: string, 
+  country: string, 
+  language: string, 
+  device: string, 
+  apiKey: string
+) {
+  const searchParams = new URLSearchParams({
+    engine: "google",
+    q: keyword,
+    google_domain: country === "il" ? "google.co.il" : "google.com",
+    gl: country,
+    hl: language,
+    device: device === "mobile" ? "mobile" : "desktop",
+    num: "100",
+    api_key: apiKey,
+  });
+
+  const searchUrl = `https://serpapi.com/search.json?${searchParams}`;
+  const searchResponse = await fetch(searchUrl);
+  
+  if (!searchResponse.ok) {
+    const errorData = await searchResponse.json();
+    return new Response(JSON.stringify({ error: errorData.error }), {
+      status: 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const searchData = await searchResponse.json();
+  const organicResults = searchData.organic_results || [];
+  
+  // Find domain position
+  let position: number | null = null;
+  let foundUrl: string | null = null;
+  const normalizedDomain = domain.replace(/^(https?:\/\/)?(www\.)?/, "").toLowerCase();
+  
+  for (let i = 0; i < organicResults.length; i++) {
+    const resultDomain = organicResults[i].link
+      ?.replace(/^(https?:\/\/)?(www\.)?/, "")
+      .toLowerCase()
+      .split("/")[0];
+    
+    if (resultDomain?.includes(normalizedDomain)) {
+      position = i + 1;
+      foundUrl = organicResults[i].link;
+      break;
+    }
+  }
+
+  // Get SERP features
+  const serpFeatures: string[] = [];
+  if (searchData.answer_box) serpFeatures.push("answer_box");
+  if (searchData.knowledge_graph) serpFeatures.push("knowledge_graph");
+  if (searchData.local_results) serpFeatures.push("local_pack");
+  if (searchData.shopping_results) serpFeatures.push("shopping");
+  if (searchData.related_questions) serpFeatures.push("people_also_ask");
+  if (searchData.inline_videos) serpFeatures.push("videos");
+  if (searchData.inline_images) serpFeatures.push("images");
+
+  // Get top competitors
+  const competitors = organicResults.slice(0, 10).map((result: any, index: number) => ({
+    position: index + 1,
+    domain: result.link?.replace(/^(https?:\/\/)?(www\.)?/, "").split("/")[0],
+    url: result.link,
+    title: result.title,
+  }));
+
+  return new Response(JSON.stringify({
+    success: true,
+    keyword,
+    position,
+    found_url: foundUrl,
+    serp_features: serpFeatures,
+    competitors,
+    total_results: searchData.search_information?.total_results,
+  }), {
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}

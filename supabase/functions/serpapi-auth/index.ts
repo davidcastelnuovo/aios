@@ -72,17 +72,32 @@ Deno.serve(async (req) => {
     const action = url.searchParams.get("action");
 
     if (action === "status") {
-      // Get integration status
-      const { data: integration } = await supabase
+      // Get integration status - check for dataforseo first, fallback to serpapi for backwards compatibility
+      let integration = null;
+      
+      const { data: dataforSeoIntegration } = await supabase
         .from("tenant_integrations")
         .select("id, is_active, config, created_at, updated_at")
         .eq("tenant_id", tenantId)
-        .eq("integration_type", "serpapi")
+        .eq("integration_type", "dataforseo")
         .single();
+      
+      if (dataforSeoIntegration) {
+        integration = dataforSeoIntegration;
+      } else {
+        // Fallback to old serpapi integration
+        const { data: serpIntegration } = await supabase
+          .from("tenant_integrations")
+          .select("id, is_active, config, created_at, updated_at")
+          .eq("tenant_id", tenantId)
+          .eq("integration_type", "serpapi")
+          .single();
+        integration = serpIntegration;
+      }
 
       return new Response(JSON.stringify({
         connected: !!integration?.is_active,
-        has_key: !!integration?.config?.api_key,
+        has_credentials: !!(integration?.config?.email && integration?.config?.password) || !!integration?.config?.api_key,
         created_at: integration?.created_at,
         updated_at: integration?.updated_at,
       }), {
@@ -92,57 +107,73 @@ Deno.serve(async (req) => {
 
     if (action === "connect") {
       const body = await req.json();
-      const { api_key } = body;
+      const { email, password } = body;
 
-      if (!api_key) {
-        return new Response(JSON.stringify({ error: "API key is required" }), {
+      if (!email || !password) {
+        return new Response(JSON.stringify({ error: "Email and password are required" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Test the API key
-      const testUrl = `https://serpapi.com/search.json?engine=google&q=test&api_key=${api_key}&num=1`;
-      const testResponse = await fetch(testUrl);
+      // Create Base64 token for DataForSEO
+      const base64Token = btoa(`${email}:${password}`);
+
+      // Test the credentials by getting user data
+      const testResponse = await fetch("https://api.dataforseo.com/v3/appendix/user_data", {
+        method: "GET",
+        headers: {
+          "Authorization": `Basic ${base64Token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
       if (!testResponse.ok) {
         const errorData = await testResponse.json();
         return new Response(JSON.stringify({ 
-          error: errorData.error || "Invalid API key" 
+          error: errorData.status_message || "Invalid credentials" 
         }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Get account info
-      const accountUrl = `https://serpapi.com/account.json?api_key=${api_key}`;
-      const accountResponse = await fetch(accountUrl);
-      let accountInfo = null;
+      const testData = await testResponse.json();
       
-      if (accountResponse.ok) {
-        accountInfo = await accountResponse.json();
+      // Check if response is successful
+      if (testData.status_code !== 20000) {
+        return new Response(JSON.stringify({ 
+          error: testData.status_message || "API Error" 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
+
+      const userData = testData.tasks?.[0]?.result?.[0];
 
       // Save or update integration
       const { data: existing } = await supabase
         .from("tenant_integrations")
         .select("id")
         .eq("tenant_id", tenantId)
-        .eq("integration_type", "serpapi")
+        .eq("integration_type", "dataforseo")
         .single();
+
+      const configData = { 
+        email,
+        password,
+        balance: userData?.money?.balance,
+        currency: userData?.money?.currency,
+        login: userData?.login,
+        timezone: userData?.timezone,
+      };
 
       if (existing) {
         await supabase
           .from("tenant_integrations")
           .update({
-            config: { 
-              api_key,
-              account_email: accountInfo?.account_email,
-              plan: accountInfo?.plan,
-              searches_per_month: accountInfo?.searches_per_month,
-              this_month_searches: accountInfo?.this_month_usage,
-            },
+            config: configData,
             is_active: true,
             updated_at: new Date().toISOString(),
           })
@@ -151,30 +182,37 @@ Deno.serve(async (req) => {
         await supabase.from("tenant_integrations").insert({
           tenant_id: tenantId,
           user_id: user.id,
-          integration_type: "serpapi",
-          config: {
-            api_key,
-            account_email: accountInfo?.account_email,
-            plan: accountInfo?.plan,
-            searches_per_month: accountInfo?.searches_per_month,
-            this_month_searches: accountInfo?.this_month_usage,
-          },
+          integration_type: "dataforseo",
+          config: configData,
           is_active: true,
         });
       }
 
+      // Deactivate old serpapi integration if exists
+      await supabase
+        .from("tenant_integrations")
+        .update({ is_active: false })
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "serpapi");
+
       return new Response(JSON.stringify({
         success: true,
-        account_email: accountInfo?.account_email,
-        plan: accountInfo?.plan,
-        searches_per_month: accountInfo?.searches_per_month,
-        this_month_searches: accountInfo?.this_month_usage,
+        login: userData?.login,
+        balance: userData?.money?.balance,
+        currency: userData?.money?.currency,
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (action === "disconnect") {
+      // Disconnect both old and new integrations
+      await supabase
+        .from("tenant_integrations")
+        .update({ is_active: false })
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "dataforseo");
+
       await supabase
         .from("tenant_integrations")
         .update({ is_active: false })
@@ -187,8 +225,67 @@ Deno.serve(async (req) => {
     }
 
     if (action === "account") {
-      // Get current account info
-      const { data: integration } = await supabase
+      // Get current account info - check dataforseo first
+      let integration = null;
+      
+      const { data: dataforSeoIntegration } = await supabase
+        .from("tenant_integrations")
+        .select("id, config")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "dataforseo")
+        .eq("is_active", true)
+        .single();
+      
+      if (dataforSeoIntegration?.config?.email && dataforSeoIntegration?.config?.password) {
+        integration = dataforSeoIntegration;
+        
+        // Get fresh data from DataForSEO
+        const base64Token = btoa(`${integration.config.email}:${integration.config.password}`);
+        
+        const accountResponse = await fetch("https://api.dataforseo.com/v3/appendix/user_data", {
+          method: "GET",
+          headers: {
+            "Authorization": `Basic ${base64Token}`,
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (!accountResponse.ok) {
+          return new Response(JSON.stringify({ error: "Failed to get account info" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const accountData = await accountResponse.json();
+        const userData = accountData.tasks?.[0]?.result?.[0];
+
+        // Update stored info
+        await supabase
+          .from("tenant_integrations")
+          .update({
+            config: {
+              ...integration.config,
+              balance: userData?.money?.balance,
+              currency: userData?.money?.currency,
+              login: userData?.login,
+            },
+          })
+          .eq("id", integration.id);
+
+        return new Response(JSON.stringify({
+          provider: "dataforseo",
+          login: userData?.login,
+          balance: userData?.money?.balance,
+          currency: userData?.money?.currency || "USD",
+          limits: userData?.limits,
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Fallback to old serpapi
+      const { data: serpIntegration } = await supabase
         .from("tenant_integrations")
         .select("config")
         .eq("tenant_id", tenantId)
@@ -196,47 +293,33 @@ Deno.serve(async (req) => {
         .eq("is_active", true)
         .single();
 
-      if (!integration?.config?.api_key) {
-        return new Response(JSON.stringify({ error: "SerpAPI not configured" }), {
-          status: 400,
+      if (serpIntegration?.config?.api_key) {
+        const accountUrl = `https://serpapi.com/account.json?api_key=${serpIntegration.config.api_key}`;
+        const accountResponse = await fetch(accountUrl);
+
+        if (!accountResponse.ok) {
+          return new Response(JSON.stringify({ error: "Failed to get account info" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const accountInfo = await accountResponse.json();
+
+        return new Response(JSON.stringify({
+          provider: "serpapi",
+          account_email: accountInfo.account_email,
+          plan: accountInfo.plan,
+          searches_per_month: accountInfo.searches_per_month,
+          this_month_searches: accountInfo.this_month_usage,
+          remaining_searches: accountInfo.searches_per_month - accountInfo.this_month_usage,
+        }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      const accountUrl = `https://serpapi.com/account.json?api_key=${integration.config.api_key}`;
-      const accountResponse = await fetch(accountUrl);
-
-      if (!accountResponse.ok) {
-        return new Response(JSON.stringify({ error: "Failed to get account info" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const accountInfo = await accountResponse.json();
-
-      // Update stored info
-      await supabase
-        .from("tenant_integrations")
-        .update({
-          config: {
-            ...integration.config,
-            account_email: accountInfo.account_email,
-            plan: accountInfo.plan,
-            searches_per_month: accountInfo.searches_per_month,
-            this_month_searches: accountInfo.this_month_usage,
-          },
-        })
-        .eq("tenant_id", tenantId)
-        .eq("integration_type", "serpapi");
-
-      return new Response(JSON.stringify({
-        account_email: accountInfo.account_email,
-        plan: accountInfo.plan,
-        searches_per_month: accountInfo.searches_per_month,
-        this_month_searches: accountInfo.this_month_usage,
-        remaining_searches: accountInfo.searches_per_month - accountInfo.this_month_usage,
-      }), {
+      return new Response(JSON.stringify({ error: "No integration configured" }), {
+        status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -247,7 +330,7 @@ Deno.serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("SerpAPI auth error:", error);
+    console.error("DataForSEO auth error:", error);
     return new Response(JSON.stringify({ error: String(error) }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
