@@ -80,6 +80,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
   const [dataSource, setDataSource] = useState<"make_api" | "direct_api" | "webhook">("make_api");
   const [selectedMakeConnection, setSelectedMakeConnection] = useState("");
   const [customerIdInput, setCustomerIdInput] = useState("");
+  const [campaignType, setCampaignType] = useState<"leads" | "ecommerce">("leads");
 
   // Fetch agencies
   const { data: agencies = [] } = useQuery({
@@ -239,6 +240,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
         date_range: dateRange,
         sync_frequency: 'daily',
         data_source: dataSource,
+        campaign_type: campaignType,
       };
 
       if (dataSource === 'make_api') {
@@ -305,6 +307,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
               webhook_url: webhookUrl,
               scenario_name: tableName,
               customer_id: formattedCustomerId,
+              campaign_type: campaignType,
             },
           });
           
@@ -394,6 +397,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
     setDataSource("make_api");
     setSelectedMakeConnection("");
     setCustomerIdInput("");
+    setCampaignType("leads");
     onOpenChange(false);
   };
 
@@ -460,6 +464,32 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
                     <div className="font-medium">API ישיר</div>
                     <div className="text-xs text-muted-foreground">דורש Developer Token מאושר</div>
                   </div>
+                </Label>
+          </div>
+            </RadioGroup>
+          </div>
+
+          {/* Campaign Type Selection */}
+          <div className="space-y-3">
+            <Label>סוג קמפיין</Label>
+            <RadioGroup 
+              value={campaignType} 
+              onValueChange={(v) => setCampaignType(v as "leads" | "ecommerce")}
+              className="grid grid-cols-2 gap-2"
+            >
+              <div className={`flex items-center space-x-2 space-x-reverse border rounded-lg p-3 cursor-pointer hover:bg-muted/50 ${campaignType === 'leads' ? 'border-primary bg-primary/5' : ''}`}>
+                <RadioGroupItem value="leads" id="leads-type" />
+                <Label htmlFor="leads-type" className="cursor-pointer flex-1">
+                  <div className="font-medium">לידים</div>
+                  <div className="text-xs text-muted-foreground">המרות, עלות להמרה, CTR</div>
+                </Label>
+              </div>
+              
+              <div className={`flex items-center space-x-2 space-x-reverse border rounded-lg p-3 cursor-pointer hover:bg-muted/50 ${campaignType === 'ecommerce' ? 'border-primary bg-primary/5' : ''}`}>
+                <RadioGroupItem value="ecommerce" id="ecommerce-type" />
+                <Label htmlFor="ecommerce-type" className="cursor-pointer flex-1">
+                  <div className="font-medium">איקומרס</div>
+                  <div className="text-xs text-muted-foreground">רכישות, הכנסות, ROAS</div>
                 </Label>
               </div>
             </RadioGroup>
