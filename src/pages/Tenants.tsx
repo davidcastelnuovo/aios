@@ -118,14 +118,13 @@ export default function Tenants() {
       return { tenantId, slug: tenantData?.slug };
     },
     onSuccess: ({ tenantId, slug }) => {
-      queryClient.invalidateQueries({ queryKey: ["current-tenant"] });
-      
+      // CRITICAL: Use window.location.href for full page reload
+      // React Router's navigate() doesn't refresh the page, which can leave 
+      // stale cached data and cause URL/state mismatch issues
       if (slug) {
-        // Navigate to the new tenant's tenants page
-        navigate(`/t/${slug}/tenants`);
+        window.location.href = `/t/${slug}/tenants`;
       } else {
-        // Fallback if no slug found
-        window.location.reload();
+        window.location.href = '/';
       }
     },
     onError: (error: any) => {
