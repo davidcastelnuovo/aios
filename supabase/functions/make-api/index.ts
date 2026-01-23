@@ -33,6 +33,7 @@ interface MakeAPIRequest {
   webhook_secret?: string;
   scenario_name?: string;
   template_scenario_id?: string;
+  campaign_type?: "leads" | "ecommerce";
 }
 
 // Make.com API base URLs per region
@@ -159,7 +160,8 @@ serve(async (req) => {
       webhook_url,
       webhook_secret,
       scenario_name,
-      template_scenario_id
+      template_scenario_id,
+      campaign_type = "leads"
     } = body;
 
     console.log(`Make API action: ${action}, team_id: ${team_id}, region: ${region}`);
@@ -546,8 +548,9 @@ serve(async (req) => {
         }
         
         // customer_id is already extracted from body at the top of the function
+        // campaign_type is also extracted from body
         
-        console.log(`Cloning template scenario: ${template_scenario_id}, customer_id: ${customer_id}`);
+        console.log(`Cloning template scenario: ${template_scenario_id}, customer_id: ${customer_id}, campaign_type: ${campaign_type}`);
         
         try {
           // Step 1: Get the template scenario details
@@ -577,19 +580,43 @@ serve(async (req) => {
           
           // Find and update modules in the flow
           if (blueprintData.flow && Array.isArray(blueprintData.flow)) {
+            // Define metrics based on campaign type
+            const metricsForLeads = [
+              "metrics.impressions",
+              "metrics.clicks", 
+              "metrics.cost_micros",
+              "metrics.conversions",
+              "metrics.ctr",
+              "metrics.average_cpc"
+            ];
+            
+            const metricsForEcommerce = [
+              "metrics.impressions",
+              "metrics.clicks",
+              "metrics.cost_micros",
+              "metrics.conversions",
+              "metrics.conversions_value",
+              "metrics.all_conversions",
+              "metrics.all_conversions_value"
+            ];
+            
+            const selectedMetrics = campaign_type === "ecommerce" ? metricsForEcommerce : metricsForLeads;
+            
             for (const module of blueprintData.flow) {
-              // Check if this is a Google Ads module - update customer_id
+              // Check if this is a Google Ads module - update customer_id and metrics
               if (customer_id && module.module && (
                 module.module.includes('google-ads') || 
                 module.module.includes('googleads') ||
                 module.module.includes('adwords')
               )) {
-                console.log("Found Google Ads module, updating customer_id");
+                console.log(`Found Google Ads module, updating customer_id and metrics for ${campaign_type}`);
                 if (module.mapper) {
                   // Format customer ID without dashes
                   const formattedCustomerId = customer_id.replace(/-/g, '');
                   module.mapper.customerId = formattedCustomerId;
                   module.mapper.customer_id = formattedCustomerId;
+                  // Update metrics based on campaign type
+                  module.mapper.metrics = selectedMetrics;
                 }
               }
               

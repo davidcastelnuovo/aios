@@ -5,7 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-webhook-secret",
 };
 
-interface GoogleAdsRecord {
+interface GoogleAdsLeadRecord {
   campaign_id: string;
   campaign_name: string;
   date: string;
@@ -16,6 +16,19 @@ interface GoogleAdsRecord {
   ctr: number;
   cpc: number;
   cost_per_conversion: number;
+}
+
+interface GoogleAdsEcommerceRecord {
+  campaign_id: string;
+  campaign_name: string;
+  date: string;
+  impressions: number;
+  clicks: number;
+  cost: number;
+  purchases: number;
+  purchase_value: number;
+  add_to_cart: number;
+  roas: number;
 }
 
 Deno.serve(async (req) => {
@@ -60,10 +73,15 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Get campaign type from integration settings
+    const integrationSettings = table.integration_settings as { campaign_type?: string } | null;
+    const campaignType = integrationSettings?.campaign_type || "leads";
+    
+    console.log(`Table campaign type: ${campaignType}`);
+
     // Verify webhook secret if configured
-    const integrationSettings = table.integration_settings as any;
-    if (integrationSettings?.webhook_secret) {
-      if (webhookSecret !== integrationSettings.webhook_secret) {
+    if (integrationSettings && (integrationSettings as any).webhook_secret) {
+      if (webhookSecret !== (integrationSettings as any).webhook_secret) {
         console.error("Invalid webhook secret");
         return new Response(
           JSON.stringify({ error: "Invalid webhook secret" }),
@@ -80,8 +98,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Define the expected fields for Google Ads data
-    const expectedFields = [
+    // Define the expected fields based on campaign type
+    const leadFields = [
       { key: "campaign_id", name: "מזהה קמפיין", type: "text" },
       { key: "campaign_name", name: "שם קמפיין", type: "text" },
       { key: "date", name: "תאריך", type: "date" },
@@ -93,6 +111,21 @@ Deno.serve(async (req) => {
       { key: "cpc", name: "CPC", type: "number" },
       { key: "cost_per_conversion", name: "עלות להמרה", type: "number" },
     ];
+
+    const ecommerceFields = [
+      { key: "campaign_id", name: "מזהה קמפיין", type: "text" },
+      { key: "campaign_name", name: "שם קמפיין", type: "text" },
+      { key: "date", name: "תאריך", type: "date" },
+      { key: "impressions", name: "חשיפות", type: "number" },
+      { key: "clicks", name: "קליקים", type: "number" },
+      { key: "cost", name: "עלות", type: "number" },
+      { key: "purchases", name: "רכישות", type: "number" },
+      { key: "purchase_value", name: "שווי רכישות", type: "number" },
+      { key: "add_to_cart", name: "הוספות לעגלה", type: "number" },
+      { key: "roas", name: "ROAS", type: "number" },
+    ];
+
+    const expectedFields = campaignType === "ecommerce" ? ecommerceFields : leadFields;
 
     // Ensure fields exist in crm_fields
     for (let i = 0; i < expectedFields.length; i++) {
@@ -137,19 +170,46 @@ Deno.serve(async (req) => {
     let updatedCount = 0;
     let insertedCount = 0;
 
-    for (const record of records as GoogleAdsRecord[]) {
-      const recordData = {
-        campaign_id: record.campaign_id || "",
-        campaign_name: record.campaign_name || "",
-        date: record.date || "",
-        impressions: Number(record.impressions) || 0,
-        clicks: Number(record.clicks) || 0,
-        cost: Number(record.cost) || 0,
-        conversions: Number(record.conversions) || 0,
-        ctr: Number(record.ctr) || 0,
-        cpc: Number(record.cpc) || 0,
-        cost_per_conversion: Number(record.cost_per_conversion) || 0,
-      };
+    for (const record of records) {
+      let recordData: Record<string, any>;
+      
+      if (campaignType === "ecommerce") {
+        // E-commerce record mapping
+        const cost = Number(record.cost) || Number(record.cost_micros) / 1000000 || 0;
+        const conversionsValue = Number(record.conversions_value) || Number(record.purchase_value) || 0;
+        const conversions = Number(record.conversions) || Number(record.purchases) || 0;
+        const allConversions = Number(record.all_conversions) || 0;
+        
+        recordData = {
+          campaign_id: record.campaign_id || record.id || "",
+          campaign_name: record.campaign_name || record.name || "",
+          date: record.date || "",
+          impressions: Number(record.impressions) || 0,
+          clicks: Number(record.clicks) || 0,
+          cost: cost,
+          purchases: conversions,
+          purchase_value: conversionsValue,
+          add_to_cart: Math.max(0, allConversions - conversions), // Estimate add to cart
+          roas: cost > 0 ? Number((conversionsValue / cost).toFixed(2)) : 0,
+        };
+      } else {
+        // Leads record mapping
+        const cost = Number(record.cost) || Number(record.cost_micros) / 1000000 || 0;
+        const conversions = Number(record.conversions) || 0;
+        
+        recordData = {
+          campaign_id: record.campaign_id || record.id || "",
+          campaign_name: record.campaign_name || record.name || "",
+          date: record.date || "",
+          impressions: Number(record.impressions) || 0,
+          clicks: Number(record.clicks) || 0,
+          cost: cost,
+          conversions: conversions,
+          ctr: Number(record.ctr) || 0,
+          cpc: Number(record.cpc) || Number(record.average_cpc) / 1000000 || 0,
+          cost_per_conversion: conversions > 0 ? Number((cost / conversions).toFixed(2)) : 0,
+        };
+      }
 
       // Check if record with same campaign_id and date already exists
       const { data: existingRecords } = await supabase
@@ -157,6 +217,9 @@ Deno.serve(async (req) => {
         .select("id, data")
         .eq("table_id", table_id);
 
+      // Check for matching record based on campaign type unique key
+      const uniqueKeyField = campaignType === "ecommerce" ? "campaign_id" : "campaign_id";
+      
       const existingRecord = existingRecords?.find((r: any) => {
         const data = r.data as any;
         return data?.campaign_id === recordData.campaign_id && data?.date === recordData.date;
