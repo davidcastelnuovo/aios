@@ -66,6 +66,14 @@ export default function RankTrackingProject() {
   const [selectedColumn, setSelectedColumn] = useState<string>("");
   const [allCsvData, setAllCsvData] = useState<Record<string, string>[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Scan progress state for batching
+  const [scanProgress, setScanProgress] = useState<{
+    current: number;
+    total: number;
+    scanned: number;
+    errors: number;
+  } | null>(null);
 
   // Fetch project
   const { data: project, isLoading: projectLoading } = useQuery({
@@ -161,38 +169,81 @@ export default function RankTrackingProject() {
     },
   });
 
-  // Scan mutation
+  // Scan mutation with batching to avoid timeout
+  const BATCH_SIZE = 10;
+  
   const scanMutation = useMutation({
     mutationFn: async (keywordIds?: string[]) => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/serpapi-search`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            action: "bulk_search",
-            projectId,
-            keywordIds,
-          }),
-        }
-      );
+      const idsToScan = keywordIds || keywords?.map(k => k.id) || [];
+      
+      if (idsToScan.length === 0) {
+        throw new Error("אין ביטויים לסריקה");
+      }
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Scan failed");
-      return data;
+      // Split into batches
+      const batches: string[][] = [];
+      for (let i = 0; i < idsToScan.length; i += BATCH_SIZE) {
+        batches.push(idsToScan.slice(i, i + BATCH_SIZE));
+      }
+
+      let totalChecked = 0;
+      let totalErrors = 0;
+
+      // Process each batch sequentially
+      for (let i = 0; i < batches.length; i++) {
+        setScanProgress({
+          current: i + 1,
+          total: batches.length,
+          scanned: totalChecked,
+          errors: totalErrors,
+        });
+
+        const response = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/serpapi-search`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              action: "bulk_search",
+              projectId,
+              keywordIds: batches[i],
+            }),
+          }
+        );
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+          console.error(`Batch ${i + 1} failed:`, data.error);
+          totalErrors += batches[i].length;
+        } else {
+          totalChecked += data.checked_count || 0;
+          totalErrors += data.error_count || 0;
+        }
+
+        // Refresh keywords data after each batch to show live progress
+        queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords", projectId] });
+      }
+
+      return { totalChecked, totalErrors };
     },
     onSuccess: (data) => {
-      toast.success(`סריקה הושלמה! נבדקו ${data.checked_count} ביטויים`);
+      setScanProgress(null);
+      const message = data.totalErrors > 0
+        ? `סריקה הושלמה! נבדקו ${data.totalChecked} ביטויים (${data.totalErrors} שגיאות)`
+        : `סריקה הושלמה! נבדקו ${data.totalChecked} ביטויים`;
+      toast.success(message);
       queryClient.invalidateQueries({ queryKey: ["rank-tracking-keywords", projectId] });
       queryClient.invalidateQueries({ queryKey: ["rank-tracking-project", projectId] });
     },
     onError: (error: Error) => {
+      setScanProgress(null);
       toast.error(error.message || "שגיאה בסריקה");
     },
   });
@@ -408,18 +459,28 @@ export default function RankTrackingProject() {
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {scanProgress && (
+            <span className="text-sm text-muted-foreground">
+              קבוצה {scanProgress.current}/{scanProgress.total} • נסרקו {scanProgress.scanned}
+            </span>
+          )}
           <Button
             variant="outline"
             onClick={() => scanMutation.mutate(undefined)}
             disabled={scanMutation.isPending || !keywords?.length}
           >
             {scanMutation.isPending ? (
-              <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
+              <>
+                <RefreshCw className="h-4 w-4 ml-2 animate-spin" />
+                סורק... {scanProgress ? `${scanProgress.current}/${scanProgress.total}` : ""}
+              </>
             ) : (
-              <Play className="h-4 w-4 ml-2" />
+              <>
+                <Play className="h-4 w-4 ml-2" />
+                סרוק הכל
+              </>
             )}
-            סרוק הכל
           </Button>
           <Dialog open={isAddOpen} onOpenChange={handleDialogClose}>
             <DialogTrigger asChild>
