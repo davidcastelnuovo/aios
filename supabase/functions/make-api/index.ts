@@ -387,7 +387,7 @@ serve(async (req) => {
         const scenarioBlueprint = {
           name: scenario_name || `Google Ads Sync - Table ${table_id.slice(0, 8)}`,
           teamId: parseInt(team_id || "0"),
-          scheduling: { type: "indefinitely" },
+          scheduling: JSON.stringify({ type: "indefinitely" }),
           blueprint: JSON.stringify({
             name: scenario_name || `Google Ads Sync`,
             flow: [
