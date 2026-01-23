@@ -19,11 +19,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, Webhook, Plug } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface GoogleAdsTableDialogProps {
@@ -38,6 +39,13 @@ interface GoogleAdsAccount {
   manager: boolean;
 }
 
+interface MakeConnection {
+  id: number;
+  name: string;
+  accountName?: string;
+  typeName?: string;
+}
+
 const dateRangeOptions = [
   { value: "today", label: "היום" },
   { value: "yesterday", label: "אתמול" },
@@ -48,11 +56,19 @@ const dateRangeOptions = [
   { value: "this_month", label: "החודש הנוכחי" },
 ];
 
+// Make.com icon
+const MakeIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="12" cy="12" r="10" fill="#6D29D9"/>
+    <path d="M8 12l3 3 5-6" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
 export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialogProps) {
   const navigate = useNavigate();
   const { buildPath } = useTenantPath();
   const queryClient = useQueryClient();
-  const { tenantId } = useCurrentTenant();
+  const { tenantId, tenant } = useCurrentTenant();
 
   const [tableName, setTableName] = useState("");
   const [selectedAccount, setSelectedAccount] = useState("");
@@ -61,6 +77,8 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
   const [accountSearch, setAccountSearch] = useState("");
   const [agencyId, setAgencyId] = useState<string>("");
   const [clientId, setClientId] = useState<string>("");
+  const [dataSource, setDataSource] = useState<"make_api" | "direct_api" | "webhook">("make_api");
+  const [selectedMakeConnection, setSelectedMakeConnection] = useState("");
 
   // Fetch agencies
   const { data: agencies = [] } = useQuery({
@@ -94,12 +112,86 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
     enabled: open && !!agencyId,
   });
 
+  // Fetch Make API integration
+  const { data: makeApiIntegration } = useQuery({
+    queryKey: ['make-api-integration', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return null;
+      const { data, error } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('integration_type', 'make_api')
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: open && !!tenantId,
+  });
+
+  // Fetch Google Ads via Make integration
+  const { data: googleAdsViaMakeIntegration } = useQuery({
+    queryKey: ['google-ads-via-make-integration', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return null;
+      const { data, error } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('integration_type', 'google_ads_via_make')
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: open && !!tenantId,
+  });
+
+  const makeApiSettings = makeApiIntegration?.settings as { 
+    api_token?: string; 
+    team_id?: string; 
+    region?: string;
+  } | null;
+
+  const isMakeApiConnected = makeApiIntegration?.is_active && makeApiSettings?.api_token;
+  const isViaMakeConnected = googleAdsViaMakeIntegration?.is_active;
+
+  // Fetch Google Ads connections from Make.com
+  const { data: makeConnections = [], isLoading: loadingMakeConnections } = useQuery({
+    queryKey: ['make-google-ads-connections-dialog', tenantId],
+    queryFn: async () => {
+      if (!makeApiSettings?.api_token || !makeApiSettings?.team_id) return [];
+      
+      const { data, error } = await supabase.functions.invoke('make-api', {
+        body: {
+          action: 'list_google_ads_connections',
+          api_token: makeApiSettings.api_token,
+          team_id: makeApiSettings.team_id,
+          region: makeApiSettings.region || 'eu1',
+        },
+      });
+      
+      if (error) throw error;
+      return data?.connections || [];
+    },
+    enabled: open && !!isMakeApiConnected && dataSource === 'make_api',
+  });
+
+  // Pre-select Make connection if already saved
+  useEffect(() => {
+    if (isViaMakeConnected) {
+      const savedSettings = googleAdsViaMakeIntegration?.settings as { connection_id?: string } | null;
+      if (savedSettings?.connection_id) {
+        setSelectedMakeConnection(savedSettings.connection_id);
+      }
+    }
+  }, [googleAdsViaMakeIntegration, isViaMakeConnected]);
+
   // Reset client when agency changes
   useEffect(() => {
     setClientId("");
   }, [agencyId]);
 
-  // Check if Google Ads is connected
+  // Check if Google Ads is connected (direct API)
   const { data: googleAdsStatus, isLoading: checkingConnection } = useQuery({
     queryKey: ['google-ads-connection-status'],
     queryFn: async () => {
@@ -109,10 +201,10 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
       if (response.error) throw response.error;
       return response.data;
     },
-    enabled: open,
+    enabled: open && dataSource === 'direct_api',
   });
 
-  // Fetch Google Ads accounts
+  // Fetch Google Ads accounts (direct API)
   const { data: accountsData, isLoading: loadingAccounts, error: accountsError } = useQuery({
     queryKey: ['google-ads-accounts'],
     queryFn: async () => {
@@ -122,7 +214,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
       if (response.error) throw response.error;
       return response.data;
     },
-    enabled: open && googleAdsStatus?.is_connected,
+    enabled: open && dataSource === 'direct_api' && googleAdsStatus?.is_connected,
   });
 
   const accounts: GoogleAdsAccount[] = accountsData?.accounts || [];
@@ -137,7 +229,33 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
         .replace(/[^a-z0-9\u0590-\u05FF-]/g, '')
         + '-' + Date.now().toString(36);
 
-      const selectedAcc = accounts.find(acc => acc.id === selectedAccount);
+      let integrationSettings: Record<string, any> = {
+        date_range: dateRange,
+        sync_frequency: 'daily',
+        data_source: dataSource,
+      };
+
+      if (dataSource === 'make_api') {
+        const selectedConn = (makeConnections as MakeConnection[]).find(
+          c => c.id.toString() === selectedMakeConnection
+        );
+        integrationSettings = {
+          ...integrationSettings,
+          make_connection_id: selectedMakeConnection,
+          make_connection_name: selectedConn?.name || selectedConn?.accountName || '',
+          make_team_id: makeApiSettings?.team_id,
+          make_region: makeApiSettings?.region || 'eu1',
+        };
+      } else if (dataSource === 'direct_api') {
+        const selectedAcc = accounts.find(acc => acc.id === selectedAccount);
+        integrationSettings = {
+          ...integrationSettings,
+          customer_id: selectedAccount,
+          account_name: selectedAcc?.name || '',
+          currency: selectedAcc?.currency || 'ILS',
+        };
+      }
+      // For webhook, we just set the data_source and let the user configure via Make.com
 
       const response = await supabase.functions.invoke('crm-tables', {
         method: 'POST',
@@ -146,13 +264,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
           slug,
           category: category || 'Google Ads',
           integration_type: 'google_ads',
-          integration_settings: {
-            customer_id: selectedAccount,
-            account_name: selectedAcc?.name || '',
-            currency: selectedAcc?.currency || 'ILS',
-            date_range: dateRange,
-            sync_frequency: 'daily',
-          },
+          integration_settings: integrationSettings,
           agency_id: agencyId || null,
           client_id: clientId || null,
         },
@@ -165,17 +277,21 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       toast.success('טבלת Google Ads נוצרה בהצלחה');
       
-      // Trigger initial sync
-      try {
-        toast.info('מסנכרן נתונים מ-Google Ads...');
-        await supabase.functions.invoke('sync-google-ads-data', {
-          method: 'POST',
-          body: { table_id: data.id },
-        });
-        toast.success('הנתונים סונכרנו בהצלחה');
-      } catch (err) {
-        console.error('Initial sync failed:', err);
-        toast.error('הטבלה נוצרה אך הסנכרון נכשל - נסה לסנכרן ידנית');
+      // Trigger initial sync only for direct API
+      if (dataSource === 'direct_api') {
+        try {
+          toast.info('מסנכרן נתונים מ-Google Ads...');
+          await supabase.functions.invoke('sync-google-ads-data', {
+            method: 'POST',
+            body: { table_id: data.id },
+          });
+          toast.success('הנתונים סונכרנו בהצלחה');
+        } catch (err) {
+          console.error('Initial sync failed:', err);
+          toast.error('הטבלה נוצרה אך הסנכרון נכשל - נסה לסנכרן ידנית');
+        }
+      } else if (dataSource === 'make_api' || dataSource === 'webhook') {
+        toast.info('הטבלה נוצרה. הגדר Scenario ב-Make.com כדי לסנכרן נתונים.');
       }
 
       handleClose();
@@ -192,10 +308,17 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
       toast.error('יש להזין שם לטבלה');
       return;
     }
-    if (!selectedAccount) {
+    
+    if (dataSource === 'direct_api' && !selectedAccount) {
       toast.error('יש לבחור חשבון Google Ads');
       return;
     }
+    
+    if (dataSource === 'make_api' && !selectedMakeConnection) {
+      toast.error('יש לבחור חיבור Google Ads מ-Make.com');
+      return;
+    }
+    
     createMutation.mutate();
   };
 
@@ -207,14 +330,23 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
     setAccountSearch("");
     setAgencyId("");
     setClientId("");
+    setDataSource("make_api");
+    setSelectedMakeConnection("");
     onOpenChange(false);
   };
 
-  const isConnected = googleAdsStatus?.is_connected;
+  const isDirectApiConnected = googleAdsStatus?.is_connected;
+
+  // Determine if the form is ready to submit
+  const canSubmit = tableName.trim() && (
+    (dataSource === 'make_api' && selectedMakeConnection) ||
+    (dataSource === 'direct_api' && selectedAccount) ||
+    (dataSource === 'webhook')
+  );
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
@@ -227,170 +359,303 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
           </DialogDescription>
         </DialogHeader>
 
-        {checkingConnection ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin" />
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Data Source Selection */}
+          <div className="space-y-3">
+            <Label>מקור נתונים</Label>
+            <RadioGroup 
+              value={dataSource} 
+              onValueChange={(v) => setDataSource(v as any)}
+              className="grid grid-cols-1 gap-2"
+            >
+              <div className="flex items-center space-x-2 space-x-reverse border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
+                <RadioGroupItem value="make_api" id="make_api" />
+                <Label htmlFor="make_api" className="flex items-center gap-2 cursor-pointer flex-1">
+                  <MakeIcon className="h-4 w-4" />
+                  <div>
+                    <div className="font-medium">חיבור דרך Make.com API</div>
+                    <div className="text-xs text-muted-foreground">מומלץ - ללא צורך ב-Developer Token</div>
+                  </div>
+                </Label>
+              </div>
+              
+              <div className="flex items-center space-x-2 space-x-reverse border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
+                <RadioGroupItem value="webhook" id="webhook" />
+                <Label htmlFor="webhook" className="flex items-center gap-2 cursor-pointer flex-1">
+                  <Webhook className="h-4 w-4" />
+                  <div>
+                    <div className="font-medium">Webhook מ-Make.com</div>
+                    <div className="text-xs text-muted-foreground">שליטה מלאה על הנתונים</div>
+                  </div>
+                </Label>
+              </div>
+              
+              <div className="flex items-center space-x-2 space-x-reverse border rounded-lg p-3 cursor-pointer hover:bg-muted/50">
+                <RadioGroupItem value="direct_api" id="direct_api" />
+                <Label htmlFor="direct_api" className="flex items-center gap-2 cursor-pointer flex-1">
+                  <Plug className="h-4 w-4" />
+                  <div>
+                    <div className="font-medium">API ישיר</div>
+                    <div className="text-xs text-muted-foreground">דורש Developer Token מאושר</div>
+                  </div>
+                </Label>
+              </div>
+            </RadioGroup>
           </div>
-        ) : !isConnected ? (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              האינטגרציה עם Google Ads לא מוגדרת. יש להתחבר תחילה בדף{" "}
-              <Button 
-                variant="link" 
-                className="p-0 h-auto" 
-                onClick={() => {
-                  handleClose();
-                  navigate(buildPath('/integrations'));
-                }}
-              >
-                אינטגרציות
-              </Button>
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="table-name">שם הטבלה</Label>
-              <Input
-                id="table-name"
-                value={tableName}
-                onChange={(e) => setTableName(e.target.value)}
-                placeholder="למשל: ניתוח קמפיינים גוגל דצמבר"
-                autoFocus
-              />
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="account">חשבון Google Ads</Label>
-              {loadingAccounts ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  טוען חשבונות...
-                </div>
-              ) : accountsError ? (
+          {/* Table Name */}
+          <div className="space-y-2">
+            <Label htmlFor="table-name">שם הטבלה</Label>
+            <Input
+              id="table-name"
+              value={tableName}
+              onChange={(e) => setTableName(e.target.value)}
+              placeholder="למשל: ניתוח קמפיינים גוגל דצמבר"
+              autoFocus
+            />
+          </div>
+
+          {/* Make API Source */}
+          {dataSource === 'make_api' && (
+            <>
+              {!isMakeApiConnected ? (
                 <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    שגיאה בטעינת חשבונות: {(accountsError as any)?.message}
+                    יש להגדיר תחילה את אינטגרציית Make.com בדף{" "}
+                    <Button 
+                      variant="link" 
+                      className="p-0 h-auto" 
+                      onClick={() => {
+                        handleClose();
+                        navigate(buildPath('/make-settings'));
+                      }}
+                    >
+                      הגדרות Make
+                    </Button>
                   </AlertDescription>
                 </Alert>
-              ) : accounts.length === 0 ? (
+              ) : loadingMakeConnections ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  טוען חיבורי Google Ads מ-Make.com...
+                </div>
+              ) : makeConnections.length === 0 ? (
                 <Alert>
+                  <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    לא נמצאו חשבונות Google Ads
+                    לא נמצאו חיבורי Google Ads ב-Make.com.{" "}
+                    <Button 
+                      variant="link" 
+                      className="p-0 h-auto" 
+                      onClick={() => {
+                        handleClose();
+                        navigate(buildPath('/google-ads-settings'));
+                      }}
+                    >
+                      הגדר חיבור
+                    </Button>
                   </AlertDescription>
                 </Alert>
               ) : (
-                <>
-                  <Input
-                    placeholder="חפש חשבון..."
-                    value={accountSearch}
-                    onChange={(e) => setAccountSearch(e.target.value)}
-                    className="mb-2"
-                  />
-                  <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+                <div className="space-y-2">
+                  <Label>בחר חשבון Google Ads מ-Make.com</Label>
+                  <Select value={selectedMakeConnection} onValueChange={setSelectedMakeConnection}>
                     <SelectTrigger>
-                      <SelectValue placeholder="בחר חשבון" />
+                      <SelectValue placeholder="בחר חשבון..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {accounts
-                        .filter((account) => 
-                          account.name?.toLowerCase().includes(accountSearch.toLowerCase()) ||
-                          account.id?.includes(accountSearch)
-                        )
-                        .map((account) => (
-                          <SelectItem key={account.id} value={account.id}>
-                            {account.name} ({account.currency}) {account.manager ? '(MCC)' : ''}
-                          </SelectItem>
-                        ))}
+                      {(makeConnections as MakeConnection[]).map((conn) => (
+                        <SelectItem key={conn.id} value={conn.id.toString()}>
+                          {conn.name || conn.accountName || `חיבור ${conn.id}`}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                </>
+                </div>
               )}
-            </div>
+            </>
+          )}
 
+          {/* Webhook Source */}
+          {dataSource === 'webhook' && (
+            <Alert className="border-purple-200 bg-purple-50">
+              <MakeIcon className="h-4 w-4" />
+              <AlertDescription className="text-purple-800">
+                לאחר יצירת הטבלה, העתק את ה-table_id מכתובת הדף והגדר Scenario ב-Make.com 
+                שישלח נתונים ל-Webhook. ראה הוראות מפורטות בדף{" "}
+                <Button 
+                  variant="link" 
+                  className="p-0 h-auto text-purple-800 underline" 
+                  onClick={() => {
+                    handleClose();
+                    navigate(buildPath('/google-ads-settings'));
+                  }}
+                >
+                  הגדרות Google Ads
+                </Button>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Direct API Source */}
+          {dataSource === 'direct_api' && (
+            <>
+              {checkingConnection ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              ) : !isDirectApiConnected ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    האינטגרציה עם Google Ads לא מוגדרת. יש להתחבר תחילה בדף{" "}
+                    <Button 
+                      variant="link" 
+                      className="p-0 h-auto" 
+                      onClick={() => {
+                        handleClose();
+                        navigate(buildPath('/google-ads-settings'));
+                      }}
+                    >
+                      הגדרות Google Ads
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="account">חשבון Google Ads</Label>
+                  {loadingAccounts ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      טוען חשבונות...
+                    </div>
+                  ) : accountsError ? (
+                    <Alert variant="destructive">
+                      <AlertDescription>
+                        שגיאה בטעינת חשבונות: {(accountsError as any)?.message}
+                      </AlertDescription>
+                    </Alert>
+                  ) : accounts.length === 0 ? (
+                    <Alert>
+                      <AlertDescription>
+                        לא נמצאו חשבונות Google Ads
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    <>
+                      <Input
+                        placeholder="חפש חשבון..."
+                        value={accountSearch}
+                        onChange={(e) => setAccountSearch(e.target.value)}
+                        className="mb-2"
+                      />
+                      <Select value={selectedAccount} onValueChange={setSelectedAccount}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="בחר חשבון" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {accounts
+                            .filter((account) => 
+                              account.name?.toLowerCase().includes(accountSearch.toLowerCase()) ||
+                              account.id?.includes(accountSearch)
+                            )
+                            .map((account) => (
+                              <SelectItem key={account.id} value={account.id}>
+                                {account.name} ({account.currency}) {account.manager ? '(MCC)' : ''}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Date Range - for all sources */}
+          <div className="space-y-2">
+            <Label htmlFor="date-range">טווח תאריכים לסנכרון</Label>
+            <Select value={dateRange} onValueChange={setDateRange}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {dateRangeOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="category">קטגוריה (אופציונלי)</Label>
+            <Input
+              id="category"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              placeholder="Google Ads"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>שיוך לסוכנות (אופציונלי)</Label>
+            <Select value={agencyId || "__none__"} onValueChange={(v) => setAgencyId(v === "__none__" ? "" : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="ללא שיוך - כל הסוכנויות" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">ללא שיוך - כל הסוכנויות</SelectItem>
+                {agencies.map((agency) => (
+                  <SelectItem key={agency.id} value={agency.id}>
+                    {agency.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {agencyId && (
             <div className="space-y-2">
-              <Label htmlFor="date-range">טווח תאריכים לסנכרון</Label>
-              <Select value={dateRange} onValueChange={setDateRange}>
+              <Label>שיוך ללקוח (אופציונלי)</Label>
+              <Select value={clientId || "__none__"} onValueChange={(v) => setClientId(v === "__none__" ? "" : v)}>
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="ללא שיוך - כל הלקוחות" />
                 </SelectTrigger>
                 <SelectContent>
-                  {dateRangeOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
+                  <SelectItem value="__none__">ללא שיוך - כל הלקוחות</SelectItem>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+          )}
 
-            <div className="space-y-2">
-              <Label htmlFor="category">קטגוריה (אופציונלי)</Label>
-              <Input
-                id="category"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                placeholder="Google Ads"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>שיוך לסוכנות (אופציונלי)</Label>
-              <Select value={agencyId || "__none__"} onValueChange={(v) => setAgencyId(v === "__none__" ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="ללא שיוך - כל הסוכנויות" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">ללא שיוך - כל הסוכנויות</SelectItem>
-                  {agencies.map((agency) => (
-                    <SelectItem key={agency.id} value={agency.id}>
-                      {agency.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {agencyId && (
-              <div className="space-y-2">
-                <Label>שיוך ללקוח (אופציונלי)</Label>
-                <Select value={clientId || "__none__"} onValueChange={(v) => setClientId(v === "__none__" ? "" : v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="ללא שיוך - כל הלקוחות" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">ללא שיוך - כל הלקוחות</SelectItem>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleClose}>
-                ביטול
-              </Button>
-              <Button 
-                type="submit" 
-                disabled={createMutation.isPending || !selectedAccount}
-              >
-                {createMutation.isPending ? (
-                  <>
-                    <Loader2 className="ml-2 h-4 w-4 animate-spin" />
-                    יוצר...
-                  </>
-                ) : (
-                  'צור טבלה'
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
-        )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={handleClose}>
+              ביטול
+            </Button>
+            <Button 
+              type="submit" 
+              disabled={createMutation.isPending || !canSubmit}
+            >
+              {createMutation.isPending ? (
+                <>
+                  <Loader2 className="ml-2 h-4 w-4 animate-spin" />
+                  יוצר...
+                </>
+              ) : (
+                'צור טבלה'
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
