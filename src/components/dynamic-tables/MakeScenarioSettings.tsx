@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,22 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { toast } from "sonner";
-import { RefreshCw, Play, ExternalLink, Clock, Save } from "lucide-react";
+import { RefreshCw, Play, ExternalLink, Clock, Save, Search } from "lucide-react";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface MakeScenarioSettingsProps {
   table: {
@@ -42,6 +57,8 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
   const [scenarioId, setScenarioId] = useState(settings.make_scenario_id || "");
   const [syncSchedule, setSyncSchedule] = useState(settings.sync_schedule || "manual");
   const [hasChanges, setHasChanges] = useState(false);
+  const [scenarioOpen, setScenarioOpen] = useState(false);
+  const [scenarioSearch, setScenarioSearch] = useState("");
 
   // Check for changes
   useEffect(() => {
@@ -185,18 +202,59 @@ export function MakeScenarioSettings({ table, onSync, isSyncing }: MakeScenarioS
               טוען סנריואים...
             </div>
           ) : scenarios.length > 0 ? (
-            <Select value={scenarioId} onValueChange={setScenarioId}>
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="בחר סנריו מ-Make.com" />
-              </SelectTrigger>
-              <SelectContent>
-                {scenarios.map((scenario: any) => (
-                  <SelectItem key={scenario.id} value={String(scenario.id)}>
-                    {scenario.name} (#{scenario.id})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Popover open={scenarioOpen} onOpenChange={setScenarioOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={scenarioOpen}
+                  className="flex-1 justify-between"
+                >
+                  {scenarioId
+                    ? scenarios.find((s: any) => String(s.id) === scenarioId)?.name || `סנריו #${scenarioId}`
+                    : "בחר סנריו מ-Make.com"}
+                  <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[400px] p-0" align="start">
+                <Command>
+                  <CommandInput 
+                    placeholder="חפש לפי שם..." 
+                    value={scenarioSearch}
+                    onValueChange={setScenarioSearch}
+                  />
+                  <CommandList>
+                    <CommandEmpty>לא נמצאו סנריואים</CommandEmpty>
+                    <CommandGroup>
+                      {scenarios
+                        .filter((scenario: any) => 
+                          scenario.name.toLowerCase().includes(scenarioSearch.toLowerCase()) ||
+                          String(scenario.id).includes(scenarioSearch)
+                        )
+                        .map((scenario: any) => (
+                          <CommandItem
+                            key={scenario.id}
+                            value={`${scenario.name} ${scenario.id}`}
+                            onSelect={() => {
+                              setScenarioId(String(scenario.id));
+                              setScenarioOpen(false);
+                              setScenarioSearch("");
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "ml-2 h-4 w-4",
+                                scenarioId === String(scenario.id) ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {scenario.name} (#{scenario.id})
+                          </CommandItem>
+                        ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           ) : (
             <Input
               value={scenarioId}
