@@ -19,7 +19,8 @@ interface MakeAPIRequest {
     | "create_google_ads_scenario"
     | "run_and_sync_google_ads"
     | "clone_scenario"
-    | "get_scenario_blueprint";
+    | "get_scenario_blueprint"
+    | "activate_scenario";
   api_token?: string;
   team_id?: string;
   region?: string;
@@ -264,6 +265,32 @@ serve(async (req) => {
           data
         );
         result = runResult;
+        break;
+      }
+
+      case "activate_scenario": {
+        if (!scenario_id) {
+          return new Response(
+            JSON.stringify({ error: "Scenario ID is required" }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        // Activate a scenario so it can be run
+        try {
+          console.log(`Activating scenario ${scenario_id}...`);
+          const activateResult = await makeAPICall(
+            api_token,
+            region,
+            `/scenarios/${scenario_id}/start`,
+            "POST"
+          );
+          result = { success: true, message: "Scenario activated successfully", ...activateResult };
+        } catch (activateError) {
+          if (activateError instanceof MakeApiError) {
+            throw activateError;
+          }
+          throw new Error(`Failed to activate scenario: ${activateError}`);
+        }
         break;
       }
 
