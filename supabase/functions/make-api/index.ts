@@ -523,7 +523,7 @@ serve(async (req) => {
       }
 
       case "clone_scenario": {
-        // Clone a template scenario with modified webhook URL and table_id
+        // Clone a template scenario with modified webhook URL, table_id and customer_id
         if (!template_scenario_id) {
           return new Response(
             JSON.stringify({ error: "Template Scenario ID is required" }),
@@ -545,7 +545,9 @@ serve(async (req) => {
           );
         }
         
-        console.log(`Cloning template scenario: ${template_scenario_id}`);
+        // customer_id is already extracted from body at the top of the function
+        
+        console.log(`Cloning template scenario: ${template_scenario_id}, customer_id: ${customer_id}`);
         
         try {
           // Step 1: Get the template scenario details
@@ -573,10 +575,25 @@ serve(async (req) => {
             blueprintData = JSON.parse(blueprintResponse);
           }
           
-          // Find and update the HTTP module in the flow
+          // Find and update modules in the flow
           if (blueprintData.flow && Array.isArray(blueprintData.flow)) {
             for (const module of blueprintData.flow) {
-              // Check if this is an HTTP module
+              // Check if this is a Google Ads module - update customer_id
+              if (customer_id && module.module && (
+                module.module.includes('google-ads') || 
+                module.module.includes('googleads') ||
+                module.module.includes('adwords')
+              )) {
+                console.log("Found Google Ads module, updating customer_id");
+                if (module.mapper) {
+                  // Format customer ID without dashes
+                  const formattedCustomerId = customer_id.replace(/-/g, '');
+                  module.mapper.customerId = formattedCustomerId;
+                  module.mapper.customer_id = formattedCustomerId;
+                }
+              }
+              
+              // Check if this is an HTTP module - update webhook URL and table_id
               if (module.module && (
                 module.module.includes('http:') || 
                 module.module === 'http:ActionMakeRequest' ||
