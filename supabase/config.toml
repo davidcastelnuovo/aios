@@ -137,3 +137,6 @@ verify_jwt = false
 
 [functions.make-api]
 verify_jwt = true
+
+[functions.sync-facebook-ecommerce]
+verify_jwt = true

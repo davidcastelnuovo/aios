@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon, Sparkles, Info, Copy, Loader2, AlertCircle, Play } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon, Sparkles, Info, Copy, Loader2, AlertCircle, Play, ShoppingCart } from "lucide-react";
 import { AIAnalysisDialog } from "@/components/dynamic-tables/AIAnalysisDialog";
 import { format, subDays, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { he } from "date-fns/locale";
@@ -457,7 +457,13 @@ export default function DynamicTableView() {
   const syncFacebookMutation = useMutation({
     mutationFn: async () => {
       if (!table?.id) throw new Error('No table');
-      const response = await supabase.functions.invoke('sync-facebook-insights', {
+      
+      // Determine which sync function to use based on integration type
+      const syncFunction = table?.integration_type === 'facebook_ecommerce' 
+        ? 'sync-facebook-ecommerce' 
+        : 'sync-facebook-insights';
+      
+      const response = await supabase.functions.invoke(syncFunction, {
         method: 'POST',
         body: { table_id: table.id },
       });
@@ -467,7 +473,8 @@ export default function DynamicTableView() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
-      toast.success(`נתוני פייסבוק סונכרנו בהצלחה (${data.records_synced} שורות)`);
+      const typeLabel = table?.integration_type === 'facebook_ecommerce' ? 'נתוני מכירות מפייסבוק' : 'נתוני פייסבוק';
+      toast.success(`${typeLabel} סונכרנו בהצלחה (${data.records_synced} שורות)`);
     },
     onError: (error: any) => {
       toast.error('שגיאה בסנכרון מפייסבוק: ' + error.message);
@@ -1137,6 +1144,8 @@ export default function DynamicTableView() {
   
   // Determine which integrations are connected
   const hasFacebook = table?.integration_type === 'facebook_insights';
+  const hasFacebookEcommerce = table?.integration_type === 'facebook_ecommerce';
+  const hasAnyFacebook = hasFacebook || hasFacebookEcommerce;
   const hasGoogleAds = table?.integration_type === 'google_ads';
   const hasGoogleAnalytics = table?.integration_type === 'google_analytics';
   const hasGoogleSearchConsole = table?.integration_type === 'google_search_console';
@@ -1314,7 +1323,7 @@ export default function DynamicTableView() {
             חזור
           </Button>
         
-          {/* Facebook Sync Controls */}
+          {/* Facebook Insights Sync Controls */}
           {hasFacebook && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center">
               <Button 
@@ -1345,6 +1354,33 @@ export default function DynamicTableView() {
                 title="הגדרות התראות"
               >
                 <Bell className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+
+          {/* Facebook Ecommerce Sync Controls */}
+          {hasFacebookEcommerce && (
+            <div className="flex items-center gap-2 w-full md:w-auto justify-center">
+              <Button 
+                variant="outline" 
+                onClick={() => syncFacebookMutation.mutate()}
+                disabled={syncFacebookMutation.isPending}
+                className="flex-1 md:flex-none gap-2"
+              >
+                <ShoppingCart className="h-4 w-4 text-green-600" />
+                <RefreshCw className={`h-4 w-4 ${syncFacebookMutation.isPending ? 'animate-spin' : ''}`} />
+                {syncFacebookMutation.isPending ? 'מסנכרן מכירות...' : 'סנכרן מכירות'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="icon"
+                onClick={() => {
+                  setSelectedAdAccount(table.integration_settings?.ad_account_id || '');
+                  setSelectedSyncDateRange(table.integration_settings?.date_range || 'last_30_days');
+                  setShowSettingsDialog(true);
+                }}
+              >
+                <Settings className="h-4 w-4" />
               </Button>
             </div>
           )}
@@ -1471,7 +1507,7 @@ export default function DynamicTableView() {
           )}
           
           {/* Campaign Search Filter - Only for Facebook/Google Ads tables */}
-          {(hasFacebook || hasGoogleAds) && (
+          {(hasAnyFacebook || hasGoogleAds) && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center">
               <div className="relative">
                 <SearchIcon className="h-4 w-4 text-muted-foreground absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1830,6 +1866,102 @@ export default function DynamicTableView() {
           })()}
         </Card>
       )}
+
+      {/* Summary Stats for Facebook Ecommerce */}
+      {hasFacebookEcommerce && filteredRecords && filteredRecords.length > 0 && (
+        <Card className="mb-4 overflow-hidden">
+          {(() => {
+            // Group records by campaign_name
+            const campaignGroups = filteredRecords.reduce((acc, record) => {
+              const campaignName = String(record.data?.campaign_name || 'ללא קמפיין');
+              if (!acc[campaignName]) {
+                acc[campaignName] = { 
+                  impressions: 0, 
+                  clicks: 0, 
+                  spend: 0, 
+                  purchases: 0, 
+                  purchase_value: 0,
+                  add_to_cart: 0,
+                };
+              }
+              acc[campaignName].impressions += Number(record.data?.impressions) || 0;
+              acc[campaignName].clicks += Number(record.data?.clicks) || 0;
+              acc[campaignName].spend += Number(record.data?.spend) || 0;
+              acc[campaignName].purchases += Number(record.data?.purchases) || 0;
+              acc[campaignName].purchase_value += Number(record.data?.purchase_value) || 0;
+              acc[campaignName].add_to_cart += Number(record.data?.add_to_cart) || 0;
+              return acc;
+            }, {} as Record<string, { impressions: number; clicks: number; spend: number; purchases: number; purchase_value: number; add_to_cart: number }>);
+
+            const totals = Object.values(campaignGroups).reduce((acc, campaign) => ({
+              impressions: acc.impressions + campaign.impressions,
+              clicks: acc.clicks + campaign.clicks,
+              spend: acc.spend + campaign.spend,
+              purchases: acc.purchases + campaign.purchases,
+              purchase_value: acc.purchase_value + campaign.purchase_value,
+              add_to_cart: acc.add_to_cart + campaign.add_to_cart,
+            }), { impressions: 0, clicks: 0, spend: 0, purchases: 0, purchase_value: 0, add_to_cart: 0 });
+
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" dir="rtl">
+                  <thead className="bg-muted/50 border-b">
+                    <tr>
+                      <th className="p-2 text-right font-medium">קמפיין</th>
+                      <th className="p-2 text-center font-medium">חשיפות</th>
+                      <th className="p-2 text-center font-medium">קליקים</th>
+                      <th className="p-2 text-center font-medium">הוצאה</th>
+                      <th className="p-2 text-center font-medium">הוספות לעגלה</th>
+                      <th className="p-2 text-center font-medium">רכישות</th>
+                      <th className="p-2 text-center font-medium">ערך רכישות</th>
+                      <th className="p-2 text-center font-medium">ROAS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const currency = table.integration_settings?.currency === 'USD' ? '$' : '₪';
+                      return Object.entries(campaignGroups).map(([campaignName, data]) => {
+                        const roas = data.spend > 0 ? data.purchase_value / data.spend : 0;
+                        return (
+                          <tr key={campaignName} className="border-b hover:bg-muted/30">
+                            <td className="p-2 text-right font-medium">{campaignName}</td>
+                            <td className="p-2 text-center">{data.impressions.toLocaleString('he-IL')}</td>
+                            <td className="p-2 text-center">{data.clicks.toLocaleString('he-IL')}</td>
+                            <td className="p-2 text-center">{currency}{data.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                            <td className="p-2 text-center text-orange-600">{data.add_to_cart.toLocaleString('he-IL')}</td>
+                            <td className="p-2 text-center text-green-600 font-medium">{data.purchases.toLocaleString('he-IL')}</td>
+                            <td className="p-2 text-center text-green-600">{currency}{data.purchase_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                            <td className="p-2 text-center text-blue-600 font-medium">{roas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                  <tfoot className="bg-primary/10 font-bold">
+                    {(() => {
+                      const currency = table.integration_settings?.currency === 'USD' ? '$' : '₪';
+                      const totalRoas = totals.spend > 0 ? totals.purchase_value / totals.spend : 0;
+                      return (
+                        <tr>
+                          <td className="p-2 text-right">סה״כ</td>
+                          <td className="p-2 text-center">{totals.impressions.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center">{totals.clicks.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center">{currency}{totals.spend.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                          <td className="p-2 text-center text-orange-600">{totals.add_to_cart.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center text-green-600">{totals.purchases.toLocaleString('he-IL')}</td>
+                          <td className="p-2 text-center text-green-600">{currency}{totals.purchase_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
+                          <td className="p-2 text-center text-blue-600">{totalRoas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
+                        </tr>
+                      );
+                    })()}
+                  </tfoot>
+                </table>
+              </div>
+            );
+          })()}
+        </Card>
+      )}
+
 
       {/* Summary Stats for Google Ads */}
       {hasGoogleAds && filteredRecords && filteredRecords.length > 0 && (
