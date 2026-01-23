@@ -101,6 +101,7 @@ export default function DynamicTableView() {
   const [showGoogleSettingsDialog, setShowGoogleSettingsDialog] = useState(false);
   const [selectedGoogleAccount, setSelectedGoogleAccount] = useState<string>("");
   const [showAlertsDialog, setShowAlertsDialog] = useState(false);
+  const [showMakeWebhookDialog, setShowMakeWebhookDialog] = useState(false);
   const [campaignSearch, setCampaignSearch] = useState("");
   const cellInputRef = useRef<HTMLInputElement>(null);
 
@@ -923,14 +924,14 @@ export default function DynamicTableView() {
           {hasGoogleAds && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center">
               {isGoogleAdsMakeTable ? (
-                // For Make.com tables, show info button instead of sync
+                // For Make.com tables, show button that opens webhook info dialog
                 <Button 
                   variant="outline" 
-                  onClick={() => toast.info('טבלה זו משתמשת ב-Make.com לסנכרון נתונים. הגדר Scenario ב-Make.com כדי לסנכרן את הנתונים.')}
+                  onClick={() => setShowMakeWebhookDialog(true)}
                   className="flex-1 md:flex-none gap-2"
                 >
                   <GoogleAdsIcon className="h-4 w-4" />
-                  <span>סנכרון דרך Make.com</span>
+                  <span>הגדרות סנכרון Make.com</span>
                 </Button>
               ) : (
                 // For Direct API tables, show sync button
@@ -1683,6 +1684,126 @@ export default function DynamicTableView() {
           </div>
         </div>
       )}
+
+      {/* Make.com Webhook Info Dialog for Google Ads */}
+      <Dialog open={showMakeWebhookDialog} onOpenChange={setShowMakeWebhookDialog}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <GoogleAdsIcon className="h-5 w-5" />
+              הגדרות סנכרון Google Ads דרך Make.com
+            </DialogTitle>
+            <DialogDescription>
+              כדי לסנכרן נתונים מ-Google Ads, הגדר Scenario ב-Make.com שישלח נתונים ל-Webhook הבא
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Webhook URL */}
+            <div className="space-y-2">
+              <Label>Webhook URL</Label>
+              <div className="flex gap-2">
+                <Input 
+                  readOnly 
+                  value={`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`}
+                  dir="ltr"
+                  className="text-left text-xs font-mono"
+                />
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`);
+                    toast.success('URL הועתק');
+                  }}
+                >
+                  העתק
+                </Button>
+              </div>
+            </div>
+
+            {/* Table ID */}
+            <div className="space-y-2">
+              <Label>Table ID (שלח בגוף הבקשה)</Label>
+              <div className="flex gap-2">
+                <Input 
+                  readOnly 
+                  value={table?.id || ''}
+                  dir="ltr"
+                  className="text-left text-xs font-mono"
+                />
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(table?.id || '');
+                    toast.success('Table ID הועתק');
+                  }}
+                >
+                  העתק
+                </Button>
+              </div>
+            </div>
+
+            {/* Customer ID */}
+            <div className="space-y-2">
+              <Label>Google Ads Customer ID</Label>
+              <Input 
+                readOnly 
+                value={table?.integration_settings?.customer_id || 'לא הוגדר'}
+                dir="ltr"
+                className="text-left text-xs font-mono"
+              />
+            </div>
+
+            {/* Instructions */}
+            <div className="bg-muted p-4 rounded-lg space-y-3">
+              <h4 className="font-medium">הוראות הגדרה ב-Make.com:</h4>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
+                <li>צור Scenario חדש ב-Make.com</li>
+                <li>הוסף מודול <strong>Google Ads - Get Report</strong></li>
+                <li>בחר את החיבור שהגדרת: <strong>{table?.integration_settings?.make_connection_name || 'My Google Ads connection'}</strong></li>
+                <li>הגדר Customer ID: <strong>{table?.integration_settings?.customer_id || 'XXX-XXX-XXXX'}</strong></li>
+                <li>הוסף מודול <strong>HTTP - Make a request</strong></li>
+                <li>URL: הכנס את ה-Webhook URL מלמעלה</li>
+                <li>Method: POST</li>
+                <li>Body type: JSON</li>
+                <li>Body: <code className="bg-background px-1 rounded">{`{"table_id": "${table?.id}", "records": [...]}`}</code></li>
+              </ol>
+            </div>
+
+            {/* JSON Example */}
+            <div className="space-y-2">
+              <Label>דוגמת JSON לשליחה:</Label>
+              <pre className="bg-muted p-3 rounded-lg text-xs overflow-x-auto" dir="ltr">
+{`{
+  "table_id": "${table?.id}",
+  "records": [
+    {
+      "campaign_id": "123456789",
+      "campaign_name": "Campaign Name",
+      "date": "2024-01-15",
+      "impressions": 1000,
+      "clicks": 50,
+      "cost": 150.00,
+      "conversions": 5,
+      "ctr": 5.0,
+      "cpc": 3.0,
+      "cost_per_conversion": 30.0
+    }
+  ]
+}`}
+              </pre>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={() => setShowMakeWebhookDialog(false)}>
+              סגור
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
