@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon, Sparkles, Info } from "lucide-react";
+import { ArrowRight, Plus, Trash2, Send, Pencil, Check, X, MoreVertical, Calendar as CalendarIcon, RefreshCw, Facebook, Settings, Link, BarChart3, Search, TrendingUp, Bell, SearchIcon, Sparkles, Info, Copy, Loader2, AlertCircle } from "lucide-react";
 import { AIAnalysisDialog } from "@/components/dynamic-tables/AIAnalysisDialog";
 import { format, subDays, startOfWeek, endOfWeek, subWeeks } from "date-fns";
 import { he } from "date-fns/locale";
@@ -44,7 +44,7 @@ import { GoogleAnalyticsDashboard } from "@/components/dynamic-tables/GoogleAnal
 import { SearchConsoleDashboard } from "@/components/dynamic-tables/SearchConsoleDashboard";
 import { AlertsManagementDialog } from "@/components/dynamic-tables/AlertsManagementDialog";
 import { ActiveAlerts } from "@/components/dynamic-tables/ActiveAlerts";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { MakeScenarioSettings } from "@/components/dynamic-tables/MakeScenarioSettings";
 
 // Google Ads icon component
@@ -974,8 +974,110 @@ export default function DynamicTableView() {
   const hasAhrefs = table?.integration_type === 'ahrefs';
   const hasMultipleIntegrations = hasFacebook && hasGoogleAds;
 
+  // Check if this Google Ads table needs a scenario to be cloned
+  const needsScenarioClone = 
+    table?.integration_type === 'google_ads' &&
+    table?.integration_settings?.data_source === 'make_api' &&
+    !table?.integration_settings?.make_scenario_id;
+
+  // Clone scenario mutation for existing tables without make_scenario_id
+  const cloneScenarioMutation = useMutation({
+    mutationFn: async () => {
+      if (!table?.id) throw new Error('No table');
+      
+      const settings = (makeSettings?.settings as Record<string, any>) || {};
+      const templateId = settings.google_ads_template_scenario_id;
+      
+      if (!templateId) {
+        throw new Error('לא הוגדר Template Scenario בהגדרות Make. נא לעבור ל-Make Settings ולבחור סנריו טמפלייט.');
+      }
+      
+      if (!settings.api_token || !settings.team_id) {
+        throw new Error('Make.com לא מוגדר. נא להגדיר בהגדרות > Make Settings');
+      }
+
+      const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`;
+      const integrationSettings = table.integration_settings || {};
+      
+      const { data, error } = await supabase.functions.invoke('make-api', {
+        body: {
+          action: 'clone_scenario',
+          api_token: settings.api_token,
+          team_id: settings.team_id,
+          region: settings.region || 'eu1',
+          template_scenario_id: templateId,
+          table_id: table.id,
+          webhook_url: webhookUrl,
+          scenario_name: `Google Ads Sync - ${table.name}`,
+          customer_id: integrationSettings.customer_id,
+          campaign_type: integrationSettings.campaign_type || 'leads',
+        },
+      });
+
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || data?.message || 'שכפול נכשל');
+
+      // Update the table with the new scenario_id
+      const { error: updateError } = await supabase
+        .from('crm_tables')
+        .update({
+          integration_settings: {
+            ...integrationSettings,
+            make_scenario_id: data.scenario_id,
+          }
+        })
+        .eq('id', table.id);
+
+      if (updateError) throw updateError;
+
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('הסנריו שוכפל וחובר לטבלה בהצלחה! כעת ניתן לסנכרן נתונים.');
+      queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message);
+    },
+  });
+
   return (
     <div className="container mx-auto py-8 px-4">
+      {/* Alert for tables that need scenario cloning */}
+      {needsScenarioClone && (
+        <Alert className="mb-6 border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+          <AlertCircle className="h-4 w-4 text-orange-600" />
+          <AlertTitle className="text-orange-800 dark:text-orange-200">
+            הטבלה לא מחוברת לסנריו
+          </AlertTitle>
+          <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
+            <span className="text-orange-700 dark:text-orange-300">
+              יש לשכפל סנריו מ-Make.com כדי לאפשר סנכרון נתונים. 
+              {!(makeSettings?.settings as Record<string, any>)?.google_ads_template_scenario_id && (
+                <span className="block text-sm mt-1">
+                  ⚠️ תחילה הגדר Template Scenario ב-
+                  <a href={buildPath('/make-settings')} className="underline font-medium">Make Settings</a>
+                </span>
+              )}
+            </span>
+            <Button 
+              onClick={() => cloneScenarioMutation.mutate()}
+              disabled={cloneScenarioMutation.isPending || !(makeSettings?.settings as Record<string, any>)?.google_ads_template_scenario_id}
+              size="sm"
+              variant="outline"
+              className="shrink-0"
+            >
+              {cloneScenarioMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin ml-2" />
+              ) : (
+                <Copy className="h-4 w-4 ml-2" />
+              )}
+              שכפל סנריו
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex flex-col gap-4 mb-6">
         {/* Title Row */}
         <div className="text-center md:text-right">
