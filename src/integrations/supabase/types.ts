@@ -2505,6 +2505,344 @@ export type Database = {
           },
         ]
       }
+      site_events: {
+        Row: {
+          event_category: string | null
+          event_data: Json | null
+          event_label: string | null
+          event_name: string
+          event_value: number | null
+          id: string
+          occurred_at: string
+          page_url: string | null
+          session_id: string
+          tenant_id: string
+          tracking_config_id: string
+          visitor_id: string
+        }
+        Insert: {
+          event_category?: string | null
+          event_data?: Json | null
+          event_label?: string | null
+          event_name: string
+          event_value?: number | null
+          id?: string
+          occurred_at?: string
+          page_url?: string | null
+          session_id: string
+          tenant_id: string
+          tracking_config_id: string
+          visitor_id: string
+        }
+        Update: {
+          event_category?: string | null
+          event_data?: Json | null
+          event_label?: string | null
+          event_name?: string
+          event_value?: number | null
+          id?: string
+          occurred_at?: string
+          page_url?: string | null
+          session_id?: string
+          tenant_id?: string
+          tracking_config_id?: string
+          visitor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "site_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_events_tracking_config_id_fkey"
+            columns: ["tracking_config_id"]
+            isOneToOne: false
+            referencedRelation: "site_tracking_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_events_visitor_id_fkey"
+            columns: ["visitor_id"]
+            isOneToOne: false
+            referencedRelation: "site_visitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_pageviews: {
+        Row: {
+          id: string
+          left_at: string | null
+          page_path: string | null
+          page_title: string | null
+          page_url: string
+          scroll_depth: number | null
+          session_id: string
+          tenant_id: string
+          time_on_page: number | null
+          tracking_config_id: string
+          viewed_at: string
+          visitor_id: string
+        }
+        Insert: {
+          id?: string
+          left_at?: string | null
+          page_path?: string | null
+          page_title?: string | null
+          page_url: string
+          scroll_depth?: number | null
+          session_id: string
+          tenant_id: string
+          time_on_page?: number | null
+          tracking_config_id: string
+          viewed_at?: string
+          visitor_id: string
+        }
+        Update: {
+          id?: string
+          left_at?: string | null
+          page_path?: string | null
+          page_title?: string | null
+          page_url?: string
+          scroll_depth?: number | null
+          session_id?: string
+          tenant_id?: string
+          time_on_page?: number | null
+          tracking_config_id?: string
+          viewed_at?: string
+          visitor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_pageviews_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "site_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_pageviews_tracking_config_id_fkey"
+            columns: ["tracking_config_id"]
+            isOneToOne: false
+            referencedRelation: "site_tracking_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_pageviews_visitor_id_fkey"
+            columns: ["visitor_id"]
+            isOneToOne: false
+            referencedRelation: "site_visitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_sessions: {
+        Row: {
+          browser: string | null
+          city: string | null
+          country: string | null
+          created_at: string
+          device_type: string | null
+          duration_seconds: number | null
+          ended_at: string | null
+          exit_page: string | null
+          id: string
+          is_bounce: boolean | null
+          landing_page: string | null
+          os: string | null
+          page_count: number | null
+          referrer: string | null
+          screen_resolution: string | null
+          started_at: string
+          tenant_id: string
+          tracking_config_id: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+          visitor_id: string
+        }
+        Insert: {
+          browser?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          device_type?: string | null
+          duration_seconds?: number | null
+          ended_at?: string | null
+          exit_page?: string | null
+          id?: string
+          is_bounce?: boolean | null
+          landing_page?: string | null
+          os?: string | null
+          page_count?: number | null
+          referrer?: string | null
+          screen_resolution?: string | null
+          started_at?: string
+          tenant_id: string
+          tracking_config_id: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          visitor_id: string
+        }
+        Update: {
+          browser?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          device_type?: string | null
+          duration_seconds?: number | null
+          ended_at?: string | null
+          exit_page?: string | null
+          id?: string
+          is_bounce?: boolean | null
+          landing_page?: string | null
+          os?: string | null
+          page_count?: number | null
+          referrer?: string | null
+          screen_resolution?: string | null
+          started_at?: string
+          tenant_id?: string
+          tracking_config_id?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+          visitor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_sessions_tracking_config_id_fkey"
+            columns: ["tracking_config_id"]
+            isOneToOne: false
+            referencedRelation: "site_tracking_configs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_sessions_visitor_id_fkey"
+            columns: ["visitor_id"]
+            isOneToOne: false
+            referencedRelation: "site_visitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_tracking_configs: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          id: string
+          is_active: boolean | null
+          settings: Json | null
+          tenant_id: string
+          tracking_id: string
+          updated_at: string
+          website_domain: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          settings?: Json | null
+          tenant_id: string
+          tracking_id: string
+          updated_at?: string
+          website_domain?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          settings?: Json | null
+          tenant_id?: string
+          tracking_id?: string
+          updated_at?: string
+          website_domain?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_tracking_configs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      site_visitors: {
+        Row: {
+          client_id_ref: string | null
+          created_at: string
+          first_utm: Json | null
+          first_visit: string
+          id: string
+          last_visit: string
+          lead_id: string | null
+          tenant_id: string
+          tracking_config_id: string
+          visit_count: number | null
+          visitor_fingerprint: string
+        }
+        Insert: {
+          client_id_ref?: string | null
+          created_at?: string
+          first_utm?: Json | null
+          first_visit?: string
+          id?: string
+          last_visit?: string
+          lead_id?: string | null
+          tenant_id: string
+          tracking_config_id: string
+          visit_count?: number | null
+          visitor_fingerprint: string
+        }
+        Update: {
+          client_id_ref?: string | null
+          created_at?: string
+          first_utm?: Json | null
+          first_visit?: string
+          id?: string
+          last_visit?: string
+          lead_id?: string | null
+          tenant_id?: string
+          tracking_config_id?: string
+          visit_count?: number | null
+          visitor_fingerprint?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_visitors_client_id_ref_fkey"
+            columns: ["client_id_ref"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_visitors_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_visitors_tracking_config_id_fkey"
+            columns: ["tracking_config_id"]
+            isOneToOne: false
+            referencedRelation: "site_tracking_configs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           agency_id_1: string | null
@@ -3422,6 +3760,7 @@ export type Database = {
         }
         Returns: number
       }
+      generate_tracking_id: { Args: never; Returns: string }
       get_chat_contacts: {
         Args: { p_tenant_id?: string }
         Returns: {
@@ -3451,6 +3790,23 @@ export type Database = {
         Returns: Json
       }
       get_effective_tenant_id: { Args: never; Returns: string }
+      get_lead_visitor_journey: {
+        Args: { p_lead_id: string }
+        Returns: {
+          device_type: string
+          duration_seconds: number
+          events: Json
+          landing_page: string
+          page_count: number
+          pages: Json
+          referrer: string
+          session_id: string
+          started_at: string
+          utm_campaign: string
+          utm_medium: string
+          utm_source: string
+        }[]
+      }
       get_leads_by_stages:
         | {
             Args: {
@@ -3626,6 +3982,14 @@ export type Database = {
       is_root_tenant: { Args: { tenant_id: string }; Returns: boolean }
       is_seo_staff: { Args: { _user_id: string }; Returns: boolean }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      link_visitor_to_lead: {
+        Args: {
+          p_lead_id: string
+          p_tracking_id: string
+          p_visitor_fingerprint: string
+        }
+        Returns: string
+      }
       search_contacts_for_chat:
         | {
             Args: { p_search_term: string }
