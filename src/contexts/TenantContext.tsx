@@ -216,6 +216,43 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
   }, [currentTenant?.slug, navigate]);
 
+  // CRITICAL: URL Auto-Fix - "DB wins" strategy
+  // If the URL slug doesn't match the active tenant in the database, fix the URL
+  useEffect(() => {
+    const fixUrlMismatch = async () => {
+      // Only check when we're on a tenant-scoped route with synced state
+      if (!tenantSlug || !isActiveTenantSynced || !currentTenantId) return;
+      
+      // Check if the URL tenant matches the current active tenant
+      if (tenantFromSlug?.id && tenantFromSlug.id === currentTenantId) {
+        // All good - URL matches active tenant
+        return;
+      }
+      
+      // URL doesn't match - get the correct tenant slug from DB
+      const { data: correctTenant } = await supabase
+        .from("tenants")
+        .select("slug")
+        .eq("id", currentTenantId)
+        .maybeSingle();
+      
+      if (correctTenant?.slug && correctTenant.slug !== tenantSlug) {
+        console.log("🔧 URL mismatch detected! URL has:", tenantSlug, "but active tenant is:", correctTenant.slug);
+        
+        // Fix the URL by replacing the old slug with the correct one
+        const currentPath = window.location.pathname;
+        const newPath = currentPath.replace(`/t/${tenantSlug}/`, `/t/${correctTenant.slug}/`);
+        
+        console.log("🔄 Fixing URL from:", currentPath, "to:", newPath);
+        
+        // Use replace to avoid adding to browser history
+        window.location.replace(newPath);
+      }
+    };
+    
+    fixUrlMismatch();
+  }, [tenantSlug, tenantFromSlug?.id, currentTenantId, isActiveTenantSynced]);
+
   const isLoading = isLoadingUserTenant || isLoadingTenant || isLoadingSlug;
 
   // CRITICAL: Block rendering until tenant is synced to DB
