@@ -1756,9 +1756,11 @@ export default function Leads() {
       
       if (error) throw error;
       
-      // Extract leads from the response
-      const stageData = data?.[stageId];
-      const newLeads = stageData?.leads || [];
+      // Extract leads from the response - RPC returns array with {stage, leads, total_count}
+      const stageResult = Array.isArray(data) 
+        ? data.find((item: any) => item.stage === stageId)
+        : null;
+      const newLeads = (Array.isArray(stageResult?.leads) ? stageResult.leads : []) as any[];
       
       if (newLeads.length > 0) {
         // Fetch relations for new leads
