@@ -510,8 +510,32 @@ export default function DynamicTableView() {
         throw new Error('Make.com לא מוגדר. נא להגדיר בהגדרות > Make Settings');
       }
       
+      // Check if scenario already exists in table settings
+      let scenarioId = integrationSettings.make_scenario_id;
+      
+      // If scenario is already selected in table settings, use it directly
+      if (scenarioId) {
+        console.log('Running existing Make.com scenario:', scenarioId);
+        const runResponse = await supabase.functions.invoke('make-api', {
+          body: {
+            action: 'run_scenario',
+            api_token: makeApiToken,
+            team_id: makeTeamId,
+            region: makeRegion,
+            scenario_id: scenarioId,
+          },
+        });
+        
+        if (runResponse.error) {
+          throw new Error(runResponse.error.message || 'Failed to run scenario');
+        }
+        
+        return runResponse.data;
+      }
+      
+      // No scenario selected - check if we can clone from template
       if (!templateScenarioId) {
-        throw new Error('Template Scenario ID לא הוגדר. נא להגדיר בהגדרות Make Settings את ה-Template Scenario ID.');
+        throw new Error('לא נבחר סנריו. נא לבחור סנריו בהגדרות הטבלה (כפתור 🔗) או להגדיר Template Scenario ID בהגדרות Make Settings.');
       }
       
       const connectionId = integrationSettings.make_connection_id;
@@ -527,61 +551,55 @@ export default function DynamicTableView() {
 
       const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`;
       
-      // Check if scenario already exists
-      let scenarioId = integrationSettings.make_scenario_id;
+      // Clone the template scenario
+      console.log('Cloning template scenario for Google Ads sync...');
+      const cloneResponse = await supabase.functions.invoke('make-api', {
+        body: {
+          action: 'clone_scenario',
+          api_token: makeApiToken,
+          team_id: makeTeamId,
+          region: makeRegion,
+          template_scenario_id: templateScenarioId,
+          table_id: table.id,
+          webhook_url: webhookUrl,
+          webhook_secret: integrationSettings.webhook_secret,
+          scenario_name: `Google Ads Sync - ${table.name}`,
+        },
+      });
       
-      if (!scenarioId) {
-        // Clone the template scenario
-        console.log('Cloning template scenario for Google Ads sync...');
-        const cloneResponse = await supabase.functions.invoke('make-api', {
-          body: {
-            action: 'clone_scenario',
-            api_token: makeApiToken,
-            team_id: makeTeamId,
-            region: makeRegion,
-            template_scenario_id: templateScenarioId,
-            table_id: table.id,
-            webhook_url: webhookUrl,
-            webhook_secret: integrationSettings.webhook_secret,
-            scenario_name: `Google Ads Sync - ${table.name}`,
-          },
-        });
-        
-        if (cloneResponse.error) {
-          throw new Error(cloneResponse.error.message || 'Failed to clone scenario');
-        }
-        
-        const cloneData = cloneResponse.data;
-        
-        if (!cloneData.success) {
-          // Clone failed - show the error
-          throw new Error(cloneData.message || cloneData.error || 'לא ניתן לשכפל את ה-Template Scenario');
-        }
-        
-        scenarioId = cloneData.scenario_id;
-        
-        // Save the scenario ID to the table settings
-        await supabase
-          .from('crm_tables')
-          .update({
-            integration_settings: {
-              ...integrationSettings,
-              make_scenario_id: scenarioId,
-            },
-          })
-          .eq('id', table.id);
+      if (cloneResponse.error) {
+        throw new Error(cloneResponse.error.message || 'Failed to clone scenario');
       }
+      
+      const cloneData = cloneResponse.data;
+      
+      if (!cloneData.success) {
+        // Clone failed - show the error
+        throw new Error(cloneData.message || cloneData.error || 'לא ניתן לשכפל את ה-Template Scenario');
+      }
+      
+      scenarioId = cloneData.scenario_id;
+      
+      // Save the scenario ID to the table settings
+      await supabase
+        .from('crm_tables')
+        .update({
+          integration_settings: {
+            ...integrationSettings,
+            make_scenario_id: scenarioId,
+          },
+        })
+        .eq('id', table.id);
       
       // Run the scenario
       console.log('Running Make.com scenario:', scenarioId);
       const runResponse = await supabase.functions.invoke('make-api', {
         body: {
-          action: 'run_and_sync_google_ads',
+          action: 'run_scenario',
           api_token: makeApiToken,
           team_id: makeTeamId,
           region: makeRegion,
           scenario_id: scenarioId,
-          table_id: table.id,
         },
       });
       
