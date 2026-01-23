@@ -45,25 +45,82 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     staleTime: 1000 * 60 * 5,
   });
 
-  // CRITICAL: When URL has tenant slug, use it immediately - no localStorage fallback
+  // CRITICAL: "DB wins" strategy - Check DB first before using URL slug
+  // This prevents the "stuck URL" issue in Preview iframe where the URL doesn't update
+  // but we still want to use the DB's active tenant as the source of truth
   useEffect(() => {
-    if (tenantFromSlug?.id) {
-      const newTenantId = tenantFromSlug.id;
-      const isChange = previousTenantIdRef.current !== null && previousTenantIdRef.current !== newTenantId;
+    const checkDbBeforeSync = async () => {
+      if (!tenantFromSlug?.id) return;
       
-      if (isChange) {
-        console.log("🔄 Tenant changed from", previousTenantIdRef.current, "to", newTenantId);
-        // Mark as NOT synced - this will trigger sync effect
-        setIsActiveTenantSynced(false);
+      const urlTenantId = tenantFromSlug.id;
+      
+      try {
+        // First, check what the DB says is the active tenant
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          // No user - just use URL tenant
+          if (currentTenantId !== urlTenantId) {
+            setCurrentTenantId(urlTenantId);
+          }
+          previousTenantIdRef.current = urlTenantId;
+          return;
+        }
+        
+        const { data: activeRecord } = await (supabase as any)
+          .from("user_active_tenant")
+          .select("tenant_id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        
+        // If DB has a different tenant than URL, DB WINS - fix the URL
+        if (activeRecord?.tenant_id && activeRecord.tenant_id !== urlTenantId) {
+          console.log("🔧 DB vs URL mismatch! DB has:", activeRecord.tenant_id, "URL has:", urlTenantId);
+          
+          // Get the correct slug for the DB tenant
+          const { data: correctTenant } = await supabase
+            .from("tenants")
+            .select("slug")
+            .eq("id", activeRecord.tenant_id)
+            .maybeSingle();
+          
+          if (correctTenant?.slug && correctTenant.slug !== tenantSlug) {
+            console.log("🔄 Fixing URL to match DB. Redirecting to:", correctTenant.slug);
+            
+            // Fix the URL - don't update DB state, just redirect
+            const currentPath = window.location.pathname;
+            const newPath = currentPath.replace(`/t/${tenantSlug}/`, `/t/${correctTenant.slug}/`);
+            window.location.replace(newPath);
+            return; // Stop here - the redirect will handle the rest
+          }
+        }
+        
+        // URL matches DB or DB is empty - proceed normally with URL tenant
+        const newTenantId = urlTenantId;
+        const isChange = previousTenantIdRef.current !== null && previousTenantIdRef.current !== newTenantId;
+        
+        if (isChange) {
+          console.log("🔄 Tenant changed from", previousTenantIdRef.current, "to", newTenantId);
+          setIsActiveTenantSynced(false);
+        }
+        
+        if (currentTenantId !== newTenantId) {
+          setCurrentTenantId(newTenantId);
+        }
+        
+        previousTenantIdRef.current = newTenantId;
+        
+      } catch (error) {
+        console.error("Error checking DB tenant:", error);
+        // On error, fall back to URL tenant
+        if (currentTenantId !== urlTenantId) {
+          setCurrentTenantId(urlTenantId);
+        }
+        previousTenantIdRef.current = urlTenantId;
       }
-      
-      if (currentTenantId !== newTenantId) {
-        setCurrentTenantId(newTenantId);
-      }
-      
-      previousTenantIdRef.current = newTenantId;
-    }
-  }, [tenantFromSlug?.id]);
+    };
+    
+    checkDbBeforeSync();
+  }, [tenantFromSlug?.id, tenantSlug]);
 
   // Sync tenant to database and clear cache
   useEffect(() => {
@@ -216,42 +273,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
   }, [currentTenant?.slug, navigate]);
 
-  // CRITICAL: URL Auto-Fix - "DB wins" strategy
-  // If the URL slug doesn't match the active tenant in the database, fix the URL
-  useEffect(() => {
-    const fixUrlMismatch = async () => {
-      // Only check when we're on a tenant-scoped route with synced state
-      if (!tenantSlug || !isActiveTenantSynced || !currentTenantId) return;
-      
-      // Check if the URL tenant matches the current active tenant
-      if (tenantFromSlug?.id && tenantFromSlug.id === currentTenantId) {
-        // All good - URL matches active tenant
-        return;
-      }
-      
-      // URL doesn't match - get the correct tenant slug from DB
-      const { data: correctTenant } = await supabase
-        .from("tenants")
-        .select("slug")
-        .eq("id", currentTenantId)
-        .maybeSingle();
-      
-      if (correctTenant?.slug && correctTenant.slug !== tenantSlug) {
-        console.log("🔧 URL mismatch detected! URL has:", tenantSlug, "but active tenant is:", correctTenant.slug);
-        
-        // Fix the URL by replacing the old slug with the correct one
-        const currentPath = window.location.pathname;
-        const newPath = currentPath.replace(`/t/${tenantSlug}/`, `/t/${correctTenant.slug}/`);
-        
-        console.log("🔄 Fixing URL from:", currentPath, "to:", newPath);
-        
-        // Use replace to avoid adding to browser history
-        window.location.replace(newPath);
-      }
-    };
-    
-    fixUrlMismatch();
-  }, [tenantSlug, tenantFromSlug?.id, currentTenantId, isActiveTenantSynced]);
+  // Note: URL Auto-Fix logic moved to checkDbBeforeSync above for earlier execution
 
   const isLoading = isLoadingUserTenant || isLoadingTenant || isLoadingSlug;
 
