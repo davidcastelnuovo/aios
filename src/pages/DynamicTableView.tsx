@@ -1060,6 +1060,8 @@ export default function DynamicTableView() {
 
       const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`;
 
+      const integrationSettings = (table?.integration_settings as Record<string, any>) || {};
+      
       const { data, error } = await supabase.functions.invoke('make-api', {
         body: {
           action: 'patch_scenario_blueprint',
@@ -1070,6 +1072,8 @@ export default function DynamicTableView() {
           table_id: table.id,
           tenant_id: table.tenant_id,
           webhook_url: webhookUrl,
+          customer_id: integrationSettings.google_ads_customer_id,
+          campaign_type: integrationSettings.campaign_type || 'leads',
         },
       });
 
