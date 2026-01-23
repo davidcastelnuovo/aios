@@ -2349,6 +2349,300 @@ export type Database = {
           },
         ]
       }
+      rank_tracking_alert_logs: {
+        Row: {
+          alert_id: string
+          id: string
+          keyword_id: string | null
+          message: string
+          new_position: number | null
+          old_position: number | null
+          triggered_at: string
+        }
+        Insert: {
+          alert_id: string
+          id?: string
+          keyword_id?: string | null
+          message: string
+          new_position?: number | null
+          old_position?: number | null
+          triggered_at?: string
+        }
+        Update: {
+          alert_id?: string
+          id?: string
+          keyword_id?: string | null
+          message?: string
+          new_position?: number | null
+          old_position?: number | null
+          triggered_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rank_tracking_alert_logs_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "rank_tracking_alerts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rank_tracking_alert_logs_keyword_id_fkey"
+            columns: ["keyword_id"]
+            isOneToOne: false
+            referencedRelation: "rank_tracking_keywords"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rank_tracking_alerts: {
+        Row: {
+          alert_type: string
+          created_at: string
+          id: string
+          is_active: boolean
+          last_triggered_at: string | null
+          notify_email: boolean
+          notify_whatsapp: boolean
+          project_id: string
+          threshold: number
+        }
+        Insert: {
+          alert_type: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_triggered_at?: string | null
+          notify_email?: boolean
+          notify_whatsapp?: boolean
+          project_id: string
+          threshold?: number
+        }
+        Update: {
+          alert_type?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          last_triggered_at?: string | null
+          notify_email?: boolean
+          notify_whatsapp?: boolean
+          project_id?: string
+          threshold?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rank_tracking_alerts_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "rank_tracking_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rank_tracking_competitors: {
+        Row: {
+          created_at: string
+          domain: string
+          id: string
+          name: string | null
+          project_id: string
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          id?: string
+          name?: string | null
+          project_id: string
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          id?: string
+          name?: string | null
+          project_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rank_tracking_competitors_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "rank_tracking_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rank_tracking_history: {
+        Row: {
+          checked_at: string
+          competitors_data: Json | null
+          id: string
+          keyword_id: string
+          position: number | null
+          serp_features: Json | null
+          url_found: string | null
+        }
+        Insert: {
+          checked_at?: string
+          competitors_data?: Json | null
+          id?: string
+          keyword_id: string
+          position?: number | null
+          serp_features?: Json | null
+          url_found?: string | null
+        }
+        Update: {
+          checked_at?: string
+          competitors_data?: Json | null
+          id?: string
+          keyword_id?: string
+          position?: number | null
+          serp_features?: Json | null
+          url_found?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rank_tracking_history_keyword_id_fkey"
+            columns: ["keyword_id"]
+            isOneToOne: false
+            referencedRelation: "rank_tracking_keywords"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rank_tracking_keywords: {
+        Row: {
+          best_position: number | null
+          created_at: string
+          current_position: number | null
+          found_url: string | null
+          id: string
+          is_active: boolean
+          keyword: string
+          last_checked_at: string | null
+          position_change: number | null
+          previous_position: number | null
+          project_id: string
+          search_volume: number | null
+          target_url: string | null
+          updated_at: string
+          worst_position: number | null
+        }
+        Insert: {
+          best_position?: number | null
+          created_at?: string
+          current_position?: number | null
+          found_url?: string | null
+          id?: string
+          is_active?: boolean
+          keyword: string
+          last_checked_at?: string | null
+          position_change?: number | null
+          previous_position?: number | null
+          project_id: string
+          search_volume?: number | null
+          target_url?: string | null
+          updated_at?: string
+          worst_position?: number | null
+        }
+        Update: {
+          best_position?: number | null
+          created_at?: string
+          current_position?: number | null
+          found_url?: string | null
+          id?: string
+          is_active?: boolean
+          keyword?: string
+          last_checked_at?: string | null
+          position_change?: number | null
+          previous_position?: number | null
+          project_id?: string
+          search_volume?: number | null
+          target_url?: string | null
+          updated_at?: string
+          worst_position?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rank_tracking_keywords_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "rank_tracking_projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rank_tracking_projects: {
+        Row: {
+          agency_id: string | null
+          check_frequency: string
+          client_id: string | null
+          country: string
+          created_at: string
+          device: string
+          domain: string
+          id: string
+          is_active: boolean
+          language: string
+          last_checked_at: string | null
+          name: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          agency_id?: string | null
+          check_frequency?: string
+          client_id?: string | null
+          country?: string
+          created_at?: string
+          device?: string
+          domain: string
+          id?: string
+          is_active?: boolean
+          language?: string
+          last_checked_at?: string | null
+          name: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          agency_id?: string | null
+          check_frequency?: string
+          client_id?: string | null
+          country?: string
+          created_at?: string
+          device?: string
+          domain?: string
+          id?: string
+          is_active?: boolean
+          language?: string
+          last_checked_at?: string | null
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rank_tracking_projects_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rank_tracking_projects_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rank_tracking_projects_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       report_alerts: {
         Row: {
           comparison_type: string
