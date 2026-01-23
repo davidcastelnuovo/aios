@@ -79,6 +79,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
   const [clientId, setClientId] = useState<string>("");
   const [dataSource, setDataSource] = useState<"make_api" | "direct_api" | "webhook">("make_api");
   const [selectedMakeConnection, setSelectedMakeConnection] = useState("");
+  const [customerIdInput, setCustomerIdInput] = useState("");
 
   // Fetch agencies
   const { data: agencies = [] } = useQuery({
@@ -243,12 +244,15 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
         const selectedConn = (makeConnections as MakeConnection[]).find(
           c => c.id.toString() === selectedMakeConnection
         );
+        // Format customer ID: remove dashes for storage
+        const formattedCustomerId = customerIdInput.replace(/-/g, '');
         integrationSettings = {
           ...integrationSettings,
           make_connection_id: selectedMakeConnection,
           make_connection_name: selectedConn?.name || selectedConn?.accountName || '',
           make_team_id: makeApiSettings?.team_id,
           make_region: makeApiSettings?.region || 'eu1',
+          customer_id: formattedCustomerId,
         };
       } else if (dataSource === 'direct_api') {
         const selectedAcc = accounts.find(acc => acc.id === selectedAccount);
@@ -323,6 +327,11 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
       return;
     }
     
+    if (dataSource === 'make_api' && !customerIdInput.trim()) {
+      toast.error('יש להזין Google Ads Customer ID');
+      return;
+    }
+    
     createMutation.mutate();
   };
 
@@ -336,6 +345,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
     setClientId("");
     setDataSource("make_api");
     setSelectedMakeConnection("");
+    setCustomerIdInput("");
     onOpenChange(false);
   };
 
@@ -343,7 +353,7 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
 
   // Determine if the form is ready to submit
   const canSubmit = tableName.trim() && (
-    (dataSource === 'make_api' && selectedMakeConnection) ||
+    (dataSource === 'make_api' && selectedMakeConnection && customerIdInput.trim()) ||
     (dataSource === 'direct_api' && selectedAccount) ||
     (dataSource === 'webhook')
   );
@@ -462,20 +472,44 @@ export function GoogleAdsTableDialog({ open, onOpenChange }: GoogleAdsTableDialo
                   </AlertDescription>
                 </Alert>
               ) : (
-                <div className="space-y-2">
-                  <Label>בחר חשבון Google Ads מ-Make.com</Label>
-                  <Select value={selectedMakeConnection} onValueChange={setSelectedMakeConnection}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="בחר חשבון..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(makeConnections as MakeConnection[]).map((conn) => (
-                        <SelectItem key={conn.id} value={conn.id.toString()}>
-                          {conn.name || conn.accountName || `חיבור ${conn.id}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>בחר חיבור Google Ads מ-Make.com</Label>
+                    <Select value={selectedMakeConnection} onValueChange={setSelectedMakeConnection}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="בחר חיבור..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(makeConnections as MakeConnection[]).map((conn) => (
+                          <SelectItem key={conn.id} value={conn.id.toString()}>
+                            {conn.name || conn.accountName || `חיבור ${conn.id}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {selectedMakeConnection && (
+                    <div className="space-y-2">
+                      <Label htmlFor="customer-id">Google Ads Customer ID</Label>
+                      <Input
+                        id="customer-id"
+                        value={customerIdInput}
+                        onChange={(e) => {
+                          // Allow only numbers and dashes, format as XXX-XXX-XXXX
+                          const value = e.target.value.replace(/[^0-9-]/g, '');
+                          setCustomerIdInput(value);
+                        }}
+                        placeholder="123-456-7890"
+                        dir="ltr"
+                        className="text-left"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        ניתן למצוא ב-Google Ads: לחץ על האייקון בפינה הימנית העליונה או גש ל-
+                        <span className="font-medium"> הגדרות &gt; הגדרות חשבון</span>
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </>
