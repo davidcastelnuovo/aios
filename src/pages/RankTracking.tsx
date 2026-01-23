@@ -401,14 +401,14 @@ export default function RankTracking() {
                 <div className="space-y-2">
                   <Label>לקוח (אופציונלי)</Label>
                   <Select
-                    value={newProject.client_id}
-                    onValueChange={(v) => setNewProject({ ...newProject, client_id: v })}
+                    value={newProject.client_id || "none"}
+                    onValueChange={(v) => setNewProject({ ...newProject, client_id: v === "none" ? "" : v })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="בחר לקוח" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">ללא</SelectItem>
+                      <SelectItem value="none">ללא</SelectItem>
                       {clients?.map((client) => (
                         <SelectItem key={client.id} value={client.id}>
                           {client.name}
