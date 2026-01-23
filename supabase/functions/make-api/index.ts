@@ -275,18 +275,18 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        // First, update the scenario scheduling to be valid, then activate
+        // First, update the scenario scheduling to on-demand (no interval required), then activate
         try {
-          console.log(`Setting scheduling for scenario ${scenario_id}...`);
+          console.log(`Setting scheduling to on-demand for scenario ${scenario_id}...`);
           
-          // Step 1: Update scenario with valid scheduling (on-demand / indefinitely)
+          // Step 1: Update scenario with on-demand scheduling (avoids IM008 Invalid interval)
           await makeAPICall(
             api_token,
             region,
             `/scenarios/${scenario_id}`,
             "PATCH",
             {
-              scheduling: JSON.stringify({ type: "indefinitely" })
+              scheduling: JSON.stringify({ type: "on-demand" })
             }
           );
           
@@ -725,7 +725,8 @@ serve(async (req) => {
           const createPayload = {
             name: newScenarioName,
             teamId: parseInt(team_id || "0"),
-            scheduling: JSON.stringify({ type: "indefinitely" }),
+            // Create as on-demand so it can be triggered via API without requiring an interval
+            scheduling: JSON.stringify({ type: "on-demand" }),
             blueprint: JSON.stringify(blueprintData),
           };
           
