@@ -197,19 +197,29 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
-  // Check SerpAPI integration status
-  const { data: serpApiIntegration } = useQuery({
-    queryKey: ['serpapi-integration', currentTenantId],
+  // Check DataForSEO / SerpAPI integration status
+  const { data: dataForSeoIntegration } = useQuery({
+    queryKey: ['dataforseo-integration', currentTenantId],
     queryFn: async () => {
       if (!currentTenantId) return null;
-      const { data } = await supabase
+      // Check DataForSEO first
+      const { data: dfData } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .eq('integration_type', 'dataforseo')
+        .eq('is_active', true)
+        .maybeSingle();
+      if (dfData) return dfData;
+      // Fallback to SerpAPI
+      const { data: serpData } = await supabase
         .from('tenant_integrations')
         .select('*')
         .eq('tenant_id', currentTenantId)
         .eq('integration_type', 'serpapi')
         .eq('is_active', true)
         .maybeSingle();
-      return data;
+      return serpData;
     },
     enabled: !!currentTenantId,
   });
@@ -353,15 +363,15 @@ export default function Integrations() {
     },
     {
       icon: <Search className="h-6 w-6" />,
-      title: "SerpAPI - Rank Tracking",
-      description: "מעקב דירוגים בזמן אמת - כמו Ahrefs, בעלות נמוכה",
+      title: "DataForSEO - Rank Tracking",
+      description: "מעקב דירוגים בזמן אמת - מחיר Pay-as-you-go נמוך",
       features: [
         "מיקום מדויק בזמן אמת",
         "היסטוריית דירוגים וגרפים",
         "מעקב אחרי מתחרים",
-        "התראות על שינויים",
+        "~$0.0015 לחיפוש בלבד",
       ],
-      isConnected: !!serpApiIntegration,
+      isConnected: !!dataForSeoIntegration,
       route: "integrations/serpapi",
       gradient: "bg-gradient-to-r from-emerald-500 to-teal-600",
     },

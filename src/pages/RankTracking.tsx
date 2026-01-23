@@ -254,17 +254,17 @@ export default function RankTracking() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AlertCircle className="h-5 w-5 text-amber-500" />
-              נדרש חיבור ל-SerpAPI
+              נדרש חיבור ל-DataForSEO
             </CardTitle>
             <CardDescription>
-              כדי להשתמש במעקב דירוגים, יש לחבר תחילה את SerpAPI
+              כדי להשתמש במעקב דירוגים, יש לחבר תחילה את DataForSEO
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button asChild>
               <Link to={tenantPath("/integrations/serpapi")}>
                 <Settings className="h-4 w-4 mr-2" />
-                הגדר SerpAPI
+                הגדר DataForSEO
               </Link>
             </Button>
           </CardContent>
