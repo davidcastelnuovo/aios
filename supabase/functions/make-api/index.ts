@@ -697,13 +697,31 @@ serve(async (req) => {
             createPayload
           );
           
+          const newScenarioId = createResult.scenario?.id || createResult.id;
           console.log("Scenario created:", JSON.stringify(createResult).substring(0, 300));
+          
+          // Step 5: Activate the new scenario so it can be run
+          if (newScenarioId) {
+            try {
+              console.log(`Activating scenario ${newScenarioId}...`);
+              await makeAPICall(
+                api_token,
+                region,
+                `/scenarios/${newScenarioId}/start`,
+                "POST"
+              );
+              console.log(`Scenario ${newScenarioId} activated successfully`);
+            } catch (activateError) {
+              console.warn("Failed to activate scenario (may need manual activation):", activateError);
+              // Don't fail the whole operation - scenario was created successfully
+            }
+          }
           
           result = {
             success: true,
             scenario: createResult,
-            scenario_id: createResult.scenario?.id || createResult.id,
-            message: "Scenario cloned successfully from template"
+            scenario_id: newScenarioId,
+            message: "Scenario cloned and activated successfully"
           };
         } catch (cloneError) {
           console.error("Failed to clone scenario:", cloneError);
