@@ -677,9 +677,11 @@ export default function Leads() {
     if (isKanbanView) setPage(1);
   }, [isKanbanView]);
   
-  // Reset page to 1 when filters change to prevent showing empty results
+  // Reset page to 1 and clear accumulated leads when filters change
   useEffect(() => {
     setPage(1);
+    setStageOffsets({});
+    setAccumulatedLeads({});
   }, [selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate]);
   
   // Kanban limiting state - how many leads to SHOW per stage initially (can expand)
@@ -688,6 +690,11 @@ export default function Leads() {
   
   // Stage-based data for Kanban view
   const [stageLeadsData, setStageLeadsData] = useState<Record<string, { leads: any[]; totalCount: number }>>({});
+  
+  // Load More state - tracks additional leads fetched beyond initial 50 per stage
+  const [stageOffsets, setStageOffsets] = useState<Record<string, number>>({});
+  const [accumulatedLeads, setAccumulatedLeads] = useState<Record<string, any[]>>({});
+  const [loadingMoreStage, setLoadingMoreStage] = useState<string | null>(null);
   
   // Optimistic status map - instantly shows lead in new column before backend confirms
   const [optimisticStatusByLeadId, setOptimisticStatusByLeadId] = useState<Record<string, string>>({});
@@ -1719,6 +1726,92 @@ export default function Leads() {
     });
   };
 
+  // Function to load more leads for a specific stage
+  const loadMoreLeads = async (stageId: string) => {
+    if (!tenantId || loadingMoreStage) return;
+    
+    setLoadingMoreStage(stageId);
+    
+    try {
+      const currentOffset = stageOffsets[stageId] || 0;
+      const newOffset = currentOffset + KANBAN_LEADS_PER_STAGE_LIMIT;
+      
+      const agencyIds = selectedAgency && selectedAgency !== "all" 
+        ? [selectedAgency]
+        : agencies?.map(a => a.id) || null;
+      
+      const { data, error } = await supabase.rpc('get_leads_by_stages', {
+        p_tenant_id: tenantId,
+        p_agency_ids: agencyIds,
+        p_stages: [stageId],
+        p_limit_per_stage: KANBAN_LEADS_PER_STAGE_LIMIT,
+        p_offset_per_stage: newOffset,
+        p_search_query: searchQuery.trim() || null,
+        p_sales_person_id: filterSalesPerson !== "all" && filterSalesPerson !== "none" ? filterSalesPerson : null,
+        p_response_statuses: filterResponseStatus.length > 0 && !filterResponseStatus.includes("none") ? filterResponseStatus : null,
+        p_start_date: startDate?.toISOString() || null,
+        p_end_date: endDate ? new Date(endDate.setHours(23, 59, 59, 999)).toISOString() : null,
+        p_tag_ids: filterTagIds.length > 0 && !filterTagIds.includes("none") ? filterTagIds : null
+      });
+      
+      if (error) throw error;
+      
+      // Extract leads from the response
+      const stageData = data?.[stageId];
+      const newLeads = stageData?.leads || [];
+      
+      if (newLeads.length > 0) {
+        // Fetch relations for new leads
+        const leadIds = newLeads.map((l: any) => l.id);
+        const { data: leadsWithRelations } = await supabase
+          .from("leads")
+          .select(`
+            id,
+            agencies (name),
+            sales_people (full_name)
+          `)
+          .in("id", leadIds);
+        
+        const relationsMap: Record<string, any> = {};
+        if (leadsWithRelations) {
+          for (const rel of leadsWithRelations) {
+            relationsMap[rel.id] = rel;
+          }
+        }
+        
+        const enrichedLeads = newLeads.map((lead: any) => ({
+          ...lead,
+          agencies: relationsMap[lead.id]?.agencies || null,
+          sales_people: relationsMap[lead.id]?.sales_people || null
+        }));
+        
+        // Add to accumulated leads
+        setAccumulatedLeads(prev => ({
+          ...prev,
+          [stageId]: [...(prev[stageId] || []), ...enrichedLeads]
+        }));
+        
+        setStageOffsets(prev => ({ ...prev, [stageId]: newOffset }));
+        
+        toast({
+          title: `נטענו ${newLeads.length} לידים נוספים`,
+        });
+      } else {
+        toast({
+          title: "אין עוד לידים לטעון",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "שגיאה בטעינת לידים נוספים",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingMoreStage(null);
+    }
+  };
+
   // Use effective status (optimistic first, then actual) for stage filtering
   const getLeadsByStage = (stageId: string, limit?: number) => {
     // For Kanban view: use stage data directly from RPC (already pre-filtered per stage)
@@ -1726,8 +1819,13 @@ export default function Leads() {
       const stageData = kanbanStageData[stageId];
       if (!stageData) return [];
       
-      // Apply optimistic updates
-      let stageLeads = stageData.leads.filter((lead: any) => {
+      // Combine initial leads with accumulated leads from "Load more"
+      const initialLeads = stageData.leads || [];
+      const extraLeads = accumulatedLeads[stageId] || [];
+      let allStageLeads = [...initialLeads, ...extraLeads];
+      
+      // Apply optimistic updates - remove leads moved away
+      allStageLeads = allStageLeads.filter((lead: any) => {
         const effectiveStatus = optimisticStatusByLeadId[lead.id];
         // If optimistic status exists and differs from stageId, remove from this stage
         if (effectiveStatus && effectiveStatus !== stageId) return false;
@@ -1739,12 +1837,20 @@ export default function Leads() {
         const effectiveStatus = optimisticStatusByLeadId[lead.id];
         return effectiveStatus === stageId && lead.status !== stageId;
       }) || [];
-      stageLeads = [...stageLeads, ...movedHere];
+      allStageLeads = [...allStageLeads, ...movedHere];
+      
+      // Remove duplicates (in case a lead appears in both initial and accumulated)
+      const seenIds = new Set<string>();
+      allStageLeads = allStageLeads.filter((lead: any) => {
+        if (seenIds.has(lead.id)) return false;
+        seenIds.add(lead.id);
+        return true;
+      });
       
       if (limit && !expandedStages[stageId]) {
-        return stageLeads.slice(0, limit);
+        return allStageLeads.slice(0, limit);
       }
-      return stageLeads;
+      return allStageLeads;
     }
     
     // For Table view: use filtered leads
@@ -1756,6 +1862,15 @@ export default function Leads() {
       return stageLeads.slice(0, limit);
     }
     return stageLeads;
+  };
+  
+  // Get loaded count for a stage (initial + accumulated)
+  const getLoadedCountByStage = (stageId: string) => {
+    if (!kanbanStageData) return 0;
+    const stageData = kanbanStageData[stageId];
+    const initialCount = stageData?.leads?.length || 0;
+    const accumulatedCount = accumulatedLeads[stageId]?.length || 0;
+    return initialCount + accumulatedCount;
   };
   
   const getLeadsCountByStage = (stageId: string) => {
@@ -1869,11 +1984,6 @@ export default function Leads() {
           </div>
         </div>
 
-        {isKanbanView && (
-          <p className="text-xs text-muted-foreground">
-            בקנבן נטענים עד 50 לידים לכל שלב. כדי לעבור מעבר לזה—עברו לתצוגת טבלה.
-          </p>
-        )}
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -2107,11 +2217,14 @@ export default function Leads() {
                 if (stage.id !== selectedMobileStage) return null;
                 const allStageLeads = getLeadsByStage(stage.id);
                 const totalInStage = getLeadsCountByStage(stage.id);
+                const loadedCount = getLoadedCountByStage(stage.id);
                 const isExpanded = expandedStages[stage.id];
                 const displayLimit = isExpanded ? allStageLeads.length : KANBAN_LEADS_PER_STAGE_DISPLAY;
                 const stageLeads = allStageLeads.slice(0, displayLimit);
-                const hasMore = !isExpanded && allStageLeads.length > KANBAN_LEADS_PER_STAGE_DISPLAY;
-                const remainingCount = allStageLeads.length - KANBAN_LEADS_PER_STAGE_DISPLAY;
+                const hasMoreToShow = !isExpanded && allStageLeads.length > KANBAN_LEADS_PER_STAGE_DISPLAY;
+                const remainingToShow = allStageLeads.length - KANBAN_LEADS_PER_STAGE_DISPLAY;
+                const hasMoreToLoad = totalInStage > loadedCount;
+                const remainingToLoad = totalInStage - loadedCount;
                 
                 return (
                   <div key={stage.id}>
@@ -2119,7 +2232,7 @@ export default function Leads() {
                       <h2 className="text-xl font-bold flex items-center justify-between">
                         <span>{stage.label}</span>
                         <Badge variant="secondary" className="text-sm">
-                          {stageLeads.length}{totalInStage > stageLeads.length ? ` / ${totalInStage}` : ''} לידים
+                          {loadedCount}{totalInStage > loadedCount ? ` / ${totalInStage}` : ''} לידים
                         </Badge>
                       </h2>
                     </div>
@@ -2156,8 +2269,8 @@ export default function Leads() {
                       </SortableContext>
                     </DroppableStage>
                     
-                    {/* Mobile Show More Button */}
-                    {hasMore && (
+                    {/* Mobile Show More Button (shows more from already loaded) */}
+                    {hasMoreToShow && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -2165,7 +2278,7 @@ export default function Leads() {
                         onClick={() => setExpandedStages(prev => ({ ...prev, [stage.id]: true }))}
                       >
                         <ChevronDown className="h-4 w-4" />
-                        הצג עוד {remainingCount} לידים
+                        הצג עוד {remainingToShow} לידים
                       </Button>
                     )}
                     
@@ -2179,6 +2292,29 @@ export default function Leads() {
                       >
                         <ChevronUp className="h-4 w-4" />
                         הצג פחות
+                      </Button>
+                    )}
+                    
+                    {/* Load More from Server Button */}
+                    {hasMoreToLoad && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="w-full mt-3 gap-2"
+                        onClick={() => loadMoreLeads(stage.id)}
+                        disabled={loadingMoreStage === stage.id}
+                      >
+                        {loadingMoreStage === stage.id ? (
+                          <>
+                            <span className="animate-spin">⏳</span>
+                            טוען...
+                          </>
+                        ) : (
+                          <>
+                            <Download className="h-4 w-4" />
+                            טען עוד 50 (נותרו {remainingToLoad.toLocaleString()})
+                          </>
+                        )}
                       </Button>
                     )}
                   </div>
@@ -2259,10 +2395,16 @@ export default function Leads() {
               }}
             >
               {PIPELINE_STAGES.map((stage, index) => {
-                const stageLeads = getLeadsByStage(stage.id, KANBAN_LEADS_PER_STAGE_DISPLAY);
+                const allStageLeads = getLeadsByStage(stage.id);
                 const totalInStage = getLeadsCountByStage(stage.id);
+                const loadedCount = getLoadedCountByStage(stage.id);
                 const isExpanded = expandedStages[stage.id];
-                const hasMore = !isExpanded && totalInStage > KANBAN_LEADS_PER_STAGE_DISPLAY;
+                const displayLimit = isExpanded ? allStageLeads.length : KANBAN_LEADS_PER_STAGE_DISPLAY;
+                const stageLeads = allStageLeads.slice(0, displayLimit);
+                const hasMoreToShow = !isExpanded && allStageLeads.length > KANBAN_LEADS_PER_STAGE_DISPLAY;
+                const remainingToShow = allStageLeads.length - KANBAN_LEADS_PER_STAGE_DISPLAY;
+                const hasMoreToLoad = totalInStage > loadedCount;
+                const remainingToLoad = totalInStage - loadedCount;
                 
                 return (
                   <div 
@@ -2302,17 +2444,21 @@ export default function Leads() {
                             }
                           />
                         ))}
-                        {hasMore && (
+                        
+                        {/* Show More Button (shows more from already loaded) */}
+                        {hasMoreToShow && (
                           <Button
                             variant="outline"
                             size="sm"
                             className="w-full mt-2"
                             onClick={() => setExpandedStages(prev => ({ ...prev, [stage.id]: true }))}
                           >
-                            הצג עוד {totalInStage - KANBAN_LEADS_PER_STAGE_DISPLAY} לידים
+                            הצג עוד {remainingToShow} לידים
                           </Button>
                         )}
-                        {isExpanded && totalInStage > KANBAN_LEADS_PER_STAGE_DISPLAY && (
+                        
+                        {/* Collapse button when expanded */}
+                        {isExpanded && allStageLeads.length > KANBAN_LEADS_PER_STAGE_DISPLAY && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -2320,6 +2466,29 @@ export default function Leads() {
                             onClick={() => setExpandedStages(prev => ({ ...prev, [stage.id]: false }))}
                           >
                             הצג פחות
+                          </Button>
+                        )}
+                        
+                        {/* Load More from Server Button */}
+                        {hasMoreToLoad && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="w-full mt-2 gap-2"
+                            onClick={() => loadMoreLeads(stage.id)}
+                            disabled={loadingMoreStage === stage.id}
+                          >
+                            {loadingMoreStage === stage.id ? (
+                              <>
+                                <span className="animate-spin">⏳</span>
+                                טוען...
+                              </>
+                            ) : (
+                              <>
+                                <Download className="h-4 w-4" />
+                                טען עוד 50 (נותרו {remainingToLoad.toLocaleString()})
+                              </>
+                            )}
                           </Button>
                         )}
                       </SortableContext>
