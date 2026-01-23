@@ -940,47 +940,8 @@ export default function DynamicTableView() {
     }
   }, [editingCell]);
 
-  if (tablesLoading) {
-    return (
-      <div className="container mx-auto py-8 px-4">
-        <Skeleton className="h-8 w-48 mb-4" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
-  }
-
-  if (!table) {
-    return (
-      <div className="container mx-auto py-8 px-4">
-        <Card className="p-12 text-center">
-          <h2 className="text-2xl font-bold mb-2">טבלה לא נמצאה</h2>
-          <p className="text-muted-foreground mb-4">הטבלה שחיפשת לא קיימת במערכת</p>
-          <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>
-            <ArrowRight className="ml-2 h-4 w-4" />
-            חזור לטבלאות
-          </Button>
-        </Card>
-      </div>
-    );
-  }
-
-  const isLoading = fieldsLoading || recordsLoading;
-  
-  // Determine which integrations are connected
-  const hasFacebook = table?.integration_type === 'facebook_insights';
-  const hasGoogleAds = table?.integration_type === 'google_ads';
-  const hasGoogleAnalytics = table?.integration_type === 'google_analytics';
-  const hasGoogleSearchConsole = table?.integration_type === 'google_search_console';
-  const hasAhrefs = table?.integration_type === 'ahrefs';
-  const hasMultipleIntegrations = hasFacebook && hasGoogleAds;
-
-  // Check if this Google Ads table needs a scenario to be cloned
-  const needsScenarioClone = 
-    table?.integration_type === 'google_ads' &&
-    table?.integration_settings?.data_source === 'make_api' &&
-    !table?.integration_settings?.make_scenario_id;
-
   // Clone scenario mutation for existing tables without make_scenario_id
+  // This hook must be before any conditional returns
   const cloneScenarioMutation = useMutation({
     mutationFn: async () => {
       if (!table?.id) throw new Error('No table');
@@ -997,7 +958,7 @@ export default function DynamicTableView() {
       }
 
       const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`;
-      const integrationSettings = table.integration_settings || {};
+      const integrationSettings = table?.integration_settings || {};
       
       const { data, error } = await supabase.functions.invoke('make-api', {
         body: {
@@ -1040,6 +1001,46 @@ export default function DynamicTableView() {
       toast.error(err.message);
     },
   });
+
+  if (tablesLoading) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <Skeleton className="h-8 w-48 mb-4" />
+        <Skeleton className="h-64 w-full" />
+      </div>
+    );
+  }
+
+  if (!table) {
+    return (
+      <div className="container mx-auto py-8 px-4">
+        <Card className="p-12 text-center">
+          <h2 className="text-2xl font-bold mb-2">טבלה לא נמצאה</h2>
+          <p className="text-muted-foreground mb-4">הטבלה שחיפשת לא קיימת במערכת</p>
+          <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>
+            <ArrowRight className="ml-2 h-4 w-4" />
+            חזור לטבלאות
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  const isLoading = fieldsLoading || recordsLoading;
+  
+  // Determine which integrations are connected
+  const hasFacebook = table?.integration_type === 'facebook_insights';
+  const hasGoogleAds = table?.integration_type === 'google_ads';
+  const hasGoogleAnalytics = table?.integration_type === 'google_analytics';
+  const hasGoogleSearchConsole = table?.integration_type === 'google_search_console';
+  const hasAhrefs = table?.integration_type === 'ahrefs';
+  const hasMultipleIntegrations = hasFacebook && hasGoogleAds;
+
+  // Check if this Google Ads table needs a scenario to be cloned
+  const needsScenarioClone = 
+    table?.integration_type === 'google_ads' &&
+    table?.integration_settings?.data_source === 'make_api' &&
+    !table?.integration_settings?.make_scenario_id;
 
   return (
     <div className="container mx-auto py-8 px-4">
