@@ -72,14 +72,31 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get user's tenant
-    const { data: tenantUser } = await supabase
-      .from("tenant_users")
+    // Get user's tenant - prioritize user_active_tenant, fallback to tenant_users
+    let tenantId: string | null = null;
+
+    const { data: activeTenant } = await supabase
+      .from("user_active_tenant")
       .select("tenant_id")
       .eq("user_id", user.id)
       .single();
 
-    if (!tenantUser) {
+    if (activeTenant?.tenant_id) {
+      tenantId = activeTenant.tenant_id;
+    } else {
+      const { data: tenantUser } = await supabase
+        .from("tenant_users")
+        .select("tenant_id")
+        .eq("user_id", user.id)
+        .limit(1)
+        .single();
+      
+      if (tenantUser?.tenant_id) {
+        tenantId = tenantUser.tenant_id;
+      }
+    }
+
+    if (!tenantId) {
       return new Response(JSON.stringify({ error: "No tenant found" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -94,7 +111,7 @@ Deno.serve(async (req) => {
     const { data: dataforSeoIntegration } = await supabase
       .from("tenant_integrations")
       .select("settings")
-      .eq("tenant_id", tenantUser.tenant_id)
+      .eq("tenant_id", tenantId)
       .eq("integration_type", "dataforseo")
       .eq("is_active", true)
       .single();
@@ -108,7 +125,7 @@ Deno.serve(async (req) => {
       const { data: serpIntegration } = await supabase
         .from("tenant_integrations")
         .select("api_key")
-        .eq("tenant_id", tenantUser.tenant_id)
+        .eq("tenant_id", tenantId)
         .eq("integration_type", "serpapi")
         .eq("is_active", true)
         .single();
@@ -277,7 +294,7 @@ Deno.serve(async (req) => {
         .from("rank_tracking_projects")
         .select("*")
         .eq("id", projectId)
-        .eq("tenant_id", tenantUser.tenant_id)
+        .eq("tenant_id", tenantId)
         .single();
 
       if (projectError || !project) {
