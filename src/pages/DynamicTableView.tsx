@@ -167,7 +167,7 @@ export default function DynamicTableView() {
       const accounts = response.data?.ad_accounts;
       return Array.isArray(accounts) ? accounts : [];
     },
-    enabled: showSettingsDialog && table?.integration_type === 'facebook_insights',
+    enabled: showSettingsDialog && (table?.integration_type === 'facebook_insights' || table?.integration_type === 'facebook_ecommerce'),
   });
 
   const { data: fields, isLoading: fieldsLoading } = useQuery({
@@ -1712,7 +1712,7 @@ export default function DynamicTableView() {
                           <SelectValue placeholder="בחר חשבון מודעות" />
                         </SelectTrigger>
                         <SelectContent>
-                          {(adAccounts || [])
+                          {(Array.isArray(adAccounts) ? adAccounts : [])
                             .filter((account: any) => 
                               account.name?.toLowerCase().includes(adAccountSearch.toLowerCase()) ||
                               account.id?.includes(adAccountSearch)
