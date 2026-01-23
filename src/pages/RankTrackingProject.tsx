@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import Papa from "papaparse";
 
 const useBuildPath = () => {
   const { buildPath } = useTenantPath();
@@ -14,13 +15,15 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { 
   Search, Plus, ArrowLeft, RefreshCw, TrendingUp, TrendingDown, Minus, 
-  Trash2, ExternalLink, Play, Download, Upload, LineChart, History
+  Trash2, ExternalLink, Play, Download, Upload, LineChart, History, FileUp, FileText
 } from "lucide-react";
 import { LineChart as RechartsLineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { format, subDays } from "date-fns";
@@ -55,6 +58,14 @@ export default function RankTrackingProject() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [newKeywords, setNewKeywords] = useState("");
   const [selectedKeywordId, setSelectedKeywordId] = useState<string | null>(null);
+  
+  // File import states
+  const [inputMode, setInputMode] = useState<"manual" | "file">("manual");
+  const [parsedKeywords, setParsedKeywords] = useState<string[]>([]);
+  const [csvColumns, setCsvColumns] = useState<string[]>([]);
+  const [selectedColumn, setSelectedColumn] = useState<string>("");
+  const [allCsvData, setAllCsvData] = useState<Record<string, string>[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch project
   const { data: project, isLoading: projectLoading } = useQuery({
@@ -187,10 +198,16 @@ export default function RankTrackingProject() {
   });
 
   const handleAddKeywords = () => {
-    const keywordsList = newKeywords
-      .split("\n")
-      .map(k => k.trim())
-      .filter(k => k.length > 0);
+    let keywordsList: string[] = [];
+    
+    if (inputMode === "manual") {
+      keywordsList = newKeywords
+        .split("\n")
+        .map(k => k.trim())
+        .filter(k => k.length > 0);
+    } else {
+      keywordsList = parsedKeywords;
+    }
 
     if (keywordsList.length === 0) {
       toast.error("יש להזין לפחות ביטוי אחד");
@@ -198,6 +215,108 @@ export default function RankTrackingProject() {
     }
 
     addKeywordsMutation.mutate(keywordsList);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    
+    if (fileExtension === 'txt') {
+      // Handle TXT file
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = event.target?.result as string;
+        const keywords = text
+          .split('\n')
+          .map(line => line.trim())
+          .filter(line => line.length > 0);
+        setParsedKeywords(keywords);
+        setCsvColumns([]);
+        setAllCsvData([]);
+        toast.success(`נטענו ${keywords.length} ביטויים`);
+      };
+      reader.readAsText(file);
+    } else if (fileExtension === 'csv') {
+      // Handle CSV file
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const data = results.data as Record<string, string>[];
+          if (data.length === 0) {
+            toast.error("הקובץ ריק");
+            return;
+          }
+          
+          const columns = Object.keys(data[0] || {});
+          setCsvColumns(columns);
+          setAllCsvData(data);
+          
+          // Auto-select "keyword" column if exists
+          const keywordCol = columns.find(c => 
+            c.toLowerCase().includes('keyword') || 
+            c.toLowerCase().includes('ביטוי') ||
+            c.toLowerCase() === 'query'
+          );
+          
+          if (keywordCol) {
+            setSelectedColumn(keywordCol);
+            const keywords = data
+              .map(row => row[keywordCol]?.trim())
+              .filter((k): k is string => !!k && k.length > 0);
+            setParsedKeywords(keywords);
+            toast.success(`נטענו ${keywords.length} ביטויים מעמודת "${keywordCol}"`);
+          } else if (columns.length === 1) {
+            // Single column - use it
+            setSelectedColumn(columns[0]);
+            const keywords = data
+              .map(row => row[columns[0]]?.trim())
+              .filter((k): k is string => !!k && k.length > 0);
+            setParsedKeywords(keywords);
+            toast.success(`נטענו ${keywords.length} ביטויים`);
+          } else {
+            // Multiple columns - user needs to select
+            toast.info("יש לבחור עמודה עם הביטויים");
+          }
+        },
+        error: () => {
+          toast.error("שגיאה בקריאת הקובץ");
+        }
+      });
+    } else {
+      toast.error("יש להעלות קובץ CSV או TXT");
+    }
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const handleColumnSelect = (column: string) => {
+    setSelectedColumn(column);
+    const keywords = allCsvData
+      .map(row => row[column]?.trim())
+      .filter((k): k is string => !!k && k.length > 0);
+    setParsedKeywords(keywords);
+  };
+
+  const resetFileState = () => {
+    setParsedKeywords([]);
+    setCsvColumns([]);
+    setSelectedColumn("");
+    setAllCsvData([]);
+  };
+
+  const handleDialogClose = (open: boolean) => {
+    setIsAddOpen(open);
+    if (!open) {
+      setNewKeywords("");
+      setInputMode("manual");
+      resetFileState();
+    }
   };
 
   const getPositionBadge = (position: number | null) => {
@@ -227,6 +346,10 @@ export default function RankTrackingProject() {
       </span>
     );
   };
+
+  const currentKeywordCount = inputMode === "manual" 
+    ? newKeywords.split("\n").filter(k => k.trim()).length 
+    : parsedKeywords.length;
 
   // Calculate stats
   const stats = {
@@ -298,44 +421,146 @@ export default function RankTrackingProject() {
             )}
             סרוק הכל
           </Button>
-          <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+          <Dialog open={isAddOpen} onOpenChange={handleDialogClose}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
                 הוסף ביטויים
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle>הוספת ביטויים</DialogTitle>
+                <DialogDescription>
+                  הוסף ביטויים ידנית או ייבא מקובץ CSV/TXT
+                </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>ביטויים (כל שורה = ביטוי אחד)</Label>
-                  <Textarea
-                    placeholder="הזן ביטויים, כל שורה ביטוי אחד"
-                    rows={10}
-                    value={newKeywords}
-                    onChange={(e) => setNewKeywords(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {newKeywords.split("\n").filter(k => k.trim()).length} ביטויים
-                  </p>
+              
+              <Tabs value={inputMode} onValueChange={(v) => {
+                setInputMode(v as "manual" | "file");
+                if (v === "manual") resetFileState();
+              }}>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="manual" className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    הקלדה ידנית
+                  </TabsTrigger>
+                  <TabsTrigger value="file" className="flex items-center gap-2">
+                    <FileUp className="h-4 w-4" />
+                    העלאת קובץ
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="manual" className="mt-4 space-y-4">
+                  <div className="space-y-2">
+                    <Label>ביטויים (כל שורה = ביטוי אחד)</Label>
+                    <Textarea
+                      placeholder="הזן ביטויים, כל שורה ביטוי אחד"
+                      rows={10}
+                      value={newKeywords}
+                      onChange={(e) => setNewKeywords(e.target.value)}
+                    />
+                  </div>
+                </TabsContent>
+                
+                <TabsContent value="file" className="mt-4 space-y-4">
+                  <div className="space-y-4">
+                    <div
+                      className="border-2 border-dashed rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                      onClick={() => fileInputRef.current?.click()}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const file = e.dataTransfer.files[0];
+                        if (file) {
+                          const input = fileInputRef.current;
+                          if (input) {
+                            const dt = new DataTransfer();
+                            dt.items.add(file);
+                            input.files = dt.files;
+                            handleFileUpload({ target: input } as React.ChangeEvent<HTMLInputElement>);
+                          }
+                        }
+                      }}
+                    >
+                      <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                      <p className="text-sm font-medium">גרור קובץ לכאן או לחץ לבחירה</p>
+                      <p className="text-xs text-muted-foreground mt-1">תומך ב-CSV ו-TXT</p>
+                    </div>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".csv,.txt"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                    />
+                    
+                    {/* Column selector for CSV */}
+                    {csvColumns.length > 1 && (
+                      <div className="space-y-2">
+                        <Label>בחר עמודה עם הביטויים</Label>
+                        <Select value={selectedColumn} onValueChange={handleColumnSelect}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="בחר עמודה" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {csvColumns.map(col => (
+                              <SelectItem key={col} value={col}>{col}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                    
+                    {/* Preview loaded keywords */}
+                    {parsedKeywords.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>תצוגה מקדימה ({parsedKeywords.length} ביטויים)</Label>
+                        <ScrollArea className="h-[200px] rounded-md border p-3">
+                          <div className="space-y-1">
+                            {parsedKeywords.slice(0, 100).map((keyword, idx) => (
+                              <div key={idx} className="text-sm py-1 border-b last:border-0">
+                                {keyword}
+                              </div>
+                            ))}
+                            {parsedKeywords.length > 100 && (
+                              <p className="text-xs text-muted-foreground pt-2">
+                                ...ועוד {parsedKeywords.length - 100} ביטויים
+                              </p>
+                            )}
+                          </div>
+                        </ScrollArea>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
+              
+              <div className="flex items-center justify-between pt-4 border-t">
+                <p className="text-sm text-muted-foreground">
+                  {currentKeywordCount} ביטויים
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => handleDialogClose(false)}>
+                    ביטול
+                  </Button>
+                  <Button 
+                    onClick={handleAddKeywords} 
+                    disabled={addKeywordsMutation.isPending || currentKeywordCount === 0}
+                  >
+                    {addKeywordsMutation.isPending ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Plus className="h-4 w-4 mr-2" />
+                    )}
+                    הוסף
+                  </Button>
                 </div>
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddOpen(false)}>
-                  ביטול
-                </Button>
-                <Button onClick={handleAddKeywords} disabled={addKeywordsMutation.isPending}>
-                  {addKeywordsMutation.isPending ? (
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Plus className="h-4 w-4 mr-2" />
-                  )}
-                  הוסף
-                </Button>
-              </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
