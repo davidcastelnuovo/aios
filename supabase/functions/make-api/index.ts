@@ -138,10 +138,11 @@ serve(async (req) => {
 
       case "list_connections": {
         // Get all connections for the team
+        // Make.com API uses query parameter for teamId, not path
         const connections = await makeAPICall(
           api_token,
           region,
-          `/teams/${team_id}/connections`
+          `/connections?teamId=${team_id}`
         );
         result = connections;
         break;
@@ -165,10 +166,11 @@ serve(async (req) => {
 
       case "list_scenarios": {
         // Get all scenarios for the team
+        // Make.com API uses query parameter for teamId
         const scenarios = await makeAPICall(
           api_token,
           region,
-          `/teams/${team_id}/scenarios`
+          `/scenarios?teamId=${team_id}`
         );
         result = scenarios;
         break;
@@ -197,10 +199,11 @@ serve(async (req) => {
 
       case "list_google_ads_connections": {
         // Get all connections and filter for Google Ads
+        // Make.com API uses query parameter for teamId
         const allConnections = await makeAPICall(
           api_token,
           region,
-          `/teams/${team_id}/connections`
+          `/connections?teamId=${team_id}`
         );
         
         // Filter for Google Ads connections
@@ -218,10 +221,11 @@ serve(async (req) => {
 
       case "list_google_ads_scenarios": {
         // Get all scenarios that use Google Ads modules
+        // Make.com API uses query parameter for teamId
         const allScenarios = await makeAPICall(
           api_token,
           region,
-          `/teams/${team_id}/scenarios`
+          `/scenarios?teamId=${team_id}`
         );
         
         // For each scenario, we'd need to check if it uses Google Ads modules
