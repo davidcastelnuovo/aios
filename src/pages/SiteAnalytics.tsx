@@ -142,12 +142,12 @@ export default function SiteAnalytics() {
           </p>
         </div>
         
-        <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+        <Select value={selectedClientId || "all"} onValueChange={(val) => setSelectedClientId(val === "all" ? "" : val)}>
           <SelectTrigger className="w-[250px]">
             <SelectValue placeholder="בחר לקוח לצפייה" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">כל הלקוחות</SelectItem>
+            <SelectItem value="all">כל הלקוחות</SelectItem>
             {clients.map((client) => (
               <SelectItem key={client.id} value={client.id}>
                 {client.name}
