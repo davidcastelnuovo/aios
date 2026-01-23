@@ -118,22 +118,27 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Delete existing records for this table
-    const { error: deleteError } = await supabase
-      .from("crm_records")
-      .delete()
-      .eq("table_id", table_id);
+    // Check if we should clear existing records (optional parameter)
+    const clearExisting = body.clear_existing === true;
+    
+    if (clearExisting) {
+      const { error: deleteError } = await supabase
+        .from("crm_records")
+        .delete()
+        .eq("table_id", table_id);
 
-    if (deleteError) {
-      console.error("Error deleting existing records:", deleteError);
+      if (deleteError) {
+        console.error("Error deleting existing records:", deleteError);
+      }
     }
 
-    // Insert new records
-    const recordsToInsert = records.map((record: GoogleAdsRecord) => ({
-      table_id,
-      tenant_id: table.tenant_id,
-      agency_id: table.agency_id || null,
-      data: {
+    // Upsert records - update if exists (same campaign_id + date), insert if not
+    let upsertedCount = 0;
+    let updatedCount = 0;
+    let insertedCount = 0;
+
+    for (const record of records as GoogleAdsRecord[]) {
+      const recordData = {
         campaign_id: record.campaign_id || "",
         campaign_name: record.campaign_name || "",
         date: record.date || "",
@@ -144,20 +149,52 @@ Deno.serve(async (req) => {
         ctr: Number(record.ctr) || 0,
         cpc: Number(record.cpc) || 0,
         cost_per_conversion: Number(record.cost_per_conversion) || 0,
-      },
-    }));
+      };
 
-    const { data: insertedRecords, error: insertError } = await supabase
-      .from("crm_records")
-      .insert(recordsToInsert)
-      .select();
+      // Check if record with same campaign_id and date already exists
+      const { data: existingRecords } = await supabase
+        .from("crm_records")
+        .select("id, data")
+        .eq("table_id", table_id);
 
-    if (insertError) {
-      console.error("Error inserting records:", insertError);
-      return new Response(
-        JSON.stringify({ error: "Failed to insert records", details: insertError.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      const existingRecord = existingRecords?.find((r: any) => {
+        const data = r.data as any;
+        return data?.campaign_id === recordData.campaign_id && data?.date === recordData.date;
+      });
+
+      if (existingRecord) {
+        // Update existing record
+        const { error: updateError } = await supabase
+          .from("crm_records")
+          .update({ 
+            data: recordData,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", existingRecord.id);
+
+        if (updateError) {
+          console.error("Error updating record:", updateError);
+        } else {
+          updatedCount++;
+        }
+      } else {
+        // Insert new record
+        const { error: insertError } = await supabase
+          .from("crm_records")
+          .insert({
+            table_id,
+            tenant_id: table.tenant_id,
+            agency_id: table.agency_id || null,
+            data: recordData,
+          });
+
+        if (insertError) {
+          console.error("Error inserting record:", insertError);
+        } else {
+          insertedCount++;
+        }
+      }
+      upsertedCount++;
     }
 
     // Update last_sync_at on the table
@@ -166,13 +203,15 @@ Deno.serve(async (req) => {
       .update({ last_sync_at: new Date().toISOString() })
       .eq("id", table_id);
 
-    console.log("Successfully synced", insertedRecords?.length || 0, "records for table", table_id);
+    console.log("Successfully synced", upsertedCount, "records for table", table_id, `(${insertedCount} inserted, ${updatedCount} updated)`);
 
     return new Response(
       JSON.stringify({
         success: true,
         message: "Data synced successfully",
-        records_synced: insertedRecords?.length || 0,
+        records_synced: upsertedCount,
+        records_inserted: insertedCount,
+        records_updated: updatedCount,
         table_id,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
