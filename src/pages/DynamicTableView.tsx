@@ -57,6 +57,7 @@ interface CrmTable {
   name: string;
   slug: string;
   description: string | null;
+  tenant_id: string;
   integration_type: string | null;
   integration_settings: any;
   secondary_integration_type?: string | null;
@@ -474,13 +475,145 @@ export default function DynamicTableView() {
   const isGoogleAdsMakeTable = table?.integration_type === 'google_ads' && 
     (table?.integration_settings?.data_source === 'make_api' || table?.integration_settings?.data_source === 'webhook');
 
+  // Fetch Make.com settings for this tenant
+  const { data: makeSettings } = useQuery({
+    queryKey: ['make-settings', table?.tenant_id],
+    queryFn: async () => {
+      if (!table?.tenant_id) return null;
+      const { data, error } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', table.tenant_id)
+        .eq('integration_type', 'make')
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!table?.tenant_id && isGoogleAdsMakeTable,
+  });
+
+  // Mutation for automatic Make.com scenario creation and sync
+  const syncMakeGoogleAdsMutation = useMutation({
+    mutationFn: async () => {
+      if (!table?.id) throw new Error('No table');
+      
+      const integrationSettings = table.integration_settings || {};
+      const settings = makeSettings?.settings as Record<string, any> || {};
+      const makeApiToken = settings.api_token;
+      const makeTeamId = settings.team_id;
+      const makeRegion = settings.region || 'eu1';
+      
+      if (!makeApiToken || !makeTeamId) {
+        throw new Error('Make.com לא מוגדר. נא להגדיר בהגדרות > Make Settings');
+      }
+      
+      const connectionId = integrationSettings.make_connection_id;
+      const customerId = integrationSettings.customer_id;
+      
+      if (!connectionId) {
+        throw new Error('חיבור Google Ads לא נבחר. נא לבחור חיבור בהגדרות הטבלה.');
+      }
+      
+      if (!customerId) {
+        throw new Error('Customer ID לא הוגדר. נא להגדיר בהגדרות הטבלה.');
+      }
+
+      const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`;
+      
+      // Check if scenario already exists
+      let scenarioId = integrationSettings.make_scenario_id;
+      
+      if (!scenarioId) {
+        // Create a new scenario
+        console.log('Creating new Make.com scenario for Google Ads sync...');
+        const createResponse = await supabase.functions.invoke('make-api', {
+          body: {
+            action: 'create_google_ads_scenario',
+            api_token: makeApiToken,
+            team_id: makeTeamId,
+            region: makeRegion,
+            connection_id: connectionId,
+            customer_id: customerId,
+            table_id: table.id,
+            webhook_url: webhookUrl,
+            webhook_secret: integrationSettings.webhook_secret,
+            date_range: integrationSettings.date_range || 'LAST_30_DAYS',
+            scenario_name: `Google Ads Sync - ${table.name}`,
+          },
+        });
+        
+        if (createResponse.error) {
+          throw new Error(createResponse.error.message || 'Failed to create scenario');
+        }
+        
+        const createData = createResponse.data;
+        
+        if (!createData.success || createData.fallback) {
+          // Scenario creation failed, show manual setup
+          throw new Error(createData.message || 'לא ניתן ליצור Scenario אוטומטי');
+        }
+        
+        scenarioId = createData.scenario_id;
+        
+        // Save the scenario ID to the table settings
+        await supabase
+          .from('crm_tables')
+          .update({
+            integration_settings: {
+              ...integrationSettings,
+              make_scenario_id: scenarioId,
+            },
+          })
+          .eq('id', table.id);
+      }
+      
+      // Run the scenario
+      console.log('Running Make.com scenario:', scenarioId);
+      const runResponse = await supabase.functions.invoke('make-api', {
+        body: {
+          action: 'run_and_sync_google_ads',
+          api_token: makeApiToken,
+          team_id: makeTeamId,
+          region: makeRegion,
+          scenario_id: scenarioId,
+          table_id: table.id,
+        },
+      });
+      
+      if (runResponse.error) {
+        throw new Error(runResponse.error.message || 'Failed to run scenario');
+      }
+      
+      return runResponse.data;
+    },
+    onSuccess: (data) => {
+      if (data?.success) {
+        toast.success('הסנכרון הופעל! הנתונים יתעדכנו בקרוב.');
+        // Refetch records after a delay to allow webhook to process
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
+          queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
+        }, 5000);
+      } else {
+        toast.info(data?.message || 'הסנכרון הופעל');
+      }
+    },
+    onError: (error: any) => {
+      console.error('Make sync error:', error);
+      toast.error(error.message || 'שגיאה בסנכרון דרך Make.com');
+      // If automatic sync fails, show the manual setup dialog
+      setShowMakeWebhookDialog(true);
+    },
+  });
+
   const syncGoogleAdsMutation = useMutation({
     mutationFn: async () => {
       if (!table?.id) throw new Error('No table');
       
-      // If this table uses Make.com, don't call the sync function - just show info
+      // If this table uses Make.com, use the Make sync instead
       if (isGoogleAdsMakeTable) {
-        return { uses_make: true, data_source: table.integration_settings?.data_source };
+        // Trigger Make sync mutation directly
+        throw new Error('USE_MAKE_SYNC');
       }
       
       const response = await supabase.functions.invoke('sync-google-ads-data', {
@@ -491,15 +624,16 @@ export default function DynamicTableView() {
       return response.data;
     },
     onSuccess: (data) => {
-      if (data?.uses_make) {
-        toast.info('טבלה זו משתמשת ב-Make.com לסנכרון נתונים. הגדר Scenario ב-Make.com כדי לסנכרן את הנתונים.');
-        return;
-      }
       queryClient.invalidateQueries({ queryKey: ['crm-records', table?.id] });
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
       toast.success(`נתוני Google Ads סונכרנו בהצלחה (${data?.records_synced || 0} שורות)`);
     },
     onError: (error: any) => {
+      if (error.message === 'USE_MAKE_SYNC') {
+        // This shouldn't happen now, but just in case
+        syncMakeGoogleAdsMutation.mutate();
+        return;
+      }
       toast.error('שגיאה בסנכרון מ-Google Ads: ' + error.message);
     },
   });
@@ -924,15 +1058,27 @@ export default function DynamicTableView() {
           {hasGoogleAds && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center">
               {isGoogleAdsMakeTable ? (
-                // For Make.com tables, show button that opens webhook info dialog
-                <Button 
-                  variant="outline" 
-                  onClick={() => setShowMakeWebhookDialog(true)}
-                  className="flex-1 md:flex-none gap-2"
-                >
-                  <GoogleAdsIcon className="h-4 w-4" />
-                  <span>הגדרות סנכרון Make.com</span>
-                </Button>
+                // For Make.com tables, show automatic sync button
+                <>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => syncMakeGoogleAdsMutation.mutate()}
+                    disabled={syncMakeGoogleAdsMutation.isPending}
+                    className="flex-1 md:flex-none gap-2"
+                  >
+                    <GoogleAdsIcon className="h-4 w-4" />
+                    <RefreshCw className={`h-4 w-4 ${syncMakeGoogleAdsMutation.isPending ? 'animate-spin' : ''}`} />
+                    {syncMakeGoogleAdsMutation.isPending ? 'מסנכרן...' : 'סנכרן Google Ads'}
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => setShowMakeWebhookDialog(true)}
+                    title="הגדרות Make.com"
+                  >
+                    <Link className="h-4 w-4" />
+                  </Button>
+                </>
               ) : (
                 // For Direct API tables, show sync button
                 <Button 
