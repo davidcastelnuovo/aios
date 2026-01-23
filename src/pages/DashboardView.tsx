@@ -136,13 +136,18 @@ export default function DashboardView() {
       }
       
       const data = record.data || {};
-      platforms[source].spend += Number(data.spend) || 0;
+      // Facebook commonly uses `spend`, Google Ads uses `cost`
+      platforms[source].spend += Number(data.spend) || Number(data.cost) || 0;
       platforms[source].impressions += Number(data.impressions) || 0;
       platforms[source].clicks += Number(data.clicks) || 0;
-      platforms[source].conversions += Number(data.conversions) || 0;
+      platforms[source].conversions += Number(data.conversions) || Number(data.purchases) || 0;
       platforms[source].purchases += Number(data.purchases) || 0;
-      // Support both purchase_value (Facebook) and conversion_value (Google Ads)
-      platforms[source].purchase_value += Number(data.purchase_value) || Number(data.conversion_value) || 0;
+      // Facebook: purchase_value | Google Ads: conversions_value (sometimes conversion_value)
+      platforms[source].purchase_value +=
+        Number(data.purchase_value) ||
+        Number(data.conversions_value) ||
+        Number(data.conversion_value) ||
+        0;
       platforms[source].recordCount += 1;
     });
 
@@ -156,10 +161,13 @@ export default function DashboardView() {
     return platforms;
   }, [allRecords]);
 
-  // Calculate total summary (excluding Facebook from ROAS calculation)
+  // Calculate total summary (for now: ONLY Google Ads; exclude Facebook revenue/purchases)
   const totalSummary = useMemo(() => {
     return Object.entries(summaryByPlatform).reduce((acc: any, [platform, data]: [string, any]) => {
-      const isFacebook = platform === 'facebook_insights' || platform === 'facebook_ecommerce';
+      const isGoogleAds = platform === 'google_ads' || platform.startsWith('google_ads');
+
+      if (!isGoogleAds) return acc;
+
       return {
         spend: acc.spend + data.spend,
         impressions: acc.impressions + data.impressions,
@@ -167,9 +175,8 @@ export default function DashboardView() {
         conversions: acc.conversions + data.conversions,
         purchases: acc.purchases + data.purchases,
         purchase_value: acc.purchase_value + data.purchase_value,
-        // For ROAS calculation, exclude Facebook values
-        roas_spend: acc.roas_spend + (isFacebook ? 0 : data.spend),
-        roas_value: acc.roas_value + (isFacebook ? 0 : data.purchase_value),
+        roas_spend: acc.roas_spend + data.spend,
+        roas_value: acc.roas_value + data.purchase_value,
       };
     }, { spend: 0, impressions: 0, clicks: 0, conversions: 0, purchases: 0, purchase_value: 0, roas_spend: 0, roas_value: 0 });
   }, [summaryByPlatform]);
