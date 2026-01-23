@@ -45,6 +45,7 @@ interface MakeSettings {
   team_id: string;
   region: string;
   connected_at?: string;
+  google_ads_template_scenario_id?: string;
 }
 
 const REGIONS = [
@@ -63,6 +64,7 @@ export default function MakeSettings() {
   const [apiToken, setApiToken] = useState("");
   const [teamId, setTeamId] = useState("");
   const [region, setRegion] = useState("eu1");
+  const [googleAdsTemplateId, setGoogleAdsTemplateId] = useState("");
   const [showToken, setShowToken] = useState(false);
   const [activeTab, setActiveTab] = useState("settings");
 
@@ -89,6 +91,7 @@ export default function MakeSettings() {
       setApiToken(settings.api_token || "");
       setTeamId(settings.team_id || "");
       setRegion(settings.region || "eu1");
+      setGoogleAdsTemplateId(settings.google_ads_template_scenario_id || "");
     }
   }, [makeIntegration]);
 
@@ -133,6 +136,7 @@ export default function MakeSettings() {
         api_token: apiToken,
         team_id: teamId,
         region,
+        google_ads_template_scenario_id: googleAdsTemplateId || undefined,
         connected_at: new Date().toISOString(),
       };
 
@@ -439,6 +443,23 @@ export default function MakeSettings() {
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   בחר את ה-Region שבו נמצא חשבון Make שלך
+                </p>
+              </div>
+
+              {/* Google Ads Template Scenario ID */}
+              <div className="space-y-2 pt-4 border-t">
+                <Label htmlFor="google-ads-template">Google Ads Template Scenario ID</Label>
+                <Input
+                  id="google-ads-template"
+                  type="text"
+                  value={googleAdsTemplateId}
+                  onChange={(e) => setGoogleAdsTemplateId(e.target.value)}
+                  placeholder="הזן את ה-Scenario ID של הטמפלייט"
+                />
+                <p className="text-xs text-muted-foreground">
+                  צור Scenario ב-Make.com עם 2 מודולים: Google Ads Report → HTTP POST, ושמור את ה-ID שלו כאן.
+                  <br />
+                  המערכת תשכפל אותו אוטומטית לכל טבלת Google Ads חדשה.
                 </p>
               </div>
 
