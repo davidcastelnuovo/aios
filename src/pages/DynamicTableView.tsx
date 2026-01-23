@@ -45,6 +45,7 @@ import { SearchConsoleDashboard } from "@/components/dynamic-tables/SearchConsol
 import { AlertsManagementDialog } from "@/components/dynamic-tables/AlertsManagementDialog";
 import { ActiveAlerts } from "@/components/dynamic-tables/ActiveAlerts";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { MakeScenarioSettings } from "@/components/dynamic-tables/MakeScenarioSettings";
 
 // Google Ads icon component
 const GoogleAdsIcon = ({ className = "h-4 w-4" }: { className?: string }) => (
@@ -1837,77 +1838,25 @@ export default function DynamicTableView() {
 
       {/* Make.com Automatic Sync Dialog for Google Ads */}
       <Dialog open={showMakeWebhookDialog} onOpenChange={setShowMakeWebhookDialog}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[550px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <GoogleAdsIcon className="h-5 w-5" />
               סנכרון Google Ads דרך Make.com
             </DialogTitle>
             <DialogDescription>
-              סנכרן נתונים מ-Google Ads באופן אוטומטי
+              הגדר את ה-Scenario ID להרצה ישירה מהטבלה
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4">
-            {/* Connection Info */}
-            <div className="bg-muted p-4 rounded-lg space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">חיבור Make.com:</span>
-                <span className="font-medium">{table?.integration_settings?.make_connection_name || 'לא מוגדר'}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Customer ID:</span>
-                <span className="font-mono text-sm">{table?.integration_settings?.customer_id || 'לא מוגדר'}</span>
-              </div>
-              {table?.integration_settings?.make_scenario_id && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Scenario ID:</span>
-                  <span className="font-mono text-sm">{table?.integration_settings?.make_scenario_id}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Sync Status */}
-            {(table as any)?.last_sync_at && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">סנכרון אחרון:</span>
-                <span>{new Date((table as any).last_sync_at).toLocaleString('he-IL')}</span>
-              </div>
-            )}
-
-            {/* Info Alert */}
-            <Alert>
-              <RefreshCw className="h-4 w-4" />
-              <AlertDescription>
-                לחיצה על "סנכרן עכשיו" תיצור ותפעיל Scenario אוטומטי ב-Make.com שישלוף נתונים מ-Google Ads ויעדכן את הטבלה.
-              </AlertDescription>
-            </Alert>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={() => setShowMakeWebhookDialog(false)}>
-              סגור
-            </Button>
-            <Button 
-              onClick={() => {
-                setShowMakeWebhookDialog(false);
-                syncMakeGoogleAdsMutation.mutate();
-              }}
-              disabled={syncMakeGoogleAdsMutation.isPending || !table?.integration_settings?.make_connection_id}
-            >
-              {syncMakeGoogleAdsMutation.isPending ? (
-                <>
-                  <RefreshCw className="ml-2 h-4 w-4 animate-spin" />
-                  מסנכרן...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="ml-2 h-4 w-4" />
-                  סנכרן עכשיו
-                </>
-              )}
-            </Button>
-          </div>
+          <MakeScenarioSettings 
+            table={table}
+            onSync={() => {
+              setShowMakeWebhookDialog(false);
+              syncMakeGoogleAdsMutation.mutate();
+            }}
+            isSyncing={syncMakeGoogleAdsMutation.isPending}
+          />
         </DialogContent>
       </Dialog>
     </div>
