@@ -1844,18 +1844,27 @@ export default function DynamicTableView() {
                   cost: 0,
                   conversions_value: 0,
                   all_conversions: 0,
-                  all_conversions_value: 0
+                  all_conversions_value: 0,
+                  roas_sum: 0,
+                  roas_count: 0
                 };
               }
               acc[campaignName].impressions += Number(record.data?.impressions) || 0;
               acc[campaignName].clicks += Number(record.data?.clicks) || 0;
-              acc[campaignName].conversions += Number(record.data?.conversions) || 0;
+              // Support both standard Google Ads fields and Make.com ecommerce fields
+              acc[campaignName].conversions += Number(record.data?.conversions) || Number(record.data?.purchases) || 0;
               acc[campaignName].cost += Number(record.data?.cost) || 0;
-              acc[campaignName].conversions_value += Number(record.data?.conversions_value) || 0;
+              // Support both conversions_value and purchase_value (from Make.com)
+              acc[campaignName].conversions_value += Number(record.data?.conversions_value) || Number(record.data?.purchase_value) || 0;
               acc[campaignName].all_conversions += Number(record.data?.all_conversions) || 0;
               acc[campaignName].all_conversions_value += Number(record.data?.all_conversions_value) || 0;
+              // Track ROAS if it's pre-calculated in the data
+              if (record.data?.roas) {
+                acc[campaignName].roas_sum += Number(record.data.roas) || 0;
+                acc[campaignName].roas_count += 1;
+              }
               return acc;
-            }, {} as Record<string, { impressions: number; clicks: number; conversions: number; cost: number; conversions_value: number; all_conversions: number; all_conversions_value: number }>);
+            }, {} as Record<string, { impressions: number; clicks: number; conversions: number; cost: number; conversions_value: number; all_conversions: number; all_conversions_value: number; roas_sum: number; roas_count: number }>);
 
             const totals = Object.values(campaignGroups).reduce((acc, campaign) => ({
               impressions: acc.impressions + campaign.impressions,
@@ -1865,7 +1874,14 @@ export default function DynamicTableView() {
               conversions_value: acc.conversions_value + campaign.conversions_value,
               all_conversions: acc.all_conversions + campaign.all_conversions,
               all_conversions_value: acc.all_conversions_value + campaign.all_conversions_value,
-            }), { impressions: 0, clicks: 0, conversions: 0, cost: 0, conversions_value: 0, all_conversions: 0, all_conversions_value: 0 });
+              roas_sum: acc.roas_sum + campaign.roas_sum,
+              roas_count: acc.roas_count + campaign.roas_count,
+            }), { impressions: 0, clicks: 0, conversions: 0, cost: 0, conversions_value: 0, all_conversions: 0, all_conversions_value: 0, roas_sum: 0, roas_count: 0 });
+            
+            // Calculate total ROAS - use average of pre-calculated ROAS if available, otherwise calculate
+            const totalRoas = totals.roas_count > 0 
+              ? totals.roas_sum / totals.roas_count 
+              : (totals.cost > 0 ? totals.conversions_value / totals.cost : 0);
 
             return (
               <div className="overflow-x-auto">
@@ -1890,7 +1906,10 @@ export default function DynamicTableView() {
                   <tbody>
                     {Object.entries(campaignGroups).map(([campaignName, data]) => {
                       const costPerConversion = data.conversions > 0 ? data.cost / data.conversions : 0;
-                      const roas = data.cost > 0 ? data.conversions_value / data.cost : 0;
+                      // Use pre-calculated ROAS average if available, otherwise calculate from values
+                      const roas = data.roas_count > 0 
+                        ? data.roas_sum / data.roas_count 
+                        : (data.cost > 0 ? data.conversions_value / data.cost : 0);
                       return (
                         <tr key={campaignName} className="border-b hover:bg-muted/30">
                           <td className="p-2 text-right font-medium">{campaignName}</td>
@@ -1920,7 +1939,7 @@ export default function DynamicTableView() {
                       {isEcommerce ? (
                         <>
                           <td className="p-2 text-center text-purple-600">₪{totals.conversions_value.toLocaleString('he-IL', { maximumFractionDigits: 0 })}</td>
-                          <td className="p-2 text-center text-blue-600">{(totals.cost > 0 ? totals.conversions_value / totals.cost : 0).toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
+                          <td className="p-2 text-center text-blue-600">{totalRoas.toLocaleString('he-IL', { maximumFractionDigits: 2 })}x</td>
                         </>
                       ) : (
                         <td className="p-2 text-center text-blue-600">₪{(totals.conversions > 0 ? totals.cost / totals.conversions : 0).toLocaleString('he-IL', { maximumFractionDigits: 1 })}</td>
