@@ -395,8 +395,13 @@ export default function RankTrackingProject() {
     }
   };
 
-  const getPositionBadge = (position: number | null) => {
-    if (position === null) return <Badge variant="secondary">לא נמצא</Badge>;
+  const getPositionBadge = (position: number | null, lastChecked: string | null) => {
+    if (!lastChecked) {
+      return <Badge variant="outline" className="bg-gray-50 text-gray-500">ממתין</Badge>;
+    }
+    if (position === null) {
+      return <Badge variant="outline" className="bg-orange-50 text-orange-600">לא נמצא</Badge>;
+    }
     if (position <= 3) return <Badge className="bg-green-500">{position}</Badge>;
     if (position <= 10) return <Badge className="bg-blue-500">{position}</Badge>;
     if (position <= 20) return <Badge className="bg-amber-500">{position}</Badge>;
@@ -712,17 +717,17 @@ export default function RankTrackingProject() {
             </div>
           ) : keywords && keywords.length > 0 ? (
             <Card>
-              <Table>
+              <Table dir="rtl">
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ביטוי</TableHead>
+                    <TableHead className="text-right">ביטוי</TableHead>
                     <TableHead className="text-center w-24">מיקום</TableHead>
                     <TableHead className="text-center w-24">שינוי</TableHead>
                     <TableHead className="text-center w-20">Best</TableHead>
                     <TableHead className="text-center w-20">Worst</TableHead>
-                    <TableHead>URL</TableHead>
+                    <TableHead className="text-right">URL</TableHead>
                     <TableHead className="text-center w-36">נבדק</TableHead>
-                    <TableHead className="w-20"></TableHead>
+                    <TableHead className="w-16 text-left"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -733,9 +738,9 @@ export default function RankTrackingProject() {
                       onClick={() => setSelectedKeywordId(keyword.id)}
                       style={{ cursor: "pointer" }}
                     >
-                      <TableCell className="font-medium">{keyword.keyword}</TableCell>
+                      <TableCell className="font-medium text-right">{keyword.keyword}</TableCell>
                       <TableCell className="text-center">
-                        {getPositionBadge(keyword.current_position)}
+                        {getPositionBadge(keyword.current_position, keyword.last_checked_at)}
                       </TableCell>
                       <TableCell className="text-center">
                         {getChangeIndicator(keyword.position_change)}
@@ -746,7 +751,7 @@ export default function RankTrackingProject() {
                       <TableCell className="text-center text-red-600">
                         {keyword.worst_position ?? "-"}
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate text-muted-foreground text-xs">
+                      <TableCell className="max-w-[200px] truncate text-muted-foreground text-xs text-right">
                         {keyword.found_url || "-"}
                       </TableCell>
                       <TableCell className="text-center text-xs text-muted-foreground">
@@ -754,7 +759,7 @@ export default function RankTrackingProject() {
                           ? format(new Date(keyword.last_checked_at), "dd/MM HH:mm", { locale: he })
                           : "-"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-left">
                         <Button
                           variant="ghost"
                           size="icon"
