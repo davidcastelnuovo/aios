@@ -164,6 +164,32 @@ Deno.serve(async (req) => {
           .from("site_visitors")
           .update({ visit_count: (visitor.visit_count || 0) + 1 })
           .eq("id", visitor.id);
+
+        // Save the initial pageview for session_start
+        if (event_type === "session_start" && data.page_url) {
+          const { error: pageviewError } = await supabase
+            .from("site_pageviews")
+            .insert({
+              session_id,
+              visitor_id: visitor.id,
+              tracking_config_id,
+              page_url: data.page_url,
+              page_path: data.page_path,
+              page_title: data.page_title,
+              scroll_depth: data.scroll_depth || 0,
+              tenant_id,
+            });
+
+          if (pageviewError) {
+            console.error("Error creating initial pageview:", pageviewError);
+          } else {
+            // Set initial page count to 1
+            await supabase
+              .from("site_sessions")
+              .update({ page_count: 1 })
+              .eq("id", session_id);
+          }
+        }
       }
     } else {
       // Get existing session
