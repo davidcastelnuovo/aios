@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Code, Copy, Check, Plus, Globe, Settings } from "lucide-react";
+import { Code, Copy, Check, Plus, Globe, BarChart3 } from "lucide-react";
 
 interface Client {
   id: string;
@@ -31,6 +31,7 @@ interface TrackingCodeGeneratorProps {
   trackingConfigs: TrackingConfig[];
   onCreateConfig: (data: { clientId: string; domain: string }) => void;
   isCreating: boolean;
+  onViewDashboard?: (clientId: string) => void;
 }
 
 export function TrackingCodeGenerator({
@@ -38,6 +39,7 @@ export function TrackingCodeGenerator({
   trackingConfigs,
   onCreateConfig,
   isCreating,
+  onViewDashboard,
 }: TrackingCodeGeneratorProps) {
   const [selectedClient, setSelectedClient] = useState("");
   const [newDomain, setNewDomain] = useState("");
@@ -178,6 +180,14 @@ export function TrackingCodeGenerator({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onViewDashboard?.(config.client_id)}
+                    >
+                      <BarChart3 className="h-4 w-4 ml-1" />
+                      צפה בדשבורד
+                    </Button>
                     <Badge variant={config.is_active ? "default" : "secondary"}>
                       {config.is_active ? "פעיל" : "מושבת"}
                     </Badge>
