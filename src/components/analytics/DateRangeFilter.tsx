@@ -2,9 +2,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, ChevronDown } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay, startOfWeek, startOfMonth, endOfMonth, subMonths, subYears } from "date-fns";
 import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -37,13 +38,13 @@ const presets: { key: DatePreset; label: string }[] = [
   { key: "today", label: "היום" },
   { key: "yesterday", label: "אתמול" },
   { key: "this_week", label: "השבוע" },
-  { key: "7_days", label: "7 ימים" },
-  { key: "14_days", label: "14 יום" },
-  { key: "30_days", label: "30 יום" },
-  { key: "this_month", label: "החודש" },
+  { key: "7_days", label: "7 ימים אחרונים" },
+  { key: "14_days", label: "14 ימים אחרונים" },
+  { key: "30_days", label: "30 ימים אחרונים" },
+  { key: "this_month", label: "החודש הנוכחי" },
   { key: "last_month", label: "חודש שעבר" },
-  { key: "3_months", label: "3 חודשים" },
-  { key: "year", label: "שנה" },
+  { key: "3_months", label: "3 חודשים אחרונים" },
+  { key: "year", label: "שנה אחרונה" },
 ];
 
 function getDateRangeFromPreset(preset: DatePreset): DateRange {
@@ -95,11 +96,6 @@ export function DateRangeFilter({ onRangeChange, onCompareChange, showComparison
   const [isCustomOpen, setIsCustomOpen] = useState(false);
 
   const handlePresetClick = (preset: DatePreset) => {
-    if (preset === "custom") {
-      setIsCustomOpen(true);
-      return;
-    }
-    
     setSelectedPreset(preset);
     const range = getDateRangeFromPreset(preset);
     const comparisonRange = compareEnabled ? getComparisonRange(range) : undefined;
@@ -135,71 +131,82 @@ export function DateRangeFilter({ onRangeChange, onCompareChange, showComparison
     return `${format(customStart, "dd/MM/yy", { locale: he })} - ${format(customEnd, "dd/MM/yy", { locale: he })}`;
   };
 
+  const getSelectedLabel = () => {
+    if (selectedPreset === "custom") return formatCustomRange();
+    return presets.find(p => p.key === selectedPreset)?.label || "7 ימים אחרונים";
+  };
+
   return (
-    <div className="space-y-3" dir="rtl">
-      {/* Preset buttons */}
-      <div className="flex flex-wrap gap-2">
-        {presets.map((preset) => (
-          <Button
-            key={preset.key}
-            variant={selectedPreset === preset.key ? "default" : "outline"}
-            size="sm"
-            onClick={() => handlePresetClick(preset.key)}
-            className="text-xs"
-          >
-            {preset.label}
+    <div className="flex items-center gap-3" dir="rtl">
+      {/* Dropdown for all presets */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="gap-2 min-w-[160px] justify-between">
+            <CalendarIcon className="h-4 w-4" />
+            <span>{getSelectedLabel()}</span>
+            <ChevronDown className="h-4 w-4 opacity-50" />
           </Button>
-        ))}
-        
-        {/* Custom date range picker */}
-        <Popover open={isCustomOpen} onOpenChange={setIsCustomOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              variant={selectedPreset === "custom" ? "default" : "outline"}
-              size="sm"
-              className="text-xs gap-1"
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-48 bg-background z-50">
+          {presets.map((preset) => (
+            <DropdownMenuItem
+              key={preset.key}
+              onClick={() => handlePresetClick(preset.key)}
+              className={cn(
+                "cursor-pointer",
+                selectedPreset === preset.key && "bg-accent font-medium"
+              )}
             >
-              <CalendarIcon className="h-3 w-3" />
-              {selectedPreset === "custom" ? formatCustomRange() : "טווח מותאם"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <div className="p-3 space-y-3">
-              <div className="flex gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">מתאריך</Label>
-                  <Calendar
-                    mode="single"
-                    selected={customStart}
-                    onSelect={setCustomStart}
-                    disabled={(date) => date > new Date() || (customEnd && date > customEnd)}
-                    initialFocus
-                    className={cn("p-3 pointer-events-auto")}
-                  />
+              {preset.label}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <Popover open={isCustomOpen} onOpenChange={setIsCustomOpen}>
+              <PopoverTrigger asChild>
+                <button className="w-full text-right px-2 py-1.5 text-sm hover:bg-accent rounded-sm cursor-pointer">
+                  טווח מותאם אישית...
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0 z-50 bg-background" align="start" side="left">
+                <div className="p-3 space-y-3">
+                  <div className="flex gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">מתאריך</Label>
+                      <Calendar
+                        mode="single"
+                        selected={customStart}
+                        onSelect={setCustomStart}
+                        disabled={(date) => date > new Date() || (customEnd && date > customEnd)}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">עד תאריך</Label>
+                      <Calendar
+                        mode="single"
+                        selected={customEnd}
+                        onSelect={setCustomEnd}
+                        disabled={(date) => date > new Date() || (customStart && date < customStart)}
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setIsCustomOpen(false)}>
+                      ביטול
+                    </Button>
+                    <Button size="sm" onClick={handleCustomApply} disabled={!customStart || !customEnd}>
+                      החל
+                    </Button>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">עד תאריך</Label>
-                  <Calendar
-                    mode="single"
-                    selected={customEnd}
-                    onSelect={setCustomEnd}
-                    disabled={(date) => date > new Date() || (customStart && date < customStart)}
-                    className={cn("p-3 pointer-events-auto")}
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => setIsCustomOpen(false)}>
-                  ביטול
-                </Button>
-                <Button size="sm" onClick={handleCustomApply} disabled={!customStart || !customEnd}>
-                  החל
-                </Button>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
+              </PopoverContent>
+            </Popover>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       {/* Comparison toggle */}
       {showComparison && (
@@ -209,7 +216,7 @@ export function DateRangeFilter({ onRangeChange, onCompareChange, showComparison
             checked={compareEnabled}
             onCheckedChange={handleCompareToggle}
           />
-          <Label htmlFor="compare" className="text-sm cursor-pointer">
+          <Label htmlFor="compare" className="text-sm cursor-pointer whitespace-nowrap">
             השווה לתקופה קודמת
           </Label>
         </div>
