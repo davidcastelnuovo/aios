@@ -1,32 +1,57 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { format, subDays, differenceInDays } from "date-fns";
 import { he } from "date-fns/locale";
-import { Globe, Clock, Users, TrendingUp, Smartphone, Monitor, Tablet, ArrowUp, ArrowDown, ShoppingCart, CreditCard, Eye, MousePointer } from "lucide-react";
+import { Globe, Clock, Users, TrendingUp, Smartphone, Monitor, Tablet, ArrowDown, ShoppingCart, CreditCard, Eye, MousePointer } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DateRangeFilter, type DateRange, getDateRangeFromPreset, getComparisonRange } from "./DateRangeFilter";
+import { ComparisonBadge } from "./ComparisonBadge";
+import { ImportAnalyticsDialog } from "./ImportAnalyticsDialog";
 
 interface AnalyticsDashboardProps {
   tenantId: string | null;
   clientId?: string;
 }
 
-const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899"];
+const COLORS = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))", "#06b6d4", "#ec4899"];
 
 export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardProps) {
-  const [dateRange, setDateRange] = useState("7");
-  
-  const startDate = startOfDay(subDays(new Date(), parseInt(dateRange)));
-  const endDate = endOfDay(new Date());
+  const [dateRange, setDateRange] = useState<DateRange>(() => getDateRangeFromPreset("7_days"));
+  const [comparisonRange, setComparisonRange] = useState<DateRange | undefined>();
+  const [compareEnabled, setCompareEnabled] = useState(false);
+
+  const handleRangeChange = (range: DateRange, comparison?: DateRange) => {
+    setDateRange(range);
+    setComparisonRange(comparison);
+  };
+
+  const handleCompareChange = (enabled: boolean) => {
+    setCompareEnabled(enabled);
+    if (enabled) {
+      setComparisonRange(getComparisonRange(dateRange));
+    } else {
+      setComparisonRange(undefined);
+    }
+  };
+
+  // Helper to get tracking config for client
+  const getTrackingConfigQuery = async () => {
+    if (!clientId) return null;
+    const { data } = await supabase
+      .from("site_tracking_configs")
+      .select("id")
+      .eq("client_id", clientId)
+      .single();
+    return data;
+  };
 
   // Fetch sessions with aggregated data
   const { data: sessionsData, isLoading } = useQuery({
-    queryKey: ["analytics_sessions", tenantId, clientId, dateRange],
+    queryKey: ["analytics_sessions", tenantId, clientId, dateRange.start.toISOString(), dateRange.end.toISOString()],
     queryFn: async () => {
       let query = supabase
         .from("site_sessions")
@@ -45,17 +70,12 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
           landing_page
         `)
         .eq("tenant_id", tenantId)
-        .gte("started_at", startDate.toISOString())
-        .lte("started_at", endDate.toISOString())
+        .gte("started_at", dateRange.start.toISOString())
+        .lte("started_at", dateRange.end.toISOString())
         .order("started_at", { ascending: false });
 
       if (clientId) {
-        const { data: config } = await supabase
-          .from("site_tracking_configs")
-          .select("id")
-          .eq("client_id", clientId)
-          .single();
-        
+        const config = await getTrackingConfigQuery();
         if (config) {
           query = query.eq("tracking_config_id", config.id);
         }
@@ -68,24 +88,46 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
     enabled: !!tenantId,
   });
 
+  // Fetch comparison sessions if enabled
+  const { data: comparisonSessionsData } = useQuery({
+    queryKey: ["analytics_sessions_comparison", tenantId, clientId, comparisonRange?.start.toISOString(), comparisonRange?.end.toISOString()],
+    queryFn: async () => {
+      if (!comparisonRange) return [];
+      
+      let query = supabase
+        .from("site_sessions")
+        .select(`id, duration_seconds, page_count, is_bounce`)
+        .eq("tenant_id", tenantId)
+        .gte("started_at", comparisonRange.start.toISOString())
+        .lte("started_at", comparisonRange.end.toISOString());
+
+      if (clientId) {
+        const config = await getTrackingConfigQuery();
+        if (config) {
+          query = query.eq("tracking_config_id", config.id);
+        }
+      }
+
+      const { data, error } = await query.limit(1000);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId && !!comparisonRange,
+  });
+
   // Fetch top pages
   const { data: topPages = [] } = useQuery({
-    queryKey: ["analytics_top_pages", tenantId, clientId, dateRange],
+    queryKey: ["analytics_top_pages", tenantId, clientId, dateRange.start.toISOString(), dateRange.end.toISOString()],
     queryFn: async () => {
       let query = supabase
         .from("site_pageviews")
         .select("page_path, page_title")
         .eq("tenant_id", tenantId)
-        .gte("viewed_at", startDate.toISOString())
-        .lte("viewed_at", endDate.toISOString());
+        .gte("viewed_at", dateRange.start.toISOString())
+        .lte("viewed_at", dateRange.end.toISOString());
 
       if (clientId) {
-        const { data: config } = await supabase
-          .from("site_tracking_configs")
-          .select("id")
-          .eq("client_id", clientId)
-          .single();
-        
+        const config = await getTrackingConfigQuery();
         if (config) {
           query = query.eq("tracking_config_id", config.id);
         }
@@ -115,22 +157,17 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
 
   // Fetch events data
   const { data: eventsData = [] } = useQuery({
-    queryKey: ["analytics_events", tenantId, clientId, dateRange],
+    queryKey: ["analytics_events", tenantId, clientId, dateRange.start.toISOString(), dateRange.end.toISOString()],
     queryFn: async () => {
       let query = supabase
         .from("site_events")
         .select("event_name, event_category, event_value, event_data")
         .eq("tenant_id", tenantId)
-        .gte("occurred_at", startDate.toISOString())
-        .lte("occurred_at", endDate.toISOString());
+        .gte("occurred_at", dateRange.start.toISOString())
+        .lte("occurred_at", dateRange.end.toISOString());
 
       if (clientId) {
-        const { data: config } = await supabase
-          .from("site_tracking_configs")
-          .select("id")
-          .eq("client_id", clientId)
-          .single();
-        
+        const config = await getTrackingConfigQuery();
         if (config) {
           query = query.eq("tracking_config_id", config.id);
         }
@@ -169,14 +206,16 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
   });
 
   // Process sessions data
-  const processedData = (() => {
+  const processedData = useMemo(() => {
     if (!sessionsData) return null;
+
+    // Calculate days in range
+    const daysInRange = differenceInDays(dateRange.end, dateRange.start) + 1;
 
     // Sessions by day
     const sessionsByDay = new Map<string, number>();
-    const days = parseInt(dateRange);
-    for (let i = 0; i < days; i++) {
-      const date = format(subDays(new Date(), days - 1 - i), "yyyy-MM-dd");
+    for (let i = 0; i < daysInRange; i++) {
+      const date = format(subDays(dateRange.end, daysInRange - 1 - i), "yyyy-MM-dd");
       sessionsByDay.set(date, 0);
     }
     
@@ -235,11 +274,28 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
       devices,
       browsers,
       avgDuration: totalSessions ? Math.round(totalDuration / totalSessions) : 0,
-      avgPages: totalSessions ? (totalPages / totalSessions).toFixed(1) : 0,
+      avgPages: totalSessions ? (totalPages / totalSessions).toFixed(1) : "0",
       bounceRate: totalSessions ? Math.round((bounces / totalSessions) * 100) : 0,
       totalSessions,
     };
-  })();
+  }, [sessionsData, dateRange]);
+
+  // Process comparison data
+  const comparisonData = useMemo(() => {
+    if (!comparisonSessionsData || comparisonSessionsData.length === 0) return null;
+
+    const totalSessions = comparisonSessionsData.length;
+    const totalDuration = comparisonSessionsData.reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
+    const totalPages = comparisonSessionsData.reduce((sum, s) => sum + (s.page_count || 0), 0);
+    const bounces = comparisonSessionsData.filter(s => s.is_bounce).length;
+
+    return {
+      avgDuration: totalSessions ? Math.round(totalDuration / totalSessions) : 0,
+      avgPages: totalSessions ? parseFloat((totalPages / totalSessions).toFixed(1)) : 0,
+      bounceRate: totalSessions ? Math.round((bounces / totalSessions) * 100) : 0,
+      totalSessions,
+    };
+  }, [comparisonSessionsData]);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -257,12 +313,12 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
 
   const getEventIcon = (eventName: string) => {
     switch (eventName) {
-      case "add_to_cart": return <ShoppingCart className="h-4 w-4 text-blue-500" />;
-      case "remove_from_cart": return <ShoppingCart className="h-4 w-4 text-red-500" />;
-      case "purchase": return <CreditCard className="h-4 w-4 text-green-500" />;
-      case "begin_checkout": return <ShoppingCart className="h-4 w-4 text-orange-500" />;
-      case "view_product": return <Eye className="h-4 w-4 text-purple-500" />;
-      case "form_submit": return <TrendingUp className="h-4 w-4 text-teal-500" />;
+      case "add_to_cart": return <ShoppingCart className="h-4 w-4 text-primary" />;
+      case "remove_from_cart": return <ShoppingCart className="h-4 w-4 text-destructive" />;
+      case "purchase": return <CreditCard className="h-4 w-4 text-primary" />;
+      case "begin_checkout": return <ShoppingCart className="h-4 w-4 text-muted-foreground" />;
+      case "view_product": return <Eye className="h-4 w-4 text-secondary-foreground" />;
+      case "form_submit": return <TrendingUp className="h-4 w-4 text-accent-foreground" />;
       default: return <MousePointer className="h-4 w-4 text-muted-foreground" />;
     }
   };
@@ -288,33 +344,36 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
 
   if (!processedData || processedData.totalSessions === 0) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <Globe className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-          <h3 className="text-lg font-medium mb-2">אין נתונים עדיין</h3>
-          <p className="text-muted-foreground">
-            התקן את קוד המעקב באתר כדי להתחיל לאסוף נתונים
-          </p>
-        </CardContent>
-      </Card>
+      <div dir="rtl">
+        <div className="flex justify-between items-start mb-4">
+          <DateRangeFilter 
+            onRangeChange={handleRangeChange}
+            onCompareChange={handleCompareChange}
+          />
+          <ImportAnalyticsDialog tenantId={tenantId} />
+        </div>
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Globe className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">אין נתונים עדיין</h3>
+            <p className="text-muted-foreground">
+              התקן את קוד המעקב באתר כדי להתחיל לאסוף נתונים
+            </p>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir="rtl">
       {/* Date Range Selector */}
-      <div className="flex justify-end">
-        <Select value={dateRange} onValueChange={setDateRange}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">7 ימים אחרונים</SelectItem>
-            <SelectItem value="14">14 ימים אחרונים</SelectItem>
-            <SelectItem value="30">30 ימים אחרונים</SelectItem>
-            <SelectItem value="90">90 ימים אחרונים</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+        <DateRangeFilter 
+          onRangeChange={handleRangeChange}
+          onCompareChange={handleCompareChange}
+        />
+        <ImportAnalyticsDialog tenantId={tenantId} />
       </div>
 
       {/* Summary Cards */}
@@ -326,6 +385,13 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{processedData.totalSessions}</div>
+            {compareEnabled && comparisonData && (
+              <ComparisonBadge 
+                current={processedData.totalSessions} 
+                previous={comparisonData.totalSessions}
+                className="mt-1"
+              />
+            )}
           </CardContent>
         </Card>
 
@@ -336,6 +402,13 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatDuration(processedData.avgDuration)}</div>
+            {compareEnabled && comparisonData && (
+              <ComparisonBadge 
+                current={processedData.avgDuration} 
+                previous={comparisonData.avgDuration}
+                className="mt-1"
+              />
+            )}
           </CardContent>
         </Card>
 
@@ -346,6 +419,13 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{processedData.avgPages}</div>
+            {compareEnabled && comparisonData && (
+              <ComparisonBadge 
+                current={parseFloat(processedData.avgPages)} 
+                previous={comparisonData.avgPages}
+                className="mt-1"
+              />
+            )}
           </CardContent>
         </Card>
 
@@ -356,6 +436,14 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{processedData.bounceRate}%</div>
+            {compareEnabled && comparisonData && (
+              <ComparisonBadge 
+                current={processedData.bounceRate} 
+                previous={comparisonData.bounceRate}
+                reverseColors // Lower bounce rate is better
+                className="mt-1"
+              />
+            )}
           </CardContent>
         </Card>
       </div>
@@ -414,8 +502,32 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
         </Card>
       </div>
 
-      {/* Second Row */}
+      {/* Second Row - Devices first in RTL */}
       <div className="grid gap-4 md:grid-cols-3">
+        {/* Device Breakdown */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">מכשירים</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {processedData.devices.map((device) => (
+                <div key={device.name} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {getDeviceIcon(device.name)}
+                    <span className="text-sm capitalize">
+                      {device.name === "desktop" ? "מחשב" : 
+                       device.name === "mobile" ? "נייד" : 
+                       device.name === "tablet" ? "טאבלט" : device.name}
+                    </span>
+                  </div>
+                  <Badge variant="secondary">{device.value}</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Top Pages */}
         <Card className="md:col-span-2">
           <CardHeader>
@@ -437,30 +549,6 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
               {topPages.length === 0 && (
                 <p className="text-muted-foreground text-center py-4">אין נתונים</p>
               )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Device Breakdown */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">מכשירים</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {processedData.devices.map((device) => (
-                <div key={device.name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    {getDeviceIcon(device.name)}
-                    <span className="text-sm capitalize">
-                      {device.name === "desktop" ? "מחשב" : 
-                       device.name === "mobile" ? "נייד" : 
-                       device.name === "tablet" ? "טאבלט" : device.name}
-                    </span>
-                  </div>
-                  <Badge variant="secondary">{device.value}</Badge>
-                </div>
-              ))}
             </div>
           </CardContent>
         </Card>
