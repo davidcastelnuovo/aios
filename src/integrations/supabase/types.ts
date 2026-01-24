@@ -3037,7 +3037,7 @@ export type Database = {
           is_active: boolean | null
           settings: Json | null
           tenant_id: string
-          tracking_id: string
+          tracking_id: string | null
           updated_at: string
           website_domain: string | null
         }
@@ -3048,7 +3048,7 @@ export type Database = {
           is_active?: boolean | null
           settings?: Json | null
           tenant_id: string
-          tracking_id: string
+          tracking_id?: string | null
           updated_at?: string
           website_domain?: string | null
         }
@@ -3059,7 +3059,7 @@ export type Database = {
           is_active?: boolean | null
           settings?: Json | null
           tenant_id?: string
-          tracking_id?: string
+          tracking_id?: string | null
           updated_at?: string
           website_domain?: string | null
         }
