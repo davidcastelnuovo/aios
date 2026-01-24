@@ -252,6 +252,12 @@ Deno.serve(async (req) => {
     }
 
     if (event_type === "event" && session_id && data.event_name) {
+      // Extract event value for e-commerce events from event_data if not in event_value
+      const eventValue = data.event_value || 
+        (data.event_data as Record<string, unknown>)?.value || 
+        (data.event_data as Record<string, unknown>)?.revenue || 
+        null;
+      
       const { error: eventError } = await supabase
         .from("site_events")
         .insert({
@@ -261,7 +267,7 @@ Deno.serve(async (req) => {
           event_name: data.event_name,
           event_category: data.event_category,
           event_label: data.event_label,
-          event_value: data.event_value,
+          event_value: typeof eventValue === 'number' ? eventValue : null,
           event_data: data.event_data,
           page_url: data.page_url,
           tenant_id,

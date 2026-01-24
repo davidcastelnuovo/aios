@@ -8,7 +8,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { he } from "date-fns/locale";
-import { Globe, Clock, Users, TrendingUp, Smartphone, Monitor, Tablet, ArrowUp, ArrowDown } from "lucide-react";
+import { Globe, Clock, Users, TrendingUp, Smartphone, Monitor, Tablet, ArrowUp, ArrowDown, ShoppingCart, CreditCard, Eye, MousePointer } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 interface AnalyticsDashboardProps {
   tenantId: string | null;
@@ -112,6 +113,61 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
     enabled: !!tenantId,
   });
 
+  // Fetch events data
+  const { data: eventsData = [] } = useQuery({
+    queryKey: ["analytics_events", tenantId, clientId, dateRange],
+    queryFn: async () => {
+      let query = supabase
+        .from("site_events")
+        .select("event_name, event_category, event_value, event_data")
+        .eq("tenant_id", tenantId)
+        .gte("occurred_at", startDate.toISOString())
+        .lte("occurred_at", endDate.toISOString());
+
+      if (clientId) {
+        const { data: config } = await supabase
+          .from("site_tracking_configs")
+          .select("id")
+          .eq("client_id", clientId)
+          .single();
+        
+        if (config) {
+          query = query.eq("tracking_config_id", config.id);
+        }
+      }
+
+      const { data, error } = await query.limit(1000);
+      if (error) throw error;
+
+      // Aggregate by event name
+      const eventMap = new Map<string, { name: string; category: string; count: number; totalValue: number }>();
+      data?.forEach((event) => {
+        const key = event.event_name || "unknown";
+        const existing = eventMap.get(key);
+        const eventValue = event.event_value || 
+          (event.event_data as Record<string, unknown>)?.value || 
+          (event.event_data as Record<string, unknown>)?.revenue || 
+          0;
+        
+        if (existing) {
+          existing.count++;
+          existing.totalValue += Number(eventValue) || 0;
+        } else {
+          eventMap.set(key, { 
+            name: key, 
+            category: event.event_category || "other",
+            count: 1, 
+            totalValue: Number(eventValue) || 0 
+          });
+        }
+      });
+
+      return Array.from(eventMap.values())
+        .sort((a, b) => b.count - a.count);
+    },
+    enabled: !!tenantId,
+  });
+
   // Process sessions data
   const processedData = (() => {
     if (!sessionsData) return null;
@@ -197,6 +253,33 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
       case "tablet": return <Tablet className="h-4 w-4" />;
       default: return <Monitor className="h-4 w-4" />;
     }
+  };
+
+  const getEventIcon = (eventName: string) => {
+    switch (eventName) {
+      case "add_to_cart": return <ShoppingCart className="h-4 w-4 text-blue-500" />;
+      case "remove_from_cart": return <ShoppingCart className="h-4 w-4 text-red-500" />;
+      case "purchase": return <CreditCard className="h-4 w-4 text-green-500" />;
+      case "begin_checkout": return <ShoppingCart className="h-4 w-4 text-orange-500" />;
+      case "view_product": return <Eye className="h-4 w-4 text-purple-500" />;
+      case "form_submit": return <TrendingUp className="h-4 w-4 text-teal-500" />;
+      default: return <MousePointer className="h-4 w-4 text-muted-foreground" />;
+    }
+  };
+
+  const getEventDisplayName = (eventName: string) => {
+    const names: Record<string, string> = {
+      "add_to_cart": "הוספה לעגלה",
+      "remove_from_cart": "הסרה מעגלה",
+      "purchase": "רכישה",
+      "begin_checkout": "התחלת צ'קאאוט",
+      "view_product": "צפייה במוצר",
+      "form_submit": "שליחת טופס",
+      "click": "לחיצה",
+      "button_click": "לחיצה על כפתור",
+      "outbound_click": "לחיצה חיצונית",
+    };
+    return names[eventName] || eventName;
   };
 
   if (isLoading) {
@@ -398,6 +481,55 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
               <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      {/* Events Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <MousePointer className="h-4 w-4" />
+            אירועים
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {eventsData.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-right">אירוע</TableHead>
+                  <TableHead className="text-right">קטגוריה</TableHead>
+                  <TableHead className="text-center">כמות</TableHead>
+                  <TableHead className="text-left">שווי כולל</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {eventsData.map((event) => (
+                  <TableRow key={event.name}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {getEventIcon(event.name)}
+                        {getEventDisplayName(event.name)}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {event.category === "ecommerce" ? "איקומרס" : 
+                         event.category === "custom" ? "מותאם" : 
+                         event.category === "form" ? "טופס" : event.category}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center">{event.count}</TableCell>
+                    <TableCell className="text-left">
+                      {event.totalValue > 0 ? `₪${event.totalValue.toLocaleString()}` : "-"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <p className="text-muted-foreground text-center py-4">אין אירועים בטווח התאריכים הנבחר</p>
+          )}
         </CardContent>
       </Card>
     </div>
