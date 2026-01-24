@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,36 +8,21 @@ import { format, subDays, differenceInDays } from "date-fns";
 import { he } from "date-fns/locale";
 import { Globe, Clock, Users, TrendingUp, Smartphone, Monitor, Tablet, ArrowDown, ShoppingCart, CreditCard, Eye, MousePointer } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DateRangeFilter, type DateRange, getDateRangeFromPreset, getComparisonRange } from "./DateRangeFilter";
+import { type DateRange } from "./DateRangeFilter";
 import { ComparisonBadge } from "./ComparisonBadge";
-import { ImportAnalyticsDialog } from "./ImportAnalyticsDialog";
 
 interface AnalyticsDashboardProps {
   tenantId: string | null;
   clientId?: string;
+  dateRange: DateRange;
+  comparisonRange?: DateRange;
+  compareEnabled: boolean;
 }
 
 // Vibrant colors for pie chart
 const COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#14b8a6"];
 
-export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardProps) {
-  const [dateRange, setDateRange] = useState<DateRange>(() => getDateRangeFromPreset("7_days"));
-  const [comparisonRange, setComparisonRange] = useState<DateRange | undefined>();
-  const [compareEnabled, setCompareEnabled] = useState(false);
-
-  const handleRangeChange = (range: DateRange, comparison?: DateRange) => {
-    setDateRange(range);
-    setComparisonRange(comparison);
-  };
-
-  const handleCompareChange = (enabled: boolean) => {
-    setCompareEnabled(enabled);
-    if (enabled) {
-      setComparisonRange(getComparisonRange(dateRange));
-    } else {
-      setComparisonRange(undefined);
-    }
-  };
+export function AnalyticsDashboard({ tenantId, clientId, dateRange, comparisonRange, compareEnabled }: AnalyticsDashboardProps) {
 
   // Helper to get tracking config for client
   const getTrackingConfigQuery = async () => {
@@ -346,13 +331,6 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
   if (!processedData || processedData.totalSessions === 0) {
     return (
       <div dir="rtl">
-        <div className="flex justify-between items-start mb-4">
-          <DateRangeFilter 
-            onRangeChange={handleRangeChange}
-            onCompareChange={handleCompareChange}
-          />
-          <ImportAnalyticsDialog tenantId={tenantId} />
-        </div>
         <Card>
           <CardContent className="py-12 text-center">
             <Globe className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -368,14 +346,6 @@ export function AnalyticsDashboard({ tenantId, clientId }: AnalyticsDashboardPro
 
   return (
     <div className="space-y-6" dir="rtl">
-      {/* Date Range Selector */}
-      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-        <DateRangeFilter 
-          onRangeChange={handleRangeChange}
-          onCompareChange={handleCompareChange}
-        />
-        <ImportAnalyticsDialog tenantId={tenantId} />
-      </div>
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
