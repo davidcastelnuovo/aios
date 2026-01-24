@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
     return storedId + '_' + Math.abs(hash).toString(36);
   }
   
-  // Get UTM parameters
+  // Get UTM parameters and ref/source fallbacks
   function getUTMParams() {
     var params = {};
     var search = window.location.search.substring(1);
@@ -116,8 +116,29 @@ Deno.serve(async (req) => {
     for (var i = 0; i < pairs.length; i++) {
       var pair = pairs[i].split('=');
       var key = decodeURIComponent(pair[0]);
+      var value = decodeURIComponent(pair[1] || '');
+      
+      // Support utm_ parameters
       if (key.indexOf('utm_') === 0) {
-        params[key] = decodeURIComponent(pair[1] || '');
+        params[key] = value;
+      } 
+      // Support ref parameter as utm_source fallback
+      else if (key === 'ref' && !params.utm_source) {
+        params.utm_source = value;
+      }
+      // Support source parameter as utm_source fallback
+      else if (key === 'source' && !params.utm_source) {
+        params.utm_source = value;
+      }
+      // Support fbclid as facebook source indicator
+      else if (key === 'fbclid' && !params.utm_source) {
+        params.utm_source = 'facebook';
+        params.utm_medium = 'cpc';
+      }
+      // Support gclid as google source indicator
+      else if (key === 'gclid' && !params.utm_source) {
+        params.utm_source = 'google';
+        params.utm_medium = 'cpc';
       }
     }
     
@@ -337,6 +358,81 @@ Deno.serve(async (req) => {
       event_name: eventName,
       event_category: 'custom',
       event_data: eventData,
+      page_url: window.location.href
+    });
+  };
+
+  // E-commerce: View Product
+  MC.viewProduct = function(productId, productName, value, category) {
+    track('event', {
+      event_name: 'view_product',
+      event_category: 'ecommerce',
+      event_data: {
+        product_id: productId,
+        product_name: productName,
+        value: value,
+        category: category
+      },
+      page_url: window.location.href
+    });
+  };
+
+  // E-commerce: Add to Cart
+  MC.addToCart = function(productId, productName, value, quantity, currency) {
+    track('event', {
+      event_name: 'add_to_cart',
+      event_category: 'ecommerce',
+      event_data: {
+        product_id: productId,
+        product_name: productName,
+        value: value,
+        quantity: quantity || 1,
+        currency: currency || 'ILS'
+      },
+      page_url: window.location.href
+    });
+  };
+
+  // E-commerce: Remove from Cart
+  MC.removeFromCart = function(productId, productName, value, quantity) {
+    track('event', {
+      event_name: 'remove_from_cart',
+      event_category: 'ecommerce',
+      event_data: {
+        product_id: productId,
+        product_name: productName,
+        value: value,
+        quantity: quantity || 1
+      },
+      page_url: window.location.href
+    });
+  };
+
+  // E-commerce: Begin Checkout
+  MC.beginCheckout = function(cartValue, itemCount, currency) {
+    track('event', {
+      event_name: 'begin_checkout',
+      event_category: 'ecommerce',
+      event_data: {
+        value: cartValue,
+        item_count: itemCount,
+        currency: currency || 'ILS'
+      },
+      page_url: window.location.href
+    });
+  };
+
+  // E-commerce: Purchase
+  MC.purchase = function(orderId, revenue, items, currency) {
+    track('event', {
+      event_name: 'purchase',
+      event_category: 'ecommerce',
+      event_data: {
+        order_id: orderId,
+        revenue: revenue,
+        items: items,
+        currency: currency || 'ILS'
+      },
       page_url: window.location.href
     });
   };
