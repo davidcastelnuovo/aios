@@ -1,99 +1,81 @@
 
-# תיקון מערכת אנליטיקס אתרים
+# תיקון ספירת Pageviews ו-Events
 
-## הבעיות שזוהו
+## הבעיה שזוהו
 
-### 1. `tracking_id` ריק - הבעיה הקריטית
-הקוד יוצר רשומה עם `tracking_id: ""` (מחרוזת ריקה), אבל ה-Trigger בבסיס הנתונים בודק רק `IS NULL`.
-מכיוון שמחרוזת ריקה אינה NULL, ה-Trigger לא יוצר את ה-ID האוטומטי.
+### 1. Pageviews לא נשמרים בכלל
+בעת `session_start` (כניסה ראשונית לאתר), הקוד בצד הלקוח שולח את הנתונים כ-`session_start` ולא כ-`pageview`. 
+הקוד בצד השרת (`analytics-track`) יוצר את ה-session אבל **לא שומר את ה-pageview הראשון**.
 
-**תוצאה:** קוד המעקב שהוטמע באתר לא עובד כי הוא שולח `tracking_id` ריק.
+```javascript
+// Client-side - שולח session_start בכניסה ראשונה
+track(state.sessionId ? 'pageview' : 'session_start', data);
+```
 
-### 2. הדשבורד לא נפתח אוטומטית לפי קוד מעקב
-כרגע צריך לבחור לקוח ידנית מהתפריט. הבקשה היא שהדשבורד יהיה מקושר ישירות לקוד המעקב/לקוח.
+```typescript
+// Server-side - מטפל ב-pageview רק אם event_type === "pageview"
+if (event_type === "pageview" && session_id && data.page_url) {
+  // שומר pageview
+}
+// ב-session_start לא נשמר pageview!
+```
+
+### 2. page_count תמיד 0
+מכיוון שה-pageview הראשון לא נשמר, ה-page_count לא מתעדכן.
 
 ---
 
 ## פתרון טכני
 
-### שלב 1: תיקון ה-Trigger בבסיס הנתונים
+### שינוי ב-Edge Function: `analytics-track/index.ts`
 
-עדכון הפונקציה `set_tracking_id()` לטפל גם במחרוזת ריקה:
+צריך להוסיף שמירת pageview גם במקרה של `session_start`:
 
-```sql
-CREATE OR REPLACE FUNCTION public.set_tracking_id()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path TO 'public'
-AS $$
-BEGIN
-  IF NEW.tracking_id IS NULL OR NEW.tracking_id = '' THEN
-    NEW.tracking_id := generate_tracking_id();
-  END IF;
-  RETURN NEW;
-END;
-$$;
-```
+```typescript
+// After creating session (around line 160), add:
+if (event_type === "session_start" && session_id && data.page_url) {
+  // Save the initial pageview
+  const { error: pageviewError } = await supabase
+    .from("site_pageviews")
+    .insert({
+      session_id,
+      visitor_id: visitor.id,
+      tracking_config_id,
+      page_url: data.page_url,
+      page_path: data.page_path,
+      page_title: data.page_title,
+      scroll_depth: data.scroll_depth || 0,
+      tenant_id,
+    });
 
-### שלב 2: עדכון הרשומה הקיימת
+  if (pageviewError) {
+    console.error("Error creating initial pageview:", pageviewError);
+  }
 
-יצירת `tracking_id` לרשומה הקיימת שנוצרה כבר עם ID ריק:
-
-```sql
-UPDATE site_tracking_configs 
-SET tracking_id = public.generate_tracking_id()
-WHERE tracking_id = '' OR tracking_id IS NULL;
-```
-
-### שלב 3: שיפור ה-UI - דשבורד לפי קוד מעקב
-
-#### 3.1 הוספת לחצן "צפה בדשבורד" ליד כל קוד מעקב
-בקומפוננטת `TrackingCodeGenerator.tsx`:
-
-```tsx
-<Button
-  variant="outline"
-  size="sm"
-  onClick={() => {
-    setSelectedClientId(config.client_id);
-    setActiveTab("dashboard");
-  }}
->
-  <BarChart3 className="h-4 w-4 ml-2" />
-  צפה בדשבורד
-</Button>
-```
-
-#### 3.2 תיקון קוד הפרונטאנד
-בקובץ `SiteAnalytics.tsx`, שינוי מ-`tracking_id: ""` ל-undefined:
-
-```tsx
-const { data, error } = await supabase
-  .from("site_tracking_configs")
-  .insert([{
-    client_id: clientId,
-    tenant_id: currentTenantId!,
-    website_domain: domain,
-    // לא לשלוח tracking_id בכלל - ייווצר אוטומטית
-  }])
-  .select()
-  .single();
+  // Set initial page count to 1
+  await supabase
+    .from("site_sessions")
+    .update({ page_count: 1 })
+    .eq("id", session_id);
+}
 ```
 
 ---
 
-## סיכום השינויים
+## תוצאה צפויה
 
-| מיקום | שינוי |
-|-------|-------|
-| מיגרציה SQL | תיקון Trigger לטפל גם ב-`''` |
-| מיגרציה SQL | יצירת tracking_id לרשומות קיימות |
-| `SiteAnalytics.tsx` | הסרת `tracking_id: ""` מה-insert |
-| `TrackingCodeGenerator.tsx` | הוספת כפתור "צפה בדשבורד" |
+לאחר התיקון:
+- כל כניסה לאתר תיצור pageview ראשון
+- ה-page_count יתחיל מ-1
+- הדשבורד יציג נתוני דפים פופולריים
+- ספירת "צפיות דפים היום" תהיה מדויקת
 
-## לאחר התיקון
+---
 
-1. הרשומה הקיימת תקבל `tracking_id` תקין (משהו כמו `mc_abc123def456`)
-2. צריך לעדכן את קוד ההטמעה באתר הלקוח עם ה-ID החדש
-3. הנתונים יתחילו להגיע לדשבורד
+## שלבים ליישום
+
+| שלב | פעולה |
+|-----|-------|
+| 1 | עדכון `supabase/functions/analytics-track/index.ts` להוסיף שמירת pageview גם ב-session_start |
+| 2 | Deploy אוטומטי של ה-Edge Function |
+
