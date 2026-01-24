@@ -1,85 +1,85 @@
 
+# תוכנית: תיקון טבלת דירוג ביטויים (RTL) ושיפור הסריקה
 
-# תוכנית: דילוג על ביטויים שכבר נסרקו היום
+## זיהוי הבעיות
 
-## הבעיה
-כרגע הסריקה עוברת על **כל** הביטויים בפרויקט, גם אלו שכבר נסרקו היום. זה מבזבז:
-- קריאות API יקרות
-- זמן סריקה מיותר
-- מאריך את כל התהליך
+### בעיה 1: ביטויים לא נסרקו
+מבדיקת המסד נתונים - **כל הביטויים ברשימה מעולם לא נסרקו** (`last_checked_at = null`). הטקסט "לא נמצא" מוצג כי הסריקה עוד לא בוצעה, לא בגלל שהם לא נמצאו בגוגל.
 
-## המצב הנוכחי בפרויקט
-| סה"כ ביטויים | נסרקו היום | לא נסרקו |
-|---------------|------------|----------|
-| 67 | 32 | 35 |
+יש לבדוק: האם הסריקה הושלמה בהצלחה? האם היו שגיאות API?
 
-## הפתרון
-לפני שליחת הביטויים לסריקה, נסנן החוצה את אלו שכבר נסרקו היום.
+### בעיה 2: טבלה לא RTL
+הטבלה הנוכחית לא מותאמת ל-RTL:
+- כותרות לא מיושרות לימין
+- סדר העמודות לא הפוך
+- כפתור המחיקה בצד הלא נכון
 
-## מה ייעשה
+---
+
+## פתרון טכני
 
 ### קובץ: `src/pages/RankTrackingProject.tsx`
 
-#### 1. פונקציית עזר לבדיקה אם נסרק היום
-```typescript
-const isScannedToday = (keyword: KeywordRecord): boolean => {
-  if (!keyword.last_checked_at) return false;
-  const lastChecked = new Date(keyword.last_checked_at);
-  const today = new Date();
-  return lastChecked.toDateString() === today.toDateString();
+#### 1. תיקון RTL לטבלה
+
+**לפני:**
+```tsx
+<TableHead>ביטוי</TableHead>
+<TableHead className="text-center w-24">מיקום</TableHead>
+...
+```
+
+**אחרי:**
+```tsx
+<Table dir="rtl">
+  <TableHeader>
+    <TableRow>
+      <TableHead className="text-right">ביטוי</TableHead>
+      <TableHead className="text-center w-24">מיקום</TableHead>
+      <TableHead className="text-center w-24">שינוי</TableHead>
+      <TableHead className="text-center w-20">Best</TableHead>
+      <TableHead className="text-center w-20">Worst</TableHead>
+      <TableHead className="text-right">URL</TableHead>
+      <TableHead className="text-center w-36">נבדק</TableHead>
+      <TableHead className="w-16 text-left"></TableHead>
+    </TableRow>
+  </TableHeader>
+```
+
+#### 2. יישור תאים לימין
+```tsx
+<TableCell className="font-medium text-right">{keyword.keyword}</TableCell>
+...
+<TableCell className="max-w-[200px] truncate text-muted-foreground text-xs text-right">
+  {keyword.found_url || "-"}
+</TableCell>
+```
+
+#### 3. הוספת אינדיקציה "לא נסרק עדיין"
+
+כרגע "לא נמצא" מוצג גם עבור ביטויים שמעולם לא נסרקו. נבחין:
+
+```tsx
+const getPositionBadge = (position: number | null, lastChecked: string | null) => {
+  if (!lastChecked) {
+    return <Badge variant="outline" className="bg-gray-50 text-gray-500">ממתין</Badge>;
+  }
+  if (position === null) {
+    return <Badge variant="outline" className="bg-orange-50 text-orange-600">לא נמצא</Badge>;
+  }
+  // ...existing logic
 };
 ```
 
-#### 2. עדכון `scanMutation`
-בתחילת הפונקציה, לפני חלוקה ל-batches:
+---
 
-```typescript
-mutationFn: async (keywordIds?: string[]) => {
-  // ...authentication check...
+## סיכום שינויים
 
-  // Get IDs to scan
-  let idsToScan = keywordIds || keywords?.map(k => k.id) || [];
-  
-  // If scanning all, filter out keywords already scanned today
-  if (!keywordIds) {
-    const notScannedToday = keywords?.filter(k => !isScannedToday(k)) || [];
-    idsToScan = notScannedToday.map(k => k.id);
-    
-    // Show message if some were skipped
-    const skippedCount = (keywords?.length || 0) - idsToScan.length;
-    if (skippedCount > 0) {
-      toast.info(`דילוג על ${skippedCount} ביטויים שכבר נסרקו היום`);
-    }
-  }
-  
-  if (idsToScan.length === 0) {
-    throw new Error("כל הביטויים כבר נסרקו היום");
-  }
-  
-  // Continue with batching...
-}
-```
+| שינוי | תיאור |
+|-------|-------|
+| RTL לטבלה | הוספת `dir="rtl"` ויישור ימין לכותרות ותאים |
+| אינדיקציה "ממתין" | הבחנה בין ביטוי שלא נסרק לביטוי שנסרק ולא נמצא |
+| יישור כפתור מחיקה | הזזה לצד שמאל (סוף השורה ב-RTL) |
 
-#### 3. עדכון הודעת ההצלחה
-```typescript
-onSuccess: (data) => {
-  setScanProgress(null);
-  const skippedMsg = data.skipped > 0 ? ` (דולגו ${data.skipped})` : '';
-  const message = data.totalErrors > 0
-    ? `סריקה הושלמה! נבדקו ${data.totalChecked} ביטויים (${data.totalErrors} שגיאות)${skippedMsg}`
-    : `סריקה הושלמה! נבדקו ${data.totalChecked} ביטויים${skippedMsg}`;
-  toast.success(message);
-}
-```
-
-## התנהגות צפויה
-
-| פעולה | לפני | אחרי |
-|-------|------|------|
-| לחיצה על "סרוק הכל" | סורק את כל 67 | סורק רק 35 שלא נסרקו |
-| בחירת ביטוי ספציפי וסריקה | סורק | סורק (ללא שינוי) |
-| כל הביטויים נסרקו היום | סורק שוב | מציג הודעה "כל הביטויים כבר נסרקו היום" |
-
-## הערה
-הלוגיקה תחול רק על "סרוק הכל". אם המשתמש בוחר ביטוי ספציפי לסריקה, הוא יוכל לסרוק אותו שוב גם אם נסרק היום.
-
+## המלצה
+לאחר התיקונים, יש להפעיל "סרוק הכל" כדי לסרוק את כל הביטויים שטרם נסרקו.
