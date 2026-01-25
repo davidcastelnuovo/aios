@@ -511,9 +511,20 @@ export default function DynamicTables() {
                         </Badge>
                       )}
                     </div>
-                    {table.description && (
+                    {/* Show connection status for integration tables, or description for others */}
+                    {(table.integration_type === 'facebook_insights' || table.integration_type === 'facebook_ecommerce' || table.integration_type === 'google_ads') ? (
+                      table.integration_settings?.ad_account_id || table.integration_settings?.customer_id || table.integration_settings?.make_scenario_id ? (
+                        <CardDescription className="text-green-600">
+                          ✓ מחובר לחשבון מודעות
+                        </CardDescription>
+                      ) : (
+                        <CardDescription className="text-amber-600">
+                          ממתין לחיבור חשבון מודעות
+                        </CardDescription>
+                      )
+                    ) : table.description ? (
                       <CardDescription>{table.description}</CardDescription>
-                    )}
+                    ) : null}
                     {/* Table Card Alerts */}
                     {table.integration_type === 'facebook_insights' && (
                       <TableCardAlerts tableId={table.id} />
