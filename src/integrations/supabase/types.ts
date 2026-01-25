@@ -1015,6 +1015,7 @@ export type Database = {
           agency_id: string | null
           client_id: string | null
           created_at: string | null
+          dashboard_type: string | null
           id: string
           name: string
           settings: Json | null
@@ -1025,6 +1026,7 @@ export type Database = {
           agency_id?: string | null
           client_id?: string | null
           created_at?: string | null
+          dashboard_type?: string | null
           id?: string
           name: string
           settings?: Json | null
@@ -1035,6 +1037,7 @@ export type Database = {
           agency_id?: string | null
           client_id?: string | null
           created_at?: string | null
+          dashboard_type?: string | null
           id?: string
           name?: string
           settings?: Json | null

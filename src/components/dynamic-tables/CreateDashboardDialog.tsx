@@ -33,7 +33,8 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
-import { ChevronsUpDown, Check, Facebook, ShoppingCart, FileSpreadsheet } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { ChevronsUpDown, Check, Facebook, ShoppingCart, FileSpreadsheet, Building2, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
@@ -51,6 +52,7 @@ export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDia
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   
+  const [dashboardType, setDashboardType] = useState<'client' | 'agency'>('client');
   const [name, setName] = useState("");
   const [agencyId, setAgencyId] = useState<string>("");
   const [clientId, setClientId] = useState<string>("");
@@ -90,7 +92,7 @@ export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDia
     return allClients.filter(c => c.agency_id === agencyId);
   }, [allClients, agencyId]);
 
-  // Fetch tables for selected client (preview)
+  // Fetch tables for selected client (preview) - only for client type
   const { data: clientTables = [] } = useQuery({
     queryKey: ['crm-tables-client', clientId],
     queryFn: async () => {
@@ -106,15 +108,27 @@ export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDia
       const tables = Array.isArray(response.data) ? response.data : [];
       return tables.filter((t: any) => t.client_id === clientId);
     },
-    enabled: !!clientId,
+    enabled: !!clientId && dashboardType === 'client',
   });
 
+  // Count clients for selected agency (preview for agency type)
+  const agencyClientsCount = useMemo(() => {
+    if (!agencyId || dashboardType !== 'agency') return 0;
+    return allClients.filter(c => c.agency_id === agencyId).length;
+  }, [allClients, agencyId, dashboardType]);
+
   const selectedClient = allClients.find(c => c.id === clientId);
+  const selectedAgency = agencies.find(a => a.id === agencyId);
 
   const createDashboardMutation = useMutation({
     mutationFn: async () => {
-      if (!tenantId || !clientId || !name.trim()) {
+      if (!tenantId || !name.trim() || !agencyId) {
         throw new Error('Missing required fields');
+      }
+
+      // For client type, clientId is required
+      if (dashboardType === 'client' && !clientId) {
+        throw new Error('Missing client selection');
       }
 
       const { data, error } = await supabase
@@ -122,8 +136,9 @@ export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDia
         .insert({
           tenant_id: tenantId,
           name: name.trim(),
-          agency_id: agencyId || null,
-          client_id: clientId,
+          agency_id: agencyId,
+          client_id: dashboardType === 'client' ? clientId : null,
+          dashboard_type: dashboardType,
           settings: {},
         })
         .select()
@@ -146,6 +161,7 @@ export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDia
   });
 
   const resetForm = () => {
+    setDashboardType('client');
     setName("");
     setAgencyId("");
     setClientId("");
@@ -154,6 +170,11 @@ export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDia
   const handleAgencyChange = (value: string) => {
     setAgencyId(value);
     setClientId(""); // Reset client when agency changes
+  };
+
+  const handleDashboardTypeChange = (value: 'client' | 'agency') => {
+    setDashboardType(value);
+    setClientId(""); // Reset client when type changes
   };
 
   const getIntegrationIcon = (type: string | null) => {
@@ -173,17 +194,51 @@ export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDia
     }
   };
 
+  const isValid = dashboardType === 'client' 
+    ? name.trim() && clientId && agencyId
+    : name.trim() && agencyId;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>יצירת דשבורד חדש</DialogTitle>
           <DialogDescription>
-            בחר לקוח כדי ליצור דשבורד שמרכז את כל הנתונים שלו ממקורות שונים
+            בחר סוג דשבורד ואת הנתונים שברצונך להציג
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {/* Dashboard Type Selection */}
+          <div className="space-y-3">
+            <Label>סוג דשבורד</Label>
+            <RadioGroup 
+              value={dashboardType} 
+              onValueChange={(v) => handleDashboardTypeChange(v as 'client' | 'agency')}
+              className="flex gap-4"
+            >
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <RadioGroupItem value="client" id="type-client" />
+                <Label htmlFor="type-client" className="flex items-center gap-2 cursor-pointer">
+                  <User className="h-4 w-4" />
+                  דשבורד לקוח
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <RadioGroupItem value="agency" id="type-agency" />
+                <Label htmlFor="type-agency" className="flex items-center gap-2 cursor-pointer">
+                  <Building2 className="h-4 w-4" />
+                  דשבורד סוכנות
+                </Label>
+              </div>
+            </RadioGroup>
+            <p className="text-xs text-muted-foreground">
+              {dashboardType === 'client' 
+                ? 'מציג נתונים מאוחדים של לקוח אחד'
+                : 'מציג טבלה מסכמת של כל הלקוחות בסוכנות'}
+            </p>
+          </div>
+
           {/* Dashboard Name */}
           <div className="space-y-2">
             <Label htmlFor="dashboard-name">שם הדשבורד</Label>
@@ -191,7 +246,9 @@ export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDia
               id="dashboard-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="לדוגמה: דשבורד ארבע על ארבע"
+              placeholder={dashboardType === 'client' 
+                ? "לדוגמה: דשבורד ארבע על ארבע" 
+                : "לדוגמה: סיכום סוכנות MC"}
             />
           </div>
 
@@ -212,8 +269,8 @@ export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDia
             </Select>
           </div>
 
-          {/* Client Select */}
-          {agencyId && (
+          {/* Client Select - only for client type */}
+          {dashboardType === 'client' && agencyId && (
             <div className="space-y-2">
               <Label>לקוח</Label>
               <Popover open={clientPopoverOpen} onOpenChange={setClientPopoverOpen}>
@@ -260,8 +317,8 @@ export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDia
             </div>
           )}
 
-          {/* Preview of tables that will be included */}
-          {clientId && clientTables.length > 0 && (
+          {/* Preview of tables that will be included - for client type */}
+          {dashboardType === 'client' && clientId && clientTables.length > 0 && (
             <div className="space-y-2">
               <Label className="text-muted-foreground text-sm">
                 טבלאות שיכללו בדשבורד:
@@ -281,9 +338,22 @@ export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDia
             </div>
           )}
 
-          {clientId && clientTables.length === 0 && (
+          {dashboardType === 'client' && clientId && clientTables.length === 0 && (
             <div className="text-sm text-muted-foreground bg-muted p-3 rounded-lg">
               לא נמצאו טבלאות עבור לקוח זה. צור קודם טבלאות ושייך אותן ללקוח.
+            </div>
+          )}
+
+          {/* Preview for agency type */}
+          {dashboardType === 'agency' && agencyId && (
+            <div className="text-sm bg-blue-50 dark:bg-blue-950 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                <Building2 className="h-4 w-4" />
+                <span className="font-medium">{selectedAgency?.name}</span>
+              </div>
+              <p className="mt-1 text-blue-600 dark:text-blue-400">
+                {agencyClientsCount} לקוחות בסוכנות זו יוצגו בדשבורד
+              </p>
             </div>
           )}
         </div>
@@ -294,7 +364,7 @@ export function CreateDashboardDialog({ open, onOpenChange }: CreateDashboardDia
           </Button>
           <Button
             onClick={() => createDashboardMutation.mutate()}
-            disabled={!name.trim() || !clientId || createDashboardMutation.isPending}
+            disabled={!isValid || createDashboardMutation.isPending}
           >
             {createDashboardMutation.isPending ? 'יוצר...' : 'צור דשבורד'}
           </Button>
