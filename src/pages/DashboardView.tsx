@@ -14,9 +14,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowRight, Facebook, ShoppingCart, FileSpreadsheet, TrendingUp, TrendingDown, Minus, RefreshCw } from "lucide-react";
+import { ArrowRight, Facebook, ShoppingCart, FileSpreadsheet, TrendingUp, TrendingDown, Minus, RefreshCw, Building2 } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { toast } from "sonner";
+import { AgencyDashboardContent } from "@/components/dynamic-tables/AgencyDashboardContent";
 
 const DATE_FILTERS = [
   { value: 'today', label: 'היום' },
@@ -57,6 +58,9 @@ export default function DashboardView() {
     },
     enabled: !!dashboardId,
   });
+
+  // Determine dashboard type
+  const isAgencyDashboard = (dashboard as any)?.dashboard_type === 'agency';
 
   // Fetch tables for the client
   const { data: tables = [], isLoading: tablesLoading } = useQuery({
@@ -287,28 +291,47 @@ export default function DashboardView() {
             <ArrowRight className="ml-2 h-4 w-4" />
             חזרה
           </Button>
-          <h1 className="text-3xl font-bold">{dashboard.name}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold">{dashboard.name}</h1>
+            {isAgencyDashboard && (
+              <Badge variant="secondary" className="flex items-center gap-1">
+                <Building2 className="h-3 w-3" />
+                דשבורד סוכנות
+              </Badge>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-2 text-muted-foreground">
-            <span>{(dashboard as any).clients?.name}</span>
-            {(dashboard as any).agencies?.name && (
+            {isAgencyDashboard ? (
               <>
-                <span>•</span>
+                <Building2 className="h-4 w-4" />
                 <span>{(dashboard as any).agencies?.name}</span>
+              </>
+            ) : (
+              <>
+                <span>{(dashboard as any).clients?.name}</span>
+                {(dashboard as any).agencies?.name && (
+                  <>
+                    <span>•</span>
+                    <span>{(dashboard as any).agencies?.name}</span>
+                  </>
+                )}
               </>
             )}
           </div>
         </div>
         
         <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-          >
-            <RefreshCw className={`ml-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            רענן נתונים
-          </Button>
+          {!isAgencyDashboard && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+            >
+              <RefreshCw className={`ml-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              רענן נתונים
+            </Button>
+          )}
           <Select value={dateFilter} onValueChange={setDateFilter}>
             <SelectTrigger className="w-[180px]">
               <SelectValue />
@@ -324,40 +347,49 @@ export default function DashboardView() {
         </div>
       </div>
 
-      {/* Connected Platforms */}
-      <div className="flex flex-wrap gap-2">
-        {tables.map((table: any) => {
-          const config = PLATFORM_CONFIG[table.integration_type] || { name: 'טבלה', color: 'text-gray-600', bgColor: 'bg-gray-100' };
-          return (
-            <Badge
-              key={table.id}
-              variant="outline"
-              className={`flex items-center gap-2 py-1.5 px-3 ${config.bgColor}`}
-            >
-              {getIntegrationIcon(table.integration_type)}
-              <span className={config.color}>{table.name}</span>
-            </Badge>
-          );
-        })}
-      </div>
-
-      {tablesLoading || recordsLoading ? (
-        <div className="grid gap-4 md:grid-cols-4">
-          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
-        </div>
-      ) : tables.length === 0 ? (
-        <Card className="p-12 text-center">
-          <h3 className="text-lg font-semibold mb-2">אין טבלאות משויכות ללקוח זה</h3>
-          <p className="text-muted-foreground mb-4">
-            צור טבלאות ושייך אותן ללקוח כדי לראות נתונים בדשבורד
-          </p>
-          <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>
-            עבור לניהול טבלאות
-          </Button>
-        </Card>
+      {/* Agency Dashboard Content */}
+      {isAgencyDashboard ? (
+        <AgencyDashboardContent
+          agencyId={dashboard.agency_id!}
+          agencyName={(dashboard as any).agencies?.name || ''}
+          dateFilter={dateFilter}
+        />
       ) : (
         <>
-          {/* Summary Cards */}
+          {/* Connected Platforms */}
+          <div className="flex flex-wrap gap-2">
+            {tables.map((table: any) => {
+              const config = PLATFORM_CONFIG[table.integration_type] || { name: 'טבלה', color: 'text-gray-600', bgColor: 'bg-gray-100' };
+              return (
+                <Badge
+                  key={table.id}
+                  variant="outline"
+                  className={`flex items-center gap-2 py-1.5 px-3 ${config.bgColor}`}
+                >
+                  {getIntegrationIcon(table.integration_type)}
+                  <span className={config.color}>{table.name}</span>
+                </Badge>
+              );
+            })}
+          </div>
+
+          {tablesLoading || recordsLoading ? (
+            <div className="grid gap-4 md:grid-cols-4">
+              {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32" />)}
+            </div>
+          ) : tables.length === 0 ? (
+            <Card className="p-12 text-center">
+              <h3 className="text-lg font-semibold mb-2">אין טבלאות משויכות ללקוח זה</h3>
+              <p className="text-muted-foreground mb-4">
+                צור טבלאות ושייך אותן ללקוח כדי לראות נתונים בדשבורד
+              </p>
+              <Button onClick={() => navigate(buildPath('/dynamic-tables'))}>
+                עבור לניהול טבלאות
+              </Button>
+            </Card>
+          ) : (
+            <>
+              {/* Summary Cards */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950 dark:to-blue-900">
               <CardContent className="p-6">
@@ -514,7 +546,9 @@ export default function DashboardView() {
                 </Table>
               </div>
             </CardContent>
-          </Card>
+            </Card>
+            </>
+          )}
         </>
       )}
     </div>

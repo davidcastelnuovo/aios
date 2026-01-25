@@ -614,8 +614,25 @@ export default function DynamicTables() {
                       </Button>
                     </div>
                     <div className="flex flex-wrap gap-1 mt-2">
-                      {dashboard.clients?.name && (
-                        <Badge variant="secondary" className="text-xs">
+                      {/* Dashboard Type Badge */}
+                      <Badge 
+                        variant={dashboard.dashboard_type === 'agency' ? 'default' : 'secondary'} 
+                        className="text-xs"
+                      >
+                        {dashboard.dashboard_type === 'agency' ? (
+                          <>
+                            <Building2 className="h-3 w-3 ml-1" />
+                            דשבורד סוכנות
+                          </>
+                        ) : (
+                          <>
+                            <User className="h-3 w-3 ml-1" />
+                            דשבורד לקוח
+                          </>
+                        )}
+                      </Badge>
+                      {dashboard.clients?.name && dashboard.dashboard_type !== 'agency' && (
+                        <Badge variant="outline" className="text-xs">
                           <User className="h-3 w-3 ml-1" />
                           {dashboard.clients.name}
                         </Badge>
