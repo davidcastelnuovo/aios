@@ -356,7 +356,10 @@ export function AgencyDashboardContent({ agencyId, agencyName, dateFilter }: Age
       // Aggregate data
       const impressions = Number(data.impressions) || 0;
       const clicks = Number(data.clicks) || 0;
-      const leads = Number(data.leads) || Number(data.conversions) || 0;
+      // Extract leads from multiple possible field names (website leads, form leads, custom conversions)
+      const leads = Number(data.leads) || Number(data.conversions) || 
+        Number(data.website_leads) || Number(data.offsite_conversion) || 
+        Number(data.offsite_conversion_fb_pixel_lead) || Number(data.leadgen_grouped) || 0;
       const purchases = Number(data.purchases) || 0;
       const spend = Number(data.spend) || Number(data.cost) || 0;
       const revenue = Number(data.purchase_value) || Number(data.conversions_value) || Number(data.conversion_value) || 0;
