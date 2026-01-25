@@ -1,105 +1,143 @@
 
+# תכנית: הוספת דשבורד סוכנות
 
-# תיקון: לידים נעלמים - שרון וישינסקי (0525553051)
-
-## סיכום הבעיה
-
-הליד **קיים במסד הנתונים** אך לא מופיע במסך הלידים עקב באגים ב-RPC `get_leads_by_stages`.
-
-| שדה | ערך |
-|-----|-----|
-| **שם** | Sharon Vichanski / שרון וישינסקי |
-| **טלפון** | +972525553051 |
-| **סטטוס** | new |
-| **agency_id** | NULL ❌ |
+## סקירה כללית
+יצירת סוג חדש של דשבורד - **דשבורד סוכנות** - שמאפשר לבחור סוכנות ולראות טבלה מסכמת של כל הלקוחות המשויכים לאותה סוכנות, עם פירוט לפי פלטפורמה (Facebook, Google Ads) ללא שילוב ביניהם.
 
 ---
 
-## שורש הבעיות
+## שינויים נדרשים
 
-### בעיה 1: עמודות שגויות ב-RPC
-ה-RPC `get_leads_by_stages` מנסה לגשת לעמודות שלא קיימות:
+### 1. עדכון מסד הנתונים
+הוספת עמודה `dashboard_type` לטבלת `crm_dashboards`:
 
-| RPC מחפש | עמודה אמיתית |
-|-----------|--------------|
-| `l.pipeline_stage_id` | `l.status` |
-| `stage_record.name` | `stage_record.label` |
-| `stage_record.position` | `stage_record.sort_order` |
-
-### בעיה 2: לידים ללא סוכנות לא נכללים
-הלוגיקה הנוכחית:
 ```sql
-AND (p_agency_ids IS NULL OR l.agency_id = ANY(p_agency_ids))
+ALTER TABLE crm_dashboards 
+ADD COLUMN dashboard_type TEXT DEFAULT 'client' 
+CHECK (dashboard_type IN ('client', 'agency'));
 ```
 
-כאשר `l.agency_id = NULL`, התנאי מחזיר FALSE ומסנן את הליד.
+- `client` = דשבורד לקוח (ברירת מחדל, ההתנהגות הנוכחית)
+- `agency` = דשבורד סוכנות (חדש)
 
 ---
 
-## פתרון
+### 2. עדכון CreateDashboardDialog.tsx
 
-### עדכון RPC: `get_leads_by_stages`
+**שינויים:**
+1. הוספת בחירת סוג דשבורד (לקוח / סוכנות) כשלב ראשון
+2. כאשר נבחר "סוכנות":
+   - הסתרת בחירת לקוח
+   - שמירת `client_id = null` ו-`dashboard_type = 'agency'`
+3. כאשר נבחר "לקוח" (ברירת מחדל):
+   - ההתנהגות הנוכחית נשמרת
 
-```sql
-CREATE OR REPLACE FUNCTION public.get_leads_by_stages(...)
-BEGIN
-  -- תיקון 1: קריאה לעמודות נכונות מ-lead_pipeline_stages
-  FOR stage_record IN
-    SELECT id, stage_key, label, color, sort_order
-    FROM lead_pipeline_stages
-    WHERE tenant_id = p_tenant_id AND is_active = true
-    ORDER BY sort_order ASC
-  LOOP
-    IF p_stages IS NULL OR stage_record.stage_key = ANY(p_stages) THEN
-      
-      -- תיקון 2: שימוש ב-status במקום pipeline_stage_id
-      SELECT COUNT(*)
-      INTO stage_count
-      FROM leads l
-      WHERE l.tenant_id = p_tenant_id
-        AND l.status = stage_record.stage_key  -- ⬅️ תוקן!
-        -- תיקון 3: כולל גם לידים עם agency_id NULL
-        AND (p_agency_ids IS NULL OR l.agency_id IS NULL OR l.agency_id = ANY(p_agency_ids))
-        ...
-        
-      -- אותו תיקון לשאילתת הלידים
-      SELECT ... FROM leads l
-      WHERE l.tenant_id = p_tenant_id
-        AND l.status = stage_record.stage_key  -- ⬅️ תוקן!
-        AND (p_agency_ids IS NULL OR l.agency_id IS NULL OR l.agency_id = ANY(p_agency_ids))
-        ...
+**UI חדש:**
+```text
+┌─────────────────────────────────────┐
+│ יצירת דשבורד חדש                    │
+├─────────────────────────────────────┤
+│ סוג דשבורד:                         │
+│ [◉ דשבורד לקוח]  [○ דשבורד סוכנות]  │
+│                                     │
+│ שם הדשבורד: [___________________]   │
+│                                     │
+│ סוכנות: [בחר סוכנות ▼]              │
+│                                     │
+│ (אם לקוח נבחר:)                     │
+│ לקוח: [בחר לקוח ▼]                  │
+│                                     │
+│           [ביטול]  [צור דשבורד]     │
+└─────────────────────────────────────┘
 ```
 
 ---
 
-## שינויים טכניים
+### 3. עדכון DashboardView.tsx
 
-### 1. מיגרציית Database
+**לוגיקה חדשה:**
+1. בדיקת `dashboard_type`:
+   - אם `'client'` → התנהגות נוכחית
+   - אם `'agency'` → שליפת כל הלקוחות והטבלאות לאותה סוכנות
 
-עדכון הפונקציה `get_leads_by_stages`:
+2. **עבור דשבורד סוכנות:**
+   - שליפת כל הלקוחות ששייכים ל-`agency_id`
+   - לכל לקוח: שליפת הטבלאות שלו
+   - הצגת טבלה מסכמת לכל לקוח בנפרד
 
-1. **שינוי שמות עמודות** ב-loop של `lead_pipeline_stages`:
-   - `name` → `label`
-   - `position` → `sort_order`
+**תצוגה מוצעת לדשבורד סוכנות:**
+```text
+┌─────────────────────────────────────────────────────────────┐
+│ 📊 דשבורד סוכנות: Marketing Captain                        │
+├─────────────────────────────────────────────────────────────┤
+│ לקוח       │ פלטפורמה   │ הוצאה    │ הכנסות   │ ROAS       │
+├────────────┼────────────┼──────────┼──────────┼────────────┤
+│ לקוח A     │ Facebook   │ ₪5,000   │ ₪15,000  │ 3.00       │
+│            │ Google Ads │ ₪3,000   │ ₪12,000  │ 4.00       │
+├────────────┼────────────┼──────────┼──────────┼────────────┤
+│ לקוח B     │ Facebook   │ ₪2,000   │ ₪8,000   │ 4.00       │
+│            │ Google Ads │ ₪1,500   │ ₪4,500   │ 3.00       │
+├────────────┼────────────┼──────────┼──────────┼────────────┤
+│ לקוח C     │ Facebook   │ ₪7,000   │ ₪21,000  │ 3.00       │
+└─────────────────────────────────────────────────────────────┘
+```
 
-2. **שינוי תנאי השלב**:
-   - מ: `l.pipeline_stage_id = stage_record.id`
-   - ל: `l.status = stage_record.stage_key`
+**שימו לב:** לא מציג שורת "משולב" לכל לקוח - רק פירוט לפי פלטפורמה.
 
-3. **הוספת תנאי לכלול לידים ללא סוכנות**:
-   - מ: `(p_agency_ids IS NULL OR l.agency_id = ANY(p_agency_ids))`
-   - ל: `(p_agency_ids IS NULL OR l.agency_id IS NULL OR l.agency_id = ANY(p_agency_ids))`
+---
 
-4. **עדכון ה-output** של הפונקציה:
-   - `stage_name` → `stage_record.label`
-   - `stage_position` → `stage_record.sort_order`
+### 4. עדכון הצגת הדשבורדים ב-DynamicTables.tsx
+
+הוספת Badge שמציין את סוג הדשבורד:
+- `דשבורד לקוח` או `דשבורד סוכנות`
+
+---
+
+## פירוט טכני
+
+### קובץ 1: מיגרציית Database
+```sql
+-- Add dashboard_type column
+ALTER TABLE public.crm_dashboards 
+ADD COLUMN IF NOT EXISTS dashboard_type TEXT DEFAULT 'client';
+
+-- Add check constraint
+ALTER TABLE public.crm_dashboards 
+ADD CONSTRAINT crm_dashboards_type_check 
+CHECK (dashboard_type IN ('client', 'agency'));
+```
+
+### קובץ 2: CreateDashboardDialog.tsx
+- הוספת `dashboardType` state (`'client'` | `'agency'`)
+- הוספת RadioGroup לבחירת סוג
+- עדכון הלוגיקה כך ש-`client_id` לא נדרש עבור `agency` type
+- שמירת `dashboard_type` ב-mutation
+
+### קובץ 3: DashboardView.tsx
+- שליפת `dashboard_type` מהנתונים
+- הוספת לוגיקה חדשה לשליפת נתונים עבור agency dashboard:
+  - שליפת כל הלקוחות ששייכים לסוכנות
+  - שליפת טבלאות לכל לקוח
+  - שליפת רשומות לכל טבלה
+- הוספת קומפוננטה `AgencyDashboardContent` עם:
+  - טבלה מסכמת לפי לקוח ופלטפורמה
+  - ללא שורת "סה"כ משולב" לכל לקוח
+
+### קובץ 4: DynamicTables.tsx
+- הוספת Badge לסוג הדשבורד בכרטיס
 
 ---
 
 ## תוצאה צפויה
 
-לאחר התיקון:
-- ✅ הליד של שרון וישינסקי יופיע בעמודת "חדש"
-- ✅ כל הלידים עם `agency_id = NULL` יופיעו
-- ✅ ה-Kanban יעבוד נכון עם שלבי הפייפליין הדינמיים
+1. **בדיאלוג יצירת דשבורד:**
+   - המשתמש יכול לבחור בין "דשבורד לקוח" ל"דשבורד סוכנות"
+   - עבור דשבורד סוכנות: בוחר רק סוכנות ושם
 
+2. **בתצוגת הדשבורד:**
+   - דשבורד סוכנות מציג טבלה עם כל הלקוחות
+   - לכל לקוח מופיעות שורות נפרדות לכל פלטפורמה (Facebook, Google)
+   - אין שילוב/משולב של הפלטפורמות - רק פירוט נפרד
+
+3. **ברשימת הדשבורדים:**
+   - Badge מציין את סוג הדשבורד
