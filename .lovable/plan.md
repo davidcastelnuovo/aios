@@ -1,192 +1,105 @@
 
-# שיפור דשבורד אנליטיקס - RTL, פילטרים מתקדמים וייבוא נתונים
 
-## סקירת הבקשה
+# תיקון: לידים נעלמים - שרון וישינסקי (0525553051)
 
-המשתמש מבקש:
-1. **RTL מלא** - כיוון מימין לשמאל
-2. **פילטרי תאריכים מורחבים** - היום, אתמול, השבוע, 7/14/30 יום, חודש שעבר, 3 חודשים, שנה, וטווח מותאם
-3. **השוואה לתקופה קודמת** - להראות שינוי יחסית לתקופה הקודמת
-4. **ייבוא נתונים היסטוריים** - העלאת CSV מ-Google Analytics וקליטתו למערכת
+## סיכום הבעיה
 
----
+הליד **קיים במסד הנתונים** אך לא מופיע במסך הלידים עקב באגים ב-RPC `get_leads_by_stages`.
 
-## שלב 1: תיקון RTL מלא
-
-### קובץ: `src/components/analytics/AnalyticsDashboard.tsx`
-
-- הוספת `dir="rtl"` ל-container הראשי
-- היפוך סדר ה-grid cards (מכשירים + דפים פופולריים)
-- התאמת alignments בטבלאות וגרפים
-
-```tsx
-// Before
-<div className="space-y-6">
-
-// After  
-<div className="space-y-6" dir="rtl">
-```
+| שדה | ערך |
+|-----|-----|
+| **שם** | Sharon Vichanski / שרון וישינסקי |
+| **טלפון** | +972525553051 |
+| **סטטוס** | new |
+| **agency_id** | NULL ❌ |
 
 ---
 
-## שלב 2: פילטרי תאריכים מתקדמים
+## שורש הבעיות
 
-### מבנה הפילטרים החדש
+### בעיה 1: עמודות שגויות ב-RPC
+ה-RPC `get_leads_by_stages` מנסה לגשת לעמודות שלא קיימות:
 
-```text
-+-------------------------------------------+
-|  [היום] [אתמול] [7 ימים] [14 יום] [30 יום]  |
-|  [השבוע] [החודש] [חודש שעבר] [3 חודשים] [שנה]  |
-|  [טווח מותאם: __ עד __] [השווה לתקופה קודמת ☑] |
-+-------------------------------------------+
+| RPC מחפש | עמודה אמיתית |
+|-----------|--------------|
+| `l.pipeline_stage_id` | `l.status` |
+| `stage_record.name` | `stage_record.label` |
+| `stage_record.position` | `stage_record.sort_order` |
+
+### בעיה 2: לידים ללא סוכנות לא נכללים
+הלוגיקה הנוכחית:
+```sql
+AND (p_agency_ids IS NULL OR l.agency_id = ANY(p_agency_ids))
 ```
 
-### לוגיקת חישוב התאריכים
-
-| פילטר | תאריך התחלה | תאריך סיום |
-|-------|-------------|------------|
-| היום | startOfDay(today) | endOfDay(today) |
-| אתמול | startOfDay(yesterday) | endOfDay(yesterday) |
-| השבוע | startOfWeek(today) | endOfDay(today) |
-| 7 ימים אחרונים | today - 7 days | today |
-| 14 ימים אחרונים | today - 14 days | today |
-| 30 ימים אחרונים | today - 30 days | today |
-| החודש | startOfMonth(today) | endOfDay(today) |
-| חודש שעבר | startOfMonth(lastMonth) | endOfMonth(lastMonth) |
-| 3 חודשים | today - 90 days | today |
-| שנה | today - 365 days | today |
-| מותאם | userStart | userEnd |
+כאשר `l.agency_id = NULL`, התנאי מחזיר FALSE ומסנן את הליד.
 
 ---
 
-## שלב 3: השוואה לתקופה קודמת
+## פתרון
 
-### לוגיקה
-
-כאשר מופעל "השווה לתקופה קודמת":
-- מחשבים את אורך הטווח הנבחר (למשל 7 ימים)
-- מושכים נתונים גם מ-7 הימים שלפני הטווח הנבחר
-- מציגים חיצים עם אחוז שינוי בכל KPI
-
-### דוגמה ויזואלית
-
-```text
-+---------------------------+
-|  סה"כ סשנים              |
-|  125                      |
-|  ▲ +15.2% לעומת תקופה קודמת |
-+---------------------------+
-```
-
-### קוד
-
-```typescript
-interface ComparisonData {
-  currentValue: number;
-  previousValue: number;
-  changePercent: number;
-  isIncrease: boolean;
-}
-
-const calculateComparison = (current: number, previous: number): ComparisonData => {
-  const change = previous > 0 ? ((current - previous) / previous) * 100 : 0;
-  return {
-    currentValue: current,
-    previousValue: previous,
-    changePercent: Math.abs(change),
-    isIncrease: change >= 0
-  };
-};
-```
-
----
-
-## שלב 4: ייבוא נתונים מ-Google Analytics
-
-### רכיב חדש: `ImportAnalyticsDialog.tsx`
-
-דיאלוג להעלאת CSV שמכיל נתונים היסטוריים מ-Google Analytics.
-
-### פורמט CSV נתמך
-
-המערכת תתמוך ביצוא סטנדרטי מ-GA:
-
-```csv
-Date,Sessions,Users,Pageviews,Bounce Rate,Avg. Session Duration
-2024-01-01,150,120,450,45.5,02:30
-2024-01-02,175,140,520,42.0,02:45
-```
-
-### Edge Function חדש: `import-analytics-data`
-
-```typescript
-// supabase/functions/import-analytics-data/index.ts
-// - מקבל CSV בגוף הבקשה
-// - עושה parsing לנתונים
-// - יוצר רשומות בטבלת site_sessions (עם visitor_id ו-tracking_config_id מזויפים אך תקינים)
-// - מחזיר סיכום של כמה רשומות נקלטו
-```
-
-### טבלה חדשה (אופציונלי): `analytics_imports`
-
-לצורך מעקב אחרי ייבואים:
+### עדכון RPC: `get_leads_by_stages`
 
 ```sql
-CREATE TABLE analytics_imports (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
-  client_id UUID REFERENCES clients(id),
-  tracking_config_id UUID REFERENCES site_tracking_configs(id),
-  import_date TIMESTAMPTZ DEFAULT now(),
-  source TEXT DEFAULT 'google_analytics',
-  records_imported INTEGER DEFAULT 0,
-  date_range_start DATE,
-  date_range_end DATE,
-  raw_data JSONB
-);
-```
-
-### UI לייבוא
-
-```text
-+------------------------------------------+
-|         ייבוא נתונים מ-Google Analytics    |
-+------------------------------------------+
-|                                          |
-|  [📁 בחר קובץ CSV]                        |
-|                                          |
-|  בחר לקוח: [▼ Select Client]              |
-|                                          |
-|  תצוגה מקדימה:                           |
-|  +------+----------+-------+            |
-|  | Date | Sessions | Users |            |
-|  +------+----------+-------+            |
-|  | 1/1  |   150    |  120  |            |
-|  | 2/1  |   175    |  140  |            |
-|  +------+----------+-------+            |
-|                                          |
-|  [ייבא X רשומות]  [ביטול]                 |
-+------------------------------------------+
+CREATE OR REPLACE FUNCTION public.get_leads_by_stages(...)
+BEGIN
+  -- תיקון 1: קריאה לעמודות נכונות מ-lead_pipeline_stages
+  FOR stage_record IN
+    SELECT id, stage_key, label, color, sort_order
+    FROM lead_pipeline_stages
+    WHERE tenant_id = p_tenant_id AND is_active = true
+    ORDER BY sort_order ASC
+  LOOP
+    IF p_stages IS NULL OR stage_record.stage_key = ANY(p_stages) THEN
+      
+      -- תיקון 2: שימוש ב-status במקום pipeline_stage_id
+      SELECT COUNT(*)
+      INTO stage_count
+      FROM leads l
+      WHERE l.tenant_id = p_tenant_id
+        AND l.status = stage_record.stage_key  -- ⬅️ תוקן!
+        -- תיקון 3: כולל גם לידים עם agency_id NULL
+        AND (p_agency_ids IS NULL OR l.agency_id IS NULL OR l.agency_id = ANY(p_agency_ids))
+        ...
+        
+      -- אותו תיקון לשאילתת הלידים
+      SELECT ... FROM leads l
+      WHERE l.tenant_id = p_tenant_id
+        AND l.status = stage_record.stage_key  -- ⬅️ תוקן!
+        AND (p_agency_ids IS NULL OR l.agency_id IS NULL OR l.agency_id = ANY(p_agency_ids))
+        ...
 ```
 
 ---
 
-## קבצים לעדכון/יצירה
+## שינויים טכניים
 
-| קובץ | פעולה | תיאור |
-|------|-------|-------|
-| `src/components/analytics/AnalyticsDashboard.tsx` | עדכון | RTL, פילטרים חדשים, השוואת תקופות |
-| `src/components/analytics/DateRangeFilter.tsx` | חדש | רכיב לבחירת טווח תאריכים עם presets |
-| `src/components/analytics/ImportAnalyticsDialog.tsx` | חדש | דיאלוג לייבוא נתונים מ-GA |
-| `src/components/analytics/ComparisonBadge.tsx` | חדש | רכיב להצגת השוואה עם חץ ואחוז |
-| `supabase/functions/import-analytics-data/index.ts` | חדש | Edge Function לקליטת נתונים |
-| Database migration | חדש | טבלת `analytics_imports` |
+### 1. מיגרציית Database
+
+עדכון הפונקציה `get_leads_by_stages`:
+
+1. **שינוי שמות עמודות** ב-loop של `lead_pipeline_stages`:
+   - `name` → `label`
+   - `position` → `sort_order`
+
+2. **שינוי תנאי השלב**:
+   - מ: `l.pipeline_stage_id = stage_record.id`
+   - ל: `l.status = stage_record.stage_key`
+
+3. **הוספת תנאי לכלול לידים ללא סוכנות**:
+   - מ: `(p_agency_ids IS NULL OR l.agency_id = ANY(p_agency_ids))`
+   - ל: `(p_agency_ids IS NULL OR l.agency_id IS NULL OR l.agency_id = ANY(p_agency_ids))`
+
+4. **עדכון ה-output** של הפונקציה:
+   - `stage_name` → `stage_record.label`
+   - `stage_position` → `stage_record.sort_order`
 
 ---
 
 ## תוצאה צפויה
 
-1. **RTL מלא** - כל הממשק בכיוון מימין לשמאל
-2. **פילטרים גמישים** - 10+ אפשרויות + טווח מותאם אישית
-3. **השוואה חכמה** - בכל KPI יוצג אחוז שינוי מהתקופה הקודמת
-4. **ייבוא קל** - העלאת CSV מ-Google Analytics והצגת הנתונים ההיסטוריים בדשבורד
+לאחר התיקון:
+- ✅ הליד של שרון וישינסקי יופיע בעמודת "חדש"
+- ✅ כל הלידים עם `agency_id = NULL` יופיעו
+- ✅ ה-Kanban יעבוד נכון עם שלבי הפייפליין הדינמיים
+
