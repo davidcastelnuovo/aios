@@ -314,6 +314,44 @@ export type Database = {
           },
         ]
       }
+      calendar_shares: {
+        Row: {
+          created_at: string | null
+          id: string
+          owner_user_id: string
+          permission_level: string
+          shared_with_user_id: string
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          owner_user_id: string
+          permission_level?: string
+          shared_with_user_id: string
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          owner_user_id?: string
+          permission_level?: string
+          shared_with_user_id?: string
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_shares_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calendar_tokens: {
         Row: {
           access_token: string
@@ -4334,6 +4372,14 @@ export type Database = {
       }
       user_has_agency_access: {
         Args: { _agency_id: string; _user_id: string }
+        Returns: boolean
+      }
+      user_has_calendar_access: {
+        Args: {
+          _accessor_user_id: string
+          _owner_user_id: string
+          _required_permission?: string
+        }
         Returns: boolean
       }
       user_has_cross_tenant_agency_access: {
