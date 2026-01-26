@@ -291,7 +291,9 @@ const updateMutation = useMutation({
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
       toast({
         title: "ליד עודכן בהצלחה",
       });
