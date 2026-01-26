@@ -1,142 +1,76 @@
 
-# תכנית: שיפור דשבורד סוכנות - תצוגת לקוחות נפרדת
+# תוכנית לתיקון עדכוני לידים שלא מתעדכנים בזמן אמת
 
-## סקירת הבקשה
-כרגע דשבורד הסוכנות מציג טבלה אחת מאוחדת עם כל הלקוחות והפלטפורמות. הדרישה היא:
-1. **כל לקוח יוצג בכרטיסייה נפרדת** - עם שם הלקוח, סוג הפלטפורמה, וטבלת הקמפיינים שלו
-2. **טבלה מותאמת לסוג הקמפיין**:
-   - **לידים** (facebook_insights): קמפיין | חשיפות | קליקים | לידים | הוצאה | עלות לליד
-   - **איקומרס** (facebook_ecommerce, google_ads ecommerce): קמפיין | חשיפות | קליקים | רכישות | הוצאה | הכנסה | ROAS
-3. **שורת סה"כ לכל לקוח בנפרד**
+## הבעיה שזוהתה
 
----
+רחלי מדווחת שכאשר היא מעדכנת ליד, היא צריכה לרענן את העמוד כדי לראות את העדכונים. הסיבה היא **אי-התאמה במפתחות ה-cache** בין השאילתות לבין ה-invalidation.
 
-## שינויים נדרשים
+### הבעיה הטכנית
 
-### עדכון AgencyDashboardContent.tsx
+דף הלידים (`Leads.tsx`) משתמש בשלושה query keys ספציפיים:
+- `["leads-kanban", ...]` - לתצוגת קנבן
+- `["leads-table", ...]` - לתצוגת טבלה  
+- `["leads-count", ...]` - לספירת לידים
 
-שכתוב מלא של הקומפוננטה כך ש:
+אבל שני קומפוננטים מרכזיים מבטלים cache עם מפתח גנרי שלא מתאים:
+- **`EditLeadDialog.tsx`** - מבטל `["leads"]` בלבד (לא תואם!)
+- **`FollowUpDatePicker.tsx`** - מבטל `["leads"]` ו-`["leads-count"]` (חלקי)
+- **`ImportLeadsWithMapping.tsx`** - מבטל `["leads"]` (לא תואם)
 
-1. **מבנה נתונים חדש:**
-   - במקום לאחד נתונים לפי לקוח ופלטפורמה בלבד
-   - שמירת רשומות מלאות לכל לקוח עם פירוט לפי קמפיין
-
-2. **תצוגה חדשה:**
-```text
-┌─────────────────────────────────────────────────────────────┐
-│ 📊 דשבורד סוכנות: Marketing Captain                        │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│ ┌─────────────────────────────────────────────────────────┐ │
-│ │ 🏢 לקוח A                               Facebook 🔵     │ │
-│ ├─────────────────────────────────────────────────────────┤ │
-│ │ קמפיין          | חשיפות | קליקים | לידים | הוצאה | CPL │ │
-│ ├─────────────────────────────────────────────────────────┤ │
-│ │ קמפיין 1        | 7,650  | 302    | 0     | ₪286  | ₪0  │ │
-│ │ קמפיין 2        | 9,406  | 329    | 0     | ₪250  | ₪0  │ │
-│ │ קמפיין המרות    | 10,955 | 533    | 96    | ₪534  | ₪5.6│ │
-│ ├─────────────────────────────────────────────────────────┤ │
-│ │ סה"כ            | 35,347 | 1,453  | 96    | ₪1,285| ₪13 │ │
-│ └─────────────────────────────────────────────────────────┘ │
-│                                                             │
-│ ┌─────────────────────────────────────────────────────────┐ │
-│ │ 🏢 לקוח B                             Google Ads 🔴     │ │
-│ ├─────────────────────────────────────────────────────────┤ │
-│ │ קמפיין     | חשיפות | קליקים | רכישות | הוצאה | הכנסה |ROAS│
-│ ├─────────────────────────────────────────────────────────┤ │
-│ │ קמפיין חנות| 5,000  | 150    | 25     | ₪800  | ₪3,200| 4x │ │
-│ │ סה"כ       | 5,000  | 150    | 25     | ₪800  | ₪3,200| 4x │ │
-│ └─────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
-
-3. **לוגיקה:**
-   - שליפת כל הטבלאות של כל לקוח בסוכנות
-   - זיהוי סוג הטבלה (`facebook_insights` = לידים, `facebook_ecommerce`/`google_ads ecommerce` = איקומרס)
-   - קיבוץ רשומות לפי קמפיין
-   - חישוב סה"כ לכל לקוח
-   - הצגה בכרטיסיות נפרדות
+כתוצאה מכך, כשמשתמש עורך ליד דרך הדיאלוג או משנה תאריך לחזרה, ה-cache לא מתבטל כראוי והנתונים הישנים נשארים בתצוגה.
 
 ---
 
-## פירוט טכני
+## הפתרון
 
-### שינויי מבנה הנתונים
+### שלב 1: תיקון `EditLeadDialog.tsx`
+עדכון ה-`onSuccess` callback של ה-mutation לבטל את כל ה-query keys הרלוונטיים:
 
 ```typescript
-// מבנה חדש לאחסון נתונים לפי לקוח וטבלה
-interface ClientTableData {
-  clientId: string;
-  clientName: string;
-  tableId: string;
-  tableName: string;
-  integrationType: 'facebook_insights' | 'facebook_ecommerce' | 'google_ads';
-  campaignType: 'leads' | 'ecommerce';
-  records: Array<{
-    campaignName: string;
-    impressions: number;
-    clicks: number;
-    leads?: number;
-    purchases?: number;
-    spend: number;
-    revenue?: number;
-    costPerLead?: number;
-    roas?: number;
-  }>;
-  totals: {
-    impressions: number;
-    clicks: number;
-    leads?: number;
-    purchases?: number;
-    spend: number;
-    revenue?: number;
-    costPerLead?: number;
-    roas?: number;
-  };
-}
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+  queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+  queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+  toast({
+    title: "ליד עודכן בהצלחה",
+  });
+  setOpen(false);
+},
 ```
 
-### לוגיקת זיהוי סוג קמפיין
+### שלב 2: תיקון `FollowUpDatePicker.tsx`
+עדכון ה-`onSuccess` callback לבטל את כל ה-query keys:
 
 ```typescript
-const getCampaignType = (integrationType: string, settings?: any): 'leads' | 'ecommerce' => {
-  if (integrationType === 'facebook_insights') return 'leads';
-  if (integrationType === 'facebook_ecommerce') return 'ecommerce';
-  if (integrationType === 'google_ads') {
-    return settings?.campaign_type === 'ecommerce' ? 'ecommerce' : 'leads';
-  }
-  return 'leads'; // default
-};
+onSuccess: () => {
+  queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+  queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+  queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+  toast({
+    title: selectedDate ? "תאריך לחזרה נשמר" : "תאריך לחזרה נמחק",
+  });
+  setDialogOpen(false);
+  onSuccess?.();
+},
 ```
 
-### רכיבי UI חדשים
+### שלב 3: תיקון `ImportLeadsWithMapping.tsx`
+עדכון ה-cache invalidation אחרי ייבוא לידים:
 
-1. **ClientTableCard** - כרטיסייה לכל לקוח+פלטפורמה:
-   - כותרת עם שם לקוח ואייקון פלטפורמה
-   - טבלת קמפיינים בהתאם לסוג (לידים/איקומרס)
-   - שורת סה"כ מודגשת
-
-2. **LeadsTable** - טבלה לקמפייני לידים:
-   - עמודות: קמפיין | חשיפות | קליקים | לידים | הוצאה | עלות לליד
-
-3. **EcommerceTable** - טבלה לקמפייני איקומרס:
-   - עמודות: קמפיין | חשיפות | קליקים | רכישות | הוצאה | הכנסה | ROAS
+```typescript
+queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+```
 
 ---
 
-## קבצים לעדכון
-
-### 1. src/components/dynamic-tables/AgencyDashboardContent.tsx
-- שכתוב מלא עם הלוגיקה החדשה
-- הוספת קומפוננטות פנימיות: ClientTableCard, LeadsTable, EcommerceTable
-- שמירת כרטיסי הסיכום הכוללים (הוצאה כוללת, הכנסות, ROAS)
+## קבצים שיעודכנו
+1. `src/components/forms/EditLeadDialog.tsx` - שורה 294
+2. `src/components/leads/FollowUpDatePicker.tsx` - שורות 61-62  
+3. `src/components/forms/ImportLeadsWithMapping.tsx` - שורה 1070
 
 ---
 
 ## תוצאה צפויה
-
-1. **כל לקוח מוצג בכרטיסייה נפרדת** עם שם ופלטפורמה
-2. **טבלה מותאמת לסוג הקמפיין** - לידים או איקומרס
-3. **פירוט מלא לפי קמפיין** עם שורת סה"כ
-4. **תצוגה זהה לתצוגת לקוח בודד** - אותו פורמט כמו בצילום המסך
-5. **כרטיסי סיכום כוללים** - סה"כ הוצאה, הכנסות, ROAS לכל הסוכנות
+לאחר התיקון, כל עדכון לליד (עריכה, שינוי תאריך לחזרה, או ייבוא) יתעדכן מיידית בתצוגה ללא צורך ברענון ידני של העמוד.
