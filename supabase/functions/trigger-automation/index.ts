@@ -607,7 +607,7 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
     }
   }
   
-  // Create new subscriber
+  // Prepare phone number for lookup/creation
   const contactPhone = leadRecord.phone
   if (!contactPhone) {
     throw new Error('לליד אין מספר טלפון')
@@ -618,7 +618,77 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   const whatsappPhone = '+972' + last9Digits
   const contactName = leadRecord.contact_name || leadRecord.company_name || 'Unknown'
   
-  console.log(`Creating subscriber with whatsapp_phone: ${whatsappPhone}, name: ${contactName}`)
+  // Generate phone candidates for lookup (multi-format)
+  const phoneCandidates = [
+    `+972${last9Digits}`,
+    `972${last9Digits}`,
+    `0${last9Digits}`,
+    cleanPhone,
+    contactPhone.replace(/[\s\-\(\)]/g, '')
+  ]
+  
+  // Step 1: Try to find existing subscriber by phone in ManyChat
+  console.log(`Searching for existing subscriber with phone candidates:`, phoneCandidates)
+  let subscriberId: string | null = null
+  
+  for (const candidate of phoneCandidates) {
+    try {
+      const findResponse = await fetch(
+        `${baseUrl}/subscriber/findBySystemField?phone=${encodeURIComponent(candidate)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+      const findResult = await findResponse.json()
+      console.log(`Find subscriber (${candidate}) response:`, findResult)
+      
+      if (findResult?.status === 'success' && findResult?.data?.id) {
+        subscriberId = String(findResult.data.id)
+        console.log(`Found existing subscriber: ${subscriberId}`)
+        break
+      }
+    } catch (e) {
+      console.log(`Error finding subscriber with ${candidate}:`, e)
+    }
+  }
+  
+  // Step 2: If found, update lead and add tag
+  if (subscriberId) {
+    console.log(`Subscriber exists in ManyChat: ${subscriberId}, updating lead record`)
+    await supabase.from('leads')
+      .update({ manychat_subscriber_id: subscriberId })
+      .eq('id', leadRecord.id)
+    
+    if (manychat_tag_id && manychat_tag_id !== 'none') {
+      console.log(`Adding tag ${manychat_tag_id} to existing subscriber`)
+      const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subscriber_id: subscriberId,
+          tag_id: parseInt(manychat_tag_id),
+        }),
+      })
+      const tagResult = await tagResponse.json()
+      console.log('ManyChat addTag response:', tagResult)
+    }
+    
+    return {
+      success: true,
+      subscriber_id: subscriberId,
+      message: 'Found existing subscriber in ManyChat, linked to lead'
+    }
+  }
+  
+  // Step 3: Create new subscriber (only if not found)
+  console.log(`Creating NEW subscriber with whatsapp_phone: ${whatsappPhone}, name: ${contactName}`)
   
   const createResponse = await fetch(`${baseUrl}/subscriber/createSubscriber`, {
     method: 'POST',
@@ -628,6 +698,7 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
     },
     body: JSON.stringify({
       first_name: contactName,
+      phone: whatsappPhone,
       whatsapp_phone: whatsappPhone,
       has_opt_in_sms: true,
       has_opt_in_email: true,
@@ -639,10 +710,58 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   console.log('ManyChat createSubscriber response:', createResult)
   
   if (createResult.status !== 'success' || !createResult.data?.id) {
+    // If creation failed, try one more lookup in case of race condition
+    console.log('Creation failed, trying one more lookup...')
+    for (const candidate of phoneCandidates) {
+      try {
+        const retryFind = await fetch(
+          `${baseUrl}/subscriber/findBySystemField?phone=${encodeURIComponent(candidate)}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        )
+        const retryResult = await retryFind.json()
+        if (retryResult?.status === 'success' && retryResult?.data?.id) {
+          subscriberId = String(retryResult.data.id)
+          console.log(`Found subscriber on retry: ${subscriberId}`)
+          
+          await supabase.from('leads')
+            .update({ manychat_subscriber_id: subscriberId })
+            .eq('id', leadRecord.id)
+          
+          if (manychat_tag_id && manychat_tag_id !== 'none') {
+            await fetch(`${baseUrl}/subscriber/addTag`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                subscriber_id: subscriberId,
+                tag_id: parseInt(manychat_tag_id),
+              }),
+            })
+          }
+          
+          return {
+            success: true,
+            subscriber_id: subscriberId,
+            message: 'Found existing subscriber on retry, linked to lead'
+          }
+        }
+      } catch (e) {
+        // Continue to next candidate
+      }
+    }
+    
     throw new Error(`שגיאה ביצירת subscriber ב-ManyChat: ${JSON.stringify(createResult)}`)
   }
   
-  const subscriberId = createResult.data.id.toString()
+  subscriberId = createResult.data.id.toString()
   console.log(`Created new subscriber: ${subscriberId}`)
   
   // Save subscriber ID to lead
