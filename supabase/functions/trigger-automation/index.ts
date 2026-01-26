@@ -6,9 +6,12 @@ const corsHeaders = {
 }
 
 interface AutomationPayload {
-  trigger_type: string
-  data: any
-  tenant_id: string
+  trigger_type?: string
+  data?: any
+  tenant_id?: string
+  // Support direct automation execution by ID
+  automationId?: string
+  payload?: any
 }
 
 Deno.serve(async (req) => {
@@ -22,23 +25,57 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    const payload: AutomationPayload = await req.json()
-    console.log('Automation triggered:', payload)
+    const requestBody = await req.json()
+    console.log('Automation triggered:', requestBody)
 
-    // Find active automations matching this trigger
-    const { data: automations, error: fetchError } = await supabase
-      .from('automations')
-      .select('*')
-      .eq('trigger_type', payload.trigger_type)
-      .eq('tenant_id', payload.tenant_id)
-      .eq('active', true)
+    let automations: any[] = []
+    let payloadData: any
+    let tenantId: string
 
-    if (fetchError) {
-      console.error('Error fetching automations:', fetchError)
-      throw fetchError
+    // Check if this is a direct automation execution by ID
+    if (requestBody.automationId) {
+      // Direct execution mode - fetch the specific automation
+      const { data: automation, error: fetchError } = await supabase
+        .from('automations')
+        .select('*')
+        .eq('id', requestBody.automationId)
+        .single()
+
+      if (fetchError) {
+        console.error('Error fetching automation by ID:', fetchError)
+        throw fetchError
+      }
+
+      if (!automation) {
+        throw new Error(`Automation not found: ${requestBody.automationId}`)
+      }
+
+      automations = [automation]
+      payloadData = requestBody.payload || requestBody
+      tenantId = automation.tenant_id
+      console.log(`Direct execution of automation: ${automation.name} (${automation.id})`)
+    } else {
+      // Standard trigger mode - find automations by trigger_type
+      const payload = requestBody as AutomationPayload
+      payloadData = payload.data
+      tenantId = payload.tenant_id!
+
+      const { data: foundAutomations, error: fetchError } = await supabase
+        .from('automations')
+        .select('*')
+        .eq('trigger_type', payload.trigger_type)
+        .eq('tenant_id', payload.tenant_id)
+        .eq('active', true)
+
+      if (fetchError) {
+        console.error('Error fetching automations:', fetchError)
+        throw fetchError
+      }
+
+      automations = foundAutomations || []
     }
 
-    console.log(`Found ${automations?.length || 0} active automations`)
+    console.log(`Found ${automations.length} automation(s) to execute`)
 
     // Execute each matching automation
     const results = await Promise.allSettled(
@@ -48,7 +85,7 @@ Deno.serve(async (req) => {
         try {
           // Check conditions if any
           if (automation.conditions && Object.keys(automation.conditions).length > 0) {
-            const conditionsMet = checkConditions(automation.conditions, payload.data)
+            const conditionsMet = checkConditions(automation.conditions, payloadData)
             if (!conditionsMet) {
               console.log(`Conditions not met for automation ${automation.id}`)
               return
@@ -58,27 +95,27 @@ Deno.serve(async (req) => {
           // Execute action based on type
           let response: any
           if (automation.action_type === 'webhook') {
-            response = await executeWebhook(automation.configuration, payload.data)
+            response = await executeWebhook(automation.configuration, payloadData)
           } else if (automation.action_type === 'email') {
-            response = await executeEmail(automation.configuration, payload.data)
+            response = await executeEmail(automation.configuration, payloadData)
           } else if (automation.action_type === 'notification') {
-            response = await executeNotification(automation.configuration, payload.data)
+            response = await executeNotification(automation.configuration, payloadData)
           } else if (automation.action_type === 'update_status') {
-            response = await executeStatusUpdate(supabase, automation.configuration, payload.data)
+            response = await executeStatusUpdate(supabase, automation.configuration, payloadData)
           } else if (automation.action_type === 'send_whatsapp') {
-            response = await executeSendWhatsapp(supabase, automation.configuration, payload.data, payload.tenant_id)
+            response = await executeSendWhatsapp(supabase, automation.configuration, payloadData, tenantId)
           } else if (automation.action_type === 'create_manychat_subscriber') {
-            response = await executeCreateManychatSubscriber(supabase, automation.configuration, payload.data, payload.tenant_id)
+            response = await executeCreateManychatSubscriber(supabase, automation.configuration, payloadData, tenantId)
           } else if (automation.action_type === 'send_greenapi_message') {
-            response = await executeGreenApiMessage(supabase, automation.configuration, payload.data, payload.tenant_id)
+            response = await executeGreenApiMessage(supabase, automation.configuration, payloadData, tenantId)
           } else if (automation.action_type === 'send_greenapi_to_campaigner') {
-            response = await executeGreenApiToCampaigner(supabase, automation.configuration, payload.data, payload.tenant_id)
+            response = await executeGreenApiToCampaigner(supabase, automation.configuration, payloadData, tenantId)
           } else if (automation.action_type === 'add_lead_update') {
-            response = await executeAddLeadUpdate(supabase, automation.configuration, payload.data, payload.tenant_id)
+            response = await executeAddLeadUpdate(supabase, automation.configuration, payloadData, tenantId)
           } else if (automation.action_type === 'add_client_update') {
-            response = await executeAddClientUpdate(supabase, automation.configuration, payload.data, payload.tenant_id)
+            response = await executeAddClientUpdate(supabase, automation.configuration, payloadData, tenantId)
           } else if (automation.action_type === 'create_task') {
-            response = await executeCreateTask(supabase, automation.configuration, payload.data, payload.tenant_id)
+            response = await executeCreateTask(supabase, automation.configuration, payloadData, tenantId)
           }
 
           const executionTime = Date.now() - startTime
@@ -87,7 +124,7 @@ Deno.serve(async (req) => {
           await supabase.from('automation_logs').insert({
             automation_id: automation.id,
             success: true,
-            payload: payload.data,
+            payload: payloadData,
             response: response,
             execution_time_ms: executionTime,
           })
@@ -103,7 +140,7 @@ Deno.serve(async (req) => {
             automation_id: automation.id,
             success: false,
             error_message: errorMessage,
-            payload: payload.data,
+            payload: payloadData,
             execution_time_ms: executionTime,
           })
 
