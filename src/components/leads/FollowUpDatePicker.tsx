@@ -58,7 +58,8 @@ export function FollowUpDatePicker({
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
       queryClient.invalidateQueries({ queryKey: ["leads-count"] });
       toast({
         title: selectedDate ? "תאריך לחזרה נשמר" : "תאריך לחזרה נמחק",
