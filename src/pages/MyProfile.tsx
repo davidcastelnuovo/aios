@@ -10,6 +10,7 @@ import { useState, useEffect } from "react";
 import { MFASettings } from "@/components/MFASettings";
 import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 import { CalendarIframeSettings } from "@/components/CalendarIframeSettings";
+import { CalendarSharingSettings } from "@/components/CalendarSharingSettings";
 
 export default function MyProfile() {
   const { userId } = useCurrentUser();
@@ -259,6 +260,8 @@ export default function MyProfile() {
       <MFASettings />
 
       <CalendarIframeSettings />
+
+      <CalendarSharingSettings />
 
       <Card className="shadow-card">
         <CardHeader className="border-b bg-muted/30">

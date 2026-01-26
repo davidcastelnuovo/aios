@@ -23,14 +23,41 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    const { timeMin, timeMax } = await req.json();
-    console.log('Fetching calendar events:', { timeMin, timeMax, userId: user.id });
+    const { timeMin, timeMax, target_user_id } = await req.json();
+    
+    // Determine which user's calendar to access
+    const calendarOwnerId = target_user_id || user.id;
+    console.log('Fetching calendar events:', { timeMin, timeMax, requestingUserId: user.id, calendarOwnerId });
 
-    // Get user's calendar tokens
-    const { data: tokenData, error: tokenError } = await supabaseClient
+    // If accessing another user's calendar, verify permission
+    if (target_user_id && target_user_id !== user.id) {
+      const { data: hasAccess, error: accessError } = await supabaseClient
+        .rpc('user_has_calendar_access', {
+          _accessor_user_id: user.id,
+          _owner_user_id: target_user_id,
+          _required_permission: 'view'
+        });
+
+      if (accessError) {
+        console.error('Error checking calendar access:', accessError);
+        throw new Error('Failed to verify calendar access');
+      }
+
+      if (!hasAccess) {
+        throw new Error('You do not have permission to view this calendar');
+      }
+    }
+
+    // Get calendar owner's tokens (using service role for cross-user access)
+    const serviceClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const { data: tokenData, error: tokenError } = await serviceClient
       .from('calendar_tokens')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', calendarOwnerId)
       .single();
 
     if (tokenError || !tokenData) {
@@ -96,14 +123,14 @@ serve(async (req) => {
       accessToken = refreshData.access_token;
       const newExpiresAt = new Date(Date.now() + (refreshData.expires_in * 1000));
 
-      await supabaseClient
+      await serviceClient
         .from('calendar_tokens')
         .update({
           access_token: accessToken,
           expires_at: newExpiresAt.toISOString(),
           updated_at: new Date().toISOString(),
         })
-        .eq('user_id', user.id);
+        .eq('user_id', calendarOwnerId);
 
       console.log('Token refreshed successfully');
     }
