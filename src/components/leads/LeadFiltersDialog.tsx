@@ -32,7 +32,7 @@ import { Badge } from "@/components/ui/badge";
 
 export interface FilterState {
   searchQuery: string;
-  salesPersonId: string;
+  salesPersonIds: string[]; // Changed to array for multi-select
   stageId: string;
   responseStatus: string[]; // Changed to array for multi-select
   tagIds: string[]; // Changed from tagId to tagIds for multi-select
@@ -85,10 +85,12 @@ export function LeadFiltersDialog({
   // Search states for multi-select dropdowns
   const [statusSearch, setStatusSearch] = useState("");
   const [tagSearch, setTagSearch] = useState("");
+  const [salesPersonSearch, setSalesPersonSearch] = useState("");
   
   // Popover open states
   const [statusPopoverOpen, setStatusPopoverOpen] = useState(false);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
+  const [salesPersonPopoverOpen, setSalesPersonPopoverOpen] = useState(false);
 
   // Handle wheel scroll inside popover
   const handleScrollWheel = (e: React.WheelEvent<HTMLDivElement>) => {
@@ -110,12 +112,19 @@ export function LeadFiltersDialog({
     return allTags.filter(t => t.name.toLowerCase().includes(searchLower));
   }, [allTags, tagSearch]);
 
+  const filteredSalesPeople = useMemo(() => {
+    if (!salesPersonSearch.trim()) return salesPeople;
+    const searchLower = salesPersonSearch.toLowerCase();
+    return salesPeople.filter(sp => sp.full_name.toLowerCase().includes(searchLower));
+  }, [salesPeople, salesPersonSearch]);
+
   // Sync with current filters when dialog opens or when currentFilters change while dialog is open
   useEffect(() => {
     if (open) {
       setFilters(currentFilters);
       setStatusSearch("");
       setTagSearch("");
+      setSalesPersonSearch("");
     }
   }, [open, currentFilters]);
 
@@ -131,7 +140,7 @@ export function LeadFiltersDialog({
   const handleReset = () => {
     const resetFilters: FilterState = {
       searchQuery: "",
-      salesPersonId: "all",
+      salesPersonIds: [],
       stageId: "all",
       responseStatus: [],
       tagIds: [],
@@ -157,7 +166,7 @@ export function LeadFiltersDialog({
     try {
       const filtersToSave = {
         searchQuery: filters.searchQuery || null,
-        salesPersonId: filters.salesPersonId,
+        salesPersonIds: filters.salesPersonIds,
         stageId: filters.stageId,
         responseStatus: filters.responseStatus,
         tagIds: filters.tagIds,
@@ -203,7 +212,7 @@ export function LeadFiltersDialog({
     try {
       const filtersToSave = {
         searchQuery: filters.searchQuery || null,
-        salesPersonId: filters.salesPersonId,
+        salesPersonIds: filters.salesPersonIds,
         stageId: filters.stageId,
         responseStatus: filters.responseStatus,
         tagIds: filters.tagIds,
@@ -261,6 +270,18 @@ export function LeadFiltersDialog({
     });
   };
 
+  // Toggle sales person selection
+  const toggleSalesPerson = (spId: string) => {
+    setFilters(prev => {
+      const currentSPs = prev.salesPersonIds;
+      if (currentSPs.includes(spId)) {
+        return { ...prev, salesPersonIds: currentSPs.filter(sp => sp !== spId) };
+      } else {
+        return { ...prev, salesPersonIds: [...currentSPs, spId] };
+      }
+    });
+  };
+
   // Get selected status labels for display - show max 2 items then "+X"
   const selectedStatusLabels = useMemo(() => {
     if (filters.responseStatus.length === 0) return "כל הסטטוסים";
@@ -301,8 +322,28 @@ export function LeadFiltersDialog({
     return `${labels.slice(0, 2).join(", ")} +${labels.length - 2}`;
   }, [filters.tagIds, allTags]);
 
+  // Get selected sales people labels for display - show max 2 items then "+X"
+  const selectedSalesPersonLabels = useMemo(() => {
+    if (filters.salesPersonIds.length === 0) return "כל אנשי המכירות";
+    
+    const labels: string[] = [];
+    if (filters.salesPersonIds.includes("none")) {
+      labels.push("ללא שיוך");
+    }
+    const otherLabels = filters.salesPersonIds
+      .filter(sp => sp !== "none")
+      .map(sp => salesPeople.find(p => p.id === sp)?.full_name)
+      .filter(Boolean) as string[];
+    labels.push(...otherLabels);
+    
+    if (labels.length <= 2) {
+      return labels.join(", ");
+    }
+    return `${labels.slice(0, 2).join(", ")} +${labels.length - 2}`;
+  }, [filters.salesPersonIds, salesPeople]);
+
   const hasActiveFilters = 
-    filters.salesPersonId !== "all" ||
+    filters.salesPersonIds.length > 0 ||
     filters.stageId !== "all" ||
     filters.responseStatus.length > 0 ||
     filters.tagIds.length > 0 ||
@@ -321,26 +362,82 @@ export function LeadFiltersDialog({
           </DialogHeader>
 
           <div className="space-y-5 py-4">
-            {/* Sales Person */}
+            {/* Sales Person - Multi-select with search */}
             <div className="space-y-2">
-              <Label>איש מכירות</Label>
-              <Select 
-                value={filters.salesPersonId} 
-                onValueChange={(val) => setFilters(prev => ({ ...prev, salesPersonId: val }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="בחר איש מכירות" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">כל אנשי המכירות</SelectItem>
-                  <SelectItem value="none">ללא שיוך</SelectItem>
-                  {salesPeople?.map((sp) => (
-                    <SelectItem key={sp.id} value={sp.id}>
-                      {sp.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>אנשי מכירות</Label>
+              <Popover open={salesPersonPopoverOpen} onOpenChange={setSalesPersonPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between font-normal"
+                  >
+                    <span className="truncate">{selectedSalesPersonLabels}</span>
+                    {filters.salesPersonIds.length > 0 && (
+                      <Badge variant="secondary" className="mr-2 shrink-0">
+                        {filters.salesPersonIds.length}
+                      </Badge>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0 bg-popover z-[200]" align="start">
+                  <div className="p-2 border-b">
+                    <div className="relative">
+                      <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="חיפוש איש מכירות..."
+                        value={salesPersonSearch}
+                        onChange={(e) => setSalesPersonSearch(e.target.value)}
+                        className="pr-9"
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-[200px] overflow-y-auto" onWheel={handleScrollWheel}>
+                    <div className="p-2 space-y-1">
+                      {/* "None" option */}
+                      <label
+                        className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent"
+                      >
+                        <Checkbox
+                          checked={filters.salesPersonIds.includes("none")}
+                          onCheckedChange={() => toggleSalesPerson("none")}
+                        />
+                        <span>ללא שיוך</span>
+                      </label>
+                      {filteredSalesPeople.map((sp) => (
+                        <label
+                          key={sp.id}
+                          className="flex items-center gap-2 p-2 rounded-md cursor-pointer hover:bg-accent"
+                        >
+                          <Checkbox
+                            checked={filters.salesPersonIds.includes(sp.id)}
+                            onCheckedChange={() => toggleSalesPerson(sp.id)}
+                          />
+                          <span>{sp.full_name}</span>
+                        </label>
+                      ))}
+                      {filteredSalesPeople.length === 0 && (
+                        <div className="text-center text-muted-foreground py-2">
+                          לא נמצאו אנשי מכירות
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {filters.salesPersonIds.length > 0 && (
+                    <div className="p-2 border-t">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => setFilters(prev => ({ ...prev, salesPersonIds: [] }))}
+                      >
+                        <X className="h-4 w-4 ml-2" />
+                        נקה בחירה
+                      </Button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
             </div>
 
             {/* Pipeline Stage */}

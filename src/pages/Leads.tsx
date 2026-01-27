@@ -620,7 +620,7 @@ export default function Leads() {
   const [autoOpenLeadId, setAutoOpenLeadId] = useState<string | null>(null);
   
   // Filter states
-  const [filterSalesPerson, setFilterSalesPerson] = useState<string>("all");
+  const [filterSalesPersonIds, setFilterSalesPersonIds] = useState<string[]>([]);
   const [filterStage, setFilterStage] = useState<string>("all");
   const [filterResponseStatus, setFilterResponseStatus] = useState<string[]>([]);
   const [filterTagIds, setFilterTagIds] = useState<string[]>([]);
@@ -683,7 +683,7 @@ export default function Leads() {
     setPage(1);
     setStageOffsets({});
     setAccumulatedLeads({});
-  }, [selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate]);
+  }, [selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate, endDate]);
   
   // Kanban limiting state - how many leads to SHOW per stage initially (can expand)
   const KANBAN_LEADS_PER_STAGE_DISPLAY = 20;
@@ -735,7 +735,7 @@ export default function Leads() {
 
   // Fetch total count for pagination - skip for Kanban view (not needed)
   const { data: totalLeadsCount = 0 } = useQuery({
-    queryKey: ["leads-count", tenantId, selectedAgency, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["leads-count", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!tenantId) return 0;
       
@@ -774,11 +774,12 @@ export default function Leads() {
         query = query.eq("status", filterStage as any);
       }
       
-      if (filterSalesPerson !== "all") {
-        if (filterSalesPerson === "none") {
+      // Multi-select sales person filter
+      if (filterSalesPersonIds.length > 0) {
+        if (filterSalesPersonIds.includes("none") && filterSalesPersonIds.length === 1) {
           query = query.is("sales_person_id", null);
-        } else {
-          query = query.eq("sales_person_id", filterSalesPerson);
+        } else if (!filterSalesPersonIds.includes("none")) {
+          query = query.in("sales_person_id", filterSalesPersonIds);
         }
       }
       
@@ -821,7 +822,7 @@ export default function Leads() {
 
   // Kanban view: use RPC that fetches leads per stage
   const { data: kanbanStageData, isLoading: isKanbanLoading, refetch: refetchKanban, isFetching: isKanbanFetching } = useQuery({
-    queryKey: ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPerson, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(',')],
+    queryKey: ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(',')],
     queryFn: async () => {
       if (!tenantId) return null;
       
@@ -831,13 +832,18 @@ export default function Leads() {
       
       const stageIds = PIPELINE_STAGES.map(s => s.id);
       
+      // Build sales person filter - support multi-select
+      const salesPersonFilter = filterSalesPersonIds.length > 0 && !filterSalesPersonIds.includes("none") 
+        ? filterSalesPersonIds 
+        : null;
+      
       const { data, error } = await supabase.rpc('get_leads_by_stages', {
         p_tenant_id: tenantId,
         p_agency_ids: agencyIds,
         p_stages: stageIds,
         p_limit_per_stage: KANBAN_LEADS_PER_STAGE_LIMIT,
         p_search_query: searchQuery.trim() || null,
-        p_sales_person_id: filterSalesPerson !== "all" && filterSalesPerson !== "none" ? filterSalesPerson : null,
+        p_sales_person_ids: salesPersonFilter,
         p_response_statuses: filterResponseStatus.length > 0 && !filterResponseStatus.includes("none") ? filterResponseStatus : null,
         p_follow_up_today: filterFollowUpToday,
         p_start_date: startDate?.toISOString() || null,
@@ -903,7 +909,7 @@ export default function Leads() {
   
   // Table view: use regular paginated query
   const { data: tableLeads, isLoading: isTableLoading, refetch: refetchTable, isFetching: isTableFetching } = useQuery({
-    queryKey: ["leads-table", tenantId, selectedAgency, effectivePage, searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["leads-table", tenantId, selectedAgency, effectivePage, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString()],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
       
@@ -1012,11 +1018,12 @@ export default function Leads() {
         query = query.eq("status", filterStage as any);
       }
       
-      if (filterSalesPerson !== "all") {
-        if (filterSalesPerson === "none") {
+      // Multi-select sales person filter
+      if (filterSalesPersonIds.length > 0) {
+        if (filterSalesPersonIds.includes("none") && filterSalesPersonIds.length === 1) {
           query = query.is("sales_person_id", null);
-        } else {
-          query = query.eq("sales_person_id", filterSalesPerson);
+        } else if (!filterSalesPersonIds.includes("none")) {
+          query = query.in("sales_person_id", filterSalesPersonIds);
         }
       }
       
@@ -1289,7 +1296,7 @@ export default function Leads() {
         tenantId,
         selectedAgency,
         searchQuery,
-        filterSalesPerson,
+        filterSalesPersonIds,
         filterResponseStatus,
         filterTagIds,
         filterFollowUpToday,
@@ -1304,7 +1311,7 @@ export default function Leads() {
         selectedAgency,
         effectivePage,
         searchQuery,
-        filterSalesPerson,
+        filterSalesPersonIds,
         filterStage,
         filterResponseStatus,
         filterTagIds,
@@ -1571,31 +1578,31 @@ export default function Leads() {
 
   // Helper to check if any filters are active
   const hasActiveFilters = useMemo(() => {
-    return filterSalesPerson !== "all" ||
+    return filterSalesPersonIds.length > 0 ||
       filterStage !== "all" ||
       filterResponseStatus.length > 0 ||
       filterTagIds.length > 0 ||
       startDate !== undefined ||
       endDate !== undefined ||
       filterFollowUpToday;
-  }, [filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate, endDate, filterFollowUpToday]);
+  }, [filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, startDate, endDate, filterFollowUpToday]);
 
   // Current filter state for dialog
   const currentFilters: FilterState = useMemo(() => ({
     searchQuery,
-    salesPersonId: filterSalesPerson,
+    salesPersonIds: filterSalesPersonIds,
     stageId: filterStage,
     responseStatus: filterResponseStatus,
     tagIds: filterTagIds,
     startDate,
     endDate,
     followUpToday: filterFollowUpToday,
-  }), [searchQuery, filterSalesPerson, filterStage, filterResponseStatus, filterTagIds, startDate, endDate, filterFollowUpToday]);
+  }), [searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, startDate, endDate, filterFollowUpToday]);
 
   // Handle applying filters from dialog
   const handleApplyFilters = (filters: FilterState) => {
     setSearchQuery(filters.searchQuery);
-    setFilterSalesPerson(filters.salesPersonId);
+    setFilterSalesPersonIds(filters.salesPersonIds);
     setFilterStage(filters.stageId);
     setFilterResponseStatus(filters.responseStatus);
     setFilterTagIds(filters.tagIds);
@@ -1609,7 +1616,7 @@ export default function Leads() {
   const handlePresetSelect = (preset: FilterPreset | null) => {
     if (!preset) {
       // Reset all filters
-      setFilterSalesPerson("all");
+      setFilterSalesPersonIds([]);
       setFilterStage("all");
       setFilterResponseStatus([]);
       setFilterTagIds([]);
@@ -1620,8 +1627,15 @@ export default function Leads() {
       setActivePresetId(null);
     } else {
       // Apply preset filters - handle both old (string) and new (array) format
-      const f = preset.filters;
-      setFilterSalesPerson(f.salesPersonId || "all");
+      const f = preset.filters as Record<string, any>;
+      // Handle legacy salesPersonId (string) format and new salesPersonIds (array) format
+      if ('salesPersonId' in f && typeof f.salesPersonId === 'string') {
+        setFilterSalesPersonIds(f.salesPersonId === 'all' ? [] : [f.salesPersonId]);
+      } else if ('salesPersonIds' in f && Array.isArray(f.salesPersonIds)) {
+        setFilterSalesPersonIds(f.salesPersonIds);
+      } else {
+        setFilterSalesPersonIds([]);
+      }
       setFilterStage(f.stageId || "all");
       // Handle legacy string format for responseStatus
       if (typeof f.responseStatus === 'string') {
@@ -1741,6 +1755,10 @@ export default function Leads() {
         ? [selectedAgency]
         : agencies?.map(a => a.id) || null;
       
+      const salesPersonFilter = filterSalesPersonIds.length > 0 && !filterSalesPersonIds.includes("none") 
+        ? filterSalesPersonIds 
+        : null;
+      
       const { data, error } = await supabase.rpc('get_leads_by_stages', {
         p_tenant_id: tenantId,
         p_agency_ids: agencyIds,
@@ -1748,7 +1766,7 @@ export default function Leads() {
         p_limit_per_stage: KANBAN_LEADS_PER_STAGE_LIMIT,
         p_offset_per_stage: newOffset,
         p_search_query: searchQuery.trim() || null,
-        p_sales_person_id: filterSalesPerson !== "all" && filterSalesPerson !== "none" ? filterSalesPerson : null,
+        p_sales_person_ids: salesPersonFilter,
         p_response_statuses: filterResponseStatus.length > 0 && !filterResponseStatus.includes("none") ? filterResponseStatus : null,
         p_start_date: startDate?.toISOString() || null,
         p_end_date: endDate ? new Date(endDate.setHours(23, 59, 59, 999)).toISOString() : null,
