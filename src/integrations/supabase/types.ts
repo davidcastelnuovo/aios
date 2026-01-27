@@ -1860,6 +1860,52 @@ export type Database = {
           },
         ]
       }
+      lead_sales_people: {
+        Row: {
+          created_at: string | null
+          id: string
+          lead_id: string
+          sales_person_id: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          lead_id: string
+          sales_person_id: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          lead_id?: string
+          sales_person_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_sales_people_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_sales_people_sales_person_id_fkey"
+            columns: ["sales_person_id"]
+            isOneToOne: false
+            referencedRelation: "sales_people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_sales_people_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_statuses: {
         Row: {
           color: string
