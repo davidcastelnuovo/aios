@@ -4207,6 +4207,25 @@ export type Database = {
           }
         | {
             Args: {
+              p_agency_ids?: string[]
+              p_end_date?: string
+              p_follow_up_today?: boolean
+              p_from_date?: string
+              p_limit_per_stage?: number
+              p_offset_per_stage?: number
+              p_response_statuses?: string[]
+              p_sales_person_ids?: string[]
+              p_search_query?: string
+              p_stages?: string[]
+              p_start_date?: string
+              p_tag_ids?: string[]
+              p_tenant_id: string
+              p_to_date?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
               p_agency_ids: string[]
               p_end_date?: string
               p_follow_up_today?: boolean
