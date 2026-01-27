@@ -93,7 +93,10 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
 
   const meetingScheduler = useMeetingScheduler(tenantId);
 
-const form = useForm<FormValues>({
+// State for multi-select sales people
+  const [selectedSalesPeople, setSelectedSalesPeople] = useState<string[]>([]);
+
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       company_name: lead.company_name || "",
@@ -169,6 +172,32 @@ const form = useForm<FormValues>({
     enabled: !!tenantId,
   });
 
+  // Fetch current lead's sales people assignments from junction table
+  const { data: leadSalesPeople = [] } = useQuery({
+    queryKey: ['lead-sales-people', lead.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('lead_sales_people')
+        .select('sales_person_id')
+        .eq('lead_id', lead.id);
+      if (error) throw error;
+      return data.map(sp => sp.sales_person_id);
+    },
+    enabled: !!lead.id && open,
+  });
+
+  // Sync selected sales people when dialog opens or data loads
+  useEffect(() => {
+    if (leadSalesPeople.length > 0) {
+      setSelectedSalesPeople(leadSalesPeople);
+    } else if (lead.sales_person_id) {
+      // Fallback to legacy field
+      setSelectedSalesPeople([lead.sales_person_id]);
+    } else {
+      setSelectedSalesPeople([]);
+    }
+  }, [leadSalesPeople, lead.sales_person_id, open]);
+
   // Fetch lead's tags
   const { data: leadTagIds = [] } = useQuery({
     queryKey: ['lead-tags', lead.id],
@@ -241,7 +270,8 @@ const updateMutation = useMutation({
         industry: values.industry || null,
         products: values.products && values.products.length > 0 ? JSON.stringify(values.products) : null,
         notes: values.notes || null,
-        sales_person_id: values.sales_person_id && values.sales_person_id !== 'none' ? values.sales_person_id : null,
+        // Update legacy field with first selected sales person for backwards compatibility
+        sales_person_id: selectedSalesPeople.length > 0 ? selectedSalesPeople[0] : null,
         agency_id: values.agency_id && values.agency_id !== 'none' ? values.agency_id : null,
         folder_link: values.folder_link || null,
         lost_reason: values.lost_reason || null,
@@ -259,6 +289,34 @@ const updateMutation = useMutation({
         .single();
 
       if (error) throw error;
+
+      // Update sales people assignments in junction table
+      // 1. Delete existing assignments
+      const { error: deleteError } = await supabase
+        .from('lead_sales_people')
+        .delete()
+        .eq('lead_id', lead.id);
+      
+      if (deleteError) {
+        console.error('Failed to delete existing sales people assignments:', deleteError);
+      }
+
+      // 2. Insert new assignments
+      if (selectedSalesPeople.length > 0 && lead.tenant_id) {
+        const assignments = selectedSalesPeople.map(spId => ({
+          lead_id: lead.id,
+          sales_person_id: spId,
+          tenant_id: lead.tenant_id,
+        }));
+        
+        const { error: insertError } = await supabase
+          .from('lead_sales_people')
+          .insert(assignments);
+        
+        if (insertError) {
+          console.error('Failed to insert sales people assignments:', insertError);
+        }
+      }
       
       // Trigger automations if status actually changed
       if (data && lead.status !== data.status) {
@@ -294,6 +352,7 @@ const updateMutation = useMutation({
       queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
       queryClient.invalidateQueries({ queryKey: ["leads-table"] });
       queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-sales-people", lead.id] });
       toast({
         title: "ליד עודכן בהצלחה",
       });
@@ -539,30 +598,44 @@ const updateMutation = useMutation({
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="sales_person_id"
-                  render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-sm font-medium">איש מכירות *</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger className="text-right rounded-lg border-2 h-11">
-                              <SelectValue placeholder="בחר איש מכירות" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-background z-50 text-right" align="end">
-                            {salesPeople?.map((person) => (
-                              <SelectItem key={person.id} value={person.id}>
-                                {person.full_name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
+                {/* Multi-select salespeople */}
+                <FormItem>
+                  <FormLabel className="text-sm font-medium">אנשי מכירות</FormLabel>
+                  <div className="border rounded-lg p-3 max-h-[150px] overflow-y-auto space-y-2 bg-background">
+                    {salesPeople && salesPeople.length > 0 ? (
+                      salesPeople.map((person) => (
+                        <div key={person.id} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`sp-edit-${person.id}`}
+                            checked={selectedSalesPeople.includes(person.id)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setSelectedSalesPeople(prev => [...prev, person.id]);
+                              } else {
+                                setSelectedSalesPeople(prev => 
+                                  prev.filter(id => id !== person.id)
+                                );
+                              }
+                            }}
+                          />
+                          <label 
+                            htmlFor={`sp-edit-${person.id}`}
+                            className="text-sm cursor-pointer flex-1"
+                          >
+                            {person.full_name}
+                          </label>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">אין אנשי מכירות זמינים</p>
+                    )}
+                  </div>
+                  {selectedSalesPeople.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      נבחרו {selectedSalesPeople.length} אנשי מכירות
+                    </p>
                   )}
-                />
+                </FormItem>
 
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
