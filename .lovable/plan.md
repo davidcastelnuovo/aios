@@ -1,107 +1,153 @@
 
-# תוכנית: שיוך ליד למספר אנשי מכירות (Many-to-Many)
+# תוכנית: איחוד דיאלוג שיוך אנשי מכירות + תמיכה בריבוי שיוכים
 
 ## הבעיה הנוכחית
-המבנה הנוכחי תומך רק באיש מכירות **אחד** לכל ליד (`sales_person_id` בטבלת `leads`).
-אתה מבקש ששתי אנשי המכירות - **נחמה ורויטל** - יראו את **כל 50 הלידים**.
+יש כפילות בלוגיקה של שיוך אנשי מכירות:
+1. **דיאלוג בפעולות מרובות** (`Leads.tsx`) - תומך במספר אנשי מכירות (checkboxes) ומשתמש בטבלת `lead_sales_people`
+2. **דיאלוג עריכת ליד** (`EditLeadDialog.tsx`) - תומך באיש מכירות יחיד בלבד (select dropdown) ומעדכן רק את `sales_person_id`
+
+צילום המסך שהעלית מציג את השדה "איש מכירות" בדיאלוג העריכה - שכרגע מאפשר בחירה של איש מכירות **אחד בלבד**.
+
+---
 
 ## הפתרון המוצע
-יצירת טבלת קישור חדשה `lead_sales_people` שתאפשר שיוך ליד למספר אנשי מכירות:
+
+### עיקרון
+החלפת ה-Select הבודד בדיאלוג העריכה ברכיב Multi-Select עם Checkboxes - בדיוק כמו בדיאלוג השיוך המרובה.
 
 ```text
-┌─────────────────┐         ┌────────────────────┐         ┌─────────────────┐
-│     leads       │         │  lead_sales_people │         │  sales_people   │
-├─────────────────┤         ├────────────────────┤         ├─────────────────┤
-│ id              │◄────────│ lead_id            │         │ id              │
-│ contact_name    │         │ sales_person_id    │────────►│ full_name       │
-│ ...             │         │ tenant_id          │         │ ...             │
-│ sales_person_id │         │ created_at         │         │                 │
-│ (legacy)        │         └────────────────────┘         └─────────────────┘
-└─────────────────┘
+┌─────────────────────────────────┐
+│       איש מכירות               │
+├─────────────────────────────────┤
+│  ☑ נחמה                        │
+│  ☑ רויטל                       │
+│  ☐ יוסי                        │
+│  ☐ דני                         │
+└─────────────────────────────────┘
 ```
 
 ---
 
 ## שינויים נדרשים
 
-### שלב 1: יצירת טבלת קישור חדשה
-טבלה חדשה `lead_sales_people` עם:
-- `id` - מזהה ייחודי
-- `lead_id` - קישור לליד
-- `sales_person_id` - קישור לאיש מכירות
-- `tenant_id` - לבידוד ארגוני
-- `created_at` - תאריך יצירה
+### 1. עדכון EditLeadDialog.tsx
 
-### שלב 2: הוספת RLS Policies
-- SELECT: משתמש יכול לראות קישורים שלו או של הארגון שלו
-- INSERT/UPDATE/DELETE: רק בעלים/מנהלים יכולים לשנות
+**א. הוספת שליפת אנשי מכירות משויכים מטבלת הקישור:**
+```typescript
+// Fetch current lead's sales people assignments
+const { data: leadSalesPeople = [] } = useQuery({
+  queryKey: ['lead-sales-people', lead.id],
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from('lead_sales_people')
+      .select('sales_person_id')
+      .eq('lead_id', lead.id);
+    if (error) throw error;
+    return data.map(sp => sp.sales_person_id);
+  },
+  enabled: !!lead.id && open,
+});
+```
 
-### שלב 3: עדכון הממשק
-**בדיאלוג השיוך המרובה:**
-- כשבוחרים מספר אנשי מכירות, יווצרו רשומות בטבלה החדשה לכל צירוף ליד + איש מכירות
-- לדוגמה: 50 לידים × 2 אנשי מכירות = 100 רשומות בטבלה החדשה
+**ב. הוספת state מקומי לניהול הבחירות:**
+```typescript
+const [selectedSalesPeople, setSelectedSalesPeople] = useState<string[]>([]);
 
-**בתצוגת הלידים:**
-- סינון לידים לפי איש מכירות יבדוק גם את הטבלה החדשה
-- תצוגת "משויך ל-" תציג את כל אנשי המכירות המקושרים
+// Sync with fetched data when dialog opens
+useEffect(() => {
+  if (leadSalesPeople.length > 0) {
+    setSelectedSalesPeople(leadSalesPeople);
+  } else if (lead.sales_person_id) {
+    // Fallback to legacy field
+    setSelectedSalesPeople([lead.sales_person_id]);
+  }
+}, [leadSalesPeople, lead.sales_person_id]);
+```
 
-### שלב 4: מיגרציה של נתונים קיימים
-- העתקת כל הקישורים הקיימים מ-`sales_person_id` לטבלה החדשה
-- שמירת העמודה המקורית לצורך תאימות לאחור
+**ג. החלפת ה-Select ב-Checkbox List:**
+שינוי הקוד בשורות 542-565 מ-Select בודד לרשימת Checkboxes:
+```tsx
+<FormItem>
+  <FormLabel>אנשי מכירות</FormLabel>
+  <div className="border rounded-lg p-3 max-h-[150px] overflow-y-auto space-y-2">
+    {salesPeople?.map((person) => (
+      <div key={person.id} className="flex items-center gap-2">
+        <Checkbox
+          id={`sp-edit-${person.id}`}
+          checked={selectedSalesPeople.includes(person.id)}
+          onCheckedChange={(checked) => {
+            if (checked) {
+              setSelectedSalesPeople(prev => [...prev, person.id]);
+            } else {
+              setSelectedSalesPeople(prev => 
+                prev.filter(id => id !== person.id)
+              );
+            }
+          }}
+        />
+        <label htmlFor={`sp-edit-${person.id}`}>
+          {person.full_name}
+        </label>
+      </div>
+    ))}
+  </div>
+</FormItem>
+```
+
+**ד. עדכון ה-updateMutation לטפל בטבלת הקישור:**
+```typescript
+// In updateMutation, after updating the lead:
+
+// 1. Delete existing assignments for this lead
+await supabase
+  .from('lead_sales_people')
+  .delete()
+  .eq('lead_id', lead.id);
+
+// 2. Insert new assignments
+if (selectedSalesPeople.length > 0) {
+  const assignments = selectedSalesPeople.map(spId => ({
+    lead_id: lead.id,
+    sales_person_id: spId,
+    tenant_id: lead.tenant_id,
+  }));
+  
+  await supabase
+    .from('lead_sales_people')
+    .insert(assignments);
+}
+
+// 3. Update legacy field for backwards compatibility
+submitData.sales_person_id = selectedSalesPeople[0] || null;
+```
 
 ---
 
-## פירוט טכני
+### 2. אופציונלי: יצירת רכיב SalesPersonMultiSelect משותף
 
-### מיגרציית בסיס נתונים
-```sql
--- טבלת קישור חדשה
-CREATE TABLE lead_sales_people (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  lead_id UUID NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
-  sales_person_id UUID NOT NULL REFERENCES sales_people(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(lead_id, sales_person_id)
-);
+ליצירת רכיב אחד לשימוש חוזר גם ב-Leads.tsx וגם ב-EditLeadDialog.tsx:
 
--- RLS
-ALTER TABLE lead_sales_people ENABLE ROW LEVEL SECURITY;
-
--- מיגרציה של נתונים קיימים
-INSERT INTO lead_sales_people (lead_id, sales_person_id, tenant_id)
-SELECT id, sales_person_id, tenant_id 
-FROM leads 
-WHERE sales_person_id IS NOT NULL;
+```typescript
+// src/components/leads/SalesPersonMultiSelect.tsx
+interface Props {
+  salesPeople: { id: string; full_name: string }[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}
 ```
 
-### עדכון קוד הלקוח (`src/pages/Leads.tsx`)
+---
 
-1. **שינוי mutation השיוך:**
-   - במקום לעדכן `sales_person_id` בטבלת `leads`
-   - ליצור רשומות ב-`lead_sales_people` לכל צירוף
+## סיכום הקבצים לעדכון
 
-2. **שינוי שליפת לידים:**
-   - להוסיף JOIN עם הטבלה החדשה
-   - לאפשר סינון לפי אנשי מכירות מרובים
-
-3. **שינוי תצוגת ליד:**
-   - להציג את כל אנשי המכירות המקושרים
+| קובץ | שינוי |
+|------|-------|
+| `src/components/forms/EditLeadDialog.tsx` | החלפת Select ב-Multi-Checkbox + עדכון mutation |
 
 ---
 
 ## תוצאה צפויה
-לאחר היישום:
-- נחמה תראה את **כל 50 הלידים**
-- רויטל תראה את **כל 50 הלידים**
-- בכל ליד יוצגו **שתי** אנשי המכירות המשויכות
-
----
-
-## קבצים לעדכון
-
-| קובץ | שינוי |
-|------|-------|
-| מיגרציה SQL | יצירת טבלה + RLS + מיגרציית נתונים |
-| `src/pages/Leads.tsx` | עדכון mutation + שליפה + תצוגה |
-| `src/components/forms/EditLeadDialog.tsx` | עדכון עריכת אנשי מכירות (אם רלוונטי) |
+- בדיאלוג עריכת ליד יופיע רשימת checkboxes במקום dropdown
+- ניתן יהיה לסמן מספר אנשי מכירות לליד אחד
+- הנתונים יישמרו בטבלת `lead_sales_people` (many-to-many)
+- תאימות לאחור: העמודה `sales_person_id` בטבלת `leads` תמשיך להתעדכן עם איש המכירות הראשון
