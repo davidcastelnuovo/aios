@@ -1,175 +1,107 @@
 
-# תוכנית: הוספת שיוך לידים לאנשי מכירות בתפריט הפעולות המרובות
+# תוכנית: שיוך ליד למספר אנשי מכירות (Many-to-Many)
 
-## סקירה כללית
-הפיצ'ר יאפשר למשתמש לבחור מספר לידים בטבלה ולשייך אותם לאנשי מכירות בלחיצה אחת. התכונה תתמוך בשיוך לאיש מכירות אחד או יותר (חלוקה שווה).
-
-## מצב נוכחי
-- סרגל הפעולות המרובות (Bulk Actions Toolbar) מכיל כרגע:
-  - שינוי שלב במשפך
-  - מחיקת לידים
-- קיימת כבר שליפה של אנשי מכירות בדף (`salesPeople` query בשורות 1122-1138)
-- בסיס הנתונים תומך בקישור ליד לאיש מכירות **אחד בלבד** דרך העמודה `sales_person_id`
+## הבעיה הנוכחית
+המבנה הנוכחי תומך רק באיש מכירות **אחד** לכל ליד (`sales_person_id` בטבלת `leads`).
+אתה מבקש ששתי אנשי המכירות - **נחמה ורויטל** - יראו את **כל 50 הלידים**.
 
 ## הפתרון המוצע
-### אפשרות 1: שיוך לאיש מכירות בודד
-- הוספת Select פשוט לבחירת איש מכירות בסרגל הפעולות
-- כל הלידים שנבחרו יעודכנו לאותו איש מכירות
+יצירת טבלת קישור חדשה `lead_sales_people` שתאפשר שיוך ליד למספר אנשי מכירות:
 
-### אפשרות 2: שיוך מחולק בין מספר אנשי מכירות (מועדף לפי הבקשה)
-- שימוש בדיאלוג עם multi-select לבחירת מספר אנשי מכירות
-- חלוקה שווה של הלידים בין אנשי המכירות שנבחרו
-- לדוגמה: 50 לידים ← 2 אנשי מכירות ← כל אחד מקבל 25 לידים
+```text
+┌─────────────────┐         ┌────────────────────┐         ┌─────────────────┐
+│     leads       │         │  lead_sales_people │         │  sales_people   │
+├─────────────────┤         ├────────────────────┤         ├─────────────────┤
+│ id              │◄────────│ lead_id            │         │ id              │
+│ contact_name    │         │ sales_person_id    │────────►│ full_name       │
+│ ...             │         │ tenant_id          │         │ ...             │
+│ sales_person_id │         │ created_at         │         │                 │
+│ (legacy)        │         └────────────────────┘         └─────────────────┘
+└─────────────────┘
+```
+
+---
+
+## שינויים נדרשים
+
+### שלב 1: יצירת טבלת קישור חדשה
+טבלה חדשה `lead_sales_people` עם:
+- `id` - מזהה ייחודי
+- `lead_id` - קישור לליד
+- `sales_person_id` - קישור לאיש מכירות
+- `tenant_id` - לבידוד ארגוני
+- `created_at` - תאריך יצירה
+
+### שלב 2: הוספת RLS Policies
+- SELECT: משתמש יכול לראות קישורים שלו או של הארגון שלו
+- INSERT/UPDATE/DELETE: רק בעלים/מנהלים יכולים לשנות
+
+### שלב 3: עדכון הממשק
+**בדיאלוג השיוך המרובה:**
+- כשבוחרים מספר אנשי מכירות, יווצרו רשומות בטבלה החדשה לכל צירוף ליד + איש מכירות
+- לדוגמה: 50 לידים × 2 אנשי מכירות = 100 רשומות בטבלה החדשה
+
+**בתצוגת הלידים:**
+- סינון לידים לפי איש מכירות יבדוק גם את הטבלה החדשה
+- תצוגת "משויך ל-" תציג את כל אנשי המכירות המקושרים
+
+### שלב 4: מיגרציה של נתונים קיימים
+- העתקת כל הקישורים הקיימים מ-`sales_person_id` לטבלה החדשה
+- שמירת העמודה המקורית לצורך תאימות לאחור
 
 ---
 
 ## פירוט טכני
 
-### שלב 1: הוספת state לדיאלוג שיוך
-**קובץ:** `src/pages/Leads.tsx`
+### מיגרציית בסיס נתונים
+```sql
+-- טבלת קישור חדשה
+CREATE TABLE lead_sales_people (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  lead_id UUID NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
+  sales_person_id UUID NOT NULL REFERENCES sales_people(id) ON DELETE CASCADE,
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(lead_id, sales_person_id)
+);
 
-ב-`TableWithStickyScroll` component, יש להוסיף:
-```typescript
-const [assignDialogOpen, setAssignDialogOpen] = useState(false);
-const [selectedSalesPeople, setSelectedSalesPeople] = useState<string[]>([]);
+-- RLS
+ALTER TABLE lead_sales_people ENABLE ROW LEVEL SECURITY;
+
+-- מיגרציה של נתונים קיימים
+INSERT INTO lead_sales_people (lead_id, sales_person_id, tenant_id)
+SELECT id, sales_person_id, tenant_id 
+FROM leads 
+WHERE sales_person_id IS NOT NULL;
 ```
 
-### שלב 2: הוספת mutation לשיוך מרובה
-**קובץ:** `src/pages/Leads.tsx`
+### עדכון קוד הלקוח (`src/pages/Leads.tsx`)
 
-```typescript
-const bulkAssignSalesPerson = useMutation({
-  mutationFn: async ({ leadIds, salesPersonIds }: { leadIds: string[]; salesPersonIds: string[] }) => {
-    // חלוקה שווה של הלידים בין אנשי המכירות
-    const assignments: { leadId: string; salesPersonId: string }[] = [];
-    leadIds.forEach((leadId, index) => {
-      const salesPersonIndex = index % salesPersonIds.length;
-      assignments.push({ leadId, salesPersonId: salesPersonIds[salesPersonIndex] });
-    });
-    
-    // עדכון כל ליד לאיש המכירות שלו
-    const promises = assignments.map(({ leadId, salesPersonId }) => 
-      supabase
-        .from("leads")
-        .update({ sales_person_id: salesPersonId })
-        .eq("id", leadId)
-    );
-    
-    const results = await Promise.all(promises);
-    const errors = results.filter(r => r.error);
-    if (errors.length > 0) throw new Error(`${errors.length} עדכונים נכשלו`);
-  },
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-    queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-    setSelectedLeads([]);
-    setAssignDialogOpen(false);
-    setSelectedSalesPeople([]);
-    toast({ title: "לידים שויכו בהצלחה" });
-  },
-  onError: (error: any) => {
-    toast({
-      title: "שגיאה בשיוך לידים",
-      description: error.message,
-      variant: "destructive",
-    });
-  },
-});
-```
+1. **שינוי mutation השיוך:**
+   - במקום לעדכן `sales_person_id` בטבלת `leads`
+   - ליצור רשומות ב-`lead_sales_people` לכל צירוף
 
-### שלב 3: הוספת כפתור שיוך לסרגל הפעולות
-**קובץ:** `src/pages/Leads.tsx`
+2. **שינוי שליפת לידים:**
+   - להוסיף JOIN עם הטבלה החדשה
+   - לאפשר סינון לפי אנשי מכירות מרובים
 
-בסרגל הפעולות המרובות (שורות 2820-2864), יש להוסיף:
-```tsx
-<Button
-  variant="outline"
-  size="sm"
-  onClick={() => setAssignDialogOpen(true)}
-  className="h-8 bg-background text-foreground"
->
-  <User className="h-4 w-4 mr-1" />
-  שייך לאנשי מכירות
-</Button>
-```
-
-### שלב 4: יצירת דיאלוג שיוך
-**קובץ:** `src/pages/Leads.tsx`
-
-יש להוסיף דיאלוג עם multi-select:
-```tsx
-<Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
-  <DialogContent>
-    <DialogHeader>
-      <DialogTitle>שייך {selectedLeads.length} לידים לאנשי מכירות</DialogTitle>
-    </DialogHeader>
-    
-    <div className="space-y-4">
-      {/* הסבר על חלוקה */}
-      {selectedSalesPeople.length > 1 && (
-        <p className="text-sm text-muted-foreground">
-          הלידים יחולקו שווה בשווה בין {selectedSalesPeople.length} אנשי המכירות 
-          (כ-{Math.ceil(selectedLeads.length / selectedSalesPeople.length)} לידים לכל אחד)
-        </p>
-      )}
-      
-      {/* רשימת אנשי מכירות עם checkboxes */}
-      <div className="max-h-[300px] overflow-y-auto space-y-2">
-        {salesPeople?.map((sp) => (
-          <div key={sp.id} className="flex items-center gap-2">
-            <Checkbox
-              id={sp.id}
-              checked={selectedSalesPeople.includes(sp.id)}
-              onCheckedChange={(checked) => {
-                if (checked) {
-                  setSelectedSalesPeople(prev => [...prev, sp.id]);
-                } else {
-                  setSelectedSalesPeople(prev => prev.filter(id => id !== sp.id));
-                }
-              }}
-            />
-            <label htmlFor={sp.id}>{sp.full_name}</label>
-          </div>
-        ))}
-      </div>
-    </div>
-    
-    <DialogFooter>
-      <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
-        ביטול
-      </Button>
-      <Button 
-        onClick={() => bulkAssignSalesPerson.mutate({ 
-          leadIds: selectedLeads, 
-          salesPersonIds: selectedSalesPeople 
-        })}
-        disabled={selectedSalesPeople.length === 0 || bulkAssignSalesPerson.isPending}
-      >
-        {bulkAssignSalesPerson.isPending ? "משייך..." : "שייך"}
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
-```
-
-### שלב 5: העברת salesPeople לתוך TableWithStickyScroll
-**קובץ:** `src/pages/Leads.tsx`
-
-כרגע `salesPeople` נשלף ב-component הראשי `Leads()`. יש להעביר אותו כ-prop ל-`TableWithStickyScroll`:
-- להוסיף את salesPeople ל-props של StageTable ו-TableWithStickyScroll
-- או לשלוף אותו מחדש בתוך TableWithStickyScroll
+3. **שינוי תצוגת ליד:**
+   - להציג את כל אנשי המכירות המקושרים
 
 ---
 
-## סיכום השינויים
+## תוצאה צפויה
+לאחר היישום:
+- נחמה תראה את **כל 50 הלידים**
+- רויטל תראה את **כל 50 הלידים**
+- בכל ליד יוצגו **שתי** אנשי המכירות המשויכות
+
+---
+
+## קבצים לעדכון
 
 | קובץ | שינוי |
 |------|-------|
-| `src/pages/Leads.tsx` | הוספת state לדיאלוג + mutation לשיוך + UI לכפתור ודיאלוג |
-
----
-
-## הערות נוספות
-- **RLS**: לא נדרשים שינויים ב-RLS - המשתמש כבר יכול לעדכן לידים שהוא רואה
-- **אופטימיזציה**: ניתן בעתיד לשפר ל-batch update אחד במקום Promise.all אם יש הרבה לידים
-- **Validation**: הדיאלוג לא יאפשר שיוך עד שנבחר לפחות איש מכירות אחד
+| מיגרציה SQL | יצירת טבלה + RLS + מיגרציית נתונים |
+| `src/pages/Leads.tsx` | עדכון mutation + שליפה + תצוגה |
+| `src/components/forms/EditLeadDialog.tsx` | עדכון עריכת אנשי מכירות (אם רלוונטי) |
