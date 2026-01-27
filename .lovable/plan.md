@@ -1,76 +1,175 @@
 
-# תוכנית לתיקון עדכוני לידים שלא מתעדכנים בזמן אמת
+# תוכנית: הוספת שיוך לידים לאנשי מכירות בתפריט הפעולות המרובות
 
-## הבעיה שזוהתה
+## סקירה כללית
+הפיצ'ר יאפשר למשתמש לבחור מספר לידים בטבלה ולשייך אותם לאנשי מכירות בלחיצה אחת. התכונה תתמוך בשיוך לאיש מכירות אחד או יותר (חלוקה שווה).
 
-רחלי מדווחת שכאשר היא מעדכנת ליד, היא צריכה לרענן את העמוד כדי לראות את העדכונים. הסיבה היא **אי-התאמה במפתחות ה-cache** בין השאילתות לבין ה-invalidation.
+## מצב נוכחי
+- סרגל הפעולות המרובות (Bulk Actions Toolbar) מכיל כרגע:
+  - שינוי שלב במשפך
+  - מחיקת לידים
+- קיימת כבר שליפה של אנשי מכירות בדף (`salesPeople` query בשורות 1122-1138)
+- בסיס הנתונים תומך בקישור ליד לאיש מכירות **אחד בלבד** דרך העמודה `sales_person_id`
 
-### הבעיה הטכנית
+## הפתרון המוצע
+### אפשרות 1: שיוך לאיש מכירות בודד
+- הוספת Select פשוט לבחירת איש מכירות בסרגל הפעולות
+- כל הלידים שנבחרו יעודכנו לאותו איש מכירות
 
-דף הלידים (`Leads.tsx`) משתמש בשלושה query keys ספציפיים:
-- `["leads-kanban", ...]` - לתצוגת קנבן
-- `["leads-table", ...]` - לתצוגת טבלה  
-- `["leads-count", ...]` - לספירת לידים
-
-אבל שני קומפוננטים מרכזיים מבטלים cache עם מפתח גנרי שלא מתאים:
-- **`EditLeadDialog.tsx`** - מבטל `["leads"]` בלבד (לא תואם!)
-- **`FollowUpDatePicker.tsx`** - מבטל `["leads"]` ו-`["leads-count"]` (חלקי)
-- **`ImportLeadsWithMapping.tsx`** - מבטל `["leads"]` (לא תואם)
-
-כתוצאה מכך, כשמשתמש עורך ליד דרך הדיאלוג או משנה תאריך לחזרה, ה-cache לא מתבטל כראוי והנתונים הישנים נשארים בתצוגה.
-
----
-
-## הפתרון
-
-### שלב 1: תיקון `EditLeadDialog.tsx`
-עדכון ה-`onSuccess` callback של ה-mutation לבטל את כל ה-query keys הרלוונטיים:
-
-```typescript
-onSuccess: () => {
-  queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-  queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-  queryClient.invalidateQueries({ queryKey: ["leads-count"] });
-  toast({
-    title: "ליד עודכן בהצלחה",
-  });
-  setOpen(false);
-},
-```
-
-### שלב 2: תיקון `FollowUpDatePicker.tsx`
-עדכון ה-`onSuccess` callback לבטל את כל ה-query keys:
-
-```typescript
-onSuccess: () => {
-  queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-  queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-  queryClient.invalidateQueries({ queryKey: ["leads-count"] });
-  toast({
-    title: selectedDate ? "תאריך לחזרה נשמר" : "תאריך לחזרה נמחק",
-  });
-  setDialogOpen(false);
-  onSuccess?.();
-},
-```
-
-### שלב 3: תיקון `ImportLeadsWithMapping.tsx`
-עדכון ה-cache invalidation אחרי ייבוא לידים:
-
-```typescript
-queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-queryClient.invalidateQueries({ queryKey: ["leads-count"] });
-```
+### אפשרות 2: שיוך מחולק בין מספר אנשי מכירות (מועדף לפי הבקשה)
+- שימוש בדיאלוג עם multi-select לבחירת מספר אנשי מכירות
+- חלוקה שווה של הלידים בין אנשי המכירות שנבחרו
+- לדוגמה: 50 לידים ← 2 אנשי מכירות ← כל אחד מקבל 25 לידים
 
 ---
 
-## קבצים שיעודכנו
-1. `src/components/forms/EditLeadDialog.tsx` - שורה 294
-2. `src/components/leads/FollowUpDatePicker.tsx` - שורות 61-62  
-3. `src/components/forms/ImportLeadsWithMapping.tsx` - שורה 1070
+## פירוט טכני
+
+### שלב 1: הוספת state לדיאלוג שיוך
+**קובץ:** `src/pages/Leads.tsx`
+
+ב-`TableWithStickyScroll` component, יש להוסיף:
+```typescript
+const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+const [selectedSalesPeople, setSelectedSalesPeople] = useState<string[]>([]);
+```
+
+### שלב 2: הוספת mutation לשיוך מרובה
+**קובץ:** `src/pages/Leads.tsx`
+
+```typescript
+const bulkAssignSalesPerson = useMutation({
+  mutationFn: async ({ leadIds, salesPersonIds }: { leadIds: string[]; salesPersonIds: string[] }) => {
+    // חלוקה שווה של הלידים בין אנשי המכירות
+    const assignments: { leadId: string; salesPersonId: string }[] = [];
+    leadIds.forEach((leadId, index) => {
+      const salesPersonIndex = index % salesPersonIds.length;
+      assignments.push({ leadId, salesPersonId: salesPersonIds[salesPersonIndex] });
+    });
+    
+    // עדכון כל ליד לאיש המכירות שלו
+    const promises = assignments.map(({ leadId, salesPersonId }) => 
+      supabase
+        .from("leads")
+        .update({ sales_person_id: salesPersonId })
+        .eq("id", leadId)
+    );
+    
+    const results = await Promise.all(promises);
+    const errors = results.filter(r => r.error);
+    if (errors.length > 0) throw new Error(`${errors.length} עדכונים נכשלו`);
+  },
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+    queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+    setSelectedLeads([]);
+    setAssignDialogOpen(false);
+    setSelectedSalesPeople([]);
+    toast({ title: "לידים שויכו בהצלחה" });
+  },
+  onError: (error: any) => {
+    toast({
+      title: "שגיאה בשיוך לידים",
+      description: error.message,
+      variant: "destructive",
+    });
+  },
+});
+```
+
+### שלב 3: הוספת כפתור שיוך לסרגל הפעולות
+**קובץ:** `src/pages/Leads.tsx`
+
+בסרגל הפעולות המרובות (שורות 2820-2864), יש להוסיף:
+```tsx
+<Button
+  variant="outline"
+  size="sm"
+  onClick={() => setAssignDialogOpen(true)}
+  className="h-8 bg-background text-foreground"
+>
+  <User className="h-4 w-4 mr-1" />
+  שייך לאנשי מכירות
+</Button>
+```
+
+### שלב 4: יצירת דיאלוג שיוך
+**קובץ:** `src/pages/Leads.tsx`
+
+יש להוסיף דיאלוג עם multi-select:
+```tsx
+<Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
+  <DialogContent>
+    <DialogHeader>
+      <DialogTitle>שייך {selectedLeads.length} לידים לאנשי מכירות</DialogTitle>
+    </DialogHeader>
+    
+    <div className="space-y-4">
+      {/* הסבר על חלוקה */}
+      {selectedSalesPeople.length > 1 && (
+        <p className="text-sm text-muted-foreground">
+          הלידים יחולקו שווה בשווה בין {selectedSalesPeople.length} אנשי המכירות 
+          (כ-{Math.ceil(selectedLeads.length / selectedSalesPeople.length)} לידים לכל אחד)
+        </p>
+      )}
+      
+      {/* רשימת אנשי מכירות עם checkboxes */}
+      <div className="max-h-[300px] overflow-y-auto space-y-2">
+        {salesPeople?.map((sp) => (
+          <div key={sp.id} className="flex items-center gap-2">
+            <Checkbox
+              id={sp.id}
+              checked={selectedSalesPeople.includes(sp.id)}
+              onCheckedChange={(checked) => {
+                if (checked) {
+                  setSelectedSalesPeople(prev => [...prev, sp.id]);
+                } else {
+                  setSelectedSalesPeople(prev => prev.filter(id => id !== sp.id));
+                }
+              }}
+            />
+            <label htmlFor={sp.id}>{sp.full_name}</label>
+          </div>
+        ))}
+      </div>
+    </div>
+    
+    <DialogFooter>
+      <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
+        ביטול
+      </Button>
+      <Button 
+        onClick={() => bulkAssignSalesPerson.mutate({ 
+          leadIds: selectedLeads, 
+          salesPersonIds: selectedSalesPeople 
+        })}
+        disabled={selectedSalesPeople.length === 0 || bulkAssignSalesPerson.isPending}
+      >
+        {bulkAssignSalesPerson.isPending ? "משייך..." : "שייך"}
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+```
+
+### שלב 5: העברת salesPeople לתוך TableWithStickyScroll
+**קובץ:** `src/pages/Leads.tsx`
+
+כרגע `salesPeople` נשלף ב-component הראשי `Leads()`. יש להעביר אותו כ-prop ל-`TableWithStickyScroll`:
+- להוסיף את salesPeople ל-props של StageTable ו-TableWithStickyScroll
+- או לשלוף אותו מחדש בתוך TableWithStickyScroll
 
 ---
 
-## תוצאה צפויה
-לאחר התיקון, כל עדכון לליד (עריכה, שינוי תאריך לחזרה, או ייבוא) יתעדכן מיידית בתצוגה ללא צורך ברענון ידני של העמוד.
+## סיכום השינויים
+
+| קובץ | שינוי |
+|------|-------|
+| `src/pages/Leads.tsx` | הוספת state לדיאלוג + mutation לשיוך + UI לכפתור ודיאלוג |
+
+---
+
+## הערות נוספות
+- **RLS**: לא נדרשים שינויים ב-RLS - המשתמש כבר יכול לעדכן לידים שהוא רואה
+- **אופטימיזציה**: ניתן בעתיד לשפר ל-batch update אחד במקום Promise.all אם יש הרבה לידים
+- **Validation**: הדיאלוג לא יאפשר שיוך עד שנבחר לפחות איש מכירות אחד
