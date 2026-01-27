@@ -2820,38 +2820,60 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
     },
   });
 
-  // Bulk assign to multiple sales people (equal distribution)
+  // Bulk assign leads to ALL selected sales people (many-to-many)
   const bulkAssignSalesPerson = useMutation({
     mutationFn: async ({ leadIds, salesPersonIds }: { leadIds: string[]; salesPersonIds: string[] }) => {
-      // Distribute leads equally among sales people
-      const assignments: { leadId: string; salesPersonId: string }[] = [];
-      leadIds.forEach((leadId, index) => {
-        const salesPersonIndex = index % salesPersonIds.length;
-        assignments.push({ leadId, salesPersonId: salesPersonIds[salesPersonIndex] });
-      });
+      // Get tenant_id for all leads to create proper assignments
+      const { data: leadsData, error: leadsError } = await supabase
+        .from("leads")
+        .select("id, tenant_id")
+        .in("id", leadIds);
       
-      // Update each lead with its assigned sales person
-      const promises = assignments.map(({ leadId, salesPersonId }) => 
-        supabase
-          .from("leads")
-          .update({ sales_person_id: salesPersonId })
-          .eq("id", leadId)
-      );
-      
-      const results = await Promise.all(promises);
-      const errors = results.filter(r => r.error);
-      if (errors.length > 0) throw new Error(`${errors.length} עדכונים נכשלו`);
+      if (leadsError) throw leadsError;
+      if (!leadsData || leadsData.length === 0) throw new Error("לא נמצאו לידים");
+
+      // Create junction table entries for ALL combinations of leads × salespeople
+      const assignments: { lead_id: string; sales_person_id: string; tenant_id: string }[] = [];
+      for (const lead of leadsData) {
+        for (const salesPersonId of salesPersonIds) {
+          assignments.push({
+            lead_id: lead.id,
+            sales_person_id: salesPersonId,
+            tenant_id: lead.tenant_id,
+          });
+        }
+      }
+
+      // Insert into junction table (upsert to avoid duplicates)
+      const { error: insertError } = await supabase
+        .from("lead_sales_people")
+        .upsert(assignments, { 
+          onConflict: 'lead_id,sales_person_id',
+          ignoreDuplicates: true 
+        });
+
+      if (insertError) throw insertError;
+
+      // Also update the legacy sales_person_id on leads table (for backwards compatibility)
+      // Set to the first selected sales person
+      const { error: legacyError } = await supabase
+        .from("leads")
+        .update({ sales_person_id: salesPersonIds[0] })
+        .in("id", leadIds);
+
+      if (legacyError) console.warn("Legacy sales_person_id update failed:", legacyError);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
       queryClient.invalidateQueries({ queryKey: ["leads-table"] });
       queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      queryClient.invalidateQueries({ queryKey: ["lead-sales-people"] });
       setSelectedLeads([]);
       setAssignDialogOpen(false);
       setSelectedSalesPeople([]);
       toast({
         title: "לידים שויכו בהצלחה",
-        description: `${selectedSalesPeople.length} אנשי מכירות קיבלו לידים`,
+        description: `כל ${selectedLeads.length} הלידים שויכו ל-${selectedSalesPeople.length} אנשי מכירות`,
       });
     },
     onError: (error: any) => {
