@@ -61,6 +61,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ResizableTable, ColumnConfig } from "@/components/ResizableTable";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -2590,11 +2591,31 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [selectedSalesPeople, setSelectedSalesPeople] = useState<string[]>([]);
   const { selectedAgency } = useAgency();
   const { activeStatuses: leadStatuses, isLoading: isStatusesLoading } = useLeadStatuses();
   const { activeStages: pipelineStagesData } = useLeadPipelineStages();
   const { isFieldVisible } = useCustomFieldLabels('lead');
   const { tenantId } = useCurrentTenant();
+
+  // Fetch sales people for assignment
+  const { data: salesPeople = [] } = useQuery({
+    queryKey: ["sales-people-for-assign", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("sales_people")
+        .select("id, full_name")
+        .eq("tenant_id", tenantId)
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId,
+    staleTime: 1000 * 60 * 10,
+  });
 
   // Convert dynamic pipeline stages to format compatible with existing code
   const PIPELINE_STAGES = useMemo(() => {
@@ -2799,6 +2820,49 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
     },
   });
 
+  // Bulk assign to multiple sales people (equal distribution)
+  const bulkAssignSalesPerson = useMutation({
+    mutationFn: async ({ leadIds, salesPersonIds }: { leadIds: string[]; salesPersonIds: string[] }) => {
+      // Distribute leads equally among sales people
+      const assignments: { leadId: string; salesPersonId: string }[] = [];
+      leadIds.forEach((leadId, index) => {
+        const salesPersonIndex = index % salesPersonIds.length;
+        assignments.push({ leadId, salesPersonId: salesPersonIds[salesPersonIndex] });
+      });
+      
+      // Update each lead with its assigned sales person
+      const promises = assignments.map(({ leadId, salesPersonId }) => 
+        supabase
+          .from("leads")
+          .update({ sales_person_id: salesPersonId })
+          .eq("id", leadId)
+      );
+      
+      const results = await Promise.all(promises);
+      const errors = results.filter(r => r.error);
+      if (errors.length > 0) throw new Error(`${errors.length} עדכונים נכשלו`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      setSelectedLeads([]);
+      setAssignDialogOpen(false);
+      setSelectedSalesPeople([]);
+      toast({
+        title: "לידים שויכו בהצלחה",
+        description: `${selectedSalesPeople.length} אנשי מכירות קיבלו לידים`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "שגיאה בשיוך לידים",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelectedLeads(stageLeads.map(lead => lead.id));
@@ -2846,6 +2910,15 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAssignDialogOpen(true)}
+              className="h-8 bg-background text-foreground"
+            >
+              <User className="h-4 w-4 mr-1" />
+              שייך לאנשי מכירות
+            </Button>
             <Button
               variant="destructive"
               size="sm"
@@ -3090,6 +3163,68 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
         onOpenChange={setManageStatusesOpen}
         showTrigger={false}
       />
+
+      {/* Bulk Assign to Sales People Dialog */}
+      <Dialog open={assignDialogOpen} onOpenChange={(open) => {
+        setAssignDialogOpen(open);
+        if (!open) setSelectedSalesPeople([]);
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>שייך {selectedLeads.length} לידים לאנשי מכירות</DialogTitle>
+            <DialogDescription>
+              {selectedSalesPeople.length > 1 ? (
+                <>
+                  הלידים יחולקו שווה בשווה בין {selectedSalesPeople.length} אנשי המכירות 
+                  (כ-{Math.ceil(selectedLeads.length / selectedSalesPeople.length)} לידים לכל אחד)
+                </>
+              ) : (
+                "בחר איש מכירות אחד או יותר לשיוך הלידים"
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="max-h-[300px] overflow-y-auto space-y-2 py-4">
+            {salesPeople.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">אין אנשי מכירות פעילים</p>
+            ) : (
+              salesPeople.map((sp) => (
+                <div key={sp.id} className="flex items-center gap-3 p-2 rounded hover:bg-muted/50">
+                  <Checkbox
+                    id={`sp-${sp.id}`}
+                    checked={selectedSalesPeople.includes(sp.id)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedSalesPeople(prev => [...prev, sp.id]);
+                      } else {
+                        setSelectedSalesPeople(prev => prev.filter(id => id !== sp.id));
+                      }
+                    }}
+                  />
+                  <label htmlFor={`sp-${sp.id}`} className="flex-1 cursor-pointer">
+                    {sp.full_name}
+                  </label>
+                </div>
+              ))
+            )}
+          </div>
+          
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
+              ביטול
+            </Button>
+            <Button 
+              onClick={() => bulkAssignSalesPerson.mutate({ 
+                leadIds: selectedLeads, 
+                salesPersonIds: selectedSalesPeople 
+              })}
+              disabled={selectedSalesPeople.length === 0 || bulkAssignSalesPerson.isPending}
+            >
+              {bulkAssignSalesPerson.isPending ? "משייך..." : "שייך"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
      </div>
    );
  }
