@@ -75,6 +75,29 @@ async function findSubscriberByPhone(apiKey: string, phoneCandidates: string[]):
   return null;
 }
 
+// Find subscriber by WhatsApp ID (wa_id) in ManyChat
+async function findSubscriberByWaId(apiKey: string, waIdCandidates: string[]): Promise<string | null> {
+  for (const candidate of waIdCandidates) {
+    const url = `https://api.manychat.com/fb/subscriber/findBySystemField?wa_id=${encodeURIComponent(candidate)}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    const data = await safeJson(res);
+    console.log(`🟢 Find subscriber (wa_id=${candidate}) response:`, JSON.stringify(data));
+
+    if (data?.status === 'success' && data?.data?.id) {
+      return String(data.data.id);
+    }
+  }
+  return null;
+}
+
 // Find subscriber by email in ManyChat
 async function findSubscriberByEmail(apiKey: string, email?: string | null): Promise<string | null> {
   if (!email) return null;
@@ -107,28 +130,57 @@ async function createManyChatSubscriber(
   const firstName = nameParts[0] || lead.company_name || 'Lead';
   const lastName = nameParts.slice(1).join(' ') || '';
 
-  const createRes = await fetch('https://api.manychat.com/fb/subscriber/createSubscriber', {
+  // Some ManyChat accounts deny importing phone to system fields.
+  // We first try with phone+whatsapp_phone, then retry without phone if needed.
+  const payloadWithPhone: any = {
+    first_name: firstName,
+    last_name: lastName,
+    // IMPORTANT: Add BOTH phone and whatsapp_phone for reliable future lookups (if allowed)
+    phone: `+${formattedPhone}`,
+    whatsapp_phone: `+${formattedPhone}`,
+    email: lead.email || undefined,
+    has_opt_in_sms: true,
+    has_opt_in_email: !!lead.email,
+    consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
+  }
+
+  let createRes = await fetch('https://api.manychat.com/fb/subscriber/createSubscriber', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     },
-    body: JSON.stringify({
+    body: JSON.stringify(payloadWithPhone),
+  });
+
+  let createData = await safeJson(createRes);
+  console.log('🆕 Create subscriber response:', JSON.stringify(createData));
+
+  const createStr = JSON.stringify(createData);
+  if (createStr.includes('Permission denied to import phone')) {
+    console.log('Retrying createSubscriber WITHOUT phone field due to permission restriction...');
+    const payloadNoPhone: any = {
       first_name: firstName,
       last_name: lastName,
-      // IMPORTANT: Add BOTH phone and whatsapp_phone for reliable future lookups
-      phone: `+${formattedPhone}`,
       whatsapp_phone: `+${formattedPhone}`,
       email: lead.email || undefined,
       has_opt_in_sms: true,
       has_opt_in_email: !!lead.email,
       consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
-    }),
-  });
-
-  const createData = await safeJson(createRes);
-  console.log('🆕 Create subscriber response:', JSON.stringify(createData));
+    };
+    createRes = await fetch('https://api.manychat.com/fb/subscriber/createSubscriber', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(payloadNoPhone),
+    });
+    createData = await safeJson(createRes);
+    console.log('🆕 Create subscriber response (no phone):', JSON.stringify(createData));
+  }
 
   if (createData.status === 'success' && createData.data?.id) {
     return { id: String(createData.data.id) };
@@ -233,6 +285,7 @@ Deno.serve(async (req) => {
     const defaultTagId = settings?.defaultTagId || 79380109;
 
     const phoneCandidates = getPhoneLookupCandidates(lead.phone);
+    const waIdCandidates = [...new Set([formatPhoneForManyChat(lead.phone), `+${formatPhoneForManyChat(lead.phone)}`])];
     const leadName = lead.contact_name || lead.company_name || 'Unknown';
 
     console.log(`📱 Searching for subscriber with phone candidates:`, phoneCandidates);
@@ -250,6 +303,15 @@ Deno.serve(async (req) => {
       if (subscriberId) {
         wasExisting = true;
         console.log(`✅ Found existing subscriber by email: ${subscriberId}`);
+      }
+    }
+
+    // Step 2b: Try to find by WhatsApp ID (wa_id)
+    if (!subscriberId) {
+      subscriberId = await findSubscriberByWaId(apiKey, waIdCandidates);
+      if (subscriberId) {
+        wasExisting = true;
+        console.log(`✅ Found existing subscriber by wa_id: ${subscriberId}`);
       }
     }
 
@@ -281,6 +343,9 @@ Deno.serve(async (req) => {
         subscriberId = await findSubscriberByPhone(apiKey, phoneCandidates);
         if (!subscriberId) {
           subscriberId = await findSubscriberByEmail(apiKey, lead.email);
+        }
+        if (!subscriberId) {
+          subscriberId = await findSubscriberByWaId(apiKey, waIdCandidates);
         }
         if (subscriberId) {
           wasExisting = true;
