@@ -1,119 +1,119 @@
 
-# תוכנית: תמיכה בקליטת לידים ישירה מ-Maskyoo (ללא הגדרת JSON)
+# תוכנית לתיקון: לידים לא מוצגים (בעיית פורמט תוצאת RPC)
 
-## הבנת הבעיה
+## הבעיה שזוהתה
 
-מסקיו שולחת נתונים דרך "פתיחת קישור" (URL Callback) - לא כ-JSON בגוף הבקשה, אלא כ-**פרמטרים ב-URL (query string) או form-data**.
+המשתמש `david.castelnuovo@gmail.com` לא רואה לידים בשום ארגון למרות שיש נתונים במסד הנתונים (לדוגמה: 3 לידים בארגון marlog-leads).
 
-כשמסמנים "הוסף פרמטרים מברירת מחדל לקישור" במסקיו, הם שולחים את פרמטרי השיחה הבאים:
-- **caller** - מספר הטלפון של המתקשר
-- **maskyoo** - מספר המסקיו שאליו התקשרו
-- **description** - תיאור המספר במסקיו
-- **call_status** - סטטוס השיחה (נענתה/לא נענתה)
-- **call_duration** - משך השיחה
-- **private_field1-5** - שדות פרטיים מוגדרים
+### שורש הבעיה
+הפונקציה `get_leads_by_stages` עודכנה בזמנו לתמוך בפרמטר `p_sales_person_ids` (UUID array למולטי-סלקט), ובמקביל **סוג ההחזרה שלה השתנה**:
 
-המערכת הנוכחית מצפה ל-JSON עם מבנה מסוים שהמשתמש לא יכול להגדיר במסקיו.
+| גרסה ישנה | גרסה חדשה (הבעייתית) |
+|-----------|----------------------|
+| `TABLE(stage text, leads jsonb, total_count bigint)` | `JSONB` |
+| מחזיר **מערך שורות** | מחזיר **אובייקט** |
+
+הקוד בפרונטאנד (שורה 858) מצפה ל**מערך**:
+```javascript
+if (Array.isArray(data)) {
+  for (const stageData of data as any[]) {
+    stageMap[stageData.stage] = { ... };
+  }
+}
+```
+
+כיוון שהפונקציה מחזירה **אובייקט** ולא מערך, הבדיקה `Array.isArray(data)` מחזירה `false` והלידים לא נטענים.
 
 ## הפתרון
 
-נבנה **Endpoint ייעודי למסקיו** שיקבל קריאות GET/POST עם פרמטרים ויתרגם אותם ליצירת ליד.
+לעדכן את קוד הפרונטאנד כדי לתמוך גם בפורמט JSONB object וגם במערך (backwards compatibility).
 
 ## שלבי הביצוע
 
-### שלב 1: יצירת Edge Function ייעודית - `webhook-maskyoo-intake`
+### שלב 1: עדכון `src/pages/Leads.tsx`
 
-Edge Function חדשה שתקבל בקשות מ-Maskyoo:
+שינוי הקוד בשורות 856-865 מ:
 
-**קבלת פרמטרים:**
-- תומכת ב-GET (query string) וגם ב-POST (form-data או JSON)
-- מחלצת את הפרמטרים של Maskyoo:
-  - `caller` / `phone` / `caller_phone` -> מספר טלפון
-  - `description` / `maskyoo` -> מקור/שם
-  - `private_field1` -> שם איש קשר (אופציונלי)
-  - `call_status` -> לבדוק אם להתעלם משיחות שנענו
-
-**לוגיקה:**
-1. מזהה את ה-tenant לפי פרמטר `tenant_id` בקריאה
-2. מחפש ליד קיים לפי מספר טלפון (מניעת כפילויות)
-3. אם לא קיים - יוצר ליד חדש
-4. מפעיל אוטומציות מסוג `inbound_webhook_lead` אם קיימות
-
-### שלב 2: עדכון ממשק האוטומציה
-
-שינוי ב-`AddAutomationForm.tsx` ו-`EditAutomationDialog.tsx`:
-
-**URL חדש למסקיו:**
-במקום להציג את ה-URL הכללי של `trigger-automation`, נציג את ה-URL הייעודי:
-```
-https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=XXX
+```javascript
+// Transform RPC result to map: { [stageId]: { leads: [...], totalCount: number } }
+const stageMap: Record<string, { leads: any[]; totalCount: number }> = {};
+if (Array.isArray(data)) {
+  for (const stageData of data as any[]) {
+    stageMap[stageData.stage] = {
+      leads: stageData.leads || [],
+      totalCount: stageData.total_count || 0
+    };
+  }
+}
 ```
 
-**הסבר פשוט למשתמש:**
-- "העתק את ה-URL הזה והדבק אותו בהגדרות האוטומציה של מסקיו"
-- "בחר בשיטת שליחה POST"
-- "סמן 'הוסף פרמטרים מברירת מחדל לקישור'"
+ל:
 
-### שלב 3: מיפוי הפרמטרים
+```javascript
+// Transform RPC result to map: { [stageId]: { leads: [...], totalCount: number } }
+const stageMap: Record<string, { leads: any[]; totalCount: number }> = {};
 
-| פרמטר ממסקיו | שדה בליד |
-|-------------|---------|
-| `caller` / `phone` | phone |
-| `description` | source + company_name |
-| `maskyoo` | notes (מספר המסקיו שהתקשרו אליו) |
-| `private_field1` | contact_name (אם הוגדר) |
-| `call_status` | סינון - רק שיחות שלא נענו |
-
----
+if (data) {
+  if (Array.isArray(data)) {
+    // TABLE format: array of { stage, leads, total_count }
+    for (const stageData of data as any[]) {
+      stageMap[stageData.stage] = {
+        leads: stageData.leads || [],
+        totalCount: stageData.total_count || 0
+      };
+    }
+  } else if (typeof data === 'object') {
+    // JSONB format: { [stageKey]: { leads: [...], total_count: number, ... } }
+    for (const [stageKey, stageData] of Object.entries(data as Record<string, any>)) {
+      stageMap[stageKey] = {
+        leads: stageData.leads || [],
+        totalCount: stageData.total_count || 0
+      };
+    }
+  }
+}
+```
 
 ## פרטים טכניים
 
-### מבנה ה-Edge Function
+### למה זה קרה?
+כשהפונקציה עודכנה לתמוך בסינון מרובה של אנשי מכירות (`p_sales_person_ids` במקום `p_sales_person_id`), נוצרה גרסה חדשה שמחזירה JSONB object במקום TABLE rows. PostgreSQL בוחר את הפונקציה לפי חתימת הפרמטרים, ולכן כשה-Frontend שולח UUID array - הגרסה החדשה נבחרת.
 
-```typescript
-// webhook-maskyoo-intake/index.ts
+### מבנה הנתונים
 
-// קבלת פרמטרים מ-GET או POST
-// GET: /?tenant_id=xxx&caller=0501234567&description=פרסום
-// POST: form-data או query string
-
-// 1. חילוץ tenant_id (חובה)
-// 2. חילוץ phone מ-caller או phone
-// 3. חילוץ source מ-description
-// 4. בדיקת כפילויות לפי טלפון
-// 5. יצירת ליד עם pipeline stage ראשון
-// 6. הפעלת אוטומציות קיימות (אופציונלי)
+**פורמט JSONB (מה שמוחזר כעת):**
+```json
+{
+  "new": {
+    "stage_id": "uuid",
+    "stage_name": "חדש",
+    "stage_color": "#3b82f6",
+    "leads": [{ "id": "...", "contact_name": "...", ... }],
+    "total_count": 3
+  },
+  "contacted": {
+    "stage_id": "uuid",
+    "stage_name": "יצרנו קשר",
+    "leads": [],
+    "total_count": 0
+  }
+}
 ```
 
-### הוספת סינון לשיחות
-
-אפשרות בממשק האוטומציה לבחור:
-- "כל השיחות" - יוצר ליד לכל שיחה
-- "רק שיחות שלא נענו" - יוצר ליד רק אם `call_status` = missed/unanswered
-
-### עדכון הממשק
-
-בבחירת trigger "קליטת ליד מ-Webhook (מסקיו)":
-1. הצגת URL ייעודי עם ה-tenant_id מוטמע
-2. הוראות פשוטות בעברית להגדרה במסקיו
-3. הסרת ה-JSON דוגמה (לא רלוונטי למסקיו)
-
----
+**פורמט TABLE (מה שהקוד ציפה לו):**
+```json
+[
+  { "stage": "new", "leads": [...], "total_count": 3 },
+  { "stage": "contacted", "leads": [], "total_count": 0 }
+]
+```
 
 ## קבצים שישתנו
 
 | קובץ | שינוי |
 |------|------|
-| `supabase/functions/webhook-maskyoo-intake/index.ts` | **חדש** - Edge Function ייעודית |
-| `src/components/forms/AddAutomationForm.tsx` | עדכון UI להצגת URL ייעודי והוראות |
-| `src/components/forms/EditAutomationDialog.tsx` | אותו עדכון UI |
+| `src/pages/Leads.tsx` | עדכון לתמוך בשני פורמטים של תוצאת RPC |
 
----
+## בדיקה
 
-## יתרונות הפתרון
-
-1. **פשטות למשתמש** - רק להעתיק URL ולהדביק במסקיו
-2. **ללא JSON** - תומך בפורמט שמסקיו שולחת
-3. **תאימות קדימה** - אם בעתיד מסקיו ישנו פורמט, קל לעדכן
-4. **מניעת כפילויות** - בדיקה לפי מספר טלפון
-5. **גמישות** - תומך גם ב-GET וגם ב-POST
+לאחר השינוי, המשתמש `david.castelnuovo@gmail.com` יוכל לראות לידים בכל הארגונים שלו, כולל 3 הלידים בארגון marlog-leads.
