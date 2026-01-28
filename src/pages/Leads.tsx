@@ -855,12 +855,24 @@ export default function Leads() {
       
       // Transform RPC result to map: { [stageId]: { leads: [...], totalCount: number } }
       const stageMap: Record<string, { leads: any[]; totalCount: number }> = {};
-      if (Array.isArray(data)) {
-        for (const stageData of data as any[]) {
-          stageMap[stageData.stage] = {
-            leads: stageData.leads || [],
-            totalCount: stageData.total_count || 0
-          };
+      
+      if (data) {
+        if (Array.isArray(data)) {
+          // TABLE format: array of { stage, leads, total_count }
+          for (const stageData of data as any[]) {
+            stageMap[stageData.stage] = {
+              leads: stageData.leads || [],
+              totalCount: stageData.total_count || 0
+            };
+          }
+        } else if (typeof data === 'object') {
+          // JSONB format: { [stageKey]: { leads: [...], total_count: number, ... } }
+          for (const [stageKey, stageData] of Object.entries(data as Record<string, any>)) {
+            stageMap[stageKey] = {
+              leads: stageData.leads || [],
+              totalCount: stageData.total_count || 0
+            };
+          }
         }
       }
       
