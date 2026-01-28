@@ -1,153 +1,71 @@
 
-# תוכנית: איחוד דיאלוג שיוך אנשי מכירות + תמיכה בריבוי שיוכים
+# תוכנית לתיקון בעיית הגישה ללידים עבור Team Managers
 
-## הבעיה הנוכחית
-יש כפילות בלוגיקה של שיוך אנשי מכירות:
-1. **דיאלוג בפעולות מרובות** (`Leads.tsx`) - תומך במספר אנשי מכירות (checkboxes) ומשתמש בטבלת `lead_sales_people`
-2. **דיאלוג עריכת ליד** (`EditLeadDialog.tsx`) - תומך באיש מכירות יחיד בלבד (select dropdown) ומעדכן רק את `sales_person_id`
+## הבעיה שזוהתה
+המשתמש `aviiadco@gmail.com` לא רואה לידים למרות שיש לו:
+- תפקיד `team_manager` בארגון marlog-leads
+- ניהול סוכנות "marlog-leads"
+- הרשאה `leads: true` בטבלת user_permissions
 
-צילום המסך שהעלית מציג את השדה "איש מכירות" בדיאלוג העריכה - שכרגע מאפשר בחירה של איש מכירות **אחד בלבד**.
+**שורש הבעיה:** מדיניות ה-RLS "Team managers view leads from managed agencies" משתמשת בפונקציה `get_effective_tenant_id()` שלא פועלת נכון בהקשר של RLS.
 
----
-
-## הפתרון המוצע
-
-### עיקרון
-החלפת ה-Select הבודד בדיאלוג העריכה ברכיב Multi-Select עם Checkboxes - בדיוק כמו בדיאלוג השיוך המרובה.
-
+## תנאי RLS הנוכחי (לא עובד):
 ```text
-┌─────────────────────────────────┐
-│       איש מכירות               │
-├─────────────────────────────────┤
-│  ☑ נחמה                        │
-│  ☑ רויטל                       │
-│  ☐ יוסי                        │
-│  ☐ דני                         │
-└─────────────────────────────────┘
+has_role(auth.uid(), 'team_manager')
+AND agency_id IS NOT NULL
+AND user_manages_agency(auth.uid(), agency_id)
+AND (tenant_id = get_effective_tenant_id() OR user_has_cross_tenant_agency_access(...))
 ```
+
+## הפתרון
+החלפת `get_effective_tenant_id()` ב-`get_user_tenant_id(auth.uid())` במדיניות ה-RLS.
+
+## שלבי הביצוע
+
+### שלב 1: עדכון מדיניות RLS על טבלת leads
+מיגרציה של מסד הנתונים שתבצע:
+
+```sql
+-- Drop the existing policy
+DROP POLICY IF EXISTS "Team managers view leads from managed agencies" ON public.leads;
+
+-- Create new policy with corrected tenant check
+CREATE POLICY "Team managers view leads from managed agencies"
+ON public.leads
+FOR SELECT
+TO public
+USING (
+  has_role(auth.uid(), 'team_manager'::app_role)
+  AND (
+    -- Leads in user's active tenant
+    tenant_id = get_user_tenant_id(auth.uid())
+    OR
+    -- Leads in agencies the user manages
+    (agency_id IS NOT NULL AND user_manages_agency(auth.uid(), agency_id))
+    OR
+    -- Cross-tenant agency access
+    (agency_id IS NOT NULL AND user_has_cross_tenant_agency_access(auth.uid(), agency_id))
+  )
+);
+```
+
+### שלב 2: בדיקה
+לאחר הפעלת המיגרציה, המשתמש `aviiadco@gmail.com` יוכל לראות את כל הלידים בארגון marlog-leads.
+
+## פרטים טכניים
+
+### ההבדל בין הפונקציות:
+| פונקציה | פרמטרים | שימוש |
+|---------|----------|-------|
+| `get_effective_tenant_id()` | ללא | משתמשת ב-`auth.uid()` פנימית - בעייתית |
+| `get_user_tenant_id(user_id)` | user_id | מקבלת את ה-user_id כפרמטר - עובדת נכון |
+
+### המדיניות המתוקנת:
+- מאפשרת ל-team_managers לראות לידים בארגון הפעיל שלהם
+- מאפשרת גישה ללידים מסוכנויות שהם מנהלים
+- תומכת בגישה בין-ארגונית לסוכנויות משותפות
 
 ---
 
-## שינויים נדרשים
-
-### 1. עדכון EditLeadDialog.tsx
-
-**א. הוספת שליפת אנשי מכירות משויכים מטבלת הקישור:**
-```typescript
-// Fetch current lead's sales people assignments
-const { data: leadSalesPeople = [] } = useQuery({
-  queryKey: ['lead-sales-people', lead.id],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from('lead_sales_people')
-      .select('sales_person_id')
-      .eq('lead_id', lead.id);
-    if (error) throw error;
-    return data.map(sp => sp.sales_person_id);
-  },
-  enabled: !!lead.id && open,
-});
-```
-
-**ב. הוספת state מקומי לניהול הבחירות:**
-```typescript
-const [selectedSalesPeople, setSelectedSalesPeople] = useState<string[]>([]);
-
-// Sync with fetched data when dialog opens
-useEffect(() => {
-  if (leadSalesPeople.length > 0) {
-    setSelectedSalesPeople(leadSalesPeople);
-  } else if (lead.sales_person_id) {
-    // Fallback to legacy field
-    setSelectedSalesPeople([lead.sales_person_id]);
-  }
-}, [leadSalesPeople, lead.sales_person_id]);
-```
-
-**ג. החלפת ה-Select ב-Checkbox List:**
-שינוי הקוד בשורות 542-565 מ-Select בודד לרשימת Checkboxes:
-```tsx
-<FormItem>
-  <FormLabel>אנשי מכירות</FormLabel>
-  <div className="border rounded-lg p-3 max-h-[150px] overflow-y-auto space-y-2">
-    {salesPeople?.map((person) => (
-      <div key={person.id} className="flex items-center gap-2">
-        <Checkbox
-          id={`sp-edit-${person.id}`}
-          checked={selectedSalesPeople.includes(person.id)}
-          onCheckedChange={(checked) => {
-            if (checked) {
-              setSelectedSalesPeople(prev => [...prev, person.id]);
-            } else {
-              setSelectedSalesPeople(prev => 
-                prev.filter(id => id !== person.id)
-              );
-            }
-          }}
-        />
-        <label htmlFor={`sp-edit-${person.id}`}>
-          {person.full_name}
-        </label>
-      </div>
-    ))}
-  </div>
-</FormItem>
-```
-
-**ד. עדכון ה-updateMutation לטפל בטבלת הקישור:**
-```typescript
-// In updateMutation, after updating the lead:
-
-// 1. Delete existing assignments for this lead
-await supabase
-  .from('lead_sales_people')
-  .delete()
-  .eq('lead_id', lead.id);
-
-// 2. Insert new assignments
-if (selectedSalesPeople.length > 0) {
-  const assignments = selectedSalesPeople.map(spId => ({
-    lead_id: lead.id,
-    sales_person_id: spId,
-    tenant_id: lead.tenant_id,
-  }));
-  
-  await supabase
-    .from('lead_sales_people')
-    .insert(assignments);
-}
-
-// 3. Update legacy field for backwards compatibility
-submitData.sales_person_id = selectedSalesPeople[0] || null;
-```
-
----
-
-### 2. אופציונלי: יצירת רכיב SalesPersonMultiSelect משותף
-
-ליצירת רכיב אחד לשימוש חוזר גם ב-Leads.tsx וגם ב-EditLeadDialog.tsx:
-
-```typescript
-// src/components/leads/SalesPersonMultiSelect.tsx
-interface Props {
-  salesPeople: { id: string; full_name: string }[];
-  selected: string[];
-  onChange: (ids: string[]) => void;
-}
-```
-
----
-
-## סיכום הקבצים לעדכון
-
-| קובץ | שינוי |
-|------|-------|
-| `src/components/forms/EditLeadDialog.tsx` | החלפת Select ב-Multi-Checkbox + עדכון mutation |
-
----
-
-## תוצאה צפויה
-- בדיאלוג עריכת ליד יופיע רשימת checkboxes במקום dropdown
-- ניתן יהיה לסמן מספר אנשי מכירות לליד אחד
-- הנתונים יישמרו בטבלת `lead_sales_people` (many-to-many)
-- תאימות לאחור: העמודה `sales_person_id` בטבלת `leads` תמשיך להתעדכן עם איש המכירות הראשון
+## השפעה צפויה
+לאחר התיקון, המשתמש `aviiadco@gmail.com` יראה את 3 הלידים בארגון marlog-leads.
