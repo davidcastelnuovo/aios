@@ -107,8 +107,12 @@ Deno.serve(async (req) => {
     const allParams = { ...bodyParams, ...queryParams }
     console.log('📋 All params:', JSON.stringify(allParams))
 
-    // Extract tenant_id (required)
-    const tenantId = allParams.tenant_id || allParams.tenantId || allParams.tid
+    // Extract tenant_id (required) - clean up any query string artifacts
+    let tenantId = allParams.tenant_id || allParams.tenantId || allParams.tid || ''
+    // Remove any query string artifacts that Maskyoo might append (e.g., "?event=hangup")
+    if (tenantId.includes('?')) {
+      tenantId = tenantId.split('?')[0]
+    }
     if (!tenantId) {
       console.error('❌ Missing tenant_id parameter')
       return new Response(
