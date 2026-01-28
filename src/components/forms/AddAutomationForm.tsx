@@ -560,52 +560,69 @@ export function AddAutomationForm() {
             )}
 
             {triggerType === "inbound_webhook_lead" && (
-              <div className="p-4 rounded-lg bg-muted/50 border space-y-3">
+              <div className="p-4 rounded-lg bg-muted/50 border space-y-4">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <ExternalLink className="h-4 w-4" />
-                  <span>Webhook URL לקליטת לידים (מסקיו / חיצוני)</span>
+                  <span>Webhook URL לקליטת לידים מ-Maskyoo</span>
                 </div>
-                <div className="flex gap-2">
-                  <Input 
-                    readOnly 
-                    value={`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/trigger-automation`}
-                    className="font-mono text-xs bg-background"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                      navigator.clipboard.writeText(`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/trigger-automation`);
-                      toast({
-                        title: "הועתק!",
-                        description: "ה-URL הועתק ללוח",
-                      });
-                    }}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
+                
+                {/* Maskyoo URL */}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-foreground">כתובת ה-Webhook למסקיו:</p>
+                  <div className="flex gap-2">
+                    <Input 
+                      readOnly 
+                      value={`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${tenantId || 'YOUR_TENANT_ID'}`}
+                      className="font-mono text-xs bg-background"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${tenantId || ''}`);
+                        toast({
+                          title: "הועתק!",
+                          description: "ה-URL הועתק ללוח",
+                        });
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
+
+                {/* Instructions for Maskyoo */}
+                <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg space-y-2">
+                  <p className="text-sm font-medium text-primary">📞 הוראות הגדרה במסקיו:</p>
+                  <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside mr-2">
+                    <li>העתק את הכתובת למעלה</li>
+                    <li>גש להגדרות האוטומציה במסקיו</li>
+                    <li>בחר "פתיחת קישור" כסוג הפעולה</li>
+                    <li>הדבק את הכתובת</li>
+                    <li>בחר שיטת שליחה: <strong>POST</strong></li>
+                    <li>סמן ✓ "הוסף פרמטרים מברירת מחדל לקישור"</li>
+                  </ol>
+                </div>
+
                 <p className="text-xs text-muted-foreground">
-                  שלח POST request עם JSON לכתובת זו. הפעולה תרוץ אוטומטית ותיצור ליד חדש.
+                  💡 <strong>מה יקרה:</strong> כשמישהו יתקשר למספר המסקיו ולא יענו לו, ייווצר ליד חדש אוטומטית עם מספר הטלפון שלו.
                 </p>
-                <pre className="text-xs bg-background p-2 rounded overflow-x-auto font-mono">
-{`{
-  "trigger_type": "inbound_webhook_lead",
-  "tenant_id": "${tenantId || 'YOUR_TENANT_ID'}",
-  "data": {
-    "company_name": "שם הליד / האתר",
-    "contact_name": "שם איש קשר",
-    "phone": "0501234567",
-    "email": "email@example.com",
-    "source": "website",
-    "notes": "הערות"
-  }
-}`}
-                </pre>
-                <p className="text-xs text-muted-foreground">
-                  💡 <strong>טיפ:</strong> הפעולה "צור ליד חדש" תיצור את הליד אוטומטית מהנתונים הנכנסים.
-                </p>
+                
+                {/* Expandable advanced section */}
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                    🔧 הגדרות מתקדמות ו-API ישיר
+                  </summary>
+                  <div className="mt-2 space-y-2 pt-2 border-t">
+                    <p className="text-muted-foreground">
+                      פרמטרים נתמכים: <code className="bg-muted px-1 rounded">caller</code>, <code className="bg-muted px-1 rounded">description</code>, <code className="bg-muted px-1 rounded">maskyoo</code>, <code className="bg-muted px-1 rounded">call_status</code>, <code className="bg-muted px-1 rounded">private_field1</code>
+                    </p>
+                    <p className="text-muted-foreground">
+                      להתעלם משיחות שנענו, הוסף: <code className="bg-muted px-1 rounded">&only_missed=true</code>
+                    </p>
+                  </div>
+                </details>
               </div>
             )}
 

@@ -143,3 +143,6 @@ verify_jwt = true
 
 [functions.webhook-google-analytics-sync]
 verify_jwt = false
+
+[functions.webhook-maskyoo-intake]
+verify_jwt = false
