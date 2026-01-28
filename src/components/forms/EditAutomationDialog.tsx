@@ -417,6 +417,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                       <SelectItem value="task_calendar_created">משימה נוספה ליומן</SelectItem>
                       <SelectItem value="task_overdue">משימה לא הושלמה בזמן</SelectItem>
                       <SelectItem value="inbound_webhook_task">קבלת משימה מ-Webhook</SelectItem>
+                      <SelectItem value="inbound_webhook_lead">קליטת ליד מ-Webhook (מסקיו)</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -486,6 +487,55 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                 </div>
                 <p className="text-xs text-muted-foreground">
                   שלח POST request עם JSON לכתובת זו. חובה לכלול tenant_slug ו-title.
+                </p>
+              </div>
+            )}
+
+            {triggerType === "inbound_webhook_lead" && (
+              <div className="p-4 rounded-lg bg-muted/50 border space-y-4">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <ExternalLink className="h-4 w-4" />
+                  <span>Webhook URL לקליטת לידים מ-Maskyoo</span>
+                </div>
+                
+                {/* Maskyoo URL */}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-foreground">כתובת ה-Webhook למסקיו:</p>
+                  <div className="flex gap-2">
+                    <Input 
+                      readOnly 
+                      value={`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${automation.tenant_id || 'YOUR_TENANT_ID'}`}
+                      className="font-mono text-xs bg-background"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/webhook-maskyoo-intake?tenant_id=${automation.tenant_id || ''}`);
+                        toast.success("הועתק!");
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Instructions for Maskyoo */}
+                <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg space-y-2">
+                  <p className="text-sm font-medium text-primary">📞 הוראות הגדרה במסקיו:</p>
+                  <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside mr-2">
+                    <li>העתק את הכתובת למעלה</li>
+                    <li>גש להגדרות האוטומציה במסקיו</li>
+                    <li>בחר "פתיחת קישור" כסוג הפעולה</li>
+                    <li>הדבק את הכתובת</li>
+                    <li>בחר שיטת שליחה: <strong>POST</strong></li>
+                    <li>סמן ✓ "הוסף פרמטרים מברירת מחדל לקישור"</li>
+                  </ol>
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  💡 <strong>מה יקרה:</strong> כשמישהו יתקשר למספר המסקיו ולא יענו לו, ייווצר ליד חדש אוטומטית עם מספר הטלפון שלו.
                 </p>
               </div>
             )}
