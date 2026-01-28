@@ -4502,6 +4502,7 @@ export type Database = {
         | "add_client_update"
         | "send_greenapi_to_campaigner"
         | "create_task"
+        | "create_lead"
       automation_trigger:
         | "task_assigned"
         | "task_status_changed"
@@ -4516,6 +4517,7 @@ export type Database = {
         | "meeting_day_after"
         | "meeting_same_day"
         | "inbound_webhook_task"
+        | "inbound_webhook_lead"
       chat_provider: "manychat" | "green_api" | "internal"
       client_mood_status:
         | "happy"
@@ -4718,6 +4720,7 @@ export const Constants = {
         "add_client_update",
         "send_greenapi_to_campaigner",
         "create_task",
+        "create_lead",
       ],
       automation_trigger: [
         "task_assigned",
@@ -4733,6 +4736,7 @@ export const Constants = {
         "meeting_day_after",
         "meeting_same_day",
         "inbound_webhook_task",
+        "inbound_webhook_lead",
       ],
       chat_provider: ["manychat", "green_api", "internal"],
       client_mood_status: [

@@ -54,8 +54,9 @@ const formSchema = z.object({
     "task_calendar_created",
     "task_overdue",
     "inbound_webhook_task",
+    "inbound_webhook_lead",
   ]),
-  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber", "send_greenapi_message", "send_greenapi_to_campaigner", "add_lead_update", "add_client_update", "create_task"]),
+  action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber", "send_greenapi_message", "send_greenapi_to_campaigner", "add_lead_update", "add_client_update", "create_task", "create_lead"]),
   // Green API connection selection
   green_api_integration_id: z.string().optional(),
   // Green API to campaigner fields
@@ -116,6 +117,7 @@ const TRIGGER_OPTIONS = [
   { value: "task_calendar_created", label: "משימה נוספה ליומן" },
   { value: "task_overdue", label: "משימה לא הושלמה בזמן" },
   { value: "inbound_webhook_task", label: "קבלת משימה מ-Webhook" },
+  { value: "inbound_webhook_lead", label: "קליטת ליד מ-Webhook (מסקיו)" },
 ];
 
 // LEAD_STATUS_OPTIONS removed - now using dynamic statuses from useLeadStatuses hook
@@ -358,6 +360,9 @@ export function AddAutomationForm() {
           task_priority: values.task_priority || 5,
           task_due_days: values.task_due_days || 0,
         };
+      } else if (values.action_type === "create_lead") {
+        // create_lead uses the incoming webhook data directly
+        configuration = {};
       }
 
       const { data, error } = await supabase
@@ -554,6 +559,56 @@ export function AddAutomationForm() {
               </div>
             )}
 
+            {triggerType === "inbound_webhook_lead" && (
+              <div className="p-4 rounded-lg bg-muted/50 border space-y-3">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <ExternalLink className="h-4 w-4" />
+                  <span>Webhook URL לקליטת לידים (מסקיו / חיצוני)</span>
+                </div>
+                <div className="flex gap-2">
+                  <Input 
+                    readOnly 
+                    value={`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/trigger-automation`}
+                    className="font-mono text-xs bg-background"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/trigger-automation`);
+                      toast({
+                        title: "הועתק!",
+                        description: "ה-URL הועתק ללוח",
+                      });
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  שלח POST request עם JSON לכתובת זו. הפעולה תרוץ אוטומטית ותיצור ליד חדש.
+                </p>
+                <pre className="text-xs bg-background p-2 rounded overflow-x-auto font-mono">
+{`{
+  "trigger_type": "inbound_webhook_lead",
+  "tenant_id": "${tenantId || 'YOUR_TENANT_ID'}",
+  "data": {
+    "company_name": "שם הליד / האתר",
+    "contact_name": "שם איש קשר",
+    "phone": "0501234567",
+    "email": "email@example.com",
+    "source": "website",
+    "notes": "הערות"
+  }
+}`}
+                </pre>
+                <p className="text-xs text-muted-foreground">
+                  💡 <strong>טיפ:</strong> הפעולה "צור ליד חדש" תיצור את הליד אוטומטית מהנתונים הנכנסים.
+                </p>
+              </div>
+            )}
+
             <FormField
               control={form.control}
               name="action_type"
@@ -576,6 +631,7 @@ export function AddAutomationForm() {
                       <SelectItem value="add_lead_update">הוסף עדכון לליד</SelectItem>
                       <SelectItem value="add_client_update">הוסף עדכון ללקוח</SelectItem>
                       <SelectItem value="create_task">צור משימה</SelectItem>
+                      <SelectItem value="create_lead">צור ליד חדש</SelectItem>
                       <SelectItem value="email" disabled>אימייל (בקרוב)</SelectItem>
                       <SelectItem value="notification" disabled>התראה (בקרוב)</SelectItem>
                     </SelectContent>
