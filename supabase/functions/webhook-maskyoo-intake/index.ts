@@ -150,8 +150,8 @@ Deno.serve(async (req) => {
     console.log(`✅ Tenant verified: ${tenant.name}`)
 
     // Extract Maskyoo parameters
-    // Phone: caller, phone, caller_phone, callerid
-    const rawPhone = allParams.caller || allParams.phone || allParams.caller_phone || allParams.callerid || ''
+    // Phone: cli (standard Maskyoo param), caller, phone, caller_phone, callerid
+    const rawPhone = allParams.cli || allParams.cli_unformatted || allParams.caller || allParams.phone || allParams.caller_phone || allParams.callerid || ''
     const phone = normalizePhone(rawPhone)
     
     if (!phone) {
