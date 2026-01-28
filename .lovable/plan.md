@@ -1,79 +1,114 @@
 
+# תוכנית: יצירה אוטומטית של איש מכירות ושיוך תפקיד
 
-# תוכנית: תיקון גישת הלידים לרויטל ונחמה
+## הבעיה
 
-## הבעיה שזוהתה
+כשמגדירים משתמש כ-"איש מכירות" במערכת, לא קורים אוטומטית:
+1. יצירת רשומת `sales_people` בבסיס הנתונים
+2. קישור הרשומה לפרופיל המשתמש (`profiles.sales_person_id`)
+3. הוספת תפקיד `sales_person` לטבלת `user_roles`
 
-רויטל ונחמה לא רואות את הלידים המשויכים אליהן בגלל **חוסר קישור נכון** בין חשבון המשתמש שלהן לבין רשומות אנשי המכירות:
+כתוצאה מכך, המשתמש לא רואה את הלידים שמשויכים אליו.
 
-| בעיה | מצב נוכחי | מצב נדרש |
-|------|-----------|----------|
-| `profiles.sales_person_id` | NULL (ריק) | צריך להיות מקושר לרשומת sales_people |
-| תפקיד ב-`user_roles` | campaigner | צריך גם sales_person |
-| RLS policy | בודק `get_user_sales_person_id()` | מחזיר NULL בגלל חוסר הקישור |
+---
 
-## מה קורה עכשיו
+## הפתרון המוצע
+
+### שלב 1: יצירת Trigger חדש - `handle_sales_person_assignment`
+
+בדומה ל-trigger הקיים ל-campaigner, ניצור trigger שמוסיף אוטומטית את תפקיד `sales_person` כשמקשרים `sales_person_id` לפרופיל:
 
 ```text
-משתמשת: רויטל (revital640@gmail.com)
-    │
-    ├── profiles.sales_person_id = NULL ❌
-    │
-    └── user_roles.role = 'campaigner' (לא 'sales_person')
+כש-profiles.sales_person_id מתעדכן:
+  ├── אם הוגדר sales_person_id חדש:
+  │   └── הוסף תפקיד 'sales_person' לטבלת user_roles
+  └── אם sales_person_id הוסר:
+      └── הסר את תפקיד 'sales_person' מטבלת user_roles
 ```
 
-מדיניות ה-RLS עבור אנשי מכירות:
-```
-has_role('sales_person') AND sales_person_id = get_user_sales_person_id(auth.uid())
-```
+### שלב 2: עדכון טופס הזמנת משתמש חדש
 
-מכיוון ש-`get_user_sales_person_id()` מחזיר NULL, הבדיקה נכשלת והלידים לא מוצגים.
+בעת הזמנת משתמש עם תפקיד `sales_person`:
+- אם לא נבחר איש מכירות קיים, נציע אפשרות ליצור אחד חדש אוטומטית
+- או: נוסיף לוגיקה ב-Edge Function `invite-user` שתיצור רשומת `sales_people` אם התפקיד הוא `sales_person` ולא נבחר `salesPersonId`
 
-## הפתרון
+### שלב 3: שיפור תהליך העריכה הקיים
 
-### שלב 1: עדכון טבלת profiles
-קישור חשבונות המשתמש לרשומות אנשי המכירות:
+הדיאלוג `EditUserSalesPersonDialog` כבר תומך ביצירת איש מכירות חדש ושיוך - נוודא שה-trigger החדש יטפל בהוספת התפקיד אוטומטית.
 
-| משתמשת | user_id | sales_person_id (חדש) |
-|--------|---------|----------------------|
-| נחמה | 432abeca-7475-4f02-b636-6df873078918 | 4f058f40-0ae2-4df1-8b7a-796b6bcb77aa |
-| רויטל | 91379ba0-5022-4dfb-8895-302a67693eeb | 48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91 |
+---
 
-### שלב 2: הוספת תפקיד sales_person
-הוספת שורות ל-`user_roles` עם תפקיד `sales_person` בנוסף לתפקיד `campaigner` הקיים.
+## שינויים נדרשים
+
+| רכיב | שינוי |
+|------|-------|
+| מיגרציית SQL | יצירת פונקציה `handle_sales_person_assignment` ו-Trigger מתאים |
+| `invite-user/index.ts` | (אופציונלי) יצירת `sales_people` אוטומטית אם התפקיד הוא `sales_person` |
+| `Users.tsx` | שיפור UX להזמנת איש מכירות עם אפשרות יצירה אוטומטית |
 
 ---
 
 ## פרטים טכניים
 
-### מיגרציית בסיס נתונים
+### מיגרציית SQL - יצירת הפונקציה וה-Trigger
 
 ```sql
--- Link Nachama's profile to her sales_person record
-UPDATE profiles 
-SET sales_person_id = '4f058f40-0ae2-4df1-8b7a-796b6bcb77aa'
-WHERE id = '432abeca-7475-4f02-b636-6df873078918';
+-- פונקציה לטיפול בשיוך sales_person
+CREATE OR REPLACE FUNCTION public.handle_sales_person_assignment()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_tenant_id uuid;
+BEGIN
+  -- Get user's tenant_id
+  SELECT tenant_id INTO v_tenant_id
+  FROM public.tenant_users
+  WHERE user_id = NEW.id
+  LIMIT 1;
 
--- Link Revital's profile to her sales_person record
-UPDATE profiles 
-SET sales_person_id = '48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91'
-WHERE id = '91379ba0-5022-4dfb-8895-302a67693eeb';
+  -- If sales_person_id was just set
+  IF NEW.sales_person_id IS NOT NULL AND 
+     (OLD.sales_person_id IS NULL OR OLD.sales_person_id != NEW.sales_person_id) THEN
+    -- Add sales_person role if it doesn't exist
+    INSERT INTO public.user_roles (user_id, role, tenant_id)
+    VALUES (NEW.id, 'sales_person', v_tenant_id)
+    ON CONFLICT (user_id, role, tenant_id) DO NOTHING;
+  END IF;
+  
+  -- If sales_person_id was removed
+  IF NEW.sales_person_id IS NULL AND OLD.sales_person_id IS NOT NULL THEN
+    DELETE FROM public.user_roles
+    WHERE user_id = NEW.id 
+      AND role = 'sales_person' 
+      AND tenant_id = v_tenant_id;
+  END IF;
+  
+  RETURN NEW;
+END;
+$function$;
 
--- Add sales_person role to Nachama
-INSERT INTO user_roles (user_id, role, tenant_id)
-VALUES ('432abeca-7475-4f02-b636-6df873078918', 'sales_person', 'eb31659b-7a21-4411-b99d-01df51cf2895')
-ON CONFLICT (user_id, role, tenant_id) DO NOTHING;
-
--- Add sales_person role to Revital
-INSERT INTO user_roles (user_id, role, tenant_id)
-VALUES ('91379ba0-5022-4dfb-8895-302a67693eeb', 'sales_person', 'eb31659b-7a21-4411-b99d-01df51cf2895')
-ON CONFLICT (user_id, role, tenant_id) DO NOTHING;
+-- Trigger לטבלת profiles
+CREATE TRIGGER on_sales_person_assignment 
+  AFTER UPDATE OF sales_person_id ON public.profiles 
+  FOR EACH ROW 
+  EXECUTE FUNCTION handle_sales_person_assignment();
 ```
 
-### איך זה עובד
+### עדכון Edge Function - יצירה אוטומטית (אופציונלי)
 
-לאחר התיקון:
-1. `get_user_sales_person_id(auth.uid())` יחזיר את ה-ID של איש המכירות
-2. RLS Policy יבדוק: `leads.sales_person_id = '48ba2e9e-...'` (לדוגמה עבור רויטל)
-3. כל הלידים המשויכים לאותו sales_person_id יוצגו למשתמשת
+ב-`invite-user`, אם התפקיד הוא `sales_person` ולא נבחר `salesPersonId`:
+1. יצירת רשומת `sales_people` חדשה עם שם המשתמש
+2. קישור לסוכנויות שנבחרו
+3. עדכון `profiles.sales_person_id`
 
+---
+
+## תוצאה צפויה
+
+לאחר השינויים:
+- שיוך `sales_person_id` לפרופיל יוסיף אוטומטית את התפקיד
+- אנשי מכירות חדשים יוכלו לראות את הלידים שלהם מיד אחרי השיוך
+- לא יהיה צורך בעדכונים ידניים בבסיס הנתונים
