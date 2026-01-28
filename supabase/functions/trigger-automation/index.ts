@@ -417,6 +417,49 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       }
     }
   }
+
+  // If still no subscriber, try lookup by WhatsApp ID (wa_id)
+  if (!subscriberId && contactPhone) {
+    const cleanPhone = contactPhone.replace(/\D/g, '')
+    const last9Digits = cleanPhone.slice(-9)
+    const waIdCandidates = [...new Set([`972${last9Digits}`, `+972${last9Digits}`])]
+    console.log('No subscriber found by phone, trying wa_id candidates:', waIdCandidates)
+
+    for (const waId of waIdCandidates) {
+      const searchUrl = `${baseUrl}/subscriber/findBySystemField?wa_id=${encodeURIComponent(waId)}`
+      const searchResponse = await fetch(searchUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      console.log(`Search wa_id response status for ${waId}: ${searchResponse.status}`)
+      if (searchResponse.ok) {
+        const searchResult = await searchResponse.json()
+        console.log(`ManyChat findBySystemField response for wa_id ${waId}:`, searchResult)
+
+        if (searchResult.status === 'success' && searchResult.data?.id) {
+          subscriberId = searchResult.data.id.toString()
+          console.log(`Found subscriber by wa_id ${waId}: ${subscriberId}`)
+
+          if (contactType === 'lead' && contactRecord?.id) {
+            await supabase
+              .from('leads')
+              .update({ manychat_subscriber_id: subscriberId })
+              .eq('id', contactRecord.id)
+          } else if (contactType === 'client' && contactRecord?.id) {
+            await supabase
+              .from('clients')
+              .update({ manychat_subscriber_id: subscriberId })
+              .eq('id', contactRecord.id)
+          }
+          break
+        }
+      }
+    }
+  }
   
   // If still no subscriber found, try to create a new one in ManyChat
   if (!subscriberId && contactPhone) {
@@ -465,7 +508,45 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
           console.log(`Updated client ${contactRecord.id} with new subscriber ID ${subscriberId}`)
         }
       } else {
+        // If creation failed due to existing wa_id, try to resolve via wa_id lookup
+        const errStr = JSON.stringify(createResult)
         console.error('Failed to create subscriber:', createResult)
+
+        if (errStr.includes('wa_id') || errStr.includes('WhatsApp ID already exists')) {
+          console.log('Create failed with wa_id conflict, trying wa_id lookup...')
+          const searchWaIds = [...new Set([`972${last9Digits}`, `+972${last9Digits}`])]
+
+          for (const waId of searchWaIds) {
+            const searchUrl = `${baseUrl}/subscriber/findBySystemField?wa_id=${encodeURIComponent(waId)}`
+            const searchResponse = await fetch(searchUrl, {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+              },
+            })
+
+            if (searchResponse.ok) {
+              const searchResult = await searchResponse.json()
+              console.log(`ManyChat findBySystemField response for wa_id ${waId}:`, searchResult)
+              if (searchResult.status === 'success' && searchResult.data?.id) {
+                subscriberId = searchResult.data.id.toString()
+                console.log(`Resolved subscriber by wa_id ${waId}: ${subscriberId}`)
+
+                if (contactType === 'lead' && contactRecord?.id) {
+                  await supabase.from('leads')
+                    .update({ manychat_subscriber_id: subscriberId })
+                    .eq('id', contactRecord.id)
+                } else if (contactType === 'client' && contactRecord?.id) {
+                  await supabase.from('clients')
+                    .update({ manychat_subscriber_id: subscriberId })
+                    .eq('id', contactRecord.id)
+                }
+                break
+              }
+            }
+          }
+        }
       }
     } catch (createError) {
       console.error('Error creating subscriber:', createError)
@@ -607,7 +688,7 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   if (leadId) {
     const { data: lead } = await supabase
       .from('leads')
-      .select('id, manychat_subscriber_id, contact_name, company_name, phone')
+      .select('id, manychat_subscriber_id, contact_name, company_name, phone, email')
       .eq('id', leadId)
       .single()
     leadRecord = lead
@@ -655,6 +736,7 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   const cleanPhone = contactPhone.replace(/\D/g, '')
   const last9Digits = cleanPhone.slice(-9)
   const whatsappPhone = '+972' + last9Digits
+  const waIdCandidates = [...new Set([`972${last9Digits}`, `+972${last9Digits}`])]
   const contactName = leadRecord.contact_name || leadRecord.company_name || 'Unknown'
   
   // Generate phone candidates for lookup (multi-format)
@@ -694,6 +776,35 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
       console.log(`Error finding subscriber with ${candidate}:`, e)
     }
   }
+
+  // Step 1b: Try to find by wa_id (important when phone import is disabled)
+  if (!subscriberId) {
+    console.log('No subscriber found by phone; trying wa_id candidates:', waIdCandidates)
+    for (const waId of waIdCandidates) {
+      try {
+        const findResponse = await fetch(
+          `${baseUrl}/subscriber/findBySystemField?wa_id=${encodeURIComponent(waId)}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        )
+        const findResult = await findResponse.json()
+        console.log(`Find subscriber (wa_id=${waId}) response:`, findResult)
+
+        if (findResult?.status === 'success' && findResult?.data?.id) {
+          subscriberId = String(findResult.data.id)
+          console.log(`Found existing subscriber by wa_id: ${subscriberId}`)
+          break
+        }
+      } catch (_e) {
+        // Continue
+      }
+    }
+  }
   
   // Step 2: If found, update lead and add tag
   if (subscriberId) {
@@ -728,29 +839,108 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   
   // Step 3: Create new subscriber (only if not found)
   console.log(`Creating NEW subscriber with whatsapp_phone: ${whatsappPhone}, name: ${contactName}`)
-  
-  const createResponse = await fetch(`${baseUrl}/subscriber/createSubscriber`, {
+
+  const createBodyBase: any = {
+    first_name: contactName,
+    // NOTE: some ManyChat accounts deny importing phone to system field.
+    // Keep whatsapp_phone; phone will be added only if allowed.
+    whatsapp_phone: whatsappPhone,
+    has_opt_in_sms: true,
+    has_opt_in_email: !!leadRecord.email,
+    consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
+  }
+
+  const createBodyWithPhone = {
+    ...createBodyBase,
+    phone: whatsappPhone,
+    email: leadRecord.email || undefined,
+  }
+
+  let createResponse = await fetch(`${baseUrl}/subscriber/createSubscriber`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      first_name: contactName,
-      phone: whatsappPhone,
-      whatsapp_phone: whatsappPhone,
-      has_opt_in_sms: true,
-      has_opt_in_email: true,
-      consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
-    }),
+    body: JSON.stringify(createBodyWithPhone),
   })
-  
-  const createResult = await createResponse.json()
+
+  let createResult = await createResponse.json()
   console.log('ManyChat createSubscriber response:', createResult)
+
+  // If ManyChat denies importing phone, retry without "phone" field
+  const createResultStr = JSON.stringify(createResult)
+  if (
+    (createResultStr.includes('Permission denied to import phone') || createResultStr.includes('Permission denied')) &&
+    (createResultStr.includes('phone') || createResultStr.includes('warning'))
+  ) {
+    console.log('Retrying createSubscriber WITHOUT phone field due to permission restriction...')
+    createResponse = await fetch(`${baseUrl}/subscriber/createSubscriber`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ...createBodyBase,
+        email: leadRecord.email || undefined,
+      }),
+    })
+    createResult = await createResponse.json()
+    console.log('ManyChat createSubscriber response (no phone):', createResult)
+  }
   
   if (createResult.status !== 'success' || !createResult.data?.id) {
     // If creation failed, try one more lookup in case of race condition
     console.log('Creation failed, trying one more lookup...')
+
+    // First retry wa_id lookup (covers "already exists" conflicts)
+    for (const waId of waIdCandidates) {
+      try {
+        const retryFind = await fetch(
+          `${baseUrl}/subscriber/findBySystemField?wa_id=${encodeURIComponent(waId)}`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        )
+        const retryResult = await retryFind.json()
+        if (retryResult?.status === 'success' && retryResult?.data?.id) {
+          subscriberId = String(retryResult.data.id)
+          console.log(`Found subscriber by wa_id on retry: ${subscriberId}`)
+
+          await supabase.from('leads')
+            .update({ manychat_subscriber_id: subscriberId })
+            .eq('id', leadRecord.id)
+
+          if (manychat_tag_id && manychat_tag_id !== 'none') {
+            await fetch(`${baseUrl}/subscriber/addTag`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                subscriber_id: subscriberId,
+                tag_id: parseInt(manychat_tag_id),
+              }),
+            })
+          }
+
+          return {
+            success: true,
+            subscriber_id: subscriberId,
+            message: 'Found existing subscriber by wa_id on retry, linked to lead'
+          }
+        }
+      } catch (_e) {
+        // Continue
+      }
+    }
+
     for (const candidate of phoneCandidates) {
       try {
         const retryFind = await fetch(
