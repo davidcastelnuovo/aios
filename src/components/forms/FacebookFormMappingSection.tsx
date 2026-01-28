@@ -11,6 +11,7 @@ import { Loader2, Save, RefreshCw, ListTree, AlertCircle, Edit2, ExternalLink, F
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface FormField {
   key: string;
@@ -28,7 +29,8 @@ interface FacebookForm {
 interface FormMapping {
   field_mappings: Record<string, string>;
   agency_id: string | null;
-  sales_person_id: string | null;
+  sales_person_id: string | null; // legacy single
+  sales_person_ids?: string[]; // new multi-select
   tag_id: string | null;
 }
 
@@ -76,7 +78,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   const [selectedFormId, setSelectedFormId] = useState<string>("");
   const [fieldMappings, setFieldMappings] = useState<Record<string, string>>({});
   const [selectedAgency, setSelectedAgency] = useState<string>("");
-  const [selectedSalesPerson, setSelectedSalesPerson] = useState<string>("");
+  const [selectedSalesPersonIds, setSelectedSalesPersonIds] = useState<string[]>([]);
   const [selectedTag, setSelectedTag] = useState<string>("");
   const [pageTokens, setPageTokens] = useState<Record<string, string>>({});
   const [pageSearchQuery, setPageSearchQuery] = useState<string>("");
@@ -210,7 +212,16 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       const mapping = existingSettings.form_mappings[selectedFormId] as FormMapping;
       setFieldMappings(mapping.field_mappings || {});
       setSelectedAgency(mapping.agency_id || "");
-      setSelectedSalesPerson(mapping.sales_person_id || "");
+      // Support both legacy single and new multi-select
+      const legacyId = mapping.sales_person_id;
+      const multiIds = mapping.sales_person_ids || [];
+      if (multiIds.length > 0) {
+        setSelectedSalesPersonIds(multiIds);
+      } else if (legacyId) {
+        setSelectedSalesPersonIds([legacyId]);
+      } else {
+        setSelectedSalesPersonIds([]);
+      }
       setSelectedTag(mapping.tag_id || "");
     } else if (selectedFormId) {
       // Set default mappings for new form
@@ -224,7 +235,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
         });
         setFieldMappings(defaultMappings);
       }
-      setSelectedSalesPerson("");
+      setSelectedSalesPersonIds([]);
       setSelectedTag("");
     }
   }, [selectedFormId, existingSettings, formsData]);
@@ -249,7 +260,8 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       formMappings[selectedFormId] = {
         field_mappings: fieldMappings,
         agency_id: selectedAgency || null,
-        sales_person_id: selectedSalesPerson || null,
+        sales_person_id: selectedSalesPersonIds.length > 0 ? selectedSalesPersonIds[0] : null, // legacy compat
+        sales_person_ids: selectedSalesPersonIds.length > 0 ? selectedSalesPersonIds : null,
         tag_id: selectedTag || null,
         form_name: selectedForm?.name || `טופס ${selectedFormId}`,
         page_id: selectedPageId,
@@ -298,7 +310,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
       setSelectedFormId("");
       setFieldMappings({});
       setSelectedAgency("");
-      setSelectedSalesPerson("");
+      setSelectedSalesPersonIds([]);
       setSelectedTag("");
       queryClient.invalidateQueries({ queryKey: ['facebook-integration-settings'] });
       queryClient.invalidateQueries({ queryKey: ['facebook-lead-ads-integration'] });
@@ -433,7 +445,12 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
         {mappedFormIds.map((formId) => {
               const mapping = existingFormMappings[formId];
               const agencyName = agencies.find(a => a.id === mapping.agency_id)?.name;
-              const salesPersonName = salesPeople.find(sp => sp.id === mapping.sales_person_id)?.full_name;
+              // Support both legacy single and new multi-select for display
+              const spIds = mapping.sales_person_ids || (mapping.sales_person_id ? [mapping.sales_person_id] : []);
+              const salesPersonNames = spIds
+                .map(id => salesPeople.find(sp => sp.id === id)?.full_name)
+                .filter(Boolean)
+                .join(', ');
               const tagName = tags.find(t => t.id === mapping.tag_id)?.name;
               const fieldCount = Object.values(mapping.field_mappings || {}).filter(v => v !== 'skip').length;
               
@@ -452,9 +469,9 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
                     </div>
                     <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
                       {agencyName && <span>סוכנות: {agencyName}</span>}
-                      {agencyName && salesPersonName && <span>•</span>}
-                      {salesPersonName && <span>איש מכירות: {salesPersonName}</span>}
-                      {(agencyName || salesPersonName) && tagName && <span>•</span>}
+                      {agencyName && salesPersonNames && <span>•</span>}
+                      {salesPersonNames && <span>אנשי מכירות: {salesPersonNames}</span>}
+                      {(agencyName || salesPersonNames) && tagName && <span>•</span>}
                       {tagName && <span>תווית: {tagName}</span>}
                     </div>
                   </div>
@@ -468,7 +485,9 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
                         setSelectedFormId(formId);
                         setFieldMappings(mapping.field_mappings || {});
                         setSelectedAgency(mapping.agency_id || '');
-                        setSelectedSalesPerson(mapping.sales_person_id || '');
+                        // Support both legacy and new multi-select
+                        const ids = mapping.sales_person_ids || (mapping.sales_person_id ? [mapping.sales_person_id] : []);
+                        setSelectedSalesPersonIds(ids);
                       }}
                       title="ערוך מיפוי"
                     >
@@ -512,7 +531,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
                     setSelectedFormId("");
                     setFieldMappings({});
                     setSelectedAgency("");
-                    setSelectedSalesPerson("");
+                    setSelectedSalesPersonIds([]);
                   }}
                 >
                   ביטול
@@ -795,24 +814,51 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
               </p>
             </div>
 
-            {/* Sales Person Selection */}
+            {/* Sales People Multi-Selection */}
             <div className="space-y-2">
-              <Label>איש מכירות ברירת מחדל ללידים מטופס זה</Label>
-              <Select value={selectedSalesPerson} onValueChange={setSelectedSalesPerson}>
-                <SelectTrigger>
-                  <SelectValue placeholder="בחר איש מכירות (אופציונלי)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">ללא שיוך לאיש מכירות</SelectItem>
-                  {salesPeople.map((sp) => (
-                    <SelectItem key={sp.id} value={sp.id}>
-                      {sp.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>אנשי מכירות ברירת מחדל ללידים מטופס זה</Label>
+              <div className="border rounded-md p-3 space-y-2 max-h-48 overflow-y-auto">
+                {salesPeople.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">אין אנשי מכירות זמינים</p>
+                ) : (
+                  salesPeople.map((sp) => (
+                    <div key={sp.id} className="flex items-center gap-2">
+                      <Checkbox
+                        id={`sp-${sp.id}`}
+                        checked={selectedSalesPersonIds.includes(sp.id)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedSalesPersonIds(prev => [...prev, sp.id]);
+                          } else {
+                            setSelectedSalesPersonIds(prev => prev.filter(id => id !== sp.id));
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor={`sp-${sp.id}`}
+                        className="text-sm cursor-pointer flex-1"
+                      >
+                        {sp.full_name}
+                      </label>
+                    </div>
+                  ))
+                )}
+              </div>
+              {selectedSalesPersonIds.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">{selectedSalesPersonIds.length} נבחרו</Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedSalesPersonIds([])}
+                    className="h-6 text-xs"
+                  >
+                    נקה בחירה
+                  </Button>
+                </div>
+              )}
               <p className="text-xs text-muted-foreground">
-                לידים מטופס זה ישויכו אוטומטית לאיש המכירות שנבחר
+                לידים מטופס זה ישויכו אוטומטית לכל אנשי המכירות שנבחרו
               </p>
             </div>
 

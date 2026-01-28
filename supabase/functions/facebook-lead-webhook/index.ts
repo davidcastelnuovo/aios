@@ -155,14 +155,19 @@ serve(async (req) => {
                 'phone_number': 'phone',
               };
 
+              // Support both legacy single and new multi-select
+              const salesPersonIds: string[] = formMappings.sales_person_ids 
+                || (formMappings.sales_person_id ? [formMappings.sales_person_id] : []);
+
               // Map fields to lead record (use 'paid_ads' as source since it's a valid enum value)
+              // Primary sales_person_id for backwards compatibility
               const leadRecord: Record<string, any> = {
                 company_name: fieldData.company || fieldData.full_name || 'Facebook Lead',
                 source: 'paid_ads',
                 status: 'new',
                 tenant_id: integration.tenant_id,
                 agency_id: formMappings.agency_id || null,
-                sales_person_id: formMappings.sales_person_id || null,
+                sales_person_id: salesPersonIds.length > 0 ? salesPersonIds[0] : null,
                 notes: `Facebook Lead ID: ${leadgenId}\nForm ID: ${formId}\nSource: Facebook Lead Ads`,
               };
 
@@ -327,6 +332,25 @@ serve(async (req) => {
                 console.error('Error inserting lead:', insertError);
               } else {
                 console.log('Lead created successfully:', newLead.id);
+
+                // Insert into lead_sales_people junction table for multi-salesperson support
+                if (salesPersonIds.length > 0) {
+                  const junctionRecords = salesPersonIds.map(spId => ({
+                    lead_id: newLead.id,
+                    sales_person_id: spId,
+                    tenant_id: integration.tenant_id,
+                  }));
+                  
+                  const { error: junctionError } = await supabase
+                    .from('lead_sales_people')
+                    .insert(junctionRecords);
+                  
+                  if (junctionError) {
+                    console.error('Error inserting lead_sales_people:', junctionError);
+                  } else {
+                    console.log('Assigned lead to', salesPersonIds.length, 'salespeople');
+                  }
+                }
 
                 // Apply tag if configured
                 if (formMappings.tag_id) {
