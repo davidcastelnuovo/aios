@@ -5,6 +5,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Custom field name for phone number in ManyChat (must be created manually in ManyChat)
+const PHONE_CUSTOM_FIELD_NAME = 'phone_number';
+
 // Phone normalization helper
 function normalizePhone(phone: string): string {
   if (!phone) return '';
@@ -75,29 +78,6 @@ async function findSubscriberByPhone(apiKey: string, phoneCandidates: string[]):
   return null;
 }
 
-// Find subscriber by WhatsApp ID (wa_id) in ManyChat
-async function findSubscriberByWaId(apiKey: string, waIdCandidates: string[]): Promise<string | null> {
-  for (const candidate of waIdCandidates) {
-    const url = `https://api.manychat.com/fb/subscriber/findBySystemField?wa_id=${encodeURIComponent(candidate)}`;
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    });
-
-    const data = await safeJson(res);
-    console.log(`🟢 Find subscriber (wa_id=${candidate}) response:`, JSON.stringify(data));
-
-    if (data?.status === 'success' && data?.data?.id) {
-      return String(data.data.id);
-    }
-  }
-  return null;
-}
-
 // Find subscriber by email in ManyChat
 async function findSubscriberByEmail(apiKey: string, email?: string | null): Promise<string | null> {
   if (!email) return null;
@@ -118,6 +98,53 @@ async function findSubscriberByEmail(apiKey: string, email?: string | null): Pro
     return String(data.data.id);
   }
   return null;
+}
+
+// Find subscriber by Custom Field (phone_number) in ManyChat
+// This is the key function to find subscribers created with only whatsapp_phone
+async function findSubscriberByCustomField(apiKey: string, phoneCandidates: string[]): Promise<string | null> {
+  for (const candidate of phoneCandidates) {
+    // Try to find by custom field name
+    const url = `https://api.manychat.com/fb/subscriber/findByCustomField?field_name=${encodeURIComponent(PHONE_CUSTOM_FIELD_NAME)}&field_value=${encodeURIComponent(candidate)}`;
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    });
+
+    const data = await safeJson(res);
+    console.log(`🔍 Find subscriber by custom field (${PHONE_CUSTOM_FIELD_NAME}=${candidate}) response:`, JSON.stringify(data));
+
+    if (data?.status === 'success' && data?.data?.id) {
+      return String(data.data.id);
+    }
+  }
+  return null;
+}
+
+// Set custom field value for a subscriber
+async function setPhoneCustomField(apiKey: string, subscriberId: string, phoneValue: string): Promise<boolean> {
+  const url = 'https://api.manychat.com/fb/subscriber/setCustomFieldByName';
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      subscriber_id: subscriberId,
+      field_name: PHONE_CUSTOM_FIELD_NAME,
+      field_value: phoneValue,
+    }),
+  });
+
+  const data = await safeJson(res);
+  console.log(`📝 Set custom field (${PHONE_CUSTOM_FIELD_NAME}=${phoneValue}) response:`, JSON.stringify(data));
+
+  return data?.status === 'success';
 }
 
 // Create new subscriber in ManyChat
@@ -183,7 +210,13 @@ async function createManyChatSubscriber(
   }
 
   if (createData.status === 'success' && createData.data?.id) {
-    return { id: String(createData.data.id) };
+    const subscriberId = String(createData.data.id);
+    
+    // IMPORTANT: Save phone to custom field for future lookups
+    console.log(`📝 Saving phone to custom field for new subscriber ${subscriberId}...`);
+    await setPhoneCustomField(apiKey, subscriberId, `+${formattedPhone}`);
+    
+    return { id: subscriberId };
   }
 
   return null;
@@ -285,7 +318,7 @@ Deno.serve(async (req) => {
     const defaultTagId = settings?.defaultTagId || 79380109;
 
     const phoneCandidates = getPhoneLookupCandidates(lead.phone);
-    const waIdCandidates = [...new Set([formatPhoneForManyChat(lead.phone), `+${formatPhoneForManyChat(lead.phone)}`])];
+    const formattedPhone = formatPhoneForManyChat(lead.phone);
     const leadName = lead.contact_name || lead.company_name || 'Unknown';
 
     console.log(`📱 Searching for subscriber with phone candidates:`, phoneCandidates);
@@ -296,9 +329,11 @@ Deno.serve(async (req) => {
 
     if (subscriberId) {
       wasExisting = true;
-      console.log(`✅ Found existing subscriber: ${subscriberId}`);
-    } else {
-      // Step 2: Try to find by email
+      console.log(`✅ Found existing subscriber by phone: ${subscriberId}`);
+    }
+
+    // Step 2: Try to find by email
+    if (!subscriberId) {
       subscriberId = await findSubscriberByEmail(apiKey, lead.email);
       if (subscriberId) {
         wasExisting = true;
@@ -306,16 +341,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 2b: Try to find by WhatsApp ID (wa_id)
+    // Step 3: Try to find by Custom Field (phone_number) - NEW!
+    // This is crucial for finding subscribers created with only whatsapp_phone
     if (!subscriberId) {
-      subscriberId = await findSubscriberByWaId(apiKey, waIdCandidates);
+      console.log(`🔍 Trying to find by custom field "${PHONE_CUSTOM_FIELD_NAME}"...`);
+      subscriberId = await findSubscriberByCustomField(apiKey, [`+${formattedPhone}`, formattedPhone, ...phoneCandidates]);
       if (subscriberId) {
         wasExisting = true;
-        console.log(`✅ Found existing subscriber by wa_id: ${subscriberId}`);
+        console.log(`✅ Found existing subscriber by custom field: ${subscriberId}`);
       }
     }
 
-    // Step 3: If not found, create new subscriber
+    // Step 4: If not found, create new subscriber
     if (!subscriberId) {
       console.log('🆕 No existing subscriber found, creating new one...');
       const newSubscriber = await createManyChatSubscriber(apiKey, {
@@ -329,7 +366,7 @@ Deno.serve(async (req) => {
         subscriberId = newSubscriber.id;
         console.log(`✅ Created new subscriber: ${subscriberId}`);
 
-        // Step 4: Add tag to trigger automation (only for new subscribers)
+        // Step 5: Add tag to trigger automation (only for new subscribers)
         console.log(`🏷️ Adding tag ${defaultTagId} to new subscriber...`);
         const tagAdded = await addTagToSubscriber(apiKey, subscriberId, defaultTagId);
         if (tagAdded) {
@@ -338,15 +375,22 @@ Deno.serve(async (req) => {
           console.log('⚠️ Failed to add tag, but subscriber was created');
         }
       } else {
-        // If creation failed, try lookup again (might be "already exists" conflict)
-        console.log('⚠️ Create failed, retrying lookup...');
+        // If creation failed (e.g., "already exists" conflict), try all lookup methods again
+        console.log('⚠️ Create failed, retrying all lookup methods...');
+        
+        // Retry phone lookup
         subscriberId = await findSubscriberByPhone(apiKey, phoneCandidates);
+        
+        // Retry email lookup
         if (!subscriberId) {
           subscriberId = await findSubscriberByEmail(apiKey, lead.email);
         }
+        
+        // Retry custom field lookup
         if (!subscriberId) {
-          subscriberId = await findSubscriberByWaId(apiKey, waIdCandidates);
+          subscriberId = await findSubscriberByCustomField(apiKey, [`+${formattedPhone}`, formattedPhone, ...phoneCandidates]);
         }
+        
         if (subscriberId) {
           wasExisting = true;
           console.log(`✅ Found subscriber after create conflict: ${subscriberId}`);
@@ -354,7 +398,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Step 5: Update lead with subscriber ID
+    // Step 6: Update lead with subscriber ID
     if (subscriberId) {
       const { error: updateError } = await supabase
         .from('leads')
@@ -381,18 +425,18 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else {
-      // Mark as SYNC_CONFLICT to avoid repeated attempts
-      console.log('❌ Could not find or create subscriber, marking as SYNC_CONFLICT');
+      // Mark as NEEDS_MANUAL_LINK (not SYNC_CONFLICT) to indicate manual intervention is needed
+      console.log('❌ Could not find or create subscriber, marking as NEEDS_MANUAL_LINK');
       await supabase
         .from('leads')
-        .update({ manychat_subscriber_id: 'SYNC_CONFLICT' })
+        .update({ manychat_subscriber_id: 'NEEDS_MANUAL_LINK' })
         .eq('id', lead.id);
 
       return new Response(
         JSON.stringify({ 
-          message: 'Could not sync lead to ManyChat - marked as conflict', 
+          message: 'Could not sync lead to ManyChat - requires manual linking in ManyChat', 
           synced: false,
-          conflict: true
+          needs_manual_link: true
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
