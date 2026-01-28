@@ -393,8 +393,9 @@ Deno.serve(async (req) => {
 
     console.log('✅ Lead created successfully:', lead.id)
 
-    // Trigger automations for new lead
+    // Trigger automations for new lead - both inbound_webhook_lead and lead_created
     try {
+      // First trigger: inbound_webhook_lead (for Maskyoo-specific automations)
       await supabase.functions.invoke('trigger-automation', {
         body: {
           trigger_type: 'inbound_webhook_lead',
@@ -407,7 +408,27 @@ Deno.serve(async (req) => {
           }
         }
       })
-      console.log('🤖 Automation triggered')
+      console.log('🤖 Automation triggered: inbound_webhook_lead')
+      
+      // Second trigger: lead_created (for general new lead automations like WhatsApp notifications)
+      await supabase.functions.invoke('trigger-automation', {
+        body: {
+          trigger_type: 'lead_created',
+          tenant_id: tenantId,
+          data: {
+            lead_id: lead.id,
+            id: lead.id,
+            phone: lead.phone,
+            contact_name: lead.contact_name,
+            company_name: lead.company_name,
+            source: lead.source,
+            status: lead.status,
+            agency_id: lead.agency_id,
+            email: lead.email || null,
+          }
+        }
+      })
+      console.log('🤖 Automation triggered: lead_created')
     } catch (automationError) {
       console.error('⚠️ Failed to trigger automation:', automationError)
     }
