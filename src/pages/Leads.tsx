@@ -1776,8 +1776,9 @@ export default function Leads() {
       if (error) throw error;
       
       // Extract leads from the response - RPC returns array with {stage, leads, total_count}
-      const stageResult = Array.isArray(data) 
-        ? data.find((item: any) => item.stage === stageId)
+      const typedData = data as { stage: string; leads: any[]; total_count: number }[] | null;
+      const stageResult = Array.isArray(typedData) 
+        ? typedData.find((item) => item.stage === stageId)
         : null;
       const newLeads = (Array.isArray(stageResult?.leads) ? stageResult.leads : []) as any[];
       

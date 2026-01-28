@@ -168,15 +168,26 @@ export function AppSidebar() {
   });
 
   const handleTenantChange = async (newTenantId: string) => {
-    if (!userId) return;
+    console.log("🔄 handleTenantChange called with:", newTenantId);
+    
+    if (!userId) {
+      console.error("❌ No userId available");
+      return;
+    }
 
     try {
       // First, get the new tenant slug before any state changes
-      const { data: newTenant } = await supabase
+      console.log("📍 Fetching tenant slug for:", newTenantId);
+      const { data: newTenant, error: slugError } = await supabase
         .from("tenants")
         .select("slug")
         .eq("id", newTenantId)
         .single();
+
+      if (slugError) {
+        console.error("❌ Error fetching tenant slug:", slugError);
+      }
+      console.log("✅ Got tenant slug:", newTenant?.slug);
 
       // Ensure user has a role in the new tenant
       const { data: tenantUser } = await supabase
@@ -217,7 +228,10 @@ export function AppSidebar() {
           }
         );
 
-      if (error) throw error;
+      if (error) {
+        console.error("❌ Error upserting user_active_tenant:", error);
+        throw error;
+      }
 
       // CRITICAL: Full page reload ensures complete data refresh
       // React Router navigation can leave stale cached data
@@ -226,15 +240,19 @@ export function AppSidebar() {
         const pathMatch = currentPath.match(/^\/t\/[^/]+\/(.+)$/);
         const currentModule = pathMatch ? pathMatch[1] : 'dashboard';
         
+        const newUrl = `/t/${newTenant.slug}/${currentModule}`;
+        console.log("🚀 Redirecting to:", newUrl);
+        
         // Force full page reload to ensure clean state
-        window.location.href = `/t/${newTenant.slug}/${currentModule}`;
+        window.location.href = newUrl;
         return;
       } else {
+        console.log("🚀 No slug found, redirecting to /");
         window.location.href = '/';
         return;
       }
     } catch (error) {
-      console.error("Error changing tenant:", error);
+      console.error("❌ Error changing tenant:", error);
     }
   };
 
