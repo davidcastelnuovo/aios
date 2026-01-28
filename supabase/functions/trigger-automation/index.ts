@@ -5,6 +5,62 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Custom field name for phone number in ManyChat (must be created manually in ManyChat)
+const PHONE_CUSTOM_FIELD_NAME = 'phone_number';
+
+// Find subscriber by Custom Field (phone_number) in ManyChat
+async function findSubscriberByCustomFieldMC(apiKey: string, phoneCandidates: string[]): Promise<string | null> {
+  for (const candidate of phoneCandidates) {
+    try {
+      const url = `https://api.manychat.com/fb/subscriber/findByCustomField?field_name=${encodeURIComponent(PHONE_CUSTOM_FIELD_NAME)}&field_value=${encodeURIComponent(candidate)}`;
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        console.log(`🔍 Find subscriber by custom field (${PHONE_CUSTOM_FIELD_NAME}=${candidate}) response:`, data);
+        if (data?.status === 'success' && data?.data?.id) {
+          return String(data.data.id);
+        }
+      }
+    } catch (e) {
+      console.log(`Error finding subscriber by custom field ${candidate}:`, e);
+    }
+  }
+  return null;
+}
+
+// Set phone_number custom field for a subscriber
+async function setPhoneCustomFieldMC(apiKey: string, subscriberId: string, phoneValue: string): Promise<boolean> {
+  try {
+    const url = 'https://api.manychat.com/fb/subscriber/setCustomFieldByName';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        subscriber_id: subscriberId,
+        field_name: PHONE_CUSTOM_FIELD_NAME,
+        field_value: phoneValue,
+      }),
+    });
+
+    const data = await res.json();
+    console.log(`📝 Set custom field (${PHONE_CUSTOM_FIELD_NAME}=${phoneValue}) response:`, data);
+    return data?.status === 'success';
+  } catch (e) {
+    console.log(`Error setting custom field:`, e);
+    return false;
+  }
+}
+
 interface AutomationPayload {
   trigger_type?: string
   data?: any
@@ -460,6 +516,24 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       }
     }
   }
+
+  // If still no subscriber, try Custom Field lookup (phone_number) - NEW!
+  if (!subscriberId && contactPhone) {
+    const cleanPhone = contactPhone.replace(/\D/g, '')
+    const last9Digits = cleanPhone.slice(-9)
+    const customFieldCandidates = [`+972${last9Digits}`, `972${last9Digits}`, `0${last9Digits}`]
+    console.log('No subscriber found by wa_id, trying custom field lookup:', customFieldCandidates)
+
+    subscriberId = await findSubscriberByCustomFieldMC(apiKey, customFieldCandidates)
+    if (subscriberId) {
+      console.log(`Found subscriber by custom field: ${subscriberId}`)
+      if (contactType === 'lead' && contactRecord?.id) {
+        await supabase.from('leads').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
+      } else if (contactType === 'client' && contactRecord?.id) {
+        await supabase.from('clients').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
+      }
+    }
+  }
   
   // If still no subscriber found, try to create a new one in ManyChat
   if (!subscriberId && contactPhone) {
@@ -494,6 +568,10 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       if (createResult.status === 'success' && createResult.data?.id) {
         subscriberId = createResult.data.id.toString()
         console.log(`Created new subscriber: ${subscriberId}`)
+        
+        // IMPORTANT: Save phone to custom field for future lookups
+        console.log(`📝 Saving phone to custom field for new subscriber ${subscriberId}...`)
+        await setPhoneCustomFieldMC(apiKey, subscriberId!, whatsappPhone)
         
         // Save the new subscriber ID to the lead/client
         if (contactType === 'lead' && contactRecord?.id) {
@@ -805,6 +883,15 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
       }
     }
   }
+
+  // Step 1c: Try to find by Custom Field (phone_number) - NEW!
+  if (!subscriberId) {
+    console.log('No subscriber found by wa_id; trying custom field lookup:', phoneCandidates)
+    subscriberId = await findSubscriberByCustomFieldMC(apiKey, phoneCandidates)
+    if (subscriberId) {
+      console.log(`Found existing subscriber by custom field: ${subscriberId}`)
+    }
+  }
   
   // Step 2: If found, update lead and add tag
   if (subscriberId) {
@@ -992,6 +1079,10 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   
   subscriberId = createResult.data.id.toString()
   console.log(`Created new subscriber: ${subscriberId}`)
+  
+  // IMPORTANT: Save phone to custom field for future lookups
+  console.log(`📝 Saving phone to custom field for new subscriber ${subscriberId}...`)
+  await setPhoneCustomFieldMC(apiKey, subscriberId!, whatsappPhone)
   
   // Save subscriber ID to lead
   await supabase.from('leads')
