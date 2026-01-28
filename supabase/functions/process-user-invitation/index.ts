@@ -105,6 +105,40 @@ serve(async (req: Request) => {
     const metadata = invitation.metadata as any;
     const { fullName, role, agencyIds, modulePermissions, campaignerId, salesPersonId } = metadata;
 
+    // Auto-create sales_people record if role is sales_person, no salesPersonId provided, and fullName is available
+    let effectiveSalesPersonId = salesPersonId;
+    if (role === 'sales_person' && !salesPersonId && (fullName || user.email)) {
+      console.log("Auto-creating sales_people record for invitation user");
+      const { data: newSalesPerson, error: spError } = await supabase
+        .from("sales_people")
+        .insert({
+          full_name: fullName || user.email?.split('@')[0] || 'איש מכירות חדש',
+          email: user.email,
+          active: true,
+          tenant_id: invitation.tenant_id,
+        })
+        .select()
+        .single();
+      
+      if (spError) {
+        console.error("Error creating sales_people record:", spError);
+      } else if (newSalesPerson) {
+        effectiveSalesPersonId = newSalesPerson.id;
+        console.log("Created sales_people record with ID:", effectiveSalesPersonId);
+        
+        // Link to agencies if provided
+        if (agencyIds && agencyIds.length > 0) {
+          const spAgenciesToInsert = agencyIds.map((agencyId: string) => ({
+            sales_person_id: newSalesPerson.id,
+            agency_id: agencyId,
+          }));
+          await supabase
+            .from("sales_person_agencies")
+            .insert(spAgenciesToInsert);
+        }
+      }
+    }
+
     // Update user profile
     if (fullName) {
       await supabase
@@ -120,10 +154,11 @@ serve(async (req: Request) => {
         .eq("id", user.id);
     }
 
-    if (salesPersonId) {
+    // Use effectiveSalesPersonId (may be auto-created)
+    if (effectiveSalesPersonId) {
       await supabase
         .from("profiles")
-        .update({ sales_person_id: salesPersonId })
+        .update({ sales_person_id: effectiveSalesPersonId })
         .eq("id", user.id);
     }
 
@@ -179,16 +214,16 @@ serve(async (req: Request) => {
         .insert(campaignerAgenciesToInsert);
     }
 
-    // Link sales person to agencies
-    if (salesPersonId && agencyIds && agencyIds.length > 0) {
+    // Link sales person to agencies (use effectiveSalesPersonId)
+    if (effectiveSalesPersonId && agencyIds && agencyIds.length > 0) {
       const salesPersonAgenciesToInsert = agencyIds.map((agencyId: string) => ({
-        sales_person_id: salesPersonId,
+        sales_person_id: effectiveSalesPersonId,
         agency_id: agencyId,
       }));
 
       await supabase
         .from("sales_person_agencies")
-        .insert(salesPersonAgenciesToInsert);
+        .upsert(salesPersonAgenciesToInsert, { onConflict: 'sales_person_id,agency_id' });
     }
 
     // Add user to tenant

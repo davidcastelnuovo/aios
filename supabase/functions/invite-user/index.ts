@@ -102,6 +102,40 @@ serve(async (req: Request) => {
     console.log('Module permissions received:', modulePermissions);
     console.log('Tenant ID:', tenantIdFinal);
 
+    // Auto-create sales_people record if role is sales_person and no salesPersonId provided
+    let effectiveSalesPersonId = salesPersonId;
+    if (role === 'sales_person' && !salesPersonId && fullName) {
+      console.log("Auto-creating sales_people record for:", fullName);
+      const { data: newSalesPerson, error: spError } = await supabaseAdmin
+        .from("sales_people")
+        .insert({
+          full_name: fullName,
+          email: email,
+          active: true,
+          tenant_id: tenantIdFinal,
+        })
+        .select()
+        .single();
+      
+      if (spError) {
+        console.error("Error creating sales_people record:", spError);
+      } else if (newSalesPerson) {
+        effectiveSalesPersonId = newSalesPerson.id;
+        console.log("Created sales_people record with ID:", effectiveSalesPersonId);
+        
+        // Link to agencies if provided
+        if (agencyIds && agencyIds.length > 0) {
+          const spAgenciesToInsert = agencyIds.map((agencyId) => ({
+            sales_person_id: newSalesPerson.id,
+            agency_id: agencyId,
+          }));
+          await supabaseAdmin
+            .from("sales_person_agencies")
+            .insert(spAgenciesToInsert);
+        }
+      }
+    }
+
     // Check if user already exists
     const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers();
     const userExists = existingUser?.users?.some(u => u.email === email);
@@ -138,11 +172,11 @@ serve(async (req: Request) => {
           .eq("id", userId);
       }
 
-      // Update sales_person_id if provided
-      if (salesPersonId) {
+      // Update sales_person_id if provided (use effectiveSalesPersonId which may be auto-created)
+      if (effectiveSalesPersonId) {
         await supabaseAdmin
           .from("profiles")
-          .update({ sales_person_id: salesPersonId })
+          .update({ sales_person_id: effectiveSalesPersonId })
           .eq("id", userId);
       }
 
@@ -199,17 +233,17 @@ serve(async (req: Request) => {
           .insert(campaignerAgenciesToInsert);
       }
 
-      // Update sales person agencies if provided
-      if (salesPersonId && agencyIds && agencyIds.length > 0) {
+      // Update sales person agencies if provided (use effectiveSalesPersonId)
+      if (effectiveSalesPersonId && agencyIds && agencyIds.length > 0) {
         // Delete existing sales person agencies
         await supabaseAdmin
           .from("sales_person_agencies")
           .delete()
-          .eq("sales_person_id", salesPersonId);
+          .eq("sales_person_id", effectiveSalesPersonId);
 
         // Insert new sales person agencies
         const salesPersonAgenciesToInsert = agencyIds.map((agencyId) => ({
-          sales_person_id: salesPersonId,
+          sales_person_id: effectiveSalesPersonId,
           agency_id: agencyId,
         }));
 
@@ -381,10 +415,11 @@ serve(async (req: Request) => {
               .update({ campaigner_id: campaignerId })
               .eq("id", newUserId);
           }
-          if (salesPersonId) {
+          // Use effectiveSalesPersonId which may be auto-created
+          if (effectiveSalesPersonId) {
             await supabaseAdmin
               .from("profiles")
-              .update({ sales_person_id: salesPersonId })
+              .update({ sales_person_id: effectiveSalesPersonId })
               .eq("id", newUserId);
           }
 
@@ -400,10 +435,10 @@ serve(async (req: Request) => {
               .upsert(campaignerAgenciesToInsert, { onConflict: 'campaigner_id,agency_id' });
           }
 
-          // Link sales person to agencies if provided
-          if (salesPersonId && agencyIds && agencyIds.length > 0) {
+          // Link sales person to agencies if provided (use effectiveSalesPersonId)
+          if (effectiveSalesPersonId && agencyIds && agencyIds.length > 0) {
             const salesPersonAgenciesToInsert = agencyIds.map((agencyId) => ({
-              sales_person_id: salesPersonId,
+              sales_person_id: effectiveSalesPersonId,
               agency_id: agencyId,
             }));
 
