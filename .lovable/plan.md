@@ -1,119 +1,79 @@
 
-# תוכנית לתיקון: לידים לא מוצגים (בעיית פורמט תוצאת RPC)
+
+# תוכנית: תיקון גישת הלידים לרויטל ונחמה
 
 ## הבעיה שזוהתה
 
-המשתמש `david.castelnuovo@gmail.com` לא רואה לידים בשום ארגון למרות שיש נתונים במסד הנתונים (לדוגמה: 3 לידים בארגון marlog-leads).
+רויטל ונחמה לא רואות את הלידים המשויכים אליהן בגלל **חוסר קישור נכון** בין חשבון המשתמש שלהן לבין רשומות אנשי המכירות:
 
-### שורש הבעיה
-הפונקציה `get_leads_by_stages` עודכנה בזמנו לתמוך בפרמטר `p_sales_person_ids` (UUID array למולטי-סלקט), ובמקביל **סוג ההחזרה שלה השתנה**:
+| בעיה | מצב נוכחי | מצב נדרש |
+|------|-----------|----------|
+| `profiles.sales_person_id` | NULL (ריק) | צריך להיות מקושר לרשומת sales_people |
+| תפקיד ב-`user_roles` | campaigner | צריך גם sales_person |
+| RLS policy | בודק `get_user_sales_person_id()` | מחזיר NULL בגלל חוסר הקישור |
 
-| גרסה ישנה | גרסה חדשה (הבעייתית) |
-|-----------|----------------------|
-| `TABLE(stage text, leads jsonb, total_count bigint)` | `JSONB` |
-| מחזיר **מערך שורות** | מחזיר **אובייקט** |
+## מה קורה עכשיו
 
-הקוד בפרונטאנד (שורה 858) מצפה ל**מערך**:
-```javascript
-if (Array.isArray(data)) {
-  for (const stageData of data as any[]) {
-    stageMap[stageData.stage] = { ... };
-  }
-}
+```text
+משתמשת: רויטל (revital640@gmail.com)
+    │
+    ├── profiles.sales_person_id = NULL ❌
+    │
+    └── user_roles.role = 'campaigner' (לא 'sales_person')
 ```
 
-כיוון שהפונקציה מחזירה **אובייקט** ולא מערך, הבדיקה `Array.isArray(data)` מחזירה `false` והלידים לא נטענים.
+מדיניות ה-RLS עבור אנשי מכירות:
+```
+has_role('sales_person') AND sales_person_id = get_user_sales_person_id(auth.uid())
+```
+
+מכיוון ש-`get_user_sales_person_id()` מחזיר NULL, הבדיקה נכשלת והלידים לא מוצגים.
 
 ## הפתרון
 
-לעדכן את קוד הפרונטאנד כדי לתמוך גם בפורמט JSONB object וגם במערך (backwards compatibility).
+### שלב 1: עדכון טבלת profiles
+קישור חשבונות המשתמש לרשומות אנשי המכירות:
 
-## שלבי הביצוע
+| משתמשת | user_id | sales_person_id (חדש) |
+|--------|---------|----------------------|
+| נחמה | 432abeca-7475-4f02-b636-6df873078918 | 4f058f40-0ae2-4df1-8b7a-796b6bcb77aa |
+| רויטל | 91379ba0-5022-4dfb-8895-302a67693eeb | 48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91 |
 
-### שלב 1: עדכון `src/pages/Leads.tsx`
+### שלב 2: הוספת תפקיד sales_person
+הוספת שורות ל-`user_roles` עם תפקיד `sales_person` בנוסף לתפקיד `campaigner` הקיים.
 
-שינוי הקוד בשורות 856-865 מ:
-
-```javascript
-// Transform RPC result to map: { [stageId]: { leads: [...], totalCount: number } }
-const stageMap: Record<string, { leads: any[]; totalCount: number }> = {};
-if (Array.isArray(data)) {
-  for (const stageData of data as any[]) {
-    stageMap[stageData.stage] = {
-      leads: stageData.leads || [],
-      totalCount: stageData.total_count || 0
-    };
-  }
-}
-```
-
-ל:
-
-```javascript
-// Transform RPC result to map: { [stageId]: { leads: [...], totalCount: number } }
-const stageMap: Record<string, { leads: any[]; totalCount: number }> = {};
-
-if (data) {
-  if (Array.isArray(data)) {
-    // TABLE format: array of { stage, leads, total_count }
-    for (const stageData of data as any[]) {
-      stageMap[stageData.stage] = {
-        leads: stageData.leads || [],
-        totalCount: stageData.total_count || 0
-      };
-    }
-  } else if (typeof data === 'object') {
-    // JSONB format: { [stageKey]: { leads: [...], total_count: number, ... } }
-    for (const [stageKey, stageData] of Object.entries(data as Record<string, any>)) {
-      stageMap[stageKey] = {
-        leads: stageData.leads || [],
-        totalCount: stageData.total_count || 0
-      };
-    }
-  }
-}
-```
+---
 
 ## פרטים טכניים
 
-### למה זה קרה?
-כשהפונקציה עודכנה לתמוך בסינון מרובה של אנשי מכירות (`p_sales_person_ids` במקום `p_sales_person_id`), נוצרה גרסה חדשה שמחזירה JSONB object במקום TABLE rows. PostgreSQL בוחר את הפונקציה לפי חתימת הפרמטרים, ולכן כשה-Frontend שולח UUID array - הגרסה החדשה נבחרת.
+### מיגרציית בסיס נתונים
 
-### מבנה הנתונים
+```sql
+-- Link Nachama's profile to her sales_person record
+UPDATE profiles 
+SET sales_person_id = '4f058f40-0ae2-4df1-8b7a-796b6bcb77aa'
+WHERE id = '432abeca-7475-4f02-b636-6df873078918';
 
-**פורמט JSONB (מה שמוחזר כעת):**
-```json
-{
-  "new": {
-    "stage_id": "uuid",
-    "stage_name": "חדש",
-    "stage_color": "#3b82f6",
-    "leads": [{ "id": "...", "contact_name": "...", ... }],
-    "total_count": 3
-  },
-  "contacted": {
-    "stage_id": "uuid",
-    "stage_name": "יצרנו קשר",
-    "leads": [],
-    "total_count": 0
-  }
-}
+-- Link Revital's profile to her sales_person record
+UPDATE profiles 
+SET sales_person_id = '48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91'
+WHERE id = '91379ba0-5022-4dfb-8895-302a67693eeb';
+
+-- Add sales_person role to Nachama
+INSERT INTO user_roles (user_id, role, tenant_id)
+VALUES ('432abeca-7475-4f02-b636-6df873078918', 'sales_person', 'eb31659b-7a21-4411-b99d-01df51cf2895')
+ON CONFLICT (user_id, role, tenant_id) DO NOTHING;
+
+-- Add sales_person role to Revital
+INSERT INTO user_roles (user_id, role, tenant_id)
+VALUES ('91379ba0-5022-4dfb-8895-302a67693eeb', 'sales_person', 'eb31659b-7a21-4411-b99d-01df51cf2895')
+ON CONFLICT (user_id, role, tenant_id) DO NOTHING;
 ```
 
-**פורמט TABLE (מה שהקוד ציפה לו):**
-```json
-[
-  { "stage": "new", "leads": [...], "total_count": 3 },
-  { "stage": "contacted", "leads": [], "total_count": 0 }
-]
-```
+### איך זה עובד
 
-## קבצים שישתנו
+לאחר התיקון:
+1. `get_user_sales_person_id(auth.uid())` יחזיר את ה-ID של איש המכירות
+2. RLS Policy יבדוק: `leads.sales_person_id = '48ba2e9e-...'` (לדוגמה עבור רויטל)
+3. כל הלידים המשויכים לאותו sales_person_id יוצגו למשתמשת
 
-| קובץ | שינוי |
-|------|------|
-| `src/pages/Leads.tsx` | עדכון לתמוך בשני פורמטים של תוצאת RPC |
-
-## בדיקה
-
-לאחר השינוי, המשתמש `david.castelnuovo@gmail.com` יוכל לראות לידים בכל הארגונים שלו, כולל 3 הלידים בארגון marlog-leads.
