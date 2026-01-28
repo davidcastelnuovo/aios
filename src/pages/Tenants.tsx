@@ -6,12 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Building2, Building, Users, Settings, Link as LinkIcon, RefreshCw, Trash2, ArrowRightLeft, ChevronDown, ChevronLeft, Copy } from "lucide-react";
+import { Plus, Building2, Building, Users, Settings, Link as LinkIcon, RefreshCw, Trash2, ArrowRightLeft, ChevronDown, ChevronLeft, Copy, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddTenantForm } from "@/components/forms/AddTenantForm";
 import EditTenantAgenciesDialog from "@/components/forms/EditTenantAgenciesDialog";
 import { DeleteTenantDialog } from "@/components/forms/DeleteTenantDialog";
 import { ConvertTenantTypeDialog } from "@/components/forms/ConvertTenantTypeDialog";
+import { EditTenantNameDialog } from "@/components/forms/EditTenantNameDialog";
 import { SaveAsTemplateDialog } from "@/components/forms/SaveAsTemplateDialog";
 import { useUserRole } from "@/hooks/useUserRole";
 import { useTenant } from "@/contexts/TenantContext";
@@ -42,6 +43,11 @@ export default function Tenants() {
     org_type: string;
   } | null>(null);
   const [selectedTenantForTemplate, setSelectedTenantForTemplate] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [editNameDialogOpen, setEditNameDialogOpen] = useState(false);
+  const [selectedTenantForEdit, setSelectedTenantForEdit] = useState<{
     id: string;
     name: string;
   } | null>(null);
@@ -208,6 +214,25 @@ export default function Tenants() {
             <Plus className="h-4 w-4" />
           </Button>
         )}
+
+        {/* עריכת שם */}
+        {canManageTenants && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedTenantForEdit({
+                id: org.id,
+                name: org.name,
+              });
+              setEditNameDialogOpen(true);
+            }}
+            title="ערוך שם"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
         
         {/* שמירה כטמפלייט */}
         {canManageTenants && (
@@ -287,6 +312,24 @@ export default function Tenants() {
   const renderSubOrgActions = (sub: any) => {
     return (
       <>
+        {/* עריכת שם */}
+        {canManageTenants && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedTenantForEdit({
+                id: sub.id,
+                name: sub.name,
+              });
+              setEditNameDialogOpen(true);
+            }}
+            title="ערוך שם"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+        )}
         {canManageTenants && sub.id !== currentTenantId && (
           <Button
             variant="ghost"
@@ -560,6 +603,16 @@ export default function Tenants() {
           setSubTenantParentId(null);
           refetch();
         }}
+      />
+
+      {/* Edit Tenant Name Dialog */}
+      <EditTenantNameDialog
+        open={editNameDialogOpen}
+        onOpenChange={(open) => {
+          setEditNameDialogOpen(open);
+          if (!open) setSelectedTenantForEdit(null);
+        }}
+        tenant={selectedTenantForEdit}
       />
     </div>
   );
