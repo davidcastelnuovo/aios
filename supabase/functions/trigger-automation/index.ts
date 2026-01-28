@@ -116,6 +116,8 @@ Deno.serve(async (req) => {
             response = await executeAddClientUpdate(supabase, automation.configuration, payloadData, tenantId)
           } else if (automation.action_type === 'create_task') {
             response = await executeCreateTask(supabase, automation.configuration, payloadData, tenantId)
+          } else if (automation.action_type === 'create_lead') {
+            response = await executeCreateLead(supabase, automation.configuration, payloadData, tenantId)
           }
 
           const executionTime = Date.now() - startTime
@@ -1577,5 +1579,129 @@ async function executeCreateTask(supabase: any, config: any, data: any, tenantId
     success: true,
     task_id: newTask.id,
     title,
+  }
+}
+
+// Execute create lead action
+async function executeCreateLead(supabase: any, config: any, data: any, tenantId: string) {
+  console.log('Executing create lead:', config)
+  console.log('Data:', data)
+  
+  // Extract lead data from payload
+  const companyName = data.company_name || data.name || data.full_name || data.phone || 'ליד חדש'
+  const contactName = data.contact_name || data.name || data.full_name || null
+  const phone = data.phone || null
+  const email = data.email || null
+  const source = data.source || 'website'
+  const notes = data.notes || null
+  
+  // Find default agency for this tenant
+  let agencyId = data.agency_id
+  
+  if (!agencyId) {
+    console.log(`Finding agency for tenant: ${tenantId}`)
+    
+    // First try to find default agency
+    const { data: defaultAgency } = await supabase
+      .from('agencies')
+      .select('id, name')
+      .eq('tenant_id', tenantId)
+      .eq('status', 'active')
+      .eq('is_default', true)
+      .limit(1)
+      .maybeSingle()
+    
+    if (defaultAgency) {
+      agencyId = defaultAgency.id
+      console.log(`Found default agency: ${defaultAgency.name} (${agencyId})`)
+    } else {
+      // Fallback to first active agency
+      const { data: firstAgency } = await supabase
+        .from('agencies')
+        .select('id, name')
+        .eq('tenant_id', tenantId)
+        .eq('status', 'active')
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      
+      if (firstAgency) {
+        agencyId = firstAgency.id
+        console.log(`Found first active agency: ${firstAgency.name} (${agencyId})`)
+      }
+    }
+  }
+  
+  if (!agencyId) {
+    throw new Error('לא נמצאה סוכנות פעילה לארגון זה')
+  }
+  
+  // Check for duplicate by phone
+  if (phone) {
+    const cleanPhone = phone.replace(/[\s\-\(\)\.+]/g, '').replace(/^0/, '972')
+    
+    const { data: existingLeads } = await supabase
+      .from('leads')
+      .select('id, company_name, phone')
+      .eq('tenant_id', tenantId)
+    
+    const duplicateLead = existingLeads?.find((l: any) => {
+      if (!l.phone) return false
+      const existingClean = l.phone.replace(/[\s\-\(\)\.+]/g, '').replace(/^0/, '972')
+      return existingClean === cleanPhone
+    })
+    
+    if (duplicateLead) {
+      console.log(`Duplicate lead found by phone: ${duplicateLead.id} (${duplicateLead.company_name})`)
+      return {
+        success: true,
+        lead_id: duplicateLead.id,
+        message: 'ליד כבר קיים במערכת',
+        duplicate: true,
+      }
+    }
+  }
+  
+  // Get first pipeline stage for new lead
+  const { data: firstStage } = await supabase
+    .from('lead_pipeline_stages')
+    .select('stage_key')
+    .eq('tenant_id', tenantId)
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  
+  const status = firstStage?.stage_key || 'new'
+  
+  // Create the lead
+  const { data: newLead, error: insertError } = await supabase
+    .from('leads')
+    .insert({
+      company_name: companyName,
+      contact_name: contactName,
+      phone: phone,
+      email: email,
+      source: source,
+      notes: notes,
+      agency_id: agencyId,
+      tenant_id: tenantId,
+      status: status,
+    })
+    .select()
+    .single()
+  
+  if (insertError) {
+    console.error('Error creating lead:', insertError)
+    throw new Error(`שגיאה ביצירת ליד: ${insertError.message}`)
+  }
+  
+  console.log('Lead created:', newLead)
+  
+  return {
+    success: true,
+    lead_id: newLead.id,
+    company_name: companyName,
+    phone: phone,
   }
 }
