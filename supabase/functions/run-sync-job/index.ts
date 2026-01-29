@@ -215,7 +215,7 @@ Deno.serve(async (req) => {
     const tenantId = job.tenant_id;
     const settings = job.settings as { tagId?: number; delayMs?: number };
     const tagId = settings.tagId || 79380109;
-    const delayMs = settings.delayMs || 10000;
+    const delayMs = settings.delayMs || 1000;
 
     // Get ManyChat integration
     const { data: integration } = await supabase
