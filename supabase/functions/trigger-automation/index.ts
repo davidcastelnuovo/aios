@@ -8,11 +8,73 @@ const corsHeaders = {
 // Custom field name for phone number in ManyChat (must be created manually in ManyChat)
 const PHONE_CUSTOM_FIELD_NAME = 'phone_number';
 
-// Find subscriber by Custom Field (phone_number) in ManyChat
-async function findSubscriberByCustomFieldMC(apiKey: string, phoneCandidates: string[]): Promise<string | null> {
+// Get Custom Field ID from ManyChat API (with caching)
+async function getPhoneNumberFieldIdMC(apiKey: string, supabase: any, tenantId: string): Promise<number | null> {
+  // First, try to get cached field_id from tenant_integrations.settings
+  const { data: integration } = await supabase
+    .from('tenant_integrations')
+    .select('settings')
+    .eq('tenant_id', tenantId)
+    .eq('integration_type', 'manychat')
+    .single();
+
+  const settings = integration?.settings || {};
+  if (settings.phone_number_field_id) {
+    console.log(`📋 Using cached field_id: ${settings.phone_number_field_id}`);
+    return settings.phone_number_field_id;
+  }
+
+  // If not cached, fetch from ManyChat API
+  console.log('🔍 Fetching custom fields from ManyChat API...');
+  try {
+    const res = await fetch('https://api.manychat.com/fb/page/getCustomFields', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      console.log('📋 ManyChat custom fields count:', data?.data?.length || 0);
+
+      if (data?.status === 'success' && Array.isArray(data?.data)) {
+        const phoneField = data.data.find((field: any) => 
+          field.name === PHONE_CUSTOM_FIELD_NAME || 
+          field.name?.toLowerCase() === 'phone_number'
+        );
+
+        if (phoneField?.id) {
+          const fieldId = parseInt(phoneField.id, 10);
+          console.log(`✅ Found field_id for ${PHONE_CUSTOM_FIELD_NAME}: ${fieldId}`);
+
+          // Cache the field_id in tenant_integrations.settings
+          await supabase
+            .from('tenant_integrations')
+            .update({ settings: { ...settings, phone_number_field_id: fieldId } })
+            .eq('tenant_id', tenantId)
+            .eq('integration_type', 'manychat');
+
+          return fieldId;
+        } else {
+          console.log(`⚠️ Custom field "${PHONE_CUSTOM_FIELD_NAME}" not found in ManyChat`);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error fetching custom fields:', e);
+  }
+
+  return null;
+}
+
+// Find subscriber by Custom Field using field_id (NOT field_name!)
+async function findSubscriberByCustomFieldMC(apiKey: string, fieldId: number, phoneCandidates: string[]): Promise<string | null> {
   for (const candidate of phoneCandidates) {
     try {
-      const url = `https://api.manychat.com/fb/subscriber/findByCustomField?field_name=${encodeURIComponent(PHONE_CUSTOM_FIELD_NAME)}&field_value=${encodeURIComponent(candidate)}`;
+      // IMPORTANT: Use field_id (numeric) not field_name
+      const url = `https://api.manychat.com/fb/subscriber/findByCustomField?field_id=${fieldId}&field_value=${encodeURIComponent(candidate)}`;
       const res = await fetch(url, {
         method: 'GET',
         headers: {
@@ -23,10 +85,16 @@ async function findSubscriberByCustomFieldMC(apiKey: string, phoneCandidates: st
 
       if (res.ok) {
         const data = await res.json();
-        console.log(`🔍 Find subscriber by custom field (${PHONE_CUSTOM_FIELD_NAME}=${candidate}) response:`, data);
+        console.log(`🔍 Find subscriber by custom field (field_id=${fieldId}, value=${candidate}) response:`, data);
         if (data?.status === 'success' && data?.data?.id) {
           return String(data.data.id);
         }
+      }
+      
+      // If rate limited, wait
+      if (res.status === 429) {
+        console.log('⏳ Rate limited, waiting 2 seconds...');
+        await new Promise(r => setTimeout(r, 2000));
       }
     } catch (e) {
       console.log(`Error finding subscriber by custom field ${candidate}:`, e);
@@ -517,21 +585,27 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     }
   }
 
-  // If still no subscriber, try Custom Field lookup (phone_number) - NEW!
+  // If still no subscriber, try Custom Field lookup (phone_number) using field_id
   if (!subscriberId && contactPhone) {
     const cleanPhone = contactPhone.replace(/\D/g, '')
     const last9Digits = cleanPhone.slice(-9)
     const customFieldCandidates = [`+972${last9Digits}`, `972${last9Digits}`, `0${last9Digits}`]
     console.log('No subscriber found by wa_id, trying custom field lookup:', customFieldCandidates)
 
-    subscriberId = await findSubscriberByCustomFieldMC(apiKey, customFieldCandidates)
-    if (subscriberId) {
-      console.log(`Found subscriber by custom field: ${subscriberId}`)
-      if (contactType === 'lead' && contactRecord?.id) {
-        await supabase.from('leads').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
-      } else if (contactType === 'client' && contactRecord?.id) {
-        await supabase.from('clients').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
+    // Get field_id (cached or from API)
+    const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId)
+    if (fieldId) {
+      subscriberId = await findSubscriberByCustomFieldMC(apiKey, fieldId, customFieldCandidates)
+      if (subscriberId) {
+        console.log(`Found subscriber by custom field: ${subscriberId}`)
+        if (contactType === 'lead' && contactRecord?.id) {
+          await supabase.from('leads').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
+        } else if (contactType === 'client' && contactRecord?.id) {
+          await supabase.from('clients').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
+        }
       }
+    } else {
+      console.log('⚠️ Cannot search by custom field - field_id not found')
     }
   }
   
@@ -884,12 +958,19 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
     }
   }
 
-  // Step 1c: Try to find by Custom Field (phone_number) - NEW!
+  // Step 1c: Try to find by Custom Field (phone_number) using field_id
   if (!subscriberId) {
     console.log('No subscriber found by wa_id; trying custom field lookup:', phoneCandidates)
-    subscriberId = await findSubscriberByCustomFieldMC(apiKey, phoneCandidates)
-    if (subscriberId) {
-      console.log(`Found existing subscriber by custom field: ${subscriberId}`)
+    
+    // Get field_id (cached or from API)
+    const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId)
+    if (fieldId) {
+      subscriberId = await findSubscriberByCustomFieldMC(apiKey, fieldId, phoneCandidates)
+      if (subscriberId) {
+        console.log(`Found existing subscriber by custom field: ${subscriberId}`)
+      }
+    } else {
+      console.log('⚠️ Cannot search by custom field - field_id not found')
     }
   }
   
