@@ -1,112 +1,75 @@
 
-# תוכנית: תיקון אינטגרציית ManyChat ללידים חדשים
+# תוכנית: תיקון אינטגרציית ManyChat - שימוש נכון ב-field_id
 
-## הבעיה שזוהתה
+## סיכום הבעיות שזוהו בלוגים
 
-מהלוגים של הפונקציה `auto-sync-new-lead` זיהיתי את הבעיות הבאות:
+| בעיה | סיבה |
+|------|------|
+| `field_id cannot be blank` | הקוד שולח `field_name` במקום `field_id` המספרי |
+| `Api max rps reached` | יותר מדי קריאות מקבילות |
+| `WhatsApp ID already exists` | Subscriber קיים אך לא ניתן למצוא (נוצר רק עם whatsapp_phone) |
 
-1. **ManyChat מחזיר "This WhatsApp ID already exists"** - הנרשם כבר קיים במערכת ManyChat
-2. **חיפוש לפי `wa_id` נכשל** - ManyChat API לא תומך בחיפוש לפי `wa_id` או `whatsapp_phone` דרך `findBySystemField`
-3. **המערכת לא מצליחה לאחזר את ה-subscriber_id** של נרשמים קיימים שנוצרו רק עם `whatsapp_phone`
+## הפתרון
 
-### מגבלת ManyChat API
-לפי התיעוד והפורום של ManyChat, ה-API תומך בחיפוש רק לפי:
-- `phone` (שדה מערכת סטנדרטי)
-- `email` (שדה מערכת סטנדרטי)
+### שלב 1: פונקציה חדשה לשליפת field_id
 
-נרשמים שנוצרו רק עם `whatsapp_phone` **לא ניתנים לחיפוש** דרך ה-API הסטנדרטי.
-
----
-
-## הפתרון המוצע
-
-### גישה: Custom Field + findByCustomField
-
-1. **יצירת Custom Field ב-ManyChat** בשם `phone_number` (או שימוש בקיים)
-2. **שמירת מספר הטלפון** בשדה המותאם בעת יצירת נרשם
-3. **חיפוש לפי `findByCustomField`** במקום `findBySystemField` עבור wa_id
-
-### שינויים נדרשים
-
-#### 1. עדכון `auto-sync-new-lead/index.ts`
+נוסיף פונקציה שקוראת ל-`/fb/page/getCustomFields` ומוצאת את ה-ID של שדה `phone_number`:
 
 ```text
-הלוגיקה החדשה:
-1. חפש לפי phone (כמו היום)
-2. חפש לפי email (כמו היום)  
-3. חפש לפי Custom Field "phone_number" (חדש!)
-4. אם לא נמצא - נסה ליצור
-5. אם יצירה נכשלת עם "WhatsApp ID already exists":
-   - נסה שוב חיפוש עם כל הפורמטים
-   - אם עדיין לא נמצא - סמן כ-NEEDS_MANUAL_LINK
-6. בעת יצירה - הוסף גם לשדה Custom Field
+async function getCustomFieldId(apiKey, fieldName):
+  1. קריאה ל-/fb/page/getCustomFields
+  2. חיפוש השדה לפי name
+  3. החזרת field_id או null
 ```
 
-#### 2. הוספת פונקציה `findByCustomField`
+### שלב 2: עדכון findByCustomField
 
+במקום לשלוח `field_name`:
 ```javascript
-async function findSubscriberByCustomField(
-  apiKey: string, 
-  fieldId: number, 
-  phoneValue: string
-): Promise<string | null> {
-  const url = `https://api.manychat.com/fb/subscriber/findByCustomField?field_id=${fieldId}&field_value=${encodeURIComponent(phoneValue)}`;
-  const res = await fetch(url, {
-    headers: { 
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    }
-  });
-  const data = await res.json();
-  if (data?.status === 'success' && data?.data?.id) {
-    return String(data.data.id);
-  }
-  return null;
-}
+// נכשל:
+/fb/subscriber/findByCustomField?field_name=phone_number&field_value=...
+
+// נכון:
+/fb/subscriber/findByCustomField?field_id=12345678&field_value=...
 ```
 
-#### 3. עדכון יצירת subscriber
+### שלב 3: הפחתת קריאות מקבילות
 
-בעת יצירת נרשם חדש, נוסיף את מספר הטלפון גם ל-Custom Field:
+1. לא לחפש את כל הפורמטים במקביל - לעשות סדרתית
+2. להוסיף caching ל-field_id (מספיק לשלוף פעם אחת לכל tenant)
 
-```javascript
-// After creating subscriber, set custom field
-await fetch('https://api.manychat.com/fb/subscriber/setCustomFieldByName', {
-  method: 'POST',
-  headers: {
-    'Authorization': `Bearer ${apiKey}`,
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    subscriber_id: subscriberId,
-    field_name: 'phone_number',
-    field_value: formattedPhone
-  })
-});
-```
+### שלב 4: שמירת field_id בהגדרות
+
+נשמור את ה-`phone_number_field_id` בטבלת `tenant_integrations.settings` כדי לחסוך קריאות חוזרות ל-API.
 
 ---
 
-## דרישות מוקדמות
-
-### ב-ManyChat (פעולה ידנית חד-פעמית)
-1. צור Custom Field בשם `phone_number` מסוג Text
-2. (אופציונלי) הרץ אוטומציה שתעתיק `whatsapp_phone` ל-`phone_number` עבור כל הנרשמים הקיימים
-
----
-
-## סיכום השינויים
+## קבצים לעדכון
 
 | קובץ | שינוי |
 |------|-------|
-| `supabase/functions/auto-sync-new-lead/index.ts` | הוספת חיפוש לפי Custom Field, שמירה בשדה מותאם |
-| `supabase/functions/trigger-automation/index.ts` | עדכון תואם |
+| `supabase/functions/auto-sync-new-lead/index.ts` | פונקציה לשליפת field_id, שימוש ב-field_id במקום field_name |
+| `supabase/functions/trigger-automation/index.ts` | אותם שינויים |
+
+---
+
+## לוגיקה חדשה
+
+```text
+1. שלוף את phone_number_field_id מ-settings (אם קיים)
+2. אם לא קיים - קרא ל-getCustomFields ושמור ב-settings
+3. חפש לפי phone (שדה מערכת)
+4. חפש לפי email (שדה מערכת)
+5. חפש לפי custom field עם field_id
+6. אם לא נמצא - צור subscriber חדש
+7. אחרי יצירה - עדכן את phone_number custom field
+```
 
 ---
 
 ## תוצאה צפויה
 
-לאחר השינויים:
-- לידים חדשים ייווצרו ב-ManyChat עם שדה מותאם לחיפוש
-- לידים קיימים (שנוצרו רק עם whatsapp_phone) יסומנו כ-`NEEDS_MANUAL_LINK` במקום `SYNC_CONFLICT`
-- חיפוש יעבוד גם עבור נרשמים שיש להם Custom Field מעודכן
+- לידים חדשים יירשמו ב-ManyChat בהצלחה
+- ה-subscriber_id יתעדכן בטבלת leads
+- לא יהיו שגיאות Rate Limit (קריאות סדרתיות)
+- לידים שכבר קיימים ב-ManyChat יזוהו דרך ה-Custom Field
