@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,13 +9,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Save, Key, CheckCircle2, XCircle, MessageSquare, Calendar, Play, Square, RefreshCw, Users } from "lucide-react";
+import { Save, Key, CheckCircle2, XCircle, MessageSquare, Calendar, Play, Square, RefreshCw, Users, Cloud } from "lucide-react";
 import { SyncManyChatDialog } from "@/components/forms/SyncManyChatDialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 
 interface SyncResult {
   leadId: string;
@@ -33,7 +34,16 @@ interface SyncProgress {
   conflicts: number;
   total: number;
   results: SyncResult[];
-  isRunning: boolean;
+}
+
+interface SyncJob {
+  id: string;
+  status: 'pending' | 'running' | 'completed' | 'stopped' | 'failed';
+  progress: SyncProgress;
+  error_message?: string;
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
 }
 
 export default function ManyChatSettings() {
@@ -52,17 +62,8 @@ export default function ManyChatSettings() {
   const [showMeetingSettings, setShowMeetingSettings] = useState(false);
   
   // Bulk sync state
-  const [selectedTagId, setSelectedTagId] = useState<string>("79380109"); // Default: ליד חדש
-  const [syncProgress, setSyncProgress] = useState<SyncProgress>({
-    processed: 0,
-    failed: 0,
-    remaining: 0,
-    conflicts: 0,
-    total: 0,
-    results: [],
-    isRunning: false,
-  });
-  const stopSyncRef = useRef(false);
+  const [selectedTagId, setSelectedTagId] = useState<string>("79380109");
+  const [currentJob, setCurrentJob] = useState<SyncJob | null>(null);
 
   // Fetch existing integration
   const { data: integration, isLoading } = useQuery({
@@ -81,7 +82,6 @@ export default function ManyChatSettings() {
 
       if (data) {
         setApiKey(data.api_key || '');
-        // Load meeting settings
         const settings = data.settings as Record<string, any> || {};
         setMeetingTriggerName(settings.meeting_trigger_name || 'meeting_scheduled');
         const customFields = settings.meeting_custom_fields || {};
@@ -96,6 +96,73 @@ export default function ManyChatSettings() {
     enabled: !!tenantId,
   });
 
+  // Fetch active or recent sync job
+  const { data: activeJob, refetch: refetchJob } = useQuery({
+    queryKey: ['sync-job', tenantId],
+    queryFn: async () => {
+      if (!tenantId) return null;
+      
+      const { data, error } = await supabase
+        .from('sync_jobs')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('job_type', 'manychat_sync')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error) throw error;
+      if (!data) return null;
+      
+      // Parse JSON fields with proper typing
+      const progressData = data.progress as unknown as SyncProgress | null;
+      return {
+        ...data,
+        progress: progressData || { processed: 0, failed: 0, remaining: 0, conflicts: 0, total: 0, results: [] },
+      } as SyncJob;
+    },
+    enabled: !!tenantId && !!integration?.is_active,
+  });
+
+  // Update current job when activeJob changes
+  useEffect(() => {
+    if (activeJob) {
+      setCurrentJob(activeJob);
+    }
+  }, [activeJob]);
+
+  // Subscribe to realtime updates on sync_jobs
+  useEffect(() => {
+    if (!tenantId) return;
+
+    const channel = supabase
+      .channel(`sync-jobs-${tenantId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sync_jobs',
+          filter: `tenant_id=eq.${tenantId}`,
+        },
+        (payload) => {
+          console.log('Sync job update:', payload);
+          if (payload.new) {
+            const newJob = payload.new as any;
+            setCurrentJob({
+              ...newJob,
+              progress: (newJob.progress || { processed: 0, failed: 0, remaining: 0, conflicts: 0, total: 0, results: [] }) as SyncProgress,
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tenantId]);
+
   // Fetch leads count without manychat_subscriber_id
   const { data: leadsToSync, refetch: refetchLeadsCount } = useQuery({
     queryKey: ['leads-to-sync', tenantId],
@@ -109,7 +176,6 @@ export default function ManyChatSettings() {
         .is('manychat_subscriber_id', null)
         .not('phone', 'is', null);
       
-      // Count conflicts separately
       const { count: conflictCount } = await supabase
         .from('leads')
         .select('id', { count: 'exact', head: true })
@@ -165,19 +231,15 @@ export default function ManyChatSettings() {
       };
 
       if (integration) {
-        // Update existing
         const { error } = await supabase
           .from('tenant_integrations')
           .update(integrationData)
           .eq('id', integration.id);
-
         if (error) throw error;
       } else {
-        // Insert new
         const { error } = await supabase
           .from('tenant_integrations')
           .insert(integrationData);
-
         if (error) throw error;
       }
     },
@@ -192,105 +254,88 @@ export default function ManyChatSettings() {
     },
   });
 
-  const startBulkSync = async () => {
-    if (!tenantId || syncProgress.isRunning) return;
-    
-    stopSyncRef.current = false;
-    const totalLeads = leadsToSync?.count || 0;
-    
-    setSyncProgress({
-      processed: 0,
-      failed: 0,
-      remaining: totalLeads,
-      conflicts: 0,
-      total: totalLeads,
-      results: [],
-      isRunning: true,
-    });
-    
-    toast.info(`מתחיל סנכרון ${totalLeads} לידים...`);
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      toast.error('לא מחובר');
-      setSyncProgress(prev => ({ ...prev, isRunning: false }));
-      return;
-    }
-    
-    let totalProcessed = 0;
-    let totalFailed = 0;
-    let totalConflicts = 0;
-    let allResults: SyncResult[] = [];
-    let remaining = totalLeads;
-    
-    // Process one lead at a time - the function handles the delay
-    while (remaining > 0 && !stopSyncRef.current) {
-      try {
-        const response = await supabase.functions.invoke('bulk-sync-leads-to-manychat', {
-          body: {
-            tenantId,
-            tagId: parseInt(selectedTagId),
-            delayMs: 10000,
-          },
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-        
-        // The function now always returns 200, check the data
-        const data = response.data;
-        
-        if (response.error && !data) {
-          console.error('Batch error:', response.error);
-          toast.error(`שגיאה בסנכרון: ${response.error.message}`);
-          break;
-        }
-        
-        totalProcessed += data.processed || 0;
-        totalFailed += data.failed || 0;
-        totalConflicts = data.conflicts || totalConflicts;
-        remaining = data.remaining >= 0 ? data.remaining : remaining - 1;
-        allResults = [...allResults, ...(data.results || [])];
-        
-        setSyncProgress({
-          processed: totalProcessed,
-          failed: totalFailed,
-          remaining,
-          conflicts: totalConflicts,
-          total: totalLeads,
-          results: allResults,
-          isRunning: remaining > 0 && !stopSyncRef.current,
-        });
-        
-        // If no more leads, we're done
-        if (remaining === 0) {
-          break;
-        }
-        
-      } catch (error) {
-        console.error('Sync error:', error);
-        // Don't break on error - try to continue
-        remaining--;
+  // Start sync mutation
+  const startSyncMutation = useMutation({
+    mutationFn: async () => {
+      if (!tenantId) throw new Error('No tenant');
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      
+      const response = await supabase.functions.invoke('start-sync-job', {
+        body: {
+          tenantId,
+          tagId: parseInt(selectedTagId),
+          resetFirst: false,
+        },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      
+      if (response.error) throw response.error;
+      if (response.data?.error) throw new Error(response.data.error);
+      
+      return response.data;
+    },
+    onSuccess: (data) => {
+      if (data.jobId) {
+        toast.success('הסנכרון התחיל ברקע - אפשר לסגור את הדפדפן');
+        refetchJob();
+      } else {
+        toast.info(data.message || 'אין לידים לסנכרון');
       }
-    }
-    
-    setSyncProgress(prev => ({ ...prev, isRunning: false }));
-    refetchLeadsCount();
-    
-    if (stopSyncRef.current) {
-      toast.info(`הסנכרון הופסק. סונכרנו ${totalProcessed} לידים.`);
-    } else {
-      toast.success(`הסנכרון הושלם! סונכרנו ${totalProcessed} לידים, ${totalFailed} נכשלו.`);
-    }
-  };
+    },
+    onError: (error: any) => {
+      console.error('Start sync error:', error);
+      toast.error(error.message || 'שגיאה בהתחלת הסנכרון');
+    },
+  });
 
-  const stopSync = () => {
-    stopSyncRef.current = true;
-    toast.info('עוצר את הסנכרון...');
-  };
+  // Stop sync mutation
+  const stopSyncMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentJob?.id) throw new Error('No active job');
+      
+      const { error } = await supabase
+        .from('sync_jobs')
+        .update({ status: 'stopped' })
+        .eq('id', currentJob.id);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.info('עוצר את הסנכרון...');
+      refetchJob();
+    },
+    onError: (error: any) => {
+      console.error('Stop sync error:', error);
+      toast.error('שגיאה בעצירת הסנכרון');
+    },
+  });
+
+  const isJobRunning = currentJob?.status === 'pending' || currentJob?.status === 'running';
+  const progress = currentJob?.progress || { processed: 0, failed: 0, remaining: 0, conflicts: 0, total: 0, results: [] };
+  const progressPercent = progress.total > 0 
+    ? ((progress.processed + progress.failed) / progress.total) * 100 
+    : 0;
 
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/manychat-webhook`;
-  const progressPercent = syncProgress.total > 0 
-    ? ((syncProgress.processed + syncProgress.failed) / syncProgress.total) * 100 
-    : 0;
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'running':
+        return <Badge className="bg-primary text-primary-foreground">רץ ברקע</Badge>;
+      case 'pending':
+        return <Badge className="bg-muted text-muted-foreground">ממתין</Badge>;
+      case 'completed':
+        return <Badge className="bg-primary/80 text-primary-foreground">הושלם</Badge>;
+      case 'stopped':
+        return <Badge variant="secondary">נעצר</Badge>;
+      case 'failed':
+        return <Badge variant="destructive">נכשל</Badge>;
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className="container max-w-4xl py-8">
@@ -323,7 +368,7 @@ export default function ManyChatSettings() {
               <div className="flex items-center gap-2 p-4 rounded-lg bg-muted">
                 {integration?.is_active ? (
                   <>
-                    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
                     <span className="font-medium">ManyChat מחובר ופעיל</span>
                   </>
                 ) : (
@@ -499,12 +544,26 @@ export default function ManyChatSettings() {
               <CardTitle className="flex items-center gap-2">
                 <Users className="h-5 w-5" />
                 סנכרון לידים ל-ManyChat
+                {currentJob && getStatusBadge(currentJob.status)}
               </CardTitle>
               <CardDescription>
                 סנכרן את כל הלידים הקיימים ל-ManyChat והוסף להם טאג
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Background sync notice */}
+              {isJobRunning && (
+                <div className="flex items-center gap-2 p-4 rounded-lg bg-primary/10 border border-primary/20">
+                  <Cloud className="h-5 w-5 text-primary animate-pulse" />
+                  <div>
+                    <span className="font-medium text-foreground">הסנכרון רץ ברקע</span>
+                    <p className="text-sm text-muted-foreground">
+                      אפשר לסגור את הדפדפן - הסנכרון ימשיך לרוץ בשרת
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Stats */}
               <div className="grid grid-cols-3 gap-4">
                 <Card className="p-4">
@@ -512,11 +571,11 @@ export default function ManyChatSettings() {
                   <div className="text-sm text-muted-foreground">לידים לסנכרון</div>
                 </Card>
                 <Card className="p-4">
-                  <div className="text-2xl font-bold text-primary">{syncProgress.processed}</div>
+                  <div className="text-2xl font-bold text-primary">{progress.processed}</div>
                   <div className="text-sm text-muted-foreground">סונכרנו בהצלחה</div>
                 </Card>
                 <Card className="p-4">
-                  <div className="text-2xl font-bold text-destructive">{(leadsToSync?.conflicts || 0) + syncProgress.failed}</div>
+                  <div className="text-2xl font-bold text-destructive">{(leadsToSync?.conflicts || 0) + progress.failed}</div>
                   <div className="text-sm text-muted-foreground">קונפליקטים</div>
                 </Card>
               </div>
@@ -524,7 +583,7 @@ export default function ManyChatSettings() {
               {/* Tag Selection */}
               <div className="space-y-2">
                 <Label>בחר טאג להוספה</Label>
-                <Select value={selectedTagId} onValueChange={setSelectedTagId}>
+                <Select value={selectedTagId} onValueChange={setSelectedTagId} disabled={isJobRunning}>
                   <SelectTrigger>
                     <SelectValue placeholder="בחר טאג" />
                   </SelectTrigger>
@@ -540,30 +599,35 @@ export default function ManyChatSettings() {
               </div>
               
               {/* Progress */}
-              {syncProgress.isRunning && (
+              {(isJobRunning || progress.total > 0) && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span>התקדמות</span>
-                    <span>{syncProgress.processed + syncProgress.failed} / {syncProgress.total}</span>
+                    <span>{progress.processed + progress.failed} / {progress.total}</span>
                   </div>
                   <Progress value={progressPercent} />
                   <p className="text-xs text-muted-foreground">
-                    נותרו {syncProgress.remaining} לידים • {syncProgress.failed} נכשלו
+                    נותרו {progress.remaining} לידים • {progress.failed} נכשלו
                   </p>
                 </div>
               )}
               
               {/* Action Buttons */}
               <div className="flex gap-2">
-                {syncProgress.isRunning ? (
-                  <Button onClick={stopSync} variant="destructive" className="flex-1">
+                {isJobRunning ? (
+                  <Button 
+                    onClick={() => stopSyncMutation.mutate()} 
+                    variant="destructive" 
+                    className="flex-1"
+                    disabled={stopSyncMutation.isPending}
+                  >
                     <Square className="h-4 w-4 ml-2" />
                     עצור סנכרון
                   </Button>
                 ) : (
                   <Button 
-                    onClick={startBulkSync} 
-                    disabled={!leadsToSync?.count}
+                    onClick={() => startSyncMutation.mutate()} 
+                    disabled={!leadsToSync?.count || startSyncMutation.isPending}
                     className="flex-1"
                   >
                     <Play className="h-4 w-4 ml-2" />
@@ -572,20 +636,23 @@ export default function ManyChatSettings() {
                 )}
                 <Button 
                   variant="outline" 
-                  onClick={() => refetchLeadsCount()}
-                  disabled={syncProgress.isRunning}
+                  onClick={() => {
+                    refetchLeadsCount();
+                    refetchJob();
+                  }}
+                  disabled={isJobRunning}
                 >
                   <RefreshCw className="h-4 w-4" />
                 </Button>
               </div>
               
               {/* Results Log */}
-              {syncProgress.results.length > 0 && (
+              {progress.results && progress.results.length > 0 && (
                 <div className="space-y-2">
-                  <Label>לוג תוצאות</Label>
+                  <Label>לוג תוצאות (50 אחרונים)</Label>
                   <ScrollArea className="h-48 rounded border p-2">
                     <div className="space-y-1 text-xs font-mono">
-                      {syncProgress.results.map((result, idx) => (
+                      {progress.results.slice().reverse().map((result, idx) => (
                         <div 
                           key={idx} 
                           className={result.success ? 'text-primary' : result.skipped ? 'text-amber-600' : 'text-destructive'}
@@ -606,11 +673,14 @@ export default function ManyChatSettings() {
               {/* Info */}
               <Card className="bg-muted/50 p-4">
                 <p className="text-sm text-muted-foreground">
-                  הסנכרון מעבד ליד אחד בכל פעם עם מרווח של 10 שניות.
+                  <strong className="text-foreground flex items-center gap-1">
+                    <Cloud className="h-4 w-4" />
+                    סנכרון ברקע
+                  </strong>
+                  <br />
+                  הסנכרון רץ בשרת ולא דורש להשאיר את הדפדפן פתוח.
                   <br />
                   זמן משוער ל-{leadsToSync?.count || 0} לידים: כ-{Math.ceil((leadsToSync?.count || 0) * 10 / 60)} דקות.
-                  <br />
-                  <strong>חשוב:</strong> השאר את הטאב פתוח במהלך הסנכרון.
                 </p>
               </Card>
             </CardContent>
