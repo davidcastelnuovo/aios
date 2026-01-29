@@ -505,11 +505,12 @@ function SortableLeadCard({
   );
 }
 
-function StageTable({ stage, stageLeads, isOpen, onToggle }: { 
+function StageTable({ stage, stageLeads, isOpen, onToggle, totalLeadsCount }: { 
   stage: any; 
   stageLeads: any[]; 
   isOpen: boolean; 
   onToggle: (open: boolean) => void;
+  totalLeadsCount?: number;
 }) {
   return (
     <Collapsible open={isOpen} onOpenChange={onToggle}>
@@ -528,7 +529,7 @@ function StageTable({ stage, stageLeads, isOpen, onToggle }: {
             {stageLeads.length === 0 ? (
               <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
             ) : (
-              <TableWithStickyScroll stageLeads={stageLeads} />
+              <TableWithStickyScroll stageLeads={stageLeads} totalLeadsCount={totalLeadsCount} />
             )}
           </CardContent>
         </CollapsibleContent>
@@ -2553,6 +2554,7 @@ export default function Leads() {
         <div className="space-y-6">
           {PIPELINE_STAGES.map((stage) => {
             const stageLeads = getLeadsByStage(stage.id);
+            const stageCount = getLeadsCountByStage(stage.id);
             return (
               <StageTable 
                 key={stage.id}
@@ -2560,6 +2562,7 @@ export default function Leads() {
                 stageLeads={stageLeads}
                 isOpen={openTables[stage.id]}
                 onToggle={(open) => setOpenTables(prev => ({ ...prev, [stage.id]: open }))}
+                totalLeadsCount={stageCount}
               />
             );
           })}
@@ -2618,10 +2621,13 @@ export default function Leads() {
   );
 }
 
-function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
+function TableWithStickyScroll({ stageLeads, totalLeadsCount }: { stageLeads: any[]; totalLeadsCount?: number }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
+  const [selectAllMode, setSelectAllMode] = useState<'page' | 'all' | null>(null);
+  const [allLeadIds, setAllLeadIds] = useState<string[] | null>(null);
+  const [isLoadingAllIds, setIsLoadingAllIds] = useState(false);
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [selectedSalesPeople, setSelectedSalesPeople] = useState<string[]>([]);
   const { selectedAgency } = useAgency();
@@ -2919,8 +2925,11 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelectedLeads(stageLeads.map(lead => lead.id));
+      setSelectAllMode('page');
     } else {
       setSelectedLeads([]);
+      setSelectAllMode(null);
+      setAllLeadIds(null);
     }
   };
 
@@ -2929,63 +2938,124 @@ function TableWithStickyScroll({ stageLeads }: { stageLeads: any[] }) {
       setSelectedLeads(prev => [...prev, leadId]);
     } else {
       setSelectedLeads(prev => prev.filter(id => id !== leadId));
+      setSelectAllMode(null);
+      setAllLeadIds(null);
     }
   };
 
-  const isAllSelected = stageLeads.length > 0 && selectedLeads.length === stageLeads.length;
+  const handleSelectAllLeads = async () => {
+    if (!tenantId) return;
+    setIsLoadingAllIds(true);
+    try {
+      const { data, error } = await supabase
+        .from("leads")
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .order("created_at", { ascending: false });
+      
+      if (error) throw error;
+      
+      const allIds = data.map(l => l.id);
+      setAllLeadIds(allIds);
+      setSelectedLeads(allIds);
+      setSelectAllMode('all');
+      toast({
+        title: `${allIds.length} לידים נבחרו`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "שגיאה בטעינת כל הלידים",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingAllIds(false);
+    }
+  };
+
+  const isAllPageSelected = stageLeads.length > 0 && selectedLeads.length >= stageLeads.length;
+  const isAllLeadsSelected = selectAllMode === 'all' && allLeadIds && selectedLeads.length === allLeadIds.length;
+  const showSelectAllButton = isAllPageSelected && !isAllLeadsSelected && totalLeadsCount && totalLeadsCount > stageLeads.length;
 
   return (
     <div className="relative">
       {/* Bulk Actions Toolbar */}
       {selectedLeads.length > 0 && (
-        <div className="bg-primary text-primary-foreground p-3 rounded-lg mb-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold">{selectedLeads.length} לידים נבחרו</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setSelectedLeads([])}
-              className="h-7 px-2 hover:bg-primary-foreground/20"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+        <div className="bg-primary text-primary-foreground p-3 rounded-lg mb-3 flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">{selectedLeads.length} לידים נבחרו</span>
+              {selectAllMode === 'all' && (
+                <Badge variant="secondary" className="bg-primary-foreground/20 text-primary-foreground text-xs">
+                  כל הלידים
+                </Badge>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSelectedLeads([]);
+                  setSelectAllMode(null);
+                  setAllLeadIds(null);
+                }}
+                className="h-7 px-2 hover:bg-primary-foreground/20"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Select onValueChange={(value) => bulkUpdateStatus.mutate({ leadIds: selectedLeads, status: value as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" })}>
+                <SelectTrigger className="h-8 w-[180px] bg-background text-foreground">
+                  <SelectValue placeholder="שנה שלב" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  {PIPELINE_STAGES.map((stage) => (
+                    <SelectItem key={stage.id} value={stage.id} className={stage.bgClass}>
+                      {stage.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAssignDialogOpen(true)}
+                className="h-8 bg-background text-foreground"
+              >
+                <User className="h-4 w-4 mr-1" />
+                שייך לאנשי מכירות
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  if (confirm(`האם אתה בטוח שברצונך למחוק ${selectedLeads.length} לידים?`)) {
+                    bulkDelete.mutate(selectedLeads);
+                  }
+                }}
+                className="h-8"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                מחק
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Select onValueChange={(value) => bulkUpdateStatus.mutate({ leadIds: selectedLeads, status: value as "new" | "contacted" | "follow_up" | "proposal_sent" | "transferred_to_onboarding" | "closed" })}>
-              <SelectTrigger className="h-8 w-[180px] bg-background text-foreground">
-                <SelectValue placeholder="שנה שלב" />
-              </SelectTrigger>
-              <SelectContent className="bg-background z-50">
-                {PIPELINE_STAGES.map((stage) => (
-                  <SelectItem key={stage.id} value={stage.id} className={stage.bgClass}>
-                    {stage.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          {/* Select All Leads Button */}
+          {showSelectAllButton && (
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
-              onClick={() => setAssignDialogOpen(true)}
-              className="h-8 bg-background text-foreground"
+              onClick={handleSelectAllLeads}
+              disabled={isLoadingAllIds}
+              className="w-full bg-primary-foreground/20 hover:bg-primary-foreground/30 text-primary-foreground"
             >
-              <User className="h-4 w-4 mr-1" />
-              שייך לאנשי מכירות
+              {isLoadingAllIds ? (
+                <>טוען...</>
+              ) : (
+                <>בחר את כל {totalLeadsCount?.toLocaleString()} הלידים</>
+              )}
             </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => {
-                if (confirm(`האם אתה בטוח שברצונך למחוק ${selectedLeads.length} לידים?`)) {
-                  bulkDelete.mutate(selectedLeads);
-                }
-              }}
-              className="h-8"
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              מחק
-            </Button>
-          </div>
+          )}
         </div>
       )}
 
