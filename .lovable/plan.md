@@ -1,136 +1,103 @@
 
-# תוכנית: סנכרון מחדש של לידים ל-ManyChat בארגון Nexus Capital
+# תוכנית: סנכרון ManyChat ברקע (ללא צורך בטאב פתוח)
 
-## סיכום המצב הנוכחי
+## הבעיה הנוכחית
 
-| סטטיסטיקה | כמות |
-|-----------|------|
-| סה"כ לידים | 482 |
-| ללא ManyChat ID | 290 |
-| עם SYNC_CONFLICT | 11 |
-| עם NEEDS_MANUAL_LINK | 2 |
-| עם ID תקין | 179 |
+הסנכרון הנוכחי עובד כך:
+1. הדפדפן שולח בקשה ל-Edge Function
+2. ה-Edge Function מעבד ליד אחד ומחזיר תשובה
+3. הדפדפן מקבל את התשובה ושולח בקשה חדשה
+4. חוזר על שלבים 2-3 עד שנגמרים הלידים
 
-## מה המשתמש מבקש
-
-1. **לאפס** את כל ה-manychat_subscriber_id הקיימים לכל הלידים בארגון Nexus Capital
-2. **לרשום מחדש** את כל הלידים ב-ManyChat אחד אחד
-3. **להוסיף שדה נראה** של ManyChat ID בטופס הליד
-4. לידים חדשים - לוודא שהם נרשמים ב-ManyChat עם Custom Field ומקבלים ID
+**הבעיה**: אם סוגרים את הטאב, הלולאה נעצרת.
 
 ---
 
-## שלב 1: איפוס כל ה-ManyChat IDs (פעולה חד-פעמית)
+## הפתרון: Job Queue עם Realtime Updates
 
-נריץ פקודת UPDATE על טבלת leads לאפס את כל ה-manychat_subscriber_id ל-NULL עבור הארגון:
+נשנה את הארכיטקטורה כך שהסנכרון ירוץ לגמרי בצד השרת:
 
-```sql
-UPDATE leads 
-SET manychat_subscriber_id = NULL 
-WHERE tenant_id = 'eb31659b-7a21-4411-b99d-01df51cf2895';
-```
+### שלב 1: טבלת Jobs חדשה
 
-**זה יאפס את כל 482 הלידים** (גם אלה עם SYNC_CONFLICT ואלה עם ID תקין) כדי שכולם יוכלו להירשם מחדש.
+ניצור טבלה חדשה `sync_jobs` שתנהל את התהליך:
 
----
+| עמודה | סוג | תיאור |
+|-------|-----|-------|
+| id | uuid | מזהה ייחודי |
+| tenant_id | uuid | הארגון |
+| job_type | text | סוג (manychat_sync) |
+| status | text | pending / running / completed / stopped |
+| progress | jsonb | {processed, failed, remaining, conflicts} |
+| settings | jsonb | {tagId, delayMs} |
+| created_at | timestamp | זמן יצירה |
+| updated_at | timestamp | זמן עדכון אחרון |
 
-## שלב 2: הוספת שדה ManyChat ID לטופס הליד
+### שלב 2: Edge Function חדשה - `run-sync-job`
 
-### 2.1 הוספה לטבלת custom_fields
-
-נוסיף שדה חדש `manychat_subscriber_id` עם `is_visible: true` כדי שיוצג בטפסים ובכרטיסים:
-
-```sql
-INSERT INTO custom_fields (
-  tenant_id, 
-  entity_type, 
-  field_key, 
-  field_label, 
-  field_type, 
-  is_visible, 
-  is_required, 
-  sort_order
-)
-VALUES (
-  'eb31659b-7a21-4411-b99d-01df51cf2895',
-  'lead',
-  'manychat_subscriber_id',
-  'ManyChat ID',
-  'text',
-  true,
-  false,
-  14
-) ON CONFLICT (tenant_id, entity_type, field_key) DO UPDATE 
-  SET is_visible = true, field_label = 'ManyChat ID';
-```
-
-### 2.2 עדכון קוד התצוגה
-
-נוסיף את השדה לקומפוננטות:
-
-| קובץ | שינוי |
-|------|-------|
-| `EditLeadDialog.tsx` | הצגת שדה ManyChat ID (לקריאה בלבד) בטאב הפרטים |
-| `Leads.tsx` | הוספת עמודה בטבלה שמציגה את ה-ManyChat ID (או "ממתין לסנכרון") |
-
----
-
-## שלב 3: יצירת Edge Function לסנכרון מחדש
-
-### פונקציה חדשה: `resync-all-leads-to-manychat`
-
-במקום להשתמש בפונקציית `bulk-sync-leads-to-manychat` הקיימת, ניצור פונקציה חדשה שתעשה:
-
-1. **איפוס אוטומטי** של manychat_subscriber_id ל-NULL לפני תחילת הסנכרון
-2. **יצירת subscriber חדש** ב-ManyChat (עם phone, whatsapp_phone וגם Custom Field `phone_number`)
-3. **שמירת ה-ID** שחזר מ-ManyChat בטבלת leads
-4. **הוספת tag** לכל subscriber שנוצר
-
-### לוגיקה משופרת
+פונקציה שרצה עצמאית ומעדכנת את ה-job:
 
 ```text
-1. קבל את כל הלידים עם phone != NULL
-2. לכל ליד:
-   a. נסה למצוא subscriber קיים (לפי phone, email, custom field)
-   b. אם לא נמצא - צור subscriber חדש עם:
-      - first_name, last_name
-      - phone: +972XXXXXXXXX
-      - whatsapp_phone: +972XXXXXXXXX
-      - email (אם קיים)
-   c. אחרי יצירה - שמור את phone ב-Custom Field "phone_number"
-   d. הוסף tag
-   e. עדכן את הליד עם ה-subscriber_id
-   f. המתן 10 שניות (Rate Limit)
+1. קרא את ה-job מהטבלה
+2. אם status != "running" - צא
+3. עבד ליד אחד
+4. עדכן את progress ב-job
+5. קרא לעצמך רקורסיבית (או השתמש ב-Deno.spawn)
+6. חזור על 2-5 עד שנגמרים הלידים
 ```
 
+### שלב 3: Realtime Subscription
+
+הדפדפן יאזין לשינויים בטבלת `sync_jobs` ויעדכן את ה-UI בזמן אמת:
+
+```javascript
+supabase
+  .channel('sync-jobs')
+  .on('postgres_changes', { 
+    event: 'UPDATE', 
+    table: 'sync_jobs',
+    filter: `tenant_id=eq.${tenantId}` 
+  }, (payload) => {
+    setSyncProgress(payload.new.progress);
+  })
+  .subscribe();
+```
+
+### שלב 4: UI Flow חדש
+
+1. **התחל סנכרון**: יוצר record ב-`sync_jobs` עם `status: pending`
+2. **Edge Function מופעלת**: מעדכנת `status: running` ומתחילה לעבד
+3. **הדפדפן מאזין**: מקבל עדכונים ב-Realtime
+4. **עצור סנכרון**: מעדכן `status: stopped` - ה-Edge Function תעצור בסיבוב הבא
+5. **סיום**: Edge Function מעדכנת `status: completed`
+
 ---
 
-## שלב 4: ממשק הסנכרון
-
-### עדכון ManyChatSettings.tsx
-
-נוסיף כפתור "סנכרון מלא מחדש" שיעשה:
-1. אזהרה למשתמש: "פעולה זו תאפס את כל ה-ManyChat IDs ותרשום מחדש את כל הלידים"
-2. אישור
-3. קריאה לפונקציה `resync-all-leads-to-manychat`
-
----
-
-## סיכום הקבצים לעדכון
+## קבצים חדשים/לעדכון
 
 | קובץ | פעולה |
 |------|-------|
-| **SQL (Insert Tool)** | איפוס manychat_subscriber_id + הוספת custom field |
-| `supabase/functions/resync-all-leads-to-manychat/index.ts` | **יצירה חדשה** - פונקציית סנכרון מלא |
-| `src/pages/ManyChatSettings.tsx` | הוספת כפתור "סנכרון מלא מחדש" + פרוגרס |
-| `src/components/forms/EditLeadDialog.tsx` | הצגת שדה ManyChat ID |
-| `src/pages/Leads.tsx` | הוספת עמודה ManyChat ID בטבלה |
+| **SQL Migration** | יצירת טבלת `sync_jobs` + RLS + Realtime |
+| `supabase/functions/start-sync-job/index.ts` | **חדש** - יוצר job ומפעיל את התהליך |
+| `supabase/functions/run-sync-job/index.ts` | **חדש** - מריץ את הסנכרון ברקע |
+| `src/pages/ManyChatSettings.tsx` | עדכון ל-Realtime subscription |
+
+---
+
+## יתרונות הפתרון
+
+| לפני | אחרי |
+|------|------|
+| חייב להשאיר טאב פתוח | יכול לסגור את הדפדפן |
+| אם יש disconnect הכל נעצר | ממשיך לרוץ בשרת |
+| לא יודע מה קרה אם סגרת | מצב נשמר ב-DB, אפשר לחזור ולראות |
+| אין אפשרות לעצור מסך אחר | אפשר לעצור מכל מכשיר |
 
 ---
 
 ## תוצאה צפויה
 
-1. **כל 482 הלידים** יאופסו ויירשמו מחדש ב-ManyChat
-2. **שדה ManyChat ID** יהיה נראה בטופס הליד ובטבלה
-3. **לידים חדשים** יירשמו אוטומטית ב-ManyChat עם Custom Field ויקבלו ID
-4. **לא יהיו יותר SYNC_CONFLICT** כי נשתמש ב-field_id הנכון
+1. המשתמש לוחץ "התחל סנכרון"
+2. מוצגת הודעה: "הסנכרון רץ ברקע - אפשר לסגור את הדפדפן"
+3. גם אם סוגר את הטאב, הסנכרון ממשיך
+4. כשחוזר לעמוד, רואה את ההתקדמות בזמן אמת
+5. יכול ללחוץ "עצור" מכל מקום
