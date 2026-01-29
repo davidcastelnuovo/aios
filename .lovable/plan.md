@@ -1,103 +1,76 @@
 
-# תוכנית: סנכרון ManyChat ברקע (ללא צורך בטאב פתוח)
 
-## הבעיה הנוכחית
+# תוכנית: שיוך לידים לרויטל ונחמה + עדכון הערות
 
-הסנכרון הנוכחי עובד כך:
-1. הדפדפן שולח בקשה ל-Edge Function
-2. ה-Edge Function מעבד ליד אחד ומחזיר תשובה
-3. הדפדפן מקבל את התשובה ושולח בקשה חדשה
-4. חוזר על שלבים 2-3 עד שנגמרים הלידים
+## סיכום הנתונים
 
-**הבעיה**: אם סוגרים את הטאב, הלולאה נעצרת.
+| פרט | ערך |
+|-----|-----|
+| קובץ CSV | 77 שורות (לידים) |
+| לידים קיימים במערכת | ~81 (כולל כפילויות) |
+| אנשי מכירות | רויטל (`48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91`) + נחמה (`4f058f40-0ae2-4df1-8b7a-796b6bcb77aa`) |
 
----
+## מה נעשה
 
-## הפתרון: Job Queue עם Realtime Updates
+### שלב 1: עדכון הערות לכל ליד
 
-נשנה את הארכיטקטורה כך שהסנכרון ירוץ לגמרי בצד השרת:
-
-### שלב 1: טבלת Jobs חדשה
-
-ניצור טבלה חדשה `sync_jobs` שתנהל את התהליך:
-
-| עמודה | סוג | תיאור |
-|-------|-----|-------|
-| id | uuid | מזהה ייחודי |
-| tenant_id | uuid | הארגון |
-| job_type | text | סוג (manychat_sync) |
-| status | text | pending / running / completed / stopped |
-| progress | jsonb | {processed, failed, remaining, conflicts} |
-| settings | jsonb | {tagId, delayMs} |
-| created_at | timestamp | זמן יצירה |
-| updated_at | timestamp | זמן עדכון אחרון |
-
-### שלב 2: Edge Function חדשה - `run-sync-job`
-
-פונקציה שרצה עצמאית ומעדכנת את ה-job:
+לכל שורה ב-CSV, נמצא את הליד לפי טלפון ונוסיף את ההערה (עמודה 6) לשדה `notes`:
 
 ```text
-1. קרא את ה-job מהטבלה
-2. אם status != "running" - צא
-3. עבד ליד אחד
-4. עדכן את progress ב-job
-5. קרא לעצמך רקורסיבית (או השתמש ב-Deno.spawn)
-6. חזור על 2-5 עד שנגמרים הלידים
+דוגמה:
+972503466290 → "בתיאום פגישה"
+972509905408 → "לא יכול לדבר רק אחרי 15:00"
 ```
 
-### שלב 3: Realtime Subscription
+### שלב 2: שיוך לשני אנשי מכירות
 
-הדפדפן יאזין לשינויים בטבלת `sync_jobs` ויעדכן את ה-UI בזמן אמת:
+נשתמש בטבלת `lead_sales_people` (many-to-many) כדי לשייך כל ליד לשתיהן:
 
-```javascript
-supabase
-  .channel('sync-jobs')
-  .on('postgres_changes', { 
-    event: 'UPDATE', 
-    table: 'sync_jobs',
-    filter: `tenant_id=eq.${tenantId}` 
-  }, (payload) => {
-    setSyncProgress(payload.new.progress);
-  })
-  .subscribe();
+```sql
+INSERT INTO lead_sales_people (lead_id, sales_person_id)
+SELECT l.id, '48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91' -- רויטל
+FROM leads l WHERE l.phone LIKE '%972503466290%' ...
+UNION ALL
+SELECT l.id, '4f058f40-0ae2-4df1-8b7a-796b6bcb77aa' -- נחמה
+FROM leads l WHERE l.phone LIKE '%972503466290%' ...
 ```
 
-### שלב 4: UI Flow חדש
+### שלב 3: עדכון sales_person_id הראשי
 
-1. **התחל סנכרון**: יוצר record ב-`sync_jobs` עם `status: pending`
-2. **Edge Function מופעלת**: מעדכנת `status: running` ומתחילה לעבד
-3. **הדפדפן מאזין**: מקבל עדכונים ב-Realtime
-4. **עצור סנכרון**: מעדכן `status: stopped` - ה-Edge Function תעצור בסיבוב הבא
-5. **סיום**: Edge Function מעדכנת `status: completed`
+נעדכן גם את `leads.sales_person_id` לאחת מהן (לתאימות לאחור):
+
+```sql
+UPDATE leads SET sales_person_id = '48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91'
+WHERE phone LIKE '%972503466290%' ...
+```
 
 ---
 
-## קבצים חדשים/לעדכון
+## פירוט ההערות מהקובץ
 
-| קובץ | פעולה |
-|------|-------|
-| **SQL Migration** | יצירת טבלת `sync_jobs` + RLS + Realtime |
-| `supabase/functions/start-sync-job/index.ts` | **חדש** - יוצר job ומפעיל את התהליך |
-| `supabase/functions/run-sync-job/index.ts` | **חדש** - מריץ את הסנכרון ברקע |
-| `src/pages/ManyChatSettings.tsx` | עדכון ל-Realtime subscription |
+| # | טלפון | הערה |
+|---|-------|------|
+| 1 | 972503466290 | בתיאום פגישה |
+| 2 | 972509905408 | לא יכול לדבר רק אחרי 15:00 |
+| 3 | 972502929055 | 17:00 |
+| 4 | 972506775448 | אין מענה |
+| 5 | 972526414293 | ביקש לחזור אליו הכי מאוחר שאפשר |
+| ... | ... | ... |
 
 ---
 
-## יתרונות הפתרון
+## פעולות טכניות
 
-| לפני | אחרי |
-|------|------|
-| חייב להשאיר טאב פתוח | יכול לסגור את הדפדפן |
-| אם יש disconnect הכל נעצר | ממשיך לרוץ בשרת |
-| לא יודע מה קרה אם סגרת | מצב נשמר ב-DB, אפשר לחזור ולראות |
-| אין אפשרות לעצור מסך אחר | אפשר לעצור מכל מכשיר |
+1. **פקודת INSERT** לטבלת `lead_sales_people` - שיוך כל ליד לרויטל ונחמה
+2. **פקודת UPDATE** לטבלת `leads` - עדכון הערות + sales_person_id ראשי
+
+כל הפעולות יבוצעו באמצעות ה-Insert Tool (לא מיגרציה).
 
 ---
 
 ## תוצאה צפויה
 
-1. המשתמש לוחץ "התחל סנכרון"
-2. מוצגת הודעה: "הסנכרון רץ ברקע - אפשר לסגור את הדפדפן"
-3. גם אם סוגר את הטאב, הסנכרון ממשיך
-4. כשחוזר לעמוד, רואה את ההתקדמות בזמן אמת
-5. יכול ללחוץ "עצור" מכל מקום
+- **77 לידים** ישויכו לשתי אנשות המכירות (רויטל + נחמה)
+- **הערות** מהקובץ יתווספו לכל ליד
+- שתיהן יראו את כל הלידים במערכת
+
