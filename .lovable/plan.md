@@ -1,75 +1,136 @@
 
-# תוכנית: תיקון אינטגרציית ManyChat - שימוש נכון ב-field_id
+# תוכנית: סנכרון מחדש של לידים ל-ManyChat בארגון Nexus Capital
 
-## סיכום הבעיות שזוהו בלוגים
+## סיכום המצב הנוכחי
 
-| בעיה | סיבה |
-|------|------|
-| `field_id cannot be blank` | הקוד שולח `field_name` במקום `field_id` המספרי |
-| `Api max rps reached` | יותר מדי קריאות מקבילות |
-| `WhatsApp ID already exists` | Subscriber קיים אך לא ניתן למצוא (נוצר רק עם whatsapp_phone) |
+| סטטיסטיקה | כמות |
+|-----------|------|
+| סה"כ לידים | 482 |
+| ללא ManyChat ID | 290 |
+| עם SYNC_CONFLICT | 11 |
+| עם NEEDS_MANUAL_LINK | 2 |
+| עם ID תקין | 179 |
 
-## הפתרון
+## מה המשתמש מבקש
 
-### שלב 1: פונקציה חדשה לשליפת field_id
-
-נוסיף פונקציה שקוראת ל-`/fb/page/getCustomFields` ומוצאת את ה-ID של שדה `phone_number`:
-
-```text
-async function getCustomFieldId(apiKey, fieldName):
-  1. קריאה ל-/fb/page/getCustomFields
-  2. חיפוש השדה לפי name
-  3. החזרת field_id או null
-```
-
-### שלב 2: עדכון findByCustomField
-
-במקום לשלוח `field_name`:
-```javascript
-// נכשל:
-/fb/subscriber/findByCustomField?field_name=phone_number&field_value=...
-
-// נכון:
-/fb/subscriber/findByCustomField?field_id=12345678&field_value=...
-```
-
-### שלב 3: הפחתת קריאות מקבילות
-
-1. לא לחפש את כל הפורמטים במקביל - לעשות סדרתית
-2. להוסיף caching ל-field_id (מספיק לשלוף פעם אחת לכל tenant)
-
-### שלב 4: שמירת field_id בהגדרות
-
-נשמור את ה-`phone_number_field_id` בטבלת `tenant_integrations.settings` כדי לחסוך קריאות חוזרות ל-API.
+1. **לאפס** את כל ה-manychat_subscriber_id הקיימים לכל הלידים בארגון Nexus Capital
+2. **לרשום מחדש** את כל הלידים ב-ManyChat אחד אחד
+3. **להוסיף שדה נראה** של ManyChat ID בטופס הליד
+4. לידים חדשים - לוודא שהם נרשמים ב-ManyChat עם Custom Field ומקבלים ID
 
 ---
 
-## קבצים לעדכון
+## שלב 1: איפוס כל ה-ManyChat IDs (פעולה חד-פעמית)
+
+נריץ פקודת UPDATE על טבלת leads לאפס את כל ה-manychat_subscriber_id ל-NULL עבור הארגון:
+
+```sql
+UPDATE leads 
+SET manychat_subscriber_id = NULL 
+WHERE tenant_id = 'eb31659b-7a21-4411-b99d-01df51cf2895';
+```
+
+**זה יאפס את כל 482 הלידים** (גם אלה עם SYNC_CONFLICT ואלה עם ID תקין) כדי שכולם יוכלו להירשם מחדש.
+
+---
+
+## שלב 2: הוספת שדה ManyChat ID לטופס הליד
+
+### 2.1 הוספה לטבלת custom_fields
+
+נוסיף שדה חדש `manychat_subscriber_id` עם `is_visible: true` כדי שיוצג בטפסים ובכרטיסים:
+
+```sql
+INSERT INTO custom_fields (
+  tenant_id, 
+  entity_type, 
+  field_key, 
+  field_label, 
+  field_type, 
+  is_visible, 
+  is_required, 
+  sort_order
+)
+VALUES (
+  'eb31659b-7a21-4411-b99d-01df51cf2895',
+  'lead',
+  'manychat_subscriber_id',
+  'ManyChat ID',
+  'text',
+  true,
+  false,
+  14
+) ON CONFLICT (tenant_id, entity_type, field_key) DO UPDATE 
+  SET is_visible = true, field_label = 'ManyChat ID';
+```
+
+### 2.2 עדכון קוד התצוגה
+
+נוסיף את השדה לקומפוננטות:
 
 | קובץ | שינוי |
 |------|-------|
-| `supabase/functions/auto-sync-new-lead/index.ts` | פונקציה לשליפת field_id, שימוש ב-field_id במקום field_name |
-| `supabase/functions/trigger-automation/index.ts` | אותם שינויים |
+| `EditLeadDialog.tsx` | הצגת שדה ManyChat ID (לקריאה בלבד) בטאב הפרטים |
+| `Leads.tsx` | הוספת עמודה בטבלה שמציגה את ה-ManyChat ID (או "ממתין לסנכרון") |
 
 ---
 
-## לוגיקה חדשה
+## שלב 3: יצירת Edge Function לסנכרון מחדש
+
+### פונקציה חדשה: `resync-all-leads-to-manychat`
+
+במקום להשתמש בפונקציית `bulk-sync-leads-to-manychat` הקיימת, ניצור פונקציה חדשה שתעשה:
+
+1. **איפוס אוטומטי** של manychat_subscriber_id ל-NULL לפני תחילת הסנכרון
+2. **יצירת subscriber חדש** ב-ManyChat (עם phone, whatsapp_phone וגם Custom Field `phone_number`)
+3. **שמירת ה-ID** שחזר מ-ManyChat בטבלת leads
+4. **הוספת tag** לכל subscriber שנוצר
+
+### לוגיקה משופרת
 
 ```text
-1. שלוף את phone_number_field_id מ-settings (אם קיים)
-2. אם לא קיים - קרא ל-getCustomFields ושמור ב-settings
-3. חפש לפי phone (שדה מערכת)
-4. חפש לפי email (שדה מערכת)
-5. חפש לפי custom field עם field_id
-6. אם לא נמצא - צור subscriber חדש
-7. אחרי יצירה - עדכן את phone_number custom field
+1. קבל את כל הלידים עם phone != NULL
+2. לכל ליד:
+   a. נסה למצוא subscriber קיים (לפי phone, email, custom field)
+   b. אם לא נמצא - צור subscriber חדש עם:
+      - first_name, last_name
+      - phone: +972XXXXXXXXX
+      - whatsapp_phone: +972XXXXXXXXX
+      - email (אם קיים)
+   c. אחרי יצירה - שמור את phone ב-Custom Field "phone_number"
+   d. הוסף tag
+   e. עדכן את הליד עם ה-subscriber_id
+   f. המתן 10 שניות (Rate Limit)
 ```
+
+---
+
+## שלב 4: ממשק הסנכרון
+
+### עדכון ManyChatSettings.tsx
+
+נוסיף כפתור "סנכרון מלא מחדש" שיעשה:
+1. אזהרה למשתמש: "פעולה זו תאפס את כל ה-ManyChat IDs ותרשום מחדש את כל הלידים"
+2. אישור
+3. קריאה לפונקציה `resync-all-leads-to-manychat`
+
+---
+
+## סיכום הקבצים לעדכון
+
+| קובץ | פעולה |
+|------|-------|
+| **SQL (Insert Tool)** | איפוס manychat_subscriber_id + הוספת custom field |
+| `supabase/functions/resync-all-leads-to-manychat/index.ts` | **יצירה חדשה** - פונקציית סנכרון מלא |
+| `src/pages/ManyChatSettings.tsx` | הוספת כפתור "סנכרון מלא מחדש" + פרוגרס |
+| `src/components/forms/EditLeadDialog.tsx` | הצגת שדה ManyChat ID |
+| `src/pages/Leads.tsx` | הוספת עמודה ManyChat ID בטבלה |
 
 ---
 
 ## תוצאה צפויה
 
-- לידים חדשים יירשמו ב-ManyChat בהצלחה
-- ה-subscriber_id יתעדכן בטבלת leads
-- לא יהיו שגיאות Rate Limit (קריאות סדרתיות)
-- לידים שכבר קיימים ב-ManyChat יזוהו דרך ה-Custom Field
+1. **כל 482 הלידים** יאופסו ויירשמו מחדש ב-ManyChat
+2. **שדה ManyChat ID** יהיה נראה בטופס הליד ובטבלה
+3. **לידים חדשים** יירשמו אוטומטית ב-ManyChat עם Custom Field ויקבלו ID
+4. **לא יהיו יותר SYNC_CONFLICT** כי נשתמש ב-field_id הנכון
