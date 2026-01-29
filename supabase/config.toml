@@ -146,3 +146,9 @@ verify_jwt = false
 
 [functions.webhook-maskyoo-intake]
 verify_jwt = false
+
+[functions.start-sync-job]
+verify_jwt = true
+
+[functions.run-sync-job]
+verify_jwt = false
