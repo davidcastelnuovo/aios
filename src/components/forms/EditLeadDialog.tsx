@@ -666,6 +666,28 @@ const updateMutation = useMutation({
                     )}
                   />
                 </div>
+
+                {/* ManyChat ID - Read Only */}
+                {isFieldVisible('manychat_subscriber_id') && (
+                  <div className="space-y-2">
+                    <FormLabel className="text-sm font-medium">{getFieldLabel('manychat_subscriber_id', 'ManyChat ID')}</FormLabel>
+                    <div className="flex items-center gap-2">
+                      <Input 
+                        value={lead.manychat_subscriber_id || ''} 
+                        disabled 
+                        className="text-right rounded-lg border-2 h-11 px-4 bg-muted" 
+                        dir="ltr"
+                        placeholder={lead.manychat_subscriber_id === 'SYNC_CONFLICT' ? 'קונפליקט - נדרש סנכרון ידני' : 'ממתין לסנכרון'}
+                      />
+                      {lead.manychat_subscriber_id && lead.manychat_subscriber_id !== 'SYNC_CONFLICT' && (
+                        <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                      )}
+                      {lead.manychat_subscriber_id === 'SYNC_CONFLICT' && (
+                        <AlertCircle className="h-5 w-5 text-amber-500" />
+                      )}
+                    </div>
+                  </div>
+                )}
                 
                 <div className="grid grid-cols-3 gap-4">
                   <FormField

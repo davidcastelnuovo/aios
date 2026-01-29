@@ -606,7 +606,7 @@ export default function ManyChatSettings() {
               {/* Info */}
               <Card className="bg-muted/50 p-4">
                 <p className="text-sm text-muted-foreground">
-                  הסנכרון מעבד 5 לידים בכל פעם עם מרווח של 10 שניות בין כל ליד.
+                  הסנכרון מעבד ליד אחד בכל פעם עם מרווח של 10 שניות.
                   <br />
                   זמן משוער ל-{leadsToSync?.count || 0} לידים: כ-{Math.ceil((leadsToSync?.count || 0) * 10 / 60)} דקות.
                   <br />
