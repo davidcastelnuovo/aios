@@ -455,6 +455,13 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   let contactRecord: any = null
   let contactType: 'lead' | 'client' | null = null
   
+  // Helper to check if subscriber ID is valid (not a sync conflict status)
+  const isValidSubscriberId = (id: string | null | undefined): boolean => {
+    if (!id) return false;
+    const invalidStatuses = ['SYNC_CONFLICT', 'NEEDS_MANUAL_LINK', 'SYNC_ERROR'];
+    return !invalidStatuses.includes(id);
+  };
+
   if (data.lead_id) {
     const { data: lead } = await supabase
       .from('leads')
@@ -463,7 +470,8 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       .single()
     contactRecord = lead
     contactType = 'lead'
-    subscriberId = lead?.manychat_subscriber_id
+    // Only use subscriber_id if it's a valid ID (not a sync conflict status)
+    subscriberId = isValidSubscriberId(lead?.manychat_subscriber_id) ? lead.manychat_subscriber_id : null
     contactPhone = lead?.phone
   } else if (data.client_id) {
     const { data: client } = await supabase
@@ -473,7 +481,8 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       .single()
     contactRecord = client
     contactType = 'client'
-    subscriberId = client?.manychat_subscriber_id
+    // Only use subscriber_id if it's a valid ID (not a sync conflict status)
+    subscriberId = isValidSubscriberId(client?.manychat_subscriber_id) ? client.manychat_subscriber_id : null
     contactPhone = client?.phone
   }
   
@@ -849,10 +858,17 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   if (!leadRecord) {
     throw new Error('לא נמצא ליד עם נתונים')
   }
+
+  // Helper to check if subscriber ID is valid (not a sync conflict status)
+  const isValidSubscriberId = (id: string | null | undefined): boolean => {
+    if (!id) return false;
+    const invalidStatuses = ['SYNC_CONFLICT', 'NEEDS_MANUAL_LINK', 'SYNC_ERROR'];
+    return !invalidStatuses.includes(id);
+  };
   
-  // If subscriber already exists, skip creation
-  if (leadRecord.manychat_subscriber_id) {
-    console.log(`Lead already has subscriber ID: ${leadRecord.manychat_subscriber_id}`)
+  // If subscriber already exists with VALID ID, skip creation
+  if (isValidSubscriberId(leadRecord.manychat_subscriber_id)) {
+    console.log(`Lead already has valid subscriber ID: ${leadRecord.manychat_subscriber_id}`)
     
     // Still add tag if configured
     if (manychat_tag_id && manychat_tag_id !== 'none') {
@@ -877,6 +893,11 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
       subscriber_id: leadRecord.manychat_subscriber_id,
       message: 'Subscriber already exists, tag added if configured'
     }
+  }
+
+  // Log if subscriber has a conflict status
+  if (leadRecord.manychat_subscriber_id) {
+    console.log(`Lead has sync conflict status: ${leadRecord.manychat_subscriber_id}, will attempt to find/create subscriber`)
   }
   
   // Prepare phone number for lookup/creation
