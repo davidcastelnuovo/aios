@@ -1,128 +1,70 @@
 
 
-## תוכנית תיקון - אימות והתאמת ManyChat ID לפי שדה מותאם אישית
+# תוכנית תיקון: עדכון שדה מותאם אישית `phone_number` ל-Subscriber קיים
 
-### הבעיה המזוהה
-המערכת מוצאת subscriber לפי phone_number בשדה מותאם אישית, אבל:
-1. לא משווה את ה-ID שנמצא לזה שכבר שמור בליד
-2. אם ה-ID השמור שונה מזה שנמצא בחיפוש → לא מתקנת אותו
-3. לכן האוטומציות רצות על ID ישן/לא נכון
+## הבעיה שזוהתה
 
-### הפתרון
-**לוגיקת "אמת אחת" - שדה phone_number במניצ'ט הוא מקור האמת**
+כאשר ליד חדש נוצר במערכת והמערכת מוצאת subscriber **קיים** במניצ'ט (לפי טלפון/אימייל), היא לא מעדכנת לו את השדה המותאם אישית `phone_number`. 
 
-1. **תמיד לחפש לפי phone_number** (שדה מותאם אישית)
-2. **להשוות** את ה-ID שנמצא ל-ID השמור
-3. **אם שונים → לעדכן** את ה-ID בליד/לקוח לפני שליחת הפקודה
-4. **רק אז** לשלוח את הטאג ל-subscriber הנכון
+השדה הזה קריטי כי:
+- הוא משמש כ"מקור אמת" לזיהוי subscribers בעתיד
+- בלעדיו, החיפוש לפי custom field נכשל
+- האוטומציות לא יכולות למצוא את ה-subscriber הנכון
 
-### שינויים טכניים
-
-**קובץ:** `supabase/functions/trigger-automation/index.ts`
-
-**לפני (לוגיקה נוכחית):**
+### מה קורה היום:
 ```
-1. קורא ID משמור → בודק אם תקין (WA) → משתמש בו
-2. אם לא תקין → מחפש מחדש → שומר ומשתמש
+ליד חדש → מוצא subscriber קיים → שומר ID בבסיס נתונים → סיום ❌
+                                      (לא מעדכן phone_number במניצ'ט!)
 ```
 
-**אחרי (לוגיקה חדשה):**
+### מה צריך לקרות:
 ```
-1. תמיד מחפש לפי Custom Field (phone_number) → מקבל "ID אמיתי"
-2. משווה ל-ID השמור
-3. אם שונים → לוג + עדכון ה-ID בבסיס הנתונים
-4. משתמש ב-ID שנמצא בחיפוש (לא בשמור!)
-5. אז שולח את הטאג
+ליד חדש → מוצא subscriber קיים → מעדכן phone_number במניצ'ט → שומר ID בבסיס נתונים → סיום ✅
 ```
 
-### שינויי קוד
+## הפתרון
 
-#### 1. פונקציה חדשה: `verifyAndFixSubscriberId`
+להוסיף קריאה ל-`setPhoneCustomField` בכל מקום שבו נמצא subscriber קיים:
+1. אחרי מציאה לפי טלפון/אימייל/custom field
+2. אחרי מציאה בעקבות כישלון יצירה (create conflict)
 
-פונקציה שתבצע:
-- חיפוש לפי phone_number (שדה מותאם אישית)
-- השוואה ל-ID השמור
-- תיקון אוטומטי אם יש אי-התאמה
-- החזרת ה-ID הנכון
+## פרטים טכניים
 
-#### 2. שינוי זרימת `executeSendWhatsapp`
+### קובץ לעדכון
+`supabase/functions/auto-sync-new-lead/index.ts`
 
-במקום:
+### שינוי 1: עדכון phone_number ל-subscriber קיים (שורות 544-546)
+
+**לפני** (שורה 545-546):
 ```typescript
-// קודם בודקים ID שמור → רק אחרי זה מחפשים
-const savedId = lead?.manychat_subscriber_id
-if (savedId && await validateSubscriberHasWhatsApp(savedId)) {
-  subscriberId = savedId
+// STEP 6: Update lead with subscriber ID
+if (subscriberId) {
+```
+
+**אחרי**:
+```typescript
+// STEP 5.5: If subscriber was found (not created), ensure phone_number custom field is set
+if (subscriberId && wasExisting) {
+  console.log(`📝 Ensuring phone_number custom field is set for existing subscriber ${subscriberId}...`);
+  const formattedPhoneForCustomField = `+${formattedPhone}`;
+  await setPhoneCustomField(apiKey, subscriberId, formattedPhoneForCustomField);
 }
-// ... ואז חיפושים רק אם אין ID
+
+// STEP 6: Update lead with subscriber ID
+if (subscriberId) {
 ```
 
-לשנות ל:
-```typescript
-// תמיד מחפשים לפי טלפון ומשווים
-const correctId = await verifyAndFixSubscriberId(
-  contactPhone,
-  contactRecord?.manychat_subscriber_id,
-  contactType,
-  contactRecord?.id
-)
-subscriberId = correctId
-```
-
-#### 3. לוגיקת הפונקציה החדשה
-
-```typescript
-async function verifyAndFixSubscriberId(
-  phone: string,
-  savedId: string | null,
-  contactType: 'lead' | 'client',
-  recordId: string
-): Promise<string | null> {
-  
-  // שלב 1: חיפוש לפי Custom Field
-  const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId)
-  const phoneCandidates = [...] // פורמטים שונים
-  const foundId = await findSubscriberByCustomFieldMC(apiKey, fieldId, phoneCandidates)
-  
-  // שלב 2: אם לא נמצא בכלל → יצירה
-  if (!foundId) {
-    return await createNewSubscriber(...)
-  }
-  
-  // שלב 3: השוואה לשמור
-  if (savedId && savedId !== foundId) {
-    console.log(`🔄 ID mismatch! Saved: ${savedId}, Found: ${foundId}. Fixing...`)
-    
-    // עדכון בבסיס הנתונים
-    await supabase
-      .from(contactType === 'lead' ? 'leads' : 'clients')
-      .update({ manychat_subscriber_id: foundId })
-      .eq('id', recordId)
-    
-    console.log(`✅ Fixed ${contactType} ${recordId}: ${savedId} → ${foundId}`)
-  }
-  
-  // שלב 4: החזרת ה-ID הנכון
-  return foundId
-}
-```
-
-### תוצאה צפויה
+## סיכום השינוי
 
 | מצב | לפני | אחרי |
 |-----|------|------|
-| ID שמור נכון | ✅ עובד | ✅ עובד |
-| ID שמור שונה מה-ID האמיתי | ❌ טייג רשומה שגויה | ✅ מתקן ומטייג את הנכון |
-| אין ID שמור | ✅ מחפש ושומר | ✅ מחפש ושומר |
-| לא נמצא במניצ'ט | יוצר חדש | יוצר חדש |
+| subscriber חדש נוצר | ✅ מעדכן phone_number | ✅ מעדכן phone_number |
+| subscriber קיים נמצא | ❌ לא מעדכן | ✅ מעדכן phone_number |
 
-### סדר ביצוע
+## יתרונות
 
-1. **עדכון** `trigger-automation/index.ts`:
-   - הוספת הפונקציה `verifyAndFixSubscriberId`
-   - שינוי זרימת `executeSendWhatsapp` להשתמש בה
-
-2. **Deploy** הפונקציה
-
-3. **בדיקה**: קביעת פגישה לליד → וידוא שהטאג מופיע במניצ'ט על המשתמש הנכון
+1. **תיקון הבעיה**: כל subscriber יקבל את השדה phone_number מעודכן
+2. **עקביות**: אותה לוגיקה ליצירה וגם למציאה
+3. **זיהוי עתידי**: subscriber קיים ללא phone_number יקבל אותו בפעם הראשונה שליד מקושר אליו
+4. **אין שבירה**: הקוד הקיים ממשיך לעבוד כרגיל
 
