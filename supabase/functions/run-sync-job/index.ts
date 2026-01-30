@@ -499,6 +499,27 @@ Deno.serve(async (req) => {
       await new Promise((r) => setTimeout(r, delayMs));
     }
 
+    // Re-check job status BEFORE deciding whether to continue
+    const { data: finalJobStatus } = await supabase
+      .from('sync_jobs')
+      .select('status')
+      .eq('id', jobId)
+      .single();
+
+    // If job was stopped/failed by user, do NOT continue
+    if (finalJobStatus?.status === 'stopped' || finalJobStatus?.status === 'failed') {
+      console.log(`Job ${jobId} was stopped by user, not continuing.`);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Job stopped by user',
+          processed: processedTotal,
+          failed: failedTotal,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Check if anything remains; if yes, self-invoke again. If not, complete.
     const { count: remainingAfter } = await supabase
       .from('leads')
