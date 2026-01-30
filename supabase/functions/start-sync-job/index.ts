@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
         },
         settings: {
           tagId,
-          delayMs: 10000,
+          delayMs: 1000,
         },
       })
       .select()
