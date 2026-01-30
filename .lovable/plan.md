@@ -1,110 +1,63 @@
 
-# תוכנית: מצב "צפייה בתור" (View As) לבעלים וסופר אדמין
 
-## סקירה
-מימוש פיצ'ר שמאפשר לבעלים וסופר אדמין לצפות במערכת כפי שאיש מכירות ספציפי רואה אותה, כדי לבדוק הרשאות ונראות נתונים ללא צורך בהתחברות למשתמש אחר.
+## תוכנית תיקון - לוגיקת חיפוש Subscriber במניצ'ט
 
-## ארכיטקטורה
+### הבעיה שזוהתה
 
-הפתרון יעבוד ברמת ה-Frontend בלבד (UI-level filtering):
-- לא נשנה RLS policies כי זה יכול לשבור דברים
-- נוסיף Context חדש לניהול מצב ה-"View As"
-- נסנן את הנתונים ברמת ה-React Query לפי איש המכירות הנבחר
-
-```text
-┌─────────────────────────────────────────────────────────┐
-│                     AppLayout                           │
-├─────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────┐    │
-│  │           ViewAsProvider (Context)              │    │
-│  │  ┌─────────────────────────────────────────┐    │    │
-│  │  │  viewAsUserId: string | null            │    │    │
-│  │  │  viewAsSalesPersonId: string | null     │    │    │
-│  │  │  isViewingAs: boolean                   │    │    │
-│  │  │  clearViewAs: () => void                │    │    │
-│  │  └─────────────────────────────────────────┘    │    │
-│  └─────────────────────────────────────────────────┘    │
-│                                                         │
-│  ┌─────────────────────────────────────────────────┐    │
-│  │     ViewAsBanner (בראש העמוד כשפעיל)           │    │
-│  │  "צופה בתור: נחמה ישראלי  [X סגירה]"           │    │
-│  └─────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────┘
+הפונקציה `findSubscriberByCustomFieldMC` ב-Edge Function `trigger-automation` מצפה לתגובת API בפורמט:
+```json
+{ "status": "success", "data": { "id": "123" } }
 ```
 
-## רכיבים שייווצרו
+אבל ה-API של ManyChat מחזיר **מערך**:
+```json
+{ "status": "success", "data": [ { "id": "123" }, { "id": "456" } ] }
+```
 
-### 1. ViewAsContext (`src/contexts/ViewAsContext.tsx`)
-Context חדש לניהול מצב ה-"View As":
-- `viewAsUserId` - המשתמש שמדמים
-- `viewAsSalesPersonId` - ה-sales_person_id של המשתמש
-- `viewAsUserName` - שם להצגה
-- `isViewingAs` - האם במצב צפייה
-- `setViewAs(userId, salesPersonId, name)` - הפעלת המצב
-- `clearViewAs()` - ביטול המצב
+לכן הבדיקה `data?.data?.id` מחזירה `undefined` והמערכת מדלגת על התוצאה למרות שנמצא subscriber תקין.
 
-### 2. ViewAsBanner (`src/components/ViewAsBanner.tsx`)
-באנר קבוע בראש המסך כשמצב "צפייה בתור" פעיל:
-- הצגת שם המשתמש/איש המכירות
-- כפתור לביטול המצב
-- צבע בולט (כתום/צהוב) לציון שזה לא מצב רגיל
+---
 
-### 3. ViewAsButton בדף Users
-כפתור ליד כל משתמש שהוא איש מכירות:
-- נראה רק לבעלים וסופר אדמין
-- לחיצה מפעילה את מצב ה-"View As"
-- אייקון עין 👁️
+### הפתרון
 
-## שינויים בקוד קיים
+#### שינוי 1: תיקון findSubscriberByCustomFieldMC (שורות 86-91)
 
-### 1. עדכון `src/pages/Users.tsx`
-הוספת כפתור "צפה בתור" ליד כל משתמש עם תפקיד איש מכירות
+**לפני:**
+```typescript
+if (data?.status === 'success' && data?.data?.id) {
+  return String(data.data.id);
+}
+```
 
-### 2. עדכון `src/hooks/useUserRole.ts`
-כאשר `isViewingAs` פעיל:
-- החזרת `salesPersonAgencyIds` של המשתמש המדומה
-- סימון `isSalesPerson: true` כדי שהסינון יעבוד
+**אחרי:**
+```typescript
+if (data?.status === 'success' && data?.data) {
+  // Handle both array and object responses
+  const subscribers = Array.isArray(data.data) ? data.data : [data.data];
+  // Find first ACTIVE subscriber (not deleted)
+  const activeSubscriber = subscribers.find((s: any) => s.status !== 'deleted' && s.id);
+  if (activeSubscriber?.id) {
+    return String(activeSubscriber.id);
+  }
+}
+```
 
-### 3. עדכון `src/pages/Leads.tsx`
-שימוש ב-`viewAsSalesPersonId` מה-context לסינון הלידים:
-- כשמצב "View As" פעיל, לסנן רק לידים משויכים לאיש המכירות הנבחר
-- הצגת הודעה שזה מצב צפייה
+#### לוגיקה נוספת
 
-### 4. עדכון `src/components/layout/AppLayout.tsx`
-- עטיפה ב-`ViewAsProvider`
-- הוספת `ViewAsBanner` כשמצב פעיל
+- **תיעדוף subscribers פעילים**: אם יש מספר תוצאות, נבחר את ה-subscriber הראשון שהוא לא `deleted`
+- **תמיכה בשני פורמטים**: הקוד יטפל גם באובייקט בודד וגם במערך
 
-## זרימת המשתמש
+---
 
-1. בעלים נכנס לדף "ניהול משתמשים"
-2. רואה רשימת משתמשים עם תפקידיהם
-3. ליד משתמשת "נחמה" שהיא אשת מכירות, יש כפתור 👁️ "צפה בתור"
-4. לחיצה על הכפתור:
-   - מופיע באנר כתום: "צופה בתור: נחמה ישראלי - [X]"
-   - הבעלים יכול לנווט לדף הלידים
-   - רואה רק 83 לידים (כמו שנחמה רואה)
-5. לחיצה על X בבאנר מחזירה למצב רגיל
+### פרטים טכניים
 
-## פרטים טכניים
+| קובץ | שינוי |
+|------|-------|
+| `supabase/functions/trigger-automation/index.ts` | תיקון לוגיקת parsing בפונקציה `findSubscriberByCustomFieldMC` |
 
-### שמירת מצב
-המצב יישמר ב-Context בלבד (לא ב-localStorage) כדי שיתאפס בריענון דף
+### צעדים ליישום
 
-### אבטחה
-- רק בעלים וסופר אדמין יכולים להפעיל את המצב
-- הבדיקה נעשית ב-Frontend אבל ה-RLS policies נשארות ללא שינוי
-- הנתונים שמוצגים הם תמיד נתונים שהבעלים יכול לראות - רק מסוננים
+1. עדכון הפונקציה `findSubscriberByCustomFieldMC` לטפל בתגובת מערך
+2. הוספת סינון לפי `status !== 'deleted'` כדי להתעלם מ-subscribers שנמחקו
+3. Deploy מחדש של ה-Edge Function
 
-### תמיכה ברכיבים
-בשלב ראשון - תמיכה בדף הלידים בלבד
-בהמשך ניתן להרחיב לדפים נוספים (משימות, לקוחות וכו')
-
-## קבצים שייווצרו
-1. `src/contexts/ViewAsContext.tsx` - Context חדש
-2. `src/components/ViewAsBanner.tsx` - רכיב הבאנר
-
-## קבצים שיעודכנו
-1. `src/components/layout/AppLayout.tsx` - עטיפה ב-Provider
-2. `src/pages/Users.tsx` - הוספת כפתור "צפה בתור"
-3. `src/pages/Leads.tsx` - סינון לפי מצב View As
-4. `src/hooks/useUserRole.ts` - תמיכה במצב View As (אופציונלי)
