@@ -519,6 +519,18 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     
     if (foundId) {
       console.log(`✅ Found subscriber by phone_number custom field: ${foundId}`);
+
+      // IMPORTANT:
+      // If the subscriber we found via the custom field is NOT a valid WhatsApp subscriber
+      // (e.g., status=deleted or whatsapp_phone is missing), we must NOT use it for tagging.
+      // Otherwise the tag might be applied to an invisible/deleted contact and the user won't see it.
+      // Returning null here will allow the existing fallback logic (findBySystemField + extractSubscriberId)
+      // to locate an active WA subscriber.
+      const foundIsWhatsApp = await validateSubscriberHasWhatsApp(foundId);
+      if (!foundIsWhatsApp) {
+        console.log(`⚠️ Subscriber ${foundId} was found by custom field but is not a valid WhatsApp subscriber. Falling back to phone system-field search.`);
+        return null;
+      }
       
       // Step 4: Compare with saved ID
       if (savedId && savedId !== foundId) {
