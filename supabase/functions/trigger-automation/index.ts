@@ -484,15 +484,62 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   };
 
   // ManyChat sometimes returns a single object and sometimes an array.
-  // Prefer ACTIVE subscribers (status !== 'deleted').
+  // Prefer subscribers with whatsapp_phone (not deleted).
   const extractSubscriberId = (result: any): string | null => {
     if (!result || result.status !== 'success' || !result.data) return null;
     const subscribers = Array.isArray(result.data) ? result.data : [result.data];
+    
+    // Priority 1: Active subscriber with whatsapp_phone
+    const withWA = subscribers.find((s: any) => s?.status !== 'deleted' && s?.whatsapp_phone && s?.id);
+    if (withWA?.id) {
+      console.log(`extractSubscriberId: found subscriber with WA phone: ${withWA.id}`)
+      return String(withWA.id);
+    }
+    
+    // Priority 2: Active subscriber (no WA phone but not deleted)
     const active = subscribers.find((s: any) => s?.status !== 'deleted' && s?.id);
-    if (active?.id) return String(active.id);
+    if (active?.id) {
+      console.log(`extractSubscriberId: found active subscriber (no WA phone): ${active.id}`)
+      return String(active.id);
+    }
+    
+    // Fallback: any subscriber with ID (including deleted)
     const anyWithId = subscribers.find((s: any) => s?.id);
-    return anyWithId?.id ? String(anyWithId.id) : null;
+    if (anyWithId?.id) {
+      console.log(`extractSubscriberId: fallback to subscriber: ${anyWithId.id}`)
+      return String(anyWithId.id);
+    }
+    
+    return null;
   };
+
+  // Helper: Validate subscriber has whatsapp_phone (so it's the WA subscriber, not Messenger)
+  const validateSubscriberHasWhatsApp = async (subId: string): Promise<boolean> => {
+    try {
+      const infoUrl = `${baseUrl}/subscriber/getInfo?subscriber_id=${encodeURIComponent(subId)}`
+      const res = await fetch(infoUrl, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      })
+      if (!res.ok) return false
+      const info = await res.json()
+      const sub = info?.data
+      // Valid if status != deleted AND whatsapp_phone is populated
+      if (sub?.status === 'deleted') {
+        console.log(`Subscriber ${subId} is deleted, skipping`)
+        return false
+      }
+      if (!sub?.whatsapp_phone) {
+        console.log(`Subscriber ${subId} has no whatsapp_phone, skipping`)
+        return false
+      }
+      console.log(`Subscriber ${subId} validated with whatsapp_phone: ${sub.whatsapp_phone}`)
+      return true
+    } catch (e) {
+      console.log(`Error validating subscriber ${subId}:`, e)
+      return false
+    }
+  }
 
   if (data.lead_id) {
     const { data: lead } = await supabase
@@ -502,9 +549,17 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       .single()
     contactRecord = lead
     contactType = 'lead'
-    // Only use subscriber_id if it's a valid ID (not a sync conflict status)
-    subscriberId = isValidSubscriberId(lead?.manychat_subscriber_id) ? lead.manychat_subscriber_id : null
     contactPhone = lead?.phone
+    // Only use subscriber_id if it's a valid ID (not a sync conflict status)
+    const savedId = isValidSubscriberId(lead?.manychat_subscriber_id) ? lead.manychat_subscriber_id : null
+    if (savedId) {
+      const isValid = await validateSubscriberHasWhatsApp(savedId)
+      if (isValid) {
+        subscriberId = savedId
+      } else {
+        console.log(`Saved subscriber ${savedId} is invalid (deleted/no WA), will re-search`)
+      }
+    }
   } else if (data.client_id) {
     const { data: client } = await supabase
       .from('clients')
@@ -513,9 +568,17 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       .single()
     contactRecord = client
     contactType = 'client'
-    // Only use subscriber_id if it's a valid ID (not a sync conflict status)
-    subscriberId = isValidSubscriberId(client?.manychat_subscriber_id) ? client.manychat_subscriber_id : null
     contactPhone = client?.phone
+    // Only use subscriber_id if it's a valid ID (not a sync conflict status)
+    const savedId = isValidSubscriberId(client?.manychat_subscriber_id) ? client.manychat_subscriber_id : null
+    if (savedId) {
+      const isValid = await validateSubscriberHasWhatsApp(savedId)
+      if (isValid) {
+        subscriberId = savedId
+      } else {
+        console.log(`Saved subscriber ${savedId} is invalid (deleted/no WA), will re-search`)
+      }
+    }
   }
 
   console.log('ManyChat subscriber context:', {
