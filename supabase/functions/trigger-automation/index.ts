@@ -86,8 +86,15 @@ async function findSubscriberByCustomFieldMC(apiKey: string, fieldId: number, ph
       if (res.ok) {
         const data = await res.json();
         console.log(`🔍 Find subscriber by custom field (field_id=${fieldId}, value=${candidate}) response:`, data);
-        if (data?.status === 'success' && data?.data?.id) {
-          return String(data.data.id);
+        if (data?.status === 'success' && data?.data) {
+          // Handle both array and object responses from ManyChat API
+          const subscribers = Array.isArray(data.data) ? data.data : [data.data];
+          // Find first ACTIVE subscriber (not deleted)
+          const activeSubscriber = subscribers.find((s: any) => s.status !== 'deleted' && s.id);
+          if (activeSubscriber?.id) {
+            console.log(`✅ Found active subscriber: ${activeSubscriber.id}`);
+            return String(activeSubscriber.id);
+          }
         }
       }
       
