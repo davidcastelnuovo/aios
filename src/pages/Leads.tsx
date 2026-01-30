@@ -37,6 +37,7 @@ import { useLeadStatuses, LeadStatus } from "@/hooks/useLeadStatuses";
 import { useLeadPipelineStages, LeadPipelineStage } from "@/hooks/useLeadPipelineStages";
 import { LeadFiltersDialog, FilterState } from "@/components/leads/LeadFiltersDialog";
 import { LeadFilterPresetTabs, FilterPreset } from "@/components/leads/LeadFilterPresetTabs";
+import { useViewAs } from "@/contexts/ViewAsContext";
 import {
   DndContext,
   DragCancelEvent,
@@ -616,6 +617,7 @@ export default function Leads() {
   const { activeStatuses: leadStatuses } = useLeadStatuses();
   const { activeStages: pipelineStagesData } = useLeadPipelineStages();
   const { isFieldVisible } = useCustomFieldLabels('lead');
+  const { isViewingAs, viewAsSalesPersonId, viewAsUserName } = useViewAs();
   const [searchParams, setSearchParams] = useSearchParams();
   const leadIdFromUrl = searchParams.get('leadId');
   const [autoOpenLeadId, setAutoOpenLeadId] = useState<string | null>(null);
@@ -736,7 +738,7 @@ export default function Leads() {
 
   // Fetch total count for pagination - skip for Kanban view (not needed)
   const { data: totalLeadsCount = 0 } = useQuery({
-    queryKey: ["leads-count", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["leads-count", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), isViewingAs, viewAsSalesPersonId],
     queryFn: async () => {
       if (!tenantId) return 0;
       
@@ -775,8 +777,11 @@ export default function Leads() {
         query = query.eq("status", filterStage as any);
       }
       
-      // Multi-select sales person filter
-      if (filterSalesPersonIds.length > 0) {
+      // When viewing as a sales person, force filter to their leads
+      if (isViewingAs && viewAsSalesPersonId) {
+        query = query.eq("sales_person_id", viewAsSalesPersonId);
+      } else if (filterSalesPersonIds.length > 0) {
+        // Multi-select sales person filter
         if (filterSalesPersonIds.includes("none") && filterSalesPersonIds.length === 1) {
           query = query.is("sales_person_id", null);
         } else if (!filterSalesPersonIds.includes("none")) {
@@ -823,7 +828,7 @@ export default function Leads() {
 
   // Kanban view: use RPC that fetches leads per stage
   const { data: kanbanStageData, isLoading: isKanbanLoading, refetch: refetchKanban, isFetching: isKanbanFetching } = useQuery({
-    queryKey: ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(',')],
+    queryKey: ["leads-kanban", tenantId, selectedAgency, searchQuery, filterSalesPersonIds, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), PIPELINE_STAGES.map(s => s.id).join(','), isViewingAs, viewAsSalesPersonId],
     queryFn: async () => {
       if (!tenantId) return null;
       
@@ -834,9 +839,14 @@ export default function Leads() {
       const stageIds = PIPELINE_STAGES.map(s => s.id);
       
       // Build sales person filter - support multi-select
-      const salesPersonFilter = filterSalesPersonIds.length > 0 && !filterSalesPersonIds.includes("none") 
-        ? filterSalesPersonIds 
-        : null;
+      // When viewing as a sales person, override the filter
+      let salesPersonFilter: string[] | null = null;
+      if (isViewingAs && viewAsSalesPersonId) {
+        // Force filter to the viewed-as sales person
+        salesPersonFilter = [viewAsSalesPersonId];
+      } else if (filterSalesPersonIds.length > 0 && !filterSalesPersonIds.includes("none")) {
+        salesPersonFilter = filterSalesPersonIds;
+      }
       
       const { data, error } = await supabase.rpc('get_leads_by_stages', {
         p_tenant_id: tenantId,
@@ -922,7 +932,7 @@ export default function Leads() {
   
   // Table view: use regular paginated query
   const { data: tableLeads, isLoading: isTableLoading, refetch: refetchTable, isFetching: isTableFetching } = useQuery({
-    queryKey: ["leads-table", tenantId, selectedAgency, effectivePage, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString()],
+    queryKey: ["leads-table", tenantId, selectedAgency, effectivePage, searchQuery, filterSalesPersonIds, filterStage, filterResponseStatus, filterTagIds, filterFollowUpToday, startDate?.toISOString(), endDate?.toISOString(), isViewingAs, viewAsSalesPersonId],
     queryFn: async () => {
       if (!tenantId) return [] as any[];
       
@@ -1031,8 +1041,11 @@ export default function Leads() {
         query = query.eq("status", filterStage as any);
       }
       
-      // Multi-select sales person filter
-      if (filterSalesPersonIds.length > 0) {
+      // When viewing as a sales person, force filter to their leads
+      if (isViewingAs && viewAsSalesPersonId) {
+        query = query.eq("sales_person_id", viewAsSalesPersonId);
+      } else if (filterSalesPersonIds.length > 0) {
+        // Multi-select sales person filter
         if (filterSalesPersonIds.includes("none") && filterSalesPersonIds.length === 1) {
           query = query.is("sales_person_id", null);
         } else if (!filterSalesPersonIds.includes("none")) {
@@ -1951,6 +1964,14 @@ export default function Leads() {
 
   return (
     <div className="space-y-6 p-3 md:p-6">
+      {/* View As Banner - shows when viewing as another user */}
+      {isViewingAs && (
+        <div className="bg-warning/20 border border-warning text-warning-foreground px-4 py-3 rounded-lg flex items-center gap-2 text-sm">
+          <span className="font-medium">📊 מצב צפייה:</span>
+          <span>אתה צופה בלידים של <strong>{viewAsUserName}</strong> בלבד</span>
+        </div>
+      )}
+      
       {/* Mobile Header */}
       <div className="block md:hidden space-y-4">
         <div className="flex items-center justify-between">

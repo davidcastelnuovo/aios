@@ -11,6 +11,8 @@ import { useEffect } from "react";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useQuery } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
+import { ViewAsProvider } from "@/contexts/ViewAsContext";
+import { ViewAsBanner } from "@/components/ViewAsBanner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -178,59 +180,62 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   return (
-    <SidebarProvider defaultOpen={true}>
-      <div className="min-h-screen flex w-full overflow-x-hidden" dir="rtl">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col overflow-x-hidden">
-          <header className="sticky top-0 z-50 h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 gap-2 md:gap-4 flex-shrink-0">
-            <div className="flex items-center gap-2 md:gap-4 min-w-0">
-              <SidebarTrigger className="md:hidden" />
-              <h1 className="text-sm md:text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
-                מערכת ניהול סוכנויות
-              </h1>
-            </div>
-            <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
-              {agencies && agencies.length > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground hidden sm:inline">סוכנות:</span>
-                  <Select value={selectedAgency} onValueChange={setSelectedAgency}>
-                    <SelectTrigger className="w-[160px] md:w-[220px] bg-background border-2">
-                      <Building2 className="h-4 w-4 mr-2 flex-shrink-0" />
-                      <SelectValue placeholder="בחר סוכנות" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background z-[100]">
-                      {agencies.length > 1 && (
-                        <SelectItem value="all">כל הסוכנויות</SelectItem>
-                      )}
-                      {agencies.map((agency) => (
-                        <SelectItem key={agency.id} value={agency.id}>
-                          {agency.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="rounded-full">
-                    <img src={logo} alt="Logo" className="h-8 w-8 object-contain" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-background z-[100]">
-                  <DropdownMenuItem onClick={handleLogout}>
-                    <LogOut className="mr-2 h-4 w-4" />
-                    התנתק
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </header>
-        <main className="flex-1 min-h-0 overflow-hidden md:overflow-hidden overflow-y-auto">
-          {children}
-        </main>
+    <ViewAsProvider>
+      <SidebarProvider defaultOpen={true}>
+        <div className="min-h-screen flex w-full overflow-x-hidden" dir="rtl">
+          <AppSidebar />
+          <div className="flex-1 flex flex-col overflow-x-hidden">
+            <ViewAsBanner />
+            <header className="sticky top-0 z-50 h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 gap-2 md:gap-4 flex-shrink-0">
+              <div className="flex items-center gap-2 md:gap-4 min-w-0">
+                <SidebarTrigger className="md:hidden" />
+                <h1 className="text-sm md:text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
+                  מערכת ניהול סוכנויות
+                </h1>
+              </div>
+              <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+                {agencies && agencies.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground hidden sm:inline">סוכנות:</span>
+                    <Select value={selectedAgency} onValueChange={setSelectedAgency}>
+                      <SelectTrigger className="w-[160px] md:w-[220px] bg-background border-2">
+                        <Building2 className="h-4 w-4 mr-2 flex-shrink-0" />
+                        <SelectValue placeholder="בחר סוכנות" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background z-[100]">
+                        {agencies.length > 1 && (
+                          <SelectItem value="all">כל הסוכנויות</SelectItem>
+                        )}
+                        {agencies.map((agency) => (
+                          <SelectItem key={agency.id} value={agency.id}>
+                            {agency.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="rounded-full">
+                      <img src={logo} alt="Logo" className="h-8 w-8 object-contain" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="bg-background z-[100]">
+                    <DropdownMenuItem onClick={handleLogout}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      התנתק
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </header>
+          <main className="flex-1 min-h-0 overflow-hidden md:overflow-hidden overflow-y-auto">
+            {children}
+          </main>
+          </div>
         </div>
-      </div>
-    </SidebarProvider>
+      </SidebarProvider>
+    </ViewAsProvider>
   );
 }
