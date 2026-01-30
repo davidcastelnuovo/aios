@@ -643,11 +643,14 @@ export default function ManyChatSettings() {
                 ) : (
                   <Button 
                     onClick={() => startSyncMutation.mutate()} 
-                    disabled={!leadsToSync?.count || startSyncMutation.isPending}
+                    disabled={(!leadsToSync?.count && !resetBeforeSync) || (resetBeforeSync && !leadsToSync?.conflicts && !leadsToSync?.count) || startSyncMutation.isPending}
                     className="flex-1"
                   >
                     <Play className="h-4 w-4 ml-2" />
-                    התחל סנכרון ({leadsToSync?.count || 0} לידים)
+                    {resetBeforeSync && (leadsToSync?.conflicts || 0) > 0 
+                      ? `התחל סנכרון (איפוס ${leadsToSync?.conflicts || 0} קונפליקטים)`
+                      : `התחל סנכרון (${leadsToSync?.count || 0} לידים)`
+                    }
                   </Button>
                 )}
                 <Button 
