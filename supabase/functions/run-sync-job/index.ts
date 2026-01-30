@@ -235,7 +235,12 @@ Deno.serve(async (req) => {
     const isFreshRunning =
       job.status === 'running' && jobUpdatedAt > 0 && nowMs - jobUpdatedAt < RUNNING_STALE_AFTER_MS;
 
-    if (isFreshRunning) {
+    // Internal self-invocations (using the service role key) MUST be allowed.
+    // Otherwise, the "batch + self-trigger" pattern stops after the first chunk.
+    const authHeader = req.headers.get('Authorization') || '';
+    const isInternalServiceCall = authHeader === `Bearer ${supabaseServiceKey}`;
+
+    if (isFreshRunning && !isInternalServiceCall) {
       console.log(`Job ${jobId} is already running (fresh heartbeat), skipping this trigger`);
       return new Response(
         JSON.stringify({ success: true, message: 'Job already running' }),
