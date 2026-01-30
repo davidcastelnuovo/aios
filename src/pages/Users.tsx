@@ -7,6 +7,9 @@ import { AddTenantForm } from "@/components/forms/AddTenantForm";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTerminology } from "@/hooks/useTerminology";
+import { useViewAs } from "@/contexts/ViewAsContext";
+import { useTenantPath } from "@/hooks/useTenantPath";
+import { useNavigate } from "react-router-dom";
 import {
   Table,
   TableBody,
@@ -25,7 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { Shield, UserPlus, Trash2, Settings, Lock, Mail, Building2 } from "lucide-react";
+import { Shield, UserPlus, Trash2, Settings, Lock, Mail, Building2, Eye } from "lucide-react";
 import { useState } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { EditUserAgenciesDialog } from "@/components/forms/EditUserAgenciesDialog";
@@ -77,7 +80,9 @@ export default function Users() {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const { t } = useTerminology();
-  
+  const { setViewAs } = useViewAs();
+  const { buildPath } = useTenantPath();
+  const navigate = useNavigate();
   // Helper function to get role label using terminology
   const getRoleLabel = (role: UserRole): string => {
     const key = roleTerminologyKeys[role];
@@ -1512,6 +1517,22 @@ export default function Users() {
                         >
                           <Shield className="h-4 w-4" />
                         </Button>
+                        {/* View As button - only for sales_person role */}
+                        {(isOwner || isSuperAdmin) && user.sales_person_id && (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              setViewAs(user.id, user.sales_person_id, user.full_name || user.email);
+                              toast.success(`עובר למצב צפייה בתור ${user.full_name || user.email}`);
+                              navigate(buildPath('leads'));
+                            }}
+                            title="צפה בתור משתמש זה"
+                            className="border-warning text-warning hover:bg-warning/10"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="icon"
