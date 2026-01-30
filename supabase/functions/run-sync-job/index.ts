@@ -5,6 +5,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Edge functions have execution time limits. Running a long sync (minutes) in a single invocation
+// will be terminated mid-way. We therefore process in small batches and self-invoke until done.
+const MAX_RUNTIME_MS = 25_000; // keep a safety margin under common 30s limits
+const DEFAULT_BATCH_SIZE = 20;
+const RUNNING_STALE_AFTER_MS = 60_000; // if no heartbeat/progress update for 60s, we can resume
+
 function normalizePhone(phone: string): string {
   if (!phone) return '';
   let cleaned = phone.replace(/\D/g, '');
@@ -40,6 +46,24 @@ async function safeJson(res: Response): Promise<any> {
   } catch (_e) {
     return { __parseError: true, status: res.status, text: text.slice(0, 500) };
   }
+}
+
+async function triggerNextRun(
+  supabaseUrl: string,
+  supabaseServiceKey: string,
+  jobId: string
+): Promise<void> {
+  const runUrl = `${supabaseUrl}/functions/v1/run-sync-job`;
+  fetch(runUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${supabaseServiceKey}`,
+    },
+    body: JSON.stringify({ jobId }),
+  }).catch((err) => {
+    console.error('Failed to trigger next run-sync-job:', err);
+  });
 }
 
 async function getPhoneNumberFieldId(
@@ -204,11 +228,32 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Update status to running
+    // Prevent overlapping runners (can happen if the function is triggered multiple times).
+    // If the job is already running and has recent updates, we assume another runner is active.
+    const jobUpdatedAt = job.updated_at ? new Date(job.updated_at).getTime() : 0;
+    const nowMs = Date.now();
+    const isFreshRunning =
+      job.status === 'running' && jobUpdatedAt > 0 && nowMs - jobUpdatedAt < RUNNING_STALE_AFTER_MS;
+
+    if (isFreshRunning) {
+      console.log(`Job ${jobId} is already running (fresh heartbeat), skipping this trigger`);
+      return new Response(
+        JSON.stringify({ success: true, message: 'Job already running' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Update status to running (and refresh heartbeat)
     if (job.status === 'pending') {
       await supabase
         .from('sync_jobs')
-        .update({ status: 'running', started_at: new Date().toISOString() })
+        .update({ status: 'running', started_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', jobId);
+    } else {
+      // stale runner recovery: mark a heartbeat so UI shows it's alive again
+      await supabase
+        .from('sync_jobs')
+        .update({ status: 'running', updated_at: new Date().toISOString() })
         .eq('id', jobId);
     }
 
@@ -216,6 +261,7 @@ Deno.serve(async (req) => {
     const settings = job.settings as { tagId?: number; delayMs?: number };
     const tagId = settings.tagId || 79380109;
     const delayMs = settings.delayMs || 1000;
+    const batchSize = (job.settings as any)?.batchSize ?? DEFAULT_BATCH_SIZE;
 
     // Get ManyChat integration
     const { data: integration } = await supabase
@@ -239,14 +285,29 @@ Deno.serve(async (req) => {
     const apiKey = integration.api_key;
     const phoneFieldId = await getPhoneNumberFieldId(apiKey, supabase, tenantId);
 
-    // Process leads in a loop until done or stopped
+    const startedAtMs = Date.now();
+    let processedThisRun = 0;
+
+    // Process leads in a loop until done/stopped OR we hit our batch/runtime limits
     let processedTotal = (job.progress as any)?.processed || 0;
     let failedTotal = (job.progress as any)?.failed || 0;
     let conflictsTotal = (job.progress as any)?.conflicts || 0;
     const totalLeads = (job.progress as any)?.total || 0;
     const allResults: SyncResult[] = ((job.progress as any)?.results || []).slice(-50); // Keep last 50 results
 
-    while (true) {
+     while (true) {
+       // Stop if we are close to runtime limits
+       if (Date.now() - startedAtMs > MAX_RUNTIME_MS) {
+         console.log(`Runtime limit reached for job ${jobId} - will continue in next invocation`);
+         break;
+       }
+
+       // Stop if we processed enough in this run
+       if (processedThisRun >= batchSize) {
+         console.log(`Batch limit reached for job ${jobId} (${batchSize}) - will continue in next invocation`);
+         break;
+       }
+
       // Re-check job status (in case it was stopped)
       const { data: currentJob } = await supabase
         .from('sync_jobs')
@@ -355,6 +416,17 @@ Deno.serve(async (req) => {
       } catch (err) {
         wasSkipped = true;
         errorMessage = err instanceof Error ? err.message : 'Unknown error';
+
+        // Avoid infinite retries on a lead that keeps failing: mark it as needing manual attention.
+        // (Keeps the job moving instead of getting stuck repeatedly on the same bad record.)
+        try {
+          await supabase
+            .from('leads')
+            .update({ manychat_subscriber_id: 'NEEDS_MANUAL_LINK' })
+            .eq('id', lead.id);
+        } catch (updateErr) {
+          console.error('Failed to mark lead as NEEDS_MANUAL_LINK:', updateErr);
+        }
       }
 
       // Update counters
@@ -364,6 +436,8 @@ Deno.serve(async (req) => {
       } else {
         processedTotal++;
       }
+
+       processedThisRun++;
 
       // Add result
       allResults.push({
@@ -420,12 +494,43 @@ Deno.serve(async (req) => {
       await new Promise((r) => setTimeout(r, delayMs));
     }
 
+    // Check if anything remains; if yes, self-invoke again. If not, complete.
+    const { count: remainingAfter } = await supabase
+      .from('leads')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId)
+      .is('manychat_subscriber_id', null)
+      .not('phone', 'is', null);
+
+    if (remainingAfter && remainingAfter > 0) {
+      console.log(`Job ${jobId} continuing. Remaining: ${remainingAfter}`);
+      // Keep status running and schedule next chunk
+      await supabase
+        .from('sync_jobs')
+        .update({ status: 'running', updated_at: new Date().toISOString() })
+        .eq('id', jobId);
+
+      await triggerNextRun(supabaseUrl, supabaseServiceKey, jobId);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: 'Continuing in background',
+          processed: processedTotal,
+          failed: failedTotal,
+          remaining: remainingAfter,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Mark job as completed
     await supabase
       .from('sync_jobs')
       .update({
         status: 'completed',
         completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq('id', jobId);
 
