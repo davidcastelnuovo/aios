@@ -8,11 +8,33 @@ const corsHeaders = {
 // Custom field name for phone number in ManyChat (must be created manually in ManyChat)
 const PHONE_CUSTOM_FIELD_NAME = 'phone_number';
 
-// Phone normalization helper
+// Check if phone is international (non-Israeli)
+function isInternationalPhone(phone: string): boolean {
+  if (!phone) return false;
+  const trimmed = phone.trim();
+  if (trimmed.startsWith('+') && !trimmed.startsWith('+972')) return true;
+  if (trimmed.startsWith('00') && !trimmed.startsWith('00972')) return true;
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length >= 10 && !digits.startsWith('972') && !digits.startsWith('0')) {
+    const intlPrefixes = ['1', '44', '49', '43', '33', '39', '34', '31', '32', '41', '61', '81', '86', '91'];
+    for (const prefix of intlPrefixes) {
+      if (digits.startsWith(prefix) && digits.length >= prefix.length + 8) return true;
+    }
+  }
+  return false;
+}
+
+function formatInternationalPhone(phone: string): string {
+  const trimmed = phone.trim();
+  if (trimmed.startsWith('+')) return trimmed.replace(/[^\d+]/g, '');
+  if (trimmed.startsWith('00')) return '+' + trimmed.slice(2).replace(/\D/g, '');
+  return '+' + trimmed.replace(/\D/g, '');
+}
+
+// Phone normalization helper (for Israeli phones)
 function normalizePhone(phone: string): string {
   if (!phone) return '';
   let cleaned = phone.replace(/\D/g, '');
-  // Handle Israeli numbers
   if (cleaned.startsWith('972')) {
     cleaned = cleaned.slice(3);
   }
@@ -24,12 +46,22 @@ function normalizePhone(phone: string): string {
 
 // Format phone for ManyChat API
 function formatPhoneForManyChat(phone: string): string {
+  if (isInternationalPhone(phone)) {
+    const formatted = formatInternationalPhone(phone);
+    return formatted.startsWith('+') ? formatted.slice(1) : formatted;
+  }
   const cleaned = normalizePhone(phone);
   return `972${cleaned}`;
 }
 
 // Generate phone variations for lookup
 function getPhoneLookupCandidates(phone: string): string[] {
+  if (isInternationalPhone(phone)) {
+    const formatted = formatInternationalPhone(phone);
+    const withoutPlus = formatted.startsWith('+') ? formatted.slice(1) : formatted;
+    return [formatted, withoutPlus].filter(Boolean);
+  }
+  
   const cleaned = normalizePhone(phone);
   if (!cleaned) return [];
 
