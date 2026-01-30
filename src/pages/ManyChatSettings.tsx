@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Save, Key, CheckCircle2, XCircle, MessageSquare, Calendar, Play, Square, RefreshCw, Users, Cloud } from "lucide-react";
+import { Save, Key, CheckCircle2, XCircle, MessageSquare, Calendar, Play, Square, RefreshCw, Users, Cloud, RotateCcw } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { SyncManyChatDialog } from "@/components/forms/SyncManyChatDialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Progress } from "@/components/ui/progress";
@@ -63,6 +64,7 @@ export default function ManyChatSettings() {
   
   // Bulk sync state
   const [selectedTagId, setSelectedTagId] = useState<string>("79380109");
+  const [resetBeforeSync, setResetBeforeSync] = useState(false);
   const [currentJob, setCurrentJob] = useState<SyncJob | null>(null);
 
   // Fetch existing integration
@@ -266,7 +268,7 @@ export default function ManyChatSettings() {
         body: {
           tenantId,
           tagId: parseInt(selectedTagId),
-          resetFirst: false,
+          resetFirst: resetBeforeSync,
         },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
@@ -597,6 +599,20 @@ export default function ManyChatSettings() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Reset checkbox */}
+              <div className="flex items-center space-x-2 space-x-reverse">
+                <Checkbox
+                  id="resetBeforeSync"
+                  checked={resetBeforeSync}
+                  onCheckedChange={(checked) => setResetBeforeSync(checked === true)}
+                  disabled={isJobRunning}
+                />
+                <Label htmlFor="resetBeforeSync" className="text-sm cursor-pointer">
+                  <RotateCcw className="h-4 w-4 inline ml-1" />
+                  איפוס כל הלידים לפני סנכרון (כולל קונפליקטים)
+                </Label>
+              </div>
               
               {/* Progress */}
               {(isJobRunning || progress.total > 0) && (
@@ -680,7 +696,7 @@ export default function ManyChatSettings() {
                   <br />
                   הסנכרון רץ בשרת ולא דורש להשאיר את הדפדפן פתוח.
                   <br />
-                  זמן משוער ל-{leadsToSync?.count || 0} לידים: כ-{Math.ceil((leadsToSync?.count || 0) * 10 / 60)} דקות.
+                  זמן משוער ל-{leadsToSync?.count || 0} לידים: כ-{Math.ceil((leadsToSync?.count || 0) / 60)} דקות (ליד לשנייה).
                 </p>
               </Card>
             </CardContent>
