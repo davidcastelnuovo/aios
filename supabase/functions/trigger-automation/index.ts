@@ -214,9 +214,9 @@ Deno.serve(async (req) => {
         const startTime = Date.now()
         
         try {
-          // Check conditions if any
+          // Check conditions if any (pass trigger_type to skip irrelevant conditions)
           if (automation.conditions && Object.keys(automation.conditions).length > 0) {
-            const conditionsMet = checkConditions(automation.conditions, payloadData)
+            const conditionsMet = checkConditions(automation.conditions, payloadData, automation.trigger_type)
             if (!conditionsMet) {
               console.log(`Conditions not met for automation ${automation.id}`)
               return
@@ -301,12 +301,17 @@ Deno.serve(async (req) => {
 })
 
 // Helper function to check conditions
-function checkConditions(conditions: any, data: any): boolean {
+function checkConditions(conditions: any, data: any, triggerType?: string): boolean {
   try {
     // Simple condition checking - can be extended
     for (const [key, value] of Object.entries(conditions)) {
-      // Special handling for new_status - check both status and new_status fields
+      // Special handling for new_status - only relevant for lead_status_changed trigger
       if (key === 'new_status') {
+        // Skip new_status condition for non-status triggers (like meeting_created)
+        if (triggerType && triggerType !== 'lead_status_changed' && triggerType !== 'task_status_changed') {
+          console.log(`⏭️ Skipping new_status condition for trigger: ${triggerType}`);
+          continue;
+        }
         const dataStatus = data.new_status || data.status;
         if (dataStatus !== value) {
           return false;
