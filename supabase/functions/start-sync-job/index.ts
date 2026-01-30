@@ -60,13 +60,31 @@ Deno.serve(async (req) => {
       );
     }
 
-    // If resetFirst, reset all manychat_subscriber_id for this tenant
+    // If resetFirst, reset all manychat_subscriber_id for this tenant (including conflicts)
     if (resetFirst) {
       console.log('Resetting all manychat_subscriber_id for tenant', tenantId);
+      // Reset NULL leads
       await supabase
         .from('leads')
         .update({ manychat_subscriber_id: null })
-        .eq('tenant_id', tenantId);
+        .eq('tenant_id', tenantId)
+        .is('manychat_subscriber_id', null);
+      
+      // Reset SYNC_CONFLICT leads
+      await supabase
+        .from('leads')
+        .update({ manychat_subscriber_id: null })
+        .eq('tenant_id', tenantId)
+        .eq('manychat_subscriber_id', 'SYNC_CONFLICT');
+      
+      // Reset NEEDS_MANUAL_LINK leads
+      await supabase
+        .from('leads')
+        .update({ manychat_subscriber_id: null })
+        .eq('tenant_id', tenantId)
+        .eq('manychat_subscriber_id', 'NEEDS_MANUAL_LINK');
+        
+      console.log('Reset complete for tenant', tenantId);
     }
 
     // Count total leads to sync
