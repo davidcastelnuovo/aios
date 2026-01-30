@@ -483,6 +483,17 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     return !invalidStatuses.includes(id);
   };
 
+  // ManyChat sometimes returns a single object and sometimes an array.
+  // Prefer ACTIVE subscribers (status !== 'deleted').
+  const extractSubscriberId = (result: any): string | null => {
+    if (!result || result.status !== 'success' || !result.data) return null;
+    const subscribers = Array.isArray(result.data) ? result.data : [result.data];
+    const active = subscribers.find((s: any) => s?.status !== 'deleted' && s?.id);
+    if (active?.id) return String(active.id);
+    const anyWithId = subscribers.find((s: any) => s?.id);
+    return anyWithId?.id ? String(anyWithId.id) : null;
+  };
+
   if (data.lead_id) {
     const { data: lead } = await supabase
       .from('leads')
@@ -545,8 +556,9 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         const searchResult = await searchResponse.json()
         console.log(`ManyChat findBySystemField response for ${phoneFormat}:`, searchResult)
         
-        if (searchResult.status === 'success' && searchResult.data?.id) {
-          subscriberId = searchResult.data.id.toString()
+        const foundId = extractSubscriberId(searchResult);
+        if (foundId) {
+          subscriberId = foundId;
           console.log(`Found subscriber by phone ${phoneFormat}: ${subscriberId}`)
           
           // Update the contact record with the found subscriber ID
@@ -594,8 +606,9 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         const searchResult = await searchResponse.json()
         console.log(`ManyChat findBySystemField response for wa_id ${waId}:`, searchResult)
 
-        if (searchResult.status === 'success' && searchResult.data?.id) {
-          subscriberId = searchResult.data.id.toString()
+        const foundId = extractSubscriberId(searchResult);
+        if (foundId) {
+          subscriberId = foundId;
           console.log(`Found subscriber by wa_id ${waId}: ${subscriberId}`)
 
           if (contactType === 'lead' && contactRecord?.id) {
@@ -608,6 +621,44 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
               .from('clients')
               .update({ manychat_subscriber_id: subscriberId })
               .eq('id', contactRecord.id)
+          }
+          break
+        }
+      }
+    }
+  }
+
+  // If still no subscriber, try lookup by WhatsApp phone explicitly
+  if (!subscriberId && contactPhone) {
+    const cleanPhone = contactPhone.replace(/\D/g, '')
+    const last9Digits = cleanPhone.slice(-9)
+    const whatsappPhoneCandidates = [...new Set([`+972${last9Digits}`, `972${last9Digits}`])]
+    console.log('No subscriber found by wa_id, trying whatsapp_phone candidates:', whatsappPhoneCandidates)
+
+    for (const whatsappPhone of whatsappPhoneCandidates) {
+      const searchUrl = `${baseUrl}/subscriber/findBySystemField?whatsapp_phone=${encodeURIComponent(whatsappPhone)}`
+      const searchResponse = await fetch(searchUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      console.log(`Search whatsapp_phone response status for ${whatsappPhone}: ${searchResponse.status}`)
+      if (searchResponse.ok) {
+        const searchResult = await searchResponse.json()
+        console.log(`ManyChat findBySystemField response for whatsapp_phone ${whatsappPhone}:`, searchResult)
+
+        const foundId = extractSubscriberId(searchResult)
+        if (foundId) {
+          subscriberId = foundId
+          console.log(`Found subscriber by whatsapp_phone ${whatsappPhone}: ${subscriberId}`)
+
+          if (contactType === 'lead' && contactRecord?.id) {
+            await supabase.from('leads').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
+          } else if (contactType === 'client' && contactRecord?.id) {
+            await supabase.from('clients').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
           }
           break
         }
