@@ -89,11 +89,20 @@ async function findSubscriberByCustomFieldMC(apiKey: string, fieldId: number, ph
         if (data?.status === 'success' && data?.data) {
           // Handle both array and object responses from ManyChat API
           const subscribers = Array.isArray(data.data) ? data.data : [data.data];
-          // Find first ACTIVE subscriber (not deleted)
-          const activeSubscriber = subscribers.find((s: any) => s.status !== 'deleted' && s.id);
+
+          // Prefer ACTIVE subscriber (not deleted)
+          const activeSubscriber = subscribers.find((s: any) => s?.status !== 'deleted' && s?.id);
           if (activeSubscriber?.id) {
             console.log(`✅ Found active subscriber: ${activeSubscriber.id}`);
             return String(activeSubscriber.id);
+          }
+
+          // Fallback: if ONLY deleted subscribers were found, return the first one.
+          // Reason: ManyChat may block createSubscriber with "wa_id already exists" even when the existing subscriber is deleted.
+          const firstWithId = subscribers.find((s: any) => s?.id);
+          if (firstWithId?.id) {
+            console.log(`⚠️ Found subscriber but status is "${firstWithId.status}". Using it to avoid wa_id conflict: ${firstWithId.id}`);
+            return String(firstWithId.id);
           }
         }
       }
