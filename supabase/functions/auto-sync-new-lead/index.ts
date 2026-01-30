@@ -542,6 +542,13 @@ Deno.serve(async (req) => {
       }
     }
 
+    // STEP 5.5: If subscriber was found (not created), ensure phone_number custom field is set
+    if (subscriberId && wasExisting) {
+      console.log(`📝 Ensuring phone_number custom field is set for existing subscriber ${subscriberId}...`);
+      const formattedPhoneForCustomField = `+${formattedPhone}`;
+      await setPhoneCustomField(apiKey, subscriberId, formattedPhoneForCustomField);
+    }
+
     // STEP 6: Update lead with subscriber ID
     if (subscriberId) {
       const { error: updateError } = await supabase
