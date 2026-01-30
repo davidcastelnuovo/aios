@@ -517,6 +517,14 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     subscriberId = isValidSubscriberId(client?.manychat_subscriber_id) ? client.manychat_subscriber_id : null
     contactPhone = client?.phone
   }
+
+  console.log('ManyChat subscriber context:', {
+    tenantId,
+    contactType,
+    contactRecordId: contactRecord?.id,
+    contactPhone,
+    existingSubscriberId: subscriberId,
+  })
   
   // If no subscriber ID, try to find by phone number
   if (!subscriberId && contactPhone) {
@@ -789,6 +797,11 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   if (!subscriberId) {
     throw new Error('לא נמצא Subscriber ID של ManyChat ולא ניתן היה ליצור subscriber חדש. ודא שלליד יש מספר טלפון תקין')
   }
+
+  const subscriberIdNum = Number(subscriberId)
+  if (!Number.isFinite(subscriberIdNum)) {
+    throw new Error(`Subscriber ID לא תקין (לא מספר): ${subscriberId}`)
+  }
   
   // Update custom fields if mapping is provided
   const customFieldUpdates: any[] = []
@@ -833,7 +846,7 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          subscriber_id: subscriberId,
+          subscriber_id: subscriberIdNum,
           field_id: fieldUpdate.field_id,
           field_value: fieldUpdate.field_value,
         }),
@@ -848,7 +861,13 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   
   // Add tag to trigger ManyChat automation (instead of sending a Flow)
   if (manychat_tag_id) {
+    const tagIdNum = Number.parseInt(String(manychat_tag_id).trim(), 10)
+    if (!Number.isFinite(tagIdNum)) {
+      throw new Error(`Tag ID לא תקין (לא מספר): ${manychat_tag_id}`)
+    }
+
     console.log(`Adding ManyChat tag: ${manychat_tag_id}`)
+    console.log('ManyChat addTag request:', { subscriber_id: subscriberIdNum, tag_id: tagIdNum })
     
     const tagResponse = await fetch(`${baseUrl}/subscriber/addTag`, {
       method: 'POST',
@@ -857,8 +876,8 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        subscriber_id: subscriberId,
-        tag_id: parseInt(manychat_tag_id),
+        subscriber_id: subscriberIdNum,
+        tag_id: tagIdNum,
       }),
     })
     
@@ -867,6 +886,30 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     
     if (!tagResponse.ok) {
       throw new Error(`שגיאה בהוספת טאג ב-ManyChat: ${JSON.stringify(tagResult)}`)
+    }
+
+    // Verify (best-effort) that the tag is visible on the subscriber right after applying.
+    // This helps debug cases where we tag the wrong subscriber (e.g., Messenger vs WhatsApp).
+    try {
+      const infoUrl = `${baseUrl}/subscriber/getInfo?subscriber_id=${encodeURIComponent(String(subscriberIdNum))}`
+      const infoRes = await fetch(infoUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      console.log('ManyChat getInfo status:', infoRes.status)
+      if (infoRes.ok) {
+        const info = await infoRes.json()
+        console.log('ManyChat getInfo response (post-tag):', info)
+      } else {
+        const err = await infoRes.text()
+        console.log('ManyChat getInfo error:', err)
+      }
+    } catch (e) {
+      console.log('ManyChat getInfo verification failed:', e)
     }
     
     return {
