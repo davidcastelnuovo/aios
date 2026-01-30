@@ -483,6 +483,80 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     return !invalidStatuses.includes(id);
   };
 
+  // ============================================
+  // NEW: verifyAndFixSubscriberId - Always verify ID by phone_number custom field
+  // This ensures we ALWAYS use the correct subscriber, even if saved ID is stale
+  // ============================================
+  const verifyAndFixSubscriberId = async (
+    phone: string,
+    savedId: string | null,
+    type: 'lead' | 'client',
+    recordId: string
+  ): Promise<string | null> => {
+    console.log(`🔍 verifyAndFixSubscriberId: phone=${phone}, savedId=${savedId}, type=${type}, recordId=${recordId}`);
+    
+    // Step 1: Get field_id for phone_number custom field
+    const fieldId = await getPhoneNumberFieldIdMC(apiKey, supabase, tenantId);
+    if (!fieldId) {
+      console.log('⚠️ Cannot verify - phone_number field_id not found in ManyChat');
+      // Fall back to saved ID if we can't search
+      return isValidSubscriberId(savedId) ? savedId : null;
+    }
+    
+    // Step 2: Generate phone format candidates for search
+    const cleanPhone = phone.replace(/\D/g, '');
+    const last9Digits = cleanPhone.slice(-9);
+    const phoneCandidates = [...new Set([
+      `+972${last9Digits}`,
+      `972${last9Digits}`,
+      `0${last9Digits}`,
+      cleanPhone
+    ])];
+    console.log(`🔍 Searching ManyChat by custom field (field_id=${fieldId}), candidates:`, phoneCandidates);
+    
+    // Step 3: Search for subscriber by custom field
+    const foundId = await findSubscriberByCustomFieldMC(apiKey, fieldId, phoneCandidates);
+    
+    if (foundId) {
+      console.log(`✅ Found subscriber by phone_number custom field: ${foundId}`);
+      
+      // Step 4: Compare with saved ID
+      if (savedId && savedId !== foundId) {
+        console.log(`🔄 ID MISMATCH DETECTED! Saved: ${savedId}, Found: ${foundId}`);
+        console.log(`🔧 Fixing ${type} ${recordId}: updating manychat_subscriber_id from ${savedId} to ${foundId}`);
+        
+        // Update the database with the correct ID
+        const table = type === 'lead' ? 'leads' : 'clients';
+        const { error: updateError } = await supabase
+          .from(table)
+          .update({ manychat_subscriber_id: foundId })
+          .eq('id', recordId);
+        
+        if (updateError) {
+          console.error(`❌ Failed to update ${type} ${recordId}:`, updateError);
+        } else {
+          console.log(`✅ Successfully fixed ${type} ${recordId}: ${savedId} → ${foundId}`);
+        }
+      } else if (!savedId) {
+        // No saved ID - save the found one
+        const table = type === 'lead' ? 'leads' : 'clients';
+        await supabase
+          .from(table)
+          .update({ manychat_subscriber_id: foundId })
+          .eq('id', recordId);
+        console.log(`📝 Saved new subscriber ID ${foundId} to ${type} ${recordId}`);
+      } else {
+        console.log(`✅ ID match confirmed: ${foundId}`);
+      }
+      
+      return foundId;
+    }
+    
+    console.log(`⚠️ No subscriber found by custom field phone_number`);
+    // Return null to trigger fallback searches or creation
+    return null;
+  };
+
   // ManyChat sometimes returns a single object and sometimes an array.
   // Prefer subscribers with whatsapp_phone (not deleted).
   const extractSubscriberId = (result: any): string | null => {
@@ -541,6 +615,10 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     }
   }
 
+  // ============================================
+  // NEW LOGIC: ALWAYS verify by phone_number custom field first
+  // This is the "single source of truth" approach
+  // ============================================
   if (data.lead_id) {
     const { data: lead } = await supabase
       .from('leads')
@@ -550,14 +628,17 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     contactRecord = lead
     contactType = 'lead'
     contactPhone = lead?.phone
-    // Only use subscriber_id if it's a valid ID (not a sync conflict status)
-    const savedId = isValidSubscriberId(lead?.manychat_subscriber_id) ? lead.manychat_subscriber_id : null
-    if (savedId) {
-      const isValid = await validateSubscriberHasWhatsApp(savedId)
-      if (isValid) {
-        subscriberId = savedId
-      } else {
-        console.log(`Saved subscriber ${savedId} is invalid (deleted/no WA), will re-search`)
+    
+    // NEW: If we have a phone, ALWAYS verify and potentially fix the subscriber ID
+    if (contactPhone) {
+      const savedId = isValidSubscriberId(lead?.manychat_subscriber_id) ? lead.manychat_subscriber_id : null;
+      console.log(`🔎 Lead ${lead?.id}: Verifying subscriber ID. Saved: ${savedId}, Phone: ${contactPhone}`);
+      
+      // This function searches by phone_number custom field and fixes mismatches
+      const verifiedId = await verifyAndFixSubscriberId(contactPhone, savedId, 'lead', lead.id);
+      if (verifiedId) {
+        subscriberId = verifiedId;
+        console.log(`✅ Lead ${lead?.id}: Using verified subscriber ID: ${subscriberId}`);
       }
     }
   } else if (data.client_id) {
@@ -569,14 +650,17 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     contactRecord = client
     contactType = 'client'
     contactPhone = client?.phone
-    // Only use subscriber_id if it's a valid ID (not a sync conflict status)
-    const savedId = isValidSubscriberId(client?.manychat_subscriber_id) ? client.manychat_subscriber_id : null
-    if (savedId) {
-      const isValid = await validateSubscriberHasWhatsApp(savedId)
-      if (isValid) {
-        subscriberId = savedId
-      } else {
-        console.log(`Saved subscriber ${savedId} is invalid (deleted/no WA), will re-search`)
+    
+    // NEW: If we have a phone, ALWAYS verify and potentially fix the subscriber ID
+    if (contactPhone) {
+      const savedId = isValidSubscriberId(client?.manychat_subscriber_id) ? client.manychat_subscriber_id : null;
+      console.log(`🔎 Client ${client?.id}: Verifying subscriber ID. Saved: ${savedId}, Phone: ${contactPhone}`);
+      
+      // This function searches by phone_number custom field and fixes mismatches
+      const verifiedId = await verifyAndFixSubscriberId(contactPhone, savedId, 'client', client.id);
+      if (verifiedId) {
+        subscriberId = verifiedId;
+        console.log(`✅ Client ${client?.id}: Using verified subscriber ID: ${subscriberId}`);
       }
     }
   }
