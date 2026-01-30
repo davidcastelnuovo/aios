@@ -90,19 +90,27 @@ async function findSubscriberByCustomFieldMC(apiKey: string, fieldId: number, ph
           // Handle both array and object responses from ManyChat API
           const subscribers = Array.isArray(data.data) ? data.data : [data.data];
 
-          // Prefer ACTIVE subscriber (not deleted)
+          // Prefer ACTIVE subscriber with whatsapp_phone (not deleted)
+          const activeWithWA = subscribers.find((s: any) => s?.status !== 'deleted' && s?.whatsapp_phone && s?.id);
+          if (activeWithWA?.id) {
+            console.log(`✅ Found active subscriber with WhatsApp: ${activeWithWA.id}`);
+            return String(activeWithWA.id);
+          }
+
+          // Second priority: ACTIVE subscriber (no WA phone but not deleted)
           const activeSubscriber = subscribers.find((s: any) => s?.status !== 'deleted' && s?.id);
           if (activeSubscriber?.id) {
-            console.log(`✅ Found active subscriber: ${activeSubscriber.id}`);
+            console.log(`⚠️ Found active subscriber but NO whatsapp_phone: ${activeSubscriber.id}. Will need to check further.`);
             return String(activeSubscriber.id);
           }
 
-          // Fallback: if ONLY deleted subscribers were found, return the first one.
-          // Reason: ManyChat may block createSubscriber with "wa_id already exists" even when the existing subscriber is deleted.
-          const firstWithId = subscribers.find((s: any) => s?.id);
-          if (firstWithId?.id) {
-            console.log(`⚠️ Found subscriber but status is "${firstWithId.status}". Using it to avoid wa_id conflict: ${firstWithId.id}`);
-            return String(firstWithId.id);
+          // IMPORTANT: If ONLY deleted subscribers exist, return NULL so we can try to create a new one
+          // or search via other methods. Using a deleted subscriber will fail silently.
+          const deletedSubscriber = subscribers.find((s: any) => s?.id);
+          if (deletedSubscriber?.id) {
+            console.log(`🚫 Found subscriber ${deletedSubscriber.id} but it is DELETED. NOT using it - will search via other methods.`);
+            // Return null to trigger fallback logic
+            return null;
           }
         }
       }
@@ -534,8 +542,9 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
       
       // Step 4: Compare with saved ID
       if (savedId && savedId !== foundId) {
-        console.log(`🔄 ID MISMATCH DETECTED! Saved: ${savedId}, Found: ${foundId}`);
-        console.log(`🔧 Fixing ${type} ${recordId}: updating manychat_subscriber_id from ${savedId} to ${foundId}`);
+        // Log ERROR level so it's easy to find in logs
+        console.error(`🚨 ID MISMATCH ERROR: ${type} ${recordId} - Saved ID: ${savedId}, ManyChat Found ID: ${foundId}`);
+        console.error(`🔧 AUTO-FIX TRIGGERED: Updating ${type} ${recordId} manychat_subscriber_id from ${savedId} to ${foundId}`);
         
         // Update the database with the correct ID
         const table = type === 'lead' ? 'leads' : 'clients';
@@ -545,7 +554,8 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
           .eq('id', recordId);
         
         if (updateError) {
-          console.error(`❌ Failed to update ${type} ${recordId}:`, updateError);
+          console.error(`❌ CRITICAL: Failed to fix ${type} ${recordId}:`, updateError);
+          throw new Error(`ID Mismatch detected for ${type} ${recordId}: Saved=${savedId}, Found=${foundId}. Fix failed: ${updateError.message}`);
         } else {
           console.log(`✅ Successfully fixed ${type} ${recordId}: ${savedId} → ${foundId}`);
         }
