@@ -292,25 +292,35 @@ export default function ManyChatSettings() {
     },
   });
 
-  // Stop sync mutation
+  // Stop sync mutation - uses edge function to properly stop the job
   const stopSyncMutation = useMutation({
     mutationFn: async () => {
-      if (!currentJob?.id) throw new Error('No active job');
+      if (!tenantId) throw new Error('No tenant');
       
-      const { error } = await supabase
-        .from('sync_jobs')
-        .update({ status: 'stopped' })
-        .eq('id', currentJob.id);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
       
-      if (error) throw error;
+      const response = await supabase.functions.invoke('stop-sync-job', {
+        body: {
+          tenantId,
+          jobId: currentJob?.id,
+        },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      
+      if (response.error) throw response.error;
+      if (response.data?.error) throw new Error(response.data.error);
+      
+      return response.data;
     },
     onSuccess: () => {
-      toast.info('עוצר את הסנכרון...');
+      toast.success('הסנכרון נעצר');
       refetchJob();
+      refetchLeadsCount();
     },
     onError: (error: any) => {
       console.error('Stop sync error:', error);
-      toast.error('שגיאה בעצירת הסנכרון');
+      toast.error(error.message || 'שגיאה בעצירת הסנכרון');
     },
   });
 

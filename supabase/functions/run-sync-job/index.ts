@@ -313,15 +313,15 @@ Deno.serve(async (req) => {
          break;
        }
 
-      // Re-check job status (in case it was stopped)
+      // Re-check job status (in case it was stopped/failed by user)
       const { data: currentJob } = await supabase
         .from('sync_jobs')
         .select('status')
         .eq('id', jobId)
         .single();
 
-      if (currentJob?.status === 'stopped') {
-        console.log(`Job ${jobId} was stopped by user`);
+      if (currentJob?.status === 'stopped' || currentJob?.status === 'failed') {
+        console.log(`Job ${jobId} was stopped/cancelled by user (status: ${currentJob?.status})`);
         break;
       }
 
