@@ -5,26 +5,61 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Check if phone is international (non-Israeli)
+function isInternationalPhone(phone: string): boolean {
+  if (!phone) return false;
+  const trimmed = phone.trim();
+  // Starts with + and NOT +972
+  if (trimmed.startsWith('+') && !trimmed.startsWith('+972')) return true;
+  // Starts with 00 and NOT 00972
+  if (trimmed.startsWith('00') && !trimmed.startsWith('00972')) return true;
+  // Check for common international country codes
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length >= 10 && !digits.startsWith('972') && !digits.startsWith('0')) {
+    const intlPrefixes = ['1', '44', '49', '43', '33', '39', '34', '31', '32', '41', '61', '81', '86', '91'];
+    for (const prefix of intlPrefixes) {
+      if (digits.startsWith(prefix) && digits.length >= prefix.length + 8) return true;
+    }
+  }
+  return false;
+}
+
 function normalizePhoneIsraelToE164(phoneRaw: string): string | null {
   if (!phoneRaw) return null;
 
   const trimmed = phoneRaw.trim();
   if (!trimmed) return null;
 
-  // Keep non-Israeli E.164 as-is (normalize to +digits)
-  if (trimmed.startsWith('+')) {
+  // Check if international - keep original country code
+  if (isInternationalPhone(trimmed)) {
+    if (trimmed.startsWith('+')) {
+      const digits = trimmed.replace(/\D/g, '');
+      return digits ? `+${digits}` : null;
+    }
+    if (trimmed.startsWith('00')) {
+      const digits = trimmed.replace(/\D/g, '');
+      const without00 = digits.startsWith('00') ? digits.slice(2) : digits;
+      return without00 ? `+${without00}` : null;
+    }
+    // Already starts with country code digits
     const digits = trimmed.replace(/\D/g, '');
     return digits ? `+${digits}` : null;
   }
 
-  // 00 prefix -> +
-  if (trimmed.startsWith('00')) {
+  // Keep +972 numbers as-is (already normalized Israeli)
+  if (trimmed.startsWith('+972')) {
     const digits = trimmed.replace(/\D/g, '');
-    const without00 = digits.startsWith('00') ? digits.slice(2) : digits;
+    return digits ? `+${digits}` : null;
+  }
+
+  // 00972 prefix -> +972
+  if (trimmed.startsWith('00972')) {
+    const digits = trimmed.replace(/\D/g, '');
+    const without00 = digits.slice(2); // Remove the 00
     return without00 ? `+${without00}` : null;
   }
 
-  // Israel heuristics
+  // Israel heuristics for local numbers
   let digits = trimmed.replace(/\D/g, '');
   if (!digits) return null;
 

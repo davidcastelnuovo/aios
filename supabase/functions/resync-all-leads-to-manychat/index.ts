@@ -5,6 +5,39 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Check if phone is international (non-Israeli)
+function isInternationalPhone(phone: string): boolean {
+  if (!phone) return false;
+  const trimmed = phone.trim();
+  // Starts with + and NOT +972
+  if (trimmed.startsWith('+') && !trimmed.startsWith('+972')) return true;
+  // Starts with 00 and NOT 00972
+  if (trimmed.startsWith('00') && !trimmed.startsWith('00972')) return true;
+  // Starts with country code that's not 972 (e.g., 44, 49, 43, 1)
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length >= 10 && !digits.startsWith('972') && !digits.startsWith('0')) {
+    // Could be international - check common country codes
+    const intlPrefixes = ['1', '44', '49', '43', '33', '39', '34', '31', '32', '41', '61', '81', '86', '91'];
+    for (const prefix of intlPrefixes) {
+      if (digits.startsWith(prefix) && digits.length >= prefix.length + 8) return true;
+    }
+  }
+  return false;
+}
+
+// Format international phone to E.164 (keep as-is but ensure + prefix)
+function formatInternationalPhone(phone: string): string {
+  const trimmed = phone.trim();
+  if (trimmed.startsWith('+')) {
+    return trimmed.replace(/[^\d+]/g, ''); // Keep only digits and +
+  }
+  if (trimmed.startsWith('00')) {
+    return '+' + trimmed.slice(2).replace(/\D/g, '');
+  }
+  // Already digits only
+  return '+' + trimmed.replace(/\D/g, '');
+}
+
 function normalizePhone(phone: string): string {
   if (!phone) return '';
   let cleaned = phone.replace(/\D/g, '');
@@ -20,11 +53,26 @@ function normalizePhone(phone: string): string {
 }
 
 function formatPhoneForManyChat(phone: string): string {
+  // Handle international phones - keep their original country code
+  if (isInternationalPhone(phone)) {
+    const formatted = formatInternationalPhone(phone);
+    // Return without the + for ManyChat API (they add it)
+    return formatted.startsWith('+') ? formatted.slice(1) : formatted;
+  }
+  // Israeli phone - normalize and add 972
   const cleaned = normalizePhone(phone);
   return `972${cleaned}`;
 }
 
 function getPhoneLookupCandidates(phone: string): string[] {
+  // Handle international phones
+  if (isInternationalPhone(phone)) {
+    const formatted = formatInternationalPhone(phone);
+    const withoutPlus = formatted.startsWith('+') ? formatted.slice(1) : formatted;
+    return [formatted, withoutPlus].filter(Boolean);
+  }
+  
+  // Israeli phone - generate all variants
   const cleaned = normalizePhone(phone);
   if (!cleaned) return [];
 
