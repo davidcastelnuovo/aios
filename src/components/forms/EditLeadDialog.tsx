@@ -187,7 +187,11 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
   });
 
   // Sync selected sales people when dialog opens or data loads
+  // Using JSON.stringify to prevent infinite loop from array reference changes
   useEffect(() => {
+    // Only sync when dialog is open
+    if (!open) return;
+    
     if (leadSalesPeople.length > 0) {
       setSelectedSalesPeople(leadSalesPeople);
     } else if (lead.sales_person_id) {
@@ -196,7 +200,7 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
     } else {
       setSelectedSalesPeople([]);
     }
-  }, [leadSalesPeople, lead.sales_person_id, open]);
+  }, [JSON.stringify(leadSalesPeople), lead.sales_person_id, open]);
 
   // Fetch lead's tags
   const { data: leadTagIds = [] } = useQuery({
