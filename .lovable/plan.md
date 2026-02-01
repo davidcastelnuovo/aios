@@ -1,124 +1,61 @@
 
-# תוכנית שיפור ביצועים: עדכון ליד מהיר יותר
-
-## הבעיות שזוהו
-
-### 1. פעולות סדרתיות איטיות
-ה-mutation מבצע 4-5 פעולות ברצף, וכל אחת חוסמת את הבאה:
-
-```
-עדכון lead → מחיקת sales_people → הכנסת sales_people → trigger automation
-     ↓             ↓                    ↓                    ↓
-   ~100ms        ~100ms              ~100ms               ~200ms
-```
-
-**סה"כ: ~500ms-800ms של המתנה**
-
-### 2. אין Optimistic Update
-המשתמש מחכה עד שכל הפעולות יסתיימו בשרת לפני שרואה שינוי ב-UI.
-
-### 3. invalidateQueries לכל ה-queries
-ברגע שהמוטציה מסתיימת, מתבצעות 4 קריאות refetch.
-
-## הפתרון
-
-### חלק 1: Optimistic Update
-לעדכן את ה-UI מיידית עם הנתונים החדשים, לפני שהשרת מאשר:
-
-```typescript
-updateMutation = useMutation({
-  mutationFn: ...,
-  onMutate: async (newValues) => {
-    // 1. בטל קריאות שרצות
-    await queryClient.cancelQueries({ queryKey: ["leads-kanban"] });
-    
-    // 2. שמור snapshot לפני השינוי
-    const previousData = queryClient.getQueryData(["leads-kanban"]);
-    
-    // 3. עדכן את ה-cache מיידית
-    queryClient.setQueryData(["leads-kanban"], (old) => {
-      // עדכן את הליד ב-cache
-      return updateLeadInCache(old, lead.id, newValues);
-    });
-    
-    // 4. סגור את הדיאלוג מיד
-    setOpen(false);
-    toast({ title: "מעדכן ליד..." });
-    
-    return { previousData };
-  },
-  onError: (err, newValues, context) => {
-    // אם נכשל - החזר לנתונים הקודמים
-    queryClient.setQueryData(["leads-kanban"], context.previousData);
-    toast({ title: "שגיאה בעדכון", variant: "destructive" });
-  },
-  onSettled: () => {
-    // רק אחרי הכל - רענן מהשרת
-    queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-  }
-});
-```
-
-### חלק 2: פעולות מקבילות
-להריץ את עדכון ה-lead ואת עדכון ה-sales_people במקביל:
-
-```typescript
-// במקום פעולות סדרתיות:
-const [leadResult, salesResult] = await Promise.all([
-  // עדכון הליד
-  supabase.from("leads").update(submitData).eq("id", lead.id).select().single(),
-  
-  // עדכון sales_people (delete + insert בפעולה אחת)
-  updateSalesPeopleAssignments(lead.id, selectedSalesPeople, lead.tenant_id)
-]);
-```
-
-### חלק 3: Automation ברקע
-להריץ את ה-automation בלי לחכות לתוצאה:
-
-```typescript
-// לא לחכות לתשובה - לתת לזה לרוץ ברקע
-if (lead.status !== data.status) {
-  supabase.functions.invoke('trigger-automation', { body: {...} })
-    .catch(console.error); // לא await!
-}
-```
-
-## פרטים טכניים
-
-### קובץ לעדכון
-`src/components/forms/EditLeadDialog.tsx`
-
-### שינויים
-
-**1. הוספת onMutate ל-optimistic update (שורות 257-280)**:
-- לשמור את הנתונים הנוכחיים
-- לעדכן את ה-cache מיידית
-- לסגור את הדיאלוג
-
-**2. שינוי mutationFn לפעולות מקבילות**:
-- `Promise.all` לעדכון lead + sales_people
-- Automation בלי await
-
-**3. שינוי onSuccess**:
-- להסיר את סגירת הדיאלוג (כבר נסגר ב-onMutate)
-- להציג toast מתאים
-
-**4. הוספת onError לשחזור**:
-- להחזיר את הנתונים הקודמים ל-cache
-- להציג הודעת שגיאה
-
-## השפעה צפויה
-
-| לפני | אחרי |
-|------|------|
-| המתנה של 500-800ms | תגובה מיידית |
-| הדיאלוג נסגר רק בסוף | הדיאלוג נסגר מיד |
-| "תקוע" בזמן עדכון | UI מתעדכן אופטימיסטית |
+# תוכנית: מחיקת שיוכים מהיום ושיוך לידים חדשים
 
 ## סיכום הפעולות
 
-1. **Optimistic Update** - סגירת הדיאלוג ועדכון UI מיידי
-2. **Promise.all** - הרצת lead update + sales_people במקביל
-3. **Fire & forget** - automation בלי await
-4. **Toast מעודכן** - "מעדכן ליד..." במקום המתנה שקטה
+| פעולה | כמות |
+|-------|------|
+| מחיקת שיוכים מהיום | 582 |
+| שיוך לידים חדשים לנחמה ורויטל | 3 |
+
+## שלב 1: מחיקת שיוכים מהיום
+
+למחוק את כל הרשומות בטבלת `lead_sales_people` שנוצרו היום (01/02/2026) בטנאנט נקסוס קפיטל:
+
+```sql
+DELETE FROM lead_sales_people
+WHERE tenant_id = 'eb31659b-7a21-4411-b99d-01df51cf2895'
+  AND created_at >= '2026-02-01 00:00:00';
+```
+
+**תוצאה צפויה**: 582 שיוכים יימחקו (הלידים עצמם יישארו)
+
+## שלב 2: שיוך 3 הלידים החדשים
+
+לשייך את 3 הלידים הלא משויכים מפייסבוק לנחמה ולרויטל:
+
+| ליד | שם |
+|-----|-----|
+| כפיר ששון | 40182516-8336-4ad7-bd4e-fa8d077e854f |
+| שלום שמסי | ead70dd6-0756-46df-a668-7308bd20d69b |
+| בירן נתנאל | 947b5b2f-83a5-4e55-9fdc-1a30d7a7fcc5 |
+
+**אנשי מכירות**:
+- נחמה: `4f058f40-0ae2-4df1-8b7a-796b6bcb77aa`
+- רויטל: `48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91`
+
+```sql
+INSERT INTO lead_sales_people (lead_id, sales_person_id, tenant_id)
+VALUES
+  -- כפיר ששון
+  ('40182516-8336-4ad7-bd4e-fa8d077e854f', '4f058f40-0ae2-4df1-8b7a-796b6bcb77aa', 'eb31659b-7a21-4411-b99d-01df51cf2895'),
+  ('40182516-8336-4ad7-bd4e-fa8d077e854f', '48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91', 'eb31659b-7a21-4411-b99d-01df51cf2895'),
+  -- שלום שמסי
+  ('ead70dd6-0756-46df-a668-7308bd20d69b', '4f058f40-0ae2-4df1-8b7a-796b6bcb77aa', 'eb31659b-7a21-4411-b99d-01df51cf2895'),
+  ('ead70dd6-0756-46df-a668-7308bd20d69b', '48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91', 'eb31659b-7a21-4411-b99d-01df51cf2895'),
+  -- בירן נתנאל
+  ('947b5b2f-83a5-4e55-9fdc-1a30d7a7fcc5', '4f058f40-0ae2-4df1-8b7a-796b6bcb77aa', 'eb31659b-7a21-4411-b99d-01df51cf2895'),
+  ('947b5b2f-83a5-4e55-9fdc-1a30d7a7fcc5', '48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91', 'eb31659b-7a21-4411-b99d-01df51cf2895');
+```
+
+**תוצאה צפויה**: 6 שיוכים חדשים (3 לידים × 2 מתאמות)
+
+## סיכום לפני ואחרי
+
+| מדד | לפני | אחרי |
+|-----|------|------|
+| שיוכים לנחמה | 170 | 3 |
+| שיוכים לרויטל | 170 | 3 |
+| שיוכים ליובל | 164 | 0 (מהיום) |
+| שיוכים לאוהד | 78 | 0 (מהיום) |
+| לידים לא משויכים מפייסבוק | 3 | 0 |
