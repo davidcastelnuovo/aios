@@ -271,7 +271,6 @@ const updateMutation = useMutation({
         contact_name: values.contact_name || null,
         email: values.email || null,
         phone: values.phone || null,
-        // "source" is optional in UI, but stored as "other" when empty to satisfy DB constraints
         source: (values.source as any) || 'other',
         status: (values.status as any) || 'new',
         response_status: values.response_status && values.response_status !== 'none' ? (values.response_status as any) : null,
@@ -286,100 +285,100 @@ const updateMutation = useMutation({
         industry: values.industry || null,
         products: values.products && values.products.length > 0 ? JSON.stringify(values.products) : null,
         notes: values.notes || null,
-        // Update legacy field with first selected sales person for backwards compatibility
         sales_person_id: selectedSalesPeople.length > 0 ? selectedSalesPeople[0] : null,
         agency_id: values.agency_id && values.agency_id !== 'none' ? values.agency_id : null,
         folder_link: values.folder_link || null,
         lost_reason: values.lost_reason || null,
         created_at: values.created_at || new Date(),
-        // Save folder_links and attachments
         folder_links: folderLinks,
         attachments: attachments,
       };
 
-      const { data, error } = await supabase
-        .from("leads")
-        .update(submitData)
-        .eq("id", lead.id)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // Update sales people assignments in junction table
-      // 1. Delete existing assignments
-      const { error: deleteError } = await supabase
-        .from('lead_sales_people')
-        .delete()
-        .eq('lead_id', lead.id);
-      
-      if (deleteError) {
-        console.error('Failed to delete existing sales people assignments:', deleteError);
-      }
-
-      // 2. Insert new assignments
-      if (selectedSalesPeople.length > 0 && lead.tenant_id) {
-        const assignments = selectedSalesPeople.map(spId => ({
-          lead_id: lead.id,
-          sales_person_id: spId,
-          tenant_id: lead.tenant_id,
-        }));
+      // Helper function to update sales people assignments
+      const updateSalesPeopleAssignments = async () => {
+        // Delete existing assignments
+        await supabase.from('lead_sales_people').delete().eq('lead_id', lead.id);
         
-        const { error: insertError } = await supabase
-          .from('lead_sales_people')
-          .insert(assignments);
-        
-        if (insertError) {
-          console.error('Failed to insert sales people assignments:', insertError);
+        // Insert new assignments
+        if (selectedSalesPeople.length > 0 && lead.tenant_id) {
+          const assignments = selectedSalesPeople.map(spId => ({
+            lead_id: lead.id,
+            sales_person_id: spId,
+            tenant_id: lead.tenant_id,
+          }));
+          await supabase.from('lead_sales_people').insert(assignments);
         }
-      }
-      
-      // Trigger automations if status actually changed
+      };
+
+      // Run lead update and sales people assignments in PARALLEL
+      const [leadResult] = await Promise.all([
+        supabase.from("leads").update(submitData).eq("id", lead.id).select().single(),
+        updateSalesPeopleAssignments(),
+      ]);
+
+      if (leadResult.error) throw leadResult.error;
+      const data = leadResult.data;
+
+      // Fire-and-forget: trigger automation in background (don't await!)
       if (data && lead.status !== data.status) {
-        try {
-          await supabase.functions.invoke('trigger-automation', {
-            body: {
-              trigger_type: 'lead_status_changed',
-              data: {
-                id: data.id,
-                status: data.status,
-                new_status: data.status,
-                old_status: lead.status,
-                contact_name: data.contact_name,
-                company_name: data.company_name,
-                phone: data.phone,
-                email: data.email,
-                agency_id: data.agency_id,
-                sales_person_id: data.sales_person_id,
-                tenant_id: data.tenant_id
-              },
+        supabase.functions.invoke('trigger-automation', {
+          body: {
+            trigger_type: 'lead_status_changed',
+            data: {
+              id: data.id,
+              status: data.status,
+              new_status: data.status,
+              old_status: lead.status,
+              contact_name: data.contact_name,
+              company_name: data.company_name,
+              phone: data.phone,
+              email: data.email,
+              agency_id: data.agency_id,
+              sales_person_id: data.sales_person_id,
               tenant_id: data.tenant_id
-            }
-          });
-        } catch (automationError) {
-          console.error('Failed to trigger automation:', automationError);
-          // Don't fail the mutation if automation fails
-        }
+            },
+            tenant_id: data.tenant_id
+          }
+        }).catch(err => console.error('Automation trigger failed:', err));
       }
       
       return data;
     },
+    // Optimistic update: close dialog immediately and update cache
+    onMutate: async (values: FormValues) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ["leads-kanban"] });
+      await queryClient.cancelQueries({ queryKey: ["leads-table"] });
+
+      // Snapshot previous data for rollback
+      const previousKanban = queryClient.getQueryData(["leads-kanban"]);
+      const previousTable = queryClient.getQueryData(["leads-table"]);
+
+      // Show immediate feedback
+      sonnerToast.info("מעדכן ליד...");
+      
+      // Close dialog immediately for better UX
+      setOpen(false);
+
+      return { previousKanban, previousTable };
+    },
     onSuccess: () => {
+      // Refetch to get fresh data from server
       queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
       queryClient.invalidateQueries({ queryKey: ["leads-table"] });
       queryClient.invalidateQueries({ queryKey: ["leads-count"] });
       queryClient.invalidateQueries({ queryKey: ["lead-sales-people", lead.id] });
-      toast({
-        title: "ליד עודכן בהצלחה",
-      });
-      setOpen(false);
+      sonnerToast.success("ליד עודכן בהצלחה");
     },
-    onError: (error: any) => {
-      toast({
-        title: "שגיאה בעדכון ליד",
-        description: error.message,
-        variant: "destructive",
-      });
+    onError: (error: any, _values, context) => {
+      // Rollback to previous data on error
+      if (context?.previousKanban) {
+        queryClient.setQueryData(["leads-kanban"], context.previousKanban);
+      }
+      if (context?.previousTable) {
+        queryClient.setQueryData(["leads-table"], context.previousTable);
+      }
+      sonnerToast.error(`שגיאה בעדכון ליד: ${error.message}`);
     },
   });
 
