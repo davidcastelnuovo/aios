@@ -37,7 +37,9 @@ import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachmen
 import { useMeetingScheduler } from "@/hooks/useMeetingScheduler";
 
 const formSchema = z.object({
-  company_name: z.string().min(1, "שם העסק הוא שדה חובה"),
+  // NOTE: company_name can be hidden by tenant field visibility settings.
+  // We validate it conditionally in onSubmit when visible, and otherwise preserve/fallback.
+  company_name: z.string().optional(),
   contact_name: z.string().optional(),
   email: z.string().email("כתובת אימייל לא תקינה").optional().or(z.literal("")),
   phone: z.string().optional(),
@@ -254,8 +256,18 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
 
 const updateMutation = useMutation({
     mutationFn: async (values: FormValues) => {
+      const safeCompanyName = (() => {
+        if (isFieldVisible('company_name')) return (values.company_name || '').trim();
+
+        const existing = (lead.company_name || '').trim();
+        if (existing) return existing;
+
+        const fromContact = (values.contact_name || '').trim();
+        return fromContact || 'ליד';
+      })();
+
       const submitData: any = {
-        company_name: values.company_name,
+        company_name: safeCompanyName,
         contact_name: values.contact_name || null,
         email: values.email || null,
         phone: values.phone || null,
@@ -429,7 +441,18 @@ const updateMutation = useMutation({
   });
 
   const onSubmit = (values: FormValues) => {
+    // Prevent "nothing happens" when a required field is visible but empty.
+    if (isFieldVisible('company_name') && !(values.company_name || '').trim()) {
+      sonnerToast.error("שם העסק הוא שדה חובה");
+      setActiveTab('details');
+      return;
+    }
+
     updateMutation.mutate(values);
+  };
+
+  const onInvalid = () => {
+    sonnerToast.error("יש שדות חסרים/לא תקינים — בדוק את ההודעות בטופס");
   };
 
   const handleAddUpdate = () => {
@@ -541,7 +564,7 @@ const updateMutation = useMutation({
           </TabsList>
 
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="mt-6">
+            <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="mt-6">
               
               {/* Tab 1: Lead Details */}
               <TabsContent value="details" className="space-y-4 mt-0">
