@@ -8,6 +8,26 @@ const corsHeaders = {
 // Custom field name for phone number in ManyChat (must be created manually in ManyChat)
 const PHONE_CUSTOM_FIELD_NAME = 'phone_number';
 
+// ManyChat sometimes returns a single object and sometimes an array.
+// Prefer subscribers with whatsapp_phone (not deleted).
+// NOTE: Some parts of this file define a more advanced extractSubscriberId inside a function scope;
+// this global helper is used by other functions in this file.
+function extractSubscriberId(result: any): string | null {
+  if (!result || result.status !== 'success' || !result.data) return null;
+  const subscribers = Array.isArray(result.data) ? result.data : [result.data];
+
+  const withWA = subscribers.find((s: any) => s?.status !== 'deleted' && s?.whatsapp_phone && s?.id);
+  if (withWA?.id) return String(withWA.id);
+
+  const active = subscribers.find((s: any) => s?.status !== 'deleted' && s?.id);
+  if (active?.id) return String(active.id);
+
+  const anyWithId = subscribers.find((s: any) => s?.id);
+  if (anyWithId?.id) return String(anyWithId.id);
+
+  return null;
+}
+
 // Get Custom Field ID from ManyChat API (with caching)
 async function getPhoneNumberFieldIdMC(apiKey: string, supabase: any, tenantId: string): Promise<number | null> {
   // First, try to get cached field_id from tenant_integrations.settings
@@ -889,7 +909,8 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
           first_name: contactRecord?.contact_name || 'Unknown',
           whatsapp_phone: whatsappPhone,
           has_opt_in_sms: true,
-          has_opt_in_email: true,
+          // Some ManyChat accounts deny importing email. Don't attempt it here.
+          has_opt_in_email: false,
           consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
         }),
       })
@@ -939,8 +960,9 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
             if (searchResponse.ok) {
               const searchResult = await searchResponse.json()
               console.log(`ManyChat findBySystemField response for wa_id ${waId}:`, searchResult)
-              if (searchResult.status === 'success' && searchResult.data?.id) {
-                subscriberId = searchResult.data.id.toString()
+              const foundId = extractSubscriberId(searchResult)
+              if (foundId) {
+                subscriberId = foundId
                 console.log(`Resolved subscriber by wa_id ${waId}: ${subscriberId}`)
 
                 if (contactType === 'lead' && contactRecord?.id) {
@@ -1223,9 +1245,10 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
       )
       const findResult = await findResponse.json()
       console.log(`Find subscriber (${candidate}) response:`, findResult)
-      
-      if (findResult?.status === 'success' && findResult?.data?.id) {
-        subscriberId = String(findResult.data.id)
+
+      const foundId = extractSubscriberId(findResult)
+      if (foundId) {
+        subscriberId = foundId
         console.log(`Found existing subscriber: ${subscriberId}`)
         break
       }
@@ -1252,8 +1275,9 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
         const findResult = await findResponse.json()
         console.log(`Find subscriber (wa_id=${waId}) response:`, findResult)
 
-        if (findResult?.status === 'success' && findResult?.data?.id) {
-          subscriberId = String(findResult.data.id)
+        const foundId = extractSubscriberId(findResult)
+        if (foundId) {
+          subscriberId = foundId
           console.log(`Found existing subscriber by wa_id: ${subscriberId}`)
           break
         }
@@ -1319,14 +1343,14 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
     // Keep whatsapp_phone; phone will be added only if allowed.
     whatsapp_phone: whatsappPhone,
     has_opt_in_sms: true,
-    has_opt_in_email: !!leadRecord.email,
+    // Some ManyChat accounts deny importing email. We don't import it on create.
+    has_opt_in_email: false,
     consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
   }
 
   const createBodyWithPhone = {
     ...createBodyBase,
     phone: whatsappPhone,
-    email: leadRecord.email || undefined,
   }
 
   let createResponse = await fetch(`${baseUrl}/subscriber/createSubscriber`, {
@@ -1356,7 +1380,6 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
       },
       body: JSON.stringify({
         ...createBodyBase,
-        email: leadRecord.email || undefined,
       }),
     })
     createResult = await createResponse.json()
@@ -1381,8 +1404,9 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
           }
         )
         const retryResult = await retryFind.json()
-        if (retryResult?.status === 'success' && retryResult?.data?.id) {
-          subscriberId = String(retryResult.data.id)
+        const foundId = extractSubscriberId(retryResult)
+        if (foundId) {
+          subscriberId = foundId
           console.log(`Found subscriber by wa_id on retry: ${subscriberId}`)
 
           await supabase.from('leads')
@@ -1427,8 +1451,9 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
           }
         )
         const retryResult = await retryFind.json()
-        if (retryResult?.status === 'success' && retryResult?.data?.id) {
-          subscriberId = String(retryResult.data.id)
+        const foundId = extractSubscriberId(retryResult)
+        if (foundId) {
+          subscriberId = foundId
           console.log(`Found subscriber on retry: ${subscriberId}`)
           
           await supabase.from('leads')
