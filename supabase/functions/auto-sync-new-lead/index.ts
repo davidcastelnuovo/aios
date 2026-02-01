@@ -292,9 +292,9 @@ async function createManyChatSubscriber(
     last_name: lastName,
     phone: `+${formattedPhone}`,
     whatsapp_phone: `+${formattedPhone}`,
-    email: lead.email || undefined,
     has_opt_in_sms: true,
-    has_opt_in_email: !!lead.email,
+    // Some ManyChat accounts deny importing email. Don't attempt it on create.
+    has_opt_in_email: false,
     consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
   };
 
@@ -317,9 +317,9 @@ async function createManyChatSubscriber(
       first_name: firstName,
       last_name: lastName,
       whatsapp_phone: `+${formattedPhone}`,
-      email: lead.email || undefined,
       has_opt_in_sms: true,
-      has_opt_in_email: !!lead.email,
+      // Some ManyChat accounts deny importing email. Don't attempt it on create.
+      has_opt_in_email: false,
       consent_phrase: 'אני מאשר קבלת הודעות ודיוור פרסומי'
     };
     createRes = await fetch('https://api.manychat.com/fb/subscriber/createSubscriber', {
