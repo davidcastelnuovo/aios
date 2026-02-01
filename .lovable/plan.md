@@ -1,51 +1,87 @@
 
-# תוכנית תיקון: לולאת עדכונים אינסופית ב-EditLeadDialog
+# תוכנית שיפור ביצועים: עדכון ליד מהיר יותר
 
-## הבעיה שזוהתה
+## הבעיות שזוהו
 
-בקובץ `src/components/forms/EditLeadDialog.tsx` בשורות 190-199 יש `useEffect` שיוצר **לולאה אינסופית של עדכונים**.
+### 1. פעולות סדרתיות איטיות
+ה-mutation מבצע 4-5 פעולות ברצף, וכל אחת חוסמת את הבאה:
 
-### מקור הבעיה
-
-```typescript
-// הקוד הבעייתי (שורות 190-199)
-useEffect(() => {
-  if (leadSalesPeople.length > 0) {
-    setSelectedSalesPeople(leadSalesPeople);
-  } else if (lead.sales_person_id) {
-    setSelectedSalesPeople([lead.sales_person_id]);
-  } else {
-    setSelectedSalesPeople([]);
-  }
-}, [leadSalesPeople, lead.sales_person_id, open]);
+```
+עדכון lead → מחיקת sales_people → הכנסת sales_people → trigger automation
+     ↓             ↓                    ↓                    ↓
+   ~100ms        ~100ms              ~100ms               ~200ms
 ```
 
-**למה זה יוצר לולאה אינסופית:**
-1. `leadSalesPeople` הוא מערך שמגיע מ-useQuery
-2. גם אם התוכן זהה, הייחוס למערך משתנה בכל render
-3. זה גורם ל-useEffect לרוץ שוב ושוב
-4. `setSelectedSalesPeople` משנה את ה-state, שמעדכן את הקומפוננטה
-5. העדכון גורם ל-leadSalesPeople להתחשב מחדש → חוזר לשלב 1
+**סה"כ: ~500ms-800ms של המתנה**
+
+### 2. אין Optimistic Update
+המשתמש מחכה עד שכל הפעולות יסתיימו בשרת לפני שרואה שינוי ב-UI.
+
+### 3. invalidateQueries לכל ה-queries
+ברגע שהמוטציה מסתיימת, מתבצעות 4 קריאות refetch.
 
 ## הפתרון
 
-להחליף את ההשוואה ל-comparison מבוססת על ערכים (לא על reference) באמצעות `JSON.stringify`:
+### חלק 1: Optimistic Update
+לעדכן את ה-UI מיידית עם הנתונים החדשים, לפני שהשרת מאשר:
 
 ```typescript
-// הקוד המתוקן
-useEffect(() => {
-  // Only run when dialog is open
-  if (!open) return;
-  
-  if (leadSalesPeople.length > 0) {
-    setSelectedSalesPeople(leadSalesPeople);
-  } else if (lead.sales_person_id) {
-    setSelectedSalesPeople([lead.sales_person_id]);
-  } else {
-    setSelectedSalesPeople([]);
+updateMutation = useMutation({
+  mutationFn: ...,
+  onMutate: async (newValues) => {
+    // 1. בטל קריאות שרצות
+    await queryClient.cancelQueries({ queryKey: ["leads-kanban"] });
+    
+    // 2. שמור snapshot לפני השינוי
+    const previousData = queryClient.getQueryData(["leads-kanban"]);
+    
+    // 3. עדכן את ה-cache מיידית
+    queryClient.setQueryData(["leads-kanban"], (old) => {
+      // עדכן את הליד ב-cache
+      return updateLeadInCache(old, lead.id, newValues);
+    });
+    
+    // 4. סגור את הדיאלוג מיד
+    setOpen(false);
+    toast({ title: "מעדכן ליד..." });
+    
+    return { previousData };
+  },
+  onError: (err, newValues, context) => {
+    // אם נכשל - החזר לנתונים הקודמים
+    queryClient.setQueryData(["leads-kanban"], context.previousData);
+    toast({ title: "שגיאה בעדכון", variant: "destructive" });
+  },
+  onSettled: () => {
+    // רק אחרי הכל - רענן מהשרת
+    queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
   }
-  // Use JSON.stringify to prevent infinite loop from array reference changes
-}, [JSON.stringify(leadSalesPeople), lead.sales_person_id, open]);
+});
+```
+
+### חלק 2: פעולות מקבילות
+להריץ את עדכון ה-lead ואת עדכון ה-sales_people במקביל:
+
+```typescript
+// במקום פעולות סדרתיות:
+const [leadResult, salesResult] = await Promise.all([
+  // עדכון הליד
+  supabase.from("leads").update(submitData).eq("id", lead.id).select().single(),
+  
+  // עדכון sales_people (delete + insert בפעולה אחת)
+  updateSalesPeopleAssignments(lead.id, selectedSalesPeople, lead.tenant_id)
+]);
+```
+
+### חלק 3: Automation ברקע
+להריץ את ה-automation בלי לחכות לתוצאה:
+
+```typescript
+// לא לחכות לתשובה - לתת לזה לרוץ ברקע
+if (lead.status !== data.status) {
+  supabase.functions.invoke('trigger-automation', { body: {...} })
+    .catch(console.error); // לא await!
+}
 ```
 
 ## פרטים טכניים
@@ -53,53 +89,36 @@ useEffect(() => {
 ### קובץ לעדכון
 `src/components/forms/EditLeadDialog.tsx`
 
-### שינוי (שורות 189-199)
+### שינויים
 
-**לפני:**
-```typescript
-// Sync selected sales people when dialog opens or data loads
-useEffect(() => {
-  if (leadSalesPeople.length > 0) {
-    setSelectedSalesPeople(leadSalesPeople);
-  } else if (lead.sales_person_id) {
-    // Fallback to legacy field
-    setSelectedSalesPeople([lead.sales_person_id]);
-  } else {
-    setSelectedSalesPeople([]);
-  }
-}, [leadSalesPeople, lead.sales_person_id, open]);
-```
+**1. הוספת onMutate ל-optimistic update (שורות 257-280)**:
+- לשמור את הנתונים הנוכחיים
+- לעדכן את ה-cache מיידית
+- לסגור את הדיאלוג
 
-**אחרי:**
-```typescript
-// Sync selected sales people when dialog opens or data loads
-// Using JSON.stringify to prevent infinite loop from array reference changes
-useEffect(() => {
-  // Only sync when dialog is open
-  if (!open) return;
-  
-  if (leadSalesPeople.length > 0) {
-    setSelectedSalesPeople(leadSalesPeople);
-  } else if (lead.sales_person_id) {
-    // Fallback to legacy field
-    setSelectedSalesPeople([lead.sales_person_id]);
-  } else {
-    setSelectedSalesPeople([]);
-  }
-}, [JSON.stringify(leadSalesPeople), lead.sales_person_id, open]);
-```
+**2. שינוי mutationFn לפעולות מקבילות**:
+- `Promise.all` לעדכון lead + sales_people
+- Automation בלי await
 
-## יתרונות התיקון
+**3. שינוי onSuccess**:
+- להסיר את סגירת הדיאלוג (כבר נסגר ב-onMutate)
+- להציג toast מתאים
 
-1. **עוצר את הלולאה האינסופית** - `JSON.stringify` יוצר מחרוזת שלא משתנה כל עוד הערכים זהים
-2. **שומר על הפונקציונליות** - הסנכרון עדיין עובד כמצופה
-3. **מונע renders מיותרים** - רק שינויים אמיתיים בנתונים יגרמו לעדכון
-4. **בדיקת open** - מבטיח שהעדכון קורה רק כשהדיאלוג פתוח
+**4. הוספת onError לשחזור**:
+- להחזיר את הנתונים הקודמים ל-cache
+- להציג הודעת שגיאה
 
-## השפעה
+## השפעה צפויה
 
 | לפני | אחרי |
 |------|------|
-| לולאה אינסופית → דפדפן נתקע | עדכון יחיד בפתיחת הדיאלוג |
-| שגיאת "Maximum update depth exceeded" | אין שגיאות |
-| לא ניתן לערוך לידים | עריכה עובדת כרגיל |
+| המתנה של 500-800ms | תגובה מיידית |
+| הדיאלוג נסגר רק בסוף | הדיאלוג נסגר מיד |
+| "תקוע" בזמן עדכון | UI מתעדכן אופטימיסטית |
+
+## סיכום הפעולות
+
+1. **Optimistic Update** - סגירת הדיאלוג ועדכון UI מיידי
+2. **Promise.all** - הרצת lead update + sales_people במקביל
+3. **Fire & forget** - automation בלי await
+4. **Toast מעודכן** - "מעדכן ליד..." במקום המתנה שקטה
