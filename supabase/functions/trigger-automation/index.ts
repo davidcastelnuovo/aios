@@ -219,7 +219,8 @@ Deno.serve(async (req) => {
       }
 
       automations = [automation]
-      payloadData = requestBody.payload || requestBody
+      // Support both 'payload' and 'data' field names for the actual data
+      payloadData = requestBody.payload || requestBody.data || requestBody
       tenantId = automation.tenant_id
       console.log(`Direct execution of automation: ${automation.name} (${automation.id})`)
     } else {
@@ -1257,13 +1258,14 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
     }
   }
 
-  // Step 1b: Try to find by wa_id (important when phone import is disabled)
+  // Step 1b: Try to find by whatsapp_phone system field (important when phone import is disabled)
+  // Note: wa_id is NOT a valid search parameter in findBySystemField - use whatsapp_phone instead
   if (!subscriberId) {
-    console.log('No subscriber found by phone; trying wa_id candidates:', waIdCandidates)
-    for (const waId of waIdCandidates) {
+    console.log('No subscriber found by phone; trying whatsapp_phone candidates:', phoneCandidates)
+    for (const candidate of phoneCandidates) {
       try {
         const findResponse = await fetch(
-          `${baseUrl}/subscriber/findBySystemField?wa_id=${encodeURIComponent(waId)}`,
+          `${baseUrl}/subscriber/findBySystemField?whatsapp_phone=${encodeURIComponent(candidate)}`,
           {
             method: 'GET',
             headers: {
@@ -1273,12 +1275,12 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
           }
         )
         const findResult = await findResponse.json()
-        console.log(`Find subscriber (wa_id=${waId}) response:`, findResult)
+        console.log(`Find subscriber (whatsapp_phone=${candidate}) response:`, findResult)
 
         const foundId = extractSubscriberId(findResult)
         if (foundId) {
           subscriberId = foundId
-          console.log(`Found existing subscriber by wa_id: ${subscriberId}`)
+          console.log(`Found existing subscriber by whatsapp_phone: ${subscriberId}`)
           break
         }
       } catch (_e) {
@@ -1390,11 +1392,12 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
     // If creation failed, try one more lookup in case of race condition
     console.log('Creation failed, trying one more lookup...')
 
-    // First retry wa_id lookup (covers "already exists" conflicts)
-    for (const waId of waIdCandidates) {
+    // First retry whatsapp_phone lookup (covers "already exists" conflicts)
+    console.log('Retrying with whatsapp_phone system field:', phoneCandidates)
+    for (const candidate of phoneCandidates) {
       try {
         const retryFind = await fetch(
-          `${baseUrl}/subscriber/findBySystemField?wa_id=${encodeURIComponent(waId)}`,
+          `${baseUrl}/subscriber/findBySystemField?whatsapp_phone=${encodeURIComponent(candidate)}`,
           {
             method: 'GET',
             headers: {
@@ -1404,17 +1407,21 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
           }
         )
         const retryResult = await retryFind.json()
+        console.log(`Retry find subscriber (whatsapp_phone=${candidate}) response:`, retryResult)
         const foundId = extractSubscriberId(retryResult)
         if (foundId) {
           subscriberId = foundId
-          console.log(`Found subscriber by wa_id on retry: ${subscriberId}`)
+          console.log(`Found subscriber by whatsapp_phone on retry: ${subscriberId}`)
+
+          // Update the phone custom field for future lookups
+          await setPhoneCustomFieldMC(apiKey, subscriberId!, whatsappPhone)
 
           await supabase.from('leads')
             .update({ manychat_subscriber_id: subscriberId })
             .eq('id', leadRecord.id)
 
           if (manychat_tag_id && manychat_tag_id !== 'none') {
-            await fetch(`${baseUrl}/subscriber/addTag`, {
+            const tagRes = await fetch(`${baseUrl}/subscriber/addTag`, {
               method: 'POST',
               headers: {
                 'Authorization': `Bearer ${apiKey}`,
@@ -1425,12 +1432,14 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
                 tag_id: parseInt(manychat_tag_id),
               }),
             })
+            const tagResult = await tagRes.json()
+            console.log('ManyChat addTag response:', tagResult)
           }
 
           return {
             success: true,
             subscriber_id: subscriberId,
-            message: 'Found existing subscriber by wa_id on retry, linked to lead'
+            message: 'Found existing subscriber by whatsapp_phone on retry, linked to lead'
           }
         }
       } catch (_e) {
