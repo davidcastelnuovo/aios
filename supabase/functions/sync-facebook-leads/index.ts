@@ -183,13 +183,18 @@ serve(async (req) => {
 
             // Map fields based on form mapping
             const fieldMappings = formMapping.fields || {};
+            
+            // Support both legacy single and new multi-select salesperson
+            const salesPersonIds: string[] = formMapping.sales_person_ids 
+              || (formMapping.sales_person_id ? [formMapping.sales_person_id] : []);
+            
             const leadRecord: Record<string, any> = {
               company_name: fieldData.company || fieldData.full_name || fieldData.first_name || 'Facebook Lead',
               source: 'paid_ads',
               status: 'new',
               tenant_id: integration.tenant_id,
               agency_id: formMapping.agency_id || null,
-              sales_person_id: formMapping.sales_person_id || null,
+              sales_person_id: salesPersonIds.length > 0 ? salesPersonIds[0] : null, // Primary for backwards compatibility
               notes: `Facebook Lead ID: ${leadgenId}\nForm ID: ${formId}\nSource: Facebook Lead Ads\nCreated: ${lead.created_time}`,
             };
 
@@ -234,6 +239,25 @@ serve(async (req) => {
             } else {
               console.log('Inserted lead:', leadgenId);
               totalSynced++;
+
+              // Insert into lead_sales_people junction table for multi-salesperson support
+              if (salesPersonIds.length > 0) {
+                const junctionRecords = salesPersonIds.map(spId => ({
+                  lead_id: newLead.id,
+                  sales_person_id: spId,
+                  tenant_id: integration.tenant_id,
+                }));
+                
+                const { error: junctionError } = await supabase
+                  .from('lead_sales_people')
+                  .insert(junctionRecords);
+                
+                if (junctionError) {
+                  console.error('Error inserting lead_sales_people:', junctionError);
+                } else {
+                  console.log('Assigned lead to', salesPersonIds.length, 'salespeople');
+                }
+              }
 
               // Apply tag if configured
               if (formMapping.tag_id) {
