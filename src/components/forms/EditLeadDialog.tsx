@@ -69,7 +69,7 @@ interface EditLeadDialogProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: EditLeadDialogProps) {
+export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpenChange }: EditLeadDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
@@ -80,6 +80,25 @@ export function EditLeadDialog({ lead, open: controlledOpen, onOpenChange }: Edi
   const [editingUpdateContent, setEditingUpdateContent] = useState("");
   const [responseSelectOpen, setResponseSelectOpen] = useState(false);
   const [stageSelectOpen, setStageSelectOpen] = useState(false);
+
+  // Fetch fresh lead data when dialog opens to get latest attachments/folder_links
+  const { data: freshLead } = useQuery({
+    queryKey: ['lead-detail', initialLead.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('id', initialLead.id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!initialLead.id && open,
+    staleTime: 0, // Always fetch fresh data when dialog opens
+  });
+
+  // Use fresh data if available, otherwise fall back to initial lead
+  const lead = freshLead || initialLead;
 
   // Shared hooks
   const { folderLinks, setFolderLinks, attachments, setAttachments } =
@@ -368,6 +387,7 @@ const updateMutation = useMutation({
       queryClient.invalidateQueries({ queryKey: ["leads-table"] });
       queryClient.invalidateQueries({ queryKey: ["leads-count"] });
       queryClient.invalidateQueries({ queryKey: ["lead-sales-people", lead.id] });
+      queryClient.invalidateQueries({ queryKey: ["lead-detail", lead.id] });
       sonnerToast.success("ליד עודכן בהצלחה");
     },
     onError: (error: any, _values, context) => {
