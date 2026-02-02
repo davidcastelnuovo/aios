@@ -231,9 +231,7 @@ export function AttachmentsField({
             border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer
             ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50"}
           `}
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
+          onClick={() => {
             fileInputRef.current?.click();
           }}
         >
