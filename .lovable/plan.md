@@ -1,61 +1,59 @@
 
-# תוכנית: מחיקת שיוכים מהיום ושיוך לידים חדשים
+# תכנית תיקון - סנכרון ManyChat לא עובד ללידים חדשים
 
-## סיכום הפעולות
+## אבחון הבעיה
 
-| פעולה | כמות |
-|-------|------|
-| מחיקת שיוכים מהיום | 582 |
-| שיוך לידים חדשים לנחמה ורויטל | 3 |
+הבעיה המרכזית זוהתה:
+- **ManyChat API לא תומך ב-`whatsapp_phone` ו-`wa_id` בחיפוש `findBySystemField`** - מחזיר שגיאה 400
+- כאשר מנוי נרשם דרך WhatsApp ישירות ב-ManyChat, הוא נוצר **בלי שדה `phone`** - רק עם `whatsapp_phone`
+- לכן:
+  1. `findBySystemField?phone=...` מחזיר ריק (אין phone)
+  2. `findByCustomField?phone_number=...` מחזיר ריק (Custom Field לא הוגדר ל-subscriber)
+  3. `createSubscriber` נכשל עם "WhatsApp ID already exists"
+  
+**התוצאה:** המערכת לא יכולה למצוא את המנוי הקיים וגם לא ליצור חדש.
 
-## שלב 1: מחיקת שיוכים מהיום
+## פתרון
 
-למחוק את כל הרשומות בטבלת `lead_sales_people` שנוצרו היום (01/02/2026) בטנאנט נקסוס קפיטל:
+כאשר יצירת subscriber נכשלת עם `"WhatsApp ID already exists"`, יש להוסיף שלב **לפני** הכרזת כשלון:
 
-```sql
-DELETE FROM lead_sales_people
-WHERE tenant_id = 'eb31659b-7a21-4411-b99d-01df51cf2895'
-  AND created_at >= '2026-02-01 00:00:00';
-```
+1. **לחלץ את ה-WhatsApp ID מהשגיאה** (למשל `972523043096`)
+2. **להשתמש ב-API אחר של ManyChat:** `findByName` או `getInfo` - אבל אלו דורשים subscriber_id
+3. **הפתרון האמיתי:** להשתמש ב-API `/fb/sending/sendContent` עם `subscriber_id` מסוג WhatsApp ID ישירות
 
-**תוצאה צפויה**: 582 שיוכים יימחקו (הלידים עצמם יישארו)
+אבל - ManyChat לא מספק דרך ישירה למצוא subscriber לפי whatsapp_phone.
 
-## שלב 2: שיוך 3 הלידים החדשים
+**הפתרון המעשי:**
+כאשר מתקבלת שגיאה `"WhatsApp ID already exists"`:
+1. סמן את הליד עם סטטוס מיוחד `EXISTING_WA_SUBSCRIBER` 
+2. **המערכת צריכה Flow ב-ManyChat** שמעדכן את ה-Custom Field `phone_number` לכל נרשם חדש
+3. לאחר עדכון ה-Flow - הסנכרון הבא יצליח למצוא את המנוי
 
-לשייך את 3 הלידים הלא משויכים מפייסבוק לנחמה ולרויטל:
+## שינויים טכניים
 
-| ליד | שם |
-|-----|-----|
-| כפיר ששון | 40182516-8336-4ad7-bd4e-fa8d077e854f |
-| שלום שמסי | ead70dd6-0756-46df-a668-7308bd20d69b |
-| בירן נתנאל | 947b5b2f-83a5-4e55-9fdc-1a30d7a7fcc5 |
+### 1. עדכון `executeCreateManychatSubscriber` ב-`trigger-automation/index.ts`
+- כאשר יצירה נכשלת עם `"WhatsApp ID already exists"`:
+  - לסמן את הליד כ-`EXISTING_WA_SUBSCRIBER` במקום `NEEDS_MANUAL_LINK`
+  - להחזיר תשובה מפורטת שמסבירה שצריך Flow ב-ManyChat
 
-**אנשי מכירות**:
-- נחמה: `4f058f40-0ae2-4df1-8b7a-796b6bcb77aa`
-- רויטל: `48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91`
+### 2. עדכון `executeSendWhatsapp` ב-`trigger-automation/index.ts`
+- להסיר את הקריאות ל-`findBySystemField?wa_id=...` ו-`findBySystemField?whatsapp_phone=...` - הן תמיד נכשלות
+- להוסיף הודעת לוג ברורה כשזה קורה
 
-```sql
-INSERT INTO lead_sales_people (lead_id, sales_person_id, tenant_id)
-VALUES
-  -- כפיר ששון
-  ('40182516-8336-4ad7-bd4e-fa8d077e854f', '4f058f40-0ae2-4df1-8b7a-796b6bcb77aa', 'eb31659b-7a21-4411-b99d-01df51cf2895'),
-  ('40182516-8336-4ad7-bd4e-fa8d077e854f', '48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91', 'eb31659b-7a21-4411-b99d-01df51cf2895'),
-  -- שלום שמסי
-  ('ead70dd6-0756-46df-a668-7308bd20d69b', '4f058f40-0ae2-4df1-8b7a-796b6bcb77aa', 'eb31659b-7a21-4411-b99d-01df51cf2895'),
-  ('ead70dd6-0756-46df-a668-7308bd20d69b', '48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91', 'eb31659b-7a21-4411-b99d-01df51cf2895'),
-  -- בירן נתנאל
-  ('947b5b2f-83a5-4e55-9fdc-1a30d7a7fcc5', '4f058f40-0ae2-4df1-8b7a-796b6bcb77aa', 'eb31659b-7a21-4411-b99d-01df51cf2895'),
-  ('947b5b2f-83a5-4e55-9fdc-1a30d7a7fcc5', '48ba2e9e-bf50-4cf0-bf71-5f0d16d4bf91', 'eb31659b-7a21-4411-b99d-01df51cf2895');
-```
+### 3. עדכון `auto-sync-new-lead/index.ts`
+- אותו טיפול - סימון `EXISTING_WA_SUBSCRIBER` כאשר יש conflict
 
-**תוצאה צפויה**: 6 שיוכים חדשים (3 לידים × 2 מתאמות)
+### 4. הוספת הנחיות למשתמש
+- בדף הגדרות ManyChat - להוסיף הסבר על הצורך ב-Flow שמעדכן `phone_number`
 
-## סיכום לפני ואחרי
+## המלצה נוספת
+כדי לפתור את הבעיה לחלוטין, יש ליצור Flow ב-ManyChat:
+1. טריגר: New Subscriber / WhatsApp Opt-in
+2. פעולה: Set Custom Field `phone_number` = `{{whatsapp_phone}}`
 
-| מדד | לפני | אחרי |
-|-----|------|------|
-| שיוכים לנחמה | 170 | 3 |
-| שיוכים לרויטל | 170 | 3 |
-| שיוכים ליובל | 164 | 0 (מהיום) |
-| שיוכים לאוהד | 78 | 0 (מהיום) |
-| לידים לא משויכים מפייסבוק | 3 | 0 |
+זה יבטיח שמנויים עתידיים יהיו ניתנים לאיתור דרך ה-API.
+
+## קבצים לעריכה
+- `supabase/functions/trigger-automation/index.ts`
+- `supabase/functions/auto-sync-new-lead/index.ts`
+- `src/pages/ManyChatSettings.tsx` (אופציונלי - הוספת הסבר)
