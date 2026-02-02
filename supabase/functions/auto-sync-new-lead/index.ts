@@ -310,8 +310,12 @@ async function createManyChatSubscriber(
   let createData = await safeJson(createRes);
   console.log('🆕 Create subscriber response:', JSON.stringify(createData));
 
+  // Check if first attempt SUCCEEDED (status=success with id) vs FAILED with permission error
   const createStr = JSON.stringify(createData);
-  if (createStr.includes('Permission denied to import phone')) {
+  const isSuccess = createData?.status === 'success' && createData?.data?.id;
+  
+  // Only retry WITHOUT phone if first attempt actually FAILED (not just warning on success)
+  if (!isSuccess && createStr.includes('Permission denied to import phone')) {
     console.log('Retrying createSubscriber WITHOUT phone field due to permission restriction...');
     const payloadNoPhone: any = {
       first_name: firstName,
@@ -332,6 +336,8 @@ async function createManyChatSubscriber(
     });
     createData = await safeJson(createRes);
     console.log('🆕 Create subscriber response (no phone):', JSON.stringify(createData));
+  } else if (isSuccess && createStr.includes('Permission denied to import phone')) {
+    console.log('⚠️ Subscriber created successfully with warning (Permission denied to import phone) - NOT retrying');
   }
 
   if (createData.status === 'success' && createData.data?.id) {
