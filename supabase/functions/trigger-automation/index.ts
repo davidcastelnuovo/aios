@@ -508,7 +508,7 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
   // Helper to check if subscriber ID is valid (not a sync conflict status)
   const isValidSubscriberId = (id: string | null | undefined): boolean => {
     if (!id) return false;
-    const invalidStatuses = ['SYNC_CONFLICT', 'NEEDS_MANUAL_LINK', 'SYNC_ERROR'];
+    const invalidStatuses = ['SYNC_CONFLICT', 'NEEDS_MANUAL_LINK', 'SYNC_ERROR', 'EXISTING_WA_SUBSCRIBER'];
     return !invalidStatuses.includes(id);
   };
 
@@ -782,86 +782,11 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
     }
   }
 
-  // If still no subscriber, try lookup by WhatsApp ID (wa_id)
+  // NOTE: wa_id and whatsapp_phone are NOT supported by ManyChat findBySystemField API
+  // These queries always return 400 errors. Skipping them.
+  // Only phone and email are valid system fields for findBySystemField.
   if (!subscriberId && contactPhone) {
-    const cleanPhone = contactPhone.replace(/\D/g, '')
-    const last9Digits = cleanPhone.slice(-9)
-    const waIdCandidates = [...new Set([`972${last9Digits}`, `+972${last9Digits}`])]
-    console.log('No subscriber found by phone, trying wa_id candidates:', waIdCandidates)
-
-    for (const waId of waIdCandidates) {
-      const searchUrl = `${baseUrl}/subscriber/findBySystemField?wa_id=${encodeURIComponent(waId)}`
-      const searchResponse = await fetch(searchUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-      })
-
-      console.log(`Search wa_id response status for ${waId}: ${searchResponse.status}`)
-      if (searchResponse.ok) {
-        const searchResult = await searchResponse.json()
-        console.log(`ManyChat findBySystemField response for wa_id ${waId}:`, searchResult)
-
-        const foundId = extractSubscriberId(searchResult);
-        if (foundId) {
-          subscriberId = foundId;
-          console.log(`Found subscriber by wa_id ${waId}: ${subscriberId}`)
-
-          if (contactType === 'lead' && contactRecord?.id) {
-            await supabase
-              .from('leads')
-              .update({ manychat_subscriber_id: subscriberId })
-              .eq('id', contactRecord.id)
-          } else if (contactType === 'client' && contactRecord?.id) {
-            await supabase
-              .from('clients')
-              .update({ manychat_subscriber_id: subscriberId })
-              .eq('id', contactRecord.id)
-          }
-          break
-        }
-      }
-    }
-  }
-
-  // If still no subscriber, try lookup by WhatsApp phone explicitly
-  if (!subscriberId && contactPhone) {
-    const cleanPhone = contactPhone.replace(/\D/g, '')
-    const last9Digits = cleanPhone.slice(-9)
-    const whatsappPhoneCandidates = [...new Set([`+972${last9Digits}`, `972${last9Digits}`])]
-    console.log('No subscriber found by wa_id, trying whatsapp_phone candidates:', whatsappPhoneCandidates)
-
-    for (const whatsappPhone of whatsappPhoneCandidates) {
-      const searchUrl = `${baseUrl}/subscriber/findBySystemField?whatsapp_phone=${encodeURIComponent(whatsappPhone)}`
-      const searchResponse = await fetch(searchUrl, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-      })
-
-      console.log(`Search whatsapp_phone response status for ${whatsappPhone}: ${searchResponse.status}`)
-      if (searchResponse.ok) {
-        const searchResult = await searchResponse.json()
-        console.log(`ManyChat findBySystemField response for whatsapp_phone ${whatsappPhone}:`, searchResult)
-
-        const foundId = extractSubscriberId(searchResult)
-        if (foundId) {
-          subscriberId = foundId
-          console.log(`Found subscriber by whatsapp_phone ${whatsappPhone}: ${subscriberId}`)
-
-          if (contactType === 'lead' && contactRecord?.id) {
-            await supabase.from('leads').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
-          } else if (contactType === 'client' && contactRecord?.id) {
-            await supabase.from('clients').update({ manychat_subscriber_id: subscriberId }).eq('id', contactRecord.id)
-          }
-          break
-        }
-      }
-    }
+    console.log('⚠️ Skipping wa_id/whatsapp_phone lookup - ManyChat API does not support these fields in findBySystemField')
   }
 
   // If still no subscriber, try Custom Field lookup (phone_number) using field_id
@@ -940,45 +865,31 @@ async function executeSendWhatsapp(supabase: any, config: any, data: any, tenant
           console.log(`Updated client ${contactRecord.id} with new subscriber ID ${subscriberId}`)
         }
       } else {
-        // If creation failed due to existing wa_id, try to resolve via wa_id lookup
+        // If creation failed due to existing wa_id conflict
         const errStr = JSON.stringify(createResult)
         console.error('Failed to create subscriber:', createResult)
 
         if (errStr.includes('wa_id') || errStr.includes('WhatsApp ID already exists')) {
-          console.log('Create failed with wa_id conflict, trying wa_id lookup...')
-          const searchWaIds = [...new Set([`972${last9Digits}`, `+972${last9Digits}`])]
-
-          for (const waId of searchWaIds) {
-            const searchUrl = `${baseUrl}/subscriber/findBySystemField?wa_id=${encodeURIComponent(waId)}`
-            const searchResponse = await fetch(searchUrl, {
-              method: 'GET',
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-              },
-            })
-
-            if (searchResponse.ok) {
-              const searchResult = await searchResponse.json()
-              console.log(`ManyChat findBySystemField response for wa_id ${waId}:`, searchResult)
-              const foundId = extractSubscriberId(searchResult)
-              if (foundId) {
-                subscriberId = foundId
-                console.log(`Resolved subscriber by wa_id ${waId}: ${subscriberId}`)
-
-                if (contactType === 'lead' && contactRecord?.id) {
-                  await supabase.from('leads')
-                    .update({ manychat_subscriber_id: subscriberId })
-                    .eq('id', contactRecord.id)
-                } else if (contactType === 'client' && contactRecord?.id) {
-                  await supabase.from('clients')
-                    .update({ manychat_subscriber_id: subscriberId })
-                    .eq('id', contactRecord.id)
-                }
-                break
-              }
-            }
+          console.log('⚠️ Create failed with "WhatsApp ID already exists" conflict')
+          console.log('🔍 This means the subscriber exists in ManyChat but was created via WhatsApp without a phone field.')
+          console.log('💡 Solution: Create a Flow in ManyChat to copy {{whatsapp_phone}} to phone_number custom field.')
+          
+          // Mark with special status to indicate this specific scenario
+          const specialStatus = 'EXISTING_WA_SUBSCRIBER'
+          if (contactType === 'lead' && contactRecord?.id) {
+            await supabase.from('leads')
+              .update({ manychat_subscriber_id: specialStatus })
+              .eq('id', contactRecord.id)
+            console.log(`📝 Marked lead ${contactRecord.id} as ${specialStatus}`)
+          } else if (contactType === 'client' && contactRecord?.id) {
+            await supabase.from('clients')
+              .update({ manychat_subscriber_id: specialStatus })
+              .eq('id', contactRecord.id)
+            console.log(`📝 Marked client ${contactRecord.id} as ${specialStatus}`)
           }
+          
+          // Don't throw - this is a known ManyChat limitation, not an error
+          // The subscriber exists but cannot be found via API
         }
       }
     } catch (createError) {
@@ -1169,7 +1080,7 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   // Helper to check if subscriber ID is valid (not a sync conflict status)
   const isValidSubscriberId = (id: string | null | undefined): boolean => {
     if (!id) return false;
-    const invalidStatuses = ['SYNC_CONFLICT', 'NEEDS_MANUAL_LINK', 'SYNC_ERROR'];
+    const invalidStatuses = ['SYNC_CONFLICT', 'NEEDS_MANUAL_LINK', 'SYNC_ERROR', 'EXISTING_WA_SUBSCRIBER'];
     return !invalidStatuses.includes(id);
   };
   
@@ -1258,35 +1169,11 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
     }
   }
 
-  // Step 1b: Try to find by whatsapp_phone system field (important when phone import is disabled)
-  // Note: wa_id is NOT a valid search parameter in findBySystemField - use whatsapp_phone instead
+  // NOTE: wa_id and whatsapp_phone are NOT supported by ManyChat findBySystemField API
+  // These queries always return 400 errors. Only phone and email are valid.
+  // Skipping this step.
   if (!subscriberId) {
-    console.log('No subscriber found by phone; trying whatsapp_phone candidates:', phoneCandidates)
-    for (const candidate of phoneCandidates) {
-      try {
-        const findResponse = await fetch(
-          `${baseUrl}/subscriber/findBySystemField?whatsapp_phone=${encodeURIComponent(candidate)}`,
-          {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        )
-        const findResult = await findResponse.json()
-        console.log(`Find subscriber (whatsapp_phone=${candidate}) response:`, findResult)
-
-        const foundId = extractSubscriberId(findResult)
-        if (foundId) {
-          subscriberId = foundId
-          console.log(`Found existing subscriber by whatsapp_phone: ${subscriberId}`)
-          break
-        }
-      } catch (_e) {
-        // Continue
-      }
-    }
+    console.log('⚠️ Skipping whatsapp_phone lookup - ManyChat API does not support this field in findBySystemField')
   }
 
   // Step 1c: Try to find by Custom Field (phone_number) using field_id
@@ -1389,64 +1276,32 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
   }
   
   if (createResult.status !== 'success' || !createResult.data?.id) {
-    // If creation failed, try one more lookup in case of race condition
-    console.log('Creation failed, trying one more lookup...')
+    // If creation failed, check if it's the "WhatsApp ID already exists" case
+    const createResultStr = JSON.stringify(createResult)
+    console.log('Creation failed, checking error type...')
 
-    // First retry whatsapp_phone lookup (covers "already exists" conflicts)
-    console.log('Retrying with whatsapp_phone system field:', phoneCandidates)
-    for (const candidate of phoneCandidates) {
-      try {
-        const retryFind = await fetch(
-          `${baseUrl}/subscriber/findBySystemField?whatsapp_phone=${encodeURIComponent(candidate)}`,
-          {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        )
-        const retryResult = await retryFind.json()
-        console.log(`Retry find subscriber (whatsapp_phone=${candidate}) response:`, retryResult)
-        const foundId = extractSubscriberId(retryResult)
-        if (foundId) {
-          subscriberId = foundId
-          console.log(`Found subscriber by whatsapp_phone on retry: ${subscriberId}`)
-
-          // Update the phone custom field for future lookups
-          await setPhoneCustomFieldMC(apiKey, subscriberId!, whatsappPhone)
-
-          await supabase.from('leads')
-            .update({ manychat_subscriber_id: subscriberId })
-            .eq('id', leadRecord.id)
-
-          if (manychat_tag_id && manychat_tag_id !== 'none') {
-            const tagRes = await fetch(`${baseUrl}/subscriber/addTag`, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                subscriber_id: subscriberId,
-                tag_id: parseInt(manychat_tag_id),
-              }),
-            })
-            const tagResult = await tagRes.json()
-            console.log('ManyChat addTag response:', tagResult)
-          }
-
-          return {
-            success: true,
-            subscriber_id: subscriberId,
-            message: 'Found existing subscriber by whatsapp_phone on retry, linked to lead'
-          }
-        }
-      } catch (_e) {
-        // Continue
+    if (createResultStr.includes('wa_id') || createResultStr.includes('WhatsApp ID already exists')) {
+      console.log('⚠️ Create failed with "WhatsApp ID already exists" conflict')
+      console.log('🔍 This means the subscriber exists in ManyChat but was created via WhatsApp without a phone field.')
+      console.log('💡 Solution: Create a Flow in ManyChat to copy {{whatsapp_phone}} to phone_number custom field.')
+      
+      // Mark with special status to indicate this specific scenario
+      const specialStatus = 'EXISTING_WA_SUBSCRIBER'
+      await supabase.from('leads')
+        .update({ manychat_subscriber_id: specialStatus })
+        .eq('id', leadRecord.id)
+      console.log(`📝 Marked lead ${leadRecord.id} as ${specialStatus}`)
+      
+      return {
+        success: false,
+        subscriber_id: null,
+        status: specialStatus,
+        message: 'המנוי קיים ב-ManyChat אך נוצר דרך וואטסאפ ללא שדה טלפון. יש ליצור Flow ב-ManyChat שמעתיק את whatsapp_phone לשדה phone_number'
       }
     }
 
+    // Try one more lookup by phone (not wa_id/whatsapp_phone - those don't work)
+    console.log('Retrying lookup by phone system field:', phoneCandidates)
     for (const candidate of phoneCandidates) {
       try {
         const retryFind = await fetch(
@@ -1493,6 +1348,11 @@ async function executeCreateManychatSubscriber(supabase: any, config: any, data:
         // Continue to next candidate
       }
     }
+    
+    // Mark as NEEDS_MANUAL_LINK for other failure types
+    await supabase.from('leads')
+      .update({ manychat_subscriber_id: 'NEEDS_MANUAL_LINK' })
+      .eq('id', leadRecord.id)
     
     throw new Error(`שגיאה ביצירת subscriber ב-ManyChat: ${JSON.stringify(createResult)}`)
   }

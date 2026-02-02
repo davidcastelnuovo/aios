@@ -512,13 +512,13 @@ Deno.serve(async (req) => {
           console.log('⚠️ Failed to add tag, but subscriber was created');
         }
       } else {
-        // If creation failed (e.g., "already exists" conflict), try lookup methods again
-        console.log('⚠️ Create failed, retrying lookup methods with delay...');
+        // Check if creation failed due to "WhatsApp ID already exists"
+        console.log('⚠️ Create failed, checking if this is a WhatsApp ID conflict...');
         
         // Wait a bit to avoid rate limiting
         await new Promise(r => setTimeout(r, 2000));
         
-        // Retry phone lookup
+        // Retry phone lookup (only valid method - not wa_id or whatsapp_phone)
         subscriberId = await findSubscriberByPhone(apiKey, phoneCandidates);
         
         // Retry email lookup
@@ -538,6 +538,12 @@ Deno.serve(async (req) => {
         if (subscriberId) {
           wasExisting = true;
           console.log(`✅ Found subscriber after create conflict: ${subscriberId}`);
+        } else {
+          // This is likely the "WhatsApp ID already exists" scenario
+          // The subscriber exists but cannot be found via any API method
+          console.log('⚠️ Could not find subscriber after create conflict');
+          console.log('🔍 This likely means the subscriber was created via WhatsApp without phone field');
+          console.log('💡 Solution: Create a Flow in ManyChat to copy {{whatsapp_phone}} to phone_number custom field');
         }
       }
     }
@@ -576,18 +582,20 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     } else {
-      // Mark as NEEDS_MANUAL_LINK to indicate manual intervention is needed
-      console.log('❌ Could not find or create subscriber, marking as NEEDS_MANUAL_LINK');
+      // Mark as EXISTING_WA_SUBSCRIBER to indicate the ManyChat limitation
+      // This is more specific than NEEDS_MANUAL_LINK
+      console.log('❌ Could not find or create subscriber, marking as EXISTING_WA_SUBSCRIBER');
       await supabase
         .from('leads')
-        .update({ manychat_subscriber_id: 'NEEDS_MANUAL_LINK' })
+        .update({ manychat_subscriber_id: 'EXISTING_WA_SUBSCRIBER' })
         .eq('id', lead.id);
 
       return new Response(
         JSON.stringify({ 
-          message: 'Could not sync lead to ManyChat - requires manual linking in ManyChat', 
+          message: 'המנוי קיים ב-ManyChat אך נוצר דרך וואטסאפ ללא שדה טלפון. יש ליצור Flow ב-ManyChat שמעתיק את whatsapp_phone לשדה phone_number', 
           synced: false,
-          needs_manual_link: true
+          status: 'EXISTING_WA_SUBSCRIBER',
+          solution: 'Create a Flow in ManyChat: Trigger "New Subscriber" -> Action "Set Custom Field phone_number = {{whatsapp_phone}}"'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
