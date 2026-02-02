@@ -51,7 +51,8 @@ export function useFolderLinksAndAttachments(entity: EntityWithFiles) {
     } else {
       setAttachments([]);
     }
-  }, [entity]);
+  // Use JSON.stringify to detect actual data changes, not just reference changes
+  }, [JSON.stringify(entity?.folder_links), JSON.stringify(entity?.attachments), entity?.folder_link]);
 
   return {
     folderLinks,
