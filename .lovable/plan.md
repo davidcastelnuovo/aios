@@ -1,59 +1,34 @@
 
-# תכנית תיקון - סנכרון ManyChat לא עובד ללידים חדשים
+# שינוי תדירות סנכרון Facebook Leads לכל דקה
 
-## אבחון הבעיה
+## מה ישתנה
+עדכון ה-cron job `sync-facebook-leads-every-5min` מתזמון `*/5 * * * *` (כל 5 דקות) ל-`* * * * *` (כל דקה).
 
-הבעיה המרכזית זוהתה:
-- **ManyChat API לא תומך ב-`whatsapp_phone` ו-`wa_id` בחיפוש `findBySystemField`** - מחזיר שגיאה 400
-- כאשר מנוי נרשם דרך WhatsApp ישירות ב-ManyChat, הוא נוצר **בלי שדה `phone`** - רק עם `whatsapp_phone`
-- לכן:
-  1. `findBySystemField?phone=...` מחזיר ריק (אין phone)
-  2. `findByCustomField?phone_number=...` מחזיר ריק (Custom Field לא הוגדר ל-subscriber)
-  3. `createSubscriber` נכשל עם "WhatsApp ID already exists"
-  
-**התוצאה:** המערכת לא יכולה למצוא את המנוי הקיים וגם לא ליצור חדש.
+## שלבים טכניים
 
-## פתרון
+### 1. עדכון תזמון ה-Cron Job
+הרצת SQL לעדכון הטבלה `cron.job`:
 
-כאשר יצירת subscriber נכשלת עם `"WhatsApp ID already exists"`, יש להוסיף שלב **לפני** הכרזת כשלון:
+```sql
+SELECT cron.unschedule('sync-facebook-leads-every-5min');
 
-1. **לחלץ את ה-WhatsApp ID מהשגיאה** (למשל `972523043096`)
-2. **להשתמש ב-API אחר של ManyChat:** `findByName` או `getInfo` - אבל אלו דורשים subscriber_id
-3. **הפתרון האמיתי:** להשתמש ב-API `/fb/sending/sendContent` עם `subscriber_id` מסוג WhatsApp ID ישירות
+SELECT cron.schedule(
+  'sync-facebook-leads-every-minute',
+  '* * * * *',
+  $$
+  SELECT net.http_post(
+    url:='https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/cron-sync-facebook-leads',
+    headers:='{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impuemd1aXNha2R0Y29sbHhtZ3pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA1NTcxNTcsImV4cCI6MjA3NjEzMzE1N30.VrxuppQtj-cByA2ml2krzwoM1rHwelXIr0f5D3eP4KM"}'::jsonb,
+    body:='{}'::jsonb
+  ) as request_id;
+  $$
+);
+```
 
-אבל - ManyChat לא מספק דרך ישירה למצוא subscriber לפי whatsapp_phone.
+## תוצאה צפויה
+- לידים חדשים מ-Facebook יזוהו ויכנסו למערכת **תוך דקה** במקום עד 5 דקות
+- סנכרון ManyChat יתחיל מיד אחרי (כי הוא כבר event-driven)
 
-**הפתרון המעשי:**
-כאשר מתקבלת שגיאה `"WhatsApp ID already exists"`:
-1. סמן את הליד עם סטטוס מיוחד `EXISTING_WA_SUBSCRIBER` 
-2. **המערכת צריכה Flow ב-ManyChat** שמעדכן את ה-Custom Field `phone_number` לכל נרשם חדש
-3. לאחר עדכון ה-Flow - הסנכרון הבא יצליח למצוא את המנוי
-
-## שינויים טכניים
-
-### 1. עדכון `executeCreateManychatSubscriber` ב-`trigger-automation/index.ts`
-- כאשר יצירה נכשלת עם `"WhatsApp ID already exists"`:
-  - לסמן את הליד כ-`EXISTING_WA_SUBSCRIBER` במקום `NEEDS_MANUAL_LINK`
-  - להחזיר תשובה מפורטת שמסבירה שצריך Flow ב-ManyChat
-
-### 2. עדכון `executeSendWhatsapp` ב-`trigger-automation/index.ts`
-- להסיר את הקריאות ל-`findBySystemField?wa_id=...` ו-`findBySystemField?whatsapp_phone=...` - הן תמיד נכשלות
-- להוסיף הודעת לוג ברורה כשזה קורה
-
-### 3. עדכון `auto-sync-new-lead/index.ts`
-- אותו טיפול - סימון `EXISTING_WA_SUBSCRIBER` כאשר יש conflict
-
-### 4. הוספת הנחיות למשתמש
-- בדף הגדרות ManyChat - להוסיף הסבר על הצורך ב-Flow שמעדכן `phone_number`
-
-## המלצה נוספת
-כדי לפתור את הבעיה לחלוטין, יש ליצור Flow ב-ManyChat:
-1. טריגר: New Subscriber / WhatsApp Opt-in
-2. פעולה: Set Custom Field `phone_number` = `{{whatsapp_phone}}`
-
-זה יבטיח שמנויים עתידיים יהיו ניתנים לאיתור דרך ה-API.
-
-## קבצים לעריכה
-- `supabase/functions/trigger-automation/index.ts`
-- `supabase/functions/auto-sync-new-lead/index.ts`
-- `src/pages/ManyChatSettings.tsx` (אופציונלי - הוספת הסבר)
+## הערות
+- אין שינוי בקוד
+- אין סיכון - אפשר לחזור ל-5 דקות בכל רגע
