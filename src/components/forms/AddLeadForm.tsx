@@ -187,7 +187,11 @@ export function AddLeadForm() {
       return data;
     },
     onSuccess: async (data) => {
+      // Invalidate all leads-related queries to refresh Kanban and Table views
       queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
       
       // Add selected tags to the newly created lead
       if (data && selectedTags.length > 0 && userId && tenantId) {
