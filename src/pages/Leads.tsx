@@ -1781,9 +1781,13 @@ export default function Leads() {
         ? [selectedAgency]
         : agencies?.map(a => a.id) || null;
       
-      const salesPersonFilter = filterSalesPersonIds.length > 0 && !filterSalesPersonIds.includes("none") 
-        ? filterSalesPersonIds 
-        : null;
+      // Keep filters aligned with the initial Kanban fetch (incl. View-As override)
+      let salesPersonFilter: string[] | null = null;
+      if (isViewingAs && viewAsSalesPersonId) {
+        salesPersonFilter = [viewAsSalesPersonId];
+      } else if (filterSalesPersonIds.length > 0 && !filterSalesPersonIds.includes("none")) {
+        salesPersonFilter = filterSalesPersonIds;
+      }
       
       const { data, error } = await supabase.rpc('get_leads_by_stages', {
         p_tenant_id: tenantId,
@@ -1794,6 +1798,7 @@ export default function Leads() {
         p_search_query: searchQuery.trim() || null,
         p_sales_person_ids: salesPersonFilter,
         p_response_statuses: filterResponseStatus.length > 0 && !filterResponseStatus.includes("none") ? filterResponseStatus : null,
+        p_follow_up_today: filterFollowUpToday,
         p_start_date: startDate?.toISOString() || null,
         p_end_date: endDate ? new Date(endDate.setHours(23, 59, 59, 999)).toISOString() : null,
         p_tag_ids: filterTagIds.length > 0 && !filterTagIds.includes("none") ? filterTagIds : null
@@ -1801,12 +1806,20 @@ export default function Leads() {
       
       if (error) throw error;
       
-      // Extract leads from the response - RPC returns array with {stage, leads, total_count}
-      const typedData = data as { stage: string; leads: any[]; total_count: number }[] | null;
-      const stageResult = Array.isArray(typedData) 
-        ? typedData.find((item) => item.stage === stageId)
-        : null;
-      const newLeads = (Array.isArray(stageResult?.leads) ? stageResult.leads : []) as any[];
+      // Extract leads from the response.
+      // NOTE: get_leads_by_stages RETURNS jsonb (object keyed by stage_key), not an array.
+      const newLeads = (() => {
+        if (!data) return [] as any[];
+
+        // Defensive: support legacy/alternate array format too
+        if (Array.isArray(data)) {
+          const hit = (data as any[]).find((item) => item?.stage === stageId);
+          return Array.isArray(hit?.leads) ? hit.leads : [];
+        }
+
+        const stagePayload = (data as Record<string, any>)[stageId];
+        return Array.isArray(stagePayload?.leads) ? stagePayload.leads : [];
+      })();
       
       if (newLeads.length > 0) {
         // Fetch relations for new leads
