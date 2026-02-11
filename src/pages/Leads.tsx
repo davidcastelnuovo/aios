@@ -1215,10 +1215,18 @@ export default function Leads() {
   });
 
   // Get visible lead IDs for tag fetching (to avoid 1000 row limit)
+  // Include accumulated leads from "Load More" so their tags are fetched too
   const visibleLeadIds = useMemo(() => {
-    if (!secureFilteredLeads || secureFilteredLeads.length === 0) return [];
-    return secureFilteredLeads.map((lead: any) => lead.id);
-  }, [secureFilteredLeads]);
+    const ids = new Set<string>();
+    if (secureFilteredLeads) {
+      secureFilteredLeads.forEach((lead: any) => ids.add(lead.id));
+    }
+    // Add IDs from accumulated (Load More) leads across all stages
+    Object.values(accumulatedLeads).forEach((stageLeads: any[]) => {
+      stageLeads.forEach((lead: any) => ids.add(lead.id));
+    });
+    return Array.from(ids);
+  }, [secureFilteredLeads, accumulatedLeads]);
 
   // Fetch lead tags in bulk for visible leads only (avoids 1000 row limit)
   const { data: leadsTagsMap = {} } = useQuery({
