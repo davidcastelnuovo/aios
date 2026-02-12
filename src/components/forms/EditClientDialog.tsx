@@ -274,6 +274,8 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       queryClient.invalidateQueries({ queryKey: ["client-tenant-financial-data"] });
       queryClient.invalidateQueries({ queryKey: ["client-financial-data"] });
+      queryClient.invalidateQueries({ queryKey: ["accounting-clients"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
       onOpenChange(false);
     },
     onError: (error: any) => {
