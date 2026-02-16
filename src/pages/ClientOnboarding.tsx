@@ -196,7 +196,8 @@ export default function ClientOnboarding() {
   });
 
   // Filter logic: Role-based access, then global agency filter
-  let accessibleItems = onboardingItems;
+  // Use secureFilteredOnboarding (tenant-filtered) instead of raw onboardingItems
+  let accessibleItems = secureFilteredOnboarding;
 
   if (!isOwner) {
     if (isTeamManager && userAgencyIds && userAgencyIds.length > 0) {
