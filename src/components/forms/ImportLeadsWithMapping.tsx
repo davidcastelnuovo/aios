@@ -56,6 +56,7 @@ const BASE_SYSTEM_FIELDS = [
   { key: "estimated_deal_value", label: "שווי עסקה" },
   { key: "proposal_date", label: "תאריך הצעה" },
   { key: "won_date", label: "תאריך סגירה" },
+  { key: "follow_up_date", label: "תאריך לחזרה" },
   { key: "created_at", label: "תאריך יצירה" },
   { key: "folder_link", label: "קישור לתיקייה" },
   { key: "updates", label: "עדכונים" },
@@ -105,6 +106,11 @@ const AUTO_DETECT_MAPPINGS: Record<string, string> = {
   'תחום': 'industry',
   'קמפיין': 'campaign_name',
   'שם קמפיין': 'campaign_name',
+  'תאריך לחזרה': 'follow_up_date',
+  'תאריך חזרה': 'follow_up_date',
+  'לחזרה': 'follow_up_date',
+  'פולו אפ': 'follow_up_date',
+  'follow up': 'follow_up_date',
   'תאריך יצירה': 'created_at',
   'תאריך הצעה': 'proposal_date',
   'נסגר': 'won_date',
@@ -140,6 +146,9 @@ const AUTO_DETECT_MAPPINGS: Record<string, string> = {
   'campaign_name': 'campaign_name',
   'created_at': 'created_at',
   'created': 'created_at',
+  'follow_up_date': 'follow_up_date',
+  'follow_up': 'follow_up_date',
+  'follow up date': 'follow_up_date',
   'proposal_date': 'proposal_date',
   'won_date': 'won_date',
   'deal_value': 'estimated_deal_value',
@@ -793,6 +802,10 @@ export function ImportLeadsWithMapping() {
                 lead.proposal_date = propDate;
                 lead.proposal_sent_date = propDate;
               }
+              break;
+            case 'follow_up_date':
+              const followUpDate = parseDate(strValue);
+              if (followUpDate) lead.follow_up_date = followUpDate;
               break;
             case 'won_date':
               const wonDate = parseDate(strValue);
