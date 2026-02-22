@@ -23,6 +23,7 @@ interface FollowUpDatePickerProps {
   currentDate: string | null;
   variant?: "icon" | "full";
   onSuccess?: () => void;
+  onOptimisticUpdate?: (leadId: string, newDate: string | null) => void;
 }
 
 export function FollowUpDatePicker({
@@ -30,6 +31,7 @@ export function FollowUpDatePicker({
   currentDate,
   variant = "icon",
   onSuccess,
+  onOptimisticUpdate,
 }: FollowUpDatePickerProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -57,10 +59,48 @@ export function FollowUpDatePicker({
 
       if (error) throw error;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+    onSuccess: (_data, dateArg) => {
+      // Compute the date string that was saved
+      let dateString: string | null = null;
+      if (dateArg) {
+        const year = dateArg.getFullYear();
+        const month = String(dateArg.getMonth() + 1).padStart(2, '0');
+        const day = String(dateArg.getDate()).padStart(2, '0');
+        dateString = `${year}-${month}-${day}`;
+      }
+
+      if (onOptimisticUpdate) {
+        // Optimistic: update cache directly without full invalidation
+        onOptimisticUpdate(leadId, dateString);
+        // Update query caches in-place
+        const updateLeadInCache = (old: any) => {
+          if (!old) return old;
+          if (Array.isArray(old)) {
+            return old.map((l: any) => l.id === leadId ? { ...l, follow_up_date: dateString } : l);
+          }
+          // Object with stage keys (kanban format)
+          if (typeof old === 'object') {
+            const updated = { ...old };
+            for (const key of Object.keys(updated)) {
+              if (Array.isArray(updated[key])) {
+                updated[key] = updated[key].map((l: any) => l.id === leadId ? { ...l, follow_up_date: dateString } : l);
+              } else if (updated[key]?.leads) {
+                updated[key] = { ...updated[key], leads: updated[key].leads.map((l: any) => l.id === leadId ? { ...l, follow_up_date: dateString } : l) };
+              }
+            }
+            return updated;
+          }
+          return old;
+        };
+        queryClient.setQueriesData({ queryKey: ["leads-kanban"] }, updateLeadInCache);
+        queryClient.setQueriesData({ queryKey: ["leads-table"] }, updateLeadInCache);
+      } else {
+        // Fallback: full invalidation
+        queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+        queryClient.invalidateQueries({ queryKey: ["leads-table"] });
+        queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      }
+
       toast({
         title: selectedDate ? "תאריך לחזרה נשמר" : "תאריך לחזרה נמחק",
       });

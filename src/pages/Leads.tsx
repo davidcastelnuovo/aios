@@ -192,6 +192,7 @@ function LeadCardContent({
   isCompanyNameVisible = true,
   allTags = [],
   leadTagIds = [],
+  onFollowUpDateUpdate,
   dragHandleProps,
   style,
   innerRef,
@@ -205,6 +206,7 @@ function LeadCardContent({
   isCompanyNameVisible?: boolean;
   allTags?: Array<{ id: string; name: string; color: string }>;
   leadTagIds?: string[];
+  onFollowUpDateUpdate?: (leadId: string, newDate: string | null) => void;
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
   style?: React.CSSProperties;
   innerRef?: React.Ref<HTMLDivElement>;
@@ -393,6 +395,7 @@ function LeadCardContent({
           <FollowUpDatePicker 
             leadId={lead.id} 
             currentDate={lead.follow_up_date}
+            onOptimisticUpdate={onFollowUpDateUpdate}
           />
         </div>
 
@@ -457,7 +460,8 @@ function SortableLeadCard({
   pipelineStages = [],
   isCompanyNameVisible = true,
   allTags = [],
-  leadTagIds = []
+  leadTagIds = [],
+  onFollowUpDateUpdate,
 }: { 
   lead: any; 
   onStatusChange: (leadId: string, newStatus: string) => void;
@@ -468,6 +472,7 @@ function SortableLeadCard({
   isCompanyNameVisible?: boolean;
   allTags?: Array<{ id: string; name: string; color: string }>;
   leadTagIds?: string[];
+  onFollowUpDateUpdate?: (leadId: string, newDate: string | null) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: lead.id,
@@ -499,6 +504,7 @@ function SortableLeadCard({
       isCompanyNameVisible={isCompanyNameVisible}
       allTags={allTags}
       leadTagIds={leadTagIds}
+      onFollowUpDateUpdate={onFollowUpDateUpdate}
       dragHandleProps={dragHandleProps}
       style={style}
       innerRef={setNodeRef}
@@ -702,6 +708,27 @@ export default function Leads() {
   
   // Optimistic status map - instantly shows lead in new column before backend confirms
   const [optimisticStatusByLeadId, setOptimisticStatusByLeadId] = useState<Record<string, string>>({});
+  // Optimistic follow-up date update handler
+  const handleFollowUpDateUpdate = (leadId: string, newDate: string | null) => {
+    // Update accumulatedLeads
+    setAccumulatedLeads(prev => {
+      const updated = { ...prev };
+      for (const key of Object.keys(updated)) {
+        updated[key] = updated[key].map((l: any) => l.id === leadId ? { ...l, follow_up_date: newDate } : l);
+      }
+      return updated;
+    });
+    // Update stageLeadsData
+    setStageLeadsData(prev => {
+      const updated = { ...prev };
+      for (const key of Object.keys(updated)) {
+        if (updated[key]?.leads) {
+          updated[key] = { ...updated[key], leads: updated[key].leads.map((l: any) => l.id === leadId ? { ...l, follow_up_date: newDate } : l) };
+        }
+      }
+      return updated;
+    });
+  };
 
   // Fetch lead data for auto-open from URL
   const { data: autoOpenLead } = useQuery({
@@ -2391,6 +2418,7 @@ export default function Leads() {
                                 responseStatus: responseStatus as "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant" | null 
                               })
                             }
+                            onFollowUpDateUpdate={handleFollowUpDateUpdate}
                           />
                         ))}
                       </SortableContext>
@@ -2569,6 +2597,7 @@ export default function Leads() {
                                 responseStatus: responseStatus as "no_answer_1" | "no_answer_2" | "no_answer_3" | "no_answer_4" | "denies_contact" | "not_relevant" | null 
                               })
                             }
+                            onFollowUpDateUpdate={handleFollowUpDateUpdate}
                           />
                         ))}
                         
