@@ -1328,6 +1328,35 @@ export type Database = {
         }
         Relationships: []
       }
+      deleted_facebook_leads: {
+        Row: {
+          deleted_at: string
+          id: string
+          leadgen_id: string
+          tenant_id: string
+        }
+        Insert: {
+          deleted_at?: string
+          id?: string
+          leadgen_id: string
+          tenant_id: string
+        }
+        Update: {
+          deleted_at?: string
+          id?: string
+          leadgen_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deleted_facebook_leads_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expense_payments: {
         Row: {
           amount: number
