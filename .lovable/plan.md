@@ -1,91 +1,39 @@
 
-
-# תוכנית: מניעת חזרה של לידים שנמחקו מפייסבוק
+# תיקון שגיאת ייבוא לידים מגוגל שיטס
 
 ## הבעיה
-כשמוחקים ליד שהגיע מפייסבוק, ה-`leadgen_id` שלו (שמור ב-`notes`) נמחק יחד איתו. בסנכרון הבא, המערכת לא מוצאת את ה-`leadgen_id` ויוצרת את הליד מחדש.
+הפונקציה `mapSource` בקובץ `ImportLeadsWithMapping.tsx` מחזירה ערכים לא חוקיים עבור שדה ה-`source` (מקור הליד). 
 
-## הפתרון - 3 שלבים
+לדוגמה, כשבגיליון יש ערך "facebook", הפונקציה מחזירה `"facebook"` -- אבל הערכים המותרים הם רק: `website`, `referral`, `social_media`, `paid_ads`, `cold_call`, `email_campaign`, `event`, `other`, `whatsapp`.
 
-### שלב 1: טבלת "זיכרון" ללידים שנמחקו
-יצירת טבלת `deleted_facebook_leads` שתשמור את ה-`leadgen_id` של כל ליד פייסבוק שנמחק.
+הערכים `"facebook"`, `"instagram"`, `"linkedin"` לא קיימים ב-enum וגורמים לשגיאה.
 
-- עמודות: `id`, `tenant_id`, `leadgen_id`, `deleted_at`
-- אילוץ ייחודי על `tenant_id + leadgen_id`
-- RLS מופעל עם מדיניות מתאימה
+## הפתרון
+עדכון הפונקציה `mapSource` כך שתמפה את הערכים לערכי enum חוקיים:
 
-### שלב 2: טריגר אוטומטי על מחיקת ליד
-טריגר `BEFORE DELETE` על טבלת `leads` שמחלץ את ה-`leadgen_id` מתוך ה-`notes` ושומר אותו בטבלה החדשה לפני שהליד נמחק.
-
-### שלב 3: עדכון פונקציית הסנכרון
-עדכון `cron-sync-facebook-leads` כך שלפני יצירת ליד חדש, תבדוק גם בטבלת `deleted_facebook_leads` -- אם ה-`leadgen_id` נמצא שם, הליד ידולג.
-
----
+- `facebook` / `פייסבוק` --> `paid_ads`
+- `instagram` / `אינסטגרם` --> `social_media`
+- `linkedin` / `לינקדאין` --> `social_media`
+- הוספת מיפויים נוספים חסרים: `google` --> `paid_ads`, `אימייל` --> `email_campaign`, `אירוע` --> `event`
 
 ## פרטים טכניים
 
-### מיגרציית SQL
-
-```sql
--- טבלה לשמירת leadgen_ids של לידים שנמחקו
-CREATE TABLE public.deleted_facebook_leads (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-  leadgen_id text NOT NULL,
-  deleted_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE(tenant_id, leadgen_id)
-);
-
-ALTER TABLE public.deleted_facebook_leads ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Service role full access" ON public.deleted_facebook_leads
-  FOR ALL USING (true) WITH CHECK (true);
-
--- טריגר שמתעד leadgen_id לפני מחיקת ליד
-CREATE OR REPLACE FUNCTION public.track_deleted_facebook_lead()
-RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
-SET search_path TO 'public' AS $$
-DECLARE
-  v_leadgen_id text;
-BEGIN
-  IF OLD.notes IS NOT NULL AND OLD.notes LIKE '%leadgen_id:%' THEN
-    v_leadgen_id := trim(split_part(split_part(OLD.notes, 'leadgen_id: ', 2), E'\n', 1));
-    IF v_leadgen_id IS NOT NULL AND v_leadgen_id != '' THEN
-      INSERT INTO deleted_facebook_leads (tenant_id, leadgen_id)
-      VALUES (OLD.tenant_id, v_leadgen_id)
-      ON CONFLICT (tenant_id, leadgen_id) DO NOTHING;
-    END IF;
-  END IF;
-  RETURN OLD;
-END;
-$$;
-
-CREATE TRIGGER on_lead_delete_track_facebook
-  BEFORE DELETE ON public.leads
-  FOR EACH ROW
-  EXECUTE FUNCTION public.track_deleted_facebook_lead();
-```
-
-### עדכון Edge Function: `cron-sync-facebook-leads`
-בשני המקומות בקוד (לולאה ראשית ולולאת pagination), לפני יצירת ליד חדש, יתווסף:
+### קובץ: `src/components/forms/ImportLeadsWithMapping.tsx`
+עדכון הפונקציה `mapSource` (שורות 566-574):
 
 ```typescript
-// Check if this lead was previously deleted
-const { data: deletedLead } = await supabase
-  .from('deleted_facebook_leads')
-  .select('id')
-  .eq('tenant_id', integration.tenant_id)
-  .eq('leadgen_id', leadgenId)
-  .limit(1);
-
-if (deletedLead && deletedLead.length > 0) {
-  console.log(`🗑️ Lead ${leadgenId} was previously deleted, skipping`);
-  totalSkipped++;
-  continue;
-}
+const mapSource = (val: string) => {
+  const v = val.toLowerCase().replace(/[\s_\-]/g, '');
+  if (v.includes("אתר") || v.includes("website")) return "website";
+  if (v.includes("שיחה") || v.includes("טלפון") || v.includes("coldcall")) return "cold_call";
+  if (v.includes("המלצה") || v.includes("referral") || v.includes("הפניה")) return "referral";
+  if (v.includes("facebook") || v.includes("פייסבוק") || v.includes("google") || v.includes("גוגל") || v.includes("paidads") || v.includes("ppc")) return "paid_ads";
+  if (v.includes("instagram") || v.includes("אינסטגרם") || v.includes("linkedin") || v.includes("לינקדאין") || v.includes("socialmedia") || v.includes("רשתותחברתיות") || v.includes("tiktok") || v.includes("טיקטוק")) return "social_media";
+  if (v.includes("אימייל") || v.includes("email") || v.includes("מייל") || v.includes("newsletter")) return "email_campaign";
+  if (v.includes("אירוע") || v.includes("event") || v.includes("כנס") || v.includes("תערוכה")) return "event";
+  if (v.includes("whatsapp") || v.includes("ווטסאפ") || v.includes("וואטסאפ")) return "whatsapp";
+  return "other";
+};
 ```
 
-## תוצאה צפויה
-- לידים שנמחקים לא יחזרו בסנכרון הבא
-- השינוי אוטומטי לחלוטין -- לא דורש פעולה ידנית
-- אין השפעה על לידים קיימים או על תהליכים אחרים
+שינוי קובץ אחד בלבד, ללא שינויי מסד נתונים.
