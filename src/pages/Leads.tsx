@@ -1439,16 +1439,18 @@ export default function Leads() {
       const previousKanban = queryClient.getQueryData(kanbanQueryKey);
       const previousTable = queryClient.getQueryData(tableQueryKey);
 
-      // Optimistically update Kanban data (nested structure with stages)
+      // Optimistically update Kanban data (nested structure: { [stageKey]: { leads: [...], totalCount } })
       queryClient.setQueryData(kanbanQueryKey, (old: any) => {
         if (!old) return old;
-        // Kanban data is an object with stage keys containing lead arrays
         const updated = { ...old };
         for (const stageKey in updated) {
-          if (Array.isArray(updated[stageKey])) {
-            updated[stageKey] = updated[stageKey].map((lead: any) =>
-              lead.id === leadId ? { ...lead, status: newStatus } : lead
-            );
+          if (updated[stageKey]?.leads && Array.isArray(updated[stageKey].leads)) {
+            updated[stageKey] = {
+              ...updated[stageKey],
+              leads: updated[stageKey].leads.map((lead: any) =>
+                lead.id === leadId ? { ...lead, status: newStatus } : lead
+              ),
+            };
           }
         }
         return updated;
@@ -1460,6 +1462,55 @@ export default function Leads() {
         return old.map((lead: any) => 
           lead.id === leadId ? { ...lead, status: newStatus } : lead
         );
+      });
+
+      // Optimistically update accumulatedLeads (move lead from old stage to new stage)
+      setAccumulatedLeads(prev => {
+        const updated = { ...prev };
+        let movedLead: any = null;
+        // Find and remove from old stage
+        for (const key of Object.keys(updated)) {
+          const idx = updated[key].findIndex((l: any) => l.id === leadId);
+          if (idx !== -1) {
+            movedLead = { ...updated[key][idx], status: newStatus };
+            updated[key] = [...updated[key].slice(0, idx), ...updated[key].slice(idx + 1)];
+            break;
+          }
+        }
+        // Add to new stage
+        if (movedLead) {
+          updated[newStatus] = [movedLead, ...(updated[newStatus] || [])];
+        }
+        return updated;
+      });
+
+      // Optimistically update stageLeadsData
+      setStageLeadsData(prev => {
+        const updated = { ...prev };
+        let movedLead: any = null;
+        for (const key of Object.keys(updated)) {
+          if (updated[key]?.leads) {
+            const idx = updated[key].leads.findIndex((l: any) => l.id === leadId);
+            if (idx !== -1) {
+              movedLead = { ...updated[key].leads[idx], status: newStatus };
+              updated[key] = {
+                ...updated[key],
+                leads: [...updated[key].leads.slice(0, idx), ...updated[key].leads.slice(idx + 1)],
+                totalCount: Math.max(0, updated[key].totalCount - 1),
+              };
+              break;
+            }
+          }
+        }
+        if (movedLead) {
+          const target = updated[newStatus] || { leads: [], totalCount: 0 };
+          updated[newStatus] = {
+            ...target,
+            leads: [movedLead, ...target.leads],
+            totalCount: target.totalCount + 1,
+          };
+        }
+        return updated;
       });
 
       // Return context with the snapshots for rollback
@@ -1479,6 +1530,9 @@ export default function Leads() {
         delete next[variables.leadId];
         return next;
       });
+      // Re-fetch to restore correct state
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
       toast({
         title: "שגיאה בעדכון סטטוס",
         description: error.message,
@@ -1496,15 +1550,7 @@ export default function Leads() {
         title: "סטטוס ליד עודכן בהצלחה",
       });
     },
-    onSettled: () => {
-      // Delay refetch to allow drop animation to complete smoothly
-      setTimeout(() => {
-        // Invalidate both Kanban and Table views with correct query key prefixes
-        queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-        queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-        queryClient.invalidateQueries({ queryKey: ["leads-count"] });
-      }, 300);
-    },
+    // No onSettled invalidation - optimistic updates handle the UI
   });
 
   const updateLeadResponseStatus = useMutation({
@@ -1543,15 +1589,55 @@ export default function Leads() {
         });
       }
     },
+    onMutate: async ({ leadId, responseStatus }) => {
+      // Optimistically update accumulatedLeads
+      setAccumulatedLeads(prev => {
+        const updated = { ...prev };
+        for (const key of Object.keys(updated)) {
+          updated[key] = updated[key].map((l: any) => l.id === leadId ? { ...l, response_status: responseStatus } : l);
+        }
+        return updated;
+      });
+      // Optimistically update stageLeadsData
+      setStageLeadsData(prev => {
+        const updated = { ...prev };
+        for (const key of Object.keys(updated)) {
+          if (updated[key]?.leads) {
+            updated[key] = { ...updated[key], leads: updated[key].leads.map((l: any) => l.id === leadId ? { ...l, response_status: responseStatus } : l) };
+          }
+        }
+        return updated;
+      });
+      // Update kanban cache
+      queryClient.setQueriesData({ queryKey: ["leads-kanban"] }, (old: any) => {
+        if (!old) return old;
+        const updated = { ...old };
+        for (const stageKey in updated) {
+          if (updated[stageKey]?.leads && Array.isArray(updated[stageKey].leads)) {
+            updated[stageKey] = {
+              ...updated[stageKey],
+              leads: updated[stageKey].leads.map((l: any) => l.id === leadId ? { ...l, response_status: responseStatus } : l),
+            };
+          }
+        }
+        return updated;
+      });
+      // Update table cache
+      queryClient.setQueriesData({ queryKey: ["leads-table"] }, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        return old.map((l: any) => l.id === leadId ? { ...l, response_status: responseStatus } : l);
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
-      queryClient.invalidateQueries({ queryKey: ["leads-count"] });
+      // No invalidation - optimistic update already handled the UI
       toast({
         title: "סטטוס תגובה עודכן בהצלחה",
       });
     },
     onError: (error: any) => {
+      // Re-fetch to restore correct state on error
+      queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
+      queryClient.invalidateQueries({ queryKey: ["leads-table"] });
       toast({
         title: "שגיאה בעדכון סטטוס תגובה",
         description: error.message,
