@@ -4413,6 +4413,10 @@ export type Database = {
         Args: { _tenant_id: string }
         Returns: undefined
       }
+      initialize_tenant_pipeline_stages: {
+        Args: { _tenant_id: string }
+        Returns: undefined
+      }
       initialize_tenant_terminology: {
         Args: { _business_type?: string; _tenant_id: string }
         Returns: undefined
