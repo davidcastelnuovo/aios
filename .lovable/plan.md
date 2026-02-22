@@ -1,51 +1,91 @@
 
-# תיקון באג - יצירת מנוי ב-ManyChat נכשלת בגלל Retry מיותר
 
-## הבעיה שזוהתה
+# תוכנית: מניעת חזרה של לידים שנמחקו מפייסבוק
 
-בניתוח הלוגים מצאתי באג קריטי בפונקציה `createManyChatSubscriber`:
+## הבעיה
+כשמוחקים ליד שהגיע מפייסבוק, ה-`leadgen_id` שלו (שמור ב-`notes`) נמחק יחד איתו. בסנכרון הבא, המערכת לא מוצאת את ה-`leadgen_id` ויוצרת את הליד מחדש.
 
-**מה קורה:**
-1. קריאה ראשונה ל-createSubscriber **מצליחה** עם `status: "success"` ומחזירה `id: 2107377117`
-2. התשובה מכילה גם `warning: "Permission denied to import phone"`
-3. הקוד בודק רק אם המחרוזת מכילה "Permission denied to import phone" - **בלי לבדוק קודם אם status === "success"**
-4. לכן הוא עושה retry מיותר
-5. ה-retry נכשל כי המנוי כבר נוצר ("WhatsApp ID already exists")
-6. הקוד שומר את התוצאה הנכשלת במקום ההצלחה המקורית
+## הפתרון - 3 שלבים
 
-**הקוד הבעייתי (שורות 313-335):**
-```typescript
-const createStr = JSON.stringify(createData);
-if (createStr.includes('Permission denied to import phone')) {  // ❌ לא בודק status קודם!
-  // עושה retry מיותר...
-}
+### שלב 1: טבלת "זיכרון" ללידים שנמחקו
+יצירת טבלת `deleted_facebook_leads` שתשמור את ה-`leadgen_id` של כל ליד פייסבוק שנמחק.
+
+- עמודות: `id`, `tenant_id`, `leadgen_id`, `deleted_at`
+- אילוץ ייחודי על `tenant_id + leadgen_id`
+- RLS מופעל עם מדיניות מתאימה
+
+### שלב 2: טריגר אוטומטי על מחיקת ליד
+טריגר `BEFORE DELETE` על טבלת `leads` שמחלץ את ה-`leadgen_id` מתוך ה-`notes` ושומר אותו בטבלה החדשה לפני שהליד נמחק.
+
+### שלב 3: עדכון פונקציית הסנכרון
+עדכון `cron-sync-facebook-leads` כך שלפני יצירת ליד חדש, תבדוק גם בטבלת `deleted_facebook_leads` -- אם ה-`leadgen_id` נמצא שם, הליד ידולג.
+
+---
+
+## פרטים טכניים
+
+### מיגרציית SQL
+
+```sql
+-- טבלה לשמירת leadgen_ids של לידים שנמחקו
+CREATE TABLE public.deleted_facebook_leads (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  leadgen_id text NOT NULL,
+  deleted_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(tenant_id, leadgen_id)
+);
+
+ALTER TABLE public.deleted_facebook_leads ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Service role full access" ON public.deleted_facebook_leads
+  FOR ALL USING (true) WITH CHECK (true);
+
+-- טריגר שמתעד leadgen_id לפני מחיקת ליד
+CREATE OR REPLACE FUNCTION public.track_deleted_facebook_lead()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
+SET search_path TO 'public' AS $$
+DECLARE
+  v_leadgen_id text;
+BEGIN
+  IF OLD.notes IS NOT NULL AND OLD.notes LIKE '%leadgen_id:%' THEN
+    v_leadgen_id := trim(split_part(split_part(OLD.notes, 'leadgen_id: ', 2), E'\n', 1));
+    IF v_leadgen_id IS NOT NULL AND v_leadgen_id != '' THEN
+      INSERT INTO deleted_facebook_leads (tenant_id, leadgen_id)
+      VALUES (OLD.tenant_id, v_leadgen_id)
+      ON CONFLICT (tenant_id, leadgen_id) DO NOTHING;
+    END IF;
+  END IF;
+  RETURN OLD;
+END;
+$$;
+
+CREATE TRIGGER on_lead_delete_track_facebook
+  BEFORE DELETE ON public.leads
+  FOR EACH ROW
+  EXECUTE FUNCTION public.track_deleted_facebook_lead();
 ```
 
-## הפתרון
-
-לשנות את התנאי כך שקודם יבדוק אם הקריאה הצליחה:
+### עדכון Edge Function: `cron-sync-facebook-leads`
+בשני המקומות בקוד (לולאה ראשית ולולאת pagination), לפני יצירת ליד חדש, יתווסף:
 
 ```typescript
-// Check if first attempt FAILED due to phone permission (not just warning)
-const createStr = JSON.stringify(createData);
-const isSuccess = createData?.status === 'success' && createData?.data?.id;
+// Check if this lead was previously deleted
+const { data: deletedLead } = await supabase
+  .from('deleted_facebook_leads')
+  .select('id')
+  .eq('tenant_id', integration.tenant_id)
+  .eq('leadgen_id', leadgenId)
+  .limit(1);
 
-if (!isSuccess && createStr.includes('Permission denied to import phone')) {
-  // Only retry if first attempt actually FAILED
-  console.log('Retrying createSubscriber WITHOUT phone field due to permission restriction...');
-  // ... retry logic
+if (deletedLead && deletedLead.length > 0) {
+  console.log(`🗑️ Lead ${leadgenId} was previously deleted, skipping`);
+  totalSkipped++;
+  continue;
 }
 ```
-
-## קבצים לעריכה
-
-- `supabase/functions/auto-sync-new-lead/index.ts` - תיקון הלוגיקה ב-createManyChatSubscriber
-- `supabase/functions/trigger-automation/index.ts` - אותו תיקון (אם הלוגיקה זהה)
 
 ## תוצאה צפויה
-
-לאחר התיקון:
-- כשיצירת מנוי מצליחה עם warning, לא יבוצע retry מיותר
-- השדה phone_number יוגדר כמו שצריך
-- הטאג יתווסף כראוי
-- הליד יקבל את ה-subscriber_id הנכון
+- לידים שנמחקים לא יחזרו בסנכרון הבא
+- השינוי אוטומטי לחלוטין -- לא דורש פעולה ידנית
+- אין השפעה על לידים קיימים או על תהליכים אחרים
