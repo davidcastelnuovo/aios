@@ -1,32 +1,37 @@
 
 
-# תיקון עדכון תאריך לחזרה בזמן אמת (ללא איפוס תצוגה)
+# תיקון: ליד נעלם אחרי שינוי סטטוס/סטטוס תגובה עם טעינת עוד 50
 
 ## הבעיה
-כשמעדכנים תאריך לחזרה, הרכיב `FollowUpDatePicker` מבצע `invalidateQueries` על `leads-kanban`, מה שגורם לטעינה מחדש של כל הנתונים ואיפוס ה-state של הלידים שנטענו (accumulatedLeads). התוצאה: המיקום מתאפס, לידים שנטענו בעמודים נוספים נעלמים, וצריך לטעון הכל מחדש.
+שתי בעיות משולבות:
+
+1. **Optimistic Update שבור בקנבן**: הקוד בודק `Array.isArray(updated[stageKey])` אבל המבנה האמיתי של הנתונים הוא אובייקט עם שדה `leads` בתוכו (לדוגמה `{ new: { id, color, label, leads: [...] } }`). לכן העדכון האופטימיסטי לא באמת עובד.
+
+2. **invalidateQueries מאפס את accumulatedLeads**: גם ב-`updateLeadStatus` (onSettled) וגם ב-`updateLeadResponseStatus` (onSuccess), הקריאה ל-`invalidateQueries` גורמת לטעינה מחדש של 50 הלידים הראשונים בלבד. לידים שנטענו עם "טען עוד" נעלמים.
 
 ## הפתרון
-עדכון אופטימיסטי ישירות ב-cache של React Query ובסטייט המקומי, בלי לבצע invalidation שגורמת לטעינה מחדש מלאה.
-
-## פרטים טכניים
-
-### קובץ: `src/components/leads/FollowUpDatePicker.tsx`
-
-1. הוספת prop חדש `onOptimisticUpdate` שמאפשר לרכיב האב (Leads.tsx) לעדכן את ה-state המקומי ישירות
-2. במקום `invalidateQueries`, ביצוע עדכון אופטימיסטי:
-   - עדכון ישיר של ה-query cache של `leads-kanban` ו-`leads-table` עם הערך החדש
-   - קריאה ל-`onOptimisticUpdate` לעדכון `accumulatedLeads`
-   - ללא invalidation שגורמת לריענון מלא
 
 ### קובץ: `src/pages/Leads.tsx`
 
-1. יצירת פונקציה `handleFollowUpDateUpdate(leadId, newDate)` שמעדכנת:
-   - את `accumulatedLeads` בסטייט המקומי
-   - את `stageLeadsData` בסטייט המקומי
-2. העברת הפונקציה כ-prop לכל מופע של `FollowUpDatePicker`
+#### 1. תיקון updateLeadStatus
+- תיקון ה-optimistic update בקנבן: לעבור על `updated[stageKey].leads` במקום `updated[stageKey]`
+- הוספת עדכון אופטימיסטי גם ל-`accumulatedLeads` (העברת הליד מהשלב הישן לחדש)
+- בביטול ה-`invalidateQueries` ב-onSettled והחלפתו בעדכון ממוקד שלא מאפס את הנתונים שנטענו
+
+#### 2. תיקון updateLeadResponseStatus
+- הוספת עדכון אופטימיסטי ב-onMutate (כמו שנעשה ל-follow_up_date)
+- עדכון ישיר של הקאש ו-accumulatedLeads
+- הסרת invalidateQueries מ-onSuccess
+
+#### 3. עדכון הקאש הנכון
+במקום `invalidateQueries` שמאפס הכל, נעדכן ישירות את הנתונים בקאש:
+- ב-onMutate: עדכון אופטימיסטי מיידי (הליד זז לעמודה החדשה)
+- ב-onSuccess: עדכון ממוקד של הרשומה הספציפית
+- ב-onError: החזרה למצב הקודם (rollback)
 
 ### התנהגות צפויה לאחר התיקון
-- עדכון תאריך לחזרה ישתקף מיידית בתצוגה
+- שינוי סטטוס ליד ישתקף מיידית בתצוגה (הליד יעבור לעמודה הנכונה)
+- שינוי סטטוס תגובה ישתקף מיידית
+- לידים שנטענו עם "טען עוד" לא יתאפסו
 - המיקום בגלילה יישמר
-- לידים שנטענו ב"טען עוד" לא יתאפסו
-- אפשר להמשיך לליד הבא ישירות
+
