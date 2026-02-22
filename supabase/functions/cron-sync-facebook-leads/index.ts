@@ -134,6 +134,20 @@ serve(async (req) => {
               continue;
             }
 
+            // Check if this lead was previously deleted
+            const { data: deletedLead } = await supabase
+              .from('deleted_facebook_leads')
+              .select('id')
+              .eq('tenant_id', integration.tenant_id)
+              .eq('leadgen_id', leadgenId)
+              .limit(1);
+
+            if (deletedLead && deletedLead.length > 0) {
+              console.log(`🗑️ Lead ${leadgenId} was previously deleted, skipping`);
+              totalSkipped++;
+              continue;
+            }
+
             // Parse field data from Facebook lead
             const fieldData: Record<string, string> = {};
             if (fbLead.field_data) {
@@ -261,6 +275,20 @@ serve(async (req) => {
                 .limit(1);
 
               if (existingLeads && existingLeads.length > 0) {
+                totalSkipped++;
+                continue;
+              }
+
+              // Check if this lead was previously deleted
+              const { data: deletedLead } = await supabase
+                .from('deleted_facebook_leads')
+                .select('id')
+                .eq('tenant_id', integration.tenant_id)
+                .eq('leadgen_id', leadgenId)
+                .limit(1);
+
+              if (deletedLead && deletedLead.length > 0) {
+                console.log(`🗑️ Lead ${leadgenId} was previously deleted, skipping`);
                 totalSkipped++;
                 continue;
               }
