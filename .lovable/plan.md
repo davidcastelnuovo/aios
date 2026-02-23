@@ -1,37 +1,27 @@
 
-
-# תיקון: ליד נעלם אחרי שינוי סטטוס/סטטוס תגובה עם טעינת עוד 50
+# הוספת כפתור "בחר את כל הלידים" לסרגל הפעולות
 
 ## הבעיה
-שתי בעיות משולבות:
-
-1. **Optimistic Update שבור בקנבן**: הקוד בודק `Array.isArray(updated[stageKey])` אבל המבנה האמיתי של הנתונים הוא אובייקט עם שדה `leads` בתוכו (לדוגמה `{ new: { id, color, label, leads: [...] } }`). לכן העדכון האופטימיסטי לא באמת עובד.
-
-2. **invalidateQueries מאפס את accumulatedLeads**: גם ב-`updateLeadStatus` (onSettled) וגם ב-`updateLeadResponseStatus` (onSuccess), הקריאה ל-`invalidateQueries` גורמת לטעינה מחדש של 50 הלידים הראשונים בלבד. לידים שנטענו עם "טען עוד" נעלמים.
+כפתור "בחר את כל הלידים" לא מופיע כי הבדיקה `totalLeadsCount > stageLeads.length` תמיד נכשלת - ה-`totalLeadsCount` שמועבר ל-`TableWithStickyScroll` הוא מספר הלידים בשלב הספציפי בלבד, שתמיד שווה למספר הלידים המוצגים.
 
 ## הפתרון
 
 ### קובץ: `src/pages/Leads.tsx`
 
-#### 1. תיקון updateLeadStatus
-- תיקון ה-optimistic update בקנבן: לעבור על `updated[stageKey].leads` במקום `updated[stageKey]`
-- הוספת עדכון אופטימיסטי גם ל-`accumulatedLeads` (העברת הליד מהשלב הישן לחדש)
-- בביטול ה-`invalidateQueries` ב-onSettled והחלפתו בעדכון ממוקד שלא מאפס את הנתונים שנטענו
+1. להעביר את `totalLeadsCount` הכללי (סך כל הלידים בטננט) ל-`StageTable` ומשם ל-`TableWithStickyScroll`, כ-prop נפרד בשם `overallTotalCount`
+2. לשנות את התנאי `showSelectAllButton` להשתמש ב-`overallTotalCount` במקום ב-`totalLeadsCount` של השלב
+3. התנאי החדש: אם כל הלידים בשלב נבחרו ויש עוד לידים בסך הכל שלא נבחרו, הצג את הכפתור
 
-#### 2. תיקון updateLeadResponseStatus
-- הוספת עדכון אופטימיסטי ב-onMutate (כמו שנעשה ל-follow_up_date)
-- עדכון ישיר של הקאש ו-accumulatedLeads
-- הסרת invalidateQueries מ-onSuccess
+### שינויים ספציפיים:
 
-#### 3. עדכון הקאש הנכון
-במקום `invalidateQueries` שמאפס הכל, נעדכן ישירות את הנתונים בקאש:
-- ב-onMutate: עדכון אופטימיסטי מיידי (הליד זז לעמודה החדשה)
-- ב-onSuccess: עדכון ממוקד של הרשומה הספציפית
-- ב-onError: החזרה למצב הקודם (rollback)
+**StageTable** - הוספת prop `overallTotalCount` והעברתו ל-`TableWithStickyScroll`
 
-### התנהגות צפויה לאחר התיקון
-- שינוי סטטוס ליד ישתקף מיידית בתצוגה (הליד יעבור לעמודה הנכונה)
-- שינוי סטטוס תגובה ישתקף מיידית
-- לידים שנטענו עם "טען עוד" לא יתאפסו
-- המיקום בגלילה יישמר
+**TableWithStickyScroll** - הוספת prop `overallTotalCount` ושינוי התנאי:
+```
+showSelectAllButton = isAllPageSelected && !isAllLeadsSelected && overallTotalCount && overallTotalCount > stageLeads.length
+```
 
+**קריאה ל-StageTable** (שורה 2766) - הוספת `overallTotalCount={totalLeadsCount}`
+
+### תוצאה צפויה
+כשכל הלידים בשלב מסוים נבחרים, יופיע כפתור "בחר את כל X הלידים" שיטען את כל ה-IDs מכל השלבים ויסמן אותם
