@@ -42,28 +42,39 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
 
+    // Parse query parameters from URL
+    const url = new URL(req.url)
+    const queryTenantSlug = url.searchParams.get('tenant_slug')
+    const queryTenantId = url.searchParams.get('tenant_id')
+    const queryAgencyId = url.searchParams.get('agency_id')
+
     // Parse incoming data
     const payload: LeadPayload = await req.json()
     console.log('📦 Received payload:', JSON.stringify(payload, null, 2))
+    if (queryTenantSlug || queryTenantId || queryAgencyId) {
+      console.log('🔗 Query params - tenant_slug:', queryTenantSlug, 'tenant_id:', queryTenantId, 'agency_id:', queryAgencyId)
+    }
 
-    let agencyId = payload.agency_id
-    let tenantId: string | null = payload.tenant_id || null
+    // Merge: body takes priority, then query params
+    let agencyId = payload.agency_id || queryAgencyId || undefined
+    let tenantId: string | null = payload.tenant_id || queryTenantId || null
+    const effectiveTenantSlug = payload.tenant_slug || queryTenantSlug || null
     
     // Resolve tenant from tenant_slug if provided
-    if (!tenantId && payload.tenant_slug) {
-      console.log(`🔍 Resolving tenant from slug: "${payload.tenant_slug}"`)
+    if (!tenantId && effectiveTenantSlug) {
+      console.log(`🔍 Resolving tenant from slug: "${effectiveTenantSlug}"`)
       const { data: tenantData, error: tenantError } = await supabase
         .from('tenants')
         .select('id')
-        .eq('slug', payload.tenant_slug)
+        .eq('slug', effectiveTenantSlug)
         .single()
       
       if (tenantError || !tenantData) {
-        console.error('❌ Tenant not found for slug:', payload.tenant_slug)
+        console.error('❌ Tenant not found for slug:', effectiveTenantSlug)
         return new Response(
           JSON.stringify({ 
             success: false, 
-            error: `Tenant not found for slug: ${payload.tenant_slug}`,
+            error: `Tenant not found for slug: ${effectiveTenantSlug}`,
           }),
           { 
             status: 400, 

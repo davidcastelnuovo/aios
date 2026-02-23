@@ -13,7 +13,8 @@ export default function LeadIntegrations() {
   const { tenant } = useCurrentTenant();
   const tenantSlug = tenant?.slug || 'your-tenant-slug';
   const projectUrl = import.meta.env.VITE_SUPABASE_URL || '';
-  const webhookUrl = `${projectUrl}/functions/v1/webhook-lead-intake`;
+  const webhookBaseUrl = `${projectUrl}/functions/v1/webhook-lead-intake`;
+  const webhookUrl = `${webhookBaseUrl}?tenant_slug=${tenantSlug}`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -107,7 +108,7 @@ export default function LeadIntegrations() {
               <div>
                 <h3 className="font-semibold mb-2">שדות נדרשים:</h3>
                 <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                  <li><code className="bg-muted px-1 py-0.5 rounded">tenant_slug</code> - מזהה הארגון שלך: <strong><code className="bg-primary/20 text-primary px-1 py-0.5 rounded">{tenantSlug}</code></strong></li>
+                  <li><code className="bg-muted px-1 py-0.5 rounded">tenant_slug</code> - מזהה הארגון שלך: <strong><code className="bg-primary/20 text-primary px-1 py-0.5 rounded">{tenantSlug}</code></strong> (כלול אוטומטית ב-URL)</li>
                   <li><code className="bg-muted px-1 py-0.5 rounded">company_name</code> - שם החברה (חובה)</li>
                 </ul>
               </div>
