@@ -49,11 +49,88 @@ Deno.serve(async (req) => {
     const queryAgencyId = url.searchParams.get('agency_id')
 
     // Parse incoming data
-    const payload: LeadPayload = await req.json()
-    console.log('📦 Received payload:', JSON.stringify(payload, null, 2))
+    const rawBody = await req.json()
+    console.log('📦 Received raw body:', JSON.stringify(rawBody, null, 2))
     if (queryTenantSlug || queryTenantId || queryAgencyId) {
       console.log('🔗 Query params - tenant_slug:', queryTenantSlug, 'tenant_id:', queryTenantId, 'agency_id:', queryAgencyId)
     }
+
+    // ========== WIX FORM PARSER ==========
+    // Wix sends data nested in data.submissions[] with {label, value} objects
+    let payload: LeadPayload
+    const wixSubmissions = rawBody?.data?.submissions
+    if (wixSubmissions && Array.isArray(wixSubmissions)) {
+      console.log('🔷 Detected Wix form format, parsing submissions...')
+      const parsed: Record<string, string> = {}
+      
+      for (const sub of wixSubmissions) {
+        const label = (sub.label || '').trim().toLowerCase()
+        const value = (sub.value || '').trim()
+        if (!value) continue
+
+        // Map Hebrew and English Wix form labels to lead fields
+        if (['שם מלא', 'full name', 'name', 'שם'].includes(label)) {
+          parsed.contact_name = value
+        } else if (['שם חברה', 'company name', 'company', 'חברה'].includes(label)) {
+          parsed.company_name = value
+        } else if (['כתובת אימייל', 'email', 'אימייל', 'מייל', 'דוא"ל'].includes(label)) {
+          parsed.email = value
+        } else if (['טלפון', 'phone', 'מספר טלפון', 'נייד', 'telephone'].includes(label)) {
+          parsed.phone = value
+        } else if (['הערות', 'notes', 'הודעה', 'message', 'תיאור'].includes(label)) {
+          parsed.notes = (parsed.notes ? parsed.notes + '\n' : '') + value
+        } else if (['תקציב', 'budget', 'תקציב חודשי', 'monthly budget'].includes(label)) {
+          parsed.monthly_budget = value
+        } else if (['תעשייה', 'industry', 'תחום'].includes(label)) {
+          parsed.industry = value
+        } else if (['מוצרים', 'products', 'שירותים', 'services'].includes(label)) {
+          parsed.products = value
+        } else {
+          // Unknown fields go to notes
+          console.log(`📝 Unmapped Wix field "${sub.label}": "${value}" → adding to notes`)
+          parsed.notes = (parsed.notes ? parsed.notes + '\n' : '') + `${sub.label}: ${value}`
+        }
+      }
+
+      // Also check Wix contact object for fallbacks
+      const wixContact = rawBody?.data?.contact
+      if (wixContact) {
+        if (!parsed.contact_name && wixContact.name) {
+          parsed.contact_name = [wixContact.name.first, wixContact.name.last].filter(Boolean).join(' ')
+        }
+        if (!parsed.email && wixContact.email) {
+          parsed.email = wixContact.email
+        }
+      }
+
+      // Add form name as source context
+      const formName = rawBody?.data?.formName
+      if (formName) {
+        parsed.notes = (parsed.notes ? parsed.notes + '\n' : '') + `טופס: ${formName}`
+      }
+
+      console.log('✅ Parsed Wix data:', JSON.stringify(parsed, null, 2))
+
+      payload = {
+        company_name: parsed.company_name || parsed.contact_name || '',
+        contact_name: parsed.contact_name || undefined,
+        email: parsed.email || undefined,
+        phone: parsed.phone || undefined,
+        notes: parsed.notes || undefined,
+        monthly_budget: parsed.monthly_budget ? Number(parsed.monthly_budget) || undefined : undefined,
+        industry: parsed.industry || undefined,
+        products: parsed.products || undefined,
+        source: 'website',
+        // Preserve any tenant/agency from body-level fields
+        tenant_slug: rawBody.tenant_slug || undefined,
+        tenant_id: rawBody.tenant_id || undefined,
+        agency_id: rawBody.agency_id || undefined,
+      }
+    } else {
+      // Standard flat JSON payload
+      payload = rawBody as LeadPayload
+    }
+    // ========== END WIX FORM PARSER ==========
 
     // Merge: body takes priority, then query params
     let agencyId = payload.agency_id || queryAgencyId || undefined
