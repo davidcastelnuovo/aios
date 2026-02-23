@@ -1,27 +1,26 @@
 
-# הוספת כפתור "בחר את כל הלידים" לסרגל הפעולות
+# הוספת tenant_slug אוטומטית ל-Webhook URL
 
 ## הבעיה
-כפתור "בחר את כל הלידים" לא מופיע כי הבדיקה `totalLeadsCount > stageLeads.length` תמיד נכשלת - ה-`totalLeadsCount` שמועבר ל-`TableWithStickyScroll` הוא מספר הלידים בשלב הספציפי בלבד, שתמיד שווה למספר הלידים המוצגים.
+כרגע ה-Webhook URL שמוצג בדף האינטגרציות לא כולל את ה-`tenant_slug`, ולכן לידים שנשלחים מוויקס (או כל מקור חיצוני) בלי `tenant_slug` בגוף ה-JSON לא נקלטים.
 
-## הפתרון
+## הפתרון - שני שינויים:
 
-### קובץ: `src/pages/Leads.tsx`
+### 1. Edge Function: תמיכה ב-tenant_slug כ-query parameter
+**קובץ:** `supabase/functions/webhook-lead-intake/index.ts`
 
-1. להעביר את `totalLeadsCount` הכללי (סך כל הלידים בטננט) ל-`StageTable` ומשם ל-`TableWithStickyScroll`, כ-prop נפרד בשם `overallTotalCount`
-2. לשנות את התנאי `showSelectAllButton` להשתמש ב-`overallTotalCount` במקום ב-`totalLeadsCount` של השלב
-3. התנאי החדש: אם כל הלידים בשלב נבחרו ויש עוד לידים בסך הכל שלא נבחרו, הצג את הכפתור
+- לקרוא `tenant_slug` גם מה-URL query params (נוסף על הגוף)
+- אם `tenant_slug` לא קיים ב-body, לחפש אותו ב-`?tenant_slug=...`
+- זה מאפשר שטפסי Wix וכדומה ישלחו ל-URL עם ה-slug בלי צורך לשנות את ה-body
 
-### שינויים ספציפיים:
+### 2. Frontend: הצגת URL עם tenant_slug
+**קובץ:** `src/pages/LeadIntegrations.tsx`
 
-**StageTable** - הוספת prop `overallTotalCount` והעברתו ל-`TableWithStickyScroll`
-
-**TableWithStickyScroll** - הוספת prop `overallTotalCount` ושינוי התנאי:
-```
-showSelectAllButton = isAllPageSelected && !isAllLeadsSelected && overallTotalCount && overallTotalCount > stageLeads.length
-```
-
-**קריאה ל-StageTable** (שורה 2766) - הוספת `overallTotalCount={totalLeadsCount}`
+- לשנות את `webhookUrl` לכלול `?tenant_slug=SLUG` אוטומטית
+- כל המקומות שמציגים את ה-URL (ה-Alert למעלה, דוגמאות Make/Zapier, דוגמת cURL) יציגו את ה-URL המלא
+- דוגמאות ה-JSON עדיין יכללו את `tenant_slug` בגוף כגיבוי
 
 ### תוצאה צפויה
-כשכל הלידים בשלב מסוים נבחרים, יופיע כפתור "בחר את כל X הלידים" שיטען את כל ה-IDs מכל השלבים ויסמן אותם
+- המשתמש מעתיק URL מוכן לשימוש עם ה-tenant_slug כבר בתוכו
+- טפסי Wix ומקורות אחרים שלא שולחים tenant_slug בגוף ה-JSON יעבדו אוטומטית
+- תאימות לאחור מלאה - מי ששולח tenant_slug בגוף עדיין יעבוד
