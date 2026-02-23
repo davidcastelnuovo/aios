@@ -512,12 +512,13 @@ function SortableLeadCard({
   );
 }
 
-function StageTable({ stage, stageLeads, isOpen, onToggle, totalLeadsCount }: { 
+function StageTable({ stage, stageLeads, isOpen, onToggle, totalLeadsCount, overallTotalCount }: { 
   stage: any; 
   stageLeads: any[]; 
   isOpen: boolean; 
   onToggle: (open: boolean) => void;
   totalLeadsCount?: number;
+  overallTotalCount?: number;
 }) {
   return (
     <Collapsible open={isOpen} onOpenChange={onToggle}>
@@ -536,7 +537,7 @@ function StageTable({ stage, stageLeads, isOpen, onToggle, totalLeadsCount }: {
             {stageLeads.length === 0 ? (
               <p className="text-muted-foreground text-center py-4">אין לידים בשלב זה</p>
             ) : (
-              <TableWithStickyScroll stageLeads={stageLeads} totalLeadsCount={totalLeadsCount} />
+              <TableWithStickyScroll stageLeads={stageLeads} totalLeadsCount={totalLeadsCount} overallTotalCount={overallTotalCount} />
             )}
           </CardContent>
         </CollapsibleContent>
@@ -2770,6 +2771,7 @@ export default function Leads() {
                 isOpen={openTables[stage.id]}
                 onToggle={(open) => setOpenTables(prev => ({ ...prev, [stage.id]: open }))}
                 totalLeadsCount={stageCount}
+                overallTotalCount={totalLeadsCount}
               />
             );
           })}
@@ -2828,7 +2830,7 @@ export default function Leads() {
   );
 }
 
-function TableWithStickyScroll({ stageLeads, totalLeadsCount }: { stageLeads: any[]; totalLeadsCount?: number }) {
+function TableWithStickyScroll({ stageLeads, totalLeadsCount, overallTotalCount }: { stageLeads: any[]; totalLeadsCount?: number; overallTotalCount?: number }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
@@ -3182,7 +3184,7 @@ function TableWithStickyScroll({ stageLeads, totalLeadsCount }: { stageLeads: an
 
   const isAllPageSelected = stageLeads.length > 0 && selectedLeads.length >= stageLeads.length;
   const isAllLeadsSelected = selectAllMode === 'all' && allLeadIds && selectedLeads.length === allLeadIds.length;
-  const showSelectAllButton = isAllPageSelected && !isAllLeadsSelected && totalLeadsCount && totalLeadsCount > stageLeads.length;
+  const showSelectAllButton = isAllPageSelected && !isAllLeadsSelected && overallTotalCount && overallTotalCount > stageLeads.length;
 
   return (
     <div className="relative">
