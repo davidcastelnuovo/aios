@@ -714,6 +714,13 @@ export default function AccountingIntegrations() {
     return `₪${amount.toLocaleString("he-IL")}`;
   };
 
+  const clientStatusOptions = [
+    { value: "active", label: "פעיל", color: "bg-green-600" },
+    { value: "onboarding", label: "בקליטה", color: "bg-orange-500" },
+    { value: "paused", label: "מושהה", color: "bg-muted-foreground" },
+    { value: "ended", label: "סיים", color: "bg-destructive" },
+  ];
+
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
       active: { variant: "default", label: "פעיל" },
@@ -726,6 +733,25 @@ export default function AccountingIntegrations() {
     const config = statusMap[status] || { variant: "secondary", label: status };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
+
+  const updateClientStatus = useMutation({
+    mutationFn: async ({ clientId, status }: { clientId: string; status: string }) => {
+      const { error } = await supabase
+        .from("clients")
+        .update({ status: status as any })
+        .eq("id", clientId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounting-clients"] });
+      queryClient.invalidateQueries({ queryKey: ["clients"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
+      toast.success("סטטוס הלקוח עודכן בהצלחה");
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון סטטוס הלקוח");
+    },
+  });
 
   const profit = (financeData?.income || 0) - (financeData?.expenses || 0);
 
@@ -936,7 +962,26 @@ export default function AccountingIntegrations() {
                               <TableCell className="text-right">{(client.agencies as any)?.name || "-"}</TableCell>
                               <TableCell className="text-right">{formatCurrency(client.retainer)}</TableCell>
                               <TableCell className="text-right">{formatCurrency(client.monthly_budget)}</TableCell>
-                              <TableCell className="text-right">{getStatusBadge(client.status)}</TableCell>
+                              <TableCell className="text-right">
+                                <Select
+                                  value={client.status}
+                                  onValueChange={(value) => updateClientStatus.mutate({ clientId: client.id, status: value })}
+                                >
+                                  <SelectTrigger className="h-7 w-[100px] text-xs border-none bg-transparent p-0 focus:ring-0 focus:ring-offset-0">
+                                    <SelectValue>{getStatusBadge(client.status)}</SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-popover z-[9999]">
+                                    {clientStatusOptions.map((opt) => (
+                                      <SelectItem key={opt.value} value={opt.value}>
+                                        <div className="flex items-center gap-2">
+                                          <span className={`h-2 w-2 rounded-full ${opt.color}`} />
+                                          {opt.label}
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
                               <TableCell className="text-right">
                                 {isPaid ? (
                                   <div className="flex items-center gap-2">
