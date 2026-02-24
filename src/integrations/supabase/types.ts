@@ -2300,6 +2300,66 @@ export type Database = {
         }
         Relationships: []
       }
+      one_time_incomes: {
+        Row: {
+          amount: number
+          client_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_paid: boolean
+          notes: string | null
+          paid_at: string | null
+          payment_month: string
+          product_name: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          client_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_paid?: boolean
+          notes?: string | null
+          paid_at?: string | null
+          payment_month: string
+          product_name: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          client_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_paid?: boolean
+          notes?: string | null
+          paid_at?: string | null
+          payment_month?: string
+          product_name?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "one_time_incomes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "one_time_incomes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payment_links: {
         Row: {
           amount: number

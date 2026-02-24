@@ -26,8 +26,11 @@ import {
   History,
   Trash2,
   CreditCard,
-  Pencil
+  Pencil,
+  Plus,
+  Receipt
 } from "lucide-react";
+import { Label } from "@/components/ui/label";
 import { CreatePaymentLinkDialog } from "@/components/forms/CreatePaymentLinkDialog";
 import { EditSupplierDialog } from "@/components/forms/EditSupplierDialog";
 import { EditCampaignerDialog } from "@/components/forms/EditCampaignerDialog";
@@ -82,6 +85,17 @@ export default function AccountingIntegrations() {
   const [editingSupplier, setEditingSupplier] = useState<any | null>(null);
   const [editingCampaigner, setEditingCampaigner] = useState<any | null>(null);
   const [editingClient, setEditingClient] = useState<any | null>(null);
+  
+  // One-time income state
+  const [addOneTimeIncomeOpen, setAddOneTimeIncomeOpen] = useState(false);
+  const [oneTimeIncomeForm, setOneTimeIncomeForm] = useState({
+    client_id: "",
+    product_name: "",
+    amount: "",
+    payment_month: "",
+    notes: ""
+  });
+  const [editingOneTimeIncome, setEditingOneTimeIncome] = useState<any | null>(null);
 
   const monthOptions = useMemo(() => getMonthOptions(), []);
 
@@ -256,6 +270,94 @@ export default function AccountingIntegrations() {
     },
     onError: () => {
       toast.error("שגיאה במחיקת התשלום");
+    }
+  });
+
+  // Fetch one-time incomes for selected month
+  const { data: oneTimeIncomes, isLoading: oneTimeIncomesLoading } = useQuery({
+    queryKey: ["one-time-incomes", currentTenantId, selectedMonth],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      const { data, error } = await supabase
+        .from("one_time_incomes")
+        .select("*, clients(name)")
+        .eq("tenant_id", currentTenantId)
+        .eq("payment_month", selectedMonth)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenantId,
+  });
+
+  // Create one-time income mutation
+  const createOneTimeIncome = useMutation({
+    mutationFn: async (data: {
+      client_id: string;
+      product_name: string;
+      amount: number;
+      payment_month: string;
+      notes?: string;
+    }) => {
+      const { error } = await supabase
+        .from("one_time_incomes")
+        .insert({
+          tenant_id: currentTenantId,
+          client_id: data.client_id,
+          product_name: data.product_name,
+          amount: data.amount,
+          payment_month: data.payment_month,
+          notes: data.notes || null,
+        });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["one-time-incomes"] });
+      toast.success("הכנסה חד פעמית נוספה בהצלחה");
+      setAddOneTimeIncomeOpen(false);
+      setOneTimeIncomeForm({ client_id: "", product_name: "", amount: "", payment_month: "", notes: "" });
+    },
+    onError: () => {
+      toast.error("שגיאה בשמירת ההכנסה");
+    }
+  });
+
+  // Toggle one-time income paid status
+  const toggleOneTimeIncomePaid = useMutation({
+    mutationFn: async ({ id, is_paid }: { id: string; is_paid: boolean }) => {
+      const { error } = await supabase
+        .from("one_time_incomes")
+        .update({ 
+          is_paid, 
+          paid_at: is_paid ? new Date().toISOString() : null 
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["one-time-incomes"] });
+      toast.success("סטטוס תשלום עודכן");
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון סטטוס");
+    }
+  });
+
+  // Delete one-time income
+  const deleteOneTimeIncome = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("one_time_incomes")
+        .delete()
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["one-time-incomes"] });
+      toast.success("הכנסה חד פעמית נמחקה");
+    },
+    onError: () => {
+      toast.error("שגיאה במחיקה");
     }
   });
 
@@ -908,7 +1010,7 @@ export default function AccountingIntegrations() {
 
       {/* Tabs */}
       <Tabs value={selectedTab} onValueChange={setSelectedTab} dir="rtl">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="clients" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             לקוחות ({filteredClients.length})
@@ -916,6 +1018,10 @@ export default function AccountingIntegrations() {
           <TabsTrigger value="expenses" className="flex items-center gap-2">
             <Package className="h-4 w-4" />
             הוצאות ({combinedExpenses.length})
+          </TabsTrigger>
+          <TabsTrigger value="one_time" className="flex items-center gap-2">
+            <Receipt className="h-4 w-4" />
+            הכנסות חד פעמי ({oneTimeIncomes?.length || 0})
           </TabsTrigger>
         </TabsList>
 
@@ -1171,7 +1277,186 @@ export default function AccountingIntegrations() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* One-Time Income Tab */}
+        <TabsContent value="one_time">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">הכנסות חד פעמיות</h3>
+                <Button onClick={() => {
+                  setOneTimeIncomeForm({ client_id: "", product_name: "", amount: "", payment_month: selectedMonth, notes: "" });
+                  setEditingOneTimeIncome(null);
+                  setAddOneTimeIncomeOpen(true);
+                }}>
+                  <Plus className="h-4 w-4 ml-2" />
+                  הוסף הכנסה
+                </Button>
+              </div>
+              {oneTimeIncomesLoading ? (
+                <div className="space-y-4">
+                  {[...Array(3)].map((_, i) => (
+                    <Skeleton key={i} className="h-12 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-right">שם מוצר/שירות</TableHead>
+                        <TableHead className="text-right">לקוח</TableHead>
+                        <TableHead className="text-right">סכום</TableHead>
+                        <TableHead className="text-right">חודש</TableHead>
+                        <TableHead className="text-right">הערות</TableHead>
+                        <TableHead className="text-right">סטטוס תשלום</TableHead>
+                        <TableHead className="text-right">פעולות</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(!oneTimeIncomes || oneTimeIncomes.length === 0) ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center text-muted-foreground">
+                            אין הכנסות חד פעמיות לחודש זה
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        oneTimeIncomes.map((income: any) => (
+                          <TableRow key={income.id}>
+                            <TableCell className="font-medium text-right">{income.product_name}</TableCell>
+                            <TableCell className="text-right">{income.clients?.name || '-'}</TableCell>
+                            <TableCell className="text-right font-medium text-green-600">{formatCurrency(income.amount)}</TableCell>
+                            <TableCell className="text-right">{income.payment_month}</TableCell>
+                            <TableCell className="text-right text-muted-foreground">{income.notes || '-'}</TableCell>
+                            <TableCell className="text-right">
+                              {income.is_paid ? (
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="default" className="bg-green-600">
+                                    <Check className="h-3 w-3 ml-1" />
+                                    שולם
+                                  </Badge>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => toggleOneTimeIncomePaid.mutate({ id: income.id, is_paid: false })}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => toggleOneTimeIncomePaid.mutate({ id: income.id, is_paid: true })}
+                                >
+                                  סמן שולם
+                                </Button>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => deleteOneTimeIncome.mutate(income.id)}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Add One-Time Income Dialog */}
+      <Dialog open={addOneTimeIncomeOpen} onOpenChange={setAddOneTimeIncomeOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>הוספת הכנסה חד פעמית</DialogTitle>
+            <DialogDescription>הוסף מוצר או שירות חד פעמי ושייך ללקוח</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>לקוח</Label>
+              <Select value={oneTimeIncomeForm.client_id} onValueChange={(val) => setOneTimeIncomeForm(f => ({...f, client_id: val}))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="בחר לקוח" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients?.map((client: any) => (
+                    <SelectItem key={client.id} value={client.id}>{client.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>שם מוצר/שירות</Label>
+              <Input
+                value={oneTimeIncomeForm.product_name}
+                onChange={(e) => setOneTimeIncomeForm(f => ({...f, product_name: e.target.value}))}
+                placeholder="לדוגמה: בניית אתר"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>סכום (₪)</Label>
+              <Input
+                type="number"
+                value={oneTimeIncomeForm.amount}
+                onChange={(e) => setOneTimeIncomeForm(f => ({...f, amount: e.target.value}))}
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>חודש שיוך</Label>
+              <Select value={oneTimeIncomeForm.payment_month} onValueChange={(val) => setOneTimeIncomeForm(f => ({...f, payment_month: val}))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="בחר חודש" />
+                </SelectTrigger>
+                <SelectContent>
+                  {monthOptions.map((month) => (
+                    <SelectItem key={month.value} value={month.value}>{month.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>הערות</Label>
+              <Input
+                value={oneTimeIncomeForm.notes}
+                onChange={(e) => setOneTimeIncomeForm(f => ({...f, notes: e.target.value}))}
+                placeholder="הערות (אופציונלי)"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setAddOneTimeIncomeOpen(false)}>ביטול</Button>
+            <Button 
+              onClick={() => {
+                if (!oneTimeIncomeForm.client_id || !oneTimeIncomeForm.product_name || !oneTimeIncomeForm.amount || !oneTimeIncomeForm.payment_month) {
+                  toast.error("נא למלא את כל השדות");
+                  return;
+                }
+                createOneTimeIncome.mutate({
+                  client_id: oneTimeIncomeForm.client_id,
+                  product_name: oneTimeIncomeForm.product_name,
+                  amount: parseFloat(oneTimeIncomeForm.amount),
+                  payment_month: oneTimeIncomeForm.payment_month,
+                  notes: oneTimeIncomeForm.notes,
+                });
+              }}
+              disabled={createOneTimeIncome.isPending}
+            >
+              {createOneTimeIncome.isPending ? "שומר..." : "שמור"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirm Payment Dialog */}
       <Dialog open={!!confirmDialog?.open} onOpenChange={(open) => !open && setConfirmDialog(null)}>
