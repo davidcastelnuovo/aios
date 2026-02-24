@@ -94,16 +94,18 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
   });
 
   const { data: campaigners } = useQuery({
-    queryKey: ["campaigners"],
+    queryKey: ["campaigners", tenantId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("campaigners")
         .select("id, full_name")
         .eq("active", true)
+        .eq("tenant_id", tenantId!)
         .order("full_name");
       if (error) throw error;
       return data;
     },
+    enabled: !!tenantId,
   });
 
   const { data: assignedCampaigners, refetch: refetchAssigned } = useQuery({
