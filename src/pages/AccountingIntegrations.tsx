@@ -405,7 +405,7 @@ export default function AccountingIntegrations() {
 
       if (agencyIds.length === 0) return [];
 
-      // Get client IDs for these agencies (only active + onboarding to match Campaigners view)
+      // Get client IDs for these agencies
       const { data: clientsData } = await supabase
         .from("clients")
         .select("id")
@@ -415,7 +415,7 @@ export default function AccountingIntegrations() {
       const clientIds = (clientsData || []).map(c => c.id);
       if (clientIds.length === 0) return [];
 
-      // Get campaigner payments for these clients
+      // Get all team assignments for these clients
       const { data, error } = await supabase
         .from("client_team")
         .select(`
@@ -426,8 +426,7 @@ export default function AccountingIntegrations() {
           campaigners (id, full_name),
           clients (id, name, agency_id)
         `)
-        .in("client_id", clientIds)
-        .gt("campaigner_payment", 0);
+        .in("client_id", clientIds);
       
       if (error) throw error;
       return data || [];
@@ -657,6 +656,8 @@ export default function AccountingIntegrations() {
       const campaignerTotals = new Map<string, { name: string; total: number; clients: string[] }>();
       
       campaignerPayments.forEach(payment => {
+        if (!payment.campaigner_payment || payment.campaigner_payment <= 0) return;
+        
         const campaignerId = payment.campaigner_id;
         const campaignerName = (payment.campaigners as any)?.full_name || 'קמפיינר לא ידוע';
         const clientName = (payment.clients as any)?.name || '';
@@ -686,14 +687,16 @@ export default function AccountingIntegrations() {
       });
       
       campaignerTotals.forEach((data, id) => {
-        expenses.push({
-          id: `campaigner-${id}`,
-          originalId: id,
-          name: data.name,
-          type: 'campaigner',
-          totalPayment: data.total,
-          details: `${data.clients.length} לקוחות`
-        });
+        if (data.total > 0) {
+          expenses.push({
+            id: `campaigner-${id}`,
+            originalId: id,
+            name: data.name,
+            type: 'campaigner',
+            totalPayment: data.total,
+            details: `${data.clients.length} לקוחות`
+          });
+        }
       });
     }
 
@@ -929,6 +932,7 @@ export default function AccountingIntegrations() {
                       <TableRow>
                         <TableHead className="text-right">שם לקוח</TableHead>
                         <TableHead className="text-right">סוכנות</TableHead>
+                        <TableHead className="text-right">צוות</TableHead>
                         <TableHead className="text-right">ריטיינר חודשי</TableHead>
                         <TableHead className="text-right">תקציב חודשי</TableHead>
                         <TableHead className="text-right">סטטוס</TableHead>
@@ -939,7 +943,7 @@ export default function AccountingIntegrations() {
                     <TableBody>
                       {filteredClients.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center text-muted-foreground">
+                          <TableCell colSpan={8} className="text-center text-muted-foreground">
                             לא נמצאו לקוחות
                           </TableCell>
                         </TableRow>
@@ -947,6 +951,9 @@ export default function AccountingIntegrations() {
                         filteredClients.map((client) => {
                           const isPaid = isIncomeReceived(client.id);
                           const payment = getIncomePayment(client.id);
+                          const clientTeam = campaignerPayments?.filter(p => p.client_id === client.id) || [];
+                          const teamCount = clientTeam.length;
+                          const teamCost = clientTeam.reduce((sum, p) => sum + (p.campaigner_payment || 0), 0);
                           return (
                             <TableRow key={client.id}>
                               <TableCell className="font-medium text-right">
@@ -960,6 +967,23 @@ export default function AccountingIntegrations() {
                                 </Button>
                               </TableCell>
                               <TableCell className="text-right">{(client.agencies as any)?.name || "-"}</TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-xs h-auto p-1"
+                                  onClick={() => setEditingClient(client)}
+                                >
+                                  {teamCount > 0 ? (
+                                    <span className="flex items-center gap-1">
+                                      <Users className="h-3 w-3" />
+                                      {teamCount} ({formatCurrency(teamCost)})
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground">+ שייך</span>
+                                  )}
+                                </Button>
+                              </TableCell>
                               <TableCell className="text-right">{formatCurrency(client.retainer)}</TableCell>
                               <TableCell className="text-right">{formatCurrency(client.monthly_budget)}</TableCell>
                               <TableCell className="text-right">
