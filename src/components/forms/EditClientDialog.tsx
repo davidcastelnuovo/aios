@@ -114,6 +114,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
         .select(`
           id,
           campaigner_id,
+          campaigner_payment,
           campaigners (full_name)
         `)
         .eq("client_id", client.id);
@@ -148,6 +149,8 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
     onSuccess: () => {
       toast.success(`ה${t('role_campaigner')} שויך בהצלחה`);
       refetchAssigned();
+      queryClient.invalidateQueries({ queryKey: ["accounting-campaigner-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
     },
     onError: () => {
       toast.error("שגיאה בשיוך הקמפיינר");
@@ -166,9 +169,30 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
     onSuccess: () => {
       toast.success("הקמפיינר הוסר בהצלחה");
       refetchAssigned();
+      queryClient.invalidateQueries({ queryKey: ["accounting-campaigner-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
     },
     onError: () => {
       toast.error("שגיאה בהסרת הקמפיינר");
+    },
+  });
+
+  const updateCampaignerPayment = useMutation({
+    mutationFn: async ({ assignmentId, payment }: { assignmentId: string; payment: number }) => {
+      const { error } = await supabase
+        .from("client_team")
+        .update({ campaigner_payment: payment })
+        .eq("id", assignmentId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("עלות הקמפיינר עודכנה");
+      refetchAssigned();
+      queryClient.invalidateQueries({ queryKey: ["accounting-campaigner-payments"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון עלות הקמפיינר");
     },
   });
 
@@ -585,19 +609,36 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
             <div className="space-y-3 pt-4 border-t">
               <div>
                 <FormLabel>{t('role_campaigner', true)} משויכים</FormLabel>
-                <div className="flex flex-wrap gap-2 mt-2">
+                <div className="space-y-2 mt-2">
                   {assignedCampaigners && assignedCampaigners.length > 0 ? (
                     assignedCampaigners.map((assignment: any) => (
-                      <Badge key={assignment.id} variant="secondary" className="text-sm flex items-center gap-1">
-                        {assignment.campaigners.full_name}
-                        <button
-                          type="button"
-                          onClick={() => removeCampaignerMutation.mutate(assignment.id)}
-                          className="hover:bg-destructive/20 rounded-full p-0.5"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
+                      <div key={assignment.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
+                        <Badge variant="secondary" className="text-sm flex items-center gap-1">
+                          {assignment.campaigners.full_name}
+                          <button
+                            type="button"
+                            onClick={() => removeCampaignerMutation.mutate(assignment.id)}
+                            className="hover:bg-destructive/20 rounded-full p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                        <div className="flex items-center gap-1 mr-auto">
+                          <span className="text-xs text-muted-foreground">₪</span>
+                          <Input
+                            type="number"
+                            className="h-7 w-24 text-sm"
+                            placeholder="עלות"
+                            defaultValue={assignment.campaigner_payment || ""}
+                            onBlur={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              if (val !== (assignment.campaigner_payment || 0)) {
+                                updateCampaignerPayment.mutate({ assignmentId: assignment.id, payment: val });
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
                     ))
                   ) : (
                     <p className="text-sm text-muted-foreground">אין {t('role_campaigner', true)} משויכים</p>
