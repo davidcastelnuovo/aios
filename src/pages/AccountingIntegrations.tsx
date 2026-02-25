@@ -93,7 +93,9 @@ export default function AccountingIntegrations() {
     product_name: "",
     amount: "",
     payment_month: "",
-    notes: ""
+    notes: "",
+    supplier_id: "",
+    expense_amount: ""
   });
   const [editingOneTimeIncome, setEditingOneTimeIncome] = useState<any | null>(null);
 
@@ -280,7 +282,7 @@ export default function AccountingIntegrations() {
       if (!currentTenantId) return [];
       const { data, error } = await supabase
         .from("one_time_incomes")
-        .select("*, clients(name)")
+        .select("*, clients(name), suppliers(name)")
         .eq("tenant_id", currentTenantId)
         .eq("payment_month", selectedMonth)
         .order("created_at", { ascending: false });
@@ -298,24 +300,35 @@ export default function AccountingIntegrations() {
       amount: number;
       payment_month: string;
       notes?: string;
+      supplier_id?: string;
+      expense_amount?: number;
     }) => {
+      const insertData: any = {
+        tenant_id: currentTenantId,
+        client_id: data.client_id,
+        product_name: data.product_name,
+        amount: data.amount,
+        payment_month: data.payment_month,
+        notes: data.notes || null,
+        expense_amount: data.expense_amount || 0,
+      };
+      if (data.supplier_id) {
+        insertData.supplier_id = data.supplier_id;
+      }
       const { error } = await supabase
         .from("one_time_incomes")
-        .insert({
-          tenant_id: currentTenantId,
-          client_id: data.client_id,
-          product_name: data.product_name,
-          amount: data.amount,
-          payment_month: data.payment_month,
-          notes: data.notes || null,
-        });
+        .insert(insertData);
       if (error) throw error;
+      return data.payment_month;
     },
-    onSuccess: () => {
+    onSuccess: (payment_month) => {
+      if (payment_month) {
+        setSelectedMonth(payment_month);
+      }
       queryClient.invalidateQueries({ queryKey: ["one-time-incomes"] });
       toast.success("הכנסה חד פעמית נוספה בהצלחה");
       setAddOneTimeIncomeOpen(false);
-      setOneTimeIncomeForm({ client_id: "", product_name: "", amount: "", payment_month: "", notes: "" });
+      setOneTimeIncomeForm({ client_id: "", product_name: "", amount: "", payment_month: "", notes: "", supplier_id: "", expense_amount: "" });
     },
     onError: () => {
       toast.error("שגיאה בשמירת ההכנסה");
@@ -1285,7 +1298,7 @@ export default function AccountingIntegrations() {
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">הכנסות חד פעמיות</h3>
                 <Button onClick={() => {
-                  setOneTimeIncomeForm({ client_id: "", product_name: "", amount: "", payment_month: selectedMonth, notes: "" });
+                  setOneTimeIncomeForm({ client_id: "", product_name: "", amount: "", payment_month: selectedMonth, notes: "", supplier_id: "", expense_amount: "" });
                   setEditingOneTimeIncome(null);
                   setAddOneTimeIncomeOpen(true);
                 }}>
@@ -1307,6 +1320,8 @@ export default function AccountingIntegrations() {
                         <TableHead className="text-right">שם מוצר/שירות</TableHead>
                         <TableHead className="text-right">לקוח</TableHead>
                         <TableHead className="text-right">סכום</TableHead>
+                        <TableHead className="text-right">ספק</TableHead>
+                        <TableHead className="text-right">הוצאה</TableHead>
                         <TableHead className="text-right">חודש</TableHead>
                         <TableHead className="text-right">הערות</TableHead>
                         <TableHead className="text-right">סטטוס תשלום</TableHead>
@@ -1316,7 +1331,7 @@ export default function AccountingIntegrations() {
                     <TableBody>
                       {(!oneTimeIncomes || oneTimeIncomes.length === 0) ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center text-muted-foreground">
+                          <TableCell colSpan={9} className="text-center text-muted-foreground">
                             אין הכנסות חד פעמיות לחודש זה
                           </TableCell>
                         </TableRow>
@@ -1326,6 +1341,8 @@ export default function AccountingIntegrations() {
                             <TableCell className="font-medium text-right">{income.product_name}</TableCell>
                             <TableCell className="text-right">{income.clients?.name || '-'}</TableCell>
                             <TableCell className="text-right font-medium text-green-600">{formatCurrency(income.amount)}</TableCell>
+                            <TableCell className="text-right">{income.suppliers?.name || '-'}</TableCell>
+                            <TableCell className="text-right">{income.expense_amount ? formatCurrency(income.expense_amount) : '-'}</TableCell>
                             <TableCell className="text-right">{income.payment_month}</TableCell>
                             <TableCell className="text-right text-muted-foreground">{income.notes || '-'}</TableCell>
                             <TableCell className="text-right">
@@ -1426,6 +1443,28 @@ export default function AccountingIntegrations() {
               </Select>
             </div>
             <div className="space-y-2">
+              <Label>ספק (אופציונלי)</Label>
+              <Select value={oneTimeIncomeForm.supplier_id} onValueChange={(val) => setOneTimeIncomeForm(f => ({...f, supplier_id: val}))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="בחר ספק" />
+                </SelectTrigger>
+                <SelectContent>
+                  {suppliers?.map((supplier: any) => (
+                    <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>סכום הוצאה לספק (אופציונלי)</Label>
+              <Input
+                type="number"
+                value={oneTimeIncomeForm.expense_amount}
+                onChange={(e) => setOneTimeIncomeForm(f => ({...f, expense_amount: e.target.value}))}
+                placeholder="0"
+              />
+            </div>
+            <div className="space-y-2">
               <Label>הערות</Label>
               <Input
                 value={oneTimeIncomeForm.notes}
@@ -1448,6 +1487,8 @@ export default function AccountingIntegrations() {
                   amount: parseFloat(oneTimeIncomeForm.amount),
                   payment_month: oneTimeIncomeForm.payment_month,
                   notes: oneTimeIncomeForm.notes,
+                  supplier_id: oneTimeIncomeForm.supplier_id || undefined,
+                  expense_amount: oneTimeIncomeForm.expense_amount ? parseFloat(oneTimeIncomeForm.expense_amount) : undefined,
                 });
               }}
               disabled={createOneTimeIncome.isPending}

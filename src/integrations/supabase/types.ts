@@ -2306,12 +2306,14 @@ export type Database = {
           client_id: string
           created_at: string
           created_by: string | null
+          expense_amount: number
           id: string
           is_paid: boolean
           notes: string | null
           paid_at: string | null
           payment_month: string
           product_name: string
+          supplier_id: string | null
           tenant_id: string
           updated_at: string
         }
@@ -2320,12 +2322,14 @@ export type Database = {
           client_id: string
           created_at?: string
           created_by?: string | null
+          expense_amount?: number
           id?: string
           is_paid?: boolean
           notes?: string | null
           paid_at?: string | null
           payment_month: string
           product_name: string
+          supplier_id?: string | null
           tenant_id: string
           updated_at?: string
         }
@@ -2334,12 +2338,14 @@ export type Database = {
           client_id?: string
           created_at?: string
           created_by?: string | null
+          expense_amount?: number
           id?: string
           is_paid?: boolean
           notes?: string | null
           paid_at?: string | null
           payment_month?: string
           product_name?: string
+          supplier_id?: string | null
           tenant_id?: string
           updated_at?: string
         }
@@ -2349,6 +2355,13 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "one_time_incomes_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
             referencedColumns: ["id"]
           },
           {
