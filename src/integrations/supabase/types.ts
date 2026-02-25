@@ -4260,6 +4260,85 @@ export type Database = {
           },
         ]
       }
+      zoom_recordings: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          duration: number | null
+          file_size: number | null
+          host_email: string | null
+          id: string
+          lead_id: string | null
+          meeting_id: string
+          meeting_topic: string | null
+          notes: string | null
+          recording_password: string | null
+          recording_type: string | null
+          recording_url: string | null
+          start_time: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          duration?: number | null
+          file_size?: number | null
+          host_email?: string | null
+          id?: string
+          lead_id?: string | null
+          meeting_id: string
+          meeting_topic?: string | null
+          notes?: string | null
+          recording_password?: string | null
+          recording_type?: string | null
+          recording_url?: string | null
+          start_time?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          duration?: number | null
+          file_size?: number | null
+          host_email?: string | null
+          id?: string
+          lead_id?: string | null
+          meeting_id?: string
+          meeting_topic?: string | null
+          notes?: string | null
+          recording_password?: string | null
+          recording_type?: string | null
+          recording_url?: string | null
+          start_time?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zoom_recordings_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zoom_recordings_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zoom_recordings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
