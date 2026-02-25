@@ -152,3 +152,6 @@ verify_jwt = true
 
 [functions.run-sync-job]
 verify_jwt = false
+
+[functions.zoom-webhook]
+verify_jwt = false
