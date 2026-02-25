@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search } from "lucide-react";
+import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -241,6 +241,23 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
+  // Check Zoom integration status
+  const { data: zoomIntegration } = useQuery({
+    queryKey: ['zoom-integration', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .eq('integration_type', 'zoom')
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   const integrations: IntegrationCardProps[] = [
     {
       icon: <Webhook className="h-6 w-6" />,
@@ -400,6 +417,19 @@ export default function Integrations() {
       isConnected: !!makeIntegration,
       route: "make-settings",
       gradient: "bg-gradient-to-r from-violet-600 to-purple-700",
+    },
+    {
+      icon: <Video className="h-6 w-6" />,
+      title: "Zoom",
+      description: "קבלת הקלטות פגישות אוטומטית דרך Webhook",
+      features: [
+        "קבלת הקלטות מסך ואודיו",
+        "שיוך הקלטות ללקוח או ליד",
+        "תמיכה ב-Zoom Webhook Events",
+      ],
+      isConnected: !!zoomIntegration,
+      route: "zoom-settings",
+      gradient: "bg-gradient-to-r from-blue-500 to-blue-700",
     },
   ];
 
