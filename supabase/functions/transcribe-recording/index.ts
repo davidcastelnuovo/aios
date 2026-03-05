@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 const MAX_EDGE_FILE_SIZE = 25 * 1024 * 1024; // 25MB — safe for edge function memory
@@ -433,18 +433,9 @@ async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blo
   console.log(`📦 File size: ${fileSizeMB.toFixed(1)}MB, fileName: ${fileName}, contentType: ${contentType}`);
 
   // Mode: download - return raw audio as base64 for client-side chunking
+  // NOTE: No size restriction here — this path is specifically for chunking large files on the client
   if (mode === 'download') {
-    if (audioBlob.size > MAX_EDGE_FILE_SIZE) {
-      return new Response(JSON.stringify({
-        error: 'file_too_large',
-        size_mb: Math.round(fileSizeMB),
-        message: `הקובץ גדול מדי (${Math.round(fileSizeMB)}MB) לעיבוד בשרת.`,
-        no_alternative: true,
-      }), {
-        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
+    console.log(`📥 Download mode — returning ${fileSizeMB.toFixed(1)}MB as base64 for client-side chunking`);
     const arrayBuffer = await audioBlob.arrayBuffer();
     const base64 = btoa(
       new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
@@ -454,6 +445,7 @@ async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blo
       content_type: contentType,
       file_name: fileName,
       size_mb: fileSizeMB,
+      source_recording_type: recordingType || 'unknown',
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
