@@ -261,7 +261,7 @@ serve(async (req) => {
     fileName = normalized.fileName;
     contentType = normalized.contentType;
 
-    return await transcribeBlob(supabase, recording_id, audioBlob, fileName, contentType, mode);
+    return await transcribeBlob(supabase, recording_id, audioBlob, fileName, contentType, mode, recordingType);
 
   } catch (error) {
     console.error('❌ Error:', error);
@@ -313,7 +313,7 @@ async function processZoomRecording(supabase: any, recording: any, mode: string 
 
   // Use the original recording ID for DB persistence
   const persistId = originalRecordingId || recording.id;
-  const resp = await transcribeBlob(supabase, persistId, normalized.blob, normalized.fileName, normalized.contentType, mode);
+  const resp = await transcribeBlob(supabase, persistId, normalized.blob, normalized.fileName, normalized.contentType, mode, recording.recording_type || null);
   if (isFallback) {
     const body = await resp.json();
     body.used_fallback = true;
@@ -428,7 +428,7 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
 }
 
 // ── Helper: transcribe a blob (shared logic) ─────────────────────────
-async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blob, fileName: string, contentType: string, mode: string | undefined) {
+async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blob, fileName: string, contentType: string, mode: string | undefined, recordingType?: string | null) {
   const fileSizeMB = audioBlob.size / (1024 * 1024);
   console.log(`📦 File size: ${fileSizeMB.toFixed(1)}MB, fileName: ${fileName}, contentType: ${contentType}`);
 
@@ -451,12 +451,12 @@ async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blo
     });
   }
 
-  // Mode: transcribe directly (small files only)
-  if (fileSizeMB > 25) {
+  // Mode: transcribe directly (small files only — lowered to 15MB to avoid Whisper timeouts)
+  if (fileSizeMB > 15) {
     return new Response(JSON.stringify({
       error: 'file_too_large',
       size_mb: fileSizeMB,
-      message: 'הקובץ גדול מ-25MB. משתמש בתמלול מחולק...'
+      message: 'הקובץ גדול מ-15MB. משתמש בתמלול מחולק...'
     }), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
