@@ -1497,7 +1497,7 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   console.log('Executing Green API message:', config)
   console.log('Data:', data)
   
-  const { message_template, integration_id, send_to_type, manual_phone, manual_group_id } = config
+  const { message_template, integration_id, send_to_type, manual_phone, manual_group_id, phone_mode, green_api_mode, external_instance_id, external_api_token, phone_field } = config
   
   if (!message_template) {
     throw new Error('תבנית הודעה לא הוגדרה')
@@ -1511,20 +1511,33 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     .single()
   const tenantSlug = tenant?.slug
   
-  // Determine chatId based on send_to_type
+  // Determine chatId based on phone_mode or legacy send_to_type
   let chatId: string
   let contactRecord: any = null
   
-  if (send_to_type === "manual_group" && manual_group_id) {
+  if (phone_mode === "manual" && manual_phone) {
+    // New: manual phone mode from flow editor
+    const cleanPhone = manual_phone.replace(/\D/g, '')
+    const last9 = cleanPhone.slice(-9)
+    chatId = `972${last9}@c.us`
+    console.log(`Sending to manual phone (phone_mode): ${chatId}`)
+  } else if (send_to_type === "manual_group" && manual_group_id) {
     // Send to manual group
     chatId = manual_group_id.includes("@g.us") ? manual_group_id : `${manual_group_id}@g.us`
     console.log(`Sending to manual group: ${chatId}`)
   } else if (send_to_type === "manual_phone" && manual_phone) {
-    // Send to manual phone number
+    // Legacy: Send to manual phone number
     const cleanPhone = manual_phone.replace(/\D/g, '')
     const last9 = cleanPhone.slice(-9)
     chatId = `972${last9}@c.us`
     console.log(`Sending to manual phone: ${chatId}`)
+  } else if (phone_mode === "field" && phone_field && data[phone_field]) {
+    // Dynamic field mode - resolve phone from data field
+    const fieldPhone = data[phone_field]
+    const cleanPhone = fieldPhone.replace(/\D/g, '')
+    const last9 = cleanPhone.slice(-9)
+    chatId = `972${last9}@c.us`
+    console.log(`Sending to dynamic field phone (${phone_field}): ${chatId}`)
   } else {
     // Default: send to contact (lead/client)
     let contactPhone: string | null = null
@@ -1559,54 +1572,58 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   }
   
   // Find Green API integration - use specified ID or fall back to first active
+  let idInstance: string
+  let apiTokenInstance: string
   let integration: any = null
   
-  if (integration_id) {
-    console.log(`Looking for specific integration: ${integration_id}`)
-    const { data: specificIntegration, error } = await supabase
-      .from('tenant_integrations')
-      .select('id, api_key, settings, user_id')
-      .eq('id', integration_id)
-      .eq('is_active', true)
-      .maybeSingle()
-    
-    console.log('Specific integration query result:', { data: specificIntegration, error })
-    
-    if (!error && specificIntegration) {
-      integration = specificIntegration
-      console.log(`Using specified integration: ${integration.id}, has api_key: ${!!integration.api_key}`)
-    } else {
-      console.log(`Specified integration not found or error: ${JSON.stringify(error)}`)
+  if (green_api_mode === "external" && external_instance_id && external_api_token) {
+    // External mode: use manually provided credentials
+    idInstance = external_instance_id
+    apiTokenInstance = external_api_token
+    console.log(`Using external Green API credentials, instance: ${idInstance}`)
+  } else {
+    // Tenant mode: look up from tenant_integrations
+    if (integration_id) {
+      console.log(`Looking for specific integration: ${integration_id}`)
+      const { data: specificIntegration, error } = await supabase
+        .from('tenant_integrations')
+        .select('id, api_key, settings, user_id')
+        .eq('id', integration_id)
+        .eq('is_active', true)
+        .maybeSingle()
+      
+      if (!error && specificIntegration) {
+        integration = specificIntegration
+        console.log(`Using specified integration: ${integration.id}`)
+      }
     }
-  }
-  
-  // Fallback to first active integration
-  if (!integration) {
-    const { data: fallbackIntegration, error: integrationError } = await supabase
-      .from('tenant_integrations')
-      .select('id, api_key, settings, user_id')
-      .eq('tenant_id', tenantId)
-      .eq('integration_type', 'green_api')
-      .eq('is_active', true)
-      .limit(1)
-      .maybeSingle()
     
-    if (integrationError || !fallbackIntegration) {
-      throw new Error('לא נמצא חיבור Green API פעיל')
+    // Fallback to first active integration
+    if (!integration) {
+      const { data: fallbackIntegration, error: integrationError } = await supabase
+        .from('tenant_integrations')
+        .select('id, api_key, settings, user_id')
+        .eq('tenant_id', tenantId)
+        .eq('integration_type', 'green_api')
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle()
+      
+      if (integrationError || !fallbackIntegration) {
+        throw new Error('לא נמצא חיבור Green API פעיל')
+      }
+      integration = fallbackIntegration
+      console.log(`Using fallback integration: ${integration.id}`)
     }
-    integration = fallbackIntegration
-    console.log(`Using fallback integration: ${integration.id}`)
-  }
-  
-  // Support both naming conventions: idInstance/apiTokenInstance and instance_id/api_key
-  // Also check both settings object AND direct columns (fixed Dec 14, 2025)
-  const idInstance = integration.settings?.idInstance || integration.settings?.instance_id || integration.instance_id
-  const apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
-  
-  if (!idInstance || !apiTokenInstance) {
-    console.log('Integration settings:', JSON.stringify(integration.settings))
-    console.log('api_key field:', integration.api_key ? 'exists' : 'missing')
-    throw new Error('הגדרות Green API חסרות')
+    
+    // Support both naming conventions
+    idInstance = integration.settings?.idInstance || integration.settings?.instance_id || integration.instance_id
+    apiTokenInstance = integration.settings?.apiTokenInstance || integration.api_key
+    
+    if (!idInstance || !apiTokenInstance) {
+      console.log('Integration settings:', JSON.stringify(integration.settings))
+      throw new Error('הגדרות Green API חסרות')
+    }
   }
   
   // Replace template variables

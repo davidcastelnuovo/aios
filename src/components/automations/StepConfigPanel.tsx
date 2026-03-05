@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Loader2, Facebook, CheckCircle2, Search, Bot, Plus, Sparkles } from "lucide-react";
 import {
   Dialog,
@@ -406,65 +407,149 @@ function GreenAPIActionConfig({
     onConfigChange("message_template", newValue);
   };
 
+  const greenApiMode = configuration?.green_api_mode || "tenant";
+  const phoneMode = configuration?.phone_mode || "field";
+
   return (
     <div className="space-y-4">
-      {/* Green API connection selector */}
+      {/* Green API connection mode */}
       <div className="space-y-2">
-        <Label className="text-right block">חיבור Green API</Label>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
+        <Label className="text-right block">מקור חיבור Green API</Label>
+        <RadioGroup
+          value={greenApiMode}
+          onValueChange={(v) => onConfigChange("green_api_mode", v)}
+          className="flex gap-4 justify-end"
+          dir="rtl"
+        >
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="tenant" id="gapi-tenant" />
+            <Label htmlFor="gapi-tenant" className="cursor-pointer text-sm">מהארגון</Label>
           </div>
-        ) : greenApiIntegrations && greenApiIntegrations.length > 0 ? (
-          <Select
-            value={configuration?.green_api_integration_id || ""}
-            onValueChange={(v) => onConfigChange("green_api_integration_id", v)}
-          >
-            <SelectTrigger className="text-right">
-              <SelectValue placeholder="בחר חיבור..." />
-            </SelectTrigger>
-            <SelectContent>
-              {greenApiIntegrations.map((integration) => {
-                const settings = integration.settings as Record<string, any> | null;
-                const name = settings?.instance_name || settings?.connection_name || "Green API";
-                return (
-                  <SelectItem key={integration.id} value={integration.id}>
-                    {name}
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        ) : (
-          <div className="rounded-lg border border-dashed p-3 text-center">
-            <p className="text-sm text-muted-foreground">אין חיבור Green API פעיל.</p>
-            <p className="text-xs text-muted-foreground mt-1">הגדר חיבור בעמוד האינטגרציות.</p>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="external" id="gapi-external" />
+            <Label htmlFor="gapi-external" className="cursor-pointer text-sm">חיבור חיצוני</Label>
           </div>
-        )}
+        </RadioGroup>
       </div>
 
-      {/* Phone field mapping */}
+      {greenApiMode === "tenant" ? (
+        <div className="space-y-2">
+          <Label className="text-right block">חיבור Green API</Label>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+          ) : greenApiIntegrations && greenApiIntegrations.length > 0 ? (
+            <Select
+              value={configuration?.green_api_integration_id || ""}
+              onValueChange={(v) => onConfigChange("green_api_integration_id", v)}
+            >
+              <SelectTrigger className="text-right">
+                <SelectValue placeholder="בחר חיבור..." />
+              </SelectTrigger>
+              <SelectContent>
+                {greenApiIntegrations.map((integration) => {
+                  const settings = integration.settings as Record<string, any> | null;
+                  const name = settings?.instance_name || settings?.connection_name || "Green API";
+                  return (
+                    <SelectItem key={integration.id} value={integration.id}>
+                      {name}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="rounded-lg border border-dashed p-3 text-center">
+              <p className="text-sm text-muted-foreground">אין חיבור Green API פעיל.</p>
+              <p className="text-xs text-muted-foreground mt-1">הגדר חיבור בעמוד האינטגרציות.</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+          <p className="text-xs text-muted-foreground text-right">הזן פרטי חיבור Green API חיצוני:</p>
+          <div className="space-y-2">
+            <Label className="text-right block text-xs">Instance ID</Label>
+            <Input
+              value={configuration?.external_instance_id || ""}
+              onChange={(e) => onConfigChange("external_instance_id", e.target.value)}
+              placeholder="למשל: 7103..."
+              dir="ltr"
+              className="text-left"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-right block text-xs">API Token</Label>
+            <Input
+              value={configuration?.external_api_token || ""}
+              onChange={(e) => onConfigChange("external_api_token", e.target.value)}
+              placeholder="למשל: abc123..."
+              dir="ltr"
+              className="text-left"
+              type="password"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Phone mode toggle */}
       <div className="space-y-2">
-        <Label className="text-right block">שדה מספר טלפון</Label>
-        <Select
-          value={configuration?.phone_field || ""}
-          onValueChange={(v) => onConfigChange("phone_field", v)}
+        <Label className="text-right block">מספר טלפון לשליחה</Label>
+        <RadioGroup
+          value={phoneMode}
+          onValueChange={(v) => onConfigChange("phone_mode", v)}
+          className="flex gap-4 justify-end"
+          dir="rtl"
         >
-          <SelectTrigger className="text-right">
-            <SelectValue placeholder="בחר שדה..." />
-          </SelectTrigger>
-          <SelectContent>
-            {availableFields.map((field) => (
-              <SelectItem key={field.key} value={field.key}>
-                {field.label} ({`{{${field.key}}}`})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground text-right">
-          השדה שממנו יילקח מספר הטלפון לשליחת ההודעה
-        </p>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="field" id="phone-field" />
+            <Label htmlFor="phone-field" className="cursor-pointer text-sm">שדה דינמי</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="manual" id="phone-manual" />
+            <Label htmlFor="phone-manual" className="cursor-pointer text-sm">מספר ידני</Label>
+          </div>
+        </RadioGroup>
       </div>
+
+      {phoneMode === "field" ? (
+        <div className="space-y-2">
+          <Label className="text-right block">שדה מספר טלפון</Label>
+          <Select
+            value={configuration?.phone_field || ""}
+            onValueChange={(v) => onConfigChange("phone_field", v)}
+          >
+            <SelectTrigger className="text-right">
+              <SelectValue placeholder="בחר שדה..." />
+            </SelectTrigger>
+            <SelectContent>
+              {availableFields.map((field) => (
+                <SelectItem key={field.key} value={field.key}>
+                  {field.label} ({`{{${field.key}}}`})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground text-right">
+            השדה שממנו יילקח מספר הטלפון לשליחת ההודעה
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Label className="text-right block">מספר טלפון</Label>
+          <Input
+            value={configuration?.manual_phone || ""}
+            onChange={(e) => onConfigChange("manual_phone", e.target.value)}
+            placeholder="050-1234567"
+            dir="ltr"
+            className="text-left"
+          />
+          <p className="text-xs text-muted-foreground text-right">
+            הזן מספר טלפון קבוע שאליו תישלח ההודעה
+          </p>
+        </div>
+      )}
 
       {/* Message template with dynamic variables */}
       <div className="space-y-2">
