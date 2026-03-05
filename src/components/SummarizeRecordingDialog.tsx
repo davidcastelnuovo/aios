@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, FileText, Sparkles, Download, ExternalLink } from "lucide-react";
+import { Loader2, FileText, Sparkles, Download, ExternalLink, Mic } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 interface SummarizeRecordingDialogProps {
@@ -42,6 +42,7 @@ export default function SummarizeRecordingDialog({
   );
   const [targetId, setTargetId] = useState<string>(recording?.client_id || recording?.lead_id || "");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [result, setResult] = useState<{ summary: string; file_url: string; file_name: string } | null>(null);
 
   const { data: clients = [] } = useQuery({
@@ -68,6 +69,32 @@ export default function SummarizeRecordingDialog({
     setFocusPoints((prev) =>
       prev.includes(key) ? prev.filter((f) => f !== key) : [...prev, key]
     );
+  };
+
+  const hasAudioSource = !!(recording?.file_path || recording?.recording_url || recording?.download_url);
+
+  const handleTranscribe = async () => {
+    if (!recording?.id) return;
+    setIsTranscribing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("transcribe-recording", {
+        body: { recording_id: recording.id },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (data?.text) {
+        setTranscript(data.text);
+        toast({ title: "התמלול הושלם בהצלחה!" });
+      }
+    } catch (err: any) {
+      toast({
+        title: "שגיאה בתמלול",
+        description: err.message || "נסה שוב או הדבק תמלול ידנית",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTranscribing(false);
+    }
   };
 
   const handleGenerate = async () => {
@@ -155,9 +182,33 @@ export default function SummarizeRecordingDialog({
         <div className="space-y-5">
           {/* Transcript Input */}
           <div className="space-y-2">
-            <Label className="text-base font-medium">תמלול / הערות מהפגישה *</Label>
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-medium">תמלול / הערות מהפגישה *</Label>
+              {hasAudioSource && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleTranscribe}
+                  disabled={isTranscribing}
+                >
+                  {isTranscribing ? (
+                    <>
+                      <Loader2 className="h-3 w-3 ml-1 animate-spin" />
+                      מתמלל...
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="h-3 w-3 ml-1" />
+                      תמלל אוטומטית
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
             <p className="text-sm text-muted-foreground">
-              הדבק את התמלול מ-Zoom, או כתוב הערות ונקודות מרכזיות מהפגישה
+              {hasAudioSource
+                ? "לחץ על ״תמלל אוטומטית״ או הדבק תמלול ידנית"
+                : "הדבק את התמלול מ-Zoom, או כתוב הערות ונקודות מרכזיות מהפגישה"}
             </p>
             <Textarea
               value={transcript}
