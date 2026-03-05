@@ -303,7 +303,9 @@ Deno.serve(async (req) => {
               let stepResponse: any = null
 
               try {
-                if (step.action_type === 'agent') {
+                const effectiveActionType = step.action_type || step.step_type
+
+                if (effectiveActionType === 'agent') {
                   const agentId = stepConfig.agent_id
                   if (agentId) {
                     const agentUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/run-ai-agent`
@@ -324,7 +326,7 @@ Deno.serve(async (req) => {
                     previousStepOutput = stepResponse
                     console.log('Agent step output:', stepResponse?.output?.substring(0, 100))
                   }
-                } else if (step.action_type === 'send_greenapi_message') {
+                } else if (effectiveActionType === 'send_greenapi_message') {
                   // If message_template contains {{agent_output}}, replace it
                   if (stepConfig.message_template && previousStepOutput) {
                     const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
@@ -334,7 +336,7 @@ Deno.serve(async (req) => {
                   }
                   stepResponse = await executeGreenApiMessage(supabase, stepConfig, stepData, tenantId)
                   previousStepOutput = stepResponse
-                } else if (step.action_type === 'send_whatsapp') {
+                } else if (effectiveActionType === 'send_whatsapp') {
                   if (stepConfig.message_template && previousStepOutput) {
                     const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
                     stepConfig.message_template = stepConfig.message_template.replace(/\{\{agent_output\}\}/g, agentText)
@@ -342,39 +344,39 @@ Deno.serve(async (req) => {
                   }
                   stepResponse = await executeSendWhatsapp(supabase, stepConfig, stepData, tenantId)
                   previousStepOutput = stepResponse
-                } else if (step.action_type === 'webhook') {
+                } else if (effectiveActionType === 'webhook') {
                   stepResponse = await executeWebhook(stepConfig, stepData)
                   previousStepOutput = stepResponse
-                } else if (step.action_type === 'add_lead_update') {
+                } else if (effectiveActionType === 'add_lead_update') {
                   if (stepConfig.update_text && previousStepOutput) {
                     const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : '')
                     stepConfig.update_text = stepConfig.update_text.replace(/\{\{agent_output\}\}/g, agentText)
                   }
                   stepResponse = await executeAddLeadUpdate(supabase, stepConfig, stepData, tenantId)
                   previousStepOutput = stepResponse
-                } else if (step.action_type === 'add_client_update') {
+                } else if (effectiveActionType === 'add_client_update') {
                   stepResponse = await executeAddClientUpdate(supabase, stepConfig, stepData, tenantId)
                   previousStepOutput = stepResponse
-                } else if (step.action_type === 'create_task') {
+                } else if (effectiveActionType === 'create_task') {
                   stepResponse = await executeCreateTask(supabase, stepConfig, stepData, tenantId)
                   previousStepOutput = stepResponse
-                } else if (step.action_type === 'create_lead') {
+                } else if (effectiveActionType === 'create_lead') {
                   stepResponse = await executeCreateLead(supabase, stepConfig, stepData, tenantId)
                   previousStepOutput = stepResponse
-                } else if (step.action_type === 'update_status') {
+                } else if (effectiveActionType === 'update_status') {
                   stepResponse = await executeStatusUpdate(supabase, stepConfig, stepData)
                   previousStepOutput = stepResponse
-                } else if (step.action_type === 'create_manychat_subscriber') {
+                } else if (effectiveActionType === 'create_manychat_subscriber') {
                   stepResponse = await executeCreateManychatSubscriber(supabase, stepConfig, stepData, tenantId)
                   previousStepOutput = stepResponse
-                } else if (step.action_type === 'send_greenapi_to_campaigner') {
+                } else if (effectiveActionType === 'send_greenapi_to_campaigner') {
                   stepResponse = await executeGreenApiToCampaigner(supabase, stepConfig, stepData, tenantId)
                   previousStepOutput = stepResponse
                 } else {
-                  console.log(`Unknown action_type: ${step.action_type}, skipping`)
+                  console.log(`Unknown action_type: ${step.action_type}, step_type: ${step.step_type}, skipping`)
                 }
 
-                stepResults.push({ step_id: step.id, action_type: step.action_type, success: true, response: stepResponse })
+                stepResults.push({ step_id: step.id, action_type: effectiveActionType, success: true, response: stepResponse })
               } catch (stepErr: any) {
                 console.error(`Error in flow step ${step.id}:`, stepErr)
                 stepResults.push({ step_id: step.id, action_type: step.action_type, success: false, error: stepErr.message })
