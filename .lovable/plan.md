@@ -1,48 +1,47 @@
 
-מאה אחוז — עכשיו יש לנו אבחון חד-משמעי ולא ניחוש.
+מצוין — עברתי על הקוד והלוגים האחרונים לעומק.
 
-**Do I know what the issue is? כן.**
+Do I know what the issue is? כן.
 
-## מה הבעיה בפועל (מדויק)
-1. הבקשה נכשלת עם `546 WORKER_LIMIT`.
-2. בלוגים של הפונקציה `transcribe-recording` מופיע: `Memory limit exceeded`.
-3. ההקלטה שניסית לתמלל היא בערך **346MB** (`file_size=362,777,982`), והפונקציה עושה `zoomResp.blob()` + לפעמים `base64`, מה שמפיל זיכרון.
-4. לכן הבעיה כרגע היא **משאבים/זיכרון**, לא פורמט קובץ ולא טוקן.
+הבעיה הנוכחית כבר לא רק זיכרון:
+1) ה-fallback מוצא הקלטת `audio_only` קטנה (≈21.8MB), אבל  
+2) ההורדה מגיעה עם `content-type: application/octet-stream`,  
+3) והפונקציה שולחת את ה-blob ל-Whisper בלי נרמול פורמט אמיתי → OpenAI מחזיר `Invalid file format`.
 
-## קבצים שבהם התקלה מתרחשת
-- `supabase/functions/transcribe-recording/index.ts` (הגורם המרכזי לקריסה בזיכרון)
-- `src/components/SummarizeRecordingDialog.tsx` (מפעיל fallback שמזמן הורדה כבדה שוב)
-- `supabase/functions/fetch-zoom-recordings/index.ts` (עדיין שומר `play_url` לפני `download_url` בהיסטוריה)
-- `supabase/functions/zoom-webhook/index.ts` (כבר תוקן חלקית, נוודא עקביות)
+כלומר: המסלול מתקדם יפה עד התמלול, אבל נכשל על זיהוי פורמט הקובץ (לא על auth ולא על tenant).
 
-## תוכנית תיקון ממוקדת
-1. **בלימת קריסה בזיכרון ב-`transcribe-recording`**
-   - לבצע בדיקת גודל מוקדמת לפי `recording.file_size` לפני הורדה.
-   - אם מדובר בהקלטת Zoom גדולה מ-25MB: לא לבצע `blob()` לקובץ הגדול.
-   - להחזיר תגובה מבוקרת (לא קריסה) עם סטטוס/קוד שגיאה ברור.
+תוכנית תיקון ממוקדת (Implementation)
+1. `supabase/functions/transcribe-recording/index.ts` — נרמול קשיח של קובץ לפני Whisper  
+   - להוסיף שלב `normalizeAudioFile()` לפני `whisperForm.append`.  
+   - אם `content-type` הוא `application/octet-stream`, לזהות פורמט לפי:
+     - `recording_type` (למשל `audio_only` → `audio/m4a` + `.m4a`)
+     - magic bytes בסיסיים (ftyp/ID3/RIFF/Ogg/WebM) כשאפשר
+     - fallback סופי בטוח: `.m4a` עבור audio-only  
+   - ליצור `File/Blob` חדש עם MIME תקין, לא להשתמש ב-blob המקורי כמו שהוא.
+   - להוסיף לוגים קצרים: `raw_content_type`, `detected_type`, `final_file_name`.
 
-2. **Fallback חכם להקלטות Zoom גדולות (כדי שזה כן יעבוד בפועל)**
-   - אם ההקלטה שנבחרה גדולה: לחפש באותו `meeting_id` הקלטה חלופית קטנה (למשל audio-only) בתוך `zoom_recordings`.
-   - אם נמצאה חלופה ≤25MB: לתמלל אותה אוטומטית במקום הקובץ הגדול.
-   - להחזיר גם metadata (לוג/שדה) שהשתמשנו בקובץ חלופי, לשקיפות.
+2. `supabase/functions/transcribe-recording/index.ts` — ולידציה נגד “דף HTML בתחפושת”  
+   - גם אם השרת מחזיר `octet-stream`, לבדוק preview של bytes ראשונים.  
+   - אם מזוהה HTML/JSON במקום מדיה, לדלג ל-URL הבא ולהחזיר שגיאה ברורה אם אין מדיה תקינה.
 
-3. **מניעת “לולאת שגיאה” בצד לקוח**
-   - ב-`SummarizeRecordingDialog`: אם חזר `file_too_large` עבור Zoom, לא לקרוא שוב `mode: download` (שגורם שוב לעומס).
-   - להציג הודעה ברורה למשתמש:
-     - או שתומללה חלופה קטנה אוטומטית,
-     - או שאין חלופה ולכן צריך “משיכה מחדש”/בחירת הקלטה קלה יותר.
+3. `supabase/functions/fetch-zoom-recordings/index.ts` — מניעת נתונים בעייתיים להבא  
+   - לאחד את כל מסלולי insert/upsert כך שתמיד העדפה תהיה `download_url || play_url` (כרגע במסלול fallback יש היפוך).  
+   - לשמור metadata נוסף אם זמין (למשל `file_extension`, `file_type`) כדי לשפר זיהוי פורמט בתמלול.
 
-4. **אחידות קליטה לעתיד (כדי לא לייצר עוד רשומות בעייתיות)**
-   - ב-`fetch-zoom-recordings`: לשמור `recording_url` עם העדפה ל-`download_url` לפני `play_url`.
-   - לאמת שגם `zoom-webhook` נשאר באותה העדפה.
+4. `src/components/SummarizeRecordingDialog.tsx` — UX לשגיאת פורמט  
+   - אם מתקבלת שגיאת `invalid file format`, להציג הודעה ייעודית (לא גנרית) עם הצעה אוטומטית:
+     - ניסיון חוזר על חלופה אחרת מאותו meeting (אם קיימת), או
+     - מעבר להזנת תמלול ידני.
 
-5. **בדיקות E2E לפני סגירה**
-   - הקלטה קיימת גדולה שנכשלה קודם (כמו זו של 346MB) → לוודא שאין `WORKER_LIMIT`.
-   - הקלטה קיימת קטנה → תמלול תקין.
-   - הקלטה ידנית גדולה מ-storage → לוודא שזרימת chunking לא נשברה.
-   - בדיקת לוגים של `transcribe-recording` שלא מופיע שוב `Memory limit exceeded`.
+בדיקות קבלה (E2E)
+1) הקלטה שכבר נכשלה (ה-346MB עם fallback ל-21.8MB) → אמורה להסתיים בתמלול תקין.  
+2) הקלטת Zoom קטנה ישירות (ללא fallback) → תמלול תקין.  
+3) קובץ ידני מה-storage >25MB → לוודא שמסלול chunking לא נשבר.  
+4) לוגים ב-`transcribe-recording` לא צריכים להראות שוב:
+   - `Invalid file format`
+   - `Memory limit exceeded` במסלול קבצים קטנים.
 
-## תוצאה צפויה
-- סוף לשגיאת `546 WORKER_LIMIT` במסלול התמלול הזה.
-- הקלטות Zoom שכבר נמשכו יוכלו לעבוד דרך fallback לקובץ חלופי קטן כשקיים.
-- אם אין חלופה, המשתמש יקבל שגיאה ברורה ופעילה (בלי “תיקנתי ולא עובד” שוב).
+פרטים טכניים (ללא שינוי מוצרי)
+- מוקד התיקון הוא נרמול MIME/extension לפני Whisper, לא שינוי ארכיטקטורה.
+- אין צורך בשינוי סכימה קריטי כדי לפתור עכשיו; metadata נוסף הוא hardening לשלב הבא.
+- הבידוד הרב-ארגוני נשמר (כל השאילתות נשארות עם `tenant_id`).
