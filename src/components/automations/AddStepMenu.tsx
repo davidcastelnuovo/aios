@@ -5,10 +5,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Play, GitBranch, Timer } from "lucide-react";
+import { Plus, Play, GitBranch, Timer, Bot } from "lucide-react";
 
 interface AddStepMenuProps {
-  onAdd: (stepType: "action" | "condition" | "delay") => void;
+  onAdd: (stepType: "action" | "condition" | "delay" | "agent") => void;
 }
 
 export function AddStepMenu({ onAdd }: AddStepMenuProps) {
@@ -35,6 +35,10 @@ export function AddStepMenu({ onAdd }: AddStepMenuProps) {
         <DropdownMenuItem onClick={() => onAdd("delay")}>
           <Timer className="h-4 w-4 ml-2 text-emerald-500" />
           השהייה
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onAdd("agent")}>
+          <Bot className="h-4 w-4 ml-2 text-orange-500" />
+          סוכן AI
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

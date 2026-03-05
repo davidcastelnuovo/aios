@@ -1,11 +1,11 @@
 import { memo } from "react";
-import { Zap, Play, GitBranch, Timer, GripVertical, Trash2 } from "lucide-react";
+import { Zap, Play, GitBranch, Timer, Bot, GripVertical, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 export interface FlowNodeData {
   id: string;
-  step_type: "trigger" | "action" | "condition" | "delay";
+  step_type: "trigger" | "action" | "condition" | "delay" | "agent";
   action_type?: string;
   label?: string;
   configuration: Record<string, any>;
@@ -44,6 +44,13 @@ const STEP_TYPE_CONFIG = {
     bgClass: "bg-emerald-500/10 border-emerald-500/40",
     iconClass: "text-emerald-500",
     headerClass: "bg-emerald-500/20",
+  },
+  agent: {
+    icon: Bot,
+    label: "סוכן AI",
+    bgClass: "bg-orange-500/10 border-orange-500/40",
+    iconClass: "text-orange-500",
+    headerClass: "bg-orange-500/20",
   },
 };
 
