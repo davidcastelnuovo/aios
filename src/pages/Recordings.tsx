@@ -218,6 +218,10 @@ export default function Recordings() {
   };
 
   const transcriptionStatusBadge = (rec: any) => {
+    // If transcription text exists, always show as completed regardless of status field
+    if (rec.transcription) {
+      return <Badge variant="outline" className="text-green-600 border-green-600"><CheckCircle2 className="h-3 w-3 ml-1" />תומלל</Badge>;
+    }
     const status = rec.transcription_status;
     if (!status) return null;
     switch (status) {
@@ -495,7 +499,7 @@ export default function Recordings() {
                         <TableCell>
                           <div className="flex items-center gap-1">
                             {transcriptionStatusBadge(rec)}
-                            {rec.transcription_status === 'completed' && rec.transcription && (
+                            {rec.transcription && (
                               <Button
                                 variant="ghost"
                                 size="sm"
