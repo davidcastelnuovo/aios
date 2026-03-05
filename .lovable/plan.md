@@ -1,76 +1,31 @@
 
 
-# תוכנית: הפעלת סוכן AI בפועל + תצוגת אאוטפוט
+# תוכנית: הוספת אפשרות טלפון ידני + חיבור חיצוני לפעולת WhatsApp
 
-## מצב נוכחי
-- ה-Edge Function `trigger-automation` מקבל את הפקודה אבל **לא מעבד צעדי agent** - אין קוד שמזהה step_type = "agent"
-- אין קריאה למנוע AI (Gemini/GPT)
-- הלוגים נשמרים ב-`automation_logs` אבל ללא תוכן AI
-- אין תצוגת אאוטפוט בממשק
+## סקירה
+כרגע בפעולת WhatsApp (Green API) אפשר רק לבחור שדה דינמי לטלפון מתוך הטריגר, וחיבור Green API מוגבל לארגון הנוכחי בלבד. צריך להוסיף:
+1. אפשרות להזין מספר טלפון ידנית (בנוסף לבחירת שדה)
+2. אפשרות לחבר אינטגרציית Green API שלא שייכת לארגון הנוכחי
 
-## מה צריך לבנות
+## שינויים
 
-### 1. Edge Function: `run-ai-agent`
-פונקציה חדשה שמקבלת:
-- `agent_id` - שליפת הסוכן מ-`ai_agents` (שם, מנוע, אופי, נשמה, טלנט)
-- `command_text` - הפקודה מהמשתמש
-- `automation_id` - לשמירת הלוג
+### 1. `StepConfigPanel.tsx` - GreenAPIActionConfig
+**שדה טלפון:**
+- הוספת בחירה בין "שדה דינמי" ל"מספר ידני" (radio/select toggle)
+- כש"מספר ידני" נבחר, מציג Input לכתיבת מספר טלפון ישירות
+- שמירה ב-configuration כ-`phone_mode: "field" | "manual"` ו-`manual_phone: "0501234567"`
 
-הפונקציה:
-1. שולפת את הגדרות הסוכן מה-DB
-2. בונה system prompt מהאופי + נשמה + טלנט
-3. קוראת ל-AI Gateway של Lovable עם המנוע שנבחר
-4. שומרת את התוצאה ב-`automation_logs` (בשדה `response`)
-5. מחזירה את האאוטפוט
+**חיבור Green API:**
+- הוספת אפשרות "חיבור חיצוני" בסלקטור החיבורים
+- כש"חיצוני" נבחר, מציג שדות להזנת `instance_id` ו-`api_token` ידנית
+- שמירה ב-configuration כ-`green_api_mode: "tenant" | "external"` עם `external_instance_id` ו-`external_api_token`
 
-### 2. עדכון `trigger-automation`
-- הוספת `action_type === 'agent'` שקורא ל-`run-ai-agent`
-- העברת `command_text` מה-payload לסוכן
+### 2. `trigger-automation` Edge Function
+- עדכון הלוגיקה של פעולת `send_greenapi_message`:
+  - אם `phone_mode === "manual"` - שימוש ב-`manual_phone` במקום שליפה מהשדה
+  - אם `green_api_mode === "external"` - שימוש ב-`external_instance_id` ו-`external_api_token` במקום שליפה מ-`tenant_integrations`
 
-### 3. עדכון `ManualTriggerDialog`
-- אחרי ההפעלה, **להציג את התשובה של הסוכן** ישירות בדיאלוג
-- במקום לסגור את הדיאלוג, להציג את האאוטפוט בתיבת תוצאה
-- אפשרות לכתוב פקודה נוספת (כמו צ'אט)
-
-### 4. תצוגת לוגים באוטומציה
-- הוספת טאב/כפתור "לוגים" ב-FlowEditor שמציג את `automation_logs` עם האאוטפוט של הסוכן
-
-## פירוט טכני
-
-### Edge Function `run-ai-agent`
-```text
-1. שליפת agent מ-ai_agents לפי agent_id
-2. בניית system prompt:
-   "אתה {name}. האופי שלך: {personality}. הנשמה שלך: {soul}. הטלנט שלך: {talent}."
-3. קריאה ל-AI Gateway:
-   POST https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/ai-support-chat
-   (או קריאה ישירה ל-gateway)
-4. שמירת תוצאה ב-automation_logs
-5. החזרת response עם output הסוכן
-```
-
-### ManualTriggerDialog - שיפור ל-Chat-style
-```text
-┌─────────────────────────────────┐
-│ הפעלה ידנית - שם האוטומציה     │
-├─────────────────────────────────┤
-│                                 │
-│  [אזור תוצאות - scrollable]    │
-│  👤 שלח הודעת מעקב לכל הלידים  │
-│  🤖 ביצעתי סריקה ומצאתי 12     │
-│     לידים חדשים מהיום...        │
-│                                 │
-│  👤 פקודה נוספת...              │
-│  🤖 תשובת הסוכן...             │
-│                                 │
-├─────────────────────────────────┤
-│ [textarea] [כפתור שלח]         │
-└─────────────────────────────────┘
-```
-
-## קבצים שישתנו
-1. **חדש**: `supabase/functions/run-ai-agent/index.ts`
-2. **עדכון**: `supabase/functions/trigger-automation/index.ts` - הוספת handler ל-agent
-3. **עדכון**: `src/components/automations/ManualTriggerDialog.tsx` - תצוגת צ'אט עם אאוטפוט
-4. **עדכון**: `src/components/automations/FlowEditor.tsx` - כפתור לוגים
+## קבצים
+1. **עדכון**: `src/components/automations/StepConfigPanel.tsx` - UI לטלפון ידני + חיבור חיצוני
+2. **עדכון**: `supabase/functions/trigger-automation/index.ts` - לוגיקת שליחה עם הפרמטרים החדשים
 
