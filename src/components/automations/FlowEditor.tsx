@@ -387,6 +387,7 @@ export default function FlowEditor() {
         open={!!selectedNodeId}
         onClose={() => setSelectedNodeId(null)}
         onUpdate={updateNode}
+        allNodes={nodes}
       />
     </div>
   );

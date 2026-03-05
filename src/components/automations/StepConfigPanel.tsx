@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -57,11 +57,62 @@ const LEAD_SOURCE_OPTIONS = [
   { value: "facebook_form", label: "ליד מטופס ליד (Facebook)" },
 ];
 
+// Available fields by trigger type
+function getAvailableFields(triggerType: string | undefined): { key: string; label: string }[] {
+  switch (triggerType) {
+    case "lead_created":
+      return [
+        { key: "contact_name", label: "שם איש קשר" },
+        { key: "company_name", label: "שם חברה" },
+        { key: "phone", label: "טלפון" },
+        { key: "email", label: "אימייל" },
+        { key: "source", label: "מקור" },
+        { key: "notes", label: "הערות" },
+      ];
+    case "lead_status_changed":
+      return [
+        { key: "contact_name", label: "שם איש קשר" },
+        { key: "company_name", label: "שם חברה" },
+        { key: "phone", label: "טלפון" },
+        { key: "email", label: "אימייל" },
+        { key: "old_status", label: "סטטוס קודם" },
+        { key: "new_status", label: "סטטוס חדש" },
+      ];
+    case "client_created":
+    case "client_status_changed":
+      return [
+        { key: "name", label: "שם לקוח" },
+        { key: "contact_name", label: "שם איש קשר" },
+        { key: "phone", label: "טלפון" },
+        { key: "email", label: "אימייל" },
+      ];
+    case "task_assigned":
+    case "task_status_changed":
+    case "task_overdue":
+      return [
+        { key: "title", label: "כותרת משימה" },
+        { key: "assignee_name", label: "שם מבצע" },
+      ];
+    case "meeting_created":
+      return [
+        { key: "title", label: "כותרת פגישה" },
+        { key: "date", label: "תאריך" },
+      ];
+    default:
+      return [
+        { key: "contact_name", label: "שם איש קשר" },
+        { key: "phone", label: "טלפון" },
+        { key: "email", label: "אימייל" },
+      ];
+  }
+}
+
 interface StepConfigPanelProps {
   node: FlowNodeData | null;
   open: boolean;
   onClose: () => void;
   onUpdate: (nodeId: string, updates: Partial<FlowNodeData>) => void;
+  allNodes?: FlowNodeData[];
 }
 
 interface FacebookPage {
@@ -76,11 +127,16 @@ interface FacebookForm {
   status: string;
 }
 
-export function StepConfigPanel({ node, open, onClose, onUpdate }: StepConfigPanelProps) {
+export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }: StepConfigPanelProps) {
   const { tenant } = useCurrentTenant();
   const tenantId = tenant?.id;
 
   if (!node) return null;
+
+  // Detect trigger type from flow
+  const triggerNode = allNodes.find((n) => n.step_type === "trigger");
+  const triggerType = triggerNode?.action_type;
+  const availableFields = getAvailableFields(triggerType);
 
   const isLeadCreatedTrigger = node.step_type === "trigger" && node.action_type === "lead_created";
   const leadSource = node.configuration?.lead_source || "any";
@@ -226,8 +282,8 @@ export function StepConfigPanel({ node, open, onClose, onUpdate }: StepConfigPan
             </div>
           )}
 
-          {/* Message template for WhatsApp actions */}
-          {(node.action_type === "send_whatsapp" || node.action_type === "send_greenapi_message") && (
+          {/* Message template for ManyChat WhatsApp */}
+          {node.action_type === "send_whatsapp" && (
             <div className="space-y-2">
               <Label className="text-right block">תבנית הודעה</Label>
               <Textarea
@@ -238,9 +294,19 @@ export function StepConfigPanel({ node, open, onClose, onUpdate }: StepConfigPan
                 rows={4}
               />
               <p className="text-xs text-muted-foreground text-right">
-                משתנים זמינים: {"{{contact_name}}"}, {"{{company_name}}"}
+                משתנים זמינים: {availableFields.map((f) => `{{${f.key}}}`).join(", ")}
               </p>
             </div>
+          )}
+
+          {/* Green API WhatsApp config with connection selector + field mapping */}
+          {node.action_type === "send_greenapi_message" && (
+            <GreenAPIActionConfig
+              tenantId={tenantId}
+              configuration={node.configuration}
+              availableFields={availableFields}
+              onConfigChange={handleConfigChange}
+            />
           )}
 
           {/* Status update config */}
@@ -279,7 +345,145 @@ export function StepConfigPanel({ node, open, onClose, onUpdate }: StepConfigPan
   );
 }
 
-// Sub-component for lead source configuration
+// Sub-component for Green API action configuration
+function GreenAPIActionConfig({
+  tenantId,
+  configuration,
+  availableFields,
+  onConfigChange,
+}: {
+  tenantId: string | undefined;
+  configuration: Record<string, any>;
+  availableFields: { key: string; label: string }[];
+  onConfigChange: (key: string, value: any) => void;
+}) {
+  const [cursorPos, setCursorPos] = useState<number | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Fetch Green API integrations
+  const { data: greenApiIntegrations, isLoading } = useQuery({
+    queryKey: ["green-api-integrations-for-flow", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("tenant_integrations")
+        .select("id, integration_type, settings, is_active, user_id")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "green_api")
+        .eq("is_active", true);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  const phoneFields = availableFields.filter((f) =>
+    ["phone", "email"].includes(f.key) || f.key.includes("phone")
+  );
+
+  const insertVariable = (fieldKey: string) => {
+    const variable = `{{${fieldKey}}}`;
+    const currentValue = configuration?.message_template || "";
+    const pos = cursorPos ?? currentValue.length;
+    const newValue = currentValue.slice(0, pos) + variable + currentValue.slice(pos);
+    onConfigChange("message_template", newValue);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Green API connection selector */}
+      <div className="space-y-2">
+        <Label className="text-right block">חיבור Green API</Label>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+          </div>
+        ) : greenApiIntegrations && greenApiIntegrations.length > 0 ? (
+          <Select
+            value={configuration?.green_api_integration_id || ""}
+            onValueChange={(v) => onConfigChange("green_api_integration_id", v)}
+          >
+            <SelectTrigger className="text-right">
+              <SelectValue placeholder="בחר חיבור..." />
+            </SelectTrigger>
+            <SelectContent>
+              {greenApiIntegrations.map((integration) => {
+                const settings = integration.settings as Record<string, any> | null;
+                const name = settings?.instance_name || settings?.connection_name || "Green API";
+                return (
+                  <SelectItem key={integration.id} value={integration.id}>
+                    {name}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        ) : (
+          <div className="rounded-lg border border-dashed p-3 text-center">
+            <p className="text-sm text-muted-foreground">אין חיבור Green API פעיל.</p>
+            <p className="text-xs text-muted-foreground mt-1">הגדר חיבור בעמוד האינטגרציות.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Phone field mapping */}
+      <div className="space-y-2">
+        <Label className="text-right block">שדה מספר טלפון</Label>
+        <Select
+          value={configuration?.phone_field || ""}
+          onValueChange={(v) => onConfigChange("phone_field", v)}
+        >
+          <SelectTrigger className="text-right">
+            <SelectValue placeholder="בחר שדה..." />
+          </SelectTrigger>
+          <SelectContent>
+            {availableFields.map((field) => (
+              <SelectItem key={field.key} value={field.key}>
+                {field.label} ({`{{${field.key}}}`})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground text-right">
+          השדה שממנו יילקח מספר הטלפון לשליחת ההודעה
+        </p>
+      </div>
+
+      {/* Message template with dynamic variables */}
+      <div className="space-y-2">
+        <Label className="text-right block">תבנית הודעה</Label>
+        <Textarea
+          ref={textareaRef}
+          value={configuration?.message_template || ""}
+          onChange={(e) => onConfigChange("message_template", e.target.value)}
+          onSelect={(e) => setCursorPos((e.target as HTMLTextAreaElement).selectionStart)}
+          placeholder="שלום {{contact_name}}..."
+          className="text-right"
+          rows={4}
+        />
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground text-right">הכנס משתנה:</p>
+          <div className="flex flex-wrap gap-1 justify-end">
+            {availableFields.map((field) => (
+              <Button
+                key={field.key}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs h-6 px-2"
+                onClick={() => insertVariable(field.key)}
+              >
+                {field.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function LeadSourceConfig({
   tenantId,
   leadSource,
