@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Video, Copy, Save, ArrowLeft, ExternalLink } from "lucide-react";
+import { Video, Copy, Save, ArrowLeft, ExternalLink, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { format } from "date-fns";
@@ -26,6 +26,8 @@ export default function ZoomSettings() {
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [webhookSecretToken, setWebhookSecretToken] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterType, setFilterType] = useState<"all" | "client" | "lead" | "unassigned">("all");
 
   // Fetch existing integration
   const { data: integration, isLoading } = useQuery({
@@ -236,9 +238,63 @@ export default function ZoomSettings() {
           <CardDescription>הקלטות שהגיעו מ-Zoom דרך ה-Webhook</CardDescription>
         </CardHeader>
         <CardContent>
-          {recordings.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">עדיין לא התקבלו הקלטות</p>
-          ) : (
+          {/* Search & Filter */}
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <div className="relative flex-1">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="חיפוש לפי נושא, מארח, לקוח או ליד..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pr-9"
+              />
+            </div>
+            <Select value={filterType} onValueChange={(val: any) => setFilterType(val)}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">הכל</SelectItem>
+                <SelectItem value="client">משויך ללקוח</SelectItem>
+                <SelectItem value="lead">משויך לליד</SelectItem>
+                <SelectItem value="unassigned">לא משויך</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {(() => {
+            const filtered = recordings.filter((rec: any) => {
+              // Filter by type
+              if (filterType === "client" && !rec.client_id) return false;
+              if (filterType === "lead" && !rec.lead_id) return false;
+              if (filterType === "unassigned" && (rec.client_id || rec.lead_id)) return false;
+
+              // Filter by search
+              if (searchQuery.trim()) {
+                const q = searchQuery.trim().toLowerCase();
+                const clientName = rec.clients?.name?.toLowerCase() || "";
+                const leadName = rec.leads?.company_name?.toLowerCase() || "";
+                const topic = (rec.meeting_topic || "").toLowerCase();
+                const host = (rec.host_email || "").toLowerCase();
+                return topic.includes(q) || host.includes(q) || clientName.includes(q) || leadName.includes(q);
+              }
+              return true;
+            });
+
+            if (recordings.length === 0) {
+              return <p className="text-center text-muted-foreground py-8">עדיין לא התקבלו הקלטות</p>;
+            }
+
+            return (
+              <>
+                {(searchQuery || filterType !== "all") && (
+                  <p className="text-sm text-muted-foreground mb-2">
+                    מציג {filtered.length} מתוך {recordings.length} הקלטות
+                  </p>
+                )}
+                {filtered.length === 0 ? (
+                  <p className="text-center text-muted-foreground py-8">לא נמצאו הקלטות תואמות</p>
+                ) : (
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
@@ -254,7 +310,7 @@ export default function ZoomSettings() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {recordings.map((rec: any) => (
+                  {filtered.map((rec: any) => (
                     <TableRow key={rec.id}>
                       <TableCell className="font-medium">{rec.meeting_topic || "-"}</TableCell>
                       <TableCell>{rec.host_email || "-"}</TableCell>
@@ -307,7 +363,10 @@ export default function ZoomSettings() {
                 </TableBody>
               </Table>
             </div>
-          )}
+                )}
+              </>
+            );
+          })()}
         </CardContent>
       </Card>
     </div>
