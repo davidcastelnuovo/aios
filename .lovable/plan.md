@@ -1,46 +1,60 @@
 
+אבחון חד וברור: כן, יש לנו יכולת תמלול — אבל כרגע יש 2 תקלות קוד שחוסמות את הזרימה בפועל, ולכן זה נראה כאילו “אין יכולת”.
 
-## אבחון
+1) מה מצאתי בפועל
+- ההקלטות קיימות בדאטה של tenant `marketingcaptain` (לא חסרות מהמערכת).
+- אין אף תמלול שהושלם; יש `failed` אחד ויתר הרשומות ללא סטטוס.
+- הקלטות רבות הן Audio בגודל גדול (למשל ~42MB, ~58MB), וזה אמור לעבור למסלול chunking — אבל המסלול הזה שבור כרגע.
 
-ההקלטה (`6315c5a7`) תקועה בסטטוס `processing` בבסיס הנתונים. הלוגים מראים שהפונקציה הגיעה לשלב "Transcribing audio directly..." (קריאה ל-Whisper עם קובץ 22MB) אבל אין לוג של הצלחה או כישלון — כלומר הפונקציה קרסה (wall-clock timeout של Edge Function, בערך 150 שניות) לפני שהספיקה לעדכן את הסטטוס ב-DB.
+2) שורש הבעיה (Root Cause)
+- בקובץ `supabase/functions/transcribe-recording/index.ts`, מצב `mode='download'` מחזיר שגיאת `file_too_large` מעל 25MB.
+- זה בדיוק המסלול שאמור לאפשר chunking בצד לקוח לקבצים גדולים — ולכן התהליך נתקע לוגית.
+- בנוסף, `supabase/functions/transcribe-voice/index.ts` מריץ Whisper + תיקון GPT על כל chunk, בלי guard מסודר של timeout; זה מאריך זמן ומגדיל סיכון לכשל.
+- יש גם בלבול tenant/URL אצלך בסשן (`/t/podcast-studio/recordings`), ולכן לפעמים נראה כאילו “אין נתונים/לא עובד”, למרות שהחומר ב-MarketingCaptain.
 
-כתוצאה:
-- הסטטוס נשאר `processing` לנצח
-- הפולינג בצד הלקוח ממשיך לבדוק כל 5 שניות ולא מוצא שינוי
-- המשתמש לא מקבל תשובה
+3) תוכנית תיקון (Implementation)
+א. תיקון מסלול קבצים גדולים (קריטי)
+- `supabase/functions/transcribe-recording/index.ts`
+  - להסיר את החסימה ב-`mode='download'` עבור >25MB.
+  - `mode='download'` יחזיר payload להמשך chunking במקום `file_too_large`.
+  - להחזיר גם metadata ברור: `source_recording_type`, `size_mb`, `used_fallback`.
 
-## תוכנית תיקון
+ב. הקשחת תמלול chunk
+- `supabase/functions/transcribe-voice/index.ts`
+  - להוסיף `AbortController` (למשל 120s) לקריאת Whisper.
+  - לבטל תיקון GPT לכל chunk (או להפוך לאופציונלי כבוי כברירת מחדל) כדי למנוע זמן ריצה מיותר.
+  - לשמור CORS headers מלאים ותואמים לכל תגובה (כולל שגיאות).
 
-### 1. Stale processing detection (client-side)
-**קובץ:** `src/components/SummarizeRecordingDialog.tsx`
+ג. UX יציב וברור בדיאלוג תמלול
+- `src/components/SummarizeRecordingDialog.tsx`
+  - להשאיר polling, אבל להציג סיבת כשל אמיתית מהשרת (timeout/invalid_media/etc.).
+  - להוסיף Retry ברור בכפתור ייעודי (ולא רק fallback פנימי).
+  - עבור chunking: להציג התקדמות אמיתית + מצב “ממשיך ברקע”.
 
-- בלוגיקת הפולינג, לבדוק גם את `updated_at` של ההקלטה
-- אם `transcription_status === 'processing'` וחלפו יותר מ-5 דקות מ-`updated_at`, להניח שהפונקציה קרסה
-- להציג למשתמש הודעה: "נראה שהתמלול נתקע, נסה שוב" ולאפס את הסטטוס
+ד. בחירת קובץ נכון לפגישה
+- `src/pages/Recordings.tsx`
+  - לשמר תיעדוף `audio_only` לתמלול (כבר קיים), ולהוסיף guard שאם אין `audio_only` יוצג הסבר ידידותי ונתיב חלופי.
 
-### 2. Wall-clock timeout guard (edge function)
-**קובץ:** `supabase/functions/transcribe-recording/index.ts`
+ה. קשיחות Tenant/URL (כדי למנוע “עובד בטנאנט אחר”)
+- לאחד לוגיקת החלפת tenant לנקודת אמת אחת.
+- להבטיח שברגע מעבר ארגון, URL מתעדכן מיד ורק אז מתבצעות שאילתות.
+- להוסיף אינדיקציית tenant פעיל במסך הקלטות (כותרת/תג קטן).
 
-- להוסיף `AbortController` עם timeout של 120 שניות על קריאת Whisper
-- אם חורג — לעדכן `transcription_status = 'failed'` ב-DB **לפני** הקריסה
-- כך הפולינג בצד הלקוח יזהה כישלון במקום processing תקוע
+4) למה זה יפתור את הבעיה
+- כיום קבצים גדולים “נופלים בין הכיסאות” בגלל חסימת download path; אחרי התיקון הם יעברו chunking כמו שתוכנן.
+- הורדת GPT-per-chunk מורידה משמעותית זמני ריצה וכשלים.
+- timeout guards + הודעות כשל ברורות = אין יותר “נראה תקוע” בלי סיבה.
+- קשיחות tenant תמנע false negatives של “אין הקלטה/לא עובד”.
 
-### 3. Reset stale status
-**Migration:** עדכון חד-פעמי לנקות את ההקלטה התקועה
+5) בדיקות קבלה (E2E)
+- תרחיש 1: קובץ audio_only קטן (<25MB) → `completed`.
+- תרחיש 2: קובץ audio_only גדול (>25MB) → מעבר ל-chunking → `completed`.
+- תרחיש 3: timeout יזום → `failed` עם error ברור + Retry עובד.
+- תרחיש 4: מעבר tenant → URL/נתונים/תמלול עקביים בארגון הנכון.
 
-```sql
-UPDATE zoom_recordings 
-SET transcription_status = 'failed', 
-    transcription_error = 'Edge function timed out'
-WHERE transcription_status = 'processing' 
-  AND updated_at < NOW() - INTERVAL '5 minutes';
-```
-
-### 4. Retry mechanism
-- אחרי זיהוי timeout/כישלון, לאפשר למשתמש ללחוץ "נסה שוב" שיאפס את הסטטוס ויקרא שוב לפונקציה
-
-### קבצים לשינוי
-- `supabase/functions/transcribe-recording/index.ts` — AbortController + timeout guard
-- `src/components/SummarizeRecordingDialog.tsx` — stale detection + retry UX
-- Migration — ניקוי הקלטות תקועות
-
+6) קבצים לשינוי
+- `supabase/functions/transcribe-recording/index.ts`
+- `supabase/functions/transcribe-voice/index.ts`
+- `src/components/SummarizeRecordingDialog.tsx`
+- `src/pages/Recordings.tsx`
+- (אופציונלי) רכיב החלפת tenant: `src/components/layout/AppLayout.tsx` / `src/components/layout/AppSidebar.tsx`
