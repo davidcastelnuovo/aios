@@ -1,43 +1,76 @@
 
 
-# תוכנית: טריגר "פקודה ידנית" (Chat Command) לאוטומציות
+# תוכנית: הפעלת סוכן AI בפועל + תצוגת אאוטפוט
 
-## סקירה
-הוספת סוג טריגר חדש `manual_command` שמאפשר למשתמש להפעיל אוטומציה ידנית דרך תיבת טקסט (כמו צ'אט). המשתמש כותב הוראה חופשית, וזה מטריג את האוטומציה עם הטקסט כפרמטר.
+## מצב נוכחי
+- ה-Edge Function `trigger-automation` מקבל את הפקודה אבל **לא מעבד צעדי agent** - אין קוד שמזהה step_type = "agent"
+- אין קריאה למנוע AI (Gemini/GPT)
+- הלוגים נשמרים ב-`automation_logs` אבל ללא תוכן AI
+- אין תצוגת אאוטפוט בממשק
 
-## שינויי קוד
+## מה צריך לבנות
 
-### 1. StepConfigPanel.tsx
-- הוספת טריגר חדש לרשימת `TRIGGER_OPTIONS`:
-  ```
-  { value: "manual_command", label: "פקודה ידנית (צ'אט)" }
-  ```
-- הוספת שדות זמינים עבור הטריגר החדש ב-`getAvailableFields`:
-  - `command_text` - טקסט הפקודה
-  - `user_name` - שם המשתמש שהפעיל
-- הוספת קונפיגורציה ייעודית לטריגר: תיאור/הסבר מה הפקודה עושה, placeholder לדוגמה
+### 1. Edge Function: `run-ai-agent`
+פונקציה חדשה שמקבלת:
+- `agent_id` - שליפת הסוכן מ-`ai_agents` (שם, מנוע, אופי, נשמה, טלנט)
+- `command_text` - הפקודה מהמשתמש
+- `automation_id` - לשמירת הלוג
 
-### 2. FlowNode.tsx
-- הוספת `manual_command` ל-`ACTION_TYPE_LABELS`:
-  ```
-  manual_command: "פקודה ידנית"
-  ```
+הפונקציה:
+1. שולפת את הגדרות הסוכן מה-DB
+2. בונה system prompt מהאופי + נשמה + טלנט
+3. קוראת ל-AI Gateway של Lovable עם המנוע שנבחר
+4. שומרת את התוצאה ב-`automation_logs` (בשדה `response`)
+5. מחזירה את האאוטפוט
 
-### 3. FlowEditor.tsx
-- הוספת כפתור "הפעל ידנית" (אייקון `MessageSquare`) בכותרת העורך, שנראה רק כשהטריגר הוא `manual_command`
-- לחיצה על הכפתור פותחת דיאלוג `ManualTriggerDialog` עם:
-  - תיבת טקסט לכתיבת הפקודה/הוראה
-  - כפתור "הפעל" שקורא ל-Edge Function `trigger-automation` עם `automationId` + `command_text`
+### 2. עדכון `trigger-automation`
+- הוספת `action_type === 'agent'` שקורא ל-`run-ai-agent`
+- העברת `command_text` מה-payload לסוכן
 
-### 4. קומפוננטה חדשה: ManualTriggerDialog
-- דיאלוג פשוט עם:
-  - Textarea לכתיבת ההוראה
-  - כפתור שליחה
-  - קריאה ל-`trigger-automation` עם הנתונים
+### 3. עדכון `ManualTriggerDialog`
+- אחרי ההפעלה, **להציג את התשובה של הסוכן** ישירות בדיאלוג
+- במקום לסגור את הדיאלוג, להציג את האאוטפוט בתיבת תוצאה
+- אפשרות לכתוב פקודה נוספת (כמו צ'אט)
 
-## ללא שינויי DB
-הטריגר `manual_command` ישתמש בתשתית הקיימת של `trigger-automation` Edge Function שכבר תומך ב-direct execution mode עם `automationId`.
+### 4. תצוגת לוגים באוטומציה
+- הוספת טאב/כפתור "לוגים" ב-FlowEditor שמציג את `automation_logs` עם האאוטפוט של הסוכן
 
-## סיכום
-שינוי ב-3 קבצים קיימים + דיאלוג חדש קטן. ללא מיגרציות.
+## פירוט טכני
+
+### Edge Function `run-ai-agent`
+```text
+1. שליפת agent מ-ai_agents לפי agent_id
+2. בניית system prompt:
+   "אתה {name}. האופי שלך: {personality}. הנשמה שלך: {soul}. הטלנט שלך: {talent}."
+3. קריאה ל-AI Gateway:
+   POST https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/ai-support-chat
+   (או קריאה ישירה ל-gateway)
+4. שמירת תוצאה ב-automation_logs
+5. החזרת response עם output הסוכן
+```
+
+### ManualTriggerDialog - שיפור ל-Chat-style
+```text
+┌─────────────────────────────────┐
+│ הפעלה ידנית - שם האוטומציה     │
+├─────────────────────────────────┤
+│                                 │
+│  [אזור תוצאות - scrollable]    │
+│  👤 שלח הודעת מעקב לכל הלידים  │
+│  🤖 ביצעתי סריקה ומצאתי 12     │
+│     לידים חדשים מהיום...        │
+│                                 │
+│  👤 פקודה נוספת...              │
+│  🤖 תשובת הסוכן...             │
+│                                 │
+├─────────────────────────────────┤
+│ [textarea] [כפתור שלח]         │
+└─────────────────────────────────┘
+```
+
+## קבצים שישתנו
+1. **חדש**: `supabase/functions/run-ai-agent/index.ts`
+2. **עדכון**: `supabase/functions/trigger-automation/index.ts` - הוספת handler ל-agent
+3. **עדכון**: `src/components/automations/ManualTriggerDialog.tsx` - תצוגת צ'אט עם אאוטפוט
+4. **עדכון**: `src/components/automations/FlowEditor.tsx` - כפתור לוגים
 
