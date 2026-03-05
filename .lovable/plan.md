@@ -1,37 +1,46 @@
 
 
-## Analysis
+## אבחון
 
-The logs confirm the transcription **actually succeeded on the server** (line 3: "✅ Transcription done, length: 23138") but the client received "Failed to fetch" because the HTTP connection timed out after ~2.5 minutes. The Edge Function completed the work, but the result was lost because nothing persisted it.
+ההקלטה (`6315c5a7`) תקועה בסטטוס `processing` בבסיס הנתונים. הלוגים מראים שהפונקציה הגיעה לשלב "Transcribing audio directly..." (קריאה ל-Whisper עם קובץ 22MB) אבל אין לוג של הצלחה או כישלון — כלומר הפונקציה קרסה (wall-clock timeout של Edge Function, בערך 150 שניות) לפני שהספיקה לעדכן את הסטטוס ב-DB.
 
-## Plan: Background Transcription with DB Persistence
+כתוצאה:
+- הסטטוס נשאר `processing` לנצח
+- הפולינג בצד הלקוח ממשיך לבדוק כל 5 שניות ולא מוצא שינוי
+- המשתמש לא מקבל תשובה
 
-### 1. Database Migration — Add transcription columns to `zoom_recordings`
-Add columns to persist transcription results:
-- `transcription` (text, nullable) — the transcribed text
-- `transcription_status` (text, nullable) — `pending`, `processing`, `completed`, `failed`
-- `transcription_error` (text, nullable) — error message if failed
+## תוכנית תיקון
 
-### 2. Update `transcribe-recording` Edge Function
-- At the start, update `transcription_status = 'processing'` in the DB
-- After successful transcription + GPT spelling fix, save the result to `transcription` column and set `transcription_status = 'completed'`
-- On any error, set `transcription_status = 'failed'` with `transcription_error`
-- Still return the result in the HTTP response (for when the connection survives)
+### 1. Stale processing detection (client-side)
+**קובץ:** `src/components/SummarizeRecordingDialog.tsx`
 
-### 3. Update `SummarizeRecordingDialog.tsx` — Polling + Background Support
-- After invoking `transcribe-recording`, if the request fails with a network error (timeout), don't show an error toast — instead switch to **polling mode**
-- Poll `zoom_recordings` every 5 seconds checking `transcription_status`
-- When status becomes `completed`, load the `transcription` text into the textarea
-- Show a progress indicator: "התמלול רץ ברקע... ניתן להמשיך לעבוד"
-- If the dialog is closed during processing, show a toast "התמלול ממשיך ברקע"
-- When re-opening the dialog for a recording with `transcription_status = 'completed'`, auto-populate the transcript
+- בלוגיקת הפולינג, לבדוק גם את `updated_at` של ההקלטה
+- אם `transcription_status === 'processing'` וחלפו יותר מ-5 דקות מ-`updated_at`, להניח שהפונקציה קרסה
+- להציג למשתמש הודעה: "נראה שהתמלול נתקע, נסה שוב" ולאפס את הסטטוס
 
-### 4. Recordings List — Show Transcription Status
-- In the recordings page, show an indicator if a recording has been transcribed or is currently processing
+### 2. Wall-clock timeout guard (edge function)
+**קובץ:** `supabase/functions/transcribe-recording/index.ts`
 
-### Files to Change
-- **Migration**: Add columns to `zoom_recordings`
-- `supabase/functions/transcribe-recording/index.ts`: Save results to DB
-- `src/components/SummarizeRecordingDialog.tsx`: Add polling + background UX
-- `src/pages/Recordings.tsx`: Show transcription status badge (minor)
+- להוסיף `AbortController` עם timeout של 120 שניות על קריאת Whisper
+- אם חורג — לעדכן `transcription_status = 'failed'` ב-DB **לפני** הקריסה
+- כך הפולינג בצד הלקוח יזהה כישלון במקום processing תקוע
+
+### 3. Reset stale status
+**Migration:** עדכון חד-פעמי לנקות את ההקלטה התקועה
+
+```sql
+UPDATE zoom_recordings 
+SET transcription_status = 'failed', 
+    transcription_error = 'Edge function timed out'
+WHERE transcription_status = 'processing' 
+  AND updated_at < NOW() - INTERVAL '5 minutes';
+```
+
+### 4. Retry mechanism
+- אחרי זיהוי timeout/כישלון, לאפשר למשתמש ללחוץ "נסה שוב" שיאפס את הסטטוס ויקרא שוב לפונקציה
+
+### קבצים לשינוי
+- `supabase/functions/transcribe-recording/index.ts` — AbortController + timeout guard
+- `src/components/SummarizeRecordingDialog.tsx` — stale detection + retry UX
+- Migration — ניקוי הקלטות תקועות
 
