@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Video, Copy, Save, ArrowLeft, ExternalLink, Search } from "lucide-react";
+import { Video, Copy, Save, ArrowLeft, ExternalLink, Search, Download, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { format } from "date-fns";
@@ -28,6 +28,12 @@ export default function ZoomSettings() {
   const [webhookSecretToken, setWebhookSecretToken] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<"all" | "client" | "lead" | "unassigned">("all");
+  const [fetchFromDate, setFetchFromDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [fetchToDate, setFetchToDate] = useState(() => new Date().toISOString().split('T')[0]);
 
   // Fetch existing integration
   const { data: integration, isLoading } = useQuery({
@@ -161,6 +167,32 @@ export default function ZoomSettings() {
     toast({ title: "הועתק!", description: "ה-Webhook URL הועתק ללוח" });
   };
 
+  // Fetch existing recordings from Zoom
+  const fetchRecordingsMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('fetch-zoom-recordings', {
+        body: {
+          tenant_id: currentTenantId,
+          from_date: fetchFromDate,
+          to_date: fetchToDate,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['zoom-recordings'] });
+      toast({
+        title: "הקלטות נמשכו בהצלחה",
+        description: `נמצאו ${data.meetings_found} פגישות, עובדו ${data.recordings_processed} הקלטות`,
+      });
+    },
+    onError: (err: any) => {
+      toast({ title: "שגיאה במשיכת הקלטות", description: err.message, variant: "destructive" });
+    },
+  });
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center gap-3">
@@ -231,11 +263,44 @@ export default function ZoomSettings() {
         </CardContent>
       </Card>
 
+      {/* Fetch existing recordings */}
+      {integration?.is_active && (
+        <Card>
+          <CardHeader>
+            <CardTitle>משיכת הקלטות קיימות</CardTitle>
+            <CardDescription>משוך הקלטות ישנות מחשבון Zoom שלך</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-3 items-end">
+              <div className="space-y-2">
+                <Label>מתאריך</Label>
+                <Input type="date" dir="ltr" value={fetchFromDate} onChange={(e) => setFetchFromDate(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>עד תאריך</Label>
+                <Input type="date" dir="ltr" value={fetchToDate} onChange={(e) => setFetchToDate(e.target.value)} />
+              </div>
+              <Button 
+                onClick={() => fetchRecordingsMutation.mutate()} 
+                disabled={fetchRecordingsMutation.isPending}
+              >
+                {fetchRecordingsMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 ml-2" />
+                )}
+                {fetchRecordingsMutation.isPending ? "מושך הקלטות..." : "משוך הקלטות"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Recordings table */}
       <Card>
         <CardHeader>
           <CardTitle>הקלטות שהתקבלו</CardTitle>
-          <CardDescription>הקלטות שהגיעו מ-Zoom דרך ה-Webhook</CardDescription>
+          <CardDescription>הקלטות שהגיעו מ-Zoom דרך ה-Webhook או נמשכו ידנית</CardDescription>
         </CardHeader>
         <CardContent>
           {/* Search & Filter */}
