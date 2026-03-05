@@ -67,6 +67,7 @@ const SerpApiSettings = lazy(() => import("./pages/SerpApiSettings"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
 const ZoomSettings = lazy(() => import("./pages/ZoomSettings"));
+const Recordings = lazy(() => import("./pages/Recordings"));
 
 // QueryClient with optimized defaults for better caching
 const queryClient = new QueryClient({
@@ -171,6 +172,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/rank-tracking/:projectId" element={<ProtectedRoute requiredPermission="clients"><AppLayout><RankTrackingProject /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/integrations/serpapi" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><SerpApiSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/zoom-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><ZoomSettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/recordings" element={<ProtectedRoute requiredPermission="recordings"><AppLayout><Recordings /></AppLayout></ProtectedRoute>} />
                   
                   {/* Legacy route - redirect to root */}
                   
