@@ -8,11 +8,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { ArrowRight, Save, ZoomIn, ZoomOut, RotateCcw } from "lucide-react";
+import { ArrowRight, Save, ZoomIn, ZoomOut, RotateCcw, MessageSquare } from "lucide-react";
 import { FlowNode, FlowNodeData } from "./FlowNode";
 import { FlowConnector } from "./FlowConnector";
 import { StepConfigPanel } from "./StepConfigPanel";
 import { AddStepMenu } from "./AddStepMenu";
+import { ManualTriggerDialog } from "./ManualTriggerDialog";
 
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 90;
@@ -36,6 +37,7 @@ export default function FlowEditor() {
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [dragNodeId, setDragNodeId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [showManualTrigger, setShowManualTrigger] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   // Fetch automation
@@ -287,6 +289,14 @@ export default function FlowEditor() {
 
         <div className="flex-1" />
 
+        {/* Manual trigger button - show only when trigger is manual_command */}
+        {nodes.find(n => n.step_type === "trigger" && n.action_type === "manual_command") && (
+          <Button variant="outline" onClick={() => setShowManualTrigger(true)}>
+            <MessageSquare className="h-4 w-4 ml-2" />
+            הפעל ידנית
+          </Button>
+        )}
+
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom((z) => Math.min(z + 0.1, 2))}>
             <ZoomIn className="h-4 w-4" />
@@ -388,6 +398,14 @@ export default function FlowEditor() {
         onClose={() => setSelectedNodeId(null)}
         onUpdate={updateNode}
         allNodes={nodes}
+      />
+
+      {/* Manual trigger dialog */}
+      <ManualTriggerDialog
+        open={showManualTrigger}
+        onOpenChange={setShowManualTrigger}
+        automationId={automationId || ""}
+        automationName={automationName}
       />
     </div>
   );
