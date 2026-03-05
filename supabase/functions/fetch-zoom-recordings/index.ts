@@ -124,7 +124,7 @@ Deno.serve(async (req) => {
             host_email: meeting.host_email || null,
             start_time: meeting.start_time || null,
             duration: meeting.duration || null,
-            recording_url: file.play_url || file.download_url || null,
+            recording_url: file.download_url || file.play_url || null,
             recording_password: meeting.password || null,
             recording_type: recordingType,
             file_size: file.file_size || null,

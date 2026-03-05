@@ -173,43 +173,61 @@ export default function SummarizeRecordingDialog({
       });
 
       if (error) {
-        // Try to extract detailed message from edge function response
         const detailedMsg = typeof error === 'object' && error.message ? error.message : String(error);
         throw new Error(detailedMsg);
       }
 
       // If the edge function returned an error in data (non-throw)
       if (data?.error && data.error !== 'file_too_large') {
-        throw new Error(data.error);
+        throw new Error(typeof data.message === 'string' ? data.message : data.error);
       }
 
-      // Small file transcribed successfully
+      // Small file transcribed successfully (possibly via audio-only fallback)
       if (data?.text) {
         setTranscript(data.text);
-        toast({ title: "התמלול הושלם בהצלחה!" });
+        const fallbackNote = data.used_fallback
+          ? ` (שימוש בהקלטת ${data.fallback_recording_type || 'audio'} חלופית)`
+          : "";
+        toast({ title: "התמלול הושלם בהצלחה!" + fallbackNote });
         return;
       }
 
-      // Large file – needs chunked approach
-      if (data?.error === 'file_too_large') {
-        toast({ title: "הקובץ גדול – מתחיל תמלול מחולק...", description: `${data.size_mb?.toFixed(0)}MB` });
+      // Large file with no alternative — tell user to paste manually
+      if (data?.error === 'file_too_large' && data?.no_alternative) {
+        toast({
+          title: "הקובץ גדול מדי לתמלול אוטומטי",
+          description: data.message || `${data.size_mb}MB — נא להדביק תמלול ידנית`,
+          variant: "destructive",
+        });
+        return;
+      }
 
-        // Download the file via edge function
+      // Large file but has potential for client-side chunking (storage files only, not Zoom)
+      if (data?.error === 'file_too_large' && !data?.no_alternative) {
+        toast({ title: "הקובץ גדול – מתחיל תמלול מחולק...", description: `${data.size_mb?.toFixed?.(0) || data.size_mb}MB` });
+
         const { data: dlData, error: dlError } = await supabase.functions.invoke("transcribe-recording", {
           body: { recording_id: recording.id, mode: 'download' },
         });
 
         if (dlError) throw dlError;
-        if (dlData?.error) throw new Error(dlData.error);
+        if (dlData?.error === 'file_too_large' && dlData?.no_alternative) {
+          // Download mode also failed — file is truly too large
+          toast({
+            title: "הקובץ גדול מדי",
+            description: dlData.message || "נא להדביק תמלול ידנית",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (dlData?.error) throw new Error(dlData.message || dlData.error);
         if (!dlData?.audio_base64) throw new Error('Failed to download audio');
 
-        // Convert base64 back to Blob
         const binary = atob(dlData.audio_base64);
         const bytes = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
         const audioBlob = new Blob([bytes], { type: dlData.content_type || 'audio/mp4' });
 
-        // Chunked client-side transcription
         const fullText = await transcribeChunked(audioBlob, (current, total) => {
           setTranscribeProgress({ current, total });
         });
@@ -218,8 +236,6 @@ export default function SummarizeRecordingDialog({
         toast({ title: "התמלול הושלם בהצלחה!" });
         return;
       }
-
-      // Error already handled above
     } catch (err: any) {
       toast({
         title: "שגיאה בתמלול",
