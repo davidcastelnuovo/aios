@@ -75,6 +75,7 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   meeting_created: "נוצרה פגישה",
   task_overdue: "משימה באיחור",
   inbound_webhook_task: "Webhook נכנס",
+  manual_command: "פקודה ידנית (צ'אט)",
 };
 
 interface FlowNodeProps {

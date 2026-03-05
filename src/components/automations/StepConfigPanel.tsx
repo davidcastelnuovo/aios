@@ -32,6 +32,7 @@ const TRIGGER_OPTIONS = [
   { value: "meeting_created", label: "נוצרה פגישה" },
   { value: "task_overdue", label: "משימה באיחור" },
   { value: "inbound_webhook_task", label: "Webhook נכנס" },
+  { value: "manual_command", label: "פקודה ידנית (צ'אט)" },
 ];
 
 const ACTION_OPTIONS = [
@@ -98,6 +99,11 @@ function getAvailableFields(triggerType: string | undefined): { key: string; lab
       return [
         { key: "title", label: "כותרת פגישה" },
         { key: "date", label: "תאריך" },
+      ];
+    case "manual_command":
+      return [
+        { key: "command_text", label: "טקסט הפקודה" },
+        { key: "user_name", label: "שם המשתמש" },
       ];
     default:
       return [
