@@ -1,47 +1,37 @@
 
-מצוין — עברתי על הקוד והלוגים האחרונים לעומק.
 
-Do I know what the issue is? כן.
+## Analysis
 
-הבעיה הנוכחית כבר לא רק זיכרון:
-1) ה-fallback מוצא הקלטת `audio_only` קטנה (≈21.8MB), אבל  
-2) ההורדה מגיעה עם `content-type: application/octet-stream`,  
-3) והפונקציה שולחת את ה-blob ל-Whisper בלי נרמול פורמט אמיתי → OpenAI מחזיר `Invalid file format`.
+The logs confirm the transcription **actually succeeded on the server** (line 3: "✅ Transcription done, length: 23138") but the client received "Failed to fetch" because the HTTP connection timed out after ~2.5 minutes. The Edge Function completed the work, but the result was lost because nothing persisted it.
 
-כלומר: המסלול מתקדם יפה עד התמלול, אבל נכשל על זיהוי פורמט הקובץ (לא על auth ולא על tenant).
+## Plan: Background Transcription with DB Persistence
 
-תוכנית תיקון ממוקדת (Implementation)
-1. `supabase/functions/transcribe-recording/index.ts` — נרמול קשיח של קובץ לפני Whisper  
-   - להוסיף שלב `normalizeAudioFile()` לפני `whisperForm.append`.  
-   - אם `content-type` הוא `application/octet-stream`, לזהות פורמט לפי:
-     - `recording_type` (למשל `audio_only` → `audio/m4a` + `.m4a`)
-     - magic bytes בסיסיים (ftyp/ID3/RIFF/Ogg/WebM) כשאפשר
-     - fallback סופי בטוח: `.m4a` עבור audio-only  
-   - ליצור `File/Blob` חדש עם MIME תקין, לא להשתמש ב-blob המקורי כמו שהוא.
-   - להוסיף לוגים קצרים: `raw_content_type`, `detected_type`, `final_file_name`.
+### 1. Database Migration — Add transcription columns to `zoom_recordings`
+Add columns to persist transcription results:
+- `transcription` (text, nullable) — the transcribed text
+- `transcription_status` (text, nullable) — `pending`, `processing`, `completed`, `failed`
+- `transcription_error` (text, nullable) — error message if failed
 
-2. `supabase/functions/transcribe-recording/index.ts` — ולידציה נגד “דף HTML בתחפושת”  
-   - גם אם השרת מחזיר `octet-stream`, לבדוק preview של bytes ראשונים.  
-   - אם מזוהה HTML/JSON במקום מדיה, לדלג ל-URL הבא ולהחזיר שגיאה ברורה אם אין מדיה תקינה.
+### 2. Update `transcribe-recording` Edge Function
+- At the start, update `transcription_status = 'processing'` in the DB
+- After successful transcription + GPT spelling fix, save the result to `transcription` column and set `transcription_status = 'completed'`
+- On any error, set `transcription_status = 'failed'` with `transcription_error`
+- Still return the result in the HTTP response (for when the connection survives)
 
-3. `supabase/functions/fetch-zoom-recordings/index.ts` — מניעת נתונים בעייתיים להבא  
-   - לאחד את כל מסלולי insert/upsert כך שתמיד העדפה תהיה `download_url || play_url` (כרגע במסלול fallback יש היפוך).  
-   - לשמור metadata נוסף אם זמין (למשל `file_extension`, `file_type`) כדי לשפר זיהוי פורמט בתמלול.
+### 3. Update `SummarizeRecordingDialog.tsx` — Polling + Background Support
+- After invoking `transcribe-recording`, if the request fails with a network error (timeout), don't show an error toast — instead switch to **polling mode**
+- Poll `zoom_recordings` every 5 seconds checking `transcription_status`
+- When status becomes `completed`, load the `transcription` text into the textarea
+- Show a progress indicator: "התמלול רץ ברקע... ניתן להמשיך לעבוד"
+- If the dialog is closed during processing, show a toast "התמלול ממשיך ברקע"
+- When re-opening the dialog for a recording with `transcription_status = 'completed'`, auto-populate the transcript
 
-4. `src/components/SummarizeRecordingDialog.tsx` — UX לשגיאת פורמט  
-   - אם מתקבלת שגיאת `invalid file format`, להציג הודעה ייעודית (לא גנרית) עם הצעה אוטומטית:
-     - ניסיון חוזר על חלופה אחרת מאותו meeting (אם קיימת), או
-     - מעבר להזנת תמלול ידני.
+### 4. Recordings List — Show Transcription Status
+- In the recordings page, show an indicator if a recording has been transcribed or is currently processing
 
-בדיקות קבלה (E2E)
-1) הקלטה שכבר נכשלה (ה-346MB עם fallback ל-21.8MB) → אמורה להסתיים בתמלול תקין.  
-2) הקלטת Zoom קטנה ישירות (ללא fallback) → תמלול תקין.  
-3) קובץ ידני מה-storage >25MB → לוודא שמסלול chunking לא נשבר.  
-4) לוגים ב-`transcribe-recording` לא צריכים להראות שוב:
-   - `Invalid file format`
-   - `Memory limit exceeded` במסלול קבצים קטנים.
+### Files to Change
+- **Migration**: Add columns to `zoom_recordings`
+- `supabase/functions/transcribe-recording/index.ts`: Save results to DB
+- `src/components/SummarizeRecordingDialog.tsx`: Add polling + background UX
+- `src/pages/Recordings.tsx`: Show transcription status badge (minor)
 
-פרטים טכניים (ללא שינוי מוצרי)
-- מוקד התיקון הוא נרמול MIME/extension לפני Whisper, לא שינוי ארכיטקטורה.
-- אין צורך בשינוי סכימה קריטי כדי לפתור עכשיו; metadata נוסף הוא hardening לשלב הבא.
-- הבידוד הרב-ארגוני נשמר (כל השאילתות נשארות עם `tenant_id`).
