@@ -1,27 +1,48 @@
 
 
-# תוכנית: הרחבת טריגר "ליד חדש נוצר" עם בחירת מקור
+# תוכנית: מיפוי שדות + בחירת חיבור Green API בפעולת WhatsApp
 
 ## סקירה
-כשמשתמש בוחר "ליד נוצר" כטריגר בפלוו, ייפתח דיאלוג משני שמאפשר לבחור את מקור הליד:
-1. **ליד חדש בארגון** - כל ליד שנוצר ידנית או מכל מקור
-2. **ליד מטופס ליד** - ליד שהגיע מטופס פייסבוק ספציפי, עם אפשרות לבחור טופס מתוך אינטגרציית Facebook Lead Ads
+כשמשתמש בוחר פעולת "שלח WhatsApp (Green API)" בפלוו, צריך להציג:
+1. **בחירת חיבור Green API** - מתוך `tenant_integrations` (integration_type = 'green_api')
+2. **מיפוי שדה מספר טלפון** - בחירת שדה הטלפון מתוך השדות הזמינים מהשלב הקודם (טריגר)
+3. **תבנית הודעה** - עם אפשרות להכניס משתנים מהשדות הזמינים
 
-## שינויים
+## שדות זמינים לפי סוג טריגר
+מיפוי סטטי של שדות לפי סוג הטריגר:
 
-### StepConfigPanel.tsx
-- כשנבחר `lead_created` כטריגר, מציגים Select נוסף עם שתי אפשרויות:
-  - `any` - ליד חדש בארגון (כל מקור)
-  - `facebook_form` - ליד מטופס ליד
-- כשנבחר `facebook_form`, מציגים:
-  1. Select לבחירת אינטגרציית Facebook (מתוך `tenant_integrations` של המשתמש)
-  2. Select לבחירת טופס ספציפי (נטען מ-Edge Function `get-facebook-forms`)
-- הערכים נשמרים ב-`configuration`: `{ lead_source: "any" | "facebook_form", facebook_form_id: "...", facebook_page_id: "..." }`
+| טריגר | שדות |
+|--------|-------|
+| lead_created | contact_name, company_name, phone, email, source, notes |
+| lead_status_changed | contact_name, company_name, phone, email, old_status, new_status |
+| client_created | name, contact_name, phone, email |
+| task_assigned | title, assignee_name |
+| meeting_created | title, date |
 
-### שימוש בקומפוננטות קיימות
-- נשתמש בלוגיקה דומה ל-`FacebookFormMappingSection` לטעינת דפים וטפסים
-- שאילתות ל-`tenant_integrations` לקבלת רשימת חיבורי Facebook זמינים
+## שינויים ב-StepConfigPanel.tsx
 
-### ללא שינויי DB
-הכל נשמר ב-`configuration` (jsonb) של הצעד הקיים.
+### 1. הוספת לוגיקת שדות זמינים
+פונקציה `getAvailableFields(triggerType)` שמחזירה רשימת שדות עם label ו-key לפי סוג הטריגר של הפלוו.
+
+### 2. הרחבת קונפיגורציית Green API action
+כש-`action_type === "send_greenapi_message"`:
+- **Select חיבור Green API** - שאילתה ל-`tenant_integrations` עם `integration_type = 'green_api'`
+- **Select שדה טלפון** - dropdown עם השדות הזמינים מהטריגר (למשל `{{phone}}`, `{{email}}`)
+- **תבנית הודעה** - Textarea קיים + רשימת משתנים דינמית מהשדות הזמינים
+
+### 3. שמירה ב-configuration
+```json
+{
+  "green_api_integration_id": "uuid",
+  "phone_field": "phone",
+  "message_template": "שלום {{contact_name}}, ..."
+}
+```
+
+### 4. זיהוי הטריגר
+הקומפוננטה צריכה לקבל את רשימת כל הנודים בפלוו כדי למצוא את נוד הטריגר ולדעת אילו שדות זמינים. נעביר את ה-`nodes` כ-prop ל-`StepConfigPanel`.
+
+## קבצים לעדכון
+- `src/components/automations/StepConfigPanel.tsx` - הוספת בחירת חיבור, מיפוי שדות, משתנים דינמיים
+- `src/components/automations/FlowEditor.tsx` - העברת nodes כ-prop ל-StepConfigPanel
 
