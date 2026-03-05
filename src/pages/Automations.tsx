@@ -1,16 +1,19 @@
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Zap, Activity, Trash2, Edit, TestTube } from "lucide-react";
+import { Plus, Zap, Activity, Trash2, Edit, TestTube, Workflow } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AddAutomationForm } from "@/components/forms/AddAutomationForm";
 import { EditAutomationDialog } from "@/components/forms/EditAutomationDialog";
 import { TestAutomationDialog } from "@/components/forms/TestAutomationDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useTenantPath } from "@/hooks/useTenantPath";
 import {
   Dialog,
   DialogContent,
@@ -57,12 +60,14 @@ const ACTION_LABELS: Record<string, string> = {
 export default function Automations() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [logsDialogOpen, setLogsDialogOpen] = useState(false);
   const [selectedAutomationId, setSelectedAutomationId] = useState<string | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [selectedAutomation, setSelectedAutomation] = useState<any>(null);
   const { tenantId } = useCurrentTenant();
+  const { buildPath } = useTenantPath();
 
   // Fetch automations
   const { data: automations, isLoading } = useQuery({
@@ -150,6 +155,33 @@ export default function Automations() {
     },
   });
 
+  // Create new flow automation
+  const createFlowMutation = useMutation({
+    mutationFn: async () => {
+      if (!tenantId) throw new Error("No tenant");
+      const { data, error } = await supabase
+        .from("automations")
+        .insert({
+          name: "פלוו חדש",
+          tenant_id: tenantId,
+          trigger_type: "lead_created",
+          action_type: "notification",
+          configuration: {},
+          is_flow: true,
+        } as any)
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      navigate(buildPath(`automations/flow/${data.id}`));
+    },
+    onError: (err: any) => {
+      toast({ title: "שגיאה", description: err.message, variant: "destructive" });
+    },
+  });
+
   const handleTest = (automation: any) => {
     setSelectedAutomation(automation);
     setTestDialogOpen(true);
@@ -186,17 +218,28 @@ export default function Automations() {
             נהל אוטומציות והזרמות נתונים למערכות חיצוניות
           </p>
         </div>
-        <AddAutomationForm />
+        <div className="flex gap-2">
+          <Button onClick={() => createFlowMutation.mutate()} disabled={createFlowMutation.isPending} variant="outline">
+            <Workflow className="h-4 w-4 ml-2" />
+            פלוו חדש
+          </Button>
+          <AddAutomationForm />
+        </div>
       </div>
 
       {/* Automations Grid */}
       <div className="grid gap-3 md:gap-4 grid-cols-1 lg:grid-cols-2">
         {automations?.map((automation) => (
-          <Card key={automation.id} className={automation.active ? "" : "opacity-60"}>
+          <Card
+            key={automation.id}
+            className={cn(automation.active ? "" : "opacity-60", (automation as any).is_flow && "cursor-pointer hover:border-primary/50 transition-colors")}
+            onClick={() => (automation as any).is_flow && navigate(buildPath(`automations/flow/${automation.id}`))}
+          >
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                  <CardTitle className="text-base md:text-lg truncate">
+                  <CardTitle className="text-base md:text-lg truncate flex items-center gap-2">
+                    {(automation as any).is_flow && <Workflow className="h-4 w-4 shrink-0 text-primary" />}
                     {automation.name}
                   </CardTitle>
                   {automation.description && (
