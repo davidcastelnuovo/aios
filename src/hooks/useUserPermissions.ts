@@ -35,6 +35,7 @@ export type ModulePermission =
   | "green_api_settings" // Green API WhatsApp integration settings
   | "chat_integrations" // Chat integrations settings
   | "accounting_integrations" // Accounting integrations
+  | "recordings" // Recordings management
   | "settings"; // System settings
 
 export function useUserPermissions() {

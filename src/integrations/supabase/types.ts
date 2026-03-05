@@ -4265,6 +4265,7 @@ export type Database = {
           client_id: string | null
           created_at: string
           duration: number | null
+          file_path: string | null
           file_size: number | null
           host_email: string | null
           id: string
@@ -4275,6 +4276,7 @@ export type Database = {
           recording_password: string | null
           recording_type: string | null
           recording_url: string | null
+          source: string
           start_time: string | null
           tenant_id: string
           updated_at: string
@@ -4283,6 +4285,7 @@ export type Database = {
           client_id?: string | null
           created_at?: string
           duration?: number | null
+          file_path?: string | null
           file_size?: number | null
           host_email?: string | null
           id?: string
@@ -4293,6 +4296,7 @@ export type Database = {
           recording_password?: string | null
           recording_type?: string | null
           recording_url?: string | null
+          source?: string
           start_time?: string | null
           tenant_id: string
           updated_at?: string
@@ -4301,6 +4305,7 @@ export type Database = {
           client_id?: string | null
           created_at?: string
           duration?: number | null
+          file_path?: string | null
           file_size?: number | null
           host_email?: string | null
           id?: string
@@ -4311,6 +4316,7 @@ export type Database = {
           recording_password?: string | null
           recording_type?: string | null
           recording_url?: string | null
+          source?: string
           start_time?: string | null
           tenant_id?: string
           updated_at?: string
