@@ -95,6 +95,22 @@ serve(async (req) => {
     const fileSizeMB = audioBlob.size / (1024 * 1024);
     console.log(`📦 File size: ${fileSizeMB.toFixed(1)}MB`);
 
+    // Ensure fileName has a recognized extension for Whisper API
+    const validExtensions = ['.flac', '.m4a', '.mp3', '.mp4', '.mpeg', '.mpga', '.oga', '.ogg', '.wav', '.webm'];
+    const mimeToExt: Record<string, string> = {
+      'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a', 'audio/mpeg': '.mp3',
+      'audio/mp3': '.mp3', 'video/mp4': '.mp4', 'audio/wav': '.wav',
+      'audio/x-wav': '.wav', 'audio/webm': '.webm', 'video/webm': '.webm',
+      'audio/ogg': '.ogg', 'audio/flac': '.flac', 'audio/x-flac': '.flac',
+    };
+    const hasValidExt = validExtensions.some(ext => fileName.toLowerCase().endsWith(ext));
+    if (!hasValidExt) {
+      const mapped = mimeToExt[contentType] || '.mp4';
+      fileName = fileName.replace(/\.[^.]*$/, '') + mapped;
+      if (!fileName.includes('.')) fileName += mapped;
+    }
+    console.log(`📎 fileName for Whisper: ${fileName}, contentType: ${contentType}`);
+
     // Mode: download - return raw audio as base64 for client-side chunking
     if (mode === 'download') {
       const arrayBuffer = await audioBlob.arrayBuffer();
