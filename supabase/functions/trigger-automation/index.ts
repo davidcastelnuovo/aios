@@ -261,54 +261,180 @@ Deno.serve(async (req) => {
             }
           }
 
-          // Execute action based on type
           let response: any
-          if (automation.action_type === 'webhook') {
-            response = await executeWebhook(automation.configuration, payloadData)
-          } else if (automation.action_type === 'email') {
-            response = await executeEmail(automation.configuration, payloadData)
-          } else if (automation.action_type === 'notification') {
-            response = await executeNotification(automation.configuration, payloadData)
-          } else if (automation.action_type === 'update_status') {
-            response = await executeStatusUpdate(supabase, automation.configuration, payloadData)
-          } else if (automation.action_type === 'send_whatsapp') {
-            response = await executeSendWhatsapp(supabase, automation.configuration, payloadData, tenantId)
-          } else if (automation.action_type === 'create_manychat_subscriber') {
-            response = await executeCreateManychatSubscriber(supabase, automation.configuration, payloadData, tenantId)
-          } else if (automation.action_type === 'send_greenapi_message') {
-            response = await executeGreenApiMessage(supabase, automation.configuration, payloadData, tenantId)
-          } else if (automation.action_type === 'send_greenapi_to_campaigner') {
-            response = await executeGreenApiToCampaigner(supabase, automation.configuration, payloadData, tenantId)
-          } else if (automation.action_type === 'add_lead_update') {
-            response = await executeAddLeadUpdate(supabase, automation.configuration, payloadData, tenantId)
-          } else if (automation.action_type === 'add_client_update') {
-            response = await executeAddClientUpdate(supabase, automation.configuration, payloadData, tenantId)
-          } else if (automation.action_type === 'create_task') {
-            response = await executeCreateTask(supabase, automation.configuration, payloadData, tenantId)
-          } else if (automation.action_type === 'create_lead') {
-            response = await executeCreateLead(supabase, automation.configuration, payloadData, tenantId)
-          } else if (automation.action_type === 'agent') {
-            // Delegate to run-ai-agent edge function
-            const agentConfig = automation.configuration || {}
-            const agentId = agentConfig.agent_id
-            if (agentId) {
-              const agentUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/run-ai-agent`
-              const agentRes = await fetch(agentUrl, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-                },
-                body: JSON.stringify({
-                  agent_id: agentId,
-                  command_text: payloadData?.command_text || payloadData?.text || 'הפעל את האוטומציה',
-                  automation_id: automation.id,
-                  user_name: payloadData?.user_name || 'מערכת',
-                }),
-              })
-              response = await agentRes.json()
-            } else {
-              response = { error: 'No agent_id configured in automation' }
+
+          // If this is a flow automation, execute flow steps sequentially
+          if (automation.is_flow) {
+            console.log(`Executing flow automation: ${automation.id}`)
+            const { data: flowSteps, error: stepsError } = await supabase
+              .from('automation_flow_steps')
+              .select('*')
+              .eq('automation_id', automation.id)
+              .order('sort_order', { ascending: true })
+
+            if (stepsError) {
+              console.error('Error fetching flow steps:', stepsError)
+              throw stepsError
+            }
+
+            console.log(`Found ${flowSteps?.length || 0} flow steps`)
+
+            let previousStepOutput: any = null
+            const stepResults: any[] = []
+
+            for (const step of (flowSteps || [])) {
+              console.log(`Executing step: ${step.step_type}/${step.action_type} (${step.id})`)
+              
+              // Skip trigger steps
+              if (step.step_type === 'trigger') {
+                console.log('Skipping trigger step')
+                continue
+              }
+
+              const stepConfig = step.configuration || {}
+              
+              // Merge previous step output into data for template variables
+              const stepData = {
+                ...payloadData,
+                previous_step_output: previousStepOutput,
+                agent_output: previousStepOutput?.output || previousStepOutput,
+              }
+
+              let stepResponse: any = null
+
+              try {
+                if (step.action_type === 'agent') {
+                  const agentId = stepConfig.agent_id
+                  if (agentId) {
+                    const agentUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/run-ai-agent`
+                    const agentRes = await fetch(agentUrl, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                      },
+                      body: JSON.stringify({
+                        agent_id: agentId,
+                        command_text: payloadData?.command_text || payloadData?.text || 'הפעל את האוטומציה',
+                        automation_id: automation.id,
+                        user_name: payloadData?.user_name || 'מערכת',
+                      }),
+                    })
+                    stepResponse = await agentRes.json()
+                    previousStepOutput = stepResponse
+                    console.log('Agent step output:', stepResponse?.output?.substring(0, 100))
+                  }
+                } else if (step.action_type === 'send_greenapi_message') {
+                  // If message_template contains {{agent_output}}, replace it
+                  if (stepConfig.message_template && previousStepOutput) {
+                    const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
+                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{agent_output\}\}/g, agentText)
+                    // Also support {{previous_step_output}}
+                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{previous_step_output\}\}/g, agentText)
+                  }
+                  stepResponse = await executeGreenApiMessage(supabase, stepConfig, stepData, tenantId)
+                  previousStepOutput = stepResponse
+                } else if (step.action_type === 'send_whatsapp') {
+                  if (stepConfig.message_template && previousStepOutput) {
+                    const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : JSON.stringify(previousStepOutput))
+                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{agent_output\}\}/g, agentText)
+                    stepConfig.message_template = stepConfig.message_template.replace(/\{\{previous_step_output\}\}/g, agentText)
+                  }
+                  stepResponse = await executeSendWhatsapp(supabase, stepConfig, stepData, tenantId)
+                  previousStepOutput = stepResponse
+                } else if (step.action_type === 'webhook') {
+                  stepResponse = await executeWebhook(stepConfig, stepData)
+                  previousStepOutput = stepResponse
+                } else if (step.action_type === 'add_lead_update') {
+                  if (stepConfig.update_text && previousStepOutput) {
+                    const agentText = previousStepOutput?.output || (typeof previousStepOutput === 'string' ? previousStepOutput : '')
+                    stepConfig.update_text = stepConfig.update_text.replace(/\{\{agent_output\}\}/g, agentText)
+                  }
+                  stepResponse = await executeAddLeadUpdate(supabase, stepConfig, stepData, tenantId)
+                  previousStepOutput = stepResponse
+                } else if (step.action_type === 'add_client_update') {
+                  stepResponse = await executeAddClientUpdate(supabase, stepConfig, stepData, tenantId)
+                  previousStepOutput = stepResponse
+                } else if (step.action_type === 'create_task') {
+                  stepResponse = await executeCreateTask(supabase, stepConfig, stepData, tenantId)
+                  previousStepOutput = stepResponse
+                } else if (step.action_type === 'create_lead') {
+                  stepResponse = await executeCreateLead(supabase, stepConfig, stepData, tenantId)
+                  previousStepOutput = stepResponse
+                } else if (step.action_type === 'update_status') {
+                  stepResponse = await executeStatusUpdate(supabase, stepConfig, stepData)
+                  previousStepOutput = stepResponse
+                } else if (step.action_type === 'create_manychat_subscriber') {
+                  stepResponse = await executeCreateManychatSubscriber(supabase, stepConfig, stepData, tenantId)
+                  previousStepOutput = stepResponse
+                } else if (step.action_type === 'send_greenapi_to_campaigner') {
+                  stepResponse = await executeGreenApiToCampaigner(supabase, stepConfig, stepData, tenantId)
+                  previousStepOutput = stepResponse
+                } else {
+                  console.log(`Unknown action_type: ${step.action_type}, skipping`)
+                }
+
+                stepResults.push({ step_id: step.id, action_type: step.action_type, success: true, response: stepResponse })
+              } catch (stepErr: any) {
+                console.error(`Error in flow step ${step.id}:`, stepErr)
+                stepResults.push({ step_id: step.id, action_type: step.action_type, success: false, error: stepErr.message })
+                // Continue to next step even if one fails
+              }
+            }
+
+            response = { 
+              flow: true, 
+              steps: stepResults,
+              agent_output: stepResults.find(s => s.action_type === 'agent')?.response?.output || null,
+            }
+          } else {
+            // Non-flow: execute single action as before
+            if (automation.action_type === 'webhook') {
+              response = await executeWebhook(automation.configuration, payloadData)
+            } else if (automation.action_type === 'email') {
+              response = await executeEmail(automation.configuration, payloadData)
+            } else if (automation.action_type === 'notification') {
+              response = await executeNotification(automation.configuration, payloadData)
+            } else if (automation.action_type === 'update_status') {
+              response = await executeStatusUpdate(supabase, automation.configuration, payloadData)
+            } else if (automation.action_type === 'send_whatsapp') {
+              response = await executeSendWhatsapp(supabase, automation.configuration, payloadData, tenantId)
+            } else if (automation.action_type === 'create_manychat_subscriber') {
+              response = await executeCreateManychatSubscriber(supabase, automation.configuration, payloadData, tenantId)
+            } else if (automation.action_type === 'send_greenapi_message') {
+              response = await executeGreenApiMessage(supabase, automation.configuration, payloadData, tenantId)
+            } else if (automation.action_type === 'send_greenapi_to_campaigner') {
+              response = await executeGreenApiToCampaigner(supabase, automation.configuration, payloadData, tenantId)
+            } else if (automation.action_type === 'add_lead_update') {
+              response = await executeAddLeadUpdate(supabase, automation.configuration, payloadData, tenantId)
+            } else if (automation.action_type === 'add_client_update') {
+              response = await executeAddClientUpdate(supabase, automation.configuration, payloadData, tenantId)
+            } else if (automation.action_type === 'create_task') {
+              response = await executeCreateTask(supabase, automation.configuration, payloadData, tenantId)
+            } else if (automation.action_type === 'create_lead') {
+              response = await executeCreateLead(supabase, automation.configuration, payloadData, tenantId)
+            } else if (automation.action_type === 'agent') {
+              const agentConfig = automation.configuration || {}
+              const agentId = agentConfig.agent_id
+              if (agentId) {
+                const agentUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/run-ai-agent`
+                const agentRes = await fetch(agentUrl, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                  },
+                  body: JSON.stringify({
+                    agent_id: agentId,
+                    command_text: payloadData?.command_text || payloadData?.text || 'הפעל את האוטומציה',
+                    automation_id: automation.id,
+                    user_name: payloadData?.user_name || 'מערכת',
+                  }),
+                })
+                response = await agentRes.json()
+              } else {
+                response = { error: 'No agent_id configured in automation' }
+              }
             }
           }
 
@@ -323,7 +449,7 @@ Deno.serve(async (req) => {
             execution_time_ms: executionTime,
           })
 
-          return { success: true, automation_id: automation.id }
+          return { success: true, automation_id: automation.id, response }
         } catch (error) {
           const executionTime = Date.now() - startTime
           console.error(`Error executing automation ${automation.id}:`, error)
