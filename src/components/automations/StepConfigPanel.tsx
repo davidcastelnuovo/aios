@@ -1,10 +1,14 @@
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
+import { Loader2 } from "lucide-react";
 import { FlowNodeData } from "./FlowNode";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 
 const TRIGGER_OPTIONS = [
   { value: "lead_created", label: "ליד נוצר" },
@@ -37,6 +41,11 @@ const DELAY_UNITS = [
   { value: "days", label: "ימים" },
 ];
 
+const LEAD_SOURCE_OPTIONS = [
+  { value: "any", label: "ליד חדש בארגון (כל מקור)" },
+  { value: "facebook_form", label: "ליד מטופס ליד (Facebook)" },
+];
+
 interface StepConfigPanelProps {
   node: FlowNodeData | null;
   open: boolean;
@@ -44,8 +53,27 @@ interface StepConfigPanelProps {
   onUpdate: (nodeId: string, updates: Partial<FlowNodeData>) => void;
 }
 
+interface FacebookPage {
+  id: string;
+  name: string;
+  access_token?: string;
+}
+
+interface FacebookForm {
+  id: string;
+  name: string;
+  status: string;
+}
+
 export function StepConfigPanel({ node, open, onClose, onUpdate }: StepConfigPanelProps) {
+  const { tenant } = useCurrentTenant();
+  const tenantId = tenant?.id;
+
   if (!node) return null;
+
+  const isLeadCreatedTrigger = node.step_type === "trigger" && node.action_type === "lead_created";
+  const leadSource = node.configuration?.lead_source || "any";
+  const isFacebookForm = leadSource === "facebook_form";
 
   const handleActionTypeChange = (value: string) => {
     onUpdate(node.id, { action_type: value });
@@ -106,6 +134,16 @@ export function StepConfigPanel({ node, open, onClose, onUpdate }: StepConfigPan
                 </SelectContent>
               </Select>
             </div>
+          )}
+
+          {/* Lead source sub-config when lead_created trigger */}
+          {isLeadCreatedTrigger && (
+            <LeadSourceConfig
+              tenantId={tenantId}
+              leadSource={leadSource}
+              configuration={node.configuration}
+              onConfigChange={handleConfigChange}
+            />
           )}
 
           {/* Delay config */}
@@ -221,5 +259,209 @@ export function StepConfigPanel({ node, open, onClose, onUpdate }: StepConfigPan
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+// Sub-component for lead source configuration
+function LeadSourceConfig({
+  tenantId,
+  leadSource,
+  configuration,
+  onConfigChange,
+}: {
+  tenantId: string | undefined;
+  leadSource: string;
+  configuration: Record<string, any>;
+  onConfigChange: (key: string, value: any) => void;
+}) {
+  const isFacebookForm = leadSource === "facebook_form";
+  const selectedIntegrationId = configuration?.facebook_integration_id || "";
+  const selectedPageId = configuration?.facebook_page_id || "";
+  const selectedFormId = configuration?.facebook_form_id || "";
+
+  // Fetch Facebook integrations for this tenant
+  const { data: fbIntegrations, isLoading: loadingIntegrations } = useQuery({
+    queryKey: ["fb-integrations-for-flow", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("tenant_integrations")
+        .select("id, integration_type, settings, api_key, is_active")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "facebook_lead_ads")
+        .eq("is_active", true);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId && isFacebookForm,
+  });
+
+  // Get the selected integration's access token
+  const selectedIntegration = fbIntegrations?.find((i) => i.id === selectedIntegrationId);
+  const accessToken = selectedIntegration?.api_key || null;
+
+  // Fetch pages for the selected integration
+  const { data: pagesData, isLoading: loadingPages } = useQuery({
+    queryKey: ["fb-pages-for-flow", selectedIntegrationId, accessToken],
+    queryFn: async () => {
+      if (!accessToken || !tenantId) return [];
+      const { data, error } = await supabase.functions.invoke("get-facebook-forms", {
+        body: { tenant_id: tenantId, access_token: accessToken },
+      });
+      if (error || data?.error) return [];
+      return (data?.pages as FacebookPage[]) || [];
+    },
+    enabled: !!accessToken && !!tenantId && isFacebookForm,
+  });
+
+  // Fetch forms for the selected page
+  const pageToken = pagesData?.find((p: FacebookPage) => p.id === selectedPageId)?.access_token || null;
+  const { data: formsData, isLoading: loadingForms } = useQuery({
+    queryKey: ["fb-forms-for-flow", selectedPageId, accessToken, pageToken],
+    queryFn: async () => {
+      if (!accessToken || !selectedPageId || !tenantId) return [];
+      const { data, error } = await supabase.functions.invoke("get-facebook-forms", {
+        body: {
+          tenant_id: tenantId,
+          page_id: selectedPageId,
+          access_token: accessToken,
+          page_access_token: pageToken,
+        },
+      });
+      if (error || data?.error) return [];
+      return (data?.forms as FacebookForm[]) || [];
+    },
+    enabled: !!accessToken && !!selectedPageId && !!tenantId && isFacebookForm,
+  });
+
+  // Also build forms from existing integration settings (mapped forms)
+  const settingsObj = selectedIntegration?.settings as Record<string, any> | null;
+  const mappedForms = settingsObj?.form_mappings
+    ? Object.keys(settingsObj.form_mappings as Record<string, any>)
+    : [];
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label className="text-right block">מקור הליד</Label>
+        <Select value={leadSource} onValueChange={(v) => onConfigChange("lead_source", v)}>
+          <SelectTrigger className="text-right">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LEAD_SOURCE_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isFacebookForm && (
+        <>
+          {/* Integration selector */}
+          <div className="space-y-2">
+            <Label className="text-right block">חיבור Facebook</Label>
+            {loadingIntegrations ? (
+              <div className="flex items-center justify-center py-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </div>
+            ) : fbIntegrations && fbIntegrations.length > 0 ? (
+              <Select
+                value={selectedIntegrationId}
+                onValueChange={(v) => {
+                  onConfigChange("facebook_integration_id", v);
+                  onConfigChange("facebook_page_id", "");
+                  onConfigChange("facebook_form_id", "");
+                }}
+              >
+                <SelectTrigger className="text-right">
+                  <SelectValue placeholder="בחר חיבור..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {fbIntegrations.map((integration) => (
+                    <SelectItem key={integration.id} value={integration.id}>
+                      Facebook Lead Ads
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <p className="text-xs text-muted-foreground text-right">
+                אין חיבור Facebook פעיל. הגדר אינטגרציה בהגדרות לידים.
+              </p>
+            )}
+          </div>
+
+          {/* Page selector */}
+          {selectedIntegrationId && (
+            <div className="space-y-2">
+              <Label className="text-right block">דף פייסבוק</Label>
+              {loadingPages ? (
+                <div className="flex items-center justify-center py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                </div>
+              ) : pagesData && pagesData.length > 0 ? (
+                <Select
+                  value={selectedPageId}
+                  onValueChange={(v) => {
+                    onConfigChange("facebook_page_id", v);
+                    onConfigChange("facebook_form_id", "");
+                  }}
+                >
+                  <SelectTrigger className="text-right">
+                    <SelectValue placeholder="בחר דף..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pagesData.map((page: FacebookPage) => (
+                      <SelectItem key={page.id} value={page.id}>
+                        {page.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-xs text-muted-foreground text-right">
+                  לא נמצאו דפים. בדוק את ההרשאות של חיבור הפייסבוק.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Form selector */}
+          {selectedPageId && (
+            <div className="space-y-2">
+              <Label className="text-right block">טופס ליד</Label>
+              {loadingForms ? (
+                <div className="flex items-center justify-center py-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                </div>
+              ) : formsData && formsData.length > 0 ? (
+                <Select
+                  value={selectedFormId}
+                  onValueChange={(v) => onConfigChange("facebook_form_id", v)}
+                >
+                  <SelectTrigger className="text-right">
+                    <SelectValue placeholder="בחר טופס..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {formsData.map((form: FacebookForm) => (
+                      <SelectItem key={form.id} value={form.id}>
+                        {form.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <p className="text-xs text-muted-foreground text-right">
+                  לא נמצאו טפסים בדף זה.
+                </p>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </>
   );
 }
