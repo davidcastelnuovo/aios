@@ -155,3 +155,6 @@ verify_jwt = false
 
 [functions.zoom-webhook]
 verify_jwt = false
+
+[functions.run-ai-agent]
+verify_jwt = false

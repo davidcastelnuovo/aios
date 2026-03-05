@@ -287,6 +287,29 @@ Deno.serve(async (req) => {
             response = await executeCreateTask(supabase, automation.configuration, payloadData, tenantId)
           } else if (automation.action_type === 'create_lead') {
             response = await executeCreateLead(supabase, automation.configuration, payloadData, tenantId)
+          } else if (automation.action_type === 'agent') {
+            // Delegate to run-ai-agent edge function
+            const agentConfig = automation.configuration || {}
+            const agentId = agentConfig.agent_id
+            if (agentId) {
+              const agentUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/run-ai-agent`
+              const agentRes = await fetch(agentUrl, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                },
+                body: JSON.stringify({
+                  agent_id: agentId,
+                  command_text: payloadData?.command_text || payloadData?.text || 'הפעל את האוטומציה',
+                  automation_id: automation.id,
+                  user_name: payloadData?.user_name || 'מערכת',
+                }),
+              })
+              response = await agentRes.json()
+            } else {
+              response = { error: 'No agent_id configured in automation' }
+            }
           }
 
           const executionTime = Date.now() - startTime
