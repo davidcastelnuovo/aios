@@ -8,6 +8,92 @@ const corsHeaders = {
 
 const MAX_EDGE_FILE_SIZE = 25 * 1024 * 1024; // 25MB — safe for edge function memory
 
+// ── Audio format normalization ────────────────────────────────
+// Whisper requires a recognized file extension + MIME. Zoom often serves
+// audio_only files as application/octet-stream which Whisper rejects.
+
+const MIME_TO_EXT: Record<string, string> = {
+  'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a', 'audio/m4a': '.m4a',
+  'audio/mpeg': '.mp3', 'audio/mp3': '.mp3',
+  'video/mp4': '.mp4',
+  'audio/wav': '.wav', 'audio/x-wav': '.wav',
+  'audio/webm': '.webm', 'video/webm': '.webm',
+  'audio/ogg': '.ogg', 'audio/flac': '.flac', 'audio/x-flac': '.flac',
+};
+
+const VALID_EXTENSIONS = ['.flac', '.m4a', '.mp3', '.mp4', '.mpeg', '.mpga', '.oga', '.ogg', '.wav', '.webm'];
+
+/** Detect MIME from magic bytes */
+function detectMimeFromBytes(header: Uint8Array): string | null {
+  // ftyp → MP4/M4A container
+  if (header.length >= 8) {
+    const str4 = String.fromCharCode(header[4], header[5], header[6], header[7]);
+    if (str4 === 'ftyp') return 'audio/mp4';
+  }
+  // ID3 → MP3
+  if (header[0] === 0x49 && header[1] === 0x44 && header[2] === 0x33) return 'audio/mpeg';
+  // RIFF → WAV
+  if (header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46) return 'audio/wav';
+  // OggS → OGG
+  if (header[0] === 0x4F && header[1] === 0x67 && header[2] === 0x67 && header[3] === 0x53) return 'audio/ogg';
+  // fLaC → FLAC
+  if (header[0] === 0x66 && header[1] === 0x4C && header[2] === 0x61 && header[3] === 0x43) return 'audio/flac';
+  // WebM (starts with 0x1A45DFA3 — EBML header)
+  if (header[0] === 0x1A && header[1] === 0x45 && header[2] === 0xDF && header[3] === 0xA3) return 'audio/webm';
+  // MP3 sync bytes (0xFF 0xFB/0xF3/0xF2)
+  if (header[0] === 0xFF && (header[1] === 0xFB || header[1] === 0xF3 || header[1] === 0xF2)) return 'audio/mpeg';
+  return null;
+}
+
+/** Check if first bytes look like HTML or JSON instead of media */
+function looksLikeTextContent(header: Uint8Array): boolean {
+  const prefix = new TextDecoder().decode(header.slice(0, 20)).trim();
+  return prefix.startsWith('<') || prefix.startsWith('{') || prefix.startsWith('[');
+}
+
+/** Map recording_type from Zoom to likely MIME */
+function mimeFromRecordingType(recordingType: string | null): string {
+  if (!recordingType) return 'audio/mp4';
+  const rt = recordingType.toLowerCase();
+  if (rt.includes('audio')) return 'audio/mp4'; // Zoom audio-only is M4A in MP4 container
+  if (rt.includes('transcript')) return 'audio/mp4';
+  return 'audio/mp4';
+}
+
+/**
+ * Normalize a blob for Whisper: ensure correct MIME + extension.
+ * Returns { blob, fileName, contentType } ready for FormData.
+ */
+function normalizeForWhisper(
+  blob: Blob,
+  rawContentType: string,
+  recordingType: string | null,
+  headerBytes: Uint8Array,
+): { blob: Blob; fileName: string; contentType: string } {
+  let mime = rawContentType.split(';')[0].trim().toLowerCase();
+  console.log(`🔍 normalizeForWhisper — raw_content_type=${mime}, recording_type=${recordingType}`);
+
+  // If octet-stream or empty, try magic bytes first, then recording_type
+  if (!mime || mime === 'application/octet-stream' || !MIME_TO_EXT[mime]) {
+    const detected = detectMimeFromBytes(headerBytes);
+    if (detected) {
+      mime = detected;
+      console.log(`  → detected via magic bytes: ${mime}`);
+    } else {
+      mime = mimeFromRecordingType(recordingType);
+      console.log(`  → inferred from recording_type: ${mime}`);
+    }
+  }
+
+  const ext = MIME_TO_EXT[mime] || '.m4a';
+  const fileName = `recording${ext}`;
+  const normalizedBlob = new Blob([blob], { type: mime });
+  console.log(`  → final: mime=${mime}, fileName=${fileName}`);
+  return { blob: normalizedBlob, fileName, contentType: mime };
+}
+
+// ── Main handler ──────────────────────────────────────────────
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -41,6 +127,7 @@ serve(async (req) => {
     let audioBlob: Blob | null = null;
     let fileName = 'audio.mp4';
     let contentType = 'audio/mp4';
+    let recordingType: string | null = recording.recording_type || null;
 
     // Case 1: Manual recording with file in Storage
     if (recording.file_path) {
@@ -66,7 +153,6 @@ serve(async (req) => {
       if (knownSize && knownSize > MAX_EDGE_FILE_SIZE) {
         console.log(`⚠️ Recording too large (${(knownSize / 1024 / 1024).toFixed(1)}MB). Searching for smaller audio-only alternative...`);
 
-        // Try to find a smaller audio-only recording for the same meeting
         const { data: alternatives } = await supabase
           .from('zoom_recordings')
           .select('*')
@@ -82,12 +168,9 @@ serve(async (req) => {
 
         if (smallAlt) {
           console.log(`✅ Found smaller alternative: ${smallAlt.recording_type} (${(smallAlt.file_size / 1024 / 1024).toFixed(1)}MB)`);
-          // Recursively process the smaller recording instead
-          // We re-fetch and continue with the smaller recording's URL
           return await processZoomRecording(supabase, smallAlt, mode, true);
         }
 
-        // No small alternative found — return clear error, do NOT attempt download
         return new Response(JSON.stringify({
           error: 'file_too_large',
           size_mb: Math.round(knownSize / 1024 / 1024),
@@ -109,10 +192,9 @@ serve(async (req) => {
       fileName = result.fileName!;
       contentType = result.contentType!;
 
-      // Post-download size check (for when file_size was null/unknown)
+      // Post-download size check
       if (audioBlob.size > MAX_EDGE_FILE_SIZE) {
-        console.log(`⚠️ Downloaded file is ${(audioBlob.size / 1024 / 1024).toFixed(1)}MB — too large for in-memory processing`);
-        // Try audio-only fallback
+        console.log(`⚠️ Downloaded file is ${(audioBlob.size / 1024 / 1024).toFixed(1)}MB — too large`);
         const { data: alternatives } = await supabase
           .from('zoom_recordings')
           .select('*')
@@ -145,7 +227,31 @@ serve(async (req) => {
       });
     }
 
-    // From here we have a valid audioBlob within size limits
+    // ── Normalize audio format before sending to Whisper ──
+    const rawBytes = new Uint8Array(await audioBlob.arrayBuffer());
+
+    // Guard: check if downloaded content is actually HTML/JSON (not media)
+    if (looksLikeTextContent(rawBytes)) {
+      const preview = new TextDecoder().decode(rawBytes.slice(0, 200));
+      console.error('❌ Downloaded content is text, not media:', preview.slice(0, 100));
+      return new Response(JSON.stringify({
+        error: 'invalid_media',
+        message: 'תוכן ההקלטה שהתקבל אינו קובץ מדיה תקין. ייתכן שפג תוקף הקישור.',
+      }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const normalized = normalizeForWhisper(
+      new Blob([rawBytes], { type: contentType }),
+      contentType,
+      recordingType,
+      rawBytes.slice(0, 16),
+    );
+    audioBlob = normalized.blob;
+    fileName = normalized.fileName;
+    contentType = normalized.contentType;
+
     return await transcribeBlob(audioBlob, fileName, contentType, mode);
 
   } catch (error) {
@@ -165,13 +271,33 @@ async function processZoomRecording(supabase: any, recording: any, mode: string 
     });
   }
 
-  const resp = await transcribeBlob(result.blob!, result.fileName!, result.contentType!, mode);
-  // If fallback, inject metadata
+  const blob = result.blob!;
+  const rawBytes = new Uint8Array(await blob.arrayBuffer());
+
+  // Guard against text content
+  if (looksLikeTextContent(rawBytes)) {
+    return new Response(JSON.stringify({
+      error: 'invalid_media',
+      message: 'תוכן ההקלטה שהתקבל אינו קובץ מדיה תקין.',
+    }), {
+      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Normalize
+  const normalized = normalizeForWhisper(
+    new Blob([rawBytes], { type: result.contentType! }),
+    result.contentType!,
+    recording.recording_type || null,
+    rawBytes.slice(0, 16),
+  );
+
+  const resp = await transcribeBlob(normalized.blob, normalized.fileName, normalized.contentType, mode);
   if (isFallback) {
     const body = await resp.json();
     body.used_fallback = true;
     body.fallback_recording_type = recording.recording_type;
-    body.fallback_size_mb = result.blob!.size / 1024 / 1024;
+    body.fallback_size_mb = blob.size / 1024 / 1024;
     return new Response(JSON.stringify(body), {
       status: resp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -262,7 +388,7 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
 
       if (!zoomResp.ok) {
         lastError = `HTTP ${zoomResp.status} from Zoom`;
-        await zoomResp.text(); // consume body
+        await zoomResp.text();
         continue;
       }
 
@@ -273,8 +399,8 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
       }
 
       const blob = await zoomResp.blob();
-      const ct = zoomResp.headers.get('content-type') || blob.type || 'audio/mp4';
-      return { blob, fileName: 'zoom_recording.mp4', contentType: ct };
+      const ct = zoomResp.headers.get('content-type') || blob.type || 'application/octet-stream';
+      return { blob, fileName: 'zoom_recording', contentType: ct };
     }
   }
 
@@ -284,27 +410,10 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
 // ── Helper: transcribe a blob (shared logic) ─────────────────────────
 async function transcribeBlob(audioBlob: Blob, fileName: string, contentType: string, mode: string | undefined) {
   const fileSizeMB = audioBlob.size / (1024 * 1024);
-  console.log(`📦 File size: ${fileSizeMB.toFixed(1)}MB`);
-
-  // Ensure fileName has a recognized extension for Whisper API
-  const validExtensions = ['.flac', '.m4a', '.mp3', '.mp4', '.mpeg', '.mpga', '.oga', '.ogg', '.wav', '.webm'];
-  const mimeToExt: Record<string, string> = {
-    'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a', 'audio/mpeg': '.mp3',
-    'audio/mp3': '.mp3', 'video/mp4': '.mp4', 'audio/wav': '.wav',
-    'audio/x-wav': '.wav', 'audio/webm': '.webm', 'video/webm': '.webm',
-    'audio/ogg': '.ogg', 'audio/flac': '.flac', 'audio/x-flac': '.flac',
-  };
-  const hasValidExt = validExtensions.some(ext => fileName.toLowerCase().endsWith(ext));
-  if (!hasValidExt) {
-    const mapped = mimeToExt[contentType] || '.mp4';
-    fileName = fileName.replace(/\.[^.]*$/, '') + mapped;
-    if (!fileName.includes('.')) fileName += mapped;
-  }
-  console.log(`📎 fileName for Whisper: ${fileName}, contentType: ${contentType}`);
+  console.log(`📦 File size: ${fileSizeMB.toFixed(1)}MB, fileName: ${fileName}, contentType: ${contentType}`);
 
   // Mode: download - return raw audio as base64 for client-side chunking
   if (mode === 'download') {
-    // Safety: don't base64 encode files >25MB in edge function
     if (audioBlob.size > MAX_EDGE_FILE_SIZE) {
       return new Response(JSON.stringify({
         error: 'file_too_large',

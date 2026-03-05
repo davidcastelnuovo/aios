@@ -115,9 +115,7 @@ Deno.serve(async (req) => {
         const recordingType = file.recording_type || null;
 
         // Upsert by meeting_id + recording_type to avoid duplicates
-        const { error } = await supabase
-          .from('zoom_recordings')
-          .upsert({
+      const recordingData = {
             tenant_id,
             meeting_id: meetingId,
             meeting_topic: meeting.topic || null,
@@ -128,27 +126,18 @@ Deno.serve(async (req) => {
             recording_password: meeting.password || null,
             recording_type: recordingType,
             file_size: file.file_size || null,
-          }, { 
+          };
+
+        const { error } = await supabase
+          .from('zoom_recordings')
+          .upsert(recordingData, { 
             onConflict: 'tenant_id,meeting_id,recording_type',
             ignoreDuplicates: true,
           });
 
         if (error) {
-          // If unique constraint doesn't exist, try insert and ignore duplicates
           if (error.code === '42P10' || error.message?.includes('constraint')) {
-            // Try simple insert, skip on conflict
-            await supabase.from('zoom_recordings').insert({
-              tenant_id,
-              meeting_id: meetingId,
-              meeting_topic: meeting.topic || null,
-              host_email: meeting.host_email || null,
-              start_time: meeting.start_time || null,
-              duration: meeting.duration || null,
-              recording_url: file.play_url || file.download_url || null,
-              recording_password: meeting.password || null,
-              recording_type: recordingType,
-              file_size: file.file_size || null,
-            });
+            await supabase.from('zoom_recordings').insert(recordingData);
           } else {
             console.error('Error upserting recording:', error);
           }
