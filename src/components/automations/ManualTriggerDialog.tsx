@@ -56,7 +56,7 @@ export function ManualTriggerDialog({
   });
 
   // Find agent step and its agent_id
-  const agentStep = flowSteps?.find((s: any) => s.step_type === "agent");
+  const agentStep = flowSteps?.find((s: any) => s.step_type === "agent" || s.action_type === "agent");
   const agentId = agentStep?.configuration?.agent_id;
 
   // Auto scroll to bottom
