@@ -76,15 +76,38 @@ serve(async (req) => {
         .single();
 
       let headers: Record<string, string> = {};
-      let zoomAccessToken: string | null = null;
-      if (integration?.config) {
-        const config = integration.config as any;
-        if (config.access_token) zoomAccessToken = config.access_token;
+      const settings = (integration?.settings || {}) as any;
+      const config = (integration?.config || {}) as any;
+      let zoomAccessToken: string | null = config.access_token || settings.access_token || null;
+
+      // Fallback: mint fresh Zoom token via Server-to-Server OAuth
+      if (!zoomAccessToken && settings.client_id && settings.client_secret && settings.account_id) {
+        try {
+          const tokenResp = await fetch('https://zoom.us/oauth/token', {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Basic ' + btoa(`${settings.client_id}:${settings.client_secret}`),
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              grant_type: 'account_credentials',
+              account_id: settings.account_id,
+            }),
+          });
+
+          if (tokenResp.ok) {
+            const tokenData = await tokenResp.json();
+            zoomAccessToken = tokenData?.access_token || null;
+            console.log('✅ Minted fresh Zoom access token');
+          } else {
+            const errText = await tokenResp.text();
+            console.log('⚠️ Failed to mint fresh Zoom token:', errText.slice(0, 180));
+          }
+        } catch (e) {
+          console.log('⚠️ Zoom token mint error:', e instanceof Error ? e.message : String(e));
+        }
       }
-      if (!zoomAccessToken && integration?.settings) {
-        const settings = integration.settings as any;
-        if (settings.access_token) zoomAccessToken = settings.access_token;
-      }
+
       if (zoomAccessToken) headers['Authorization'] = `Bearer ${zoomAccessToken}`;
 
       const recordingToken = typeof recording.recording_password === 'string' ? recording.recording_password : null;
