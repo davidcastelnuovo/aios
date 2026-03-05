@@ -155,6 +155,79 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_flow_steps: {
+        Row: {
+          action_type: string | null
+          automation_id: string
+          condition_branch: string | null
+          configuration: Json
+          created_at: string
+          id: string
+          label: string | null
+          parent_step_id: string | null
+          position_x: number
+          position_y: number
+          sort_order: number
+          step_type: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          action_type?: string | null
+          automation_id: string
+          condition_branch?: string | null
+          configuration?: Json
+          created_at?: string
+          id?: string
+          label?: string | null
+          parent_step_id?: string | null
+          position_x?: number
+          position_y?: number
+          sort_order?: number
+          step_type?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          action_type?: string | null
+          automation_id?: string
+          condition_branch?: string | null
+          configuration?: Json
+          created_at?: string
+          id?: string
+          label?: string | null
+          parent_step_id?: string | null
+          position_x?: number
+          position_y?: number
+          sort_order?: number
+          step_type?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_flow_steps_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_flow_steps_parent_step_id_fkey"
+            columns: ["parent_step_id"]
+            isOneToOne: false
+            referencedRelation: "automation_flow_steps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "automation_flow_steps_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_logs: {
         Row: {
           automation_id: string
@@ -205,6 +278,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           id: string
+          is_flow: boolean
           name: string
           tenant_id: string | null
           trigger_type: Database["public"]["Enums"]["automation_trigger"]
@@ -218,6 +292,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          is_flow?: boolean
           name: string
           tenant_id?: string | null
           trigger_type: Database["public"]["Enums"]["automation_trigger"]
@@ -231,6 +306,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           id?: string
+          is_flow?: boolean
           name?: string
           tenant_id?: string | null
           trigger_type?: Database["public"]["Enums"]["automation_trigger"]
