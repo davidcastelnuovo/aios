@@ -9,8 +9,6 @@ const corsHeaders = {
 const MAX_EDGE_FILE_SIZE = 25 * 1024 * 1024; // 25MB — safe for edge function memory
 
 // ── Audio format normalization ────────────────────────────────
-// Whisper requires a recognized file extension + MIME. Zoom often serves
-// audio_only files as application/octet-stream which Whisper rejects.
 
 const MIME_TO_EXT: Record<string, string> = {
   'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a', 'audio/m4a': '.m4a',
@@ -23,47 +21,33 @@ const MIME_TO_EXT: Record<string, string> = {
 
 const VALID_EXTENSIONS = ['.flac', '.m4a', '.mp3', '.mp4', '.mpeg', '.mpga', '.oga', '.ogg', '.wav', '.webm'];
 
-/** Detect MIME from magic bytes */
 function detectMimeFromBytes(header: Uint8Array): string | null {
-  // ftyp → MP4/M4A container
   if (header.length >= 8) {
     const str4 = String.fromCharCode(header[4], header[5], header[6], header[7]);
     if (str4 === 'ftyp') return 'audio/mp4';
   }
-  // ID3 → MP3
   if (header[0] === 0x49 && header[1] === 0x44 && header[2] === 0x33) return 'audio/mpeg';
-  // RIFF → WAV
   if (header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46) return 'audio/wav';
-  // OggS → OGG
   if (header[0] === 0x4F && header[1] === 0x67 && header[2] === 0x67 && header[3] === 0x53) return 'audio/ogg';
-  // fLaC → FLAC
   if (header[0] === 0x66 && header[1] === 0x4C && header[2] === 0x61 && header[3] === 0x43) return 'audio/flac';
-  // WebM (starts with 0x1A45DFA3 — EBML header)
   if (header[0] === 0x1A && header[1] === 0x45 && header[2] === 0xDF && header[3] === 0xA3) return 'audio/webm';
-  // MP3 sync bytes (0xFF 0xFB/0xF3/0xF2)
   if (header[0] === 0xFF && (header[1] === 0xFB || header[1] === 0xF3 || header[1] === 0xF2)) return 'audio/mpeg';
   return null;
 }
 
-/** Check if first bytes look like HTML or JSON instead of media */
 function looksLikeTextContent(header: Uint8Array): boolean {
   const prefix = new TextDecoder().decode(header.slice(0, 20)).trim();
   return prefix.startsWith('<') || prefix.startsWith('{') || prefix.startsWith('[');
 }
 
-/** Map recording_type from Zoom to likely MIME */
 function mimeFromRecordingType(recordingType: string | null): string {
   if (!recordingType) return 'audio/mp4';
   const rt = recordingType.toLowerCase();
-  if (rt.includes('audio')) return 'audio/mp4'; // Zoom audio-only is M4A in MP4 container
+  if (rt.includes('audio')) return 'audio/mp4';
   if (rt.includes('transcript')) return 'audio/mp4';
   return 'audio/mp4';
 }
 
-/**
- * Normalize a blob for Whisper: ensure correct MIME + extension.
- * Returns { blob, fileName, contentType } ready for FormData.
- */
 function normalizeForWhisper(
   blob: Blob,
   rawContentType: string,
@@ -73,7 +57,6 @@ function normalizeForWhisper(
   let mime = rawContentType.split(';')[0].trim().toLowerCase();
   console.log(`🔍 normalizeForWhisper — raw_content_type=${mime}, recording_type=${recordingType}`);
 
-  // If octet-stream or empty, try magic bytes first, then recording_type
   if (!mime || mime === 'application/octet-stream' || !MIME_TO_EXT[mime]) {
     const detected = detectMimeFromBytes(headerBytes);
     if (detected) {
@@ -90,6 +73,27 @@ function normalizeForWhisper(
   const normalizedBlob = new Blob([blob], { type: mime });
   console.log(`  → final: mime=${mime}, fileName=${fileName}`);
   return { blob: normalizedBlob, fileName, contentType: mime };
+}
+
+// ── DB status helpers ─────────────────────────────────────────
+
+async function setTranscriptionStatus(
+  supabase: any,
+  recordingId: string,
+  status: string,
+  transcription?: string,
+  error?: string,
+) {
+  const update: any = { transcription_status: status };
+  if (transcription !== undefined) update.transcription = transcription;
+  if (error !== undefined) update.transcription_error = error;
+  
+  const { error: dbError } = await supabase
+    .from('zoom_recordings')
+    .update(update)
+    .eq('id', recordingId);
+  
+  if (dbError) console.error('⚠️ Failed to update transcription status:', dbError.message);
 }
 
 // ── Main handler ──────────────────────────────────────────────
@@ -124,6 +128,9 @@ serve(async (req) => {
       });
     }
 
+    // Mark as processing
+    await setTranscriptionStatus(supabase, recording_id, 'processing');
+
     let audioBlob: Blob | null = null;
     let fileName = 'audio.mp4';
     let contentType = 'audio/mp4';
@@ -137,6 +144,7 @@ serve(async (req) => {
         .download(recording.file_path);
 
       if (dlError || !fileData) {
+        await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, 'Failed to download from storage');
         return new Response(JSON.stringify({ error: 'Failed to download file from storage: ' + (dlError?.message || 'unknown') }), {
           status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -147,7 +155,6 @@ serve(async (req) => {
     }
     // Case 2: Zoom recording with URL
     else if (recording.recording_url || recording.download_url) {
-      // ── EARLY SIZE CHECK: prevent memory crash on large Zoom files ──
       const knownSize = typeof recording.file_size === 'number' ? recording.file_size : null;
 
       if (knownSize && knownSize > MAX_EDGE_FILE_SIZE) {
@@ -168,9 +175,10 @@ serve(async (req) => {
 
         if (smallAlt) {
           console.log(`✅ Found smaller alternative: ${smallAlt.recording_type} (${(smallAlt.file_size / 1024 / 1024).toFixed(1)}MB)`);
-          return await processZoomRecording(supabase, smallAlt, mode, true);
+          return await processZoomRecording(supabase, smallAlt, mode, true, recording_id);
         }
 
+        await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, 'File too large, no alternative found');
         return new Response(JSON.stringify({
           error: 'file_too_large',
           size_mb: Math.round(knownSize / 1024 / 1024),
@@ -181,9 +189,9 @@ serve(async (req) => {
         });
       }
 
-      // File is small enough or size unknown — proceed with download
       const result = await downloadZoomMedia(supabase, recording);
       if (result.error) {
+        await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, result.error);
         return new Response(JSON.stringify({ error: result.error }), {
           status: result.status || 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -192,7 +200,6 @@ serve(async (req) => {
       fileName = result.fileName!;
       contentType = result.contentType!;
 
-      // Post-download size check
       if (audioBlob.size > MAX_EDGE_FILE_SIZE) {
         console.log(`⚠️ Downloaded file is ${(audioBlob.size / 1024 / 1024).toFixed(1)}MB — too large`);
         const { data: alternatives } = await supabase
@@ -209,9 +216,10 @@ serve(async (req) => {
         );
 
         if (smallAlt) {
-          return await processZoomRecording(supabase, smallAlt, mode, true);
+          return await processZoomRecording(supabase, smallAlt, mode, true, recording_id);
         }
 
+        await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, 'File too large after download');
         return new Response(JSON.stringify({
           error: 'file_too_large',
           size_mb: Math.round(audioBlob.size / 1024 / 1024),
@@ -222,6 +230,7 @@ serve(async (req) => {
         });
       }
     } else {
+      await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, 'No audio source');
       return new Response(JSON.stringify({ error: 'No audio file or URL found for this recording' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -230,10 +239,10 @@ serve(async (req) => {
     // ── Normalize audio format before sending to Whisper ──
     const rawBytes = new Uint8Array(await audioBlob.arrayBuffer());
 
-    // Guard: check if downloaded content is actually HTML/JSON (not media)
     if (looksLikeTextContent(rawBytes)) {
       const preview = new TextDecoder().decode(rawBytes.slice(0, 200));
       console.error('❌ Downloaded content is text, not media:', preview.slice(0, 100));
+      await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, 'Downloaded content is text, not media');
       return new Response(JSON.stringify({
         error: 'invalid_media',
         message: 'תוכן ההקלטה שהתקבל אינו קובץ מדיה תקין. ייתכן שפג תוקף הקישור.',
@@ -252,10 +261,20 @@ serve(async (req) => {
     fileName = normalized.fileName;
     contentType = normalized.contentType;
 
-    return await transcribeBlob(audioBlob, fileName, contentType, mode);
+    return await transcribeBlob(supabase, recording_id, audioBlob, fileName, contentType, mode);
 
   } catch (error) {
     console.error('❌ Error:', error);
+    // Try to update status on unexpected errors
+    try {
+      const body = await req.clone().json().catch(() => null);
+      if (body?.recording_id) {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+        const supabase = createClient(supabaseUrl, supabaseServiceKey);
+        await setTranscriptionStatus(supabase, body.recording_id, 'failed', undefined, error instanceof Error ? error.message : 'Unknown error');
+      }
+    } catch (_) { /* best effort */ }
     return new Response(JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -263,9 +282,10 @@ serve(async (req) => {
 });
 
 // ── Helper: process a Zoom recording (used for fallback) ──────────────
-async function processZoomRecording(supabase: any, recording: any, mode: string | undefined, isFallback: boolean) {
+async function processZoomRecording(supabase: any, recording: any, mode: string | undefined, isFallback: boolean, originalRecordingId?: string) {
   const result = await downloadZoomMedia(supabase, recording);
   if (result.error) {
+    if (originalRecordingId) await setTranscriptionStatus(supabase, originalRecordingId, 'failed', undefined, result.error);
     return new Response(JSON.stringify({ error: result.error }), {
       status: result.status || 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -274,8 +294,8 @@ async function processZoomRecording(supabase: any, recording: any, mode: string 
   const blob = result.blob!;
   const rawBytes = new Uint8Array(await blob.arrayBuffer());
 
-  // Guard against text content
   if (looksLikeTextContent(rawBytes)) {
+    if (originalRecordingId) await setTranscriptionStatus(supabase, originalRecordingId, 'failed', undefined, 'Downloaded content is text');
     return new Response(JSON.stringify({
       error: 'invalid_media',
       message: 'תוכן ההקלטה שהתקבל אינו קובץ מדיה תקין.',
@@ -284,7 +304,6 @@ async function processZoomRecording(supabase: any, recording: any, mode: string 
     });
   }
 
-  // Normalize
   const normalized = normalizeForWhisper(
     new Blob([rawBytes], { type: result.contentType! }),
     result.contentType!,
@@ -292,7 +311,9 @@ async function processZoomRecording(supabase: any, recording: any, mode: string 
     rawBytes.slice(0, 16),
   );
 
-  const resp = await transcribeBlob(normalized.blob, normalized.fileName, normalized.contentType, mode);
+  // Use the original recording ID for DB persistence
+  const persistId = originalRecordingId || recording.id;
+  const resp = await transcribeBlob(supabase, persistId, normalized.blob, normalized.fileName, normalized.contentType, mode);
   if (isFallback) {
     const body = await resp.json();
     body.used_fallback = true;
@@ -340,7 +361,6 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
   const settings = (integration.settings || {}) as any;
   let zoomAccessToken: string | null = settings.access_token || null;
 
-  // Mint fresh Zoom token via Server-to-Server OAuth
   if (!zoomAccessToken && settings.client_id && settings.client_secret && settings.account_id) {
     try {
       const tokenResp = await fetch('https://zoom.us/oauth/token', {
@@ -408,7 +428,7 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
 }
 
 // ── Helper: transcribe a blob (shared logic) ─────────────────────────
-async function transcribeBlob(audioBlob: Blob, fileName: string, contentType: string, mode: string | undefined) {
+async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blob, fileName: string, contentType: string, mode: string | undefined) {
   const fileSizeMB = audioBlob.size / (1024 * 1024);
   console.log(`📦 File size: ${fileSizeMB.toFixed(1)}MB, fileName: ${fileName}, contentType: ${contentType}`);
 
@@ -452,6 +472,7 @@ async function transcribeBlob(audioBlob: Blob, fileName: string, contentType: st
 
   const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
   if (!openaiApiKey) {
+    await setTranscriptionStatus(supabase, recordingId, 'failed', undefined, 'OpenAI API key not configured');
     return new Response(JSON.stringify({ error: 'OpenAI API key not configured' }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -473,6 +494,7 @@ async function transcribeBlob(audioBlob: Blob, fileName: string, contentType: st
   if (!whisperResp.ok) {
     const errText = await whisperResp.text();
     console.error('❌ Whisper error:', whisperResp.status, errText);
+    await setTranscriptionStatus(supabase, recordingId, 'failed', undefined, `Whisper error: ${errText.slice(0, 200)}`);
     return new Response(JSON.stringify({ error: `Transcription failed: ${errText}` }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -515,6 +537,10 @@ async function transcribeBlob(audioBlob: Blob, fileName: string, contentType: st
       console.error('⚠️ GPT correction failed, using raw:', e);
     }
   }
+
+  // ── PERSIST to DB ──
+  await setTranscriptionStatus(supabase, recordingId, 'completed', transcribedText);
+  console.log('✅ Transcription saved to DB for recording:', recordingId);
 
   return new Response(JSON.stringify({ text: transcribedText }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
