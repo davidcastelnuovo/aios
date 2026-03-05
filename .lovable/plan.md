@@ -2,22 +2,42 @@
 
 ## הבעיה
 
-ההקלטות נשמרו בהצלחה בבסיס הנתונים (12 הקלטות), אבל מדיניות האבטחה (RLS) על טבלת `zoom_recordings` לא מאפשרת לך לראות אותן.
+הדיאלוג של סיכום פגישה דורש הדבקה ידנית של תמלול. אין כפתור תמלול אוטומטי. הקלטות Zoom שמורות כ-URL חיצוני (`recording_url`), והקלטות ידניות שמורות כקובץ ב-Storage (`file_path`).
 
-הבעיה: ה-SELECT policy משתמש ב-`get_user_tenant_id(auth.uid())` בלבד, בלי bypass ל-super admin. כ-super admin, הפונקציה הזו לא מחזירה את ה-tenant הנכון.
+## פתרון
 
-## תיקון
+הוספת כפתור "תמלל אוטומטית" בדיאלוג הסיכום שיעבוד בשני מצבים:
 
-עדכון ה-RLS policies על `zoom_recordings` כדי לתמוך גם ב-super admin:
+### 1. הקלטות ידניות (עם קובץ ב-Storage)
+- הורדת הקובץ מ-Storage דרך Edge Function
+- שליחה ל-Whisper API (OpenAI) לתמלול
+- הזרקת התוצאה לשדה התמלול
 
-```sql
-DROP POLICY "Users can view zoom recordings in their tenant" ON zoom_recordings;
-CREATE POLICY "Users can view zoom recordings in their tenant" ON zoom_recordings
-  FOR SELECT USING (
-    tenant_id = get_user_tenant_id(auth.uid())
-    OR is_super_admin(auth.uid())
-  );
-```
+### 2. הקלטות Zoom (URL חיצוני)
+- הורדת הקובץ מ-Zoom דרך Edge Function (עם download_url + access token)
+- שליחה ל-Whisper API לתמלול
+- הזרקת התוצאה לשדה התמלול
 
-אותו דבר לכל שאר ה-policies (INSERT, UPDATE, DELETE).
+## שינויים נדרשים
 
+### Edge Function חדשה: `transcribe-recording`
+- מקבלת `recording_id`
+- שולפת את ההקלטה מ-DB
+- אם `file_path` קיים → מורידה מ-Storage
+- אם `recording_url` קיים → מורידה מ-Zoom (עם Zoom access token מ-`tenant_integrations`)
+- שולחת את האודיו ל-Whisper API (`OPENAI_API_KEY` כבר קיים)
+- מתקנת כתיב עם GPT (כמו ב-`transcribe-voice`)
+- מחזירה את הטקסט
+
+### עדכון `SummarizeRecordingDialog.tsx`
+- הוספת כפתור "תמלל אוטומטית" ליד שדה התמלול
+- כשלוחצים → קורא ל-Edge Function → ממלא את שדה התמלול
+- מצב loading עם spinner
+- טיפול בשגיאות (קובץ לא נמצא, Zoom token לא תקין וכו')
+
+### עדכון `config.toml`
+- הוספת `[functions.transcribe-recording]` עם `verify_jwt = false`
+
+## הערה טכנית
+- הקלטות Zoom יכולות להיות גדולות. Whisper תומך עד 25MB. אם הקובץ גדול מדי, נציג הודעת שגיאה ונמליץ להדביק תמלול ידנית.
+- נשתמש ב-`OPENAI_API_KEY` הקיים לתמלול Whisper.
