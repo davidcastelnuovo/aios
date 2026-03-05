@@ -7,11 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Video, Search, Download, Loader2, ExternalLink, Upload, FileVideo, Plus, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
+import { Video, Search, Download, Loader2, ExternalLink, Upload, FileVideo, Plus, Sparkles, CheckCircle2, AlertCircle, Trash2, Pencil, Check, X } from "lucide-react";
 import { format } from "date-fns";
 import SummarizeRecordingDialog from "@/components/SummarizeRecordingDialog";
 
@@ -90,6 +91,9 @@ export default function Recordings() {
     enabled: !!currentTenantId,
   });
 
+  const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
+  const [editingTopicValue, setEditingTopicValue] = useState("");
+
   const assignMutation = useMutation({
     mutationFn: async ({ recordingId, clientId, leadId }: { recordingId: string; clientId?: string | null; leadId?: string | null }) => {
       const { error } = await supabase
@@ -101,6 +105,43 @@ export default function Recordings() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['recordings'] });
       toast({ title: "שויך בהצלחה" });
+    },
+  });
+
+  const updateTopicMutation = useMutation({
+    mutationFn: async ({ recordingIds, topic }: { recordingIds: string[]; topic: string }) => {
+      const { error } = await supabase
+        .from('zoom_recordings')
+        .update({ meeting_topic: topic })
+        .in('id', recordingIds);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recordings'] });
+      setEditingTopicId(null);
+      toast({ title: "הנושא עודכן בהצלחה" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async ({ recordingIds, filePaths }: { recordingIds: string[]; filePaths: string[] }) => {
+      // Delete files from storage if they exist
+      if (filePaths.length > 0) {
+        await supabase.storage.from('recordings').remove(filePaths);
+      }
+      // Delete from DB
+      const { error } = await supabase
+        .from('zoom_recordings')
+        .delete()
+        .in('id', recordingIds);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recordings'] });
+      toast({ title: "ההקלטה נמחקה בהצלחה" });
+    },
+    onError: (err: any) => {
+      toast({ title: "שגיאה במחיקה", description: err.message, variant: "destructive" });
     },
   });
 
@@ -390,12 +431,55 @@ export default function Recordings() {
                       <TableHead>שיוך לליד</TableHead>
                       <TableHead>קישור</TableHead>
                       <TableHead>סיכום</TableHead>
+                      <TableHead>מחיקה</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filtered.map((rec: any) => (
                       <TableRow key={rec.id}>
-                        <TableCell className="font-medium">{rec.meeting_topic || "-"}</TableCell>
+                        <TableCell className="font-medium">
+                          {editingTopicId === rec.id ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                value={editingTopicValue}
+                                onChange={(e) => setEditingTopicValue(e.target.value)}
+                                className="h-7 text-sm"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    const allIds = rec._group?.map((r: any) => r.id) || [rec.id];
+                                    updateTopicMutation.mutate({ recordingIds: allIds, topic: editingTopicValue });
+                                  }
+                                  if (e.key === 'Escape') setEditingTopicId(null);
+                                }}
+                              />
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => {
+                                const allIds = rec._group?.map((r: any) => r.id) || [rec.id];
+                                updateTopicMutation.mutate({ recordingIds: allIds, topic: editingTopicValue });
+                              }}>
+                                <Check className="h-3 w-3" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingTopicId(null)}>
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 group">
+                              <span>{rec.meeting_topic || "-"}</span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => {
+                                  setEditingTopicId(rec.id);
+                                  setEditingTopicValue(rec.meeting_topic || "");
+                                }}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell>
                           <Badge variant="secondary">{sourceLabel(rec.source)}</Badge>
                         </TableCell>
@@ -456,6 +540,38 @@ export default function Recordings() {
                             <Sparkles className="h-4 w-4 ml-1" />
                             סכם
                           </Button>
+                        </TableCell>
+                        <TableCell>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/80">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>מחיקת הקלטה</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  האם אתה בטוח שברצונך למחוק את ההקלטה "{rec.meeting_topic}"? פעולה זו לא ניתנת לביטול.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>ביטול</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => {
+                                    const allIds = rec._group?.map((r: any) => r.id) || [rec.id];
+                                    const filePaths = (rec._group || [rec])
+                                      .map((r: any) => r.file_path)
+                                      .filter(Boolean);
+                                    deleteMutation.mutate({ recordingIds: allIds, filePaths });
+                                  }}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  מחק
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </TableCell>
                       </TableRow>
                     ))}
