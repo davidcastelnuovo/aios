@@ -177,6 +177,16 @@ export default function SummarizeRecordingDialog({
         throw new Error(detailedMsg);
       }
 
+      // Handle invalid media content (HTML instead of audio)
+      if (data?.error === 'invalid_media') {
+        toast({
+          title: "תוכן לא תקין",
+          description: data.message || "ייתכן שפג תוקף הקישור להקלטה. נסה למשוך הקלטות מחדש.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // If the edge function returned an error in data (non-throw)
       if (data?.error && data.error !== 'file_too_large') {
         throw new Error(typeof data.message === 'string' ? data.message : data.error);
