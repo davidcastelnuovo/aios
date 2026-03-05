@@ -578,6 +578,15 @@ function GreenAPIActionConfig({
                 {field.label}
               </Button>
             ))}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="text-xs h-6 px-2 border-primary text-primary"
+              onClick={() => insertVariable("agent_output")}
+            >
+              🤖 תוצאת סוכן AI
+            </Button>
           </div>
         </div>
       </div>
