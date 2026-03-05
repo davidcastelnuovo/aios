@@ -1,19 +1,42 @@
 
+אחלה, עכשיו יש אבחון מדויק למה זה נתקע שוב ושוב — ולא “ניחוש”.
 
-## הבעיה
+## מה הבעיה בפועל (Root Cause)
+1. ב-`transcribe-recording` יש שאילתה ל-`tenant_integrations` עם `config`:
+   - `select('config, settings')`
+   - אבל בטבלה **אין בכלל עמודת `config`** (יש רק `settings`).
+   - בפועל זה מפיל את שליפת האינטגרציה, ולכן אין טוקן Zoom בפונקציה.
+2. בלי טוקן, הורדת Zoom מחזירה HTML של דף צפייה/לוגין במקום מדיה, ולכן מתקבלת:
+   - `Failed to download valid media from Zoom: Non-media response (text/html...)`
+3. בנוסף, ב-`zoom-webhook` נשמר `play_url` לפני `download_url`, מה שמגדיל סיכוי ל-HTML במקום קובץ.
 
-השגיאה: `Invalid file format. Supported formats: ['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']`
+## תוכנית תיקון (ממוקדת)
+1. **תיקון קריטי בפונקציית תמלול** `supabase/functions/transcribe-recording/index.ts`
+   - להחליף שליפה ל-`select('settings')` בלבד.
+   - להוסיף טיפול שגיאה מפורש אם שליפת אינטגרציה נכשלה (ולא להמשיך “בשקט”).
+   - לחלץ credentials מ-`settings`, להנפיק access token חדש (Server-to-Server) כשצריך.
+   - להוריד קובץ Zoom עם URL של download + token, ורק אם מתקבלת מדיה אמיתית להמשיך.
 
-Whisper API מזהה את פורמט הקובץ לפי **שם הקובץ** שנשלח ב-FormData. כשקובץ יורד מ-Storage, ה-`fileName` עלול להיות ללא סיומת מזוהה (למשל UUID בלבד), או שה-blob type הוא `application/octet-stream`.
+2. **חיזוק קליטה מה-Webhook** `supabase/functions/zoom-webhook/index.ts`
+   - לשמור `recording_url` כ-`file.download_url || file.play_url` (העדפה ל-download).
+   - אם יש `payload.download_token`, להעדיף אותו על פני סיסמת פגישה בשדה הקיים.
 
-## תיקון
+3. **שיפור הודעות שגיאה בצד לקוח** `src/components/SummarizeRecordingDialog.tsx`
+   - להציג למשתמש את פירוט השגיאה שחוזר מהפונקציה (ולא רק “non-2xx”).
+   - להוסיף רמז ברור כשיש כשל באוטוריזציה/קישור Zoom.
 
-עדכון `transcribe-recording/index.ts` - הוספת לוגיקה שמבטיחה ש-fileName תמיד יסתיים בסיומת מוכרת:
+4. **בדיקות end-to-end לפני סגירה**
+   - לבדוק תמלול להקלטת Zoom שנכשלה קודם (play URL).
+   - לבדוק תמלול לקובץ Zoom שמגיע כ-download URL.
+   - לבדוק קובץ גדול (חלוקה לחלקים) שלא נשבר אחרי השינוי.
+   - לוודא שלא נשברה תמלול מהקלטה ידנית (`file_path` מ-storage).
 
-1. **מיפוי content-type לסיומת**: `audio/mp4` → `.mp4`, `audio/mpeg` → `.mp3`, `video/mp4` → `.mp4` וכו'
-2. **בדיקת סיומת קיימת**: אם `fileName` כבר מסתיים בסיומת מוכרת - לא לשנות
-3. **ברירת מחדל**: אם אין סיומת מזוהה - להוסיף `.mp4`
-4. **לוג**: הדפסת fileName ו-contentType לפני שליחה ל-Whisper לצורכי דיבוג
+## קבצים שיושפעו
+- `supabase/functions/transcribe-recording/index.ts`
+- `supabase/functions/zoom-webhook/index.ts`
+- `src/components/SummarizeRecordingDialog.tsx`
 
-שינוי אחד בקובץ `supabase/functions/transcribe-recording/index.ts`.
-
+## תוצאה צפויה
+- סוף ללופ של “תוקן אבל לא עובד”.
+- תמלול Zoom יעבוד גם כשמקור ההקלטה התחיל כ-`play_url`.
+- במקרה כשל — תופיע שגיאה ברורה שאפשר לפעול לפיה.
