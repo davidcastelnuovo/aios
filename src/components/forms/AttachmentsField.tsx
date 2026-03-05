@@ -16,10 +16,13 @@ import {
 
 export interface Attachment {
   name: string;
-  path: string;
-  size: number;
+  path?: string;
+  url?: string;
+  size?: number;
   type: string;
-  uploaded_at: string;
+  uploaded_at?: string;
+  created_at?: string;
+  created_by?: string;
 }
 
 interface AttachmentsFieldProps {
@@ -142,6 +145,17 @@ export function AttachmentsField({
   };
 
   const handleDownload = async (attachment: Attachment) => {
+    // If attachment has a direct URL (e.g. meeting summaries), open it directly
+    if (attachment.url) {
+      window.open(attachment.url, "_blank");
+      return;
+    }
+
+    if (!attachment.path) {
+      toast.error("אין קישור להורדה");
+      return;
+    }
+
     try {
       const { data, error } = await supabase.storage
         .from("entity-attachments")
@@ -190,9 +204,11 @@ export function AttachmentsField({
               {getFileIcon(attachment.type)}
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{attachment.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {formatFileSize(attachment.size)}
-                </p>
+                {attachment.size ? (
+                  <p className="text-xs text-muted-foreground">
+                    {formatFileSize(attachment.size)}
+                  </p>
+                ) : null}
               </div>
               <div className="flex gap-1 shrink-0">
                 <Button
