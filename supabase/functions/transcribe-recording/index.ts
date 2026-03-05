@@ -12,17 +12,10 @@ serve(async (req) => {
   }
 
   try {
-    const { recording_id } = await req.json();
+    const { recording_id, mode } = await req.json();
     if (!recording_id) {
       return new Response(JSON.stringify({ error: 'recording_id is required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openaiApiKey) {
-      return new Response(JSON.stringify({ error: 'OpenAI API key not configured' }), {
-        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
@@ -45,6 +38,7 @@ serve(async (req) => {
 
     let audioBlob: Blob | null = null;
     let fileName = 'audio.mp4';
+    let contentType = 'audio/mp4';
 
     // Case 1: Manual recording with file in Storage
     if (recording.file_path) {
@@ -60,13 +54,13 @@ serve(async (req) => {
       }
       audioBlob = fileData;
       fileName = recording.file_path.split('/').pop() || 'audio.mp4';
+      contentType = fileData.type || 'audio/mp4';
     }
     // Case 2: Zoom recording with URL
     else if (recording.recording_url || recording.download_url) {
       const downloadUrl = recording.download_url || recording.recording_url;
       console.log('🔗 Downloading from Zoom URL');
 
-      // Get Zoom access token from tenant_integrations
       const { data: integration } = await supabase
         .from('tenant_integrations')
         .select('config')
@@ -91,24 +85,52 @@ serve(async (req) => {
       }
       audioBlob = await zoomResp.blob();
       fileName = 'zoom_recording.mp4';
+      contentType = zoomResp.headers.get('content-type') || 'audio/mp4';
     } else {
       return new Response(JSON.stringify({ error: 'No audio file or URL found for this recording' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Check file size (Whisper limit: 25MB)
-    if (audioBlob.size > 25 * 1024 * 1024) {
+    const fileSizeMB = audioBlob.size / (1024 * 1024);
+    console.log(`📦 File size: ${fileSizeMB.toFixed(1)}MB`);
+
+    // Mode: download - return raw audio as base64 for client-side chunking
+    if (mode === 'download') {
+      const arrayBuffer = await audioBlob.arrayBuffer();
+      const base64 = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
       return new Response(JSON.stringify({ 
-        error: 'הקובץ גדול מ-25MB. Whisper תומך עד 25MB. נסה להדביק תמלול ידנית.' 
+        audio_base64: base64, 
+        content_type: contentType,
+        file_name: fileName,
+        size_mb: fileSizeMB,
       }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    console.log('🎤 Transcribing audio, size:', audioBlob.size);
+    // Mode: transcribe directly (small files only)
+    if (fileSizeMB > 25) {
+      return new Response(JSON.stringify({ 
+        error: 'file_too_large',
+        size_mb: fileSizeMB,
+        message: 'הקובץ גדול מ-25MB. משתמש בתמלול מחולק...'
+      }), {
+        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    // Send to Whisper API
+    const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openaiApiKey) {
+      return new Response(JSON.stringify({ error: 'OpenAI API key not configured' }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    console.log('🎤 Transcribing audio directly...');
+
     const whisperForm = new FormData();
     whisperForm.append('file', audioBlob, fileName);
     whisperForm.append('model', 'whisper-1');
