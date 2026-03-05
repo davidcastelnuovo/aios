@@ -1,21 +1,37 @@
 
 
-## הוספת חיפוש וסינון להקלטות Zoom
+## משיכת הקלטות קיימות מ-Zoom
 
 ### מה ייבנה
-שורת חיפוש וסינון מעל טבלת ההקלטות בדף `ZoomSettings.tsx` שתאפשר:
-- **חיפוש חופשי** לפי נושא פגישה, אימייל מארח, או שם לקוח/ליד משויך
-- **סינון לפי שיוך** - הכל / משויך ללקוח / משויך לליד / לא משויך
+כפתור "משוך הקלטות קיימות" בדף ZoomSettings שמאפשר לשלוף הקלטות ישנות מחשבון Zoom ולשמור אותן בטבלת `zoom_recordings`.
 
 ### שינויים
 
-**קובץ: `src/pages/ZoomSettings.tsx`**
-- הוספת state: `searchQuery` (string) ו-`filterType` (all/client/lead/unassigned)
-- הוספת שורת חיפוש עם `Input` + `Select` לסינון מעל הטבלה בתוך הכרטיס "הקלטות שהתקבלו"
-- סינון ה-`recordings` בצד הלקוח (client-side filter) לפי:
-  - טקסט חיפוש: `meeting_topic`, `host_email`, שם לקוח/ליד משויך
-  - סוג סינון: all / משויך ללקוח / משויך לליד / לא משויך
-- הצגת מספר תוצאות
+**1. Edge Function חדשה: `supabase/functions/fetch-zoom-recordings/index.ts`**
+- מקבלת `tenant_id` ואופציונלית `from_date` (ברירת מחדל: 30 יום אחורה)
+- שולפת את ה-credentials מ-`tenant_integrations`
+- מבצעת Server-to-Server OAuth token request ל-Zoom (`https://zoom.us/oauth/token` עם `grant_type=account_credentials`)
+- קוראת ל-`GET https://api.zoom.us/v2/users/me/recordings?from=...&to=...`
+- עוברת על כל הפגישות עם הקלטות ושומרת ב-`zoom_recordings` (upsert לפי `meeting_id` כדי לא ליצור כפילויות)
+- מחזירה כמה הקלטות נשמרו
 
-אין צורך בשינויי DB או Edge Functions - הסינון יתבצע על הנתונים שכבר נשלפים.
+**2. עדכון `src/pages/ZoomSettings.tsx`**
+- הוספת כפתור "משוך הקלטות" מעל טבלת ההקלטות (ליד שורת החיפוש)
+- אופציה לבחור טווח תאריכים (ברירת מחדל: 30 יום אחורה)
+- mutation שקורא ל-Edge Function עם loading state
+- Toast עם תוצאה (כמה הקלטות נמשכו)
+- רענון אוטומטי של הטבלה אחרי המשיכה
+
+**3. עדכון `supabase/config.toml`** - לא נדרש, ה-JWT verification מטופל בקוד
+
+### זרימה טכנית
+```text
+כפתור "משוך הקלטות"
+  → Edge Function fetch-zoom-recordings
+    → POST zoom.us/oauth/token (account_credentials grant)
+    → GET api.zoom.us/v2/users/me/recordings?from=...&to=...
+    → UPSERT to zoom_recordings (skip duplicates by meeting_id)
+  → Toast: "נמשכו X הקלטות חדשות"
+  → Refresh recordings table
+```
 
