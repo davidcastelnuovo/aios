@@ -125,6 +125,53 @@ export type Database = {
           },
         ]
       }
+      ai_agents: {
+        Row: {
+          active: boolean | null
+          created_at: string | null
+          engine: string
+          id: string
+          name: string
+          personality: string | null
+          soul: string | null
+          talent: string | null
+          tenant_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string | null
+          engine?: string
+          id?: string
+          name: string
+          personality?: string | null
+          soul?: string | null
+          talent?: string | null
+          tenant_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string | null
+          engine?: string
+          id?: string
+          name?: string
+          personality?: string | null
+          soul?: string | null
+          talent?: string | null
+          tenant_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_conversations: {
         Row: {
           created_at: string

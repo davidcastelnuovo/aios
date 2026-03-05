@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Facebook, CheckCircle2, Search } from "lucide-react";
+import { Loader2, Facebook, CheckCircle2, Search, Bot, Plus, Sparkles } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { FlowNodeData } from "./FlowNode";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useToast } from "@/hooks/use-toast";
 
 const TRIGGER_OPTIONS = [
   { value: "lead_created", label: "ליד נוצר" },
@@ -171,6 +172,7 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
             {node.step_type === "trigger" ? "הגדרת טריגר" :
              node.step_type === "action" ? "הגדרת פעולה" :
              node.step_type === "condition" ? "הגדרת תנאי" :
+             node.step_type === "agent" ? "הגדרת סוכן AI" :
              "הגדרת השהייה"}
           </SheetTitle>
         </SheetHeader>
@@ -267,6 +269,15 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
                 אם התנאי מתקיים - הענף הראשי. אם לא - הענף החלופי.
               </p>
             </div>
+          )}
+
+          {/* Agent config */}
+          {node.step_type === "agent" && (
+            <AgentStepConfig
+              tenantId={tenantId}
+              configuration={node.configuration}
+              onConfigChange={handleConfigChange}
+            />
           )}
 
           {/* Webhook URL for webhook action */}
@@ -480,6 +491,263 @@ function GreenAPIActionConfig({
         </div>
       </div>
     </div>
+  );
+}
+
+// AI Agent step configuration
+const AI_ENGINES = [
+  { value: "google/gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+  { value: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  { value: "google/gemini-3-flash-preview", label: "Gemini 3 Flash" },
+  { value: "google/gemini-3-pro-preview", label: "Gemini 3 Pro" },
+  { value: "openai/gpt-5", label: "GPT-5" },
+  { value: "openai/gpt-5-mini", label: "GPT-5 Mini" },
+  { value: "openai/gpt-5-nano", label: "GPT-5 Nano" },
+];
+
+function AgentStepConfig({
+  tenantId,
+  configuration,
+  onConfigChange,
+}: {
+  tenantId: string | undefined;
+  configuration: Record<string, any>;
+  onConfigChange: (key: string, value: any) => void;
+}) {
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: agents, isLoading } = useQuery({
+    queryKey: ["ai-agents", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("ai_agents" as any)
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .eq("active", true)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!tenantId,
+  });
+
+  const selectedAgent = agents?.find((a: any) => a.id === configuration?.agent_id);
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <Label className="text-right block">בחר סוכן AI</Label>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+          </div>
+        ) : agents && agents.length > 0 ? (
+          <Select
+            value={configuration?.agent_id || ""}
+            onValueChange={(v) => onConfigChange("agent_id", v)}
+          >
+            <SelectTrigger className="text-right">
+              <SelectValue placeholder="בחר סוכן..." />
+            </SelectTrigger>
+            <SelectContent>
+              {agents.map((agent: any) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-3.5 w-3.5 text-orange-500" />
+                    {agent.name}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <div className="rounded-lg border border-dashed p-3 text-center">
+            <Bot className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+            <p className="text-sm text-muted-foreground">אין סוכנים עדיין.</p>
+            <p className="text-xs text-muted-foreground mt-1">צור סוכן AI חדש כדי להתחיל.</p>
+          </div>
+        )}
+      </div>
+
+      <Button
+        variant="outline"
+        className="w-full gap-2"
+        onClick={() => setShowCreateDialog(true)}
+      >
+        <Plus className="h-4 w-4" />
+        צור סוכן חדש
+      </Button>
+
+      {/* Show selected agent details */}
+      {selectedAgent && (
+        <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-orange-500" />
+            <span className="text-sm font-medium">{selectedAgent.name}</span>
+          </div>
+          <div className="text-xs text-muted-foreground space-y-1 text-right">
+            <p>מנוע: {AI_ENGINES.find(e => e.value === selectedAgent.engine)?.label || selectedAgent.engine}</p>
+            {selectedAgent.personality && <p>אופי: {selectedAgent.personality.slice(0, 60)}...</p>}
+            {selectedAgent.talent && <p>טלנט: {selectedAgent.talent.slice(0, 60)}...</p>}
+          </div>
+        </div>
+      )}
+
+      <CreateAgentDialog
+        open={showCreateDialog}
+        onClose={() => setShowCreateDialog(false)}
+        tenantId={tenantId}
+        onCreated={(agentId: string) => {
+          onConfigChange("agent_id", agentId);
+          queryClient.invalidateQueries({ queryKey: ["ai-agents", tenantId] });
+          setShowCreateDialog(false);
+          toast({ title: "הסוכן נוצר בהצלחה!" });
+        }}
+      />
+    </div>
+  );
+}
+
+function CreateAgentDialog({
+  open,
+  onClose,
+  tenantId,
+  onCreated,
+}: {
+  open: boolean;
+  onClose: () => void;
+  tenantId: string | undefined;
+  onCreated: (agentId: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [engine, setEngine] = useState("google/gemini-2.5-flash");
+  const [personality, setPersonality] = useState("");
+  const [soul, setSoul] = useState("");
+  const [talent, setTalent] = useState("");
+
+  const createMutation = useMutation({
+    mutationFn: async () => {
+      if (!tenantId || !name.trim()) throw new Error("שם הסוכן הוא שדה חובה");
+      const { data, error } = await supabase
+        .from("ai_agents" as any)
+        .insert({
+          tenant_id: tenantId,
+          name: name.trim(),
+          engine,
+          personality: personality.trim() || null,
+          soul: soul.trim() || null,
+          talent: talent.trim() || null,
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      return (data as any).id as string;
+    },
+    onSuccess: (agentId) => {
+      setName("");
+      setEngine("google/gemini-2.5-flash");
+      setPersonality("");
+      setSoul("");
+      setTalent("");
+      onCreated(agentId);
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-[500px]" dir="rtl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-right">
+            <Bot className="h-5 w-5 text-orange-500" />
+            יצירת סוכן AI חדש
+          </DialogTitle>
+          <DialogDescription className="text-right">
+            הגדר את הסוכן עם שם, מנוע AI, אופי, נשמה וטלנט.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label className="text-right block">שם הסוכן *</Label>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="למשל: סוכן מכירות, סוכן תמיכה..."
+              className="text-right"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-right block">מנוע AI</Label>
+            <Select value={engine} onValueChange={setEngine}>
+              <SelectTrigger className="text-right">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AI_ENGINES.map((e) => (
+                  <SelectItem key={e.value} value={e.value}>
+                    {e.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-right block">אופי</Label>
+            <Textarea
+              value={personality}
+              onChange={(e) => setPersonality(e.target.value)}
+              placeholder="תאר את האופי של הסוכן... למשל: ידידותי, מקצועי, סבלני, ישיר"
+              className="text-right"
+              rows={3}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-right block">נשמה</Label>
+            <Textarea
+              value={soul}
+              onChange={(e) => setSoul(e.target.value)}
+              placeholder="מה מניע את הסוכן? מה הערכים שלו? למשל: עזרה ללקוחות, מקסום מכירות..."
+              className="text-right"
+              rows={3}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-right block">טלנט</Label>
+            <Textarea
+              value={talent}
+              onChange={(e) => setTalent(e.target.value)}
+              placeholder="מה הסוכן טוב בו? למשל: משא ומתן, כתיבת תוכן שיווקי, ניתוח נתונים..."
+              className="text-right"
+              rows={3}
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="flex-row-reverse sm:flex-row-reverse gap-2">
+          <Button
+            disabled={!name.trim() || createMutation.isPending}
+            onClick={() => createMutation.mutate()}
+          >
+            {createMutation.isPending ? (
+              <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4 ml-2" />
+            )}
+            {createMutation.isPending ? "יוצר..." : "צור סוכן"}
+          </Button>
+          <Button variant="outline" onClick={onClose}>
+            ביטול
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
