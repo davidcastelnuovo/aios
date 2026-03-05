@@ -485,11 +485,30 @@ async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blo
   whisperForm.append('model', 'whisper-1');
   whisperForm.append('language', 'he');
 
-  const whisperResp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${openaiApiKey}` },
-    body: whisperForm,
-  });
+  // AbortController with 120s timeout guard to prevent stuck "processing" state
+  const whisperController = new AbortController();
+  const whisperTimeout = setTimeout(() => whisperController.abort(), 120_000);
+
+  let whisperResp: Response;
+  try {
+    whisperResp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${openaiApiKey}` },
+      body: whisperForm,
+      signal: whisperController.signal,
+    });
+  } catch (abortErr: any) {
+    clearTimeout(whisperTimeout);
+    const isTimeout = abortErr.name === 'AbortError';
+    const errMsg = isTimeout ? 'Whisper API timed out after 120s' : (abortErr.message || 'Unknown fetch error');
+    console.error('❌ Whisper fetch error:', errMsg);
+    await setTranscriptionStatus(supabase, recordingId, 'failed', undefined, errMsg);
+    return new Response(JSON.stringify({ error: errMsg }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } finally {
+    clearTimeout(whisperTimeout);
+  }
 
   if (!whisperResp.ok) {
     const errText = await whisperResp.text();

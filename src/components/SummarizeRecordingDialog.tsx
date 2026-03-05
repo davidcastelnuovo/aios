@@ -165,40 +165,73 @@ export default function SummarizeRecordingDialog({
     };
   }, []);
 
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    setIsPolling(false);
+    setIsTranscribing(false);
+  }, []);
+
+  const handleRetryTranscription = useCallback(async (recordingId: string) => {
+    // Reset status in DB and restart
+    await supabase
+      .from('zoom_recordings')
+      .update({ transcription_status: null, transcription_error: null } as any)
+      .eq('id', recordingId);
+    stopPolling();
+    // Re-trigger transcription
+    handleTranscribe();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopPolling]);
+
   const startPolling = useCallback((recordingId: string) => {
     if (pollingRef.current) clearInterval(pollingRef.current);
+    const startedAt = Date.now();
     
     pollingRef.current = setInterval(async () => {
       try {
         const { data } = await supabase
           .from('zoom_recordings')
-          .select('transcription, transcription_status, transcription_error')
+          .select('transcription, transcription_status, transcription_error, updated_at')
           .eq('id', recordingId)
           .single();
 
         if (data?.transcription_status === 'completed' && data?.transcription) {
           setTranscript(data.transcription);
-          setIsTranscribing(false);
-          setIsPolling(false);
-          if (pollingRef.current) clearInterval(pollingRef.current);
-          pollingRef.current = null;
+          stopPolling();
           toast({ title: "התמלול הושלם בהצלחה!" });
         } else if (data?.transcription_status === 'failed') {
-          setIsTranscribing(false);
-          setIsPolling(false);
-          if (pollingRef.current) clearInterval(pollingRef.current);
-          pollingRef.current = null;
+          stopPolling();
           toast({
             title: "התמלול נכשל",
             description: data.transcription_error || "נסה שוב או הדבק תמלול ידנית",
             variant: "destructive",
           });
+        } else if (data?.transcription_status === 'processing') {
+          // Stale detection: if processing for >5 minutes, assume crash
+          const updatedAt = data.updated_at ? new Date(data.updated_at).getTime() : startedAt;
+          const elapsed = Date.now() - updatedAt;
+          if (elapsed > 5 * 60 * 1000) {
+            stopPolling();
+            // Mark as failed in DB
+            await supabase
+              .from('zoom_recordings')
+              .update({ transcription_status: 'failed', transcription_error: 'התמלול נתקע (timeout)' } as any)
+              .eq('id', recordingId);
+            toast({
+              title: "נראה שהתמלול נתקע",
+              description: "ניתן לנסות שוב",
+              variant: "destructive",
+            });
+          }
         }
       } catch {
         // Silently ignore polling errors
       }
     }, 5000);
-  }, [toast]);
+  }, [toast, stopPolling]);
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-summary", currentTenantId],
