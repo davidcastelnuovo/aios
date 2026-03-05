@@ -1,48 +1,60 @@
 
 
-# תוכנית: מיפוי שדות + בחירת חיבור Green API בפעולת WhatsApp
+# תוכנית: הוספת סוג צעד "סוכן AI" לפלוו האוטומציות
 
 ## סקירה
-כשמשתמש בוחר פעולת "שלח WhatsApp (Green API)" בפלוו, צריך להציג:
-1. **בחירת חיבור Green API** - מתוך `tenant_integrations` (integration_type = 'green_api')
-2. **מיפוי שדה מספר טלפון** - בחירת שדה הטלפון מתוך השדות הזמינים מהשלב הקודם (טריגר)
-3. **תבנית הודעה** - עם אפשרות להכניס משתנים מהשדות הזמינים
+הוספת אפשרות חדשה "סוכן" בתפריט הוספת צעד (ליד פעולה, תנאי, השהייה). בחירת סוכן תפתח דיאלוג לבחירת סוכן קיים או יצירת חדש. יצירת סוכן חדש תכלול: שם, מנוע AI, אופי, נשמה וטלנט.
 
-## שדות זמינים לפי סוג טריגר
-מיפוי סטטי של שדות לפי סוג הטריגר:
+## שינויי DB (מיגרציה)
 
-| טריגר | שדות |
-|--------|-------|
-| lead_created | contact_name, company_name, phone, email, source, notes |
-| lead_status_changed | contact_name, company_name, phone, email, old_status, new_status |
-| client_created | name, contact_name, phone, email |
-| task_assigned | title, assignee_name |
-| meeting_created | title, date |
+יצירת טבלת `ai_agents` עם tenant isolation:
 
-## שינויים ב-StepConfigPanel.tsx
+```sql
+CREATE TABLE public.ai_agents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  engine TEXT NOT NULL DEFAULT 'google/gemini-2.5-flash',
+  personality TEXT, -- אופי
+  soul TEXT,        -- נשמה
+  talent TEXT,      -- טלנט
+  active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
 
-### 1. הוספת לוגיקת שדות זמינים
-פונקציה `getAvailableFields(triggerType)` שמחזירה רשימת שדות עם label ו-key לפי סוג הטריגר של הפלוו.
-
-### 2. הרחבת קונפיגורציית Green API action
-כש-`action_type === "send_greenapi_message"`:
-- **Select חיבור Green API** - שאילתה ל-`tenant_integrations` עם `integration_type = 'green_api'`
-- **Select שדה טלפון** - dropdown עם השדות הזמינים מהטריגר (למשל `{{phone}}`, `{{email}}`)
-- **תבנית הודעה** - Textarea קיים + רשימת משתנים דינמית מהשדות הזמינים
-
-### 3. שמירה ב-configuration
-```json
-{
-  "green_api_integration_id": "uuid",
-  "phone_field": "phone",
-  "message_template": "שלום {{contact_name}}, ..."
-}
+ALTER TABLE public.ai_agents ENABLE ROW LEVEL SECURITY;
+-- RLS policies for tenant isolation
 ```
 
-### 4. זיהוי הטריגר
-הקומפוננטה צריכה לקבל את רשימת כל הנודים בפלוו כדי למצוא את נוד הטריגר ולדעת אילו שדות זמינים. נעביר את ה-`nodes` כ-prop ל-`StepConfigPanel`.
+## שינויי קוד
 
-## קבצים לעדכון
-- `src/components/automations/StepConfigPanel.tsx` - הוספת בחירת חיבור, מיפוי שדות, משתנים דינמיים
-- `src/components/automations/FlowEditor.tsx` - העברת nodes כ-prop ל-StepConfigPanel
+### 1. AddStepMenu.tsx
+- הוספת אפשרות רביעית "סוכן" עם אייקון `Bot` ובצבע כתום
+- עדכון ה-`onAdd` callback לתמוך ב-`"agent"` כ-step_type
+
+### 2. FlowNode.tsx
+- הוספת `"agent"` ל-`FlowNodeData.step_type` type
+- הוספת קונפיגורציה ויזואלית ב-`STEP_TYPE_CONFIG` (אייקון Bot, צבע כתום)
+
+### 3. FlowEditor.tsx
+- עדכון `addStep` לתמוך ב-`"agent"`
+
+### 4. StepConfigPanel.tsx
+- כש-step_type === "agent", מציגים:
+  1. **בחירת סוכן קיים** - Select עם רשימת סוכנים מ-`ai_agents` (מסוננים לפי tenant)
+  2. **כפתור "צור סוכן חדש"** - פותח דיאלוג `CreateAgentDialog`
+- **CreateAgentDialog** - דיאלוג עם שדות:
+  - **שם הסוכן** (text, חובה)
+  - **מנוע AI** (select): google/gemini-2.5-flash, google/gemini-2.5-pro, openai/gpt-5, openai/gpt-5-mini וכו׳
+  - **אופי** (textarea): תיאור האופי של הסוכן
+  - **נשמה** (textarea): מה מניע את הסוכן, הערכים שלו
+  - **טלנט** (textarea): מה הסוכן טוב בו, היכולות המיוחדות
+- לאחר יצירה/בחירה, ה-agent_id נשמר ב-`configuration.agent_id`
+
+### 5. automation_flow_steps
+- עדכון הטבלה לתמוך ב-step_type = 'agent' (אם יש enum - הוספה)
+
+## ללא שינויי Edge Functions
+בשלב זה רק UI + DB. הפעלת הסוכן בפועל תהיה בשלב הבא.
 
