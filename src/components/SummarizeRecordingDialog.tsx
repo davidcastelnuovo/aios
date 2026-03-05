@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
 import { Loader2, FileText, Sparkles, Download, ExternalLink, Mic, RotateCcw } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface SummarizeRecordingDialogProps {
   open: boolean;
@@ -117,6 +117,7 @@ export default function SummarizeRecordingDialog({
 }: SummarizeRecordingDialogProps) {
   const { currentTenantId } = useTenant();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [transcript, setTranscript] = useState("");
   const [focusPoints, setFocusPoints] = useState<string[]>(["decisions", "action_items", "next_steps"]);
@@ -205,6 +206,7 @@ export default function SummarizeRecordingDialog({
         if (data?.transcription_status === 'completed' && data?.transcription) {
           setTranscript(data.transcription);
           stopPolling();
+          queryClient.invalidateQueries({ queryKey: ['recordings'] });
           toast({ title: "התמלול הושלם בהצלחה!" });
         } else if (data?.transcription_status === 'failed') {
           stopPolling();
@@ -304,6 +306,7 @@ export default function SummarizeRecordingDialog({
 
     setTranscript(fullText);
     setFailedError(null);
+    queryClient.invalidateQueries({ queryKey: ['recordings'] });
     toast({ title: "התמלול הושלם בהצלחה!" });
     setIsTranscribing(false);
   };
@@ -362,6 +365,7 @@ export default function SummarizeRecordingDialog({
         const fallbackNote = data.used_fallback
           ? ` (שימוש בהקלטת ${data.fallback_recording_type || 'audio'} חלופית)`
           : "";
+        queryClient.invalidateQueries({ queryKey: ['recordings'] });
         toast({ title: "התמלול הושלם בהצלחה!" + fallbackNote });
         setIsTranscribing(false);
         return;
@@ -486,6 +490,7 @@ export default function SummarizeRecordingDialog({
         file_name: data.file_name,
       });
 
+      queryClient.invalidateQueries({ queryKey: ['recordings'] });
       toast({ title: "הסיכום נוצר בהצלחה!", description: "הקובץ נשמר ושויך" });
     } catch (err: any) {
       toast({

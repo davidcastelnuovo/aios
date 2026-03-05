@@ -248,6 +248,9 @@ export default function Recordings() {
       const audioRec = group.find((r: any) => r.recording_type === 'audio_only');
       const primary = videoRec || audioRec || group[0];
 
+      // Find the record with completed transcription
+      const transcribedRec = group.find((r: any) => r.transcription_status === 'completed' && r.transcription);
+
       return {
         ...primary,
         // Keep video URL for playback, audio URL for transcription
@@ -259,6 +262,8 @@ export default function Recordings() {
           || group.find((r: any) => r.transcription_status === 'processing')?.transcription_status
           || group.find((r: any) => r.transcription_status === 'failed')?.transcription_status
           || null,
+        // Merge transcription text from any file in the group
+        transcription: transcribedRec?.transcription || null,
         // Merge summary_file_url from any file in the group
         summary_file_url: group.find((r: any) => r.summary_file_url)?.summary_file_url || null,
         _group: group,
@@ -487,7 +492,30 @@ export default function Recordings() {
                         </TableCell>
                         <TableCell>{rec.start_time ? format(new Date(rec.start_time), "dd/MM/yyyy HH:mm") : "-"}</TableCell>
                         <TableCell>{rec.duration || "-"}</TableCell>
-                        <TableCell>{transcriptionStatusBadge(rec)}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            {transcriptionStatusBadge(rec)}
+                            {rec.transcription_status === 'completed' && rec.transcription && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-primary hover:text-primary/80"
+                                onClick={() => {
+                                  const blob = new Blob([rec.transcription], { type: 'text/plain;charset=utf-8' });
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = `תמלול - ${rec.meeting_topic || 'הקלטה'}.txt`;
+                                  a.click();
+                                  URL.revokeObjectURL(url);
+                                }}
+                              >
+                                <Download className="h-3 w-3 ml-1" />
+                                הורד
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell>
                           <Select
                             value={rec.client_id || "none"}
