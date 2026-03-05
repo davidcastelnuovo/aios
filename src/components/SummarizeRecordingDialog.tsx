@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
@@ -26,6 +27,90 @@ const FOCUS_OPTIONS = [
   { key: "key_quotes", label: "ציטוטים מרכזיים" },
 ];
 
+// ── Audio chunking utilities ──────────────────────────────────
+
+function float32ToWav(samples: Float32Array, sampleRate: number): Blob {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const writeStr = (offset: number, str: string) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
+async function transcribeChunked(
+  audioBlob: Blob,
+  onProgress: (current: number, total: number) => void,
+): Promise<string> {
+  const SAMPLE_RATE = 16000;
+  const CHUNK_DURATION_SEC = 8 * 60; // 8 minutes per chunk → ~15MB WAV each
+
+  const arrayBuffer = await audioBlob.arrayBuffer();
+  const audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
+  const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+  await audioCtx.close();
+
+  // Mix down to mono
+  const mono = decoded.getChannelData(0);
+  const chunkSamples = SAMPLE_RATE * CHUNK_DURATION_SEC;
+  const totalChunks = Math.ceil(mono.length / chunkSamples);
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData?.session?.access_token;
+  if (!accessToken) throw new Error('לא מחובר – נא להתחבר מחדש');
+
+  const transcriptions: string[] = [];
+
+  for (let i = 0; i < totalChunks; i++) {
+    onProgress(i + 1, totalChunks);
+    const start = i * chunkSamples;
+    const end = Math.min(start + chunkSamples, mono.length);
+    const chunk = mono.slice(start, end);
+    const wavBlob = float32ToWav(chunk, SAMPLE_RATE);
+
+    const formData = new FormData();
+    formData.append('audio', wavBlob, `chunk_${i}.wav`);
+
+    const resp = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/transcribe-voice`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: formData,
+      },
+    );
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      throw new Error(`שגיאה בתמלול חלק ${i + 1}: ${errText}`);
+    }
+
+    const result = await resp.json();
+    if (result.text) transcriptions.push(result.text);
+  }
+
+  return transcriptions.join(' ');
+}
+
+// ── Component ─────────────────────────────────────────────────
+
 export default function SummarizeRecordingDialog({
   open,
   onOpenChange,
@@ -43,6 +128,7 @@ export default function SummarizeRecordingDialog({
   const [targetId, setTargetId] = useState<string>(recording?.client_id || recording?.lead_id || "");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [transcribeProgress, setTranscribeProgress] = useState<{ current: number; total: number } | null>(null);
   const [result, setResult] = useState<{ summary: string; file_url: string; file_name: string } | null>(null);
 
   const { data: clients = [] } = useQuery({
@@ -73,19 +159,58 @@ export default function SummarizeRecordingDialog({
 
   const hasAudioSource = !!(recording?.file_path || recording?.recording_url || recording?.download_url);
 
+  // ── Transcribe handler (supports large files) ─────────────
+
   const handleTranscribe = async () => {
     if (!recording?.id) return;
     setIsTranscribing(true);
+    setTranscribeProgress(null);
+
     try {
+      // Step 1 – Try direct transcription via edge function
       const { data, error } = await supabase.functions.invoke("transcribe-recording", {
         body: { recording_id: recording.id },
       });
+
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
+
+      // Small file transcribed successfully
       if (data?.text) {
         setTranscript(data.text);
         toast({ title: "התמלול הושלם בהצלחה!" });
+        return;
       }
+
+      // Large file – needs chunked approach
+      if (data?.error === 'file_too_large') {
+        toast({ title: "הקובץ גדול – מתחיל תמלול מחולק...", description: `${data.size_mb?.toFixed(0)}MB` });
+
+        // Download the file via edge function
+        const { data: dlData, error: dlError } = await supabase.functions.invoke("transcribe-recording", {
+          body: { recording_id: recording.id, mode: 'download' },
+        });
+
+        if (dlError) throw dlError;
+        if (dlData?.error) throw new Error(dlData.error);
+        if (!dlData?.audio_base64) throw new Error('Failed to download audio');
+
+        // Convert base64 back to Blob
+        const binary = atob(dlData.audio_base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const audioBlob = new Blob([bytes], { type: dlData.content_type || 'audio/mp4' });
+
+        // Chunked client-side transcription
+        const fullText = await transcribeChunked(audioBlob, (current, total) => {
+          setTranscribeProgress({ current, total });
+        });
+
+        setTranscript(fullText);
+        toast({ title: "התמלול הושלם בהצלחה!" });
+        return;
+      }
+
+      if (data?.error) throw new Error(data.error);
     } catch (err: any) {
       toast({
         title: "שגיאה בתמלול",
@@ -94,8 +219,63 @@ export default function SummarizeRecordingDialog({
       });
     } finally {
       setIsTranscribing(false);
+      setTranscribeProgress(null);
     }
   };
+
+  // ── Storage-only shortcut: if file is in storage, download directly ──
+
+  const handleTranscribeFromStorage = async () => {
+    if (!recording?.file_path) return handleTranscribe();
+
+    setIsTranscribing(true);
+    setTranscribeProgress(null);
+
+    try {
+      // Download directly from storage (faster, no edge function needed for download)
+      const { data: fileData, error: dlError } = await supabase.storage
+        .from('recordings')
+        .download(recording.file_path);
+
+      if (dlError || !fileData) throw new Error('Failed to download: ' + (dlError?.message || 'unknown'));
+
+      const fileSizeMB = fileData.size / (1024 * 1024);
+
+      if (fileSizeMB <= 25) {
+        // Small file – send directly to transcribe-recording
+        return handleTranscribe();
+      }
+
+      // Large file – chunk on client
+      toast({ title: "הקובץ גדול – מתחיל תמלול מחולק...", description: `${fileSizeMB.toFixed(0)}MB` });
+
+      const fullText = await transcribeChunked(fileData, (current, total) => {
+        setTranscribeProgress({ current, total });
+      });
+
+      setTranscript(fullText);
+      toast({ title: "התמלול הושלם בהצלחה!" });
+    } catch (err: any) {
+      toast({
+        title: "שגיאה בתמלול",
+        description: err.message || "נסה שוב או הדבק תמלול ידנית",
+        variant: "destructive",
+      });
+    } finally {
+      setIsTranscribing(false);
+      setTranscribeProgress(null);
+    }
+  };
+
+  const onTranscribeClick = () => {
+    if (recording?.file_path) {
+      handleTranscribeFromStorage();
+    } else {
+      handleTranscribe();
+    }
+  };
+
+  // ── Generate summary ──────────────────────────────────────
 
   const handleGenerate = async () => {
     if (!transcript.trim()) {
@@ -146,14 +326,18 @@ export default function SummarizeRecordingDialog({
 
   const handleClose = () => {
     onOpenChange(false);
-    // Reset after animation
     setTimeout(() => {
       setTranscript("");
       setCustomFocus("");
       setResult(null);
+      setTranscribeProgress(null);
       setFocusPoints(["decisions", "action_items", "next_steps"]);
     }, 300);
   };
+
+  const progressPct = transcribeProgress
+    ? Math.round((transcribeProgress.current / transcribeProgress.total) * 100)
+    : 0;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -188,13 +372,15 @@ export default function SummarizeRecordingDialog({
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleTranscribe}
+                  onClick={onTranscribeClick}
                   disabled={isTranscribing}
                 >
                   {isTranscribing ? (
                     <>
                       <Loader2 className="h-3 w-3 ml-1 animate-spin" />
-                      מתמלל...
+                      {transcribeProgress
+                        ? `מתמלל חלק ${transcribeProgress.current}/${transcribeProgress.total}...`
+                        : "מתמלל..."}
                     </>
                   ) : (
                     <>
@@ -205,9 +391,20 @@ export default function SummarizeRecordingDialog({
                 </Button>
               )}
             </div>
+
+            {/* Progress bar for chunked transcription */}
+            {isTranscribing && transcribeProgress && (
+              <div className="space-y-1">
+                <Progress value={progressPct} className="h-2" />
+                <p className="text-xs text-muted-foreground text-center">
+                  מתמלל חלק {transcribeProgress.current} מתוך {transcribeProgress.total} ({progressPct}%)
+                </p>
+              </div>
+            )}
+
             <p className="text-sm text-muted-foreground">
               {hasAudioSource
-                ? "לחץ על ״תמלל אוטומטית״ או הדבק תמלול ידנית"
+                ? "לחץ על ״תמלל אוטומטית״ או הדבק תמלול ידנית. תומך בקבצים גדולים."
                 : "הדבק את התמלול מ-Zoom, או כתוב הערות ונקודות מרכזיות מהפגישה"}
             </p>
             <Textarea
@@ -277,14 +474,10 @@ export default function SummarizeRecordingDialog({
                   <SelectItem value="none">בחר...</SelectItem>
                   {targetType === "client"
                     ? clients.map((c: any) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                       ))
                     : leads.map((l: any) => (
-                        <SelectItem key={l.id} value={l.id}>
-                          {l.company_name}
-                        </SelectItem>
+                        <SelectItem key={l.id} value={l.id}>{l.company_name}</SelectItem>
                       ))}
                 </SelectContent>
               </Select>
