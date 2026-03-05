@@ -91,48 +91,62 @@ export function ManualTriggerDialog({
       const { data: { user } } = await supabase.auth.getUser();
       const userName = user?.email || "משתמש";
 
-      if (agentId) {
-        // Call run-ai-agent directly
-        const { data, error } = await supabase.functions.invoke("run-ai-agent", {
-          body: {
-            agent_id: agentId,
-            command_text: currentCommand,
-            automation_id: automationId,
-            user_name: userName,
-          },
-        });
+      // Always call trigger-automation which handles full flow execution
+      const { data, error } = await supabase.functions.invoke("trigger-automation", {
+        body: {
+          automationId,
+          command_text: currentCommand,
+          user_name: userName,
+        },
+      });
 
-        if (error) throw error;
+      if (error) throw error;
 
-        if (data?.success) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "agent",
-              content: data.output,
-              timestamp: new Date(),
-            },
-          ]);
-        } else {
-          throw new Error(data?.error || "שגיאה לא ידועה");
-        }
-      } else {
-        // No agent step - fallback to trigger-automation
-        const { data, error } = await supabase.functions.invoke("trigger-automation", {
-          body: {
-            automationId,
-            command_text: currentCommand,
-            user_name: userName,
-          },
-        });
-
-        if (error) throw error;
+      // Extract agent output from flow results
+      const result = data?.results?.[0];
+      const flowResponse = result?.response || result;
+      
+      if (flowResponse?.flow && flowResponse?.agent_output) {
+        // Flow with agent - show agent output
+        const stepsInfo = flowResponse.steps
+          ?.filter((s: any) => s.action_type !== 'agent')
+          ?.map((s: any) => s.success ? `✅ ${s.action_type}` : `❌ ${s.action_type}: ${s.error}`)
+          ?.join('\n') || '';
+        
+        const agentContent = flowResponse.agent_output;
+        const fullContent = stepsInfo 
+          ? `${agentContent}\n\n---\n${stepsInfo}` 
+          : agentContent;
 
         setMessages((prev) => [
           ...prev,
           {
             role: "agent",
-            content: "האוטומציה הופעלה בהצלחה. (אין סוכן AI מוגדר בפלוו זה)",
+            content: fullContent,
+            timestamp: new Date(),
+          },
+        ]);
+      } else if (flowResponse?.flow) {
+        // Flow without agent
+        const stepsInfo = flowResponse.steps
+          ?.map((s: any) => s.success ? `✅ ${s.action_type}` : `❌ ${s.action_type}: ${s.error}`)
+          ?.join('\n') || 'הפלוו הופעל בהצלחה';
+        
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "agent",
+            content: stepsInfo,
+            timestamp: new Date(),
+          },
+        ]);
+      } else {
+        // Non-flow automation
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "agent",
+            content: flowResponse?.output || "האוטומציה הופעלה בהצלחה.",
             timestamp: new Date(),
           },
         ]);
