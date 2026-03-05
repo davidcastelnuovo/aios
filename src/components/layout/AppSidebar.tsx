@@ -304,6 +304,7 @@ export function AppSidebar() {
       'chat-integrations': 'chat_integrations',
       'chat': 'chat',
       'dynamic-tables': 'dynamic_tables',
+      'recordings': 'recordings',
       'site_analytics': 'clients', // אנליטיקס אתרים - מי שיש לו גישה ללקוחות יכול לראות
       'rank_tracking': 'clients', // מעקב מיקומים - מי שיש לו גישה ללקוחות יכול לראות
     };
