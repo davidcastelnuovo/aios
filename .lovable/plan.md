@@ -1,42 +1,48 @@
 
-אחלה, עכשיו יש אבחון מדויק למה זה נתקע שוב ושוב — ולא “ניחוש”.
+מאה אחוז — עכשיו יש לנו אבחון חד-משמעי ולא ניחוש.
 
-## מה הבעיה בפועל (Root Cause)
-1. ב-`transcribe-recording` יש שאילתה ל-`tenant_integrations` עם `config`:
-   - `select('config, settings')`
-   - אבל בטבלה **אין בכלל עמודת `config`** (יש רק `settings`).
-   - בפועל זה מפיל את שליפת האינטגרציה, ולכן אין טוקן Zoom בפונקציה.
-2. בלי טוקן, הורדת Zoom מחזירה HTML של דף צפייה/לוגין במקום מדיה, ולכן מתקבלת:
-   - `Failed to download valid media from Zoom: Non-media response (text/html...)`
-3. בנוסף, ב-`zoom-webhook` נשמר `play_url` לפני `download_url`, מה שמגדיל סיכוי ל-HTML במקום קובץ.
+**Do I know what the issue is? כן.**
 
-## תוכנית תיקון (ממוקדת)
-1. **תיקון קריטי בפונקציית תמלול** `supabase/functions/transcribe-recording/index.ts`
-   - להחליף שליפה ל-`select('settings')` בלבד.
-   - להוסיף טיפול שגיאה מפורש אם שליפת אינטגרציה נכשלה (ולא להמשיך “בשקט”).
-   - לחלץ credentials מ-`settings`, להנפיק access token חדש (Server-to-Server) כשצריך.
-   - להוריד קובץ Zoom עם URL של download + token, ורק אם מתקבלת מדיה אמיתית להמשיך.
+## מה הבעיה בפועל (מדויק)
+1. הבקשה נכשלת עם `546 WORKER_LIMIT`.
+2. בלוגים של הפונקציה `transcribe-recording` מופיע: `Memory limit exceeded`.
+3. ההקלטה שניסית לתמלל היא בערך **346MB** (`file_size=362,777,982`), והפונקציה עושה `zoomResp.blob()` + לפעמים `base64`, מה שמפיל זיכרון.
+4. לכן הבעיה כרגע היא **משאבים/זיכרון**, לא פורמט קובץ ולא טוקן.
 
-2. **חיזוק קליטה מה-Webhook** `supabase/functions/zoom-webhook/index.ts`
-   - לשמור `recording_url` כ-`file.download_url || file.play_url` (העדפה ל-download).
-   - אם יש `payload.download_token`, להעדיף אותו על פני סיסמת פגישה בשדה הקיים.
+## קבצים שבהם התקלה מתרחשת
+- `supabase/functions/transcribe-recording/index.ts` (הגורם המרכזי לקריסה בזיכרון)
+- `src/components/SummarizeRecordingDialog.tsx` (מפעיל fallback שמזמן הורדה כבדה שוב)
+- `supabase/functions/fetch-zoom-recordings/index.ts` (עדיין שומר `play_url` לפני `download_url` בהיסטוריה)
+- `supabase/functions/zoom-webhook/index.ts` (כבר תוקן חלקית, נוודא עקביות)
 
-3. **שיפור הודעות שגיאה בצד לקוח** `src/components/SummarizeRecordingDialog.tsx`
-   - להציג למשתמש את פירוט השגיאה שחוזר מהפונקציה (ולא רק “non-2xx”).
-   - להוסיף רמז ברור כשיש כשל באוטוריזציה/קישור Zoom.
+## תוכנית תיקון ממוקדת
+1. **בלימת קריסה בזיכרון ב-`transcribe-recording`**
+   - לבצע בדיקת גודל מוקדמת לפי `recording.file_size` לפני הורדה.
+   - אם מדובר בהקלטת Zoom גדולה מ-25MB: לא לבצע `blob()` לקובץ הגדול.
+   - להחזיר תגובה מבוקרת (לא קריסה) עם סטטוס/קוד שגיאה ברור.
 
-4. **בדיקות end-to-end לפני סגירה**
-   - לבדוק תמלול להקלטת Zoom שנכשלה קודם (play URL).
-   - לבדוק תמלול לקובץ Zoom שמגיע כ-download URL.
-   - לבדוק קובץ גדול (חלוקה לחלקים) שלא נשבר אחרי השינוי.
-   - לוודא שלא נשברה תמלול מהקלטה ידנית (`file_path` מ-storage).
+2. **Fallback חכם להקלטות Zoom גדולות (כדי שזה כן יעבוד בפועל)**
+   - אם ההקלטה שנבחרה גדולה: לחפש באותו `meeting_id` הקלטה חלופית קטנה (למשל audio-only) בתוך `zoom_recordings`.
+   - אם נמצאה חלופה ≤25MB: לתמלל אותה אוטומטית במקום הקובץ הגדול.
+   - להחזיר גם metadata (לוג/שדה) שהשתמשנו בקובץ חלופי, לשקיפות.
 
-## קבצים שיושפעו
-- `supabase/functions/transcribe-recording/index.ts`
-- `supabase/functions/zoom-webhook/index.ts`
-- `src/components/SummarizeRecordingDialog.tsx`
+3. **מניעת “לולאת שגיאה” בצד לקוח**
+   - ב-`SummarizeRecordingDialog`: אם חזר `file_too_large` עבור Zoom, לא לקרוא שוב `mode: download` (שגורם שוב לעומס).
+   - להציג הודעה ברורה למשתמש:
+     - או שתומללה חלופה קטנה אוטומטית,
+     - או שאין חלופה ולכן צריך “משיכה מחדש”/בחירת הקלטה קלה יותר.
+
+4. **אחידות קליטה לעתיד (כדי לא לייצר עוד רשומות בעייתיות)**
+   - ב-`fetch-zoom-recordings`: לשמור `recording_url` עם העדפה ל-`download_url` לפני `play_url`.
+   - לאמת שגם `zoom-webhook` נשאר באותה העדפה.
+
+5. **בדיקות E2E לפני סגירה**
+   - הקלטה קיימת גדולה שנכשלה קודם (כמו זו של 346MB) → לוודא שאין `WORKER_LIMIT`.
+   - הקלטה קיימת קטנה → תמלול תקין.
+   - הקלטה ידנית גדולה מ-storage → לוודא שזרימת chunking לא נשברה.
+   - בדיקת לוגים של `transcribe-recording` שלא מופיע שוב `Memory limit exceeded`.
 
 ## תוצאה צפויה
-- סוף ללופ של “תוקן אבל לא עובד”.
-- תמלול Zoom יעבוד גם כשמקור ההקלטה התחיל כ-`play_url`.
-- במקרה כשל — תופיע שגיאה ברורה שאפשר לפעול לפיה.
+- סוף לשגיאת `546 WORKER_LIMIT` במסלול התמלול הזה.
+- הקלטות Zoom שכבר נמשכו יוכלו לעבוד דרך fallback לקובץ חלופי קטן כשקיים.
+- אם אין חלופה, המשתמש יקבל שגיאה ברורה ופעילה (בלי “תיקנתי ולא עובד” שוב).
