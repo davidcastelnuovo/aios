@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -41,7 +41,7 @@ function float32ToWav(samples: Float32Array, sampleRate: number): Blob {
   writeStr(12, 'fmt ');
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true); // mono
+  view.setUint16(22, 1, true);
   view.setUint32(24, sampleRate, true);
   view.setUint32(28, sampleRate * 2, true);
   view.setUint16(32, 2, true);
@@ -60,14 +60,13 @@ async function transcribeChunked(
   onProgress: (current: number, total: number) => void,
 ): Promise<string> {
   const SAMPLE_RATE = 16000;
-  const CHUNK_DURATION_SEC = 8 * 60; // 8 minutes per chunk → ~15MB WAV each
+  const CHUNK_DURATION_SEC = 8 * 60;
 
   const arrayBuffer = await audioBlob.arrayBuffer();
   const audioCtx = new AudioContext({ sampleRate: SAMPLE_RATE });
   const decoded = await audioCtx.decodeAudioData(arrayBuffer);
   await audioCtx.close();
 
-  // Mix down to mono
   const mono = decoded.getChannelData(0);
   const chunkSamples = SAMPLE_RATE * CHUNK_DURATION_SEC;
   const totalChunks = Math.ceil(mono.length / chunkSamples);
@@ -128,8 +127,78 @@ export default function SummarizeRecordingDialog({
   const [targetId, setTargetId] = useState<string>(recording?.client_id || recording?.lead_id || "");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isPolling, setIsPolling] = useState(false);
   const [transcribeProgress, setTranscribeProgress] = useState<{ current: number; total: number } | null>(null);
   const [result, setResult] = useState<{ summary: string; file_url: string; file_name: string } | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Auto-populate transcript from DB on open ──
+  useEffect(() => {
+    if (open && recording?.id) {
+      // Check if recording already has a completed transcription
+      const checkExisting = async () => {
+        const { data } = await supabase
+          .from('zoom_recordings')
+          .select('transcription, transcription_status')
+          .eq('id', recording.id)
+          .single();
+        
+        if (data?.transcription_status === 'completed' && data?.transcription && !transcript) {
+          setTranscript(data.transcription);
+          toast({ title: "תמלול קיים נטען אוטומטית" });
+        } else if (data?.transcription_status === 'processing') {
+          // Resume polling
+          setIsTranscribing(true);
+          setIsPolling(true);
+          startPolling(recording.id);
+        }
+      };
+      checkExisting();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, recording?.id]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
+
+  const startPolling = useCallback((recordingId: string) => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    
+    pollingRef.current = setInterval(async () => {
+      try {
+        const { data } = await supabase
+          .from('zoom_recordings')
+          .select('transcription, transcription_status, transcription_error')
+          .eq('id', recordingId)
+          .single();
+
+        if (data?.transcription_status === 'completed' && data?.transcription) {
+          setTranscript(data.transcription);
+          setIsTranscribing(false);
+          setIsPolling(false);
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          pollingRef.current = null;
+          toast({ title: "התמלול הושלם בהצלחה!" });
+        } else if (data?.transcription_status === 'failed') {
+          setIsTranscribing(false);
+          setIsPolling(false);
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          pollingRef.current = null;
+          toast({
+            title: "התמלול נכשל",
+            description: data.transcription_error || "נסה שוב או הדבק תמלול ידנית",
+            variant: "destructive",
+          });
+        }
+      } catch {
+        // Silently ignore polling errors
+      }
+    }, 5000);
+  }, [toast]);
 
   const { data: clients = [] } = useQuery({
     queryKey: ["clients-summary", currentTenantId],
@@ -159,60 +228,66 @@ export default function SummarizeRecordingDialog({
 
   const hasAudioSource = !!(recording?.file_path || recording?.recording_url || recording?.download_url);
 
-  // ── Transcribe handler (supports large files) ─────────────
+  // ── Transcribe handler (supports large files + background polling) ─────────────
 
   const handleTranscribe = async () => {
     if (!recording?.id) return;
     setIsTranscribing(true);
     setTranscribeProgress(null);
+    setIsPolling(false);
 
     try {
-      // Step 1 – Try direct transcription via edge function
       const { data, error } = await supabase.functions.invoke("transcribe-recording", {
         body: { recording_id: recording.id },
       });
 
       if (error) {
-        const detailedMsg = typeof error === 'object' && error.message ? error.message : String(error);
-        throw new Error(detailedMsg);
+        // Network timeout / "Failed to fetch" → switch to polling
+        const errMsg = typeof error === 'object' && error.message ? error.message : String(error);
+        if (errMsg.includes('Failed to fetch') || errMsg.includes('network') || errMsg.includes('timeout') || errMsg.includes('AbortError')) {
+          console.log('⏳ Request timed out, switching to polling mode...');
+          setIsPolling(true);
+          startPolling(recording.id);
+          toast({ title: "התמלול רץ ברקע", description: "ניתן להמשיך לעבוד, התוצאה תופיע כשתהיה מוכנה" });
+          return;
+        }
+        throw new Error(errMsg);
       }
 
-      // Handle invalid media content (HTML instead of audio)
       if (data?.error === 'invalid_media') {
         toast({
           title: "תוכן לא תקין",
           description: data.message || "ייתכן שפג תוקף הקישור להקלטה. נסה למשוך הקלטות מחדש.",
           variant: "destructive",
         });
+        setIsTranscribing(false);
         return;
       }
 
-      // If the edge function returned an error in data (non-throw)
       if (data?.error && data.error !== 'file_too_large') {
         throw new Error(typeof data.message === 'string' ? data.message : data.error);
       }
 
-      // Small file transcribed successfully (possibly via audio-only fallback)
       if (data?.text) {
         setTranscript(data.text);
         const fallbackNote = data.used_fallback
           ? ` (שימוש בהקלטת ${data.fallback_recording_type || 'audio'} חלופית)`
           : "";
         toast({ title: "התמלול הושלם בהצלחה!" + fallbackNote });
+        setIsTranscribing(false);
         return;
       }
 
-      // Large file with no alternative — tell user to paste manually
       if (data?.error === 'file_too_large' && data?.no_alternative) {
         toast({
           title: "הקובץ גדול מדי לתמלול אוטומטי",
           description: data.message || `${data.size_mb}MB — נא להדביק תמלול ידנית`,
           variant: "destructive",
         });
+        setIsTranscribing(false);
         return;
       }
 
-      // Large file but has potential for client-side chunking (storage files only, not Zoom)
       if (data?.error === 'file_too_large' && !data?.no_alternative) {
         toast({ title: "הקובץ גדול – מתחיל תמלול מחולק...", description: `${data.size_mb?.toFixed?.(0) || data.size_mb}MB` });
 
@@ -222,12 +297,12 @@ export default function SummarizeRecordingDialog({
 
         if (dlError) throw dlError;
         if (dlData?.error === 'file_too_large' && dlData?.no_alternative) {
-          // Download mode also failed — file is truly too large
           toast({
             title: "הקובץ גדול מדי",
             description: dlData.message || "נא להדביק תמלול ידנית",
             variant: "destructive",
           });
+          setIsTranscribing(false);
           return;
         }
         if (dlData?.error) throw new Error(dlData.message || dlData.error);
@@ -244,21 +319,28 @@ export default function SummarizeRecordingDialog({
 
         setTranscript(fullText);
         toast({ title: "התמלול הושלם בהצלחה!" });
+        setIsTranscribing(false);
         return;
       }
     } catch (err: any) {
+      // Final fallback — check if maybe it's a timeout
+      const errMsg = err.message || '';
+      if (errMsg.includes('Failed to fetch') || errMsg.includes('network') || errMsg.includes('timeout')) {
+        setIsPolling(true);
+        startPolling(recording.id);
+        toast({ title: "התמלול רץ ברקע", description: "ניתן להמשיך לעבוד, התוצאה תופיע כשתהיה מוכנה" });
+        return;
+      }
       toast({
         title: "שגיאה בתמלול",
         description: err.message || "נסה שוב או הדבק תמלול ידנית",
         variant: "destructive",
       });
-    } finally {
       setIsTranscribing(false);
+    } finally {
       setTranscribeProgress(null);
     }
   };
-
-  // ── Storage-only shortcut: if file is in storage, download directly ──
 
   const handleTranscribeFromStorage = async () => {
     if (!recording?.file_path) return handleTranscribe();
@@ -267,7 +349,6 @@ export default function SummarizeRecordingDialog({
     setTranscribeProgress(null);
 
     try {
-      // Download directly from storage (faster, no edge function needed for download)
       const { data: fileData, error: dlError } = await supabase.storage
         .from('recordings')
         .download(recording.file_path);
@@ -277,11 +358,9 @@ export default function SummarizeRecordingDialog({
       const fileSizeMB = fileData.size / (1024 * 1024);
 
       if (fileSizeMB <= 25) {
-        // Small file – send directly to transcribe-recording
         return handleTranscribe();
       }
 
-      // Large file – chunk on client
       toast({ title: "הקובץ גדול – מתחיל תמלול מחולק...", description: `${fileSizeMB.toFixed(0)}MB` });
 
       const fullText = await transcribeChunked(fileData, (current, total) => {
@@ -360,12 +439,25 @@ export default function SummarizeRecordingDialog({
   };
 
   const handleClose = () => {
+    // If transcription is running in background, notify
+    if (isPolling && isTranscribing) {
+      toast({ title: "התמלול ממשיך ברקע", description: "כשתפתח שוב את הדיאלוג, התוצאה תיטען אוטומטית" });
+    }
+    
+    // Stop polling when closing
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    
     onOpenChange(false);
     setTimeout(() => {
       setTranscript("");
       setCustomFocus("");
       setResult(null);
       setTranscribeProgress(null);
+      setIsTranscribing(false);
+      setIsPolling(false);
       setFocusPoints(["decisions", "action_items", "next_steps"]);
     }, 300);
   };
@@ -413,7 +505,9 @@ export default function SummarizeRecordingDialog({
                   {isTranscribing ? (
                     <>
                       <Loader2 className="h-3 w-3 ml-1 animate-spin" />
-                      {transcribeProgress
+                      {isPolling
+                        ? "מתמלל ברקע..."
+                        : transcribeProgress
                         ? `מתמלל חלק ${transcribeProgress.current}/${transcribeProgress.total}...`
                         : "מתמלל..."}
                     </>
@@ -428,11 +522,21 @@ export default function SummarizeRecordingDialog({
             </div>
 
             {/* Progress bar for chunked transcription */}
-            {isTranscribing && transcribeProgress && (
+            {isTranscribing && transcribeProgress && !isPolling && (
               <div className="space-y-1">
                 <Progress value={progressPct} className="h-2" />
                 <p className="text-xs text-muted-foreground text-center">
                   מתמלל חלק {transcribeProgress.current} מתוך {transcribeProgress.total} ({progressPct}%)
+                </p>
+              </div>
+            )}
+
+            {/* Background polling indicator */}
+            {isPolling && (
+              <div className="bg-primary/10 rounded-lg p-3 flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <p className="text-sm text-primary">
+                  התמלול רץ ברקע... ניתן להמשיך לעבוד. התוצאה תופיע אוטומטית.
                 </p>
               </div>
             )}
@@ -468,68 +572,44 @@ export default function SummarizeRecordingDialog({
                 </label>
               ))}
             </div>
-          </div>
-
-          {/* Custom Focus */}
-          <div className="space-y-2">
-            <Label>דגשים נוספים (אופציונלי)</Label>
             <Textarea
               value={customFocus}
               onChange={(e) => setCustomFocus(e.target.value)}
-              placeholder="דגשים מיוחדים שחשוב לך שיופיעו בסיכום..."
+              placeholder="דגשים נוספים (אופציונלי)..."
               className="min-h-[60px]"
               dir="rtl"
             />
           </div>
 
-          {/* Target Selection */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>שייך ל</Label>
-              <Select value={targetType} onValueChange={(val: "client" | "lead") => {
-                setTargetType(val);
-                setTargetId("");
-              }}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+          {/* Target Assignment */}
+          <div className="space-y-3">
+            <Label className="text-base font-medium">שיוך הסיכום</Label>
+            <div className="flex gap-3">
+              <Select value={targetType} onValueChange={(val: "client" | "lead") => { setTargetType(val); setTargetId(""); }}>
+                <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="client">לקוח</SelectItem>
                   <SelectItem value="lead">ליד</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>{targetType === "client" ? "בחר לקוח" : "בחר ליד"} *</Label>
               <Select value={targetId || "none"} onValueChange={(val) => setTargetId(val === "none" ? "" : val)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="בחר..." />
-                </SelectTrigger>
+                <SelectTrigger className="flex-1"><SelectValue placeholder="בחר..." /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">בחר...</SelectItem>
                   {targetType === "client"
-                    ? clients.map((c: any) => (
-                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                      ))
-                    : leads.map((l: any) => (
-                        <SelectItem key={l.id} value={l.id}>{l.company_name}</SelectItem>
-                      ))}
+                    ? clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)
+                    : leads.map((l: any) => <SelectItem key={l.id} value={l.id}>{l.company_name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           {/* Generate Button */}
-          <Button
-            onClick={handleGenerate}
-            disabled={isGenerating || !transcript.trim() || !targetId}
-            className="w-full"
-            size="lg"
-          >
+          <Button onClick={handleGenerate} disabled={isGenerating || !transcript.trim()} className="w-full" size="lg">
             {isGenerating ? (
               <>
                 <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                מייצר סיכום...
+                יוצר סיכום...
               </>
             ) : (
               <>
@@ -542,16 +622,21 @@ export default function SummarizeRecordingDialog({
           {/* Result */}
           {result && (
             <div className="space-y-3 border-t pt-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-green-500" />
-                  הסיכום נוצר בהצלחה!
-                </h3>
+              <h3 className="font-medium flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                סיכום הפגישה
+              </h3>
+              <div
+                className="bg-muted/50 rounded-lg p-4 text-sm leading-relaxed max-h-[300px] overflow-y-auto"
+                dir="rtl"
+                dangerouslySetInnerHTML={{ __html: result.summary }}
+              />
+              {result.file_url && (
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" asChild>
                     <a href={result.file_url} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="h-3 w-3 ml-1" />
-                      פתח
+                      פתח קובץ
                     </a>
                   </Button>
                   <Button variant="outline" size="sm" asChild>
@@ -561,13 +646,7 @@ export default function SummarizeRecordingDialog({
                     </a>
                   </Button>
                 </div>
-              </div>
-              <div className="bg-muted/50 rounded-lg p-4 max-h-[300px] overflow-y-auto text-sm whitespace-pre-wrap">
-                {result.summary}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                הקובץ נשמר בקבצים של ה{targetType === "client" ? "לקוח" : "ליד"} הנבחר
-              </p>
+              )}
             </div>
           )}
         </div>

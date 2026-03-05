@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Video, Search, Download, Loader2, ExternalLink, Upload, FileVideo, Plus, Sparkles } from "lucide-react";
+import { Video, Search, Download, Loader2, ExternalLink, Upload, FileVideo, Plus, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import SummarizeRecordingDialog from "@/components/SummarizeRecordingDialog";
 
@@ -31,7 +31,6 @@ export default function Recordings() {
   });
   const [fetchToDate, setFetchToDate] = useState(() => new Date().toISOString().split('T')[0]);
 
-  // Upload dialog state
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadTopic, setUploadTopic] = useState("");
   const [uploadDate, setUploadDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -39,11 +38,9 @@ export default function Recordings() {
   const [uploadLeadId, setUploadLeadId] = useState<string>("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
 
-  // Summarize dialog state
   const [summarizeOpen, setSummarizeOpen] = useState(false);
   const [selectedRecording, setSelectedRecording] = useState<any>(null);
 
-  // Check if Zoom is connected
   const { data: zoomIntegration } = useQuery({
     queryKey: ['zoom-integration', currentTenantId],
     queryFn: async () => {
@@ -59,7 +56,6 @@ export default function Recordings() {
     enabled: !!currentTenantId,
   });
 
-  // Fetch recordings
   const { data: recordings = [] } = useQuery({
     queryKey: ['recordings', currentTenantId],
     queryFn: async () => {
@@ -74,7 +70,6 @@ export default function Recordings() {
     enabled: !!currentTenantId,
   });
 
-  // Fetch clients & leads
   const { data: clients = [] } = useQuery({
     queryKey: ['clients-for-recordings', currentTenantId],
     queryFn: async () => {
@@ -95,7 +90,6 @@ export default function Recordings() {
     enabled: !!currentTenantId,
   });
 
-  // Assign recording
   const assignMutation = useMutation({
     mutationFn: async ({ recordingId, clientId, leadId }: { recordingId: string; clientId?: string | null; leadId?: string | null }) => {
       const { error } = await supabase
@@ -110,7 +104,6 @@ export default function Recordings() {
     },
   });
 
-  // Fetch from Zoom
   const fetchRecordingsMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('fetch-zoom-recordings', {
@@ -129,7 +122,6 @@ export default function Recordings() {
     },
   });
 
-  // Upload manual recording
   const uploadMutation = useMutation({
     mutationFn: async () => {
       if (!currentTenantId) throw new Error("No tenant");
@@ -181,6 +173,21 @@ export default function Recordings() {
       case 'manual': return 'העלאה ידנית';
       case 'google_meet': return 'Google Meet';
       default: return source || 'Zoom';
+    }
+  };
+
+  const transcriptionStatusBadge = (rec: any) => {
+    const status = rec.transcription_status;
+    if (!status) return null;
+    switch (status) {
+      case 'processing':
+        return <Badge variant="outline" className="text-yellow-600 border-yellow-600"><Loader2 className="h-3 w-3 ml-1 animate-spin" />מתמלל...</Badge>;
+      case 'completed':
+        return <Badge variant="outline" className="text-green-600 border-green-600"><CheckCircle2 className="h-3 w-3 ml-1" />תומלל</Badge>;
+      case 'failed':
+        return <Badge variant="outline" className="text-destructive border-destructive"><AlertCircle className="h-3 w-3 ml-1" />נכשל</Badge>;
+      default:
+        return null;
     }
   };
 
@@ -271,7 +278,6 @@ export default function Recordings() {
         </div>
       </div>
 
-      {/* Pull from Zoom */}
       {zoomIntegration?.is_active && (
         <Card>
           <CardHeader>
@@ -300,7 +306,6 @@ export default function Recordings() {
         </Card>
       )}
 
-      {/* Recordings table */}
       <Card>
         <CardHeader>
           <CardTitle>כל ההקלטות</CardTitle>
@@ -348,6 +353,7 @@ export default function Recordings() {
                       <TableHead>מקור</TableHead>
                       <TableHead>תאריך</TableHead>
                       <TableHead>משך (דק')</TableHead>
+                      <TableHead>תמלול</TableHead>
                       <TableHead>שיוך ללקוח</TableHead>
                       <TableHead>שיוך לליד</TableHead>
                       <TableHead>קישור</TableHead>
@@ -363,6 +369,7 @@ export default function Recordings() {
                         </TableCell>
                         <TableCell>{rec.start_time ? format(new Date(rec.start_time), "dd/MM/yyyy HH:mm") : "-"}</TableCell>
                         <TableCell>{rec.duration || "-"}</TableCell>
+                        <TableCell>{transcriptionStatusBadge(rec)}</TableCell>
                         <TableCell>
                           <Select
                             value={rec.client_id || "none"}

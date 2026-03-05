@@ -4279,6 +4279,9 @@ export type Database = {
           source: string
           start_time: string | null
           tenant_id: string
+          transcription: string | null
+          transcription_error: string | null
+          transcription_status: string | null
           updated_at: string
         }
         Insert: {
@@ -4299,6 +4302,9 @@ export type Database = {
           source?: string
           start_time?: string | null
           tenant_id: string
+          transcription?: string | null
+          transcription_error?: string | null
+          transcription_status?: string | null
           updated_at?: string
         }
         Update: {
@@ -4319,6 +4325,9 @@ export type Database = {
           source?: string
           start_time?: string | null
           tenant_id?: string
+          transcription?: string | null
+          transcription_error?: string | null
+          transcription_status?: string | null
           updated_at?: string
         }
         Relationships: [
