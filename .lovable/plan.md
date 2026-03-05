@@ -1,37 +1,39 @@
 
 
-## משיכת הקלטות קיימות מ-Zoom
+## מצב נוכחי
 
-### מה ייבנה
-כפתור "משוך הקלטות קיימות" בדף ZoomSettings שמאפשר לשלוף הקלטות ישנות מחשבון Zoom ולשמור אותן בטבלת `zoom_recordings`.
+כרגע **כל ניהול ההקלטות נמצא בתוך דף הגדרות Zoom** (`/t/:tenantSlug/zoom-settings`) - כולל הגדרות חיבור, משיכת הקלטות, טבלת הקלטות וחיפוש/סינון. **אין מודול סיכום אוטומטי של הקלטות** - הנתונים שנשמרים הם רק מטא-נתונים (נושא, משך, קישור, סיסמה).
 
-### שינויים
+## הצעה - מודול "הקלטות" עצמאי
 
-**1. Edge Function חדשה: `supabase/functions/fetch-zoom-recordings/index.ts`**
-- מקבלת `tenant_id` ואופציונלית `from_date` (ברירת מחדל: 30 יום אחורה)
-- שולפת את ה-credentials מ-`tenant_integrations`
-- מבצעת Server-to-Server OAuth token request ל-Zoom (`https://zoom.us/oauth/token` עם `grant_type=account_credentials`)
-- קוראת ל-`GET https://api.zoom.us/v2/users/me/recordings?from=...&to=...`
-- עוברת על כל הפגישות עם הקלטות ושומרת ב-`zoom_recordings` (upsert לפי `meeting_id` כדי לא ליצור כפילויות)
-- מחזירה כמה הקלטות נשמרו
+ליצור דף ייעודי לניהול הקלטות שיהיה נפרד מדף ההגדרות, עם יכולות מורחבות:
 
-**2. עדכון `src/pages/ZoomSettings.tsx`**
-- הוספת כפתור "משוך הקלטות" מעל טבלת ההקלטות (ליד שורת החיפוש)
-- אופציה לבחור טווח תאריכים (ברירת מחדל: 30 יום אחורה)
-- mutation שקורא ל-Edge Function עם loading state
-- Toast עם תוצאה (כמה הקלטות נמשכו)
-- רענון אוטומטי של הטבלה אחרי המשיכה
+### 1. דף חדש: `src/pages/Recordings.tsx`
+- **טבלת הקלטות מלאה** (מועברת מ-ZoomSettings) עם חיפוש/סינון
+- **העלאת הקלטות ידנית** - כפתור העלאה לקבצי אודיו/וידאו עם שדות מטא-נתונים (נושא, תאריך, שיוך ללקוח/ליד)
+- **מקור ההקלטה** - עמודה חדשה שמציגה "Zoom" / "העלאה ידנית" / (בעתיד: Google Meet, Teams וכו')
+- **כפתור "משוך מ-Zoom"** שיקרא ל-Edge Function הקיימת
 
-**3. עדכון `supabase/config.toml`** - לא נדרש, ה-JWT verification מטופל בקוד
+### 2. שינויי DB
+- הוספת עמודה `source` לטבלת `zoom_recordings` (ערכים: `zoom`, `manual`, `google_meet` וכו') - או שינוי שם הטבלה ל-`recordings`
+- הוספת עמודה `file_path` לקבצים שהועלו ידנית (Storage)
+- יצירת Storage bucket `recordings` לקבצים שמועלים
 
-### זרימה טכנית
-```text
-כפתור "משוך הקלטות"
-  → Edge Function fetch-zoom-recordings
-    → POST zoom.us/oauth/token (account_credentials grant)
-    → GET api.zoom.us/v2/users/me/recordings?from=...&to=...
-    → UPSERT to zoom_recordings (skip duplicates by meeting_id)
-  → Toast: "נמשכו X הקלטות חדשות"
-  → Refresh recordings table
-```
+### 3. ניתוב ותפריט
+- Route חדש: `/t/:tenantSlug/recordings`
+- הוספה לתפריט כפריט ראשי או תחת אינטגרציות
+- ZoomSettings יישאר רק להגדרות החיבור (ללא טבלת ההקלטות)
+
+### 4. מודול modules.ts
+- הוספת `recordings` כמודול חדש עם הרשאות
+
+### 5. בעתיד
+- אינטגרציות נוספות (Google Meet, Teams)
+- סיכום אוטומטי באמצעות AI (תמלול + סיכום)
+
+### סדר עבודה
+1. מיגרציה - הוספת עמודות `source`, `file_path` + Storage bucket
+2. יצירת דף Recordings חדש עם כל הפיצ'רים
+3. עדכון ZoomSettings - הסרת טבלת ההקלטות, השארת הגדרות בלבד
+4. עדכון ניתוב, תפריט, ומודולים
 
