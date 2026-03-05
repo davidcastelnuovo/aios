@@ -4278,6 +4278,7 @@ export type Database = {
           recording_url: string | null
           source: string
           start_time: string | null
+          summary_file_url: string | null
           tenant_id: string
           transcription: string | null
           transcription_error: string | null
@@ -4301,6 +4302,7 @@ export type Database = {
           recording_url?: string | null
           source?: string
           start_time?: string | null
+          summary_file_url?: string | null
           tenant_id: string
           transcription?: string | null
           transcription_error?: string | null
@@ -4324,6 +4326,7 @@ export type Database = {
           recording_url?: string | null
           source?: string
           start_time?: string | null
+          summary_file_url?: string | null
           tenant_id?: string
           transcription?: string | null
           transcription_error?: string | null

@@ -201,6 +201,14 @@ ${transcript}${focusPrompt}
       console.error("Update attachments error:", updateError);
     }
 
+    // Also save summary URL on the recording itself
+    if (recording_id) {
+      await admin
+        .from("zoom_recordings")
+        .update({ summary_file_url: fileUrl } as any)
+        .eq("id", recording_id);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,

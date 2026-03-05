@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Video, Search, Download, Loader2, ExternalLink, Upload, FileVideo, Plus, Sparkles, CheckCircle2, AlertCircle, Trash2, Pencil, Check, X } from "lucide-react";
+import { Video, Search, Download, Loader2, ExternalLink, Upload, FileVideo, FileText, Plus, Sparkles, CheckCircle2, AlertCircle, Trash2, Pencil, Check, X } from "lucide-react";
 import { format } from "date-fns";
 import SummarizeRecordingDialog from "@/components/SummarizeRecordingDialog";
 
@@ -259,6 +259,8 @@ export default function Recordings() {
           || group.find((r: any) => r.transcription_status === 'processing')?.transcription_status
           || group.find((r: any) => r.transcription_status === 'failed')?.transcription_status
           || null,
+        // Merge summary_file_url from any file in the group
+        summary_file_url: group.find((r: any) => r.summary_file_url)?.summary_file_url || null,
         _group: group,
       };
     });
@@ -527,19 +529,29 @@ export default function Recordings() {
                           ) : "-"}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              const audioRec = rec._group?.find((r: any) => r.recording_type === 'audio_only') || rec;
-                              setSelectedRecording(audioRec);
-                              setSummarizeOpen(true);
-                            }}
-                            className="text-primary hover:text-primary/80"
-                          >
-                            <Sparkles className="h-4 w-4 ml-1" />
-                            סכם
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            {rec.summary_file_url ? (
+                              <Button variant="ghost" size="sm" asChild className="text-green-600 hover:text-green-700">
+                                <a href={rec.summary_file_url} target="_blank" rel="noopener noreferrer">
+                                  <FileText className="h-4 w-4 ml-1" />
+                                  הורד
+                                </a>
+                              </Button>
+                            ) : null}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const audioRec = rec._group?.find((r: any) => r.recording_type === 'audio_only') || rec;
+                                setSelectedRecording(audioRec);
+                                setSummarizeOpen(true);
+                              }}
+                              className="text-primary hover:text-primary/80"
+                            >
+                              <Sparkles className="h-4 w-4 ml-1" />
+                              {rec.summary_file_url ? "סכם מחדש" : "סכם"}
+                            </Button>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <AlertDialog>
