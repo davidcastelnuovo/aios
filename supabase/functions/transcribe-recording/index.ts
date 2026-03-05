@@ -432,16 +432,49 @@ async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blo
   const fileSizeMB = audioBlob.size / (1024 * 1024);
   console.log(`📦 File size: ${fileSizeMB.toFixed(1)}MB, fileName: ${fileName}, contentType: ${contentType}`);
 
-  // Mode: download - return raw audio as base64 for client-side chunking
-  // NOTE: No size restriction here — this path is specifically for chunking large files on the client
+  // Mode: download - return audio reference for client-side chunking
+  // For large files, avoid base64 conversion (can exceed edge memory); upload temp file and return signed URL.
   if (mode === 'download') {
-    console.log(`📥 Download mode — returning ${fileSizeMB.toFixed(1)}MB as base64 for client-side chunking`);
-    const arrayBuffer = await audioBlob.arrayBuffer();
-    const base64 = btoa(
-      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-    );
+    console.log(`📥 Download mode — preparing ${fileSizeMB.toFixed(1)}MB for client-side chunking`);
+
+    const ext = (fileName.split('.').pop() || 'm4a').toLowerCase();
+    const tempPath = `transcription-temp/${recordingId}-${Date.now()}.${ext}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('recordings')
+      .upload(tempPath, audioBlob, {
+        contentType,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error('❌ Failed to upload temp audio for chunking:', uploadError.message);
+      return new Response(JSON.stringify({
+        error: 'download_prepare_failed',
+        message: `Failed to prepare audio for chunking: ${uploadError.message}`,
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { data: signedData, error: signedError } = await supabase.storage
+      .from('recordings')
+      .createSignedUrl(tempPath, 60 * 60);
+
+    if (signedError || !signedData?.signedUrl) {
+      console.error('❌ Failed to create signed URL for temp audio:', signedError?.message || 'unknown');
+      return new Response(JSON.stringify({
+        error: 'download_prepare_failed',
+        message: 'Failed to create temporary download URL for chunking',
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({
-      audio_base64: base64,
+      audio_url: signedData.signedUrl,
       content_type: contentType,
       file_name: fileName,
       size_mb: fileSizeMB,

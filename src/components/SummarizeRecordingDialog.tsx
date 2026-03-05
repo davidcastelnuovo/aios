@@ -176,14 +176,17 @@ export default function SummarizeRecordingDialog({
   }, []);
 
   const handleRetryTranscription = useCallback(async (recordingId: string) => {
-    // Reset status in DB and restart
+    if (!recordingId) return;
+    setFailedError(null);
+    setIsPolling(false);
+
     await supabase
       .from('zoom_recordings')
       .update({ transcription_status: null, transcription_error: null } as any)
       .eq('id', recordingId);
+
     stopPolling();
-    // Re-trigger transcription
-    handleTranscribe();
+    void handleTranscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopPolling]);
 
@@ -273,18 +276,28 @@ export default function SummarizeRecordingDialog({
     });
     if (dlError) throw dlError;
     if (dlData?.error) throw new Error(dlData.message || dlData.error);
-    if (!dlData?.audio_base64) throw new Error('Failed to download audio');
 
-    const binary = atob(dlData.audio_base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const audioBlob = new Blob([bytes], { type: dlData.content_type || 'audio/mp4' });
+    let audioBlob: Blob | null = null;
+
+    if (dlData?.audio_base64) {
+      const binary = atob(dlData.audio_base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      audioBlob = new Blob([bytes], { type: dlData.content_type || 'audio/mp4' });
+    } else if (dlData?.audio_url) {
+      const audioResp = await fetch(dlData.audio_url);
+      if (!audioResp.ok) throw new Error('Failed to download prepared audio for chunking');
+      audioBlob = await audioResp.blob();
+    }
+
+    if (!audioBlob) throw new Error('Failed to download audio');
 
     const fullText = await transcribeChunked(audioBlob, (current, total) => {
       setTranscribeProgress({ current, total });
     });
 
     setTranscript(fullText);
+    setFailedError(null);
     toast({ title: "התמלול הושלם בהצלחה!" });
     setIsTranscribing(false);
   };
