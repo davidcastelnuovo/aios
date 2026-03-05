@@ -296,6 +296,12 @@ export default function SummarizeRecordingDialog({
       setTranscribeProgress({ current, total });
     });
 
+    // Save transcript to DB so status updates to 'completed'
+    await supabase
+      .from('zoom_recordings')
+      .update({ transcription: fullText, transcription_status: 'completed', transcription_error: null } as any)
+      .eq('id', recordingId);
+
     setTranscript(fullText);
     setFailedError(null);
     toast({ title: "התמלול הושלם בהצלחה!" });
