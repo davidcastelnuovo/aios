@@ -191,7 +191,39 @@ export default function Recordings() {
     }
   };
 
-  const filtered = recordings.filter((rec: any) => {
+  // Group recordings by meeting_id to avoid visual duplicates
+  const groupedRecordings = (() => {
+    const groups = new Map<string, any[]>();
+    recordings.forEach((rec: any) => {
+      const key = rec.meeting_id || rec.id;
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(rec);
+    });
+
+    return Array.from(groups.values()).map((group) => {
+      // Pick the best representative record
+      const videoRec = group.find((r: any) => r.recording_type === 'shared_screen_with_speaker_view') 
+        || group.find((r: any) => r.recording_type === 'speaker_view');
+      const audioRec = group.find((r: any) => r.recording_type === 'audio_only');
+      const primary = videoRec || audioRec || group[0];
+
+      return {
+        ...primary,
+        // Keep video URL for playback, audio URL for transcription
+        video_url: videoRec?.recording_url || null,
+        audio_url: audioRec?.recording_url || null,
+        audio_recording_id: audioRec?.id || primary.id,
+        // Merge transcription status from any file in the group
+        transcription_status: group.find((r: any) => r.transcription_status === 'completed')?.transcription_status
+          || group.find((r: any) => r.transcription_status === 'processing')?.transcription_status
+          || group.find((r: any) => r.transcription_status === 'failed')?.transcription_status
+          || null,
+        _group: group,
+      };
+    });
+  })();
+
+  const filtered = groupedRecordings.filter((rec: any) => {
     if (filterType === "client" && !rec.client_id) return false;
     if (filterType === "lead" && !rec.lead_id) return false;
     if (filterType === "unassigned" && (rec.client_id || rec.lead_id)) return false;
@@ -309,7 +341,7 @@ export default function Recordings() {
       <Card>
         <CardHeader>
           <CardTitle>כל ההקלטות</CardTitle>
-          <CardDescription>{recordings.length} הקלטות במערכת</CardDescription>
+          <CardDescription>{groupedRecordings.length} פגישות ({recordings.length} קבצים)</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -336,14 +368,14 @@ export default function Recordings() {
             </Select>
           </div>
 
-          {recordings.length === 0 ? (
+          {groupedRecordings.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">עדיין אין הקלטות</p>
           ) : filtered.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">לא נמצאו הקלטות תואמות</p>
           ) : (
             <>
               {(searchQuery || filterType !== "all" || filterSource !== "all") && (
-                <p className="text-sm text-muted-foreground mb-2">מציג {filtered.length} מתוך {recordings.length}</p>
+                <p className="text-sm text-muted-foreground mb-2">מציג {filtered.length} מתוך {groupedRecordings.length}</p>
               )}
               <div className="overflow-x-auto">
                 <Table>
@@ -395,9 +427,9 @@ export default function Recordings() {
                           </Select>
                         </TableCell>
                         <TableCell>
-                          {rec.recording_url ? (
+                          {(rec.video_url || rec.recording_url) ? (
                             <Button variant="ghost" size="icon" asChild>
-                              <a href={rec.recording_url} target="_blank" rel="noopener noreferrer">
+                              <a href={rec.video_url || rec.recording_url} target="_blank" rel="noopener noreferrer">
                                 <ExternalLink className="h-4 w-4" />
                               </a>
                             </Button>
@@ -415,7 +447,8 @@ export default function Recordings() {
                             variant="ghost"
                             size="sm"
                             onClick={() => {
-                              setSelectedRecording(rec);
+                              const audioRec = rec._group?.find((r: any) => r.recording_type === 'audio_only') || rec;
+                              setSelectedRecording(audioRec);
                               setSummarizeOpen(true);
                             }}
                             className="text-primary hover:text-primary/80"
