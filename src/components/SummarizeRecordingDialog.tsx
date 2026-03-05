@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenant } from "@/contexts/TenantContext";
-import { Loader2, FileText, Sparkles, Download, ExternalLink, Mic } from "lucide-react";
+import { Loader2, FileText, Sparkles, Download, ExternalLink, Mic, RotateCcw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 interface SummarizeRecordingDialogProps {
@@ -129,6 +129,7 @@ export default function SummarizeRecordingDialog({
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isPolling, setIsPolling] = useState(false);
   const [transcribeProgress, setTranscribeProgress] = useState<{ current: number; total: number } | null>(null);
+  const [failedError, setFailedError] = useState<string | null>(null);
   const [result, setResult] = useState<{ summary: string; file_url: string; file_name: string } | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -204,6 +205,7 @@ export default function SummarizeRecordingDialog({
           toast({ title: "התמלול הושלם בהצלחה!" });
         } else if (data?.transcription_status === 'failed') {
           stopPolling();
+          setFailedError(data.transcription_error || "שגיאה לא ידועה");
           toast({
             title: "התמלול נכשל",
             description: data.transcription_error || "נסה שוב או הדבק תמלול ידנית",
@@ -215,10 +217,12 @@ export default function SummarizeRecordingDialog({
           const elapsed = Date.now() - updatedAt;
           if (elapsed > 5 * 60 * 1000) {
             stopPolling();
+            const errMsg = 'התמלול נתקע (timeout - מעל 5 דקות)';
+            setFailedError(errMsg);
             // Mark as failed in DB
             await supabase
               .from('zoom_recordings')
-              .update({ transcription_status: 'failed', transcription_error: 'התמלול נתקע (timeout)' } as any)
+              .update({ transcription_status: 'failed', transcription_error: errMsg } as any)
               .eq('id', recordingId);
             toast({
               title: "נראה שהתמלול נתקע",
@@ -268,6 +272,7 @@ export default function SummarizeRecordingDialog({
     setIsTranscribing(true);
     setTranscribeProgress(null);
     setIsPolling(false);
+    setFailedError(null);
 
     try {
       const { data, error } = await supabase.functions.invoke("transcribe-recording", {
@@ -364,6 +369,7 @@ export default function SummarizeRecordingDialog({
         toast({ title: "התמלול רץ ברקע", description: "ניתן להמשיך לעבוד, התוצאה תופיע כשתהיה מוכנה" });
         return;
       }
+      setFailedError(err.message || "שגיאה לא ידועה");
       toast({
         title: "שגיאה בתמלול",
         description: err.message || "נסה שוב או הדבק תמלול ידנית",
@@ -491,6 +497,7 @@ export default function SummarizeRecordingDialog({
       setTranscribeProgress(null);
       setIsTranscribing(false);
       setIsPolling(false);
+      setFailedError(null);
       setFocusPoints(["decisions", "action_items", "next_steps"]);
     }, 300);
   };
@@ -571,6 +578,22 @@ export default function SummarizeRecordingDialog({
                 <p className="text-sm text-primary">
                   התמלול רץ ברקע... ניתן להמשיך לעבוד. התוצאה תופיע אוטומטית.
                 </p>
+              </div>
+            )}
+
+            {/* Failed with Retry button */}
+            {failedError && !isTranscribing && (
+              <div className="bg-destructive/10 rounded-lg p-3 space-y-2">
+                <p className="text-sm text-destructive font-medium">התמלול נכשל: {failedError}</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleRetryTranscription(recording?.id)}
+                  className="text-destructive border-destructive hover:bg-destructive/10"
+                >
+                  <RotateCcw className="h-3 w-3 ml-1" />
+                  נסה שוב
+                </Button>
               </div>
             )}
 

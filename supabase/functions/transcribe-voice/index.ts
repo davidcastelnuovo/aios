@@ -2,7 +2,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 serve(async (req) => {
@@ -29,21 +29,40 @@ serve(async (req) => {
       });
     }
 
-    console.log('🎤 Transcribing audio file:', audioFile.name, 'size:', audioFile.size);
+    console.log('🎤 Transcribing audio chunk:', audioFile.name, 'size:', audioFile.size);
 
     // Prepare form data for OpenAI
     const openaiFormData = new FormData();
     openaiFormData.append('file', audioFile, audioFile.name || 'audio.webm');
     openaiFormData.append('model', 'whisper-1');
-    openaiFormData.append('language', 'he'); // Default to Hebrew, can be auto-detected
+    openaiFormData.append('language', 'he');
 
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-      },
-      body: openaiFormData,
-    });
+    // AbortController with 120s timeout guard
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120_000);
+
+    let response: Response;
+    try {
+      response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openaiApiKey}`,
+        },
+        body: openaiFormData,
+        signal: controller.signal,
+      });
+    } catch (abortErr: any) {
+      clearTimeout(timeout);
+      const isTimeout = abortErr.name === 'AbortError';
+      const errMsg = isTimeout ? 'Whisper API timed out after 120s' : (abortErr.message || 'Unknown fetch error');
+      console.error('❌ Whisper fetch error:', errMsg);
+      return new Response(JSON.stringify({ error: errMsg }), {
+        status: 504,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -55,51 +74,13 @@ serve(async (req) => {
     }
 
     const result = await response.json();
-    const rawText = result.text;
-    console.log('✅ Transcription complete:', rawText?.substring(0, 100));
+    const text = result.text;
+    console.log('✅ Chunk transcription complete, length:', text?.length);
 
-    // Post-process with GPT to fix spelling errors
-    let correctedText = rawText;
-    if (rawText && rawText.length > 0) {
-      try {
-        console.log('🔧 Fixing spelling errors with GPT...');
-        const gptResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openaiApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: [
-              {
-                role: 'system',
-                content: 'אתה עוזר שמתקן שגיאות כתיב בעברית. תקבל טקסט שתומלל מהודעה קולית ותחזיר אותו מתוקן. אל תשנה את המשמעות או המבנה, רק תקן שגיאות כתיב וסימני פיסוק. החזר רק את הטקסט המתוקן, ללא הסברים.'
-              },
-              {
-                role: 'user',
-                content: rawText
-              }
-            ],
-            temperature: 0.3,
-            max_tokens: 2000,
-          }),
-        });
+    // GPT spelling correction is DISABLED per-chunk to save time and reduce failure risk.
+    // Spelling correction runs once on the full transcript in transcribe-recording.
 
-        if (gptResponse.ok) {
-          const gptResult = await gptResponse.json();
-          correctedText = gptResult.choices?.[0]?.message?.content || rawText;
-          console.log('✅ Spelling correction complete');
-        } else {
-          console.error('⚠️ GPT spelling correction failed, using raw transcription');
-        }
-      } catch (gptError) {
-        console.error('⚠️ GPT spelling correction error:', gptError);
-        // Fall back to raw transcription if GPT fails
-      }
-    }
-
-    return new Response(JSON.stringify({ text: correctedText }), {
+    return new Response(JSON.stringify({ text }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
