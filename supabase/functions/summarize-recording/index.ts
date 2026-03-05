@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { zipSync } from "https://esm.sh/fflate@0.8.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -146,34 +147,9 @@ ${transcript}${focusPrompt}
       targetName = data?.company_name || "lead";
     }
 
-    // Create HTML document
+    // Create DOCX document
     const dateStr = new Date().toLocaleDateString("he-IL");
-    const htmlContent = `<!DOCTYPE html>
-<html dir="rtl" lang="he">
-<head>
-  <meta charset="UTF-8">
-  <title>סיכום פגישה - ${targetName} - ${dateStr}</title>
-  <style>
-    body { font-family: 'Segoe UI', Tahoma, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; line-height: 1.6; direction: rtl; color: #333; }
-    h1 { color: #1a1a1a; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; }
-    h2 { color: #2563eb; margin-top: 24px; }
-    h3 { color: #4b5563; }
-    ul, ol { padding-right: 20px; }
-    li { margin-bottom: 6px; }
-    .meta { background: #f3f4f6; padding: 12px 16px; border-radius: 8px; margin-bottom: 24px; font-size: 14px; color: #6b7280; }
-    strong { color: #1f2937; }
-    blockquote { border-right: 3px solid #3b82f6; padding-right: 16px; margin: 16px 0; color: #4b5563; font-style: italic; }
-  </style>
-</head>
-<body>
-  <h1>סיכום פגישה - ${targetName}</h1>
-  <div class="meta">
-    <strong>תאריך הפקה:</strong> ${dateStr}<br>
-    ${recording_id ? `<strong>מזהה הקלטה:</strong> ${recording_id}<br>` : ""}
-  </div>
-  ${markdownToHtml(summary)}
-</body>
-</html>`;
+    const docxBytes = buildDocx(summary, targetName, dateStr, recording_id);
 
     // Save to storage
     const admin = createClient(
@@ -181,12 +157,12 @@ ${transcript}${focusPrompt}
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const fileName = `summaries/${tenant_id}/${target_type}_${target_id}/${Date.now()}_summary.html`;
+    const fileName = `summaries/${tenant_id}/${target_type}_${target_id}/${Date.now()}_summary.docx`;
     
     const { error: uploadError } = await admin.storage
       .from("recordings")
-      .upload(fileName, new TextEncoder().encode(htmlContent), {
-        contentType: "text/html",
+      .upload(fileName, docxBytes, {
+        contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         upsert: false,
       });
 
@@ -209,7 +185,7 @@ ${transcript}${focusPrompt}
 
     const currentAttachments = (targetData?.attachments as any[]) || [];
     const newAttachment = {
-      name: `סיכום פגישה - ${dateStr}.html`,
+      name: `סיכום פגישה - ${dateStr}.docx`,
       url: fileUrl,
       type: "meeting_summary",
       created_at: new Date().toISOString(),
@@ -243,29 +219,193 @@ ${transcript}${focusPrompt}
   }
 });
 
-function markdownToHtml(md: string): string {
-  let html = md
-    .replace(/^### (.+)$/gm, "<h3>$1</h3>")
-    .replace(/^## (.+)$/gm, "<h2>$1</h2>")
-    .replace(/^# (.+)$/gm, "<h1>$1</h1>")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.+?)\*/g, "<em>$1</em>")
-    .replace(/^> (.+)$/gm, "<blockquote>$1</blockquote>")
-    .replace(/^- (.+)$/gm, "<li>$1</li>")
-    .replace(/^(\d+)\. (.+)$/gm, "<li>$2</li>");
+// ─── DOCX Builder ───
 
-  // Wrap consecutive <li> in <ul>
-  html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, "<ul>$1</ul>");
-  // Paragraphs
-  html = html.replace(/\n\n/g, "</p><p>");
-  html = `<p>${html}</p>`;
-  html = html.replace(/<p><\/p>/g, "");
-  html = html.replace(/<p>(<h[123]>)/g, "$1");
-  html = html.replace(/(<\/h[123]>)<\/p>/g, "$1");
-  html = html.replace(/<p>(<ul>)/g, "$1");
-  html = html.replace(/(<\/ul>)<\/p>/g, "$1");
-  html = html.replace(/<p>(<blockquote>)/g, "$1");
-  html = html.replace(/(<\/blockquote>)<\/p>/g, "$1");
+function escapeXml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 
-  return html;
+function markdownToDocxParagraphs(md: string): string {
+  const lines = md.split("\n");
+  let paragraphs = "";
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Heading 1
+    if (/^# (.+)$/.test(trimmed)) {
+      const text = trimmed.replace(/^# /, "");
+      paragraphs += makeParagraph(text, "Heading1");
+      continue;
+    }
+    // Heading 2
+    if (/^## (.+)$/.test(trimmed)) {
+      const text = trimmed.replace(/^## /, "");
+      paragraphs += makeParagraph(text, "Heading2");
+      continue;
+    }
+    // Heading 3
+    if (/^### (.+)$/.test(trimmed)) {
+      const text = trimmed.replace(/^### /, "");
+      paragraphs += makeParagraph(text, "Heading3");
+      continue;
+    }
+    // Bullet list
+    if (/^[-*] (.+)$/.test(trimmed)) {
+      const text = trimmed.replace(/^[-*] /, "");
+      paragraphs += makeListParagraph(text);
+      continue;
+    }
+    // Numbered list
+    if (/^\d+\. (.+)$/.test(trimmed)) {
+      const text = trimmed.replace(/^\d+\. /, "");
+      paragraphs += makeListParagraph(text);
+      continue;
+    }
+    // Blockquote
+    if (/^> (.+)$/.test(trimmed)) {
+      const text = trimmed.replace(/^> /, "");
+      paragraphs += makeBlockquote(text);
+      continue;
+    }
+    // Regular paragraph
+    paragraphs += makeParagraph(trimmed, "Normal");
+  }
+
+  return paragraphs;
+}
+
+function makeRuns(text: string): string {
+  // Handle **bold** and *italic* inline formatting
+  let runs = "";
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
+  for (const part of parts) {
+    if (/^\*\*(.+)\*\*$/.test(part)) {
+      const inner = part.replace(/^\*\*|\*\*$/g, "");
+      runs += `<w:r><w:rPr><w:b/><w:bCs/><w:rtl/></w:rPr><w:t xml:space="preserve">${escapeXml(inner)}</w:t></w:r>`;
+    } else if (/^\*(.+)\*$/.test(part)) {
+      const inner = part.replace(/^\*|\*$/g, "");
+      runs += `<w:r><w:rPr><w:i/><w:iCs/><w:rtl/></w:rPr><w:t xml:space="preserve">${escapeXml(inner)}</w:t></w:r>`;
+    } else if (part) {
+      runs += `<w:r><w:rPr><w:rtl/></w:rPr><w:t xml:space="preserve">${escapeXml(part)}</w:t></w:r>`;
+    }
+  }
+  return runs;
+}
+
+function makeParagraph(text: string, style: string): string {
+  return `<w:p><w:pPr><w:pStyle w:val="${style}"/><w:bidi/></w:pPr>${makeRuns(text)}</w:p>`;
+}
+
+function makeListParagraph(text: string): string {
+  return `<w:p><w:pPr><w:pStyle w:val="ListParagraph"/><w:bidi/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>${makeRuns(text)}</w:p>`;
+}
+
+function makeBlockquote(text: string): string {
+  return `<w:p><w:pPr><w:pStyle w:val="Normal"/><w:bidi/><w:ind w:right="720"/><w:pBdr><w:right w:val="single" w:sz="12" w:space="4" w:color="3B82F6"/></w:pBdr></w:pPr>${makeRuns(text)}</w:p>`;
+}
+
+function buildDocx(summary: string, targetName: string, dateStr: string, recordingId?: string): Uint8Array {
+  const bodyContent = markdownToDocxParagraphs(summary);
+
+  const metaLine = `תאריך הפקה: ${dateStr}${recordingId ? ` | מזהה הקלטה: ${recordingId}` : ""}`;
+
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+  xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"
+  xmlns:v="urn:schemas-microsoft-com:vml"
+  xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+  xmlns:w10="urn:schemas-microsoft-com:office:word"
+  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml"
+  mc:Ignorable="w14 wp14">
+  <w:body>
+    ${makeParagraph(`סיכום פגישה - ${targetName}`, "Heading1")}
+    ${makeParagraph(metaLine, "Normal")}
+    ${bodyContent}
+  </w:body>
+</w:document>`;
+
+  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:rPrDefault><w:rPr>
+      <w:rFonts w:ascii="David" w:hAnsi="David" w:cs="David"/>
+      <w:sz w:val="24"/><w:szCs w:val="24"/>
+      <w:lang w:bidi="he-IL"/>
+    </w:rPr></w:rPrDefault>
+    <w:pPrDefault><w:pPr><w:bidi/><w:spacing w:after="120" w:line="276" w:lineRule="auto"/></w:pPr></w:pPrDefault>
+  </w:docDefaults>
+  <w:style w:type="paragraph" w:styleId="Normal"><w:name w:val="Normal"/></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading1">
+    <w:name w:val="heading 1"/>
+    <w:pPr><w:bidi/><w:spacing w:before="360" w:after="120"/></w:pPr>
+    <w:rPr><w:b/><w:bCs/><w:sz w:val="36"/><w:szCs w:val="36"/><w:color w:val="1A1A1A"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading2">
+    <w:name w:val="heading 2"/>
+    <w:pPr><w:bidi/><w:spacing w:before="240" w:after="80"/></w:pPr>
+    <w:rPr><w:b/><w:bCs/><w:sz w:val="30"/><w:szCs w:val="30"/><w:color w:val="2563EB"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading3">
+    <w:name w:val="heading 3"/>
+    <w:pPr><w:bidi/><w:spacing w:before="200" w:after="60"/></w:pPr>
+    <w:rPr><w:b/><w:bCs/><w:sz w:val="26"/><w:szCs w:val="26"/><w:color w:val="4B5563"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="ListParagraph">
+    <w:name w:val="List Paragraph"/>
+    <w:pPr><w:bidi/><w:ind w:right="720"/></w:pPr>
+  </w:style>
+</w:styles>`;
+
+  const numberingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:abstractNum w:abstractNumId="0">
+    <w:lvl w:ilvl="0">
+      <w:start w:val="1"/>
+      <w:numFmt w:val="bullet"/>
+      <w:lvlText w:val="•"/>
+      <w:lvlJc w:val="right"/>
+      <w:pPr><w:ind w:right="720" w:hanging="360"/></w:pPr>
+      <w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol" w:hint="default"/></w:rPr>
+    </w:lvl>
+  </w:abstractNum>
+  <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
+</w:numbering>`;
+
+  const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
+</Types>`;
+
+  const relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`;
+
+  const docRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
+</Relationships>`;
+
+  const enc = new TextEncoder();
+  const zipped = zipSync({
+    "[Content_Types].xml": enc.encode(contentTypesXml),
+    "_rels/.rels": enc.encode(relsXml),
+    "word/document.xml": enc.encode(documentXml),
+    "word/styles.xml": enc.encode(stylesXml),
+    "word/numbering.xml": enc.encode(numberingXml),
+    "word/_rels/document.xml.rels": enc.encode(docRelsXml),
+  });
+
+  return zipped;
 }
