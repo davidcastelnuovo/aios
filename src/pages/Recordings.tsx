@@ -11,8 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Video, Search, Download, Loader2, ExternalLink, Upload, FileVideo, Plus } from "lucide-react";
+import { Video, Search, Download, Loader2, ExternalLink, Upload, FileVideo, Plus, Sparkles } from "lucide-react";
 import { format } from "date-fns";
+import SummarizeRecordingDialog from "@/components/SummarizeRecordingDialog";
 
 export default function Recordings() {
   const { currentTenantId } = useTenant();
@@ -37,6 +38,10 @@ export default function Recordings() {
   const [uploadClientId, setUploadClientId] = useState<string>("");
   const [uploadLeadId, setUploadLeadId] = useState<string>("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+
+  // Summarize dialog state
+  const [summarizeOpen, setSummarizeOpen] = useState(false);
+  const [selectedRecording, setSelectedRecording] = useState<any>(null);
 
   // Check if Zoom is connected
   const { data: zoomIntegration } = useQuery({
@@ -346,6 +351,7 @@ export default function Recordings() {
                       <TableHead>שיוך ללקוח</TableHead>
                       <TableHead>שיוך לליד</TableHead>
                       <TableHead>קישור</TableHead>
+                      <TableHead>סיכום</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -397,6 +403,20 @@ export default function Recordings() {
                             </Button>
                           ) : "-"}
                         </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedRecording(rec);
+                              setSummarizeOpen(true);
+                            }}
+                            className="text-primary hover:text-primary/80"
+                          >
+                            <Sparkles className="h-4 w-4 ml-1" />
+                            סכם
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -406,6 +426,12 @@ export default function Recordings() {
           )}
         </CardContent>
       </Card>
+
+      <SummarizeRecordingDialog
+        open={summarizeOpen}
+        onOpenChange={setSummarizeOpen}
+        recording={selectedRecording}
+      />
     </div>
   );
 }
