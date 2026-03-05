@@ -1,39 +1,23 @@
 
 
-## מצב נוכחי
+## הבעיה
 
-כרגע **כל ניהול ההקלטות נמצא בתוך דף הגדרות Zoom** (`/t/:tenantSlug/zoom-settings`) - כולל הגדרות חיבור, משיכת הקלטות, טבלת הקלטות וחיפוש/סינון. **אין מודול סיכום אוטומטי של הקלטות** - הנתונים שנשמרים הם רק מטא-נתונים (נושא, משך, קישור, סיסמה).
+ההקלטות נשמרו בהצלחה בבסיס הנתונים (12 הקלטות), אבל מדיניות האבטחה (RLS) על טבלת `zoom_recordings` לא מאפשרת לך לראות אותן.
 
-## הצעה - מודול "הקלטות" עצמאי
+הבעיה: ה-SELECT policy משתמש ב-`get_user_tenant_id(auth.uid())` בלבד, בלי bypass ל-super admin. כ-super admin, הפונקציה הזו לא מחזירה את ה-tenant הנכון.
 
-ליצור דף ייעודי לניהול הקלטות שיהיה נפרד מדף ההגדרות, עם יכולות מורחבות:
+## תיקון
 
-### 1. דף חדש: `src/pages/Recordings.tsx`
-- **טבלת הקלטות מלאה** (מועברת מ-ZoomSettings) עם חיפוש/סינון
-- **העלאת הקלטות ידנית** - כפתור העלאה לקבצי אודיו/וידאו עם שדות מטא-נתונים (נושא, תאריך, שיוך ללקוח/ליד)
-- **מקור ההקלטה** - עמודה חדשה שמציגה "Zoom" / "העלאה ידנית" / (בעתיד: Google Meet, Teams וכו')
-- **כפתור "משוך מ-Zoom"** שיקרא ל-Edge Function הקיימת
+עדכון ה-RLS policies על `zoom_recordings` כדי לתמוך גם ב-super admin:
 
-### 2. שינויי DB
-- הוספת עמודה `source` לטבלת `zoom_recordings` (ערכים: `zoom`, `manual`, `google_meet` וכו') - או שינוי שם הטבלה ל-`recordings`
-- הוספת עמודה `file_path` לקבצים שהועלו ידנית (Storage)
-- יצירת Storage bucket `recordings` לקבצים שמועלים
+```sql
+DROP POLICY "Users can view zoom recordings in their tenant" ON zoom_recordings;
+CREATE POLICY "Users can view zoom recordings in their tenant" ON zoom_recordings
+  FOR SELECT USING (
+    tenant_id = get_user_tenant_id(auth.uid())
+    OR is_super_admin(auth.uid())
+  );
+```
 
-### 3. ניתוב ותפריט
-- Route חדש: `/t/:tenantSlug/recordings`
-- הוספה לתפריט כפריט ראשי או תחת אינטגרציות
-- ZoomSettings יישאר רק להגדרות החיבור (ללא טבלת ההקלטות)
-
-### 4. מודול modules.ts
-- הוספת `recordings` כמודול חדש עם הרשאות
-
-### 5. בעתיד
-- אינטגרציות נוספות (Google Meet, Teams)
-- סיכום אוטומטי באמצעות AI (תמלול + סיכום)
-
-### סדר עבודה
-1. מיגרציה - הוספת עמודות `source`, `file_path` + Storage bucket
-2. יצירת דף Recordings חדש עם כל הפיצ'רים
-3. עדכון ZoomSettings - הסרת טבלת ההקלטות, השארת הגדרות בלבד
-4. עדכון ניתוב, תפריט, ומודולים
+אותו דבר לכל שאר ה-policies (INSERT, UPDATE, DELETE).
 
