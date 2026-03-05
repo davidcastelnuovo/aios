@@ -58,34 +58,76 @@ serve(async (req) => {
     }
     // Case 2: Zoom recording with URL
     else if (recording.recording_url || recording.download_url) {
-      const downloadUrl = recording.download_url || recording.recording_url;
-      console.log('🔗 Downloading from Zoom URL');
+      const rawUrls = [recording.download_url, recording.recording_url].filter(Boolean) as string[];
+      const expandedUrls = rawUrls.flatMap((url) => {
+        const variants = [url];
+        if (url.includes('/play/')) variants.unshift(url.replace('/play/', '/download/'));
+        if (url.includes('/rec/play/')) variants.unshift(url.replace('/rec/play/', '/rec/download/'));
+        return variants;
+      });
+      const zoomUrls = [...new Set(expandedUrls)];
 
       const { data: integration } = await supabase
         .from('tenant_integrations')
-        .select('config')
+        .select('config, settings')
         .eq('tenant_id', recording.tenant_id)
         .eq('integration_type', 'zoom')
         .eq('is_active', true)
         .single();
 
       let headers: Record<string, string> = {};
+      let zoomAccessToken: string | null = null;
       if (integration?.config) {
         const config = integration.config as any;
-        if (config.access_token) {
-          headers['Authorization'] = `Bearer ${config.access_token}`;
+        if (config.access_token) zoomAccessToken = config.access_token;
+      }
+      if (!zoomAccessToken && integration?.settings) {
+        const settings = integration.settings as any;
+        if (settings.access_token) zoomAccessToken = settings.access_token;
+      }
+      if (zoomAccessToken) headers['Authorization'] = `Bearer ${zoomAccessToken}`;
+
+      const recordingToken = typeof recording.recording_password === 'string' ? recording.recording_password : null;
+      const queryTokens = [zoomAccessToken, recordingToken].filter(Boolean) as string[];
+      let lastError = 'No Zoom URL candidates found';
+
+      for (const baseUrl of zoomUrls) {
+        const candidateUrls = [baseUrl];
+        for (const token of queryTokens) {
+          const sep = baseUrl.includes('?') ? '&' : '?';
+          candidateUrls.push(`${baseUrl}${sep}access_token=${encodeURIComponent(token)}`);
         }
+
+        for (const candidateUrl of [...new Set(candidateUrls)]) {
+          console.log('🔗 Trying Zoom URL:', candidateUrl.split('?')[0]);
+          const zoomResp = await fetch(candidateUrl, { headers });
+          const responseType = (zoomResp.headers.get('content-type') || '').toLowerCase();
+
+          if (!zoomResp.ok) {
+            lastError = `HTTP ${zoomResp.status} from Zoom`;
+            continue;
+          }
+
+          if (responseType.includes('text/html') || responseType.includes('application/json')) {
+            const preview = (await zoomResp.text()).slice(0, 180);
+            lastError = `Non-media response (${responseType}): ${preview}`;
+            continue;
+          }
+
+          audioBlob = await zoomResp.blob();
+          fileName = 'zoom_recording.mp4';
+          contentType = zoomResp.headers.get('content-type') || audioBlob.type || 'audio/mp4';
+          break;
+        }
+
+        if (audioBlob) break;
       }
 
-      const zoomResp = await fetch(downloadUrl, { headers });
-      if (!zoomResp.ok) {
-        return new Response(JSON.stringify({ error: `Failed to download from Zoom: ${zoomResp.status}` }), {
+      if (!audioBlob) {
+        return new Response(JSON.stringify({ error: `Failed to download valid media from Zoom: ${lastError}` }), {
           status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
-      audioBlob = await zoomResp.blob();
-      fileName = 'zoom_recording.mp4';
-      contentType = zoomResp.headers.get('content-type') || 'audio/mp4';
     } else {
       return new Response(JSON.stringify({ error: 'No audio file or URL found for this recording' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
