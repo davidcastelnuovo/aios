@@ -145,8 +145,15 @@ export default function SummarizeRecordingDialog({
           .eq('id', recording.id)
           .single();
         
-        if (data?.transcription_status === 'completed' && data?.transcription && !transcript) {
+      if (data?.transcription && !transcript) {
           setTranscript(data.transcription);
+          // If status is stuck on processing but text exists, fix it
+          if (data.transcription_status === 'processing') {
+            await supabase
+              .from('zoom_recordings')
+              .update({ transcription_status: 'completed', transcription_error: null } as any)
+              .eq('id', recording.id);
+          }
           toast({ title: "תמלול קיים נטען אוטומטית" });
         } else if (data?.transcription_status === 'processing') {
           // Resume polling
@@ -431,7 +438,20 @@ export default function SummarizeRecordingDialog({
         setTranscribeProgress({ current, total });
       });
 
+      // Save transcript to DB
+      const { error: updateErr } = await supabase
+        .from('zoom_recordings')
+        .update({ transcription: fullText, transcription_status: 'completed', transcription_error: null } as any)
+        .eq('id', recording.id);
+
+      if (updateErr) {
+        console.error("Failed to save transcription to DB:", updateErr);
+        toast({ title: "אזהרה: התמלול הושלם אך לא נשמר בבסיס הנתונים", variant: "destructive" });
+      }
+
       setTranscript(fullText);
+      setFailedError(null);
+      queryClient.invalidateQueries({ queryKey: ['recordings'] });
       toast({ title: "התמלול הושלם בהצלחה!" });
     } catch (err: any) {
       toast({
