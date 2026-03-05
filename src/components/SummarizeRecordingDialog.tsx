@@ -265,6 +265,30 @@ export default function SummarizeRecordingDialog({
 
   const hasAudioSource = !!(recording?.file_path || recording?.recording_url || recording?.download_url);
 
+  // ── Download + chunk helper ──────────────────────────────────
+  const attemptDownloadAndChunk = async (recordingId: string) => {
+    toast({ title: "הקובץ גדול – מתחיל תמלול מחולק..." });
+    const { data: dlData, error: dlError } = await supabase.functions.invoke("transcribe-recording", {
+      body: { recording_id: recordingId, mode: 'download' },
+    });
+    if (dlError) throw dlError;
+    if (dlData?.error) throw new Error(dlData.message || dlData.error);
+    if (!dlData?.audio_base64) throw new Error('Failed to download audio');
+
+    const binary = atob(dlData.audio_base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const audioBlob = new Blob([bytes], { type: dlData.content_type || 'audio/mp4' });
+
+    const fullText = await transcribeChunked(audioBlob, (current, total) => {
+      setTranscribeProgress({ current, total });
+    });
+
+    setTranscript(fullText);
+    toast({ title: "התמלול הושלם בהצלחה!" });
+    setIsTranscribing(false);
+  };
+
   // ── Transcribe handler (supports large files + background polling) ─────────────
 
   const handleTranscribe = async () => {
@@ -280,14 +304,22 @@ export default function SummarizeRecordingDialog({
       });
 
       if (error) {
-        // Network timeout / "Failed to fetch" → switch to polling
         const errMsg = typeof error === 'object' && error.message ? error.message : String(error);
-        if (errMsg.includes('Failed to fetch') || errMsg.includes('network') || errMsg.includes('timeout') || errMsg.includes('AbortError')) {
-          console.log('⏳ Request timed out, switching to polling mode...');
-          setIsPolling(true);
-          startPolling(recording.id);
-          toast({ title: "התמלול רץ ברקע", description: "ניתן להמשיך לעבוד, התוצאה תופיע כשתהיה מוכנה" });
-          return;
+        // Network timeout / "Failed to fetch" / non-2xx (server timeout) → try download+chunking
+        const isTimeoutLike = errMsg.includes('Failed to fetch') || errMsg.includes('network') || errMsg.includes('timeout') || errMsg.includes('AbortError') || errMsg.includes('non-2xx');
+        if (isTimeoutLike) {
+          console.log('⏳ Direct transcription failed/timed out, attempting download+chunking...');
+          try {
+            await attemptDownloadAndChunk(recording.id);
+            return;
+          } catch (chunkErr: any) {
+            // If chunking also fails, fall back to polling
+            console.log('⏳ Chunking also failed, switching to polling mode...');
+            setIsPolling(true);
+            startPolling(recording.id);
+            toast({ title: "התמלול רץ ברקע", description: "ניתן להמשיך לעבוד, התוצאה תופיע כשתהיה מוכנה" });
+            return;
+          }
         }
         throw new Error(errMsg);
       }
@@ -327,37 +359,7 @@ export default function SummarizeRecordingDialog({
       }
 
       if (data?.error === 'file_too_large' && !data?.no_alternative) {
-        toast({ title: "הקובץ גדול – מתחיל תמלול מחולק...", description: `${data.size_mb?.toFixed?.(0) || data.size_mb}MB` });
-
-        const { data: dlData, error: dlError } = await supabase.functions.invoke("transcribe-recording", {
-          body: { recording_id: recording.id, mode: 'download' },
-        });
-
-        if (dlError) throw dlError;
-        if (dlData?.error === 'file_too_large' && dlData?.no_alternative) {
-          toast({
-            title: "הקובץ גדול מדי",
-            description: dlData.message || "נא להדביק תמלול ידנית",
-            variant: "destructive",
-          });
-          setIsTranscribing(false);
-          return;
-        }
-        if (dlData?.error) throw new Error(dlData.message || dlData.error);
-        if (!dlData?.audio_base64) throw new Error('Failed to download audio');
-
-        const binary = atob(dlData.audio_base64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        const audioBlob = new Blob([bytes], { type: dlData.content_type || 'audio/mp4' });
-
-        const fullText = await transcribeChunked(audioBlob, (current, total) => {
-          setTranscribeProgress({ current, total });
-        });
-
-        setTranscript(fullText);
-        toast({ title: "התמלול הושלם בהצלחה!" });
-        setIsTranscribing(false);
+        await attemptDownloadAndChunk(recording.id);
         return;
       }
     } catch (err: any) {
