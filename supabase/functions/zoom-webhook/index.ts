@@ -102,8 +102,8 @@ Deno.serve(async (req) => {
         host_email: meetingObject.host_email || null,
         start_time: meetingObject.start_time || null,
         duration: meetingObject.duration || null,
-        recording_url: file.play_url || file.download_url || null,
-        recording_password: meetingObject.password || payload?.download_token || null,
+        recording_url: file.download_url || file.play_url || null,
+        recording_password: payload?.download_token || meetingObject.password || null,
         recording_type: file.recording_type || null,
         file_size: file.file_size || null,
       }));

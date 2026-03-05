@@ -67,18 +67,31 @@ serve(async (req) => {
       });
       const zoomUrls = [...new Set(expandedUrls)];
 
-      const { data: integration } = await supabase
+      const { data: integration, error: integrationError } = await supabase
         .from('tenant_integrations')
-        .select('config, settings')
+        .select('settings')
         .eq('tenant_id', recording.tenant_id)
         .eq('integration_type', 'zoom')
         .eq('is_active', true)
-        .single();
+        .maybeSingle();
+
+      if (integrationError) {
+        console.error('❌ Failed to fetch Zoom integration:', integrationError.message);
+        return new Response(JSON.stringify({ error: `Zoom integration lookup failed: ${integrationError.message}` }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      if (!integration) {
+        console.error('❌ No active Zoom integration found for tenant:', recording.tenant_id);
+        return new Response(JSON.stringify({ error: 'לא נמצא חיבור Zoom פעיל. נא להגדיר את האינטגרציה בהגדרות.' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
 
       let headers: Record<string, string> = {};
-      const settings = (integration?.settings || {}) as any;
-      const config = (integration?.config || {}) as any;
-      let zoomAccessToken: string | null = config.access_token || settings.access_token || null;
+      const settings = (integration.settings || {}) as any;
+      let zoomAccessToken: string | null = settings.access_token || null;
 
       // Fallback: mint fresh Zoom token via Server-to-Server OAuth
       if (!zoomAccessToken && settings.client_id && settings.client_secret && settings.account_id) {

@@ -172,7 +172,16 @@ export default function SummarizeRecordingDialog({
         body: { recording_id: recording.id },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Try to extract detailed message from edge function response
+        const detailedMsg = typeof error === 'object' && error.message ? error.message : String(error);
+        throw new Error(detailedMsg);
+      }
+
+      // If the edge function returned an error in data (non-throw)
+      if (data?.error && data.error !== 'file_too_large') {
+        throw new Error(data.error);
+      }
 
       // Small file transcribed successfully
       if (data?.text) {
@@ -210,7 +219,7 @@ export default function SummarizeRecordingDialog({
         return;
       }
 
-      if (data?.error) throw new Error(data.error);
+      // Error already handled above
     } catch (err: any) {
       toast({
         title: "שגיאה בתמלול",
