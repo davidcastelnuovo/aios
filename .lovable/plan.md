@@ -1,39 +1,51 @@
 
+מושלם — הבנתי את התקלה החוזרת, ואחרי בדיקה בקוד ובדאטה אני מתכנן לתקן את זה בצורה מלאה (גם לתקלות קיימות וגם להקלטות חדשות).
 
-## Plan: Change Meeting Summary Output from HTML to DOCX
+## מה קורה כרגע (שורש הבעיה)
+1. **סטטוס "מתמלל..." נתקע** כי יש מסלולים שבהם התמלול מסתיים בצד לקוח, אבל עדכון ה־DB ל־`completed` לא נאכף מספיק/לא נבדק עם טיפול שגיאה.
+2. **כפתור הורדת תמלול** מוצג רק אם `transcription_status === 'completed'`, גם אם בפועל יש כבר טקסט תמלול.
+3. **כפתור הורדת סיכום** תלוי רק ב־`summary_file_url` על רשומת `zoom_recordings`; אם הסיכום נשמר רק כ־attachment ללקוח/ליד, הכפתור לא מופיע בניהול הקלטות.
 
-### Problem
-The `summarize-recording` edge function currently generates an HTML file for meeting summaries. You want it as a DOCX (Word document) instead.
+## תוכנית יישום
+1. **הקשחת סנכרון סטטוס תמלול ל־DB**
+   - בכל מסלול תמלול (כולל chunking ו־storage path) לבצע עדכון DB מפורש:
+     - `transcription`
+     - `transcription_status='completed'`
+     - `transcription_error=null`
+   - להוסיף בדיקת שגיאה על update, עם toast שגיאה ברור אם נשמר מקומית אבל לא נשמר ב־DB.
 
-### Solution
-Modify the `summarize-recording` edge function to generate a DOCX file using the Office Open XML format (a ZIP of XML files). DOCX is essentially a ZIP archive containing XML — we can build it directly in Deno without external libraries.
+2. **תיקון לוגיקת תצוגת סטטוס בטבלה**
+   - לחשב סטטוס אפקטיבי ברמת קבוצה:
+     - אם יש `transcription` בפועל → להציג כ־"תומלל" גם אם הסטטוס לא עודכן.
+   - למנוע מצב שבו משתמש רואה "מתמלל..." כשכבר יש תמלול קיים.
 
-### Changes
+3. **להפוך את הורדת התמלול לזמינה כשיש תוכן**
+   - להציג כפתור הורדה לפי קיום `transcription` (לא רק לפי `status`).
+   - הורדה כ־`.txt` (כבר קיים חלקית) תישאר ותורחב לכל המקרים שבהם יש טקסט.
 
-**File: `supabase/functions/summarize-recording/index.ts`**
+4. **להבטיח הורדת סיכום גם כשאין `summary_file_url` ברשומה**
+   - לשמור תמיד `summary_file_url` בעת יצירת סיכום מדיאלוג ההקלטות.
+   - להוסיף fallback בניהול הקלטות:
+     - אם `summary_file_url` ריק, לחפש סיכום מתוך `attachments` של הלקוח/ליד המשויך (type=`meeting_summary`) ולהציג כפתור הורדה גם משם.
 
-1. Replace the HTML generation block (lines 149-176) with DOCX generation:
-   - Convert the Markdown summary to Office Open XML paragraphs (headings, bold, lists, blockquotes)
-   - Build the DOCX ZIP archive using Deno's built-in `JSZip`-compatible approach or raw ZIP construction
-   - Use proper RTL and Hebrew font settings in the document
+5. **תיקון נתונים קיימים (Backfill נקודתי)**
+   - לבצע תיקון לרשומות שנתקעו על `processing`:
+     - אם יש `transcription` → להעביר ל־`completed`.
+     - אם אין תמלול ובפועל נכשל → להעביר ל־`failed` עם שגיאה מתאימה.
+   - מטרה: לנקות מיידית את מצב "מתמלל..." שכבר נתקע אצלך.
 
-2. Update the upload section (lines 184-191):
-   - Change file extension from `.html` to `.docx`
-   - Change content type from `text/html` to `application/vnd.openxmlformats-officedocument.wordprocessingml.document`
+6. **רענון UI אמין לאחר פעולות**
+   - `invalidateQueries(['recordings'])` אחרי תמלול/סיכום/שיוך קבצים כדי שהטבלה תתעדכן מידית.
 
-3. Update the attachment metadata (line 212):
-   - Change display name from `.html` to `.docx`
-
-### Technical Detail
-A minimal DOCX file consists of:
-- `[Content_Types].xml` — declares file types
-- `_rels/.rels` — root relationships
-- `word/_rels/document.xml.rels` — document relationships
-- `word/document.xml` — the actual content with RTL paragraphs
-- `word/styles.xml` — heading and list styles
-
-We'll use the `fflate` library (available via esm.sh) to create the ZIP, as it's lightweight and works in Deno.
-
-### Files to Edit
-- `supabase/functions/summarize-recording/index.ts`
+## פרטי יישום טכניים
+- קבצים עיקריים לעדכון:
+  - `src/components/SummarizeRecordingDialog.tsx`
+  - `src/pages/Recordings.tsx`
+  - (אם צריך התאמה נוספת) `supabase/functions/summarize-recording/index.ts`
+- בדיקות שאבצע אחרי היישום:
+  1. תמלול גדול עם chunking מסתיים ומציג "תומלל".
+  2. כפתור הורדת תמלול מופיע ומוריד TXT.
+  3. יצירת סיכום מציגה כפתור הורדה בניהול הקלטות.
+  4. סיכום זמין גם אם מגיע מ־attachments של הלקוח/ליד.
+  5. אין יותר רשומות "processing" שתקועות אחרי סיום.
 
