@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Facebook, ChevronRight, CheckCircle2, X } from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Loader2, Facebook, CheckCircle2, Search } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -408,6 +409,7 @@ function FacebookFormSelectionDialog({
   const [selectedIntegrationId, setSelectedIntegrationId] = useState(configuration?.facebook_integration_id || "");
   const [selectedPageId, setSelectedPageId] = useState(configuration?.facebook_page_id || "");
   const [selectedFormId, setSelectedFormId] = useState(configuration?.facebook_form_id || "");
+  const [pageSearchQuery, setPageSearchQuery] = useState("");
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -415,6 +417,7 @@ function FacebookFormSelectionDialog({
       setSelectedIntegrationId(configuration?.facebook_integration_id || "");
       setSelectedPageId(configuration?.facebook_page_id || "");
       setSelectedFormId(configuration?.facebook_form_id || "");
+      setPageSearchQuery("");
     }
   }, [open, configuration]);
 
@@ -475,6 +478,13 @@ function FacebookFormSelectionDialog({
   const selectedPage = pagesData?.find((p: FacebookPage) => p.id === selectedPageId);
   const selectedForm = formsData?.find((f: FacebookForm) => f.id === selectedFormId);
   const canSave = !!selectedIntegrationId && !!selectedPageId && !!selectedFormId;
+
+  const filteredPages = useMemo(() => {
+    if (!pagesData || pagesData.length === 0) return [];
+    if (!pageSearchQuery.trim()) return pagesData;
+    const q = pageSearchQuery.trim().toLowerCase();
+    return pagesData.filter((p: FacebookPage) => p.name.toLowerCase().includes(q));
+  }, [pagesData, pageSearchQuery]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -554,24 +564,51 @@ function FacebookFormSelectionDialog({
                   <Loader2 className="h-4 w-4 animate-spin" />
                 </div>
               ) : pagesData && pagesData.length > 0 ? (
-                <Select
-                  value={selectedPageId}
-                  onValueChange={(v) => {
-                    setSelectedPageId(v);
-                    setSelectedFormId("");
-                  }}
-                >
-                  <SelectTrigger className="text-right">
-                    <SelectValue placeholder="בחר דף..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {pagesData.map((page: FacebookPage) => (
-                      <SelectItem key={page.id} value={page.id}>
-                        {page.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="space-y-2">
+                  {/* Search input */}
+                  <div className="relative">
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={pageSearchQuery}
+                      onChange={(e) => setPageSearchQuery(e.target.value)}
+                      placeholder="חפש עמוד לפי שם..."
+                      className="text-right pr-9"
+                    />
+                  </div>
+                  {/* Pages list */}
+                  <ScrollArea className="h-[200px] rounded-md border">
+                    <div className="p-1">
+                      {filteredPages.length > 0 ? (
+                        filteredPages.map((page: FacebookPage) => (
+                          <button
+                            key={page.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedPageId(page.id);
+                              setSelectedFormId("");
+                            }}
+                            className={`w-full text-right px-3 py-2 rounded-md text-sm transition-colors ${
+                              selectedPageId === page.id
+                                ? "bg-primary text-primary-foreground"
+                                : "hover:bg-muted"
+                            }`}
+                          >
+                            {page.name}
+                          </button>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          לא נמצאו עמודים תואמים
+                        </p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                  {pagesData.length > 5 && (
+                    <p className="text-xs text-muted-foreground text-right">
+                      {filteredPages.length} מתוך {pagesData.length} עמודים
+                    </p>
+                  )}
+                </div>
               ) : (
                 <p className="text-sm text-muted-foreground text-right">
                   לא נמצאו דפים. בדוק את ההרשאות של חיבור הפייסבוק.
