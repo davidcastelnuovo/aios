@@ -60,41 +60,44 @@ Deno.serve(async (req) => {
       const existingUser = existingUsers?.users?.find(u => u.email === email);
 
       if (existingUser) {
-        // User exists - try to sign in instead
-        return new Response(JSON.stringify({ 
-          error: "USER_EXISTS",
-          message: "משתמש עם אימייל זה כבר קיים. נסה להתחבר.",
-        }), {
-          status: 409,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        // User exists - add them to the tenant instead of rejecting
+        userId = existingUser.id;
+        userEmail = email;
+
+        // Ensure profile exists
+        await adminClient.from("profiles").upsert({
+          id: userId,
+          email: userEmail,
+          full_name: fullName || existingUser.user_metadata?.full_name || email.split("@")[0],
+          status: "active",
+        }, { onConflict: "id" });
+      } else {
+        // Create user with admin API (auto-confirmed)
+        const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { full_name: fullName || email.split("@")[0] },
         });
+
+        if (createError || !newUser.user) {
+          return new Response(JSON.stringify({ error: createError?.message || "Failed to create user" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        userId = newUser.user.id;
+        userEmail = email;
+
+        // Create profile
+        await adminClient.from("profiles").upsert({
+          id: userId,
+          email: userEmail,
+          full_name: fullName || email.split("@")[0],
+          status: "active",
+        }, { onConflict: "id" });
       }
-
-      // Create user with admin API (auto-confirmed)
-      const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true, // Auto-confirm!
-        user_metadata: { full_name: fullName || email.split("@")[0] },
-      });
-
-      if (createError || !newUser.user) {
-        return new Response(JSON.stringify({ error: createError?.message || "Failed to create user" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      userId = newUser.user.id;
-      userEmail = email;
-
-      // Create profile
-      await adminClient.from("profiles").upsert({
-        id: userId,
-        email: userEmail,
-        full_name: fullName || email.split("@")[0],
-        status: "active",
-      }, { onConflict: "id" });
 
     } else {
       // ======== EXISTING USER (authenticated) ========
