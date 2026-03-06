@@ -75,7 +75,7 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
           className="h-3 w-3 shrink-0"
         />
         
-        <div className="flex-1 min-w-0 truncate" onClick={onClick}>
+        <div className="flex-1 min-w-0 whitespace-normal break-words" onClick={onClick}>
           <span
             className={cn(
               "font-medium",
@@ -136,7 +136,7 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
       <div className="flex-1 min-w-0" onClick={onClick}>
         <p
           className={cn(
-            "text-sm font-medium leading-tight truncate",
+            "text-sm font-medium leading-tight break-words",
             isCompleted && "line-through text-muted-foreground"
           )}
         >
