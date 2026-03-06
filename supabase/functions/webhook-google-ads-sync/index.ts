@@ -5,34 +5,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-webhook-secret",
 };
 
-interface GoogleAdsLeadRecord {
-  campaign_id: string;
-  campaign_name: string;
-  date: string;
-  impressions: number;
-  clicks: number;
-  cost: number;
-  conversions: number;
-  ctr: number;
-  cpc: number;
-  cost_per_conversion: number;
-}
-
-interface GoogleAdsEcommerceRecord {
-  campaign_id: string;
-  campaign_name: string;
-  date: string;
-  impressions: number;
-  clicks: number;
-  cost: number;
-  purchases: number;
-  purchase_value: number;
-  add_to_cart: number;
-  roas: number;
-}
-
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -42,9 +15,8 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Parse request body
     const body = await req.json();
-    const { table_id, records, tenant_id } = body;
+    const { table_id, records } = body;
 
     console.log("Received webhook for table:", table_id, "with", records?.length || 0, "records");
 
@@ -55,10 +27,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get the webhook secret from the request headers
     const webhookSecret = req.headers.get("x-webhook-secret");
 
-    // Verify table exists and get its settings
+    // Verify table exists
     const { data: table, error: tableError } = await supabase
       .from("crm_tables")
       .select("*")
@@ -73,16 +44,12 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Get campaign type from integration settings
-    const integrationSettings = table.integration_settings as { campaign_type?: string } | null;
+    const integrationSettings = table.integration_settings as { campaign_type?: string; webhook_secret?: string } | null;
     const campaignType = integrationSettings?.campaign_type || "leads";
-    
-    console.log(`Table campaign type: ${campaignType}`);
 
-    // Verify webhook secret if configured
-    if (integrationSettings && (integrationSettings as any).webhook_secret) {
-      if (webhookSecret !== (integrationSettings as any).webhook_secret) {
-        console.error("Invalid webhook secret");
+    // Verify webhook secret
+    if (integrationSettings?.webhook_secret) {
+      if (webhookSecret !== integrationSettings.webhook_secret) {
         return new Response(
           JSON.stringify({ error: "Invalid webhook secret" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -90,7 +57,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Validate records
     if (!Array.isArray(records) || records.length === 0) {
       return new Response(
         JSON.stringify({ error: "No records provided", received: 0 }),
@@ -98,7 +64,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Define the expected fields based on campaign type
+    // Ensure fields exist (once)
     const leadFields = [
       { key: "campaign_id", name: "מזהה קמפיין", type: "text" },
       { key: "campaign_name", name: "שם קמפיין", type: "text" },
@@ -127,152 +93,146 @@ Deno.serve(async (req) => {
 
     const expectedFields = campaignType === "ecommerce" ? ecommerceFields : leadFields;
 
-    // Ensure fields exist in crm_fields
-    for (let i = 0; i < expectedFields.length; i++) {
-      const field = expectedFields[i];
-      const { data: existingField } = await supabase
-        .from("crm_fields")
-        .select("id")
-        .eq("table_id", table_id)
-        .eq("key", field.key)
-        .maybeSingle();
+    // Batch check existing fields
+    const { data: existingFields } = await supabase
+      .from("crm_fields")
+      .select("key")
+      .eq("table_id", table_id);
 
-      if (!existingField) {
-        await supabase.from("crm_fields").insert({
-          table_id,
-          key: field.key,
-          name: field.name,
-          type: field.type,
-          position: i,
-          is_visible: true,
-          is_required: false,
-          config: {},
-        });
+    const existingFieldKeys = new Set((existingFields || []).map((f: any) => f.key));
+    const missingFields = expectedFields.filter((f, i) => !existingFieldKeys.has(f.key)).map((f, i) => ({
+      table_id,
+      key: f.key,
+      name: f.name,
+      type: f.type,
+      position: expectedFields.indexOf(f),
+      is_visible: true,
+      is_required: false,
+      config: {},
+    }));
+
+    if (missingFields.length > 0) {
+      await supabase.from("crm_fields").insert(missingFields);
+    }
+
+    // Clear existing if requested
+    if (body.clear_existing === true) {
+      await supabase.from("crm_records").delete().eq("table_id", table_id);
+    }
+
+    // === BATCH UPSERT: fetch all existing records ONCE ===
+    const { data: allExisting } = await supabase
+      .from("crm_records")
+      .select("id, data")
+      .eq("table_id", table_id);
+
+    // Build lookup map: "campaign_id|date" -> record id
+    const existingMap = new Map<string, string>();
+    for (const r of (allExisting || [])) {
+      const d = r.data as any;
+      if (d?.campaign_id && d?.date) {
+        existingMap.set(`${d.campaign_id}|${d.date}`, r.id);
       }
     }
 
-    // Check if we should clear existing records (optional parameter)
-    const clearExisting = body.clear_existing === true;
-    
-    if (clearExisting) {
-      const { error: deleteError } = await supabase
-        .from("crm_records")
-        .delete()
-        .eq("table_id", table_id);
+    console.log(`Loaded ${existingMap.size} existing records for dedup`);
 
-      if (deleteError) {
-        console.error("Error deleting existing records:", deleteError);
-      }
-    }
-
-    // Upsert records - update if exists (same campaign_id + date), insert if not
-    let upsertedCount = 0;
-    let updatedCount = 0;
-    let insertedCount = 0;
+    // Process all records and split into inserts vs updates
+    const toInsert: any[] = [];
+    const toUpdate: { id: string; data: Record<string, any> }[] = [];
 
     for (const record of records) {
       let recordData: Record<string, any>;
-      
+
       if (campaignType === "ecommerce") {
-        // E-commerce record mapping
         const cost = Number(record.cost) || Number(record.cost_micros) / 1000000 || 0;
         const conversionsValue = Number(record.conversions_value) || Number(record.purchase_value) || 0;
         const conversions = Number(record.conversions) || Number(record.purchases) || 0;
         const allConversions = Number(record.all_conversions) || 0;
-        
+
         recordData = {
           campaign_id: record.campaign_id || record.id || "",
           campaign_name: record.campaign_name || record.name || "",
           date: record.date || "",
           impressions: Number(record.impressions) || 0,
           clicks: Number(record.clicks) || 0,
-          cost: cost,
+          cost,
           purchases: conversions,
           purchase_value: conversionsValue,
-          add_to_cart: Math.max(0, allConversions - conversions), // Estimate add to cart
+          add_to_cart: Math.max(0, allConversions - conversions),
           roas: cost > 0 ? Number((conversionsValue / cost).toFixed(2)) : 0,
         };
       } else {
-        // Leads record mapping
         const cost = Number(record.cost) || Number(record.cost_micros) / 1000000 || 0;
         const conversions = Number(record.conversions) || 0;
-        
+
         recordData = {
           campaign_id: record.campaign_id || record.id || "",
           campaign_name: record.campaign_name || record.name || "",
           date: record.date || "",
           impressions: Number(record.impressions) || 0,
           clicks: Number(record.clicks) || 0,
-          cost: cost,
-          conversions: conversions,
+          cost,
+          conversions,
           ctr: Number(record.ctr) || 0,
           cpc: Number(record.cpc) || Number(record.average_cpc) / 1000000 || 0,
           cost_per_conversion: conversions > 0 ? Number((cost / conversions).toFixed(2)) : 0,
         };
       }
 
-      // Check if record with same campaign_id and date already exists
-      const { data: existingRecords } = await supabase
-        .from("crm_records")
-        .select("id, data")
-        .eq("table_id", table_id);
+      const key = `${recordData.campaign_id}|${recordData.date}`;
+      const existingId = existingMap.get(key);
 
-      // Check for matching record based on campaign type unique key
-      const uniqueKeyField = campaignType === "ecommerce" ? "campaign_id" : "campaign_id";
-      
-      const existingRecord = existingRecords?.find((r: any) => {
-        const data = r.data as any;
-        return data?.campaign_id === recordData.campaign_id && data?.date === recordData.date;
-      });
-
-      if (existingRecord) {
-        // Update existing record
-        const { error: updateError } = await supabase
-          .from("crm_records")
-          .update({ 
-            data: recordData,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", existingRecord.id);
-
-        if (updateError) {
-          console.error("Error updating record:", updateError);
-        } else {
-          updatedCount++;
-        }
+      if (existingId) {
+        toUpdate.push({ id: existingId, data: recordData });
       } else {
-        // Insert new record
-        const { error: insertError } = await supabase
-          .from("crm_records")
-          .insert({
-            table_id,
-            tenant_id: table.tenant_id,
-            agency_id: table.agency_id || null,
-            data: recordData,
-          });
-
-        if (insertError) {
-          console.error("Error inserting record:", insertError);
-        } else {
-          insertedCount++;
-        }
+        toInsert.push({
+          table_id,
+          tenant_id: table.tenant_id,
+          agency_id: table.agency_id || null,
+          data: recordData,
+        });
       }
-      upsertedCount++;
     }
 
-    // Update last_sync_at on the table
+    // Batch insert (Supabase handles arrays)
+    let insertedCount = 0;
+    if (toInsert.length > 0) {
+      // Insert in chunks of 500 to avoid payload limits
+      for (let i = 0; i < toInsert.length; i += 500) {
+        const chunk = toInsert.slice(i, i + 500);
+        const { error } = await supabase.from("crm_records").insert(chunk);
+        if (error) {
+          console.error("Batch insert error:", error);
+        } else {
+          insertedCount += chunk.length;
+        }
+      }
+    }
+
+    // Batch update (must be done individually due to different data per row)
+    let updatedCount = 0;
+    for (const item of toUpdate) {
+      const { error } = await supabase
+        .from("crm_records")
+        .update({ data: item.data, updated_at: new Date().toISOString() })
+        .eq("id", item.id);
+      if (!error) updatedCount++;
+    }
+
+    // Update last_sync_at
     await supabase
       .from("crm_tables")
       .update({ last_sync_at: new Date().toISOString() })
       .eq("id", table_id);
 
-    console.log("Successfully synced", upsertedCount, "records for table", table_id, `(${insertedCount} inserted, ${updatedCount} updated)`);
+    console.log(`Synced ${records.length} records: ${insertedCount} inserted, ${updatedCount} updated`);
 
     return new Response(
       JSON.stringify({
         success: true,
         message: "Data synced successfully",
-        records_synced: upsertedCount,
+        records_synced: records.length,
         records_inserted: insertedCount,
         records_updated: updatedCount,
         table_id,

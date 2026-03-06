@@ -1184,12 +1184,8 @@ export default function DynamicTableView() {
       return data;
     },
     onSuccess: () => {
-      toast.success('הסנריו תוקן! כעת הוא מחובר לטבלה הנכונה.');
+      toast.success('הסנריו תוקן! כעת ניתן להריץ סנכרון.');
       queryClient.invalidateQueries({ queryKey: ['crm-tables'] });
-      // Trigger sync after patching
-      setTimeout(() => {
-        syncMakeGoogleAdsMutation.mutate();
-      }, 1000);
     },
     onError: (err: Error) => {
       toast.error(err.message);
