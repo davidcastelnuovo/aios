@@ -1,7 +1,7 @@
 import { useState, useRef, KeyboardEvent } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Send, Paperclip, Mic, Square, X, Loader2, Smile } from "lucide-react";
+import { Send, Paperclip, Mic, Square, X, Loader2, Smile, AudioLines, Type } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -10,6 +10,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // Simple emoji list for quick selection
 const COMMON_EMOJIS = ['😊', '😂', '❤️', '👍', '🙏', '😍', '🔥', '💪', '✅', '👏', '🎉', '😁', '🤔', '💯', '⭐', '🙌', '😎', '💬', '📞', '✨'];
@@ -31,9 +36,11 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
   const [message, setMessage] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isSendingVoice, setIsSendingVoice] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [sendAsVoice, setSendAsVoice] = useState(true);
   const isMobile = useIsMobile();
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -115,8 +122,13 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
         const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
         stream.getTracks().forEach(track => track.stop());
         
-        // Transcribe the audio
-        await transcribeAudio(audioBlob);
+        if (sendAsVoice && onSendFile) {
+          // Send as voice message
+          await sendVoiceMessage(audioBlob);
+        } else {
+          // Transcribe the audio
+          await transcribeAudio(audioBlob);
+        }
       };
 
       mediaRecorder.start();
@@ -131,6 +143,20 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+    }
+  };
+
+  const sendVoiceMessage = async (audioBlob: Blob) => {
+    setIsSendingVoice(true);
+    try {
+      const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+      await onSendFile!(file);
+      toast.success("הודעה קולית נשלחה");
+    } catch (error) {
+      console.error('Voice send error:', error);
+      toast.error("שגיאה בשליחת הודעה קולית");
+    } finally {
+      setIsSendingVoice(false);
     }
   };
 
@@ -256,15 +282,35 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
           </PopoverContent>
         </Popover>
 
+        {/* Voice mode toggle */}
+        {onSendFile && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`shrink-0 h-8 w-8 ${sendAsVoice ? 'text-primary' : 'text-muted-foreground'}`}
+                onClick={() => setSendAsVoice(!sendAsVoice)}
+                disabled={isLoading || isRecording || isTranscribing || isSendingVoice}
+              >
+                {sendAsVoice ? <AudioLines className="h-3.5 w-3.5" /> : <Type className="h-3.5 w-3.5" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {sendAsVoice ? "מצב: שלח כהודעה קולית (לחץ לעבור לתמלול)" : "מצב: תמלל לטקסט (לחץ לעבור לקולי)"}
+            </TooltipContent>
+          </Tooltip>
+        )}
+
         {/* Voice recording button */}
         <Button
           variant={isRecording ? "destructive" : "ghost"}
           size="icon"
           className="shrink-0 h-10 w-10"
           onClick={isRecording ? stopRecording : startRecording}
-          disabled={isLoading || isTranscribing}
+          disabled={isLoading || isTranscribing || isSendingVoice}
         >
-          {isTranscribing ? (
+          {isTranscribing || isSendingVoice ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : isRecording ? (
             <Square className="h-4 w-4" />
@@ -281,12 +327,12 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
           placeholder={selectedFile ? "הוסף כיתוב (אופציונלי)..." : "הקלד הודעה... (Enter לשליחה)"}
           className="resize-none flex-1 h-10 min-h-10 max-h-10"
           rows={1}
-          disabled={isLoading || isRecording || isTranscribing}
+          disabled={isLoading || isRecording || isTranscribing || isSendingVoice}
         />
         
         <Button
           onClick={handleSend}
-          disabled={(!message.trim() && !selectedFile) || isLoading || isRecording || isTranscribing}
+          disabled={(!message.trim() && !selectedFile) || isLoading || isRecording || isTranscribing || isSendingVoice}
           size="icon"
           className="shrink-0 h-10 w-10"
         >
@@ -296,7 +342,7 @@ export default function ChatInput({ onSend, onSendFile, isLoading, replyToMessag
       
       {isRecording && (
         <p className="text-xs text-destructive text-center animate-pulse">
-          🔴 מקליט... לחץ על הכפתור לסיום
+          🔴 מקליט... {sendAsVoice ? '(ישלח כהודעה קולית)' : '(יתמלל לטקסט)'}
         </p>
       )}
     </div>
