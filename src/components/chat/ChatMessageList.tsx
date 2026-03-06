@@ -2,10 +2,9 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { Loader2, MoreVertical, Copy, CheckSquare, Reply, AlertCircle } from "lucide-react";
+import { Loader2, MoreVertical, Copy, CheckSquare, Reply, AlertCircle, History } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-const MAX_MESSAGES = 2000;
 import CustomAudioPlayer from "./CustomAudioPlayer";
 import {
   DropdownMenu,
@@ -36,6 +35,8 @@ interface ChatMessageListProps {
   contactType?: 'client' | 'lead' | 'group' | 'unknown';
   agencyId?: string;
   anchorMessageId?: string;
+  currentPeriod?: 'week' | 'month' | 'all';
+  onLoadMore?: (period: 'week' | 'month' | 'all') => void;
   onReplyToMessage?: (message: Message) => void;
 }
 
@@ -74,6 +75,8 @@ export default function ChatMessageList({
   contactType,
   agencyId,
   anchorMessageId,
+  currentPeriod = 'week',
+  onLoadMore,
   onReplyToMessage,
 }: ChatMessageListProps) {
   const isMobile = useIsMobile();
@@ -389,10 +392,26 @@ export default function ChatMessageList({
   return (
     <div className={`flex flex-col h-full`}>
       <div className={`flex flex-col gap-2 ${isMobile ? 'p-2' : 'p-4'}`}>
-        {messages.length >= MAX_MESSAGES && (
-          <div className="flex items-center justify-center gap-2 py-2 px-4 mb-2 bg-muted/60 text-muted-foreground text-sm rounded-lg border border-border">
-            <AlertCircle className="h-4 w-4 shrink-0" />
-            <span>מציג {MAX_MESSAGES.toLocaleString()} הודעות אחרונות בלבד</span>
+        {currentPeriod !== 'all' && onLoadMore && (
+          <div className="flex items-center justify-center py-2 mb-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2 text-xs bg-white/80">
+                  <History className="h-3.5 w-3.5" />
+                  טען הודעות ישנות יותר
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center">
+                {currentPeriod === 'week' && (
+                  <DropdownMenuItem onClick={() => onLoadMore('month')}>
+                    חודש אחרון
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => onLoadMore('all')}>
+                  כל ההודעות
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
         {messages.map((message) => {
