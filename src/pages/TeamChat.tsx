@@ -927,6 +927,7 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [deleteConfirmMsg, setDeleteConfirmMsg] = useState<TeamMessage | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -1044,16 +1045,36 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
                       {/* Attachments */}
                       {msg.attachments && msg.attachments.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-1">
-                          {msg.attachments.map((att, idx) => (
+                          {msg.attachments.filter(att => att.type === 'image').length > 0 && (
+                            <div className={cn(
+                              "grid gap-1",
+                              msg.attachments.filter(a => a.type === 'image').length === 1 ? "grid-cols-1" : "grid-cols-2"
+                            )}>
+                              {msg.attachments.filter(att => att.type === 'image').map((att, idx) => (
+                                <button
+                                  key={`img-${idx}`}
+                                  className="relative rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
+                                  onClick={() => setLightboxImage(att.url)}
+                                >
+                                  <img
+                                    src={att.url}
+                                    alt={att.name}
+                                    className="max-w-[240px] max-h-[200px] rounded-lg object-cover"
+                                    loading="lazy"
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {msg.attachments.filter(att => att.type !== 'image').map((att, idx) => (
                             <a
-                              key={idx}
+                              key={`file-${idx}`}
                               href={att.url}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-muted hover:bg-muted/80 text-xs transition-colors border"
                             >
-                              {att.type === 'image' ? <ImageIcon className="h-3.5 w-3.5 text-blue-500" /> :
-                               att.type === 'link' ? <Link2 className="h-3.5 w-3.5 text-green-500" /> :
+                              {att.type === 'link' ? <Link2 className="h-3.5 w-3.5 text-green-500" /> :
                                <FileText className="h-3.5 w-3.5 text-orange-500" />}
                               <span className="max-w-[200px] truncate">{att.name}</span>
                             </a>
@@ -1121,6 +1142,27 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Image Lightbox */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center cursor-pointer"
+          onClick={() => setLightboxImage(null)}
+        >
+          <button
+            className="absolute top-4 right-4 text-white hover:text-white/80 z-10"
+            onClick={() => setLightboxImage(null)}
+          >
+            <X className="h-8 w-8" />
+          </button>
+          <img
+            src={lightboxImage}
+            alt="תצוגה מוגדלת"
+            className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </>
   );
 }
