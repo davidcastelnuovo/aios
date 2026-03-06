@@ -1152,6 +1152,22 @@ export function WeeklyTaskBoard() {
         {/* Desktop: Side by side with sticky panel */}
         <div className="hidden md:block flex-1 relative min-h-0 overflow-x-auto">
           <div className="flex gap-2 pb-4 min-h-0 w-fit">
+            {/* Task Backlog Panel - Sticky on desktop, first in DOM for RTL (appears on right) */}
+            <div className="sticky left-0 top-0 z-20 shrink-0 self-start">
+              <TaskBacklogPanel
+                tasks={backlogTasks}
+                onToggleComplete={(taskId, completed) =>
+                  toggleComplete.mutate({ taskId, completed })
+                }
+                onTaskClick={(task) => {
+                  setSelectedTask(task);
+                  setDialogOpen(true);
+                }}
+                onAddTask={handleBacklogAddTask}
+                isLoading={isLoading || addTask.isPending || !canQuickAddTask}
+              />
+            </div>
+
             {viewMode === "daily" && (
               <DailyView
                 date={currentDate}
@@ -1211,22 +1227,6 @@ export function WeeklyTaskBoard() {
                 }}
               />
             )}
-
-            {/* Task Backlog Panel - Sticky on desktop */}
-            <div className="sticky left-0 top-0 z-20 shrink-0 self-start">
-              <TaskBacklogPanel
-                tasks={backlogTasks}
-                onToggleComplete={(taskId, completed) =>
-                  toggleComplete.mutate({ taskId, completed })
-                }
-                onTaskClick={(task) => {
-                  setSelectedTask(task);
-                  setDialogOpen(true);
-                }}
-                onAddTask={handleBacklogAddTask}
-                isLoading={isLoading || addTask.isPending || !canQuickAddTask}
-              />
-            </div>
           </div>
         </div>
         <DragOverlay>
