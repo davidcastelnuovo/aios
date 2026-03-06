@@ -77,10 +77,10 @@ Deno.serve(async (req) => {
     const memberUserIds = members.map(m => m.user_id)
     console.log(`📋 Found ${memberUserIds.length} members to notify`)
 
-    // Get profiles with campaigner_id for these users
+    // Get profiles with phone and notification_group_link
     const { data: profiles } = await supabaseAdmin
       .from('profiles')
-      .select('id, full_name, campaigner_id')
+      .select('id, full_name, phone, notification_group_link, campaigner_id')
       .in('id', memberUserIds)
 
     if (!profiles?.length) {
@@ -89,52 +89,51 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get campaigner phone numbers
+    // Get campaigner phone numbers as fallback
     const campaignerIds = profiles
-      .filter(p => p.campaigner_id)
+      .filter(p => p.campaigner_id && !p.phone)
       .map(p => p.campaigner_id!)
 
-    let phoneMap: Record<string, string> = {} // campaigner_id -> phone
-
+    let campaignerPhoneMap: Record<string, string> = {}
     if (campaignerIds.length > 0) {
       const { data: campaigners } = await supabaseAdmin
         .from('campaigners')
         .select('id, phone')
         .in('id', campaignerIds)
-
       if (campaigners) {
-        campaigners.forEach(c => {
-          if (c.phone) {
-            phoneMap[c.id] = c.phone
-          }
-        })
+        campaigners.forEach(c => { if (c.phone) campaignerPhoneMap[c.id] = c.phone })
       }
     }
 
-    // Build list of phones to notify
+    // Build notification targets: groups (deduplicated) and individual phones
+    const groupsToNotify = new Set<string>() // unique group chat IDs
     const phonesToNotify: { phone: string; name: string }[] = []
+
     for (const profile of profiles) {
-      if (profile.campaigner_id && phoneMap[profile.campaigner_id]) {
-        phonesToNotify.push({
-          phone: phoneMap[profile.campaigner_id],
-          name: profile.full_name || 'חבר צוות',
-        })
+      // Priority 1: notification_group_link (WhatsApp group)
+      if (profile.notification_group_link) {
+        groupsToNotify.add(profile.notification_group_link)
+        continue
+      }
+      // Priority 2: profile phone
+      const phone = profile.phone || (profile.campaigner_id ? campaignerPhoneMap[profile.campaigner_id] : null)
+      if (phone) {
+        phonesToNotify.push({ phone, name: profile.full_name || 'חבר צוות' })
       }
     }
 
-    if (phonesToNotify.length === 0) {
-      console.log('No phone numbers found for members')
-      return new Response(JSON.stringify({ success: true, notified: 0, reason: 'No phone numbers found' }), {
+    if (phonesToNotify.length === 0 && groupsToNotify.size === 0) {
+      console.log('No phone numbers or groups found for members')
+      return new Response(JSON.stringify({ success: true, notified: 0, reason: 'No phone numbers or groups found' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    console.log(`📱 Sending notifications to ${phonesToNotify.length} phones`)
+    console.log(`📱 Sending notifications to ${phonesToNotify.length} phones + ${groupsToNotify.size} groups`)
 
     // Find any active Green API integration for this tenant (prefer the sender's)
     let integration: any = null
 
-    // First try sender's integration
     const { data: senderIntegration } = await supabaseAdmin
       .from('tenant_integrations')
       .select('*')
@@ -147,7 +146,6 @@ Deno.serve(async (req) => {
     if (senderIntegration?.api_key && senderIntegration?.settings?.instance_id) {
       integration = senderIntegration
     } else {
-      // Fallback: any active Green API integration for this tenant
       const { data: anyIntegration } = await supabaseAdmin
         .from('tenant_integrations')
         .select('*')
@@ -172,23 +170,15 @@ Deno.serve(async (req) => {
 
     const instanceId = integration.settings.instance_id
     const apiToken = integration.api_key
-
-    // Format notification message
     const notificationMessage = `🔔 *התראה מצ'אט צוות*\n\n📢 *ערוץ:* ${channelName || 'ערוץ'}\n👤 *מאת:* ${senderName || 'חבר צוות'}\n\n💬 ${messageContent}\n\n🔗 ${chatLink}`
 
     let sentCount = 0
     const errors: string[] = []
 
-    for (const target of phonesToNotify) {
+    // Helper to send via Green API
+    const sendGreenApi = async (chatId: string, label: string) => {
       try {
-        // Normalize phone
-        let digits = target.phone.replace(/[^0-9]/g, '')
-        if (digits.startsWith('00')) digits = digits.slice(2)
-        if (digits.startsWith('0') && digits.length <= 10) digits = '972' + digits.slice(1)
-        const chatId = digits + '@c.us'
-
-        console.log(`📤 Sending to ${target.name} (${chatId})`)
-
+        console.log(`📤 Sending to ${label} (${chatId})`)
         const response = await fetch(
           `https://api.green-api.com/waInstance${instanceId}/sendMessage/${apiToken}`,
           {
@@ -197,27 +187,58 @@ Deno.serve(async (req) => {
             body: JSON.stringify({ chatId, message: notificationMessage }),
           }
         )
-
         if (response.ok) {
           sentCount++
-          console.log(`✅ Sent to ${target.name}`)
+          console.log(`✅ Sent to ${label}`)
         } else {
           const errText = await response.text()
-          console.error(`❌ Failed to send to ${target.name}: ${errText}`)
-          errors.push(`${target.name}: ${errText}`)
+          console.error(`❌ Failed to send to ${label}: ${errText}`)
+          errors.push(`${label}: ${errText}`)
         }
       } catch (err) {
-        console.error(`❌ Error sending to ${target.name}:`, err)
-        errors.push(`${target.name}: ${err.message}`)
+        console.error(`❌ Error sending to ${label}:`, err)
+        errors.push(`${label}: ${err.message}`)
       }
     }
 
-    console.log(`✅ Notification sent to ${sentCount}/${phonesToNotify.length} members`)
+    // Send to WhatsApp groups (deduplicated - one message per unique group)
+    for (const groupLink of groupsToNotify) {
+      // Extract group chatId from link or use as-is
+      let groupChatId = groupLink.trim()
+      // If it's an invite link, we can't send to it directly - need the group ID
+      // Support formats: group chatId directly (e.g. "120363xxx@g.us") or just the ID
+      if (!groupChatId.endsWith('@g.us')) {
+        // Try to extract from invite link or treat as group ID
+        const match = groupChatId.match(/([0-9-]+@g\.us)/)
+        if (match) {
+          groupChatId = match[1]
+        } else {
+          // If it's just a numeric group ID without suffix
+          const digits = groupChatId.replace(/[^0-9-]/g, '')
+          if (digits) {
+            groupChatId = digits + '@g.us'
+          }
+        }
+      }
+      await sendGreenApi(groupChatId, `קבוצה: ${groupChatId}`)
+    }
+
+    // Send to individual phones
+    for (const target of phonesToNotify) {
+      let digits = target.phone.replace(/[^0-9]/g, '')
+      if (digits.startsWith('00')) digits = digits.slice(2)
+      if (digits.startsWith('0') && digits.length <= 10) digits = '972' + digits.slice(1)
+      await sendGreenApi(digits + '@c.us', target.name)
+    }
+
+    const totalTargets = phonesToNotify.length + groupsToNotify.size
+    console.log(`✅ Notification sent to ${sentCount}/${totalTargets} targets`)
 
     return new Response(JSON.stringify({
       success: true,
       notified: sentCount,
-      total: phonesToNotify.length,
+      total: totalTargets,
+      groups: groupsToNotify.size,
       errors: errors.length > 0 ? errors : undefined,
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
