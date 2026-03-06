@@ -36,6 +36,7 @@ export type ModulePermission =
   | "chat_integrations" // Chat integrations settings
   | "accounting_integrations" // Accounting integrations
   | "recordings" // Recordings management
+  | "team_chat" // Team internal communication
   | "settings"; // System settings
 
 export function useUserPermissions() {
