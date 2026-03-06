@@ -1071,7 +1071,7 @@ export function WeeklyTaskBoard() {
           </div>
 
           {/* Task Backlog Panel - full width, max 45vh with internal scroll */}
-          <div className="w-full max-h-[45vh] overflow-y-auto border rounded-xl bg-muted/30">
+          <div className="w-full max-h-[45vh] overflow-y-auto border rounded-xl bg-muted/30 [&>div]:!w-full [&>div]:!min-w-0">
             <TaskBacklogPanel
               tasks={backlogTasks}
               onToggleComplete={(taskId, completed) =>
