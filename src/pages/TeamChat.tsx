@@ -1019,7 +1019,7 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
 
   return (
     <div
-      className={cn("p-3 border-t space-y-2 transition-colors shrink-0", isDragOver && "bg-primary/5 border-primary")}
+      className={cn("p-3 border-t space-y-2 transition-colors shrink-0 sticky bottom-0 bg-background z-10", isDragOver && "bg-primary/5 border-primary")}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
