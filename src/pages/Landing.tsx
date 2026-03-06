@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import OptionsSelector from "@/components/OptionsSelector";
@@ -20,7 +20,9 @@ import {
   ArrowLeft,
   Check,
   CalendarClock,
-  PieChart
+  PieChart,
+  Download,
+  Smartphone,
 } from "lucide-react";
 import logoImage from "@/assets/logo.png";
 
@@ -67,6 +69,36 @@ const ModuleCard: React.FC<ModuleCardProps> = ({
 const Landing = () => {
   const navigate = useNavigate();
   const [demoDialogOpen, setDemoDialogOpen] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isAppInstalled, setIsAppInstalled] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsAppInstalled(true);
+    }
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const result = await deferredPrompt.userChoice;
+      if (result.outcome === 'accepted') setIsAppInstalled(true);
+      setDeferredPrompt(null);
+    } else {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (isIOS) {
+        alert('להתקנה באייפון:\n1. לחץ על כפתור השיתוף (⬆️)\n2. בחר "Add to Home Screen"');
+      } else {
+        alert('פתח את התפריט של הדפדפן ובחר "התקן אפליקציה" או "הוסף למסך הבית"');
+      }
+    }
+  };
   const modules = [
     {
       title: "ניהול לידים",
@@ -164,6 +196,16 @@ const Landing = () => {
             </div>
 
             <div className="flex items-center gap-3">
+              {!isAppInstalled && (
+                <Button 
+                  variant="ghost" 
+                  className="text-white/70 hover:text-white hover:bg-white/10 gap-2"
+                  onClick={handleInstallApp}
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="hidden sm:inline">התקן אפליקציה</span>
+                </Button>
+              )}
               <Link to="/auth">
                 <Button variant="ghost" className="text-white/70 hover:text-white hover:bg-white/10">
                   התחברות
