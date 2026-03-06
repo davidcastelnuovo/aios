@@ -239,9 +239,25 @@ Deno.serve(async (req) => {
       console.log(`🎯 Target override: ${JSON.stringify(targetOverride)}`)
       
       if (targetOverride.type === 'group') {
-        // Send to channel group link
-        if (channelGroupLink) {
-          let groupChatId = channelGroupLink.trim()
+        // Find group link from all sources: channel > member override > profile
+        let resolvedGroupLink = channelGroupLink
+        if (!resolvedGroupLink) {
+          // Check member override groups
+          const memberOverride = enabledMembers.find(m => m.notify_override_group)
+          if (memberOverride) {
+            resolvedGroupLink = memberOverride.notify_override_group
+          }
+        }
+        if (!resolvedGroupLink && profiles?.length) {
+          // Check profile notification_group_link
+          const profileWithGroup = profiles.find(p => p.notification_group_link)
+          if (profileWithGroup) {
+            resolvedGroupLink = profileWithGroup.notification_group_link
+          }
+        }
+
+        if (resolvedGroupLink) {
+          let groupChatId = resolvedGroupLink.trim()
           if (!groupChatId.endsWith('@g.us')) {
             const match = groupChatId.match(/([0-9-]+@g\.us)/)
             if (match) {
