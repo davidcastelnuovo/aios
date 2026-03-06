@@ -67,11 +67,19 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
   const { data: tenantUsers } = useQuery({
     queryKey: ["tenant-users-for-channel", tenantId],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data: tuData } = await supabase
         .from("tenant_users")
-        .select("user_id, profiles:user_id(id, full_name, email)")
+        .select("user_id")
         .eq("tenant_id", tenantId);
-      return (data || []) as any[];
+      if (!tuData || tuData.length === 0) return [];
+      
+      const userIds = tuData.map((tu: any) => tu.user_id);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", userIds);
+      
+      return (profiles || []).map((p: any) => ({ profiles: p }));
     },
     enabled: !!tenantId && open,
   });
@@ -383,11 +391,19 @@ function ManageChannelMembersDialog({
   const { data: tenantUsers = [] } = useQuery({
     queryKey: ["tenant-users-for-members", tenantId],
     queryFn: async () => {
-      const { data } = await supabase
+      const { data: tuData } = await supabase
         .from("tenant_users")
-        .select("user_id, profiles:user_id(id, full_name, email)")
+        .select("user_id")
         .eq("tenant_id", tenantId);
-      return (data || []) as any[];
+      if (!tuData || tuData.length === 0) return [];
+      
+      const userIds = tuData.map((tu: any) => tu.user_id);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", userIds);
+      
+      return (profiles || []).map((p: any) => ({ profiles: p }));
     },
     enabled: !!tenantId && open,
   });
