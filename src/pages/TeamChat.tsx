@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,7 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target, Settings, Pencil } from "lucide-react";
+import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target, Settings, Pencil, ArrowRight } from "lucide-react";
 import { ConvertMessageToTaskDialog } from "@/components/chat/ConvertMessageToTaskDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -554,7 +555,7 @@ function ChannelSidebar({
   );
 
   return (
-    <div className="w-64 border-l bg-muted/30 flex flex-col h-full">
+    <div className="w-full md:w-64 border-l bg-muted/30 flex flex-col h-full">
       <div className="p-3 flex items-center justify-between border-b">
         <div className="flex items-center gap-1">
           <ManageCategoriesDialog tenantId={tenantId} />
@@ -634,7 +635,7 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask }: { message
   }, []);
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
       {grouped.map((group) => (
         <div key={group.date}>
           <div className="flex items-center gap-2 my-3">
@@ -940,7 +941,7 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
 
   return (
     <div
-      className={cn("p-3 border-t space-y-2 transition-colors", isDragOver && "bg-primary/5 border-primary")}
+      className={cn("p-3 border-t space-y-2 transition-colors shrink-0", isDragOver && "bg-primary/5 border-primary")}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -1326,16 +1327,23 @@ function ChannelHeader({
   tenantId,
   currentUserId,
   onMembersChanged,
+  onBack,
 }: {
   channel: TeamChannel;
   members: ChannelMember[];
   tenantId: string;
   currentUserId?: string;
   onMembersChanged: () => void;
+  onBack?: () => void;
 }) {
   return (
-    <div className="h-14 border-b flex items-center gap-3 px-4">
-      <div className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: channel.color }}>
+    <div className="h-14 border-b flex items-center gap-3 px-4 shrink-0">
+      {onBack && (
+        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={onBack}>
+          <ArrowRight className="h-4 w-4" />
+        </Button>
+      )}
+      <div className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0" style={{ backgroundColor: channel.color }}>
         {channel.is_private ? <Lock className="h-4 w-4" /> : <Hash className="h-4 w-4" />}
       </div>
       <div className="flex-1 min-w-0">
@@ -1365,6 +1373,7 @@ export default function TeamChat() {
   const { userId } = useCurrentUser();
   const { selectedAgency } = useAgency();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [taskMessage, setTaskMessage] = useState<TeamMessage | null>(null);
   const [linkDialogFiles, setLinkDialogFiles] = useState<{ id: string; file_name: string; file_url: string }[]>([]);
@@ -1374,7 +1383,6 @@ export default function TeamChat() {
   const { data: allChannels = [], refetch: refetchChannels } = useQuery({
     queryKey: ["team-channels", tenantId, userId],
     queryFn: async () => {
-      // First get channel IDs where the user is a member
       const { data: memberships, error: memError } = await supabase
         .from("team_channel_members")
         .select("channel_id")
@@ -1401,12 +1409,12 @@ export default function TeamChat() {
     ? allChannels
     : allChannels.filter((ch) => !ch.agency_id || ch.agency_id === selectedAgency);
 
-  // Auto-select first channel
+  // Auto-select first channel (only on desktop)
   useEffect(() => {
-    if (channels.length > 0 && !activeChannelId) {
+    if (!isMobile && channels.length > 0 && !activeChannelId) {
       setActiveChannelId(channels[0].id);
     }
-  }, [channels, activeChannelId]);
+  }, [channels, activeChannelId, isMobile]);
 
   const activeChannel = channels.find((c) => c.id === activeChannelId);
 
@@ -1422,7 +1430,6 @@ export default function TeamChat() {
         .limit(200);
       if (error) throw error;
 
-      // Fetch sender profiles
       const senderIds = [...new Set(data.map((m: any) => m.sender_id))];
       const { data: profiles } = await supabase
         .from("profiles")
@@ -1470,55 +1477,68 @@ export default function TeamChat() {
     };
   }, [activeChannelId, refetchMessages]);
 
-  // Unread counts (simplified - count messages after last read)
   const unreadCounts: Record<string, number> = {};
 
   if (!tenantId) return null;
 
+  const showSidebar = isMobile ? !activeChannelId : true;
+  const showChat = isMobile ? !!activeChannelId : true;
+
   return (
-    <div className="flex h-[calc(100vh-4rem)] bg-background" dir="rtl">
+    <div className="flex h-[calc(100vh-4rem)] overflow-hidden bg-background" dir="rtl">
       {/* Channel Sidebar */}
-      <ChannelSidebar
-        channels={channels}
-        activeChannelId={activeChannelId}
-        onSelect={setActiveChannelId}
-        tenantId={tenantId}
-        onCreated={refetchChannels}
-        unreadCounts={unreadCounts}
-      />
+      {showSidebar && (
+        <ChannelSidebar
+          channels={channels}
+          activeChannelId={activeChannelId}
+          onSelect={setActiveChannelId}
+          tenantId={tenantId}
+          onCreated={refetchChannels}
+          unreadCounts={unreadCounts}
+        />
+      )}
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {activeChannel ? (
-          <>
-            <ChannelHeader channel={activeChannel} members={members} tenantId={tenantId} currentUserId={userId} onMembersChanged={() => queryClient.invalidateQueries({ queryKey: ["team-channel-members", activeChannelId] })} />
-            <TeamMessageList messages={messages} currentUserId={userId} onConvertToTask={(msg) => setTaskMessage(msg)} />
-            <TeamMessageInput
-              channelId={activeChannel.id}
-              tenantId={tenantId}
-              onSent={refetchMessages}
-              onFilesUploaded={(files) => {
-                setLinkDialogFiles(files);
-                setShowLinkDialog(true);
-              }}
-            />
-            <ConvertMessageToTaskDialog
-              open={!!taskMessage}
-              onOpenChange={(open) => { if (!open) setTaskMessage(null); }}
-              messageText={taskMessage?.content || ""}
-              contactId={activeChannel.linked_client_id || activeChannel.linked_lead_id || undefined}
-              contactType={activeChannel.linked_client_id ? 'client' : activeChannel.linked_lead_id ? 'lead' : undefined}
-            />
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            <div className="text-center space-y-2">
-              <Hash className="h-12 w-12 mx-auto opacity-20" />
-              <p>בחר ערוץ או צור קבוצה חדשה</p>
+      {showChat && (
+        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+          {activeChannel ? (
+            <>
+              <ChannelHeader
+                channel={activeChannel}
+                members={members}
+                tenantId={tenantId}
+                currentUserId={userId}
+                onMembersChanged={() => queryClient.invalidateQueries({ queryKey: ["team-channel-members", activeChannelId] })}
+                onBack={isMobile ? () => setActiveChannelId(null) : undefined}
+              />
+              <TeamMessageList messages={messages} currentUserId={userId} onConvertToTask={(msg) => setTaskMessage(msg)} />
+              <TeamMessageInput
+                channelId={activeChannel.id}
+                tenantId={tenantId}
+                onSent={refetchMessages}
+                onFilesUploaded={(files) => {
+                  setLinkDialogFiles(files);
+                  setShowLinkDialog(true);
+                }}
+              />
+              <ConvertMessageToTaskDialog
+                open={!!taskMessage}
+                onOpenChange={(open) => { if (!open) setTaskMessage(null); }}
+                messageText={taskMessage?.content || ""}
+                contactId={activeChannel.linked_client_id || activeChannel.linked_lead_id || undefined}
+                contactType={activeChannel.linked_client_id ? 'client' : activeChannel.linked_lead_id ? 'lead' : undefined}
+              />
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-muted-foreground">
+              <div className="text-center space-y-2">
+                <Hash className="h-12 w-12 mx-auto opacity-20" />
+                <p>בחר ערוץ או צור קבוצה חדשה</p>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Link files dialog */}
       <LinkFileToEntityDialog
