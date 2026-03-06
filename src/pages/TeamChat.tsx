@@ -543,9 +543,66 @@ function ManageChannelMembersDialog({
   onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const queryClient = useQueryClient();
 
   const isAdmin = members.some((m) => m.user_id === currentUserId && m.role === "admin");
+
+  // Fetch existing invite link
+  const { data: existingInvite } = useQuery({
+    queryKey: ["team-channel-invite", channel.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("team_channel_invites")
+        .select("token")
+        .eq("channel_id", channel.id)
+        .eq("is_active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      return data;
+    },
+    enabled: open && isAdmin,
+  });
+
+  useEffect(() => {
+    if (existingInvite?.token) {
+      setInviteLink(`${window.location.origin}/chat-invite/${existingInvite.token}`);
+    }
+  }, [existingInvite]);
+
+  const generateInviteLink = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase
+        .from("team_channel_invites")
+        .insert({
+          channel_id: channel.id,
+          tenant_id: tenantId,
+          created_by: currentUserId!,
+        })
+        .select("token")
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      const link = `${window.location.origin}/chat-invite/${data.token}`;
+      setInviteLink(link);
+      queryClient.invalidateQueries({ queryKey: ["team-channel-invite", channel.id] });
+      toast.success("קישור הזמנה נוצר בהצלחה");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const copyInviteLink = () => {
+    if (inviteLink) {
+      navigator.clipboard.writeText(inviteLink);
+      setCopied(true);
+      toast.success("הקישור הועתק");
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   // Fetch all tenant users
   const { data: tenantUsers = [] } = useQuery({
@@ -711,6 +768,32 @@ function ManageChannelMembersDialog({
 
           {!isAdmin && (
             <p className="text-xs text-muted-foreground text-center py-2">רק מנהלי הקבוצה יכולים להוסיף או להסיר חברים</p>
+          )}
+
+          {/* Invite Link Section */}
+          {isAdmin && (
+            <>
+              <Separator className="my-3" />
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium flex items-center gap-2">
+                  <Link2 className="h-4 w-4" />
+                  קישור הזמנה חיצוני
+                </h4>
+                <p className="text-xs text-muted-foreground">שתף קישור עם אנשים מחוץ למערכת. הם יוכלו להירשם ולקבל גישה לצ׳אט הזה בלבד.</p>
+                {inviteLink ? (
+                  <div className="flex gap-2">
+                    <Input value={inviteLink} readOnly className="text-xs" dir="ltr" />
+                    <Button size="sm" variant="outline" onClick={copyInviteLink}>
+                      {copied ? "הועתק!" : "העתק"}
+                    </Button>
+                  </div>
+                ) : (
+                  <Button size="sm" variant="outline" className="w-full" onClick={() => generateInviteLink.mutate()} disabled={generateInviteLink.isPending}>
+                    {generateInviteLink.isPending ? "יוצר..." : "צור קישור הזמנה"}
+                  </Button>
+                )}
+              </div>
+            </>
           )}
         </div>
       </DialogContent>

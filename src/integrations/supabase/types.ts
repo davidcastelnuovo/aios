@@ -3804,6 +3804,51 @@ export type Database = {
           },
         ]
       }
+      team_channel_invites: {
+        Row: {
+          channel_id: string
+          created_at: string
+          created_by: string
+          id: string
+          is_active: boolean
+          tenant_id: string
+          token: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          is_active?: boolean
+          tenant_id: string
+          token?: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          is_active?: boolean
+          tenant_id?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_channel_invites_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "team_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_channel_invites_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_channel_members: {
         Row: {
           channel_id: string
