@@ -1218,23 +1218,22 @@ export function WeeklyTaskBoard() {
                 }}
               />
             )}
-          </div>
 
-          {/* Task Backlog Panel - Sticky on desktop */}
-          <div className="sticky left-0 top-0 z-20 shrink-0 self-start">
-            <TaskBacklogPanel
-              tasks={backlogTasks}
-              onToggleComplete={(taskId, completed) =>
-                toggleComplete.mutate({ taskId, completed })
-              }
-              onTaskClick={(task) => {
-                setSelectedTask(task);
-                setDialogOpen(true);
-              }}
-              onAddTask={handleBacklogAddTask}
-              isLoading={isLoading || addTask.isPending || !canQuickAddTask}
-            />
-          </div>
+            {/* Task Backlog Panel - Sticky on desktop */}
+            <div className="sticky left-0 top-0 z-20 shrink-0 self-start">
+              <TaskBacklogPanel
+                tasks={backlogTasks}
+                onToggleComplete={(taskId, completed) =>
+                  toggleComplete.mutate({ taskId, completed })
+                }
+                onTaskClick={(task) => {
+                  setSelectedTask(task);
+                  setDialogOpen(true);
+                }}
+                onAddTask={handleBacklogAddTask}
+                isLoading={isLoading || addTask.isPending || !canQuickAddTask}
+              />
+            </div>
           </div>
         </div>
         <DragOverlay>
