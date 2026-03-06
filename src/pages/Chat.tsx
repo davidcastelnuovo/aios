@@ -19,7 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { MessageCircle, Search, Settings, Pencil, Trash2, Tags, SquareCheck } from "lucide-react";
+import { MessageCircle, Search, Settings, Pencil, Trash2, Tags, SquareCheck, CheckCheck } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -485,6 +485,34 @@ export default function Chat() {
               <h2 className="text-lg font-semibold">צ'אט</h2>
             </div>
             <div className="flex items-center gap-1">
+              <Button 
+                variant="ghost"
+                size="icon"
+                title="סמן הכל כנקרא"
+                onClick={async () => {
+                  try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (!user || !tenantId) return;
+                    
+                    const { error } = await supabase
+                      .from('chat_messages')
+                      .update({ read_at: new Date().toISOString() })
+                      .eq('tenant_id', tenantId)
+                      .eq('direction', 'inbound')
+                      .is('read_at', null);
+                    
+                    if (error) throw error;
+                    toast.success('כל ההודעות סומנו כנקראו');
+                    queryClient.invalidateQueries({ queryKey: ['active-chats'] });
+                    queryClient.invalidateQueries({ queryKey: ['unknown-contacts'] });
+                  } catch (err) {
+                    console.error('Error marking all as read:', err);
+                    toast.error('שגיאה בסימון הודעות כנקראו');
+                  }
+                }}
+              >
+                <CheckCheck className="h-4 w-4" />
+              </Button>
               <Button 
                 variant={isMultiSelectMode ? "secondary" : "ghost"}
                 size="icon"
