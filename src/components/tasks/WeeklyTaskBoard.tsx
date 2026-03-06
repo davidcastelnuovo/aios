@@ -1156,10 +1156,9 @@ export function WeeklyTaskBoard() {
           </div>
         </div>
 
-        {/* Desktop: Side by side with fixed panel */}
-        <div className="hidden md:flex gap-2 flex-1 relative min-h-0">
-          {/* Scrollable days container - with padding for fixed panel */}
-          <div className="flex gap-2 overflow-x-auto pb-4 flex-1 pr-[280px] min-h-0">
+        {/* Desktop: Side by side with sticky panel */}
+        <div className="hidden md:block flex-1 relative min-h-0 overflow-x-auto">
+          <div className="flex gap-2 pb-4 min-h-0 w-fit">
             {viewMode === "daily" && (
               <DailyView
                 date={currentDate}
@@ -1219,26 +1218,22 @@ export function WeeklyTaskBoard() {
                 }}
               />
             )}
-          </div>
 
-          {/* Task Backlog Panel - Fixed on desktop */}
-          <div className={`fixed top-[200px] z-20 transition-all duration-200 ${
-            sidebarState === "collapsed" 
-              ? "right-[calc(var(--sidebar-width-icon,3rem)+1rem)]" 
-              : "right-[calc(var(--sidebar-width,16rem)+1rem)]"
-          }`}>
-            <TaskBacklogPanel
-              tasks={backlogTasks}
-              onToggleComplete={(taskId, completed) =>
-                toggleComplete.mutate({ taskId, completed })
-              }
-              onTaskClick={(task) => {
-                setSelectedTask(task);
-                setDialogOpen(true);
-              }}
-              onAddTask={handleBacklogAddTask}
-              isLoading={isLoading || addTask.isPending || !canQuickAddTask}
-            />
+            {/* Task Backlog Panel - Sticky on desktop */}
+            <div className="sticky left-0 top-0 z-20 shrink-0 self-start">
+              <TaskBacklogPanel
+                tasks={backlogTasks}
+                onToggleComplete={(taskId, completed) =>
+                  toggleComplete.mutate({ taskId, completed })
+                }
+                onTaskClick={(task) => {
+                  setSelectedTask(task);
+                  setDialogOpen(true);
+                }}
+                onAddTask={handleBacklogAddTask}
+                isLoading={isLoading || addTask.isPending || !canQuickAddTask}
+              />
+            </div>
           </div>
         </div>
         <DragOverlay>
