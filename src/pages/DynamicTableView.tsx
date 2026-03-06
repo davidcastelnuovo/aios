@@ -1083,6 +1083,13 @@ export default function DynamicTableView() {
 
       const integrationSettings = (table?.integration_settings as Record<string, any>) || {};
       
+      // Calculate dynamic date range: last 30 days
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+      const endDate = now.toISOString().split('T')[0];
+      
       const { data, error } = await supabase.functions.invoke('make-api', {
         body: {
           action: 'patch_scenario_blueprint',
@@ -1095,6 +1102,8 @@ export default function DynamicTableView() {
           webhook_url: webhookUrl,
           customer_id: integrationSettings.google_ads_customer_id,
           campaign_type: integrationSettings.campaign_type || 'leads',
+          start_date: startDate,
+          end_date: endDate,
         },
       });
 
