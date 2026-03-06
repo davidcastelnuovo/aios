@@ -14,7 +14,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2 } from "lucide-react";
+import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo } from "lucide-react";
+import { ConvertMessageToTaskDialog } from "@/components/chat/ConvertMessageToTaskDialog";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 
@@ -248,7 +249,7 @@ function ChannelSidebar({
 }
 
 // =================== TeamMessageList ===================
-function TeamMessageList({ messages, currentUserId }: { messages: TeamMessage[]; currentUserId?: string }) {
+function TeamMessageList({ messages, currentUserId, onConvertToTask }: { messages: TeamMessage[]; currentUserId?: string; onConvertToTask?: (msg: TeamMessage) => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -286,7 +287,7 @@ function TeamMessageList({ messages, currentUserId }: { messages: TeamMessage[];
               const isOwn = msg.sender_id === currentUserId;
 
               return (
-                <div key={msg.id} className={cn("group flex gap-2 hover:bg-muted/50 rounded px-2 py-0.5", sameAuthor ? "pt-0" : "pt-2")}>
+                <div key={msg.id} className={cn("group flex gap-2 hover:bg-muted/50 rounded px-2 py-0.5 relative", sameAuthor ? "pt-0" : "pt-2")}>
                   <div className="w-8 shrink-0">
                     {!sameAuthor && (
                       <Avatar className="h-8 w-8">
@@ -304,6 +305,18 @@ function TeamMessageList({ messages, currentUserId }: { messages: TeamMessage[];
                       </div>
                     )}
                     <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                  </div>
+                  {/* Convert to task button - visible on hover */}
+                  <div className="absolute left-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      title="המרה למשימה"
+                      onClick={() => onConvertToTask?.(msg)}
+                    >
+                      <ListTodo className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
               );
@@ -604,6 +617,7 @@ export default function TeamChat() {
   const { userId } = useCurrentUser();
   const queryClient = useQueryClient();
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const [taskMessage, setTaskMessage] = useState<TeamMessage | null>(null);
 
   // Fetch channels
   const { data: channels = [], refetch: refetchChannels } = useQuery({
@@ -721,8 +735,15 @@ export default function TeamChat() {
         {activeChannel ? (
           <>
             <ChannelHeader channel={activeChannel} members={members} tenantId={tenantId} currentUserId={userId} onMembersChanged={() => queryClient.invalidateQueries({ queryKey: ["team-channel-members", activeChannelId] })} />
-            <TeamMessageList messages={messages} currentUserId={userId} />
+            <TeamMessageList messages={messages} currentUserId={userId} onConvertToTask={(msg) => setTaskMessage(msg)} />
             <TeamMessageInput channelId={activeChannel.id} tenantId={tenantId} onSent={refetchMessages} />
+            <ConvertMessageToTaskDialog
+              open={!!taskMessage}
+              onOpenChange={(open) => { if (!open) setTaskMessage(null); }}
+              messageText={taskMessage?.content || ""}
+              contactId={activeChannel.linked_client_id || activeChannel.linked_lead_id || undefined}
+              contactType={activeChannel.linked_client_id ? 'client' : activeChannel.linked_lead_id ? 'lead' : undefined}
+            />
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
