@@ -124,19 +124,42 @@ export default function ChatInvite() {
       return;
     }
     setAuthLoading(true);
+    setProcessing(true);
     try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: fullName },
-          emailRedirectTo: `${window.location.origin}/chat-invite/${token}`,
+      // Use edge function to create auto-confirmed user + add to tenant + channel
+      const response = await supabase.functions.invoke("process-chat-invite", {
+        body: { 
+          token, 
+          action: "signup",
+          email,
+          password,
+          fullName,
         },
       });
-      if (error) throw error;
-      toast.success("נרשמת בהצלחה! בודק הרשאות...");
+
+      if (response.error) throw new Error(response.error.message);
+
+      const result = response.data;
+      if (result.error) {
+        if (result.error === "USER_EXISTS") {
+          toast.error(result.message || "משתמש כבר קיים - נסה להתחבר");
+          setActiveTab("login");
+          setProcessing(false);
+          return;
+        }
+        throw new Error(result.error);
+      }
+
+      // Now sign in the newly created user
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) throw signInError;
+
+      toast.success(`הצטרפת בהצלחה לערוץ ${result.channelName || ""}`);
+      navigate(`/t/${result.tenantSlug}/team-chat`);
     } catch (err: any) {
+      console.error("Signup error:", err);
       toast.error(err.message || "שגיאה בהרשמה");
+      setProcessing(false);
     } finally {
       setAuthLoading(false);
     }
