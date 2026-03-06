@@ -70,6 +70,7 @@ const ZoomSettings = lazy(() => import("./pages/ZoomSettings"));
 const Recordings = lazy(() => import("./pages/Recordings"));
 const AutomationFlow = lazy(() => import("./pages/AutomationFlow"));
 const TeamChat = lazy(() => import("./pages/TeamChat"));
+const ChatInvite = lazy(() => import("./pages/ChatInvite"));
 
 // QueryClient with optimized defaults for better caching
 const queryClient = new QueryClient({
@@ -122,7 +123,8 @@ const App = () => (
                   <Route path="/auth" element={<Auth />} />
                   <Route path="/signup" element={<SignUp />} />
                   <Route path="/setup" element={<Setup />} />
-                  <Route path="/privacy" element={<Privacy />} />
+                   <Route path="/privacy" element={<Privacy />} />
+                   <Route path="/chat-invite/:token" element={<ChatInvite />} />
                   <Route path="/terms" element={<Terms />} />
                   
                   {/* Tenant-scoped routes */}
