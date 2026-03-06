@@ -491,15 +491,10 @@ export default function Chat() {
                 title="סמן הכל כנקרא"
                 onClick={async () => {
                   try {
-                    const { data: { user } } = await supabase.auth.getUser();
-                    if (!user || !tenantId) return;
+                    if (!tenantId) return;
                     
                     const { error } = await supabase
-                      .from('chat_messages')
-                      .update({ read_at: new Date().toISOString() })
-                      .eq('tenant_id', tenantId)
-                      .eq('direction', 'inbound')
-                      .is('read_at', null);
+                      .rpc('mark_all_chats_read', { p_tenant_id: tenantId });
                     
                     if (error) throw error;
                     toast.success('כל ההודעות סומנו כנקראו');

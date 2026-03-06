@@ -4729,6 +4729,7 @@ export type Database = {
         }
         Returns: string
       }
+      mark_all_chats_read: { Args: { p_tenant_id: string }; Returns: number }
       search_contacts_for_chat:
         | {
             Args: { p_search_term: string }
