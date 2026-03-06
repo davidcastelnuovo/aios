@@ -143,13 +143,20 @@ export function useUserPermissions() {
       return permissions?.[module] === true;
     }
 
+    // Modules accessible to ALL authenticated org members regardless of permissions
+    const alwaysAccessibleModules: ModulePermission[] = ["team_chat", "settings"];
+
+    if (alwaysAccessibleModules.includes(module)) {
+      return true;
+    }
+
     // If user has no permissions defined at all:
     // - Owners get full access to non-restricted modules
     // - Regular users only get access to their profile
     if (!hasAnyPermissions) {
       if (isOwner) return true;
       // Only allow access to profile for users without explicit permissions
-      return module === "settings";
+      return false;
     }
 
     // Owners always get access to non-restricted modules, even if permission says false
