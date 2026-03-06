@@ -1,30 +1,47 @@
 
 
-# תיקון: הזמנה לצ'אט שומרת tenant_id שגוי
+# הגדרת התראות ברמת ערוץ וברמת חבר בערוץ
 
-## הבעיה
-כשיוצרים קישור הזמנה לערוץ, הקוד שומר את `tenantId` מה-context הנוכחי (מבוסס URL) ולא את ה-`tenant_id` של הערוץ עצמו. כך כשאתה (super admin) נמצא בארגון "פודקאסטודיו" אבל מזמין לערוץ של "MarketingCaptain", ההזמנה נוצרת עם tenant_id שגוי → פליקס הצטרף לארגון הלא נכון ולא נוסף לערוץ הנכון.
+## הבעיה הנוכחית
+כרגע ההתראות מבוססות על `notification_group_link` ו-`phone` מטבלת `profiles` — כלומר ההגדרה היא גלובלית לכל המשתמש, לא ספציפית לערוץ. אין אפשרות להגדיר:
+1. קבוצת וואטסאפ ייעודית **לערוץ ספציפי**
+2. התראה **לחבר ספציפי** בערוץ (override של ההגדרה הגלובלית)
 
-## מה שצריך לתקן
+## מה ייבנה
 
-### 1. תיקון יצירת הזמנה (`TeamChat.tsx`)
-בקוד `generateInviteLink` — להשתמש ב-`channel.tenant_id` במקום `tenantId` מה-context:
-```typescript
-tenant_id: channel.tenant_id,  // במקום tenantId
-```
+### 1. שינויי Database (מיגרציה)
 
-### 2. תיקון `process-chat-invite` Edge Function
-להשתמש ב-`tenant_id` של הערוץ (מה-join) במקום של ההזמנה, כהגנה נוספת:
-```typescript
-const tenantId = invite.team_channels?.tenant_id || invite.tenant_id;
-```
+**טבלת `team_channels`** — הוספת עמודה:
+- `notification_group_link text` — קישור לקבוצת וואטסאפ ייעודית לערוץ
 
-### 3. תיקון הנתונים הקיימים (מיגרציה)
-- עדכון ההזמנה הקיימת לערוץ "אנה / פליקס / דוד" ל-tenant_id הנכון (`2dcdaac6...`)
-- הוספת פליקס כ-tenant_user ב-MarketingCaptain (אם לא קיים)
-- הוספת פליקס כ-member בערוץ הנכון
-- הסרת ה-member הכפול של David עם tenant שגוי
+**טבלת `team_channel_members`** — הוספת עמודות:
+- `notify_enabled boolean DEFAULT true` — האם לשלוח התראה לחבר הזה בערוץ הזה
+- `notify_override_phone text` — טלפון ספציפי לערוץ הזה (override)
+- `notify_override_group text` — קבוצה ספציפית לערוץ הזה (override)
 
-### 4. תיקון יצירת חברים בערוץ
-גם בעת הוספת חברים חדשים לערוץ (דיאלוג ניהול חברים) — להשתמש ב-`channel.tenant_id`.
+### 2. עדכון Edge Function `notify-team-message`
+
+לוגיקת עדיפויות חדשה לכל חבר:
+1. אם `notify_enabled = false` — דלג
+2. אם יש `notify_override_group` על ה-member — שלח לקבוצה הזו
+3. אם יש `notification_group_link` על הערוץ — שלח לשם (הודעה אחת, deduplicated)
+4. אם יש `notify_override_phone` על ה-member — שלח לטלפון הזה
+5. Fallback לפרופיל (`notification_group_link` / `phone` / campaigner phone)
+
+### 3. UI — הגדרות התראות בערוץ
+
+בתוך **ManageChannelMembersDialog** (או בדיאלוג הגדרות ערוץ), הוספת:
+
+**ברמת ערוץ:**
+- שדה "קבוצת וואטסאפ לערוץ" — כל ההתראות של הערוץ נשלחות לקבוצה אחת
+
+**ברמת חבר:**
+- Toggle "שלח התראות" (on/off) לכל חבר
+- אפשרות להגדיר טלפון/קבוצה ספציפית לחבר בערוץ הזה (override)
+
+### 4. קבצים שישתנו
+- **מיגרציה SQL** — הוספת עמודות ל-`team_channels` ו-`team_channel_members`
+- **`src/pages/TeamChat.tsx`** — UI להגדרות התראות בדיאלוג ניהול חברים + הגדרות ערוץ
+- **`supabase/functions/notify-team-message/index.ts`** — לוגיקת עדיפויות חדשה
+- **`src/integrations/supabase/types.ts`** — יתעדכן אוטומטית
 
