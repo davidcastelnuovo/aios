@@ -32,6 +32,7 @@ import {
   Plus,
   Table2,
   MessageSquare,
+  MessagesSquare,
 } from "lucide-react";
 import {
   Sidebar,
@@ -100,6 +101,7 @@ const iconMap: Record<string, any> = {
   Table,
   Table2,
   MessageSquare,
+  MessagesSquare,
   FolderKanban: Table,
   Database: Table,
   Layers: Table,
@@ -305,6 +307,7 @@ export function AppSidebar() {
       'chat': 'chat',
       'dynamic-tables': 'dynamic_tables',
       'recordings': 'recordings',
+      'team-chat': 'team_chat',
       'site_analytics': 'clients', // אנליטיקס אתרים - מי שיש לו גישה ללקוחות יכול לראות
       'rank_tracking': 'clients', // מעקב מיקומים - מי שיש לו גישה ללקוחות יכול לראות
     };
