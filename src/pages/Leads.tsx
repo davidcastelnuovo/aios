@@ -829,7 +829,7 @@ export default function Leads() {
       // Follow-up today filter
       if (filterFollowUpToday) {
         const today = new Date().toISOString().split('T')[0];
-        query = query.eq("follow_up_date", today);
+        query = query.lte("follow_up_date", today);
       }
       
       if (startDate) {
@@ -1143,7 +1143,7 @@ export default function Leads() {
       // Follow-up today filter
       if (filterFollowUpToday) {
         const today = new Date().toISOString().split('T')[0];
-        query = query.eq("follow_up_date", today);
+        query = query.lte("follow_up_date", today).order("follow_up_date", { ascending: true });
       }
       
       if (startDate) {
