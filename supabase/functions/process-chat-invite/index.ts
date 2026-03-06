@@ -62,10 +62,11 @@ Deno.serve(async (req) => {
     const tenantId = invite.tenant_id;
     const channelId = invite.channel_id;
 
-    // 1. Ensure user has a profile
+    // 1. Ensure user has a profile with a name
+    const derivedName = user.user_metadata?.full_name || user.email?.split("@")[0] || "";
     const { data: existingProfile } = await adminClient
       .from("profiles")
-      .select("id")
+      .select("id, full_name")
       .eq("id", user.id)
       .single();
 
@@ -73,9 +74,12 @@ Deno.serve(async (req) => {
       await adminClient.from("profiles").insert({
         id: user.id,
         email: user.email,
-        full_name: user.user_metadata?.full_name || user.email?.split("@")[0] || "",
+        full_name: derivedName,
         status: "active",
       });
+    } else if (!existingProfile.full_name && derivedName) {
+      // Update empty full_name for existing profiles
+      await adminClient.from("profiles").update({ full_name: derivedName }).eq("id", user.id);
     }
 
     // 2. Add user to tenant if not already a member
