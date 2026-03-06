@@ -81,6 +81,7 @@ interface ChannelMember {
   user_id: string;
   role: string;
   joined_at: string;
+  notify_override_group?: string | null;
   profile?: { full_name: string; email: string };
 }
 
@@ -2570,7 +2571,7 @@ function NotifyTargetDialog({
       if (memberUserIds.length === 0) return [];
       const { data } = await supabase
         .from('profiles')
-        .select('id, full_name, phone, campaigner_id')
+        .select('id, full_name, phone, campaigner_id, notification_group_link')
         .in('id', memberUserIds);
       
       // For members without phone, try campaigner phone
@@ -2594,6 +2595,11 @@ function NotifyTargetDialog({
     },
     enabled: open && memberUserIds.length > 0,
   });
+
+  // Check all group link sources: channel level, member override, profile level
+  const memberHasOverrideGroup = members.some(m => m.notify_override_group);
+  const profileHasGroupLink = memberProfiles.some(p => (p as any).notification_group_link);
+  const hasAnyGroupLink = channelHasGroupLink || memberHasOverrideGroup || profileHasGroupLink;
 
   const handleSend = () => {
     if (target === 'group') {
@@ -2626,7 +2632,7 @@ function NotifyTargetDialog({
                 <Users className="h-4 w-4 text-muted-foreground" />
                 שלח לקבוצה משותפת
               </Label>
-              {!channelHasGroupLink && (
+              {!hasAnyGroupLink && (
                 <span className="text-[10px] text-destructive">(אין קבוצה מקושרת)</span>
               )}
             </div>
@@ -2665,7 +2671,7 @@ function NotifyTargetDialog({
         <DialogFooter>
           <Button
             onClick={handleSend}
-            disabled={isPending || (target === 'group' && !channelHasGroupLink) || (target === 'contact' && !selectedMemberId)}
+            disabled={isPending || (target === 'group' && !hasAnyGroupLink) || (target === 'contact' && !selectedMemberId)}
             className="gap-1.5"
           >
             {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
