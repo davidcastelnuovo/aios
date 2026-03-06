@@ -12,13 +12,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2 } from "lucide-react";
+import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target } from "lucide-react";
 import { ConvertMessageToTaskDialog } from "@/components/chat/ConvertMessageToTaskDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
+import { useAgency } from "@/contexts/AgencyContext";
 
 // Types
 interface TeamChannel {
@@ -32,6 +34,7 @@ interface TeamChannel {
   is_private: boolean;
   linked_client_id: string | null;
   linked_lead_id: string | null;
+  agency_id: string | null;
   created_at: string;
 }
 
@@ -72,6 +75,9 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
   const [color, setColor] = useState("#3B82F6");
   const [isPrivate, setIsPrivate] = useState(false);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [selectedAgencyId, setSelectedAgencyId] = useState<string>("");
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [selectedLeadId, setSelectedLeadId] = useState<string>("");
   const { userId } = useCurrentUser();
 
   const { data: tenantUsers } = useQuery({
@@ -94,19 +100,57 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
     enabled: !!tenantId && open,
   });
 
+  // Fetch agencies
+  const { data: agencies = [] } = useQuery({
+    queryKey: ["agencies-for-channel", tenantId],
+    queryFn: async () => {
+      const { data } = await supabase.from("agencies").select("id, name").eq("tenant_id", tenantId).order("name");
+      return data || [];
+    },
+    enabled: !!tenantId && open,
+  });
+
+  // Fetch clients for selected agency
+  const { data: clients = [] } = useQuery({
+    queryKey: ["clients-for-channel", tenantId, selectedAgencyId],
+    queryFn: async () => {
+      let q = supabase.from("clients").select("id, name").eq("tenant_id", tenantId);
+      if (selectedAgencyId) q = q.eq("agency_id", selectedAgencyId);
+      const { data } = await q.order("name");
+      return data || [];
+    },
+    enabled: !!tenantId && open,
+  });
+
+  // Fetch leads for selected agency
+  const { data: leads = [] } = useQuery({
+    queryKey: ["leads-for-channel", tenantId, selectedAgencyId],
+    queryFn: async () => {
+      let q = supabase.from("leads").select("id, company_name, contact_name").eq("tenant_id", tenantId);
+      if (selectedAgencyId) q = q.eq("agency_id", selectedAgencyId);
+      const { data } = await q.order("created_at", { ascending: false }).limit(100);
+      return data || [];
+    },
+    enabled: !!tenantId && open,
+  });
+
   const createChannel = useMutation({
     mutationFn: async () => {
-      // Create channel
+      const insertData: any = {
+        tenant_id: tenantId,
+        name,
+        description: description || null,
+        color,
+        is_private: isPrivate,
+        created_by: userId!,
+      };
+      if (selectedAgencyId) insertData.agency_id = selectedAgencyId;
+      if (selectedClientId) insertData.linked_client_id = selectedClientId;
+      if (selectedLeadId) insertData.linked_lead_id = selectedLeadId;
+
       const { data: channel, error } = await supabase
         .from("team_channels")
-        .insert({
-          tenant_id: tenantId,
-          name,
-          description: description || null,
-          color,
-          is_private: isPrivate,
-          created_by: userId!,
-        })
+        .insert(insertData)
         .select()
         .single();
       if (error) throw error;
@@ -132,6 +176,9 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
       setName("");
       setDescription("");
       setSelectedMembers([]);
+      setSelectedAgencyId("");
+      setSelectedClientId("");
+      setSelectedLeadId("");
       onCreated();
     },
     onError: (err: any) => toast.error(err.message),
@@ -150,7 +197,7 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
         <DialogHeader>
           <DialogTitle>צור קבוצה חדשה</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto">
           <div>
             <Label>שם הקבוצה</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="למשל: צוות שיווק" />
@@ -172,6 +219,55 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
               ))}
             </div>
           </div>
+
+          {/* Agency Selector */}
+          <div>
+            <Label className="flex items-center gap-1"><Building2 className="h-3.5 w-3.5" /> שייך לסוכנות</Label>
+            <Select value={selectedAgencyId} onValueChange={(v) => { setSelectedAgencyId(v === "none" ? "" : v); setSelectedClientId(""); setSelectedLeadId(""); }}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="ללא שיוך" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">ללא שיוך</SelectItem>
+                {agencies.map((a: any) => (
+                  <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Client Selector */}
+          <div>
+            <Label className="flex items-center gap-1"><User className="h-3.5 w-3.5" /> שייך ללקוח</Label>
+            <Select value={selectedClientId} onValueChange={(v) => { setSelectedClientId(v === "none" ? "" : v); if (v !== "none") setSelectedLeadId(""); }}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="ללא שיוך" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">ללא שיוך</SelectItem>
+                {clients.map((c: any) => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Lead Selector */}
+          <div>
+            <Label className="flex items-center gap-1"><Target className="h-3.5 w-3.5" /> שייך לליד</Label>
+            <Select value={selectedLeadId} onValueChange={(v) => { setSelectedLeadId(v === "none" ? "" : v); if (v !== "none") setSelectedClientId(""); }}>
+              <SelectTrigger className="mt-1">
+                <SelectValue placeholder="ללא שיוך" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">ללא שיוך</SelectItem>
+                {leads.map((l: any) => (
+                  <SelectItem key={l.id} value={l.id}>{l.company_name || l.contact_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="flex items-center gap-2">
             <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} id="private" />
             <Label htmlFor="private" className="flex items-center gap-1">
@@ -240,7 +336,14 @@ function ChannelSidebar({
               )}
             >
               {ch.is_private ? <Lock className="h-3.5 w-3.5 shrink-0" /> : <Hash className="h-3.5 w-3.5 shrink-0" />}
-              <span className="flex-1 truncate">{ch.name}</span>
+              <div className="flex-1 min-w-0">
+                <span className="block truncate">{ch.name}</span>
+                {(ch.linked_client_id || ch.linked_lead_id || ch.agency_id) && (
+                  <span className="text-[10px] text-muted-foreground truncate block">
+                    {ch.linked_client_id ? "👤 לקוח" : ch.linked_lead_id ? "🎯 ליד" : "🏢 סוכנות"}
+                  </span>
+                )}
+              </div>
               {(unreadCounts[ch.id] || 0) > 0 && (
                 <Badge variant="destructive" className="h-5 min-w-5 text-xs px-1">
                   {unreadCounts[ch.id]}
@@ -917,12 +1020,13 @@ function ChannelHeader({
 export default function TeamChat() {
   const { tenantId } = useCurrentTenant();
   const { userId } = useCurrentUser();
+  const { selectedAgency } = useAgency();
   const queryClient = useQueryClient();
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [taskMessage, setTaskMessage] = useState<TeamMessage | null>(null);
 
   // Fetch channels
-  const { data: channels = [], refetch: refetchChannels } = useQuery({
+  const { data: allChannels = [], refetch: refetchChannels } = useQuery({
     queryKey: ["team-channels", tenantId, userId],
     queryFn: async () => {
       // First get channel IDs where the user is a member
@@ -945,6 +1049,11 @@ export default function TeamChat() {
     },
     enabled: !!tenantId && !!userId,
   });
+
+  // Filter channels by selected agency
+  const channels = selectedAgency === "all"
+    ? allChannels
+    : allChannels.filter((ch) => !ch.agency_id || ch.agency_id === selectedAgency);
 
   // Auto-select first channel
   useEffect(() => {
