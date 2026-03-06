@@ -347,7 +347,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           query = query.eq("connection_user_id", connectionUserId);
         }
 
-        const { data, error } = await query.order("created_at", { ascending: true });
+        const { data, error } = await query.order("created_at", { ascending: false }).limit(2000);
 
         if (error) {
           console.error("❌ Error fetching unknown messages:", error);
@@ -357,7 +357,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         console.log("✅ Fetched unknown messages:", data?.length);
         // Mark as read automatically for unknown contacts
         markAsReadMutation.mutate();
-        return data;
+        return data?.reverse() || [];
       }
 
       const filter = contactType === "client" 
@@ -379,7 +379,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         query = query.eq("connection_user_id", connectionUserId);
       }
 
-      const { data, error } = await query.order("created_at", { ascending: true });
+      const { data, error } = await query.order("created_at", { ascending: false }).limit(2000);
 
       if (error) {
         console.error("❌ Error fetching messages:", error);
@@ -391,7 +391,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       // Mark as read automatically
       markAsReadMutation.mutate();
 
-      return data;
+      return data?.reverse() || [];
     },
     enabled: !!contactId,
     refetchInterval: 5000,
