@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -62,6 +62,7 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
   const [linkCampaignerDialogOpen, setLinkCampaignerDialogOpen] = useState(false);
   const [isHeaderExpanded, setIsHeaderExpanded] = useState(false);
   const [replyToMessage, setReplyToMessage] = useState<ReplyToMessage | null>(null);
+  const [messagePeriod, setMessagePeriod] = useState<'week' | 'month' | 'all'>('week');
 
   // Fetch contact details
   const { data: contact, isLoading: isLoadingContact } = useQuery({
@@ -329,11 +330,32 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
     },
   });
 
+  // Reset message period when contact changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const contactKey = `${contactId}-${contactType}-${senderPhone}`;
+  const prevContactKey = useRef(contactKey);
+  if (prevContactKey.current !== contactKey) {
+    prevContactKey.current = contactKey;
+    setMessagePeriod('week');
+  }
+
+  // Calculate date filter based on period
+  const getDateFilter = () => {
+    const now = new Date();
+    if (messagePeriod === 'week') {
+      return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    } else if (messagePeriod === 'month') {
+      return new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    }
+    return null; // 'all' - no date filter
+  };
+
   // Fetch chat messages
   const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
-    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId],
+    queryKey: ["chat-messages", contactId, contactType, senderPhone, connectionUserId, messagePeriod],
     queryFn: async () => {
-      console.log("🔵 Fetching messages for:", { contactId, contactType, senderPhone, connectionUserId });
+      console.log("🔵 Fetching messages for:", { contactId, contactType, senderPhone, connectionUserId, messagePeriod });
+      const dateFilter = getDateFilter();
       
       if (contactType === "unknown") {
         let query = supabase
@@ -342,9 +364,11 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           .eq("sender_phone", senderPhone || contactId)
           .eq("is_blocked", false);
 
-        // Filter by connection_user_id to prevent message leaking between users
         if (connectionUserId) {
           query = query.eq("connection_user_id", connectionUserId);
+        }
+        if (dateFilter) {
+          query = query.gte("created_at", dateFilter);
         }
 
         const { data, error } = await query.order("created_at", { ascending: false }).limit(2000);
@@ -355,7 +379,6 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         }
 
         console.log("✅ Fetched unknown messages:", data?.length);
-        // Mark as read automatically for unknown contacts
         markAsReadMutation.mutate();
         return data?.reverse() || [];
       }
@@ -366,17 +389,17 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
         ? { lead_id: contactId }
         : { group_id: contactId };
 
-      console.log("🔍 Query filter:", filter);
-
       let query = supabase
         .from("chat_messages")
         .select("*")
         .match(filter)
         .eq("is_blocked", false);
 
-      // Filter by connection_user_id to prevent message leaking between users
       if (connectionUserId) {
         query = query.eq("connection_user_id", connectionUserId);
+      }
+      if (dateFilter) {
+        query = query.gte("created_at", dateFilter);
       }
 
       const { data, error } = await query.order("created_at", { ascending: false }).limit(2000);
@@ -387,8 +410,6 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
       }
 
       console.log("✅ Fetched messages:", data?.length);
-
-      // Mark as read automatically
       markAsReadMutation.mutate();
 
       return data?.reverse() || [];
@@ -713,6 +734,8 @@ export default function ChatView({ contactId, contactType, senderPhone, contactN
           contactType={contactType} 
           agencyId={contact?.agency_id}
           anchorMessageId={anchorMessageId}
+          currentPeriod={messagePeriod}
+          onLoadMore={(period) => setMessagePeriod(period)}
           onReplyToMessage={(msg) => setReplyToMessage({
             id: msg.raw_provider_data?.idMessage || msg.id,
             text: msg.message_text,
