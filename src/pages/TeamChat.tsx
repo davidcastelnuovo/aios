@@ -589,16 +589,27 @@ export default function TeamChat() {
 
   // Fetch channels
   const { data: channels = [], refetch: refetchChannels } = useQuery({
-    queryKey: ["team-channels", tenantId],
+    queryKey: ["team-channels", tenantId, userId],
     queryFn: async () => {
+      // First get channel IDs where the user is a member
+      const { data: memberships, error: memError } = await supabase
+        .from("team_channel_members")
+        .select("channel_id")
+        .eq("user_id", userId!);
+      if (memError) throw memError;
+      
+      const channelIds = (memberships || []).map((m: any) => m.channel_id);
+      if (channelIds.length === 0) return [];
+      
       const { data, error } = await supabase
         .from("team_channels")
         .select("*")
+        .in("id", channelIds)
         .order("created_at", { ascending: true });
       if (error) throw error;
       return data as TeamChannel[];
     },
-    enabled: !!tenantId,
+    enabled: !!tenantId && !!userId,
   });
 
   // Auto-select first channel
