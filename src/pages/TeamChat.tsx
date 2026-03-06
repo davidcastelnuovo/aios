@@ -180,10 +180,10 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
 
       // Add creator as admin
       const members = [
-        { channel_id: channel.id, user_id: userId!, role: "admin" },
+        { channel_id: channel.id, user_id: userId!, role: "admin", tenant_id: tenantId },
         ...selectedMembers
           .filter((uid) => uid !== userId)
-          .map((uid) => ({ channel_id: channel.id, user_id: uid, role: "member" })),
+          .map((uid) => ({ channel_id: channel.id, user_id: uid, role: "member", tenant_id: tenantId })),
       ];
 
       const { error: memberError } = await supabase
@@ -1163,6 +1163,7 @@ function ManageChannelMembersDialog({
         channel_id: channel.id,
         user_id: userId,
         role: "member",
+        tenant_id: tenantId,
       });
       if (error) throw error;
     },
@@ -1377,7 +1378,8 @@ export default function TeamChat() {
       const { data: memberships, error: memError } = await supabase
         .from("team_channel_members")
         .select("channel_id")
-        .eq("user_id", userId!);
+        .eq("user_id", userId!)
+        .eq("tenant_id", tenantId);
       if (memError) throw memError;
       
       const channelIds = (memberships || []).map((m: any) => m.channel_id);
