@@ -33,6 +33,7 @@ import { LeadUpdatesTab } from "@/components/leads/LeadUpdatesTab";
 import { LeadTagSelector, LeadTagBadgesEditable } from "@/components/leads/LeadTagSelector";
 import { FolderLinksField } from "./FolderLinksField";
 import { AttachmentsField } from "./AttachmentsField";
+import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
 import { useFolderLinksAndAttachments } from "@/hooks/useFolderLinksAndAttachments";
 import { useMeetingScheduler } from "@/hooks/useMeetingScheduler";
 
@@ -977,6 +978,12 @@ const updateMutation = useMutation({
                   entityType="lead"
                   entityId={lead.id}
                 />
+
+                {/* Files linked from team chat */}
+                <div>
+                  <h4 className="text-sm font-medium mb-2">קבצים מצ׳אט הצוות</h4>
+                  <ClientLinkedFiles leadId={lead.id} tenantId={tenantId || ""} />
+                </div>
 
                 <Button type="submit" disabled={updateMutation.isPending} className="w-full">
                   {updateMutation.isPending ? "מעדכן..." : "שמור שינויים"}

@@ -4009,6 +4009,87 @@ export type Database = {
           },
         ]
       }
+      team_chat_files: {
+        Row: {
+          channel_id: string
+          client_id: string | null
+          created_at: string
+          file_name: string
+          file_size: number | null
+          file_type: string
+          file_url: string
+          id: string
+          lead_id: string | null
+          message_id: string | null
+          tenant_id: string
+          uploaded_by: string
+        }
+        Insert: {
+          channel_id: string
+          client_id?: string | null
+          created_at?: string
+          file_name: string
+          file_size?: number | null
+          file_type?: string
+          file_url: string
+          id?: string
+          lead_id?: string | null
+          message_id?: string | null
+          tenant_id: string
+          uploaded_by: string
+        }
+        Update: {
+          channel_id?: string
+          client_id?: string | null
+          created_at?: string
+          file_name?: string
+          file_size?: number | null
+          file_type?: string
+          file_url?: string
+          id?: string
+          lead_id?: string | null
+          message_id?: string | null
+          tenant_id?: string
+          uploaded_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_chat_files_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "team_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_chat_files_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_chat_files_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_chat_files_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "team_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_chat_files_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_message_attachments: {
         Row: {
           created_at: string
