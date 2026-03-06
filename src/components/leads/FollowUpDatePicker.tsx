@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarClock, X } from "lucide-react";
-import { format } from "date-fns";
+import { format, differenceInCalendarDays, startOfDay } from "date-fns";
 import { he } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,6 +24,18 @@ interface FollowUpDatePickerProps {
   variant?: "icon" | "full";
   onSuccess?: () => void;
   onOptimisticUpdate?: (leadId: string, newDate: string | null) => void;
+}
+
+function getOverdueInfo(dateStr: string | null) {
+  if (!dateStr) return { isOverdue: false, isToday: false, daysLate: 0 };
+  const today = startOfDay(new Date());
+  const followUp = startOfDay(new Date(dateStr));
+  const diff = differenceInCalendarDays(today, followUp);
+  return {
+    isOverdue: diff > 0,
+    isToday: diff === 0,
+    daysLate: diff,
+  };
 }
 
 export function FollowUpDatePicker({
@@ -41,11 +53,12 @@ export function FollowUpDatePicker({
     currentDate ? new Date(currentDate) : undefined
   );
 
+  const { isOverdue, isToday, daysLate } = getOverdueInfo(currentDate);
+
   const updateFollowUpDate = useMutation({
     mutationFn: async (date: Date | null) => {
       let dateString: string | null = null;
       if (date) {
-        // Use local date to avoid timezone issues
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
@@ -60,7 +73,6 @@ export function FollowUpDatePicker({
       if (error) throw error;
     },
     onSuccess: (_data, dateArg) => {
-      // Compute the date string that was saved
       let dateString: string | null = null;
       if (dateArg) {
         const year = dateArg.getFullYear();
@@ -70,15 +82,12 @@ export function FollowUpDatePicker({
       }
 
       if (onOptimisticUpdate) {
-        // Optimistic: update cache directly without full invalidation
         onOptimisticUpdate(leadId, dateString);
-        // Update query caches in-place
         const updateLeadInCache = (old: any) => {
           if (!old) return old;
           if (Array.isArray(old)) {
             return old.map((l: any) => l.id === leadId ? { ...l, follow_up_date: dateString } : l);
           }
-          // Object with stage keys (kanban format)
           if (typeof old === 'object') {
             const updated = { ...old };
             for (const key of Object.keys(updated)) {
@@ -95,7 +104,6 @@ export function FollowUpDatePicker({
         queryClient.setQueriesData({ queryKey: ["leads-kanban"] }, updateLeadInCache);
         queryClient.setQueriesData({ queryKey: ["leads-table"] }, updateLeadInCache);
       } else {
-        // Fallback: full invalidation
         queryClient.invalidateQueries({ queryKey: ["leads-kanban"] });
         queryClient.invalidateQueries({ queryKey: ["leads-table"] });
         queryClient.invalidateQueries({ queryKey: ["leads-count"] });
@@ -125,8 +133,6 @@ export function FollowUpDatePicker({
     updateFollowUpDate.mutate(null);
   };
 
-  const isToday = currentDate && new Date(currentDate).toDateString() === new Date().toDateString();
-
   if (variant === "full") {
     return (
       <div className="flex items-center gap-2">
@@ -137,12 +143,15 @@ export function FollowUpDatePicker({
               className={cn(
                 "justify-start text-right font-normal",
                 !currentDate && "text-muted-foreground",
-                isToday && "border-primary bg-primary/10"
+                isToday && "border-primary bg-primary/10",
+                isOverdue && "border-destructive bg-destructive/10 text-destructive"
               )}
             >
               <CalendarClock className="ml-2 h-4 w-4" />
               {currentDate
-                ? format(new Date(currentDate), "dd/MM/yyyy", { locale: he })
+                ? isOverdue
+                  ? `${format(new Date(), "dd/MM/yyyy", { locale: he })} (איחור ${daysLate} ${daysLate === 1 ? 'יום' : 'ימים'})`
+                  : format(new Date(currentDate), "dd/MM/yyyy", { locale: he })
                 : "בחר תאריך לחזרה"}
             </Button>
           </PopoverTrigger>
@@ -186,13 +195,14 @@ export function FollowUpDatePicker({
           size="icon"
           className={cn(
             "h-8 w-8 relative shrink-0",
-            isToday && "text-green-600 bg-green-100"
+            isToday && "text-green-600 bg-green-100",
+            isOverdue && "text-destructive bg-destructive/10"
           )}
           onClick={(e) => {
             e.stopPropagation();
             setDialogOpen(true);
           }}
-          title={currentDate ? `תאריך לחזרה: ${format(new Date(currentDate), "dd/MM/yyyy", { locale: he })}` : "הגדר תאריך לחזרה"}
+          title={currentDate ? (isOverdue ? `איחור ${daysLate} ימים` : `תאריך לחזרה: ${format(new Date(currentDate), "dd/MM/yyyy", { locale: he })}`) : "הגדר תאריך לחזרה"}
         >
           <CalendarClock className="h-4 w-4" />
         </Button>
@@ -200,10 +210,13 @@ export function FollowUpDatePicker({
           <span
             className={cn(
               "text-sm font-medium whitespace-nowrap",
-              isToday && "text-green-600 bg-green-100 px-2 py-0.5 rounded-md"
+              isToday && "text-green-600 bg-green-100 px-2 py-0.5 rounded-md",
+              isOverdue && "text-destructive bg-destructive/10 px-2 py-0.5 rounded-md"
             )}
           >
-            {format(new Date(currentDate), "dd/MM/yyyy", { locale: he })}
+            {isOverdue
+              ? `${format(new Date(), "dd/MM", { locale: he })} · איחור ${daysLate} ${daysLate === 1 ? 'יום' : 'ימים'}`
+              : format(new Date(currentDate), "dd/MM/yyyy", { locale: he })}
           </span>
         )}</div>
 
@@ -224,8 +237,13 @@ export function FollowUpDatePicker({
             />
             
             {currentDate && (
-              <p className="text-sm text-muted-foreground text-center mt-3">
-                תאריך נוכחי: {format(new Date(currentDate), "dd/MM/yyyy", { locale: he })}
+              <p className={cn(
+                "text-sm text-center mt-3",
+                isOverdue ? "text-destructive font-medium" : "text-muted-foreground"
+              )}>
+                {isOverdue
+                  ? `תאריך מקורי: ${format(new Date(currentDate), "dd/MM/yyyy", { locale: he })} — איחור ${daysLate} ${daysLate === 1 ? 'יום' : 'ימים'}`
+                  : `תאריך נוכחי: ${format(new Date(currentDate), "dd/MM/yyyy", { locale: he })}`}
               </p>
             )}
           </div>
