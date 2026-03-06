@@ -165,8 +165,6 @@ Deno.serve(async (req) => {
         role: "campaigner",
         tenant_id: tenantId,
       });
-        tenant_id: tenantId,
-      });
     }
 
     // 2. Set active tenant
