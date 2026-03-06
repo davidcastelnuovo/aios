@@ -299,6 +299,12 @@ Deno.serve(async (req) => {
     const tenantId = integration.tenant_id;
     const connectionUserId = integration.user_id;
     const apiToken = integration.api_key;
+    const { data: connectionProfile } = await supabaseClient
+      .from('profiles')
+      .select('full_name')
+      .eq('id', connectionUserId)
+      .maybeSingle();
+    const connectionDisplayName = connectionProfile?.full_name || null;
     console.log('✅ Identified tenant:', tenantId);
     console.log('✅ Connection owner (user_id):', connectionUserId);
 
@@ -482,8 +488,8 @@ Deno.serve(async (req) => {
         }
         
         console.log('✅ WhatsApp-sent group message saved successfully');
-        // Forward to linked team channels
-        await forwardToTeamChannels(supabaseClient, tenantId, connectionUserId, chatId, null, messageText, messageContent, groupId);
+        // Do not forward from outgoingMessageStatus to avoid duplicate forwards.
+        // Forwarding is handled by outgoingMessageReceived/incomingMessageReceived flow.
         return new Response(JSON.stringify({ success: true, contactType: 'group' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -1016,7 +1022,8 @@ Deno.serve(async (req) => {
       console.log('✅ Group message saved successfully');
 
       // Forward to linked team channels
-      await forwardToTeamChannels(supabaseClient, tenantId, connectionUserId, senderData.chatId, senderData.senderName, messageText, messageData, groupId);
+      const forwardedSenderName = isOutgoing ? connectionDisplayName : senderData.senderName;
+      await forwardToTeamChannels(supabaseClient, tenantId, connectionUserId, senderData.chatId, forwardedSenderName, messageText, messageData, groupId);
 
       // For incoming group messages, add "unread" tag automatically
       if (isIncoming) {
