@@ -14,7 +14,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, Send, Hash, Lock, Users, Settings, Smile } from "lucide-react";
+import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 
@@ -360,8 +360,200 @@ function TeamMessageInput({ channelId, tenantId, onSent }: { channelId: string; 
   );
 }
 
+// =================== ManageChannelMembersDialog ===================
+function ManageChannelMembersDialog({
+  channel,
+  members,
+  tenantId,
+  currentUserId,
+  onChanged,
+}: {
+  channel: TeamChannel;
+  members: ChannelMember[];
+  tenantId: string;
+  currentUserId?: string;
+  onChanged: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const queryClient = useQueryClient();
+
+  const isAdmin = members.some((m) => m.user_id === currentUserId && m.role === "admin");
+
+  // Fetch all tenant users
+  const { data: tenantUsers = [] } = useQuery({
+    queryKey: ["tenant-users-for-members", tenantId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("tenant_users")
+        .select("user_id, profiles:user_id(id, full_name, email)")
+        .eq("tenant_id", tenantId);
+      return (data || []) as any[];
+    },
+    enabled: !!tenantId && open,
+  });
+
+  // Fetch member profiles
+  const { data: memberProfiles = [] } = useQuery({
+    queryKey: ["team-member-profiles", channel.id],
+    queryFn: async () => {
+      const memberIds = members.map((m) => m.user_id);
+      if (memberIds.length === 0) return [];
+      const { data } = await supabase.from("profiles").select("id, full_name, email").in("id", memberIds);
+      return data || [];
+    },
+    enabled: open && members.length > 0,
+  });
+
+  const memberUserIds = new Set(members.map((m) => m.user_id));
+  const nonMembers = tenantUsers.filter((tu: any) => tu.profiles && !memberUserIds.has(tu.profiles.id));
+
+  const addMember = useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await supabase.from("team_channel_members").insert({
+        channel_id: channel.id,
+        user_id: userId,
+        role: "member",
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("החבר נוסף בהצלחה");
+      queryClient.invalidateQueries({ queryKey: ["team-channel-members", channel.id] });
+      onChanged();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const removeMember = useMutation({
+    mutationFn: async (userId: string) => {
+      const { error } = await supabase
+        .from("team_channel_members")
+        .delete()
+        .eq("channel_id", channel.id)
+        .eq("user_id", userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("החבר הוסר מהקבוצה");
+      queryClient.invalidateQueries({ queryKey: ["team-channel-members", channel.id] });
+      onChanged();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const getMemberProfile = (userId: string) => memberProfiles.find((p: any) => p.id === userId);
+  const getMemberRole = (userId: string) => members.find((m) => m.user_id === userId)?.role;
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground">
+          <UserPlus className="h-4 w-4" />
+          <span className="text-xs">ניהול חברים</span>
+        </Button>
+      </DialogTrigger>
+      <DialogContent dir="rtl" className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>ניהול חברי הקבוצה - {channel.name}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {/* Current Members */}
+          <div>
+            <Label className="text-sm font-medium">חברים נוכחיים ({members.length})</Label>
+            <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
+              {members.map((member) => {
+                const profile = getMemberProfile(member.user_id);
+                const role = getMemberRole(member.user_id);
+                const isCreator = member.user_id === channel.created_by;
+                return (
+                  <div key={member.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50">
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-7 w-7">
+                        <AvatarFallback className="text-xs">
+                          {(profile?.full_name || profile?.email || "?")[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <span className="text-sm">{profile?.full_name || profile?.email || "משתמש"}</span>
+                        {role === "admin" && (
+                          <Badge variant="secondary" className="mr-2 text-[10px] px-1.5 py-0">מנהל</Badge>
+                        )}
+                      </div>
+                    </div>
+                    {isAdmin && !isCreator && member.user_id !== currentUserId && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                        onClick={() => removeMember.mutate(member.user_id)}
+                        disabled={removeMember.isPending}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Add Members */}
+          {isAdmin && nonMembers.length > 0 && (
+            <div>
+              <Label className="text-sm font-medium">הוסף חברים</Label>
+              <div className="mt-2 space-y-1 max-h-48 overflow-y-auto">
+                {nonMembers.map((tu: any) => {
+                  const profile = tu.profiles;
+                  return (
+                    <button
+                      key={profile.id}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted transition-colors"
+                      onClick={() => addMember.mutate(profile.id)}
+                      disabled={addMember.isPending}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-7 w-7">
+                          <AvatarFallback className="text-xs">
+                            {(profile.full_name || profile.email || "?")[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm">{profile.full_name || profile.email}</span>
+                      </div>
+                      <Plus className="h-4 w-4 text-primary" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {isAdmin && nonMembers.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-2">כל חברי הארגון כבר בקבוצה</p>
+          )}
+
+          {!isAdmin && (
+            <p className="text-xs text-muted-foreground text-center py-2">רק מנהלי הקבוצה יכולים להוסיף או להסיר חברים</p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // =================== ChannelHeader ===================
-function ChannelHeader({ channel, memberCount }: { channel: TeamChannel; memberCount: number }) {
+function ChannelHeader({
+  channel,
+  members,
+  tenantId,
+  currentUserId,
+  onMembersChanged,
+}: {
+  channel: TeamChannel;
+  members: ChannelMember[];
+  tenantId: string;
+  currentUserId?: string;
+  onMembersChanged: () => void;
+}) {
   return (
     <div className="h-14 border-b flex items-center gap-3 px-4">
       <div className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-sm font-bold" style={{ backgroundColor: channel.color }}>
@@ -371,9 +563,18 @@ function ChannelHeader({ channel, memberCount }: { channel: TeamChannel; memberC
         <h2 className="font-semibold text-sm">{channel.name}</h2>
         {channel.description && <p className="text-xs text-muted-foreground truncate">{channel.description}</p>}
       </div>
-      <div className="flex items-center gap-1 text-muted-foreground text-xs">
-        <Users className="h-3.5 w-3.5" />
-        {memberCount}
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 text-muted-foreground text-xs">
+          <Users className="h-3.5 w-3.5" />
+          {members.length}
+        </div>
+        <ManageChannelMembersDialog
+          channel={channel}
+          members={members}
+          tenantId={tenantId}
+          currentUserId={currentUserId}
+          onChanged={onMembersChanged}
+        />
       </div>
     </div>
   );
@@ -490,7 +691,7 @@ export default function TeamChat() {
       <div className="flex-1 flex flex-col min-w-0">
         {activeChannel ? (
           <>
-            <ChannelHeader channel={activeChannel} memberCount={members.length} />
+            <ChannelHeader channel={activeChannel} members={members} tenantId={tenantId} currentUserId={userId} onMembersChanged={() => queryClient.invalidateQueries({ queryKey: ["team-channel-members", activeChannelId] })} />
             <TeamMessageList messages={messages} currentUserId={userId} />
             <TeamMessageInput channelId={activeChannel.id} tenantId={tenantId} onSent={refetchMessages} />
           </>
