@@ -67,7 +67,7 @@ export function TaskItem({ task, onToggleComplete, onClick }: TaskItemProps) {
       <div className="flex-1 min-w-0" onClick={onClick}>
         <p
           className={cn(
-            "text-sm font-medium leading-tight truncate",
+            "text-sm font-medium leading-tight break-words",
             isCompleted && "line-through text-muted-foreground"
           )}
         >
