@@ -1083,7 +1083,7 @@ export function WeeklyTaskBoard() {
               }}
               onAddTask={handleBacklogAddTask}
               isLoading={isLoading || addTask.isPending || !canQuickAddTask}
-              fullWidth
+              />
             />
           </div>
           
