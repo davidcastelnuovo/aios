@@ -3804,6 +3804,44 @@ export type Database = {
           },
         ]
       }
+      team_channel_categories: {
+        Row: {
+          created_at: string
+          icon: string
+          id: string
+          name: string
+          sort_order: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          icon?: string
+          id?: string
+          name: string
+          sort_order?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          icon?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_channel_categories_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_channel_invites: {
         Row: {
           channel_id: string
@@ -3886,6 +3924,7 @@ export type Database = {
           agency_id: string | null
           avatar_url: string | null
           category: string
+          category_id: string | null
           color: string | null
           created_at: string
           created_by: string
@@ -3902,6 +3941,7 @@ export type Database = {
           agency_id?: string | null
           avatar_url?: string | null
           category?: string
+          category_id?: string | null
           color?: string | null
           created_at?: string
           created_by: string
@@ -3918,6 +3958,7 @@ export type Database = {
           agency_id?: string | null
           avatar_url?: string | null
           category?: string
+          category_id?: string | null
           color?: string | null
           created_at?: string
           created_by?: string
@@ -3936,6 +3977,13 @@ export type Database = {
             columns: ["agency_id"]
             isOneToOne: false
             referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_channels_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "team_channel_categories"
             referencedColumns: ["id"]
           },
           {
