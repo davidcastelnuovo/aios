@@ -14,8 +14,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo } from "lucide-react";
+import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File } from "lucide-react";
 import { ConvertMessageToTaskDialog } from "@/components/chat/ConvertMessageToTaskDialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 
@@ -34,6 +35,13 @@ interface TeamChannel {
   created_at: string;
 }
 
+interface TeamAttachment {
+  name: string;
+  url: string;
+  type: 'file' | 'link' | 'image';
+  size?: number;
+}
+
 interface TeamMessage {
   id: string;
   channel_id: string;
@@ -43,6 +51,7 @@ interface TeamMessage {
   parent_message_id: string | null;
   is_edited: boolean;
   created_at: string;
+  attachments?: TeamAttachment[];
   sender_profile?: { full_name: string; email: string };
 }
 
@@ -304,7 +313,26 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask }: { message
                         <span className="text-xs text-muted-foreground">{format(new Date(msg.created_at), "HH:mm")}</span>
                       </div>
                     )}
-                    <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                    {msg.content && <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>}
+                    {/* Attachments */}
+                    {msg.attachments && msg.attachments.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {msg.attachments.map((att, idx) => (
+                          <a
+                            key={idx}
+                            href={att.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-muted hover:bg-muted/80 text-xs transition-colors border"
+                          >
+                            {att.type === 'image' ? <ImageIcon className="h-3.5 w-3.5 text-blue-500" /> :
+                             att.type === 'link' ? <Link2 className="h-3.5 w-3.5 text-green-500" /> :
+                             <FileText className="h-3.5 w-3.5 text-orange-500" />}
+                            <span className="max-w-[200px] truncate">{att.name}</span>
+                          </a>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {/* Convert to task button - visible on hover */}
                   <div className="absolute left-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -336,20 +364,73 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask }: { message
 // =================== TeamMessageInput ===================
 function TeamMessageInput({ channelId, tenantId, onSent }: { channelId: string; tenantId: string; onSent: () => void }) {
   const [text, setText] = useState("");
+  const [attachments, setAttachments] = useState<TeamAttachment[]>([]);
+  const [linkInput, setLinkInput] = useState("");
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { userId } = useCurrentUser();
+
+  const canSend = text.trim() || attachments.length > 0;
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    try {
+      const newAttachments: TeamAttachment[] = [];
+      for (const file of Array.from(files)) {
+        const filePath = `${userId}/${Date.now()}-${file.name}`;
+        const { error } = await supabase.storage.from("team-chat-files").upload(filePath, file);
+        if (error) throw error;
+        const { data: urlData } = supabase.storage.from("team-chat-files").getPublicUrl(filePath);
+        const isImage = file.type.startsWith("image/");
+        newAttachments.push({
+          name: file.name,
+          url: urlData.publicUrl,
+          type: isImage ? 'image' : 'file',
+          size: file.size,
+        });
+      }
+      setAttachments((prev) => [...prev, ...newAttachments]);
+    } catch (err: any) {
+      toast.error("שגיאה בהעלאת הקובץ: " + err.message);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const addLink = () => {
+    const url = linkInput.trim();
+    if (!url) return;
+    const finalUrl = url.startsWith("http") ? url : `https://${url}`;
+    setAttachments((prev) => [...prev, { name: finalUrl, url: finalUrl, type: 'link' }]);
+    setLinkInput("");
+    setShowLinkInput(false);
+  };
+
+  const removeAttachment = (idx: number) => {
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   const sendMessage = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("team_messages").insert({
+      const insertData: any = {
         channel_id: channelId,
         tenant_id: tenantId,
         sender_id: userId!,
         content: text.trim(),
-      });
+      };
+      if (attachments.length > 0) {
+        insertData.attachments = attachments;
+      }
+      const { error } = await supabase.from("team_messages").insert(insertData);
       if (error) throw error;
     },
     onSuccess: () => {
       setText("");
+      setAttachments([]);
       onSent();
     },
     onError: (err: any) => toast.error(err.message),
@@ -358,13 +439,79 @@ function TeamMessageInput({ channelId, tenantId, onSent }: { channelId: string; 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (text.trim()) sendMessage.mutate();
+      if (canSend) sendMessage.mutate();
     }
   };
 
   return (
-    <div className="p-3 border-t">
-      <div className="flex gap-2">
+    <div className="p-3 border-t space-y-2">
+      {/* Attached files preview */}
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {attachments.map((att, idx) => (
+            <div key={idx} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs border">
+              {att.type === 'image' ? <ImageIcon className="h-3 w-3" /> :
+               att.type === 'link' ? <Link2 className="h-3 w-3" /> :
+               <File className="h-3 w-3" />}
+              <span className="max-w-[150px] truncate">{att.name}</span>
+              <button onClick={() => removeAttachment(idx)} className="hover:text-destructive">
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Link input */}
+      {showLinkInput && (
+        <div className="flex gap-2">
+          <Input
+            value={linkInput}
+            onChange={(e) => setLinkInput(e.target.value)}
+            placeholder="הדבק קישור..."
+            className="text-sm"
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLink(); } }}
+            autoFocus
+          />
+          <Button size="sm" variant="outline" onClick={addLink} disabled={!linkInput.trim()}>הוסף</Button>
+          <Button size="sm" variant="ghost" onClick={() => { setShowLinkInput(false); setLinkInput(""); }}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      <div className="flex gap-2 items-end">
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileUpload}
+          className="hidden"
+          multiple
+          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip"
+        />
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" disabled={uploading}>
+              <Plus className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-40 p-1" side="top" align="start">
+            <button
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-muted transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip className="h-4 w-4" />
+              צרף קובץ
+            </button>
+            <button
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded hover:bg-muted transition-colors"
+              onClick={() => setShowLinkInput(true)}
+            >
+              <Link2 className="h-4 w-4" />
+              הוסף קישור
+            </button>
+          </PopoverContent>
+        </Popover>
         <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -373,7 +520,7 @@ function TeamMessageInput({ channelId, tenantId, onSent }: { channelId: string; 
           className="min-h-[40px] max-h-32 resize-none"
           rows={1}
         />
-        <Button size="icon" onClick={() => text.trim() && sendMessage.mutate()} disabled={!text.trim() || sendMessage.isPending}>
+        <Button size="icon" onClick={() => canSend && sendMessage.mutate()} disabled={!canSend || sendMessage.isPending || uploading}>
           <Send className="h-4 w-4" />
         </Button>
       </div>
