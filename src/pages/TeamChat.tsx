@@ -23,6 +23,15 @@ import { he } from "date-fns/locale";
 import { useAgency } from "@/contexts/AgencyContext";
 
 // Types
+type ChannelCategory = "team" | "clients" | "projects" | "automations";
+
+const CHANNEL_CATEGORIES: { key: ChannelCategory; label: string; icon: string }[] = [
+  { key: "team", label: "צוות", icon: "👥" },
+  { key: "clients", label: "לקוחות", icon: "👤" },
+  { key: "projects", label: "פרוייקטים מיוחדים", icon: "🚀" },
+  { key: "automations", label: "אוטומציות", icon: "⚡" },
+];
+
 interface TeamChannel {
   id: string;
   tenant_id: string;
@@ -35,6 +44,7 @@ interface TeamChannel {
   linked_client_id: string | null;
   linked_lead_id: string | null;
   agency_id: string | null;
+  category: ChannelCategory;
   created_at: string;
 }
 
@@ -78,6 +88,7 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
   const [selectedAgencyId, setSelectedAgencyId] = useState<string>("");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [selectedLeadId, setSelectedLeadId] = useState<string>("");
+  const [category, setCategory] = useState<ChannelCategory>("team");
   const { userId } = useCurrentUser();
 
   const { data: tenantUsers } = useQuery({
@@ -144,6 +155,7 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
         is_private: isPrivate,
         created_by: userId!,
       };
+      insertData.category = category;
       if (selectedAgencyId) insertData.agency_id = selectedAgencyId;
       if (selectedClientId) insertData.linked_client_id = selectedClientId;
       if (selectedLeadId) insertData.linked_lead_id = selectedLeadId;
@@ -179,6 +191,7 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
       setSelectedAgencyId("");
       setSelectedClientId("");
       setSelectedLeadId("");
+      setCategory("team");
       onCreated();
     },
     onError: (err: any) => toast.error(err.message),
@@ -218,6 +231,21 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
                 />
               ))}
             </div>
+          </div>
+
+          {/* Category Selector */}
+          <div>
+            <Label>קטגוריה</Label>
+            <Select value={category} onValueChange={(v) => setCategory(v as ChannelCategory)}>
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CHANNEL_CATEGORIES.map((cat) => (
+                  <SelectItem key={cat.key} value={cat.key}>{cat.icon} {cat.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Agency Selector */}
@@ -318,6 +346,22 @@ function ChannelSidebar({
   onCreated: () => void;
   unreadCounts: Record<string, number>;
 }) {
+  const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
+
+  const toggleCategory = (key: string) => {
+    setCollapsedCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const channelsByCategory = CHANNEL_CATEGORIES.map((cat) => ({
+    ...cat,
+    channels: channels.filter((ch) => (ch.category || "team") === cat.key),
+  })).filter((cat) => cat.channels.length > 0);
+
   return (
     <div className="w-64 border-l bg-muted/30 flex flex-col h-full">
       <div className="p-3 flex items-center justify-between border-b">
@@ -325,31 +369,40 @@ function ChannelSidebar({
         <CreateChannelDialog tenantId={tenantId} onCreated={onCreated} />
       </div>
       <ScrollArea className="flex-1">
-        <div className="p-2 space-y-0.5">
-          {channels.map((ch) => (
-            <button
-              key={ch.id}
-              onClick={() => onSelect(ch.id)}
-              className={cn(
-                "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-right",
-                activeChannelId === ch.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"
+        <div className="p-2 space-y-2">
+          {channelsByCategory.map((cat) => (
+            <div key={cat.key}>
+              <button
+                onClick={() => toggleCategory(cat.key)}
+                className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span className="text-[11px]">{cat.icon}</span>
+                <span className="flex-1 text-right">{cat.label}</span>
+                <span className="text-[10px]">{cat.channels.length}</span>
+              </button>
+              {!collapsedCategories.has(cat.key) && (
+                <div className="space-y-0.5">
+                  {cat.channels.map((ch) => (
+                    <button
+                      key={ch.id}
+                      onClick={() => onSelect(ch.id)}
+                      className={cn(
+                        "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-right",
+                        activeChannelId === ch.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {ch.is_private ? <Lock className="h-3.5 w-3.5 shrink-0" /> : <Hash className="h-3.5 w-3.5 shrink-0" />}
+                      <span className="flex-1 truncate">{ch.name}</span>
+                      {(unreadCounts[ch.id] || 0) > 0 && (
+                        <Badge variant="destructive" className="h-5 min-w-5 text-xs px-1">
+                          {unreadCounts[ch.id]}
+                        </Badge>
+                      )}
+                    </button>
+                  ))}
+                </div>
               )}
-            >
-              {ch.is_private ? <Lock className="h-3.5 w-3.5 shrink-0" /> : <Hash className="h-3.5 w-3.5 shrink-0" />}
-              <div className="flex-1 min-w-0">
-                <span className="block truncate">{ch.name}</span>
-                {(ch.linked_client_id || ch.linked_lead_id || ch.agency_id) && (
-                  <span className="text-[10px] text-muted-foreground truncate block">
-                    {ch.linked_client_id ? "👤 לקוח" : ch.linked_lead_id ? "🎯 ליד" : "🏢 סוכנות"}
-                  </span>
-                )}
-              </div>
-              {(unreadCounts[ch.id] || 0) > 0 && (
-                <Badge variant="destructive" className="h-5 min-w-5 text-xs px-1">
-                  {unreadCounts[ch.id]}
-                </Badge>
-              )}
-            </button>
+            </div>
           ))}
           {channels.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-8">אין ערוצים עדיין. צור קבוצה חדשה!</p>
