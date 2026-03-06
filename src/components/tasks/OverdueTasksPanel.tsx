@@ -86,14 +86,14 @@ function DraggableBacklogTask({
         <div className="flex-1 min-w-0" onClick={onClick}>
           <p
             className={cn(
-              "text-sm font-medium truncate",
+              "text-sm font-medium whitespace-normal break-words",
               isCompleted && "line-through text-muted-foreground"
             )}
           >
             {task.title}
           </p>
           {task.clients?.name && (
-            <p className="text-xs text-muted-foreground truncate">
+            <p className="text-xs text-muted-foreground whitespace-normal break-words">
               {task.clients.name}
             </p>
           )}
@@ -131,7 +131,7 @@ export function TaskBacklogPanel({
   isLoading,
 }: TaskBacklogPanelProps) {
   // Start collapsed if no tasks, expanded if there are tasks
-  const [isExpanded, setIsExpanded] = useState(() => tasks.length > 0);
+  const [isExpanded, setIsExpanded] = useState(true);
   
   const { setNodeRef, isOver } = useDroppable({
     id: "backlog",
@@ -173,7 +173,7 @@ export function TaskBacklogPanel({
         overdueCount > 0 
           ? "bg-destructive/5 border-destructive/30" 
           : "bg-background border-border",
-        isExpanded ? "min-w-[260px] w-[260px]" : "w-[60px]",
+        isExpanded ? "min-w-[33vw] w-[33vw]" : "w-[60px]",
         isOver && (overdueCount > 0 ? "bg-destructive/10" : "bg-accent/50")
       )}
     >
