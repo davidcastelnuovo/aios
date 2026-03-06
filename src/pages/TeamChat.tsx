@@ -1554,6 +1554,113 @@ function MemberNotifyRow({
   );
 }
 
+// =================== MemberRow (with inline name edit) ===================
+function MemberRow({
+  member,
+  profile,
+  role,
+  isCreator,
+  isAdmin,
+  currentUserId,
+  onRemove,
+  removeDisabled,
+  onNameUpdated,
+}: {
+  member: ChannelMember;
+  profile: any;
+  role?: string;
+  isCreator: boolean;
+  isAdmin: boolean;
+  currentUserId?: string;
+  onRemove: () => void;
+  removeDisabled: boolean;
+  onNameUpdated: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [newName, setNewName] = useState(profile?.full_name || "");
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    if (!newName.trim()) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ full_name: newName.trim() })
+        .eq("id", member.user_id);
+      if (error) throw error;
+      toast.success("השם עודכן בהצלחה");
+      setEditing(false);
+      onNameUpdated();
+    } catch (err: any) {
+      toast.error("שגיאה בעדכון: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50">
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        <Avatar className="h-7 w-7 shrink-0">
+          <AvatarImage src={profile?.avatar_url || undefined} />
+          <AvatarFallback className="text-xs">
+            {(profile?.full_name || profile?.email || "?")[0]}
+          </AvatarFallback>
+        </Avatar>
+        {editing ? (
+          <div className="flex items-center gap-1 flex-1 min-w-0">
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="h-7 text-sm"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSave();
+                if (e.key === "Escape") setEditing(false);
+              }}
+            />
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleSave} disabled={saving}>
+              <Check className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setEditing(false)}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="text-sm truncate">{profile?.full_name || profile?.email || "משתמש"}</span>
+            {role === "admin" && (
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">מנהל</Badge>
+            )}
+            {isAdmin && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-foreground"
+                onClick={() => { setNewName(profile?.full_name || ""); setEditing(true); }}
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+      {isAdmin && !isCreator && member.user_id !== currentUserId && !editing && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
+          onClick={onRemove}
+          disabled={removeDisabled}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
+    </div>
+  );
+}
+
 // =================== ManageChannelMembersDialog ===================
 function ManageChannelMembersDialog({
   channel,
@@ -1792,33 +1899,21 @@ function ManageChannelMembersDialog({
                 const role = getMemberRole(member.user_id);
                 const isCreator = member.user_id === channel.created_by;
                 return (
-                  <div key={member.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-7 w-7">
-                        <AvatarImage src={profile?.avatar_url || undefined} />
-                        <AvatarFallback className="text-xs">
-                          {(profile?.full_name || profile?.email || "?")[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <span className="text-sm">{profile?.full_name || profile?.email || "משתמש"}</span>
-                        {role === "admin" && (
-                          <Badge variant="secondary" className="mr-2 text-[10px] px-1.5 py-0">מנהל</Badge>
-                        )}
-                      </div>
-                    </div>
-                    {isAdmin && !isCreator && member.user_id !== currentUserId && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => removeMember.mutate(member.user_id)}
-                        disabled={removeMember.isPending}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
+                  <MemberRow
+                    key={member.id}
+                    member={member}
+                    profile={profile}
+                    role={role}
+                    isCreator={isCreator}
+                    isAdmin={isAdmin}
+                    currentUserId={currentUserId}
+                    onRemove={() => removeMember.mutate(member.user_id)}
+                    removeDisabled={removeMember.isPending}
+                    onNameUpdated={() => {
+                      queryClient.invalidateQueries({ queryKey: ["team-member-profiles", channel.id] });
+                      queryClient.invalidateQueries({ queryKey: ["tenant-users-for-members", tenantId] });
+                    }}
+                  />
                 );
               })}
             </div>
