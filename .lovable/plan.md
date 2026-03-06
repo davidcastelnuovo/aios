@@ -1,29 +1,20 @@
 
 
-## תוכנית: שליחת הקלטת אודיו כקובץ קולי (במקום תמלול)
+## תיקון: הדיאלוג מציג "אין קבוצה מקושרת" למרות שיש קבוצה
 
-### מצב נוכחי
-כרגע כפתור המיקרופון מקליט אודיו, מתמלל אותו לטקסט (Whisper), ומוסיף את הטקסט לשדה ההודעה. האודיו עצמו לא נשלח.
+### הבעיה
+הדיאלוג בודק רק את `notification_group_link` ברמת הערוץ, אבל הקבוצה מוגדרת ברמת הפרופיל (priority 4 בלוגיקה של ה-Edge Function). לכן הדיאלוג מציג בטעות "אין קבוצה מקושרת".
 
-### מה ישתנה
-הוספת אפשרות בחירה: כשלוחצים על כפתור המיקרופון, המשתמש יוכל לבחור בין **תמלול** (ההתנהגות הנוכחית) ל**שליחה כהודעה קולית** (שליחת קובץ האודיו ישירות דרך WhatsApp).
+### פתרון
+**`src/pages/TeamChat.tsx` — `NotifyTargetDialog`:**
+- הרחבת הבדיקה: בנוסף ל-`channelHasGroupLink`, בדוק גם אם יש `notify_override_group` ברמת חברי הערוץ או `notification_group_link` ברמת הפרופילים
+- כבר יש `memberProfiles` query שמביא את הפרופילים — נוסיף בדיקה האם לפחות אחד מהם מכיל `notification_group_link`
+- נשנה את ה-prop ל-`channelHasGroupLink` כך שייקח בחשבון גם קבוצות פרופיל
+- הכפתור "שלח לקבוצה" יהיה פעיל אם יש קבוצה בכל אחד מהמקורות
+- אם אין קבוצה בשום מקום — רק אז נציג "(אין קבוצה מקושרת)"
 
-### שינויים טכניים
-
-**1. `ChatInput.tsx`** — שינוי זרימת ההקלטה:
-- הוספת מצב `sendAsVoice` (ברירת מחדל: `true` — שליחה כאודיו)
-- לחיצה ארוכה / לחיצה רגילה על כפתור המיקרופון → הקלטה
-- כשעוצרים הקלטה: במקום תמלול, שליחת ה-Blob כקובץ דרך `onSendFile` עם `fileType: 'voice'`
-- הוספת Toggle קטן ליד כפתור המיקרופון לבחירה בין "שלח כקולי" ל"תמלל לטקסט"
-
-**2. `ChatInput.tsx` → `onSendFile` interface** — הרחבת הממשק:
-- הוספת פרמטר `fileType?: string` ל-`onSendFile` כדי להבדיל בין קובץ רגיל להודעה קולית
-
-**3. `ChatView.tsx` → `handleSendFile`** — העברת `fileType` ל-Edge Function `send-green-api-file`
-
-**4. Edge Function `send-green-api-file`** — כבר תומך ב-voice (`fileType === 'voice'`), לא צריך שינוי.
-
-### חוויית משתמש
-- ברירת מחדל: לחיצה על 🎤 → הקלטה → עצירה → **נשלח כהודעה קולית**
-- אם המשתמש רוצה תמלול: לחיצה על אייקון קטן ליד המיקרופון (או toggle) לשנות למצב תמלול
+### שינוי ספציפי
+1. ב-`NotifyTargetDialog` — חישוב `hasAnyGroupLink` שבודק: channel group link **או** member override group **או** profile notification_group_link
+2. הוספת fetch של `notify_override_group` מ-`team_channel_members` (כבר זמין ב-members data)
+3. שימוש ב-`hasAnyGroupLink` במקום `channelHasGroupLink` לתצוגה ולכפתור disabled
 
