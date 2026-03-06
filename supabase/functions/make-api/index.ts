@@ -187,7 +187,9 @@ serve(async (req) => {
       webhook_secret,
       scenario_name,
       template_scenario_id,
-      campaign_type = "leads"
+      campaign_type = "leads",
+      start_date,
+      end_date,
     } = body;
 
     console.log(`Make API action: ${action}, team_id: ${team_id}, region: ${region}`);
