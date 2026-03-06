@@ -442,7 +442,7 @@ export default function ChatMessageList({
                 <div
                   className="text-[11px] mt-0.5 flex items-center justify-end gap-1 text-gray-500">
                   <span>
-                    {format(new Date(message.created_at), 'HH:mm', { locale: he })}
+                    {format(new Date(message.created_at), 'd/M HH:mm', { locale: he })}
                     {isOutbound && message.profiles && (
                       <span className="mr-2">• {message.profiles.full_name}</span>
                     )}
