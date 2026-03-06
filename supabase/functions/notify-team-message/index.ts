@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { messageId, channelId, tenantId, messageContent, senderName, channelName } = await req.json()
+    const { messageId, channelId, tenantId, messageContent, senderName, channelName, tenantSlug } = await req.json()
 
     if (!channelId || !tenantId || !messageContent) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -52,6 +52,11 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+
+    // Build direct link to team chat
+    const baseUrl = Deno.env.get('SITE_URL') || 'https://after-lead.lovable.app'
+    const slug = tenantSlug || ''
+    const chatLink = slug ? `${baseUrl}/t/${slug}/team-chat` : `${baseUrl}/team-chat`
 
     console.log(`🔔 Notify request for channel ${channelId} by user ${user.id}`)
 
@@ -169,7 +174,7 @@ Deno.serve(async (req) => {
     const apiToken = integration.api_key
 
     // Format notification message
-    const notificationMessage = `🔔 *התראה מצ'אט צוות*\n\n📢 *ערוץ:* ${channelName || 'ערוץ'}\n👤 *מאת:* ${senderName || 'חבר צוות'}\n\n💬 ${messageContent}`
+    const notificationMessage = `🔔 *התראה מצ'אט צוות*\n\n📢 *ערוץ:* ${channelName || 'ערוץ'}\n👤 *מאת:* ${senderName || 'חבר צוות'}\n\n💬 ${messageContent}\n\n🔗 ${chatLink}`
 
     let sentCount = 0
     const errors: string[] = []
