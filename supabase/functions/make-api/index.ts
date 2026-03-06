@@ -969,13 +969,21 @@ serve(async (req) => {
                     return `${dd}/${mm}/${yyyy}`;
                   };
                   
-                  module.mapper.startDate = formatForMake(start_date);
-                  module.mapper.endDate = formatForMake(end_date);
-                  // Also set dateRangeType to CUSTOM if it exists
-                  if (module.mapper.dateRangeType) {
-                    module.mapper.dateRangeType = "CUSTOM";
-                  }
-                  console.log(`Updated date range: ${module.mapper.startDate} - ${module.mapper.endDate}`);
+                  const formattedStart = formatForMake(start_date);
+                  const formattedEnd = formatForMake(end_date);
+                  
+                  // Always set dateRangeType to CUSTOM when providing custom dates
+                  module.mapper.dateRangeType = "CUSTOM";
+                  
+                  // Set all possible date field variants that Make.com Google Ads module uses
+                  module.mapper.startDate = formattedStart;
+                  module.mapper.endDate = formattedEnd;
+                  module.mapper.start_date = formattedStart;
+                  module.mapper.end_date = formattedEnd;
+                  module.mapper.dateFrom = formattedStart;
+                  module.mapper.dateTo = formattedEnd;
+                  
+                  console.log(`Updated date range to CUSTOM: ${formattedStart} - ${formattedEnd}`);
                 }
               }
               
