@@ -40,7 +40,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const tenantId = invite.tenant_id;
+    // Prefer the channel's tenant_id over the invite's (in case invite was created with wrong context)
+    const tenantId = invite.team_channels?.tenant_id || invite.tenant_id;
     const channelId = invite.channel_id;
 
     let userId: string;
@@ -161,7 +162,9 @@ Deno.serve(async (req) => {
       // Add viewer role
       await adminClient.from("user_roles").insert({
         user_id: userId,
-        role: "viewer",
+        role: "campaigner",
+        tenant_id: tenantId,
+      });
         tenant_id: tenantId,
       });
     }

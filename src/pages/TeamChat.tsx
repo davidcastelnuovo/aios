@@ -1177,7 +1177,7 @@ function ManageChannelMembersDialog({
         .from("team_channel_invites")
         .insert({
           channel_id: channel.id,
-          tenant_id: tenantId,
+          tenant_id: channel.tenant_id,
           created_by: currentUserId!,
         })
         .select("token")
@@ -1245,7 +1245,7 @@ function ManageChannelMembersDialog({
         channel_id: channel.id,
         user_id: userId,
         role: "member",
-        tenant_id: tenantId,
+        tenant_id: channel.tenant_id,
       });
       if (error) throw error;
     },
