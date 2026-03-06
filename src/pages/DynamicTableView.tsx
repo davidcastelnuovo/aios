@@ -531,11 +531,33 @@ export default function DynamicTableView() {
       if (scenarioId) {
         console.log('Patching dates and running existing Make.com scenario:', scenarioId);
         
-        // Calculate dynamic date range: last 30 days
+        // Find the latest date in existing records to avoid fetching duplicates
         const now = new Date();
-        const thirtyDaysAgo = new Date(now);
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+        let startDate: string;
+        
+        if (records && records.length > 0) {
+          const dates = records
+            .map((r: any) => r.data?.date)
+            .filter(Boolean)
+            .sort();
+          const latestDate = dates[dates.length - 1];
+          if (latestDate) {
+            // Start from the latest date we have (will upsert, so no true duplicates)
+            startDate = latestDate;
+            console.log('Starting from latest existing date:', startDate);
+          } else {
+            // Fallback to 30 days ago
+            const thirtyDaysAgo = new Date(now);
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            startDate = thirtyDaysAgo.toISOString().split('T')[0];
+          }
+        } else {
+          // No records at all - fetch last 30 days
+          const thirtyDaysAgo = new Date(now);
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          startDate = thirtyDaysAgo.toISOString().split('T')[0];
+        }
+        
         const endDate = now.toISOString().split('T')[0];
         
         const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`;
@@ -558,7 +580,7 @@ export default function DynamicTableView() {
               end_date: endDate,
             },
           });
-          console.log('Blueprint dates patched successfully');
+          console.log(`Blueprint dates patched: ${startDate} → ${endDate}`);
         } catch (patchErr) {
           console.warn('Failed to patch dates, running scenario anyway:', patchErr);
         }
@@ -1117,11 +1139,26 @@ export default function DynamicTableView() {
 
       const integrationSettings = (table?.integration_settings as Record<string, any>) || {};
       
-      // Calculate dynamic date range: last 30 days
+      // Calculate date range from latest existing record
       const now = new Date();
-      const thirtyDaysAgo = new Date(now);
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+      let startDate: string;
+      
+      if (records && records.length > 0) {
+        const dates = records
+          .map((r: any) => r.data?.date)
+          .filter(Boolean)
+          .sort();
+        const latestDate = dates[dates.length - 1];
+        startDate = latestDate || (() => {
+          const d = new Date(now);
+          d.setDate(d.getDate() - 30);
+          return d.toISOString().split('T')[0];
+        })();
+      } else {
+        const d = new Date(now);
+        d.setDate(d.getDate() - 30);
+        startDate = d.toISOString().split('T')[0];
+      }
       const endDate = now.toISOString().split('T')[0];
       
       const { data, error } = await supabase.functions.invoke('make-api', {
