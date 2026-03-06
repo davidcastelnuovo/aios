@@ -17,7 +17,8 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target, Settings, Pencil, ArrowRight, Check, Upload, Sparkles, Camera, Bell, MessageSquare, Reply } from "lucide-react";
+import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target, Settings, Pencil, ArrowRight, Check, Upload, Sparkles, Camera, Bell, MessageSquare, Reply, Phone, Globe } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { ConvertMessageToTaskDialog } from "@/components/chat/ConvertMessageToTaskDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -68,7 +69,7 @@ interface TeamMessage {
   is_edited: boolean;
   created_at: string;
   attachments?: TeamAttachment[];
-  sender_profile?: { full_name: string; email: string };
+  sender_profile?: { full_name: string; email: string; avatar_url?: string };
   reply_count?: number;
 }
 
@@ -107,7 +108,7 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
       const userIds = tuData.map((tu: any) => tu.user_id);
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id, full_name, email")
+        .select("id, full_name, email, avatar_url")
         .in("id", userIds);
       
       return (profiles || []).map((p: any) => ({ profiles: p }));
@@ -492,7 +493,302 @@ function ManageCategoriesDialog({ tenantId }: { tenantId: string }) {
   );
 }
 
-// =================== ChannelSidebar ===================
+// =================== ManageTeamMembersDialog ===================
+function ManageTeamMembersDialog({ tenantId }: { tenantId: string }) {
+  const [open, setOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editPhone, setEditPhone] = useState("");
+  const [editNotifLink, setEditNotifLink] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [generatingAi, setGeneratingAi] = useState(false);
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+
+  // Fetch all tenant members with profiles
+  const { data: teamMembers = [], refetch: refetchMembers } = useQuery({
+    queryKey: ["team-members-manage", tenantId],
+    queryFn: async () => {
+      const { data: tuData } = await supabase
+        .from("tenant_users")
+        .select("user_id, tenant_id")
+        .eq("tenant_id", tenantId);
+      if (!tuData || tuData.length === 0) return [];
+
+      const userIds = tuData.map((tu: any) => tu.user_id);
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, phone, avatar_url, notification_group_link")
+        .in("id", userIds);
+      
+      return (profiles || []) as any[];
+    },
+    enabled: !!tenantId && open,
+  });
+
+  const startEdit = (member: any) => {
+    setEditingUser(member);
+    setEditPhone(member.phone || "");
+    setEditNotifLink(member.notification_group_link || "");
+    setAiPrompt("");
+  };
+
+  const saveEdit = async () => {
+    if (!editingUser) return;
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        phone: editPhone || null,
+        notification_group_link: editNotifLink || null,
+      })
+      .eq("id", editingUser.id);
+    if (error) {
+      toast.error("שגיאה בשמירה: " + error.message);
+      return;
+    }
+    toast.success("הפרטים עודכנו בהצלחה");
+    setEditingUser(null);
+    refetchMembers();
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingUser) return;
+    setUploading(true);
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = `user-avatars/${editingUser.id}-${Date.now()}-${safeName}`;
+      const { error: uploadError } = await supabase.storage.from("team-chat-files").upload(filePath, file);
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from("team-chat-files").getPublicUrl(filePath);
+
+      const { error } = await supabase.from("profiles").update({ avatar_url: urlData.publicUrl }).eq("id", editingUser.id);
+      if (error) throw error;
+
+      toast.success("התמונה עודכנה");
+      refetchMembers();
+      setEditingUser({ ...editingUser, avatar_url: urlData.publicUrl });
+    } catch (err: any) {
+      toast.error("שגיאה בהעלאה: " + err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const generateAvatarAI = async () => {
+    if (!aiPrompt.trim() || !editingUser) return;
+    setGeneratingAi(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-channel-avatar", {
+        body: { prompt: aiPrompt, channelId: `user-${editingUser.id}`, tenantId },
+      });
+      if (error) throw error;
+      if (data?.avatar_url) {
+        await supabase.from("profiles").update({ avatar_url: data.avatar_url }).eq("id", editingUser.id);
+        toast.success("האווטר נוצר בהצלחה!");
+        refetchMembers();
+        setEditingUser({ ...editingUser, avatar_url: data.avatar_url });
+      }
+    } catch (err: any) {
+      toast.error("שגיאה ביצירת אווטר: " + err.message);
+    } finally {
+      setGeneratingAi(false);
+    }
+  };
+
+  const removeAvatar = async () => {
+    if (!editingUser) return;
+    const { error } = await supabase.from("profiles").update({ avatar_url: null }).eq("id", editingUser.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("התמונה הוסרה");
+    refetchMembers();
+    setEditingUser({ ...editingUser, avatar_url: null });
+  };
+
+  const deleteUser = async () => {
+    if (!deleteConfirmUser) return;
+    try {
+      const { error } = await supabase.functions.invoke("delete-user", {
+        body: { userId: deleteConfirmUser.id },
+      });
+      if (error) throw error;
+      toast.success("המשתמש נמחק");
+      setDeleteConfirmUser(null);
+      refetchMembers();
+    } catch (err: any) {
+      toast.error("שגיאה במחיקה: " + err.message);
+    }
+  };
+
+  return (
+    <>
+      <Dialog open={open && !editingUser} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-7 w-7" title="ניהול אנשי צוות">
+            <Users className="h-4 w-4" />
+          </Button>
+        </DialogTrigger>
+        <DialogContent dir="rtl" className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>ניהול אנשי צוות</DialogTitle>
+            <DialogDescription>הגדר טלפון, קישור להתראות ותמונה לכל איש צוות</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh]">
+            <div className="space-y-2 p-1">
+              {teamMembers.map((member: any) => (
+                <div key={member.id} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-muted/50 transition-colors">
+                  <Avatar className="h-10 w-10">
+                    <AvatarImage src={member.avatar_url || undefined} />
+                    <AvatarFallback className="text-sm">
+                      {(member.full_name || member.email || "?")[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{member.full_name || member.email}</p>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      {member.phone && (
+                        <span className="flex items-center gap-1">
+                          <Phone className="h-3 w-3" />
+                          <span dir="ltr">{member.phone}</span>
+                        </span>
+                      )}
+                      {member.notification_group_link && (
+                        <span className="flex items-center gap-1">
+                          <Globe className="h-3 w-3" />
+                          קישור התראות
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(member)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteConfirmUser(member)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {teamMembers.length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-8">אין אנשי צוות</p>
+              )}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Member Dialog */}
+      <Dialog open={!!editingUser} onOpenChange={(o) => { if (!o) setEditingUser(null); }}>
+        <DialogContent dir="rtl" className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>עריכת {editingUser?.full_name || "איש צוות"}</DialogTitle>
+            <DialogDescription>עדכן פרטים, תמונה והגדרות התראות</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {/* Avatar section */}
+            <div className="flex flex-col items-center gap-3">
+              <Avatar className="h-20 w-20">
+                <AvatarImage src={editingUser?.avatar_url || undefined} />
+                <AvatarFallback className="text-2xl">
+                  {(editingUser?.full_name || "?")[0]}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex gap-2">
+                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                  {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4 ml-1" />}
+                  העלה תמונה
+                </Button>
+                {editingUser?.avatar_url && (
+                  <Button size="sm" variant="outline" className="text-destructive" onClick={removeAvatar}>
+                    <Trash2 className="h-4 w-4 ml-1" /> הסר
+                  </Button>
+                )}
+              </div>
+
+              {/* AI Avatar */}
+              <div className="w-full space-y-2">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Sparkles className="h-3 w-3" /> יצירת אווטר עם AI
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder="תאר את האווטר הרצוי..."
+                    className="text-sm"
+                  />
+                  <Button size="sm" onClick={generateAvatarAI} disabled={!aiPrompt.trim() || generatingAi}>
+                    {generatingAi ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Phone */}
+            <div>
+              <Label className="flex items-center gap-1.5">
+                <Phone className="h-3.5 w-3.5" /> מספר טלפון
+              </Label>
+              <Input
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
+                placeholder="למשל: 972501234567"
+                dir="ltr"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">מספר טלפון לשליחת התראות בוואטסאפ</p>
+            </div>
+
+            {/* Notification Group Link */}
+            <div>
+              <Label className="flex items-center gap-1.5">
+                <Globe className="h-3.5 w-3.5" /> קישור לקבוצת התראות
+              </Label>
+              <Input
+                value={editNotifLink}
+                onChange={(e) => setEditNotifLink(e.target.value)}
+                placeholder="https://chat.whatsapp.com/..."
+                dir="ltr"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">קישור לקבוצת וואטסאפ שבה ישלחו התראות</p>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingUser(null)}>ביטול</Button>
+              <Button onClick={saveEdit}>שמור</Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteConfirmUser} onOpenChange={(o) => { if (!o) setDeleteConfirmUser(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת {deleteConfirmUser?.full_name || "משתמש"}</AlertDialogTitle>
+            <AlertDialogDescription>פעולה זו תמחק את המשתמש לצמיתות. לא ניתן לבטל.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteUser}>
+              מחק
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 function ChannelSidebar({
   channels,
   activeChannelId,
@@ -568,6 +864,7 @@ function ChannelSidebar({
     <div className="w-full md:w-64 border-l bg-muted/30 flex flex-col h-full">
       <div className="p-3 flex items-center justify-between border-b">
         <div className="flex items-center gap-1">
+          <ManageTeamMembersDialog tenantId={tenantId} />
           <ManageCategoriesDialog tenantId={tenantId} />
           <CreateChannelDialog tenantId={tenantId} onCreated={onCreated} />
         </div>
@@ -689,6 +986,7 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
                     <div className="w-8 shrink-0">
                       {!sameAuthor && (
                         <Avatar className="h-8 w-8">
+                          <AvatarImage src={msg.sender_profile?.avatar_url || undefined} />
                           <AvatarFallback className="text-xs" style={{ backgroundColor: isOwn ? "hsl(var(--primary))" : "hsl(var(--muted))" }}>
                             {(msg.sender_profile?.full_name || "?")[0]}
                           </AvatarFallback>
@@ -1244,7 +1542,7 @@ function ManageChannelMembersDialog({
       const userIds = tuData.map((tu: any) => tu.user_id);
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id, full_name, email")
+        .select("id, full_name, email, avatar_url")
         .in("id", userIds);
       
       return (profiles || []).map((p: any) => ({ profiles: p }));
@@ -1258,7 +1556,7 @@ function ManageChannelMembersDialog({
     queryFn: async () => {
       const memberIds = members.map((m) => m.user_id);
       if (memberIds.length === 0) return [];
-      const { data } = await supabase.from("profiles").select("id, full_name, email").in("id", memberIds);
+      const { data } = await supabase.from("profiles").select("id, full_name, email, avatar_url").in("id", memberIds);
       return data || [];
     },
     enabled: open && members.length > 0,
@@ -1332,6 +1630,7 @@ function ManageChannelMembersDialog({
                   <div key={member.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50">
                     <div className="flex items-center gap-2">
                       <Avatar className="h-7 w-7">
+                        <AvatarImage src={profile?.avatar_url || undefined} />
                         <AvatarFallback className="text-xs">
                           {(profile?.full_name || profile?.email || "?")[0]}
                         </AvatarFallback>
@@ -1376,6 +1675,7 @@ function ManageChannelMembersDialog({
                     >
                       <div className="flex items-center gap-2">
                         <Avatar className="h-7 w-7">
+                          <AvatarImage src={profile.avatar_url || undefined} />
                           <AvatarFallback className="text-xs">
                             {(profile.full_name || profile.email || "?")[0]}
                           </AvatarFallback>
@@ -1750,7 +2050,7 @@ function ThreadDialog({
       if (senderIds.length === 0) return [];
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id, full_name, email")
+        .select("id, full_name, email, avatar_url")
         .in("id", senderIds);
 
       const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
@@ -1831,6 +2131,7 @@ function ThreadDialog({
           {replies.map((reply) => (
             <div key={reply.id} className="flex gap-2 px-1">
               <Avatar className="h-6 w-6 shrink-0 mt-0.5">
+                <AvatarImage src={reply.sender_profile?.avatar_url || undefined} />
                 <AvatarFallback className="text-[10px]">
                   {(reply.sender_profile?.full_name || "?")[0]}
                 </AvatarFallback>
@@ -1938,7 +2239,7 @@ export default function TeamChat() {
       const senderIds = [...new Set(allMsgs.map((m: any) => m.sender_id))];
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("id, full_name, email")
+        .select("id, full_name, email, avatar_url")
         .in("id", senderIds);
 
       const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
