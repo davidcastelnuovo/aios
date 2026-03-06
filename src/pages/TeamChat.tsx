@@ -7,16 +7,17 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target, Settings, Pencil, ArrowRight } from "lucide-react";
+import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target, Settings, Pencil, ArrowRight, Check, Upload, Sparkles, Camera } from "lucide-react";
 import { ConvertMessageToTaskDialog } from "@/components/chat/ConvertMessageToTaskDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -544,7 +545,11 @@ function ChannelSidebar({
         activeChannelId === ch.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"
       )}
     >
-      {ch.is_private ? <Lock className="h-3.5 w-3.5 shrink-0" /> : <Hash className="h-3.5 w-3.5 shrink-0" />}
+      {ch.avatar_url ? (
+        <img src={ch.avatar_url} alt={ch.name} className="h-4 w-4 rounded shrink-0 object-cover" />
+      ) : (
+        ch.is_private ? <Lock className="h-3.5 w-3.5 shrink-0" /> : <Hash className="h-3.5 w-3.5 shrink-0" />
+      )}
       <span className="flex-1 truncate">{ch.name}</span>
       {(unreadCounts[ch.id] || 0) > 0 && (
         <Badge variant="destructive" className="h-5 min-w-5 text-xs px-1">
@@ -614,8 +619,11 @@ function ChannelSidebar({
 }
 
 // =================== TeamMessageList ===================
-function TeamMessageList({ messages, currentUserId, onConvertToTask }: { messages: TeamMessage[]; currentUserId?: string; onConvertToTask?: (msg: TeamMessage) => void }) {
+function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessage, onDeleteMessage }: { messages: TeamMessage[]; currentUserId?: string; onConvertToTask?: (msg: TeamMessage) => void; onEditMessage?: (msg: TeamMessage, newContent: string) => void; onDeleteMessage?: (msg: TeamMessage) => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [deleteConfirmMsg, setDeleteConfirmMsg] = useState<TeamMessage | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -634,86 +642,156 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask }: { message
     return acc;
   }, []);
 
-  return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
-      {grouped.map((group) => (
-        <div key={group.date}>
-          <div className="flex items-center gap-2 my-3">
-            <Separator className="flex-1" />
-            <span className="text-xs text-muted-foreground">
-              {format(new Date(group.date), "EEEE, d MMMM", { locale: he })}
-            </span>
-            <Separator className="flex-1" />
-          </div>
-          <div className="space-y-1">
-            {group.msgs.map((msg, i) => {
-              const prev = i > 0 ? group.msgs[i - 1] : null;
-              const sameAuthor = prev && prev.sender_id === msg.sender_id;
-              const isOwn = msg.sender_id === currentUserId;
+  const startEdit = (msg: TeamMessage) => {
+    setEditingId(msg.id);
+    setEditText(msg.content);
+  };
 
-              return (
-                <div key={msg.id} className={cn("group flex gap-2 hover:bg-muted/50 rounded px-2 py-0.5 relative", sameAuthor ? "pt-0" : "pt-2")}>
-                  <div className="w-8 shrink-0">
-                    {!sameAuthor && (
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="text-xs" style={{ backgroundColor: isOwn ? "hsl(var(--primary))" : "hsl(var(--muted))" }}>
-                          {(msg.sender_profile?.full_name || "?")[0]}
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
+  const saveEdit = (msg: TeamMessage) => {
+    if (editText.trim() && editText.trim() !== msg.content) {
+      onEditMessage?.(msg, editText.trim());
+    }
+    setEditingId(null);
+    setEditText("");
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditText("");
+  };
+
+  return (
+    <>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4">
+        {grouped.map((group) => (
+          <div key={group.date}>
+            <div className="flex items-center gap-2 my-3">
+              <Separator className="flex-1" />
+              <span className="text-xs text-muted-foreground">
+                {format(new Date(group.date), "EEEE, d MMMM", { locale: he })}
+              </span>
+              <Separator className="flex-1" />
+            </div>
+            <div className="space-y-1">
+              {group.msgs.map((msg, i) => {
+                const prev = i > 0 ? group.msgs[i - 1] : null;
+                const sameAuthor = prev && prev.sender_id === msg.sender_id;
+                const isOwn = msg.sender_id === currentUserId;
+                const isEditing = editingId === msg.id;
+
+                return (
+                  <div key={msg.id} className={cn("group flex gap-2 hover:bg-muted/50 rounded px-2 py-0.5 relative", sameAuthor ? "pt-0" : "pt-2")}>
+                    <div className="w-8 shrink-0">
+                      {!sameAuthor && (
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="text-xs" style={{ backgroundColor: isOwn ? "hsl(var(--primary))" : "hsl(var(--muted))" }}>
+                            {(msg.sender_profile?.full_name || "?")[0]}
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {!sameAuthor && (
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-semibold text-sm">{msg.sender_profile?.full_name || "משתמש"}</span>
+                          <span className="text-xs text-muted-foreground">{format(new Date(msg.created_at), "HH:mm")}</span>
+                          {msg.is_edited && <span className="text-[10px] text-muted-foreground">(נערך)</span>}
+                        </div>
+                      )}
+                      {isEditing ? (
+                        <div className="space-y-1">
+                          <Textarea
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            className="min-h-[40px] max-h-32 resize-none text-sm"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); saveEdit(msg); }
+                              if (e.key === "Escape") cancelEdit();
+                            }}
+                          />
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="default" className="h-6 text-xs px-2" onClick={() => saveEdit(msg)}>
+                              <Check className="h-3 w-3 ml-1" /> שמור
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-6 text-xs px-2" onClick={cancelEdit}>ביטול</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          {msg.content && (
+                            <p className="text-sm whitespace-pre-wrap break-words">
+                              {msg.content}
+                              {sameAuthor && msg.is_edited && <span className="text-[10px] text-muted-foreground mr-1">(נערך)</span>}
+                            </p>
+                          )}
+                        </>
+                      )}
+                      {/* Attachments */}
+                      {msg.attachments && msg.attachments.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {msg.attachments.map((att, idx) => (
+                            <a
+                              key={idx}
+                              href={att.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-muted hover:bg-muted/80 text-xs transition-colors border"
+                            >
+                              {att.type === 'image' ? <ImageIcon className="h-3.5 w-3.5 text-blue-500" /> :
+                               att.type === 'link' ? <Link2 className="h-3.5 w-3.5 text-green-500" /> :
+                               <FileText className="h-3.5 w-3.5 text-orange-500" />}
+                              <span className="max-w-[200px] truncate">{att.name}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {/* Action buttons - visible on hover */}
+                    <div className="absolute left-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="המרה למשימה" onClick={() => onConvertToTask?.(msg)}>
+                        <ListTodo className="h-3.5 w-3.5" />
+                      </Button>
+                      {isOwn && !isEditing && (
+                        <>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" title="ערוך הודעה" onClick={() => startEdit(msg)}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" title="מחק הודעה" onClick={() => setDeleteConfirmMsg(msg)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    {!sameAuthor && (
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-semibold text-sm">{msg.sender_profile?.full_name || "משתמש"}</span>
-                        <span className="text-xs text-muted-foreground">{format(new Date(msg.created_at), "HH:mm")}</span>
-                      </div>
-                    )}
-                    {msg.content && <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>}
-                    {/* Attachments */}
-                    {msg.attachments && msg.attachments.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {msg.attachments.map((att, idx) => (
-                          <a
-                            key={idx}
-                            href={att.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-muted hover:bg-muted/80 text-xs transition-colors border"
-                          >
-                            {att.type === 'image' ? <ImageIcon className="h-3.5 w-3.5 text-blue-500" /> :
-                             att.type === 'link' ? <Link2 className="h-3.5 w-3.5 text-green-500" /> :
-                             <FileText className="h-3.5 w-3.5 text-orange-500" />}
-                            <span className="max-w-[200px] truncate">{att.name}</span>
-                          </a>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  {/* Convert to task button - visible on hover */}
-                  <div className="absolute left-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      title="המרה למשימה"
-                      onClick={() => onConvertToTask?.(msg)}
-                    >
-                      <ListTodo className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
-      {messages.length === 0 && (
-        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-          אין הודעות עדיין. התחל שיחה!
-        </div>
-      )}
-    </div>
+        ))}
+        {messages.length === 0 && (
+          <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+            אין הודעות עדיין. התחל שיחה!
+          </div>
+        )}
+      </div>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={!!deleteConfirmMsg} onOpenChange={(open) => { if (!open) setDeleteConfirmMsg(null); }}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת הודעה</AlertDialogTitle>
+            <AlertDialogDescription>האם אתה בטוח שברצונך למחוק את ההודעה? פעולה זו לא ניתנת לביטול.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deleteConfirmMsg) { onDeleteMessage?.(deleteConfirmMsg); setDeleteConfirmMsg(null); } }}>
+              מחק
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -1320,6 +1398,241 @@ function ManageChannelMembersDialog({
   );
 }
 
+// =================== ChannelAvatarDialog ===================
+function ChannelAvatarDialog({ channel, tenantId, onUpdated }: { channel: TeamChannel; tenantId: string; onUpdated: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<'upload' | 'ai'>('upload');
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = `avatars/${channel.id}-${Date.now()}-${safeName}`;
+      const { error: uploadError } = await supabase.storage.from("team-chat-files").upload(filePath, file);
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from("team-chat-files").getPublicUrl(filePath);
+      
+      const { error } = await supabase.from("team_channels").update({ avatar_url: urlData.publicUrl }).eq("id", channel.id);
+      if (error) throw error;
+      
+      toast.success("האווטר עודכן בהצלחה");
+      onUpdated();
+      setOpen(false);
+    } catch (err: any) {
+      toast.error("שגיאה בהעלאה: " + err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const generateWithAI = async () => {
+    if (!aiPrompt.trim()) return;
+    setGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-channel-avatar", {
+        body: { prompt: aiPrompt, channelId: channel.id, tenantId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      
+      toast.success("האווטר נוצר בהצלחה!");
+      onUpdated();
+      setOpen(false);
+    } catch (err: any) {
+      toast.error("שגיאה ביצירת אווטר: " + err.message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden" style={{ backgroundColor: channel.color }}>
+          {channel.avatar_url ? (
+            <img src={channel.avatar_url} alt={channel.name} className="h-full w-full object-cover" />
+          ) : (
+            channel.is_private ? <Lock className="h-4 w-4" /> : <Hash className="h-4 w-4" />
+          )}
+        </button>
+      </DialogTrigger>
+      <DialogContent dir="rtl" className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>שנה אווטר ערוץ</DialogTitle>
+          <DialogDescription>העלה תמונה או צור אווטר באמצעות AI</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <Button variant={tab === 'upload' ? 'default' : 'outline'} size="sm" onClick={() => setTab('upload')} className="flex-1 gap-1.5">
+              <Upload className="h-4 w-4" /> העלאת תמונה
+            </Button>
+            <Button variant={tab === 'ai' ? 'default' : 'outline'} size="sm" onClick={() => setTab('ai')} className="flex-1 gap-1.5">
+              <Sparkles className="h-4 w-4" /> יצירה ב-AI
+            </Button>
+          </div>
+
+          {tab === 'upload' ? (
+            <div className="space-y-3">
+              <input type="file" ref={fileInputRef} onChange={handleUpload} className="hidden" accept="image/*" />
+              <Button variant="outline" className="w-full h-24 border-dashed" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+                {uploading ? <Loader2 className="h-6 w-6 animate-spin" /> : (
+                  <div className="flex flex-col items-center gap-1">
+                    <Camera className="h-6 w-6 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">לחץ לבחירת תמונה</span>
+                  </div>
+                )}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <Input value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="תאר את האווטר שאתה רוצה..." />
+              <p className="text-xs text-muted-foreground">למשל: &quot;לוגו מעוצב לקבוצת שיווק בצבעים כחול וכתום&quot;</p>
+              <Button className="w-full" onClick={generateWithAI} disabled={!aiPrompt.trim() || generating}>
+                {generating ? <><Loader2 className="h-4 w-4 animate-spin ml-2" /> יוצר...</> : <><Sparkles className="h-4 w-4 ml-2" /> צור אווטר</>}
+              </Button>
+            </div>
+          )}
+
+          {channel.avatar_url && (
+            <div className="space-y-2">
+              <Label className="text-xs">אווטר נוכחי:</Label>
+              <div className="flex items-center gap-3">
+                <img src={channel.avatar_url} alt="current avatar" className="h-12 w-12 rounded-lg object-cover" />
+                <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={async () => {
+                  await supabase.from("team_channels").update({ avatar_url: null }).eq("id", channel.id);
+                  toast.success("האווטר הוסר");
+                  onUpdated();
+                  setOpen(false);
+                }}>
+                  <Trash2 className="h-3.5 w-3.5 ml-1" /> הסר אווטר
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// =================== EditChannelDialog ===================
+function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }: { channel: TeamChannel; tenantId: string; isAdmin: boolean; onUpdated: () => void; onDeleted: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(channel.name);
+  const [description, setDescription] = useState(channel.description || "");
+  const [color, setColor] = useState(channel.color);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setName(channel.name);
+      setDescription(channel.description || "");
+      setColor(channel.color);
+    }
+  }, [open, channel]);
+
+  const colors = ["#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#06B6D4", "#F97316"];
+
+  const updateChannel = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("team_channels").update({ name, description: description || null, color }).eq("id", channel.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("הערוץ עודכן בהצלחה");
+      onUpdated();
+      setOpen(false);
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const deleteChannel = async () => {
+    setDeleting(true);
+    try {
+      // Delete members, messages, then channel
+      await supabase.from("team_channel_members").delete().eq("channel_id", channel.id);
+      await supabase.from("team_messages").delete().eq("channel_id", channel.id);
+      const { error } = await supabase.from("team_channels").delete().eq("id", channel.id);
+      if (error) throw error;
+      toast.success("הערוץ נמחק בהצלחה");
+      onDeleted();
+      setOpen(false);
+    } catch (err: any) {
+      toast.error("שגיאה במחיקה: " + err.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  if (!isAdmin) return null;
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-8 w-8" title="הגדרות ערוץ">
+            <Settings className="h-4 w-4" />
+          </Button>
+        </DialogTrigger>
+        <DialogContent dir="rtl" className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>הגדרות ערוץ</DialogTitle>
+            <DialogDescription>ערוך את פרטי הערוץ או מחק אותו</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>שם הערוץ</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div>
+              <Label>תיאור</Label>
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="תיאור קצר..." />
+            </div>
+            <div>
+              <Label>צבע</Label>
+              <div className="flex gap-2 mt-1">
+                {colors.map((c) => (
+                  <button key={c} className={cn("h-7 w-7 rounded-full border-2 transition-all", color === c ? "border-foreground scale-110" : "border-transparent")} style={{ backgroundColor: c }} onClick={() => setColor(c)} />
+                ))}
+              </div>
+            </div>
+            <DialogFooter className="flex gap-2 sm:gap-0">
+              <Button variant="destructive" size="sm" onClick={() => setShowDeleteConfirm(true)}>
+                <Trash2 className="h-4 w-4 ml-1" /> מחק ערוץ
+              </Button>
+              <Button onClick={() => updateChannel.mutate()} disabled={!name.trim() || updateChannel.isPending}>
+                {updateChannel.isPending ? "שומר..." : "שמור שינויים"}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent dir="rtl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת ערוץ &quot;{channel.name}&quot;</AlertDialogTitle>
+            <AlertDialogDescription>פעולה זו תמחק את הערוץ, כל ההודעות וכל החברים. לא ניתן לבטל פעולה זו.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>ביטול</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={deleteChannel} disabled={deleting}>
+              {deleting ? "מוחק..." : "מחק לצמיתות"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 // =================== ChannelHeader ===================
 function ChannelHeader({
   channel,
@@ -1328,6 +1641,8 @@ function ChannelHeader({
   currentUserId,
   onMembersChanged,
   onBack,
+  onChannelUpdated,
+  onChannelDeleted,
 }: {
   channel: TeamChannel;
   members: ChannelMember[];
@@ -1335,7 +1650,11 @@ function ChannelHeader({
   currentUserId?: string;
   onMembersChanged: () => void;
   onBack?: () => void;
+  onChannelUpdated: () => void;
+  onChannelDeleted: () => void;
 }) {
+  const isAdmin = members.some((m) => m.user_id === currentUserId && m.role === "admin");
+
   return (
     <div className="h-14 border-b flex items-center gap-3 px-4 shrink-0">
       {onBack && (
@@ -1343,9 +1662,7 @@ function ChannelHeader({
           <ArrowRight className="h-4 w-4" />
         </Button>
       )}
-      <div className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-sm font-bold shrink-0" style={{ backgroundColor: channel.color }}>
-        {channel.is_private ? <Lock className="h-4 w-4" /> : <Hash className="h-4 w-4" />}
-      </div>
+      <ChannelAvatarDialog channel={channel} tenantId={tenantId} onUpdated={onChannelUpdated} />
       <div className="flex-1 min-w-0">
         <h2 className="font-semibold text-sm">{channel.name}</h2>
         {channel.description && <p className="text-xs text-muted-foreground truncate">{channel.description}</p>}
@@ -1355,6 +1672,7 @@ function ChannelHeader({
           <Users className="h-3.5 w-3.5" />
           {members.length}
         </div>
+        <EditChannelDialog channel={channel} tenantId={tenantId} isAdmin={isAdmin} onUpdated={onChannelUpdated} onDeleted={onChannelDeleted} />
         <ManageChannelMembersDialog
           channel={channel}
           members={members}
@@ -1467,7 +1785,7 @@ export default function TeamChat() {
       .channel(`team-messages-${activeChannelId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "team_messages", filter: `channel_id=eq.${activeChannelId}` },
+        { event: "*", schema: "public", table: "team_messages", filter: `channel_id=eq.${activeChannelId}` },
         () => refetchMessages()
       )
       .subscribe();
@@ -1476,6 +1794,26 @@ export default function TeamChat() {
       supabase.removeChannel(channel);
     };
   }, [activeChannelId, refetchMessages]);
+
+  // Edit message mutation
+  const editMessage = useMutation({
+    mutationFn: async ({ id, content }: { id: string; content: string }) => {
+      const { error } = await supabase.from("team_messages").update({ content, is_edited: true }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => refetchMessages(),
+    onError: (err: any) => toast.error("שגיאה בעריכת ההודעה: " + err.message),
+  });
+
+  // Delete message mutation
+  const deleteMessage = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("team_messages").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { refetchMessages(); toast.success("ההודעה נמחקה"); },
+    onError: (err: any) => toast.error("שגיאה במחיקת ההודעה: " + err.message),
+  });
 
   const unreadCounts: Record<string, number> = {};
 
@@ -1510,8 +1848,16 @@ export default function TeamChat() {
                 currentUserId={userId}
                 onMembersChanged={() => queryClient.invalidateQueries({ queryKey: ["team-channel-members", activeChannelId] })}
                 onBack={isMobile ? () => setActiveChannelId(null) : undefined}
+                onChannelUpdated={() => refetchChannels()}
+                onChannelDeleted={() => { setActiveChannelId(null); refetchChannels(); }}
               />
-              <TeamMessageList messages={messages} currentUserId={userId} onConvertToTask={(msg) => setTaskMessage(msg)} />
+              <TeamMessageList
+                messages={messages}
+                currentUserId={userId}
+                onConvertToTask={(msg) => setTaskMessage(msg)}
+                onEditMessage={(msg, newContent) => editMessage.mutate({ id: msg.id, content: newContent })}
+                onDeleteMessage={(msg) => deleteMessage.mutate(msg.id)}
+              />
               <TeamMessageInput
                 channelId={activeChannel.id}
                 tenantId={tenantId}
