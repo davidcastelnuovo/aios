@@ -15,7 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target } from "lucide-react";
+import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target, Settings, Pencil } from "lucide-react";
 import { ConvertMessageToTaskDialog } from "@/components/chat/ConvertMessageToTaskDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -23,14 +23,13 @@ import { he } from "date-fns/locale";
 import { useAgency } from "@/contexts/AgencyContext";
 
 // Types
-type ChannelCategory = "team" | "clients" | "projects" | "automations";
-
-const CHANNEL_CATEGORIES: { key: ChannelCategory; label: string; icon: string }[] = [
-  { key: "team", label: "צוות", icon: "👥" },
-  { key: "clients", label: "לקוחות", icon: "👤" },
-  { key: "projects", label: "פרוייקטים מיוחדים", icon: "🚀" },
-  { key: "automations", label: "אוטומציות", icon: "⚡" },
-];
+interface ChannelCategory {
+  id: string;
+  tenant_id: string;
+  name: string;
+  icon: string;
+  sort_order: number;
+}
 
 interface TeamChannel {
   id: string;
@@ -44,7 +43,8 @@ interface TeamChannel {
   linked_client_id: string | null;
   linked_lead_id: string | null;
   agency_id: string | null;
-  category: ChannelCategory;
+  category: string | null;
+  category_id: string | null;
   created_at: string;
 }
 
@@ -88,7 +88,7 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
   const [selectedAgencyId, setSelectedAgencyId] = useState<string>("");
   const [selectedClientId, setSelectedClientId] = useState<string>("");
   const [selectedLeadId, setSelectedLeadId] = useState<string>("");
-  const [category, setCategory] = useState<ChannelCategory>("team");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const { userId } = useCurrentUser();
 
   const { data: tenantUsers } = useQuery({
@@ -107,6 +107,16 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
         .in("id", userIds);
       
       return (profiles || []).map((p: any) => ({ profiles: p }));
+    },
+    enabled: !!tenantId && open,
+  });
+
+  // Fetch categories
+  const { data: categories = [] } = useQuery({
+    queryKey: ["team-channel-categories", tenantId],
+    queryFn: async () => {
+      const { data } = await supabase.from("team_channel_categories").select("*").eq("tenant_id", tenantId).order("sort_order");
+      return (data || []) as ChannelCategory[];
     },
     enabled: !!tenantId && open,
   });
@@ -155,7 +165,7 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
         is_private: isPrivate,
         created_by: userId!,
       };
-      insertData.category = category;
+      if (selectedCategoryId) insertData.category_id = selectedCategoryId;
       if (selectedAgencyId) insertData.agency_id = selectedAgencyId;
       if (selectedClientId) insertData.linked_client_id = selectedClientId;
       if (selectedLeadId) insertData.linked_lead_id = selectedLeadId;
@@ -191,7 +201,7 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
       setSelectedAgencyId("");
       setSelectedClientId("");
       setSelectedLeadId("");
-      setCategory("team");
+      setSelectedCategoryId("");
       onCreated();
     },
     onError: (err: any) => toast.error(err.message),
@@ -234,19 +244,22 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
           </div>
 
           {/* Category Selector */}
-          <div>
-            <Label>קטגוריה</Label>
-            <Select value={category} onValueChange={(v) => setCategory(v as ChannelCategory)}>
-              <SelectTrigger className="mt-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CHANNEL_CATEGORIES.map((cat) => (
-                  <SelectItem key={cat.key} value={cat.key}>{cat.icon} {cat.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {categories.length > 0 && (
+            <div>
+              <Label>קטגוריה</Label>
+              <Select value={selectedCategoryId} onValueChange={(v) => setSelectedCategoryId(v === "none" ? "" : v)}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="ללא קטגוריה" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">ללא קטגוריה</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>{cat.icon} {cat.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {/* Agency Selector */}
           <div>
@@ -330,6 +343,151 @@ function CreateChannelDialog({ tenantId, onCreated }: { tenantId: string; onCrea
   );
 }
 
+// =================== ManageCategoriesDialog ===================
+function ManageCategoriesDialog({ tenantId }: { tenantId: string }) {
+  const [open, setOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newIcon, setNewIcon] = useState("📁");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editIcon, setEditIcon] = useState("");
+  const queryClient = useQueryClient();
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ["team-channel-categories", tenantId],
+    queryFn: async () => {
+      const { data } = await supabase.from("team_channel_categories").select("*").eq("tenant_id", tenantId).order("sort_order");
+      return (data || []) as ChannelCategory[];
+    },
+    enabled: !!tenantId && open,
+  });
+
+  const addCategory = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("team_channel_categories").insert({
+        tenant_id: tenantId,
+        name: newName,
+        icon: newIcon,
+        sort_order: categories.length,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setNewName("");
+      setNewIcon("📁");
+      queryClient.invalidateQueries({ queryKey: ["team-channel-categories", tenantId] });
+      toast.success("קטגוריה נוספה");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const updateCategory = useMutation({
+    mutationFn: async ({ id, name, icon }: { id: string; name: string; icon: string }) => {
+      const { error } = await supabase.from("team_channel_categories").update({ name, icon }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setEditingId(null);
+      queryClient.invalidateQueries({ queryKey: ["team-channel-categories", tenantId] });
+      toast.success("קטגוריה עודכנה");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const deleteCategory = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("team_channel_categories").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team-channel-categories", tenantId] });
+      toast.success("קטגוריה נמחקה");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const icons = ["📁", "👥", "👤", "🚀", "⚡", "💬", "📊", "🎯", "🔧", "💡", "📋", "🏢"];
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-7 w-7">
+          <Settings className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent dir="rtl" className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>ניהול קטגוריות</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {/* Existing categories */}
+          <div className="space-y-2">
+            {categories.map((cat) => (
+              <div key={cat.id} className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30">
+                {editingId === cat.id ? (
+                  <>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className="text-lg">{editIcon}</button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-2" dir="rtl">
+                        <div className="grid grid-cols-6 gap-1">
+                          {icons.map((ic) => (
+                            <button key={ic} className={cn("text-lg p-1 rounded hover:bg-muted", editIcon === ic && "bg-primary/10")} onClick={() => setEditIcon(ic)}>{ic}</button>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                    <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="h-8 flex-1" />
+                    <Button size="sm" variant="ghost" className="h-8" onClick={() => updateCategory.mutate({ id: cat.id, name: editName, icon: editIcon })}>✓</Button>
+                    <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingId(null)}>✕</Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-lg">{cat.icon}</span>
+                    <span className="flex-1 text-sm font-medium">{cat.name}</span>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { setEditingId(cat.id); setEditName(cat.name); setEditIcon(cat.icon); }}>
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => deleteCategory.mutate(cat.id)}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </>
+                )}
+              </div>
+            ))}
+            {categories.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-4">אין קטגוריות עדיין</p>
+            )}
+          </div>
+
+          <Separator />
+
+          {/* Add new */}
+          <div className="flex items-center gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="text-lg border rounded p-1">{newIcon}</button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-2" dir="rtl">
+                <div className="grid grid-cols-6 gap-1">
+                  {icons.map((ic) => (
+                    <button key={ic} className={cn("text-lg p-1 rounded hover:bg-muted", newIcon === ic && "bg-primary/10")} onClick={() => setNewIcon(ic)}>{ic}</button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="שם קטגוריה חדשה" className="h-9 flex-1" />
+            <Button size="sm" onClick={() => addCategory.mutate()} disabled={!newName.trim() || addCategory.isPending}>
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // =================== ChannelSidebar ===================
 function ChannelSidebar({
   channels,
@@ -348,6 +506,15 @@ function ChannelSidebar({
 }) {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<string>>(new Set());
 
+  const { data: categories = [] } = useQuery({
+    queryKey: ["team-channel-categories", tenantId],
+    queryFn: async () => {
+      const { data } = await supabase.from("team_channel_categories").select("*").eq("tenant_id", tenantId).order("sort_order");
+      return (data || []) as ChannelCategory[];
+    },
+    enabled: !!tenantId,
+  });
+
   const toggleCategory = (key: string) => {
     setCollapsedCategories((prev) => {
       const next = new Set(prev);
@@ -357,53 +524,84 @@ function ChannelSidebar({
     });
   };
 
-  const channelsByCategory = CHANNEL_CATEGORIES.map((cat) => ({
-    ...cat,
-    channels: channels.filter((ch) => (ch.category || "team") === cat.key),
+  // Group channels: by category_id, uncategorized go into a special group
+  const uncategorized = channels.filter((ch) => !ch.category_id);
+  const categorized = categories.map((cat) => ({
+    id: cat.id,
+    icon: cat.icon,
+    label: cat.name,
+    channels: channels.filter((ch) => ch.category_id === cat.id),
   })).filter((cat) => cat.channels.length > 0);
+
+  const renderChannelItem = (ch: TeamChannel) => (
+    <button
+      key={ch.id}
+      onClick={() => onSelect(ch.id)}
+      className={cn(
+        "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-right",
+        activeChannelId === ch.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"
+      )}
+    >
+      {ch.is_private ? <Lock className="h-3.5 w-3.5 shrink-0" /> : <Hash className="h-3.5 w-3.5 shrink-0" />}
+      <span className="flex-1 truncate">{ch.name}</span>
+      {(unreadCounts[ch.id] || 0) > 0 && (
+        <Badge variant="destructive" className="h-5 min-w-5 text-xs px-1">
+          {unreadCounts[ch.id]}
+        </Badge>
+      )}
+    </button>
+  );
 
   return (
     <div className="w-64 border-l bg-muted/30 flex flex-col h-full">
       <div className="p-3 flex items-center justify-between border-b">
+        <div className="flex items-center gap-1">
+          <ManageCategoriesDialog tenantId={tenantId} />
+          <CreateChannelDialog tenantId={tenantId} onCreated={onCreated} />
+        </div>
         <h3 className="font-semibold text-sm">ערוצים</h3>
-        <CreateChannelDialog tenantId={tenantId} onCreated={onCreated} />
       </div>
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-2">
-          {channelsByCategory.map((cat) => (
-            <div key={cat.key}>
+          {/* Uncategorized channels */}
+          {uncategorized.length > 0 && categories.length > 0 && (
+            <div>
               <button
-                onClick={() => toggleCategory(cat.key)}
+                onClick={() => toggleCategory("__uncategorized")}
+                className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <span className="text-[11px]">📌</span>
+                <span className="flex-1 text-right">כללי</span>
+                <span className="text-[10px]">{uncategorized.length}</span>
+              </button>
+              {!collapsedCategories.has("__uncategorized") && (
+                <div className="space-y-0.5">{uncategorized.map(renderChannelItem)}</div>
+              )}
+            </div>
+          )}
+
+          {/* If no categories exist, show all channels flat */}
+          {categories.length === 0 && (
+            <div className="space-y-0.5">{channels.map(renderChannelItem)}</div>
+          )}
+
+          {/* Categorized channels */}
+          {categorized.map((cat) => (
+            <div key={cat.id}>
+              <button
+                onClick={() => toggleCategory(cat.id)}
                 className="w-full flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
               >
                 <span className="text-[11px]">{cat.icon}</span>
                 <span className="flex-1 text-right">{cat.label}</span>
                 <span className="text-[10px]">{cat.channels.length}</span>
               </button>
-              {!collapsedCategories.has(cat.key) && (
-                <div className="space-y-0.5">
-                  {cat.channels.map((ch) => (
-                    <button
-                      key={ch.id}
-                      onClick={() => onSelect(ch.id)}
-                      className={cn(
-                        "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-right",
-                        activeChannelId === ch.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"
-                      )}
-                    >
-                      {ch.is_private ? <Lock className="h-3.5 w-3.5 shrink-0" /> : <Hash className="h-3.5 w-3.5 shrink-0" />}
-                      <span className="flex-1 truncate">{ch.name}</span>
-                      {(unreadCounts[ch.id] || 0) > 0 && (
-                        <Badge variant="destructive" className="h-5 min-w-5 text-xs px-1">
-                          {unreadCounts[ch.id]}
-                        </Badge>
-                      )}
-                    </button>
-                  ))}
-                </div>
+              {!collapsedCategories.has(cat.id) && (
+                <div className="space-y-0.5">{cat.channels.map(renderChannelItem)}</div>
               )}
             </div>
           ))}
+
           {channels.length === 0 && (
             <p className="text-xs text-muted-foreground text-center py-8">אין ערוצים עדיין. צור קבוצה חדשה!</p>
           )}
