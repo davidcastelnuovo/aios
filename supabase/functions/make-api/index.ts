@@ -37,6 +37,8 @@ interface MakeAPIRequest {
   scenario_name?: string;
   template_scenario_id?: string;
   campaign_type?: "leads" | "ecommerce";
+  start_date?: string;
+  end_date?: string;
 }
 
 // Make.com API base URLs per region
