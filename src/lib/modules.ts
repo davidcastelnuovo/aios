@@ -17,6 +17,7 @@ export const MAIN_MODULES: ModuleConfig[] = [
   { id: "time_tracking", label: "מעקב זמן", description: "שעון נוכחות ומעקב שעות", category: "main" },
   { id: "reports", label: "דוחות", description: "צפייה בדוחות ואנליטיקה", category: "main" },
   { id: "chat", label: "צ'אט", description: "מודול צ'אט עם לקוחות ולידים", category: "main" },
+  { id: "team_chat", label: "צ'אט צוות", description: "תקשורת פנים-ארגונית בסגנון Slack", category: "main" },
   { id: "recordings", label: "הקלטות", description: "ניהול הקלטות מכל המקורות", category: "main" },
 ];
 
