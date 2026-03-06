@@ -2,8 +2,10 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { Loader2, MoreVertical, Copy, CheckSquare, Reply } from "lucide-react";
+import { Loader2, MoreVertical, Copy, CheckSquare, Reply, AlertCircle } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+
+const MAX_MESSAGES = 2000;
 import CustomAudioPlayer from "./CustomAudioPlayer";
 import {
   DropdownMenu,
@@ -387,6 +389,12 @@ export default function ChatMessageList({
   return (
     <div className={`flex flex-col h-full`}>
       <div className={`flex flex-col gap-2 ${isMobile ? 'p-2' : 'p-4'}`}>
+        {messages.length >= MAX_MESSAGES && (
+          <div className="flex items-center justify-center gap-2 py-2 px-4 mb-2 bg-muted/60 text-muted-foreground text-sm rounded-lg border border-border">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <span>מציג {MAX_MESSAGES.toLocaleString()} הודעות אחרונות בלבד</span>
+          </div>
+        )}
         {messages.map((message) => {
           const isOutbound = message.direction === 'outbound';
           const mediaContent = getMediaContent(message);
