@@ -2612,34 +2612,43 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_url: string | null
           calendar_iframe_code: string | null
           campaigner_id: string | null
           created_at: string
           email: string
           full_name: string | null
           id: string
+          notification_group_link: string | null
+          phone: string | null
           sales_person_id: string | null
           status: string
           updated_at: string
         }
         Insert: {
+          avatar_url?: string | null
           calendar_iframe_code?: string | null
           campaigner_id?: string | null
           created_at?: string
           email: string
           full_name?: string | null
           id: string
+          notification_group_link?: string | null
+          phone?: string | null
           sales_person_id?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
+          avatar_url?: string | null
           calendar_iframe_code?: string | null
           campaigner_id?: string | null
           created_at?: string
           email?: string
           full_name?: string | null
           id?: string
+          notification_group_link?: string | null
+          phone?: string | null
           sales_person_id?: string | null
           status?: string
           updated_at?: string
