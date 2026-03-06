@@ -435,6 +435,7 @@ function ManageChannelMembersDialog({
     onSuccess: () => {
       toast.success("החבר נוסף בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["team-channel-members", channel.id] });
+      queryClient.invalidateQueries({ queryKey: ["team-member-profiles", channel.id] });
       onChanged();
     },
     onError: (err: any) => toast.error(err.message),
@@ -452,6 +453,7 @@ function ManageChannelMembersDialog({
     onSuccess: () => {
       toast.success("החבר הוסר מהקבוצה");
       queryClient.invalidateQueries({ queryKey: ["team-channel-members", channel.id] });
+      queryClient.invalidateQueries({ queryKey: ["team-member-profiles", channel.id] });
       onChanged();
     },
     onError: (err: any) => toast.error(err.message),
