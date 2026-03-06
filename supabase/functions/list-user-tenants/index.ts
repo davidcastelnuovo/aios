@@ -170,17 +170,9 @@ serve(async (req: Request) => {
 
       let userTenants = (data || []).map((row: any) => row.tenants).filter((t: any) => t && t.id && t.name);
 
-      // Filter based on effective tenant
-      if (effectiveTenantId) {
-        console.log("🔍 Filtering tenants: showing effective tenant + its children");
-        tenants = userTenants.filter((t: any) => 
-          t.id === effectiveTenantId || t.parent_tenant_id === effectiveTenantId
-        );
-        console.log(`📊 Filtered to ${tenants.length} tenants`);
-      } else {
-        console.log("📋 No effective tenant, showing all user's tenants");
-        tenants = userTenants;
-      }
+      // Always show ALL tenants the user is a member of so they can switch between them
+      console.log("📋 Showing all user's tenants (no filtering)");
+      tenants = userTenants;
     }
 
     console.log(`✅ Returning ${tenants.length} tenants for user ${user.id}`);
