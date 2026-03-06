@@ -1690,7 +1690,7 @@ function ChannelHeader({
 
 // =================== Main TeamChat Page ===================
 export default function TeamChat() {
-  const { tenantId } = useCurrentTenant();
+  const { tenantId, tenant } = useCurrentTenant();
   const { userId } = useCurrentUser();
   const { selectedAgency } = useAgency();
   const queryClient = useQueryClient();
@@ -1829,6 +1829,7 @@ export default function TeamChat() {
           messageContent: msg.content,
           senderName: msg.sender_profile?.full_name || "חבר צוות",
           channelName: activeChannel?.name || "ערוץ",
+          tenantSlug: tenant?.slug || "",
         },
       });
       if (error) throw error;
