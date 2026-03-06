@@ -141,13 +141,7 @@ export default function ChatInvite() {
 
       const result = response.data;
       if (result.error) {
-        if (result.error === "USER_EXISTS") {
-          toast.error(result.message || "משתמש כבר קיים - נסה להתחבר");
-          setActiveTab("login");
-          setProcessing(false);
-          return;
-        }
-        throw new Error(result.error);
+        throw new Error(result.message || result.error);
       }
 
       // Now sign in the newly created user
