@@ -795,15 +795,23 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
   };
 
   const uploadFiles = async (files: FileList | File[]) => {
+    if (!userId) {
+      toast.error("שגיאה: משתמש לא מזוהה. נסה לרענן את הדף.");
+      return;
+    }
     setUploading(true);
     try {
       const newAttachments: TeamAttachment[] = [];
       const newFileRecords: { id: string; file_name: string; file_url: string }[] = [];
       
       for (const file of Array.from(files)) {
-        const filePath = `${userId}/${Date.now()}-${file.name}`;
-        const { error } = await supabase.storage.from("team-chat-files").upload(filePath, file);
-        if (error) throw error;
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const filePath = `${userId}/${Date.now()}-${safeName}`;
+        const { error: uploadError } = await supabase.storage.from("team-chat-files").upload(filePath, file);
+        if (uploadError) {
+          console.error("Storage upload error:", uploadError);
+          throw uploadError;
+        }
         const { data: urlData } = supabase.storage.from("team-chat-files").getPublicUrl(filePath);
         const isImage = file.type.startsWith("image/");
         
@@ -815,15 +823,20 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
         });
 
         // Track in DB
-        const { data: fileRecord } = await supabase.from("team_chat_files").insert({
+        const { data: fileRecord, error: dbError } = await supabase.from("team_chat_files").insert({
           tenant_id: tenantId,
           channel_id: channelId,
-          uploaded_by: userId!,
+          uploaded_by: userId,
           file_name: file.name,
           file_url: urlData.publicUrl,
           file_type: isImage ? 'image' : 'file',
           file_size: file.size,
         }).select("id, file_name, file_url").single();
+
+        if (dbError) {
+          console.error("DB insert error:", dbError);
+          // Don't throw - file is already uploaded, just skip tracking
+        }
 
         if (fileRecord) {
           newFileRecords.push(fileRecord);
@@ -831,8 +844,10 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
       }
       setAttachments((prev) => [...prev, ...newAttachments]);
       uploadedFileIdsRef.current = [...uploadedFileIdsRef.current, ...newFileRecords];
+      toast.success(`${Array.from(files).length} קבצים הועלו בהצלחה`);
     } catch (err: any) {
-      toast.error("שגיאה בהעלאת הקובץ: " + err.message);
+      console.error("Upload error details:", err);
+      toast.error("שגיאה בהעלאת הקובץ: " + (err.message || err.statusCode || JSON.stringify(err)));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
