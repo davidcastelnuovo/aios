@@ -3883,6 +3883,7 @@ export type Database = {
       }
       team_channels: {
         Row: {
+          agency_id: string | null
           avatar_url: string | null
           color: string | null
           created_at: string
@@ -3897,6 +3898,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          agency_id?: string | null
           avatar_url?: string | null
           color?: string | null
           created_at?: string
@@ -3911,6 +3913,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          agency_id?: string | null
           avatar_url?: string | null
           color?: string | null
           created_at?: string
@@ -3925,6 +3928,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "team_channels_agency_id_fkey"
+            columns: ["agency_id"]
+            isOneToOne: false
+            referencedRelation: "agencies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "team_channels_linked_client_id_fkey"
             columns: ["linked_client_id"]
