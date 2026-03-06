@@ -17,7 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target, Settings, Pencil, ArrowRight, Check, Upload, Sparkles, Camera } from "lucide-react";
+import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target, Settings, Pencil, ArrowRight, Check, Upload, Sparkles, Camera, Bell } from "lucide-react";
 import { ConvertMessageToTaskDialog } from "@/components/chat/ConvertMessageToTaskDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -619,7 +619,7 @@ function ChannelSidebar({
 }
 
 // =================== TeamMessageList ===================
-function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessage, onDeleteMessage }: { messages: TeamMessage[]; currentUserId?: string; onConvertToTask?: (msg: TeamMessage) => void; onEditMessage?: (msg: TeamMessage, newContent: string) => void; onDeleteMessage?: (msg: TeamMessage) => void }) {
+function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessage, onDeleteMessage, onNotifyMessage }: { messages: TeamMessage[]; currentUserId?: string; onConvertToTask?: (msg: TeamMessage) => void; onEditMessage?: (msg: TeamMessage, newContent: string) => void; onDeleteMessage?: (msg: TeamMessage) => void; onNotifyMessage?: (msg: TeamMessage) => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -749,6 +749,9 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
                     </div>
                     {/* Action buttons - visible on hover */}
                     <div className="absolute left-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="שלח התראה לחברי הערוץ" onClick={() => onNotifyMessage?.(msg)}>
+                        <Bell className="h-3.5 w-3.5" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="המרה למשימה" onClick={() => onConvertToTask?.(msg)}>
                         <ListTodo className="h-3.5 w-3.5" />
                       </Button>
@@ -1815,6 +1818,32 @@ export default function TeamChat() {
     onError: (err: any) => toast.error("שגיאה במחיקת ההודעה: " + err.message),
   });
 
+  // Notify message mutation
+  const notifyMessage = useMutation({
+    mutationFn: async (msg: TeamMessage) => {
+      const { data, error } = await supabase.functions.invoke("notify-team-message", {
+        body: {
+          messageId: msg.id,
+          channelId: msg.channel_id,
+          tenantId,
+          messageContent: msg.content,
+          senderName: msg.sender_profile?.full_name || "חבר צוות",
+          channelName: activeChannel?.name || "ערוץ",
+        },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      if (data?.notified > 0) {
+        toast.success(`התראה נשלחה ל-${data.notified} חברי צוות`);
+      } else {
+        toast.info(data?.reason || "לא נמצאו חברי צוות עם מספר טלפון לשליחת התראה");
+      }
+    },
+    onError: (err: any) => toast.error("שגיאה בשליחת התראה: " + (err?.message || err)),
+  });
+
   const unreadCounts: Record<string, number> = {};
 
   if (!tenantId) return null;
@@ -1857,6 +1886,7 @@ export default function TeamChat() {
                 onConvertToTask={(msg) => setTaskMessage(msg)}
                 onEditMessage={(msg, newContent) => editMessage.mutate({ id: msg.id, content: newContent })}
                 onDeleteMessage={(msg) => deleteMessage.mutate(msg.id)}
+                onNotifyMessage={(msg) => notifyMessage.mutate(msg)}
               />
               <TeamMessageInput
                 channelId={activeChannel.id}
