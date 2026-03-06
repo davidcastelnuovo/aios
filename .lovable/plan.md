@@ -1,17 +1,20 @@
 
 
-## תוכנית: תיקון פאנל רשימת המשימות
+## תוכנית: תיקון הצגת שם חבר חדש בדיאלוג ניהול חברים
 
-### בעיות נוכחיות (מהצילום מסך)
-1. הפאנל ברוחב קבוע `260px` - צריך להיות שליש מרוחב המסך
-2. טקסט משימות חתוך עם `truncate` - צריך לרדת שורה
-3. הפאנל מתחיל סגור כשאין משימות - צריך להיות פתוח תמיד כברירת מחדל
+### בעיה
+כשמוסיפים חבר חדש, ה-query של `team-member-profiles` לא מתעדכן. הוא משתמש ב-`members` מה-props (שעדיין ישנים), ולכן הפרופיל של החבר החדש לא נטען ומופיע "?" ו-"משתמש".
 
-### שינויים ב-`OverdueTasksPanel.tsx`
+### פתרון
+ב-`addMember.onSuccess` (שורה ~436), צריך להוסיף invalidation גם ל-`team-member-profiles`:
 
-1. **רוחב שליש מסך** (שורה 176): שינוי `min-w-[260px] w-[260px]` ל-`min-w-[33vw] w-[33vw]`
+```typescript
+queryClient.invalidateQueries({ queryKey: ["team-channel-members", channel.id] });
+queryClient.invalidateQueries({ queryKey: ["team-member-profiles", channel.id] });
+```
 
-2. **פתוח כברירת מחדל** (שורה 134): שינוי `useState(() => tasks.length > 0)` ל-`useState(true)`
+אותו דבר ב-`removeMember.onSuccess` (שורה ~453).
 
-3. **טקסט מלא ללא חיתוך** (שורות 89, 96): הסרת `truncate` מכותרת המשימה ומשם הלקוח, החלפה ב-`whitespace-normal break-words`
+### קובץ לעדכון
+- `src/pages/TeamChat.tsx` - שתי שורות invalidation נוספות
 
