@@ -41,6 +41,7 @@ import { useCustomFieldLabels } from "@/hooks/useCustomFieldLabels";
 import { useTerminology } from "@/hooks/useTerminology";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ClientUpdatesTab } from "@/components/clients/ClientUpdatesTab";
+import { ClientLinkedFiles } from "@/components/clients/ClientLinkedFiles";
 import { Calendar } from "@/components/ui/calendar";
 import { Card } from "@/components/ui/card";
 import { format } from "date-fns";
@@ -820,6 +821,11 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
               entityType="client"
               entityId={client.id}
             />
+            {/* Files linked from team chat */}
+            <div>
+              <h4 className="text-sm font-medium mb-2">קבצים מצ׳אט הצוות</h4>
+              <ClientLinkedFiles clientId={client.id} tenantId={tenantId || ""} />
+            </div>
           </TabsContent>
 
           <TabsContent value="updates" className="mt-4">

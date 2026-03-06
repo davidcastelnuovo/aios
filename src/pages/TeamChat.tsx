@@ -21,6 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
 import { useAgency } from "@/contexts/AgencyContext";
+import { LinkFileToEntityDialog } from "@/components/chat/LinkFileToEntityDialog";
 
 // Types
 interface ChannelCategory {
@@ -716,7 +717,7 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask }: { message
 }
 
 // =================== TeamMessageInput ===================
-function TeamMessageInput({ channelId, tenantId, onSent }: { channelId: string; tenantId: string; onSent: () => void }) {
+function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { channelId: string; tenantId: string; onSent: () => void; onFilesUploaded?: (files: { id: string; file_name: string; file_url: string }[]) => void }) {
   const [text, setText] = useState("");
   const [attachments, setAttachments] = useState<TeamAttachment[]>([]);
   const [linkInput, setLinkInput] = useState("");
@@ -724,10 +725,14 @@ function TeamMessageInput({ channelId, tenantId, onSent }: { channelId: string; 
   const [uploading, setUploading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { userId } = useCurrentUser();
+
+  // Track uploaded file IDs for linking
+  const uploadedFileIdsRef = useRef<{ id: string; file_name: string; file_url: string }[]>([]);
 
   const canSend = text.trim() || attachments.length > 0;
 
@@ -789,26 +794,43 @@ function TeamMessageInput({ channelId, tenantId, onSent }: { channelId: string; 
     setIsRecording(false);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  const uploadFiles = async (files: FileList | File[]) => {
     setUploading(true);
     try {
       const newAttachments: TeamAttachment[] = [];
+      const newFileRecords: { id: string; file_name: string; file_url: string }[] = [];
+      
       for (const file of Array.from(files)) {
         const filePath = `${userId}/${Date.now()}-${file.name}`;
         const { error } = await supabase.storage.from("team-chat-files").upload(filePath, file);
         if (error) throw error;
         const { data: urlData } = supabase.storage.from("team-chat-files").getPublicUrl(filePath);
         const isImage = file.type.startsWith("image/");
+        
         newAttachments.push({
           name: file.name,
           url: urlData.publicUrl,
           type: isImage ? 'image' : 'file',
           size: file.size,
         });
+
+        // Track in DB
+        const { data: fileRecord } = await supabase.from("team_chat_files").insert({
+          tenant_id: tenantId,
+          channel_id: channelId,
+          uploaded_by: userId!,
+          file_name: file.name,
+          file_url: urlData.publicUrl,
+          file_type: isImage ? 'image' : 'file',
+          file_size: file.size,
+        }).select("id, file_name, file_url").single();
+
+        if (fileRecord) {
+          newFileRecords.push(fileRecord);
+        }
       }
       setAttachments((prev) => [...prev, ...newAttachments]);
+      uploadedFileIdsRef.current = [...uploadedFileIdsRef.current, ...newFileRecords];
     } catch (err: any) {
       toast.error("שגיאה בהעלאת הקובץ: " + err.message);
     } finally {
@@ -816,6 +838,35 @@ function TeamMessageInput({ channelId, tenantId, onSent }: { channelId: string; 
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    await uploadFiles(files);
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      await uploadFiles(files);
+    }
+  }, [userId, tenantId, channelId]);
 
   const addLink = () => {
     const url = linkInput.trim();
@@ -841,12 +892,25 @@ function TeamMessageInput({ channelId, tenantId, onSent }: { channelId: string; 
       if (attachments.length > 0) {
         insertData.attachments = attachments;
       }
-      const { error } = await supabase.from("team_messages").insert(insertData);
+      const { data: msg, error } = await supabase.from("team_messages").insert(insertData).select("id").single();
       if (error) throw error;
+
+      // Update file records with message_id
+      if (uploadedFileIdsRef.current.length > 0 && msg) {
+        const fileIds = uploadedFileIdsRef.current.map(f => f.id);
+        await supabase.from("team_chat_files").update({ message_id: msg.id }).in("id", fileIds);
+      }
+
+      return msg;
     },
     onSuccess: () => {
+      // Offer to link files if any were uploaded
+      if (uploadedFileIdsRef.current.length > 0) {
+        onFilesUploaded?.(uploadedFileIdsRef.current);
+      }
       setText("");
       setAttachments([]);
+      uploadedFileIdsRef.current = [];
       onSent();
     },
     onError: (err: any) => toast.error(err.message),
@@ -860,7 +924,19 @@ function TeamMessageInput({ channelId, tenantId, onSent }: { channelId: string; 
   };
 
   return (
-    <div className="p-3 border-t space-y-2">
+    <div
+      className={cn("p-3 border-t space-y-2 transition-colors", isDragOver && "bg-primary/5 border-primary")}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {isDragOver && (
+        <div className="text-center py-3 text-sm text-primary font-medium">
+          שחרר קבצים כאן להעלאה 📎
+        </div>
+      )}
+
       {/* Attached files preview */}
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -932,7 +1008,7 @@ function TeamMessageInput({ channelId, tenantId, onSent }: { channelId: string; 
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="כתוב הודעה..."
+          placeholder="כתוב הודעה... (גרור קבצים לכאן)"
           className="min-h-[40px] max-h-32 resize-none"
           rows={1}
         />
@@ -1275,6 +1351,8 @@ export default function TeamChat() {
   const queryClient = useQueryClient();
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [taskMessage, setTaskMessage] = useState<TeamMessage | null>(null);
+  const [linkDialogFiles, setLinkDialogFiles] = useState<{ id: string; file_name: string; file_url: string }[]>([]);
+  const [showLinkDialog, setShowLinkDialog] = useState(false);
 
   // Fetch channels
   const { data: allChannels = [], refetch: refetchChannels } = useQuery({
@@ -1398,7 +1476,15 @@ export default function TeamChat() {
           <>
             <ChannelHeader channel={activeChannel} members={members} tenantId={tenantId} currentUserId={userId} onMembersChanged={() => queryClient.invalidateQueries({ queryKey: ["team-channel-members", activeChannelId] })} />
             <TeamMessageList messages={messages} currentUserId={userId} onConvertToTask={(msg) => setTaskMessage(msg)} />
-            <TeamMessageInput channelId={activeChannel.id} tenantId={tenantId} onSent={refetchMessages} />
+            <TeamMessageInput
+              channelId={activeChannel.id}
+              tenantId={tenantId}
+              onSent={refetchMessages}
+              onFilesUploaded={(files) => {
+                setLinkDialogFiles(files);
+                setShowLinkDialog(true);
+              }}
+            />
             <ConvertMessageToTaskDialog
               open={!!taskMessage}
               onOpenChange={(open) => { if (!open) setTaskMessage(null); }}
@@ -1416,6 +1502,15 @@ export default function TeamChat() {
           </div>
         )}
       </div>
+
+      {/* Link files dialog */}
+      <LinkFileToEntityDialog
+        open={showLinkDialog}
+        onOpenChange={setShowLinkDialog}
+        tenantId={tenantId}
+        files={linkDialogFiles}
+        onLinked={() => setLinkDialogFiles([])}
+      />
     </div>
   );
 }
