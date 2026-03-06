@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -33,6 +33,7 @@ import {
   Table2,
   MessageSquare,
   MessagesSquare,
+  Download,
 } from "lucide-react";
 import {
   Sidebar,
@@ -786,11 +787,67 @@ export function AppSidebar() {
         })()}
       </SidebarContent>
 
+      {/* Install PWA Button */}
+      <InstallAppButton isCollapsed={isCollapsed} />
+
       {/* Quick Create Table Dialog */}
       <SimpleTableDialog 
         open={isQuickCreateOpen}
         onOpenChange={setIsQuickCreateOpen}
       />
     </Sidebar>
+  );
+}
+
+function InstallAppButton({ isCollapsed }: { isCollapsed: boolean }) {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+
+    // Check if already installed
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+    }
+
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const result = await deferredPrompt.userChoice;
+      if (result.outcome === 'accepted') {
+        setIsInstalled(true);
+      }
+      setDeferredPrompt(null);
+    } else {
+      // Fallback for iOS / browsers that don't support beforeinstallprompt
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (isIOS) {
+        alert('להתקנה באייפון:\n1. לחץ על כפתור השיתוף (⬆️)\n2. בחר "Add to Home Screen"');
+      } else {
+        alert('פתח את התפריט של הדפדפן ובחר "התקן אפליקציה" או "הוסף למסך הבית"');
+      }
+    }
+  };
+
+  if (isInstalled) return null;
+
+  return (
+    <div className="p-2 border-t border-sidebar-border">
+      <button
+        onClick={handleInstall}
+        className="flex items-center gap-2 w-full rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors"
+      >
+        <Download className="h-4 w-4 shrink-0" />
+        {!isCollapsed && <span>התקן אפליקציה</span>}
+      </button>
+    </div>
   );
 }
