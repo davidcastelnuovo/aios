@@ -3885,6 +3885,7 @@ export type Database = {
         Row: {
           agency_id: string | null
           avatar_url: string | null
+          category: string
           color: string | null
           created_at: string
           created_by: string
@@ -3900,6 +3901,7 @@ export type Database = {
         Insert: {
           agency_id?: string | null
           avatar_url?: string | null
+          category?: string
           color?: string | null
           created_at?: string
           created_by: string
@@ -3915,6 +3917,7 @@ export type Database = {
         Update: {
           agency_id?: string | null
           avatar_url?: string | null
+          category?: string
           color?: string | null
           created_at?: string
           created_by?: string
