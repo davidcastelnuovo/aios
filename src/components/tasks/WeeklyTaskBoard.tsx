@@ -1220,12 +1220,8 @@ export function WeeklyTaskBoard() {
             )}
           </div>
 
-          {/* Task Backlog Panel - Fixed on desktop */}
-          <div className={`fixed top-[200px] z-20 transition-all duration-200 ${
-            sidebarState === "collapsed" 
-              ? "right-[calc(var(--sidebar-width-icon,3rem)+1rem)]" 
-              : "right-[calc(var(--sidebar-width,16rem)+1rem)]"
-          }`}>
+          {/* Task Backlog Panel - Sticky on desktop */}
+          <div className="sticky left-0 top-0 z-20 shrink-0 self-start">
             <TaskBacklogPanel
               tasks={backlogTasks}
               onToggleComplete={(taskId, completed) =>
@@ -1238,6 +1234,7 @@ export function WeeklyTaskBoard() {
               onAddTask={handleBacklogAddTask}
               isLoading={isLoading || addTask.isPending || !canQuickAddTask}
             />
+          </div>
           </div>
         </div>
         <DragOverlay>
