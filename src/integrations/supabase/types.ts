@@ -3893,6 +3893,7 @@ export type Database = {
           id: string
           joined_at: string
           role: string
+          tenant_id: string
           user_id: string
         }
         Insert: {
@@ -3900,6 +3901,7 @@ export type Database = {
           id?: string
           joined_at?: string
           role?: string
+          tenant_id: string
           user_id: string
         }
         Update: {
@@ -3907,6 +3909,7 @@ export type Database = {
           id?: string
           joined_at?: string
           role?: string
+          tenant_id?: string
           user_id?: string
         }
         Relationships: [
@@ -3915,6 +3918,13 @@ export type Database = {
             columns: ["channel_id"]
             isOneToOne: false
             referencedRelation: "team_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_channel_members_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
         ]
