@@ -1001,9 +1001,13 @@ serve(async (req) => {
                       if (tenant_id) {
                         bodyObj.tenant_id = tenant_id;
                       }
+                      if (start_date && end_date) {
+                        bodyObj.start_date = start_date;
+                        bodyObj.end_date = end_date;
+                      }
                       module.mapper.jsonStringBodyContent = JSON.stringify(bodyObj);
                       patchedHttpModule = true;
-                      console.log("Patched jsonStringBodyContent with new table_id and campaign_type");
+                      console.log("Patched jsonStringBodyContent with new table_id/campaign_type/date range");
                     } catch (e) {
                       console.warn("Failed to parse jsonStringBodyContent:", e);
                     }
@@ -1019,6 +1023,10 @@ serve(async (req) => {
                       dataObj.campaign_type = campaign_type || dataObj.campaign_type || 'leads';
                       if (tenant_id) {
                         dataObj.tenant_id = tenant_id;
+                      }
+                      if (start_date && end_date) {
+                        dataObj.start_date = start_date;
+                        dataObj.end_date = end_date;
                       }
                       module.mapper.data = JSON.stringify(dataObj);
                       patchedHttpModule = true;

@@ -93,6 +93,46 @@ Deno.serve(async (req) => {
 
     const expectedFields = campaignType === "ecommerce" ? ecommerceFields : leadFields;
 
+    const normalizeDate = (value: unknown): string => {
+      if (!value) return "";
+      const raw = String(value).trim();
+      if (!raw) return "";
+
+      // Already ISO-like date
+      if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+        return raw;
+      }
+
+      // DD/MM/YYYY or DD-MM-YYYY
+      const ddmmyyyy = raw.match(/^(\d{2})[\/\-](\d{2})[\/\-](\d{4})$/);
+      if (ddmmyyyy) {
+        const [, dd, mm, yyyy] = ddmmyyyy;
+        return `${yyyy}-${mm}-${dd}`;
+      }
+
+      // YYYY/MM/DD
+      const yyyymmdd = raw.match(/^(\d{4})[\/](\d{2})[\/](\d{2})$/);
+      if (yyyymmdd) {
+        const [, yyyy, mm, dd] = yyyymmdd;
+        return `${yyyy}-${mm}-${dd}`;
+      }
+
+      const parsed = new Date(raw);
+      if (Number.isNaN(parsed.getTime())) return "";
+      return parsed.toISOString().slice(0, 10);
+    };
+
+    const isWithinRange = (dateStr: string, start?: string, end?: string) => {
+      if (!start && !end) return true;
+      if (!dateStr) return false;
+      if (start && dateStr < start) return false;
+      if (end && dateStr > end) return false;
+      return true;
+    };
+
+    const syncStartDate = normalizeDate(body.start_date);
+    const syncEndDate = normalizeDate(body.end_date);
+
     // Batch check existing fields
     const { data: existingFields } = await supabase
       .from("crm_fields")
@@ -100,12 +140,12 @@ Deno.serve(async (req) => {
       .eq("table_id", table_id);
 
     const existingFieldKeys = new Set((existingFields || []).map((f: any) => f.key));
-    const missingFields = expectedFields.filter((f, i) => !existingFieldKeys.has(f.key)).map((f, i) => ({
+    const missingFields = expectedFields.filter((f) => !existingFieldKeys.has(f.key)).map((f, i) => ({
       table_id,
       key: f.key,
       name: f.name,
       type: f.type,
-      position: expectedFields.indexOf(f),
+      position: i,
       is_visible: true,
       is_required: false,
       config: {},
@@ -130,8 +170,10 @@ Deno.serve(async (req) => {
     const existingMap = new Map<string, string>();
     for (const r of (allExisting || [])) {
       const d = r.data as any;
-      if (d?.campaign_id && d?.date) {
-        existingMap.set(`${d.campaign_id}|${d.date}`, r.id);
+      const existingCampaignId = String(d?.campaign_id || "").trim();
+      const existingDate = normalizeDate(d?.date);
+      if (existingCampaignId && existingDate) {
+        existingMap.set(`${existingCampaignId}|${existingDate}`, r.id);
       }
     }
 
@@ -140,8 +182,26 @@ Deno.serve(async (req) => {
     // Process all records and split into inserts vs updates
     const toInsert: any[] = [];
     const toUpdate: { id: string; data: Record<string, any> }[] = [];
+    let skippedInvalidCount = 0;
+    let skippedOutOfRangeCount = 0;
 
     for (const record of records) {
+      const normalizedDate = normalizeDate(
+        record.date ?? record.segments_date ?? record.segment_date ?? record.day ?? record.data_date
+      );
+      const campaignId = String(record.campaign_id || record.id || "").trim();
+      const campaignName = String(record.campaign_name || record.name || "").trim();
+
+      if (!campaignId || !normalizedDate) {
+        skippedInvalidCount++;
+        continue;
+      }
+
+      if (!isWithinRange(normalizedDate, syncStartDate || undefined, syncEndDate || undefined)) {
+        skippedOutOfRangeCount++;
+        continue;
+      }
+
       let recordData: Record<string, any>;
 
       if (campaignType === "ecommerce") {
@@ -151,9 +211,9 @@ Deno.serve(async (req) => {
         const allConversions = Number(record.all_conversions) || 0;
 
         recordData = {
-          campaign_id: record.campaign_id || record.id || "",
-          campaign_name: record.campaign_name || record.name || "",
-          date: record.date || "",
+          campaign_id: campaignId,
+          campaign_name: campaignName,
+          date: normalizedDate,
           impressions: Number(record.impressions) || 0,
           clicks: Number(record.clicks) || 0,
           cost,
@@ -167,9 +227,9 @@ Deno.serve(async (req) => {
         const conversions = Number(record.conversions) || 0;
 
         recordData = {
-          campaign_id: record.campaign_id || record.id || "",
-          campaign_name: record.campaign_name || record.name || "",
-          date: record.date || "",
+          campaign_id: campaignId,
+          campaign_name: campaignName,
+          date: normalizedDate,
           impressions: Number(record.impressions) || 0,
           clicks: Number(record.clicks) || 0,
           cost,
@@ -180,7 +240,7 @@ Deno.serve(async (req) => {
         };
       }
 
-      const key = `${recordData.campaign_id}|${recordData.date}`;
+      const key = `${campaignId}|${normalizedDate}`;
       const existingId = existingMap.get(key);
 
       if (existingId) {
@@ -226,15 +286,19 @@ Deno.serve(async (req) => {
       .update({ last_sync_at: new Date().toISOString() })
       .eq("id", table_id);
 
-    console.log(`Synced ${records.length} records: ${insertedCount} inserted, ${updatedCount} updated`);
+    console.log(
+      `Synced ${records.length} records: ${insertedCount} inserted, ${updatedCount} updated, ${skippedInvalidCount} skipped invalid, ${skippedOutOfRangeCount} skipped out-of-range`
+    );
 
     return new Response(
       JSON.stringify({
         success: true,
         message: "Data synced successfully",
-        records_synced: records.length,
+        records_received: records.length,
         records_inserted: insertedCount,
         records_updated: updatedCount,
+        records_skipped_invalid: skippedInvalidCount,
+        records_skipped_out_of_range: skippedOutOfRangeCount,
         table_id,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
