@@ -28,7 +28,6 @@ Deno.serve(async (req) => {
       }
     )
 
-    // Use service role for cross-user queries
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -53,17 +52,25 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Build direct link to team chat
     const baseUrl = Deno.env.get('SITE_URL') || 'https://after-lead.lovable.app'
     const slug = tenantSlug || ''
     const chatLink = slug ? `${baseUrl}/t/${slug}/team-chat` : `${baseUrl}/team-chat`
 
     console.log(`🔔 Notify request for channel ${channelId} by user ${user.id}`)
 
-    // Get channel members (exclude the sender)
+    // Get channel-level notification_group_link
+    const { data: channelData } = await supabaseAdmin
+      .from('team_channels')
+      .select('notification_group_link')
+      .eq('id', channelId)
+      .single()
+
+    const channelGroupLink = channelData?.notification_group_link || null
+
+    // Get channel members with notification settings (exclude sender)
     const { data: members, error: membersError } = await supabaseAdmin
       .from('team_channel_members')
-      .select('user_id')
+      .select('user_id, notify_enabled, notify_override_phone, notify_override_group')
       .eq('channel_id', channelId)
       .neq('user_id', user.id)
 
@@ -74,10 +81,17 @@ Deno.serve(async (req) => {
       })
     }
 
-    const memberUserIds = members.map(m => m.user_id)
-    console.log(`📋 Found ${memberUserIds.length} members to notify`)
+    // Filter out disabled members
+    const enabledMembers = members.filter(m => m.notify_enabled !== false)
+    if (enabledMembers.length === 0) {
+      return new Response(JSON.stringify({ success: true, notified: 0, reason: 'All members have notifications disabled' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
+    }
 
-    // Get profiles with phone and notification_group_link
+    const memberUserIds = enabledMembers.map(m => m.user_id)
+
+    // Get profiles
     const { data: profiles } = await supabaseAdmin
       .from('profiles')
       .select('id, full_name, phone, notification_group_link, campaigner_id')
@@ -89,11 +103,8 @@ Deno.serve(async (req) => {
       })
     }
 
-    // Get campaigner phone numbers as fallback
-    const campaignerIds = profiles
-      .filter(p => p.campaigner_id && !p.phone)
-      .map(p => p.campaigner_id!)
-
+    // Get campaigner phones as fallback
+    const campaignerIds = profiles.filter(p => p.campaigner_id && !p.phone).map(p => p.campaigner_id!)
     let campaignerPhoneMap: Record<string, string> = {}
     if (campaignerIds.length > 0) {
       const { data: campaigners } = await supabaseAdmin
@@ -105,17 +116,44 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Build notification targets: groups (deduplicated) and individual phones
-    const groupsToNotify = new Set<string>() // unique group chat IDs
+    // Build notification targets using priority logic:
+    // 1. member notify_override_group → send to that group
+    // 2. channel notification_group_link → send to channel group (deduplicated)
+    // 3. member notify_override_phone → send to that phone
+    // 4. profile notification_group_link → send to profile group
+    // 5. profile phone / campaigner phone → send to phone
+    const groupsToNotify = new Set<string>()
     const phonesToNotify: { phone: string; name: string }[] = []
 
-    for (const profile of profiles) {
-      // Priority 1: notification_group_link (WhatsApp group)
+    for (const member of enabledMembers) {
+      const profile = profiles.find(p => p.id === member.user_id)
+      if (!profile) continue
+
+      // Priority 1: member-level group override
+      if (member.notify_override_group) {
+        groupsToNotify.add(member.notify_override_group)
+        continue
+      }
+
+      // Priority 2: channel-level group
+      if (channelGroupLink) {
+        groupsToNotify.add(channelGroupLink)
+        continue
+      }
+
+      // Priority 3: member-level phone override
+      if (member.notify_override_phone) {
+        phonesToNotify.push({ phone: member.notify_override_phone, name: profile.full_name || 'חבר צוות' })
+        continue
+      }
+
+      // Priority 4: profile group
       if (profile.notification_group_link) {
         groupsToNotify.add(profile.notification_group_link)
         continue
       }
-      // Priority 2: profile phone
+
+      // Priority 5: profile phone / campaigner phone
       const phone = profile.phone || (profile.campaigner_id ? campaignerPhoneMap[profile.campaigner_id] : null)
       if (phone) {
         phonesToNotify.push({ phone, name: profile.full_name || 'חבר צוות' })
@@ -123,17 +161,15 @@ Deno.serve(async (req) => {
     }
 
     if (phonesToNotify.length === 0 && groupsToNotify.size === 0) {
-      console.log('No phone numbers or groups found for members')
       return new Response(JSON.stringify({ success: true, notified: 0, reason: 'No phone numbers or groups found' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    console.log(`📱 Sending notifications to ${phonesToNotify.length} phones + ${groupsToNotify.size} groups`)
+    console.log(`📱 Sending to ${phonesToNotify.length} phones + ${groupsToNotify.size} groups`)
 
-    // Find any active Green API integration for this tenant (prefer the sender's)
+    // Find Green API integration
     let integration: any = null
-
     const { data: senderIntegration } = await supabaseAdmin
       .from('tenant_integrations')
       .select('*')
@@ -161,8 +197,7 @@ Deno.serve(async (req) => {
     }
 
     if (!integration) {
-      console.error('No Green API integration found for tenant')
-      return new Response(JSON.stringify({ error: 'Green API not configured. Please set up a WhatsApp integration.' }), {
+      return new Response(JSON.stringify({ error: 'Green API not configured.' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
@@ -175,10 +210,8 @@ Deno.serve(async (req) => {
     let sentCount = 0
     const errors: string[] = []
 
-    // Helper to send via Green API
     const sendGreenApi = async (chatId: string, label: string) => {
       try {
-        console.log(`📤 Sending to ${label} (${chatId})`)
         const response = await fetch(
           `https://api.green-api.com/waInstance${instanceId}/sendMessage/${apiToken}`,
           {
@@ -192,32 +225,25 @@ Deno.serve(async (req) => {
           console.log(`✅ Sent to ${label}`)
         } else {
           const errText = await response.text()
-          console.error(`❌ Failed to send to ${label}: ${errText}`)
+          console.error(`❌ Failed ${label}: ${errText}`)
           errors.push(`${label}: ${errText}`)
         }
       } catch (err) {
-        console.error(`❌ Error sending to ${label}:`, err)
+        console.error(`❌ Error ${label}:`, err)
         errors.push(`${label}: ${err.message}`)
       }
     }
 
-    // Send to WhatsApp groups (deduplicated - one message per unique group)
+    // Send to groups
     for (const groupLink of groupsToNotify) {
-      // Extract group chatId from link or use as-is
       let groupChatId = groupLink.trim()
-      // If it's an invite link, we can't send to it directly - need the group ID
-      // Support formats: group chatId directly (e.g. "120363xxx@g.us") or just the ID
       if (!groupChatId.endsWith('@g.us')) {
-        // Try to extract from invite link or treat as group ID
         const match = groupChatId.match(/([0-9-]+@g\.us)/)
         if (match) {
           groupChatId = match[1]
         } else {
-          // If it's just a numeric group ID without suffix
           const digits = groupChatId.replace(/[^0-9-]/g, '')
-          if (digits) {
-            groupChatId = digits + '@g.us'
-          }
+          if (digits) groupChatId = digits + '@g.us'
         }
       }
       await sendGreenApi(groupChatId, `קבוצה: ${groupChatId}`)
@@ -232,7 +258,7 @@ Deno.serve(async (req) => {
     }
 
     const totalTargets = phonesToNotify.length + groupsToNotify.size
-    console.log(`✅ Notification sent to ${sentCount}/${totalTargets} targets`)
+    console.log(`✅ Sent to ${sentCount}/${totalTargets} targets`)
 
     return new Response(JSON.stringify({
       success: true,

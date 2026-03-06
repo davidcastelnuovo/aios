@@ -50,6 +50,7 @@ interface TeamChannel {
   category: string | null;
   category_id: string | null;
   created_at: string;
+  notification_group_link?: string | null;
 }
 
 interface TeamAttachment {
@@ -1453,6 +1454,62 @@ function TeamMessageInput({ channelId, tenantId, onSent, onFilesUploaded }: { ch
   );
 }
 
+// =================== MemberNotifyRow ===================
+function MemberNotifyRow({
+  member,
+  profile,
+  settings,
+  onSettingsChange,
+}: {
+  member: ChannelMember;
+  profile?: { full_name: string; email: string; avatar_url?: string };
+  settings: { notify_enabled: boolean; notify_override_phone: string; notify_override_group: string };
+  onSettingsChange: (s: { notify_enabled: boolean; notify_override_phone: string; notify_override_group: string }) => void;
+}) {
+  const [showOverrides, setShowOverrides] = useState(false);
+  return (
+    <div className="border rounded-lg p-2 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Avatar className="h-6 w-6">
+            <AvatarFallback className="text-[10px]">
+              {(profile?.full_name || "?")[0]}
+            </AvatarFallback>
+          </Avatar>
+          <span className="text-xs">{profile?.full_name || profile?.email || "משתמש"}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={settings.notify_enabled}
+            onCheckedChange={(checked) => onSettingsChange({ ...settings, notify_enabled: checked })}
+          />
+          <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setShowOverrides(!showOverrides)}>
+            <Settings className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+      {showOverrides && settings.notify_enabled && (
+        <div className="space-y-1 pr-8">
+          <Input
+            value={settings.notify_override_group}
+            onChange={(e) => onSettingsChange({ ...settings, notify_override_group: e.target.value })}
+            placeholder="קבוצה ספציפית (chatId)"
+            className="text-[10px] h-7"
+            dir="ltr"
+          />
+          <Input
+            value={settings.notify_override_phone}
+            onChange={(e) => onSettingsChange({ ...settings, notify_override_phone: e.target.value })}
+            placeholder="טלפון ספציפי"
+            className="text-[10px] h-7"
+            dir="ltr"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // =================== ManageChannelMembersDialog ===================
 function ManageChannelMembersDialog({
   channel,
@@ -1470,9 +1527,73 @@ function ManageChannelMembersDialog({
   const [open, setOpen] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [channelGroupLink, setChannelGroupLink] = useState(channel.notification_group_link || "");
+  const [memberNotifySettings, setMemberNotifySettings] = useState<Record<string, { notify_enabled: boolean; notify_override_phone: string; notify_override_group: string }>>({});
   const queryClient = useQueryClient();
 
   const isAdmin = members.some((m) => m.user_id === currentUserId && m.role === "admin");
+
+  // Load member notification settings
+  useEffect(() => {
+    if (open && members.length > 0) {
+      const settings: Record<string, { notify_enabled: boolean; notify_override_phone: string; notify_override_group: string }> = {};
+      // We need to fetch the actual settings from DB
+      supabase
+        .from("team_channel_members")
+        .select("user_id, notify_enabled, notify_override_phone, notify_override_group")
+        .eq("channel_id", channel.id)
+        .then(({ data }) => {
+          if (data) {
+            data.forEach((m: any) => {
+              settings[m.user_id] = {
+                notify_enabled: m.notify_enabled !== false,
+                notify_override_phone: m.notify_override_phone || "",
+                notify_override_group: m.notify_override_group || "",
+              };
+            });
+          }
+          // Fill missing members with defaults
+          members.forEach(m => {
+            if (!settings[m.user_id]) {
+              settings[m.user_id] = { notify_enabled: true, notify_override_phone: "", notify_override_group: "" };
+            }
+          });
+          setMemberNotifySettings(settings);
+        });
+      setChannelGroupLink(channel.notification_group_link || "");
+    }
+  }, [open, members, channel.id, channel.notification_group_link]);
+
+  const saveNotificationSettings = useMutation({
+    mutationFn: async () => {
+      // Save channel-level group link
+      const { error: chErr } = await supabase
+        .from("team_channels")
+        .update({ notification_group_link: channelGroupLink || null })
+        .eq("id", channel.id);
+      if (chErr) throw chErr;
+
+      // Save per-member settings
+      for (const [userId, s] of Object.entries(memberNotifySettings)) {
+        const { error } = await supabase
+          .from("team_channel_members")
+          .update({
+            notify_enabled: s.notify_enabled,
+            notify_override_phone: s.notify_override_phone || null,
+            notify_override_group: s.notify_override_group || null,
+          })
+          .eq("channel_id", channel.id)
+          .eq("user_id", userId);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success("הגדרות התראות נשמרו");
+      queryClient.invalidateQueries({ queryKey: ["team-channels"] });
+      onChanged();
+    },
+    onError: (err: any) => toast.error("שגיאה בשמירה: " + err.message),
+  });
 
   // Fetch existing invite link
   const { data: existingInvite } = useQuery({
@@ -1696,6 +1817,59 @@ function ManageChannelMembersDialog({
 
           {!isAdmin && (
             <p className="text-xs text-muted-foreground text-center py-2">רק מנהלי הקבוצה יכולים להוסיף או להסיר חברים</p>
+          )}
+
+          {/* Notification Settings */}
+          {isAdmin && (
+            <>
+              <Separator className="my-3" />
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium flex items-center gap-2">
+                  <Bell className="h-4 w-4" />
+                  הגדרות התראות
+                </h4>
+
+                {/* Channel-level group */}
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">קבוצת וואטסאפ לערוץ (chatId של הקבוצה)</Label>
+                  <Input
+                    value={channelGroupLink}
+                    onChange={(e) => setChannelGroupLink(e.target.value)}
+                    placeholder="לדוגמה: 120363xxx@g.us"
+                    className="text-xs"
+                    dir="ltr"
+                  />
+                  <p className="text-[10px] text-muted-foreground">אם מוגדר, כל התראות הערוץ ישלחו לקבוצה זו</p>
+                </div>
+
+                {/* Per-member notification settings */}
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">הגדרות לכל חבר</Label>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {members.map((member) => (
+                      <MemberNotifyRow
+                        key={member.id}
+                        member={member}
+                        profile={getMemberProfile(member.user_id)}
+                        settings={memberNotifySettings[member.user_id] || { notify_enabled: true, notify_override_phone: "", notify_override_group: "" }}
+                        onSettingsChange={(s) =>
+                          setMemberNotifySettings(prev => ({ ...prev, [member.user_id]: s }))
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <Button
+                  size="sm"
+                  className="w-full"
+                  onClick={() => saveNotificationSettings.mutate()}
+                  disabled={saveNotificationSettings.isPending}
+                >
+                  {saveNotificationSettings.isPending ? "שומר..." : "שמור הגדרות התראות"}
+                </Button>
+              </div>
+            </>
           )}
 
           {/* Invite Link Section */}

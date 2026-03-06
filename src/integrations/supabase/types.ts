@@ -3901,6 +3901,9 @@ export type Database = {
           channel_id: string
           id: string
           joined_at: string
+          notify_enabled: boolean | null
+          notify_override_group: string | null
+          notify_override_phone: string | null
           role: string
           tenant_id: string
           user_id: string
@@ -3909,6 +3912,9 @@ export type Database = {
           channel_id: string
           id?: string
           joined_at?: string
+          notify_enabled?: boolean | null
+          notify_override_group?: string | null
+          notify_override_phone?: string | null
           role?: string
           tenant_id: string
           user_id: string
@@ -3917,6 +3923,9 @@ export type Database = {
           channel_id?: string
           id?: string
           joined_at?: string
+          notify_enabled?: boolean | null
+          notify_override_group?: string | null
+          notify_override_phone?: string | null
           role?: string
           tenant_id?: string
           user_id?: string
@@ -3953,6 +3962,7 @@ export type Database = {
           linked_client_id: string | null
           linked_lead_id: string | null
           name: string
+          notification_group_link: string | null
           tenant_id: string
           updated_at: string
         }
@@ -3970,6 +3980,7 @@ export type Database = {
           linked_client_id?: string | null
           linked_lead_id?: string | null
           name: string
+          notification_group_link?: string | null
           tenant_id: string
           updated_at?: string
         }
@@ -3987,6 +3998,7 @@ export type Database = {
           linked_client_id?: string | null
           linked_lead_id?: string | null
           name?: string
+          notification_group_link?: string | null
           tenant_id?: string
           updated_at?: string
         }
