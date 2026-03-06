@@ -2512,6 +2512,41 @@ export default function TeamChat() {
     };
   }, [activeChannelId, refetchMessages]);
 
+  // Play notification gong sound
+  const playGongSound = useCallback(() => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Main tone
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(830, audioCtx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(415, audioCtx.currentTime + 0.8);
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 1.2);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 1.2);
+
+      // Harmonic
+      const osc2 = audioCtx.createOscillator();
+      const gain2 = audioCtx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(1245, audioCtx.currentTime);
+      osc2.frequency.exponentialRampToValueAtTime(622, audioCtx.currentTime + 0.6);
+      gain2.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.8);
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      osc2.start(audioCtx.currentTime);
+      osc2.stop(audioCtx.currentTime + 0.8);
+    } catch (e) {
+      // Audio not supported or blocked
+    }
+  }, []);
+
   // Realtime subscription for unread counts (listen to all team_messages in tenant)
   useEffect(() => {
     if (!tenantId) return;
@@ -2521,8 +2556,12 @@ export default function TeamChat() {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "team_messages", filter: `tenant_id=eq.${tenantId}` },
-        () => {
+        (payload: any) => {
           queryClient.invalidateQueries({ queryKey: ["team-unread-counts"] });
+          // Play sound if the message is from someone else
+          if (payload.new?.sender_id !== userId) {
+            playGongSound();
+          }
         }
       )
       .subscribe();
@@ -2530,7 +2569,7 @@ export default function TeamChat() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [tenantId, queryClient]);
+  }, [tenantId, queryClient, userId, playGongSound]);
 
   // Edit message mutation
   const editMessage = useMutation({
