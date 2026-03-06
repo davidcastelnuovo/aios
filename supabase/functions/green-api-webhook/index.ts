@@ -170,6 +170,8 @@ async function forwardToTeamChannels(
   whatsappGroupId?: string | null
 ) {
   try {
+    console.log('🔗 forwardToTeamChannels called - tenantId:', tenantId, 'whatsappGroupId:', whatsappGroupId, 'chatId:', chatId);
+    
     // Find linked team channels - by whatsapp_group_id or whatsapp_chat_id
     let query = supabaseClient
       .from('team_channel_whatsapp_links')
@@ -184,7 +186,15 @@ async function forwardToTeamChannels(
 
     const { data: links, error } = await query;
 
-    if (error || !links?.length) return;
+    if (error) {
+      console.error('❌ Error querying team_channel_whatsapp_links:', error.message);
+      return;
+    }
+    
+    if (!links?.length) {
+      console.log('ℹ️ No team channel links found for this chat/group');
+      return;
+    }
 
     console.log(`📨 Forwarding to ${links.length} linked team channel(s)`);
 
