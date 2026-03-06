@@ -942,9 +942,9 @@ serve(async (req) => {
           if (blueprintData.flow && Array.isArray(blueprintData.flow)) {
             for (const module of blueprintData.flow) {
               // Update Google Ads module if customer_id is provided
-              if (customer_id && module.module && isGoogleAdsModule(module.module)) {
-                console.log(`Patching Google Ads module (${module.module}) with accountId and metrics for ${campaign_type}`);
-                if (module.mapper) {
+              if (module.module && isGoogleAdsModule(module.module)) {
+                if (customer_id && module.mapper) {
+                  console.log(`Patching Google Ads module (${module.module}) with accountId and metrics for ${campaign_type}`);
                   const formattedCustomerId = customer_id.replace(/-/g, '');
                   module.mapper.customerId = formattedCustomerId;
                   module.mapper.customer_id = formattedCustomerId;
@@ -956,6 +956,26 @@ serve(async (req) => {
                     module.mapper.metrics = selectedMetrics;
                     console.log(`Updated metrics for campaign_type: ${campaign_type}`);
                   }
+                }
+                
+                // Update date range if start_date and end_date are provided
+                if (start_date && end_date && module.mapper) {
+                  // Format dates to DD/MM/YYYY for Make.com Google Ads module
+                  const formatForMake = (dateStr: string) => {
+                    const d = new Date(dateStr);
+                    const dd = String(d.getDate()).padStart(2, '0');
+                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                    const yyyy = d.getFullYear();
+                    return `${dd}/${mm}/${yyyy}`;
+                  };
+                  
+                  module.mapper.startDate = formatForMake(start_date);
+                  module.mapper.endDate = formatForMake(end_date);
+                  // Also set dateRangeType to CUSTOM if it exists
+                  if (module.mapper.dateRangeType) {
+                    module.mapper.dateRangeType = "CUSTOM";
+                  }
+                  console.log(`Updated date range: ${module.mapper.startDate} - ${module.mapper.endDate}`);
                 }
               }
               
