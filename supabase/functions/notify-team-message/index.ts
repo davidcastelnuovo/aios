@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
       })
     }
 
-    const { messageId, channelId, tenantId, messageContent, senderName, channelName, tenantSlug } = await req.json()
+    const { messageId, channelId, tenantId, messageContent, senderName, channelName, tenantSlug, targetOverride } = await req.json()
 
     if (!channelId || !tenantId || !messageContent) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -232,6 +232,46 @@ Deno.serve(async (req) => {
         console.error(`❌ Error ${label}:`, err)
         errors.push(`${label}: ${err.message}`)
       }
+    }
+
+    // If targetOverride is provided, skip normal priority logic and send only to specified target
+    if (targetOverride) {
+      console.log(`🎯 Target override: ${JSON.stringify(targetOverride)}`)
+      
+      if (targetOverride.type === 'group') {
+        // Send to channel group link
+        if (channelGroupLink) {
+          let groupChatId = channelGroupLink.trim()
+          if (!groupChatId.endsWith('@g.us')) {
+            const match = groupChatId.match(/([0-9-]+@g\.us)/)
+            if (match) {
+              groupChatId = match[1]
+            } else {
+              const digits = groupChatId.replace(/[^0-9-]/g, '')
+              if (digits) groupChatId = digits + '@g.us'
+            }
+          }
+          await sendGreenApi(groupChatId, `קבוצה: ${groupChatId}`)
+        } else {
+          return new Response(JSON.stringify({ success: true, notified: 0, reason: 'אין קבוצה משויכת לערוץ' }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+      } else if (targetOverride.type === 'contact' && targetOverride.phone) {
+        let digits = targetOverride.phone.replace(/[^0-9]/g, '')
+        if (digits.startsWith('00')) digits = digits.slice(2)
+        if (digits.startsWith('0') && digits.length <= 10) digits = '972' + digits.slice(1)
+        await sendGreenApi(digits + '@c.us', targetOverride.name || 'איש קשר')
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        notified: sentCount,
+        total: 1,
+        errors: errors.length > 0 ? errors : undefined,
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      })
     }
 
     // Send to groups

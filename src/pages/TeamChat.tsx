@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target, Settings, Pencil, ArrowRight, Check, Upload, Sparkles, Camera, Bell, MessageSquare, Reply, Phone, Globe } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ConvertMessageToTaskDialog } from "@/components/chat/ConvertMessageToTaskDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -2538,7 +2539,144 @@ function ThreadDialog({
   );
 }
 
-// =================== Main TeamChat Page ===================
+// =================== NotifyTargetDialog ===================
+function NotifyTargetDialog({
+  open,
+  onOpenChange,
+  members,
+  currentUserId,
+  channelHasGroupLink,
+  onSend,
+  isPending,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  members: ChannelMember[];
+  currentUserId?: string;
+  channelHasGroupLink: boolean;
+  onSend: (targetOverride?: { type: 'group' } | { type: 'contact'; phone: string; name: string }) => void;
+  isPending: boolean;
+}) {
+  const [target, setTarget] = useState<'group' | 'contact'>('group');
+  const [selectedMemberId, setSelectedMemberId] = useState<string>('');
+
+  // Fetch profiles with phone for all members
+  const otherMembers = members.filter(m => m.user_id !== currentUserId);
+  const memberUserIds = otherMembers.map(m => m.user_id);
+
+  const { data: memberProfiles = [] } = useQuery({
+    queryKey: ['notify-member-profiles', memberUserIds.join(',')],
+    queryFn: async () => {
+      if (memberUserIds.length === 0) return [];
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, phone, campaigner_id')
+        .in('id', memberUserIds);
+      
+      // For members without phone, try campaigner phone
+      const profiles = data || [];
+      const needCampaigner = profiles.filter(p => !p.phone && p.campaigner_id);
+      if (needCampaigner.length > 0) {
+        const { data: campaigners } = await supabase
+          .from('campaigners')
+          .select('id, phone')
+          .in('id', needCampaigner.map(p => p.campaigner_id!));
+        if (campaigners) {
+          const campMap = new Map(campaigners.map(c => [c.id, c.phone]));
+          profiles.forEach(p => {
+            if (!p.phone && p.campaigner_id && campMap.has(p.campaigner_id)) {
+              (p as any).phone = campMap.get(p.campaigner_id);
+            }
+          });
+        }
+      }
+      return profiles;
+    },
+    enabled: open && memberUserIds.length > 0,
+  });
+
+  const handleSend = () => {
+    if (target === 'group') {
+      onSend({ type: 'group' });
+    } else {
+      const profile = memberProfiles.find(p => p.id === selectedMemberId);
+      if (profile?.phone) {
+        onSend({ type: 'contact', phone: profile.phone, name: profile.full_name || 'איש קשר' });
+      } else {
+        toast.error('לא נמצא מספר טלפון לאיש הקשר שנבחר');
+      }
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent dir="rtl" className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-sm">בחר יעד להתראה</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            בחר אם לשלוח לקבוצה המשותפת או לאיש קשר ספציפי
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <RadioGroup value={target} onValueChange={(v) => setTarget(v as 'group' | 'contact')}>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="group" id="notify-group" />
+              <Label htmlFor="notify-group" className="text-sm cursor-pointer flex items-center gap-1.5">
+                <Users className="h-4 w-4 text-muted-foreground" />
+                שלח לקבוצה משותפת
+              </Label>
+              {!channelHasGroupLink && (
+                <span className="text-[10px] text-destructive">(אין קבוצה מקושרת)</span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <RadioGroupItem value="contact" id="notify-contact" />
+              <Label htmlFor="notify-contact" className="text-sm cursor-pointer flex items-center gap-1.5">
+                <User className="h-4 w-4 text-muted-foreground" />
+                שלח לאיש קשר ספציפי
+              </Label>
+            </div>
+          </RadioGroup>
+
+          {target === 'contact' && (
+            <Select value={selectedMemberId} onValueChange={setSelectedMemberId}>
+              <SelectTrigger className="text-sm">
+                <SelectValue placeholder="בחר חבר ערוץ..." />
+              </SelectTrigger>
+              <SelectContent>
+                {memberProfiles.map((profile) => (
+                  <SelectItem key={profile.id} value={profile.id} disabled={!profile.phone}>
+                    <span className="flex items-center gap-2">
+                      <span>{profile.full_name || 'ללא שם'}</span>
+                      {profile.phone ? (
+                        <span className="text-xs text-muted-foreground">{profile.phone}</span>
+                      ) : (
+                        <span className="text-xs text-destructive">ללא טלפון</span>
+                      )}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button
+            onClick={handleSend}
+            disabled={isPending || (target === 'group' && !channelHasGroupLink) || (target === 'contact' && !selectedMemberId)}
+            className="gap-1.5"
+          >
+            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bell className="h-4 w-4" />}
+            שלח התראה
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function TeamChat() {
   const { tenantId, tenant } = useCurrentTenant();
   const { userId } = useCurrentUser();
@@ -2742,9 +2880,13 @@ export default function TeamChat() {
     onError: (err: any) => toast.error("שגיאה במחיקת ההודעה: " + err.message),
   });
 
+  // Notify target dialog state
+  const [notifyDialogOpen, setNotifyDialogOpen] = useState(false);
+  const [notifyDialogMessage, setNotifyDialogMessage] = useState<TeamMessage | null>(null);
+
   // Notify message mutation
   const notifyMessage = useMutation({
-    mutationFn: async (msg: TeamMessage) => {
+    mutationFn: async ({ msg, targetOverride }: { msg: TeamMessage; targetOverride?: { type: 'group' } | { type: 'contact'; phone: string; name: string } }) => {
       const { data, error } = await supabase.functions.invoke("notify-team-message", {
         body: {
           messageId: msg.id,
@@ -2754,20 +2896,37 @@ export default function TeamChat() {
           senderName: msg.sender_profile?.full_name || "חבר צוות",
           channelName: activeChannel?.name || "ערוץ",
           tenantSlug: tenant?.slug || "",
+          targetOverride,
         },
       });
       if (error) throw error;
       return data;
     },
     onSuccess: (data) => {
+      setNotifyDialogOpen(false);
+      setNotifyDialogMessage(null);
       if (data?.notified > 0) {
-        toast.success(`התראה נשלחה ל-${data.notified} חברי צוות`);
+        toast.success(`התראה נשלחה ל-${data.notified} יעדים`);
       } else {
-        toast.info(data?.reason || "לא נמצאו חברי צוות עם מספר טלפון לשליחת התראה");
+        toast.info(data?.reason || "לא נמצאו יעדים לשליחת התראה");
       }
     },
     onError: (err: any) => toast.error("שגיאה בשליחת התראה: " + (err?.message || err)),
   });
+
+  // Handle bell button click - check member count
+  const handleNotifyClick = useCallback((msg: TeamMessage) => {
+    // Filter members excluding current user
+    const otherMembers = members.filter(m => m.user_id !== userId);
+    if (otherMembers.length <= 1) {
+      // Single member or no members - send directly
+      notifyMessage.mutate({ msg });
+    } else {
+      // Multiple members - open dialog
+      setNotifyDialogMessage(msg);
+      setNotifyDialogOpen(true);
+    }
+  }, [members, userId, notifyMessage]);
 
   // Unread counts query
   const { data: readStatuses = [] } = useQuery({
@@ -2884,7 +3043,7 @@ export default function TeamChat() {
                 onConvertToTask={(msg) => setTaskMessage(msg)}
                 onEditMessage={(msg, newContent) => editMessage.mutate({ id: msg.id, content: newContent })}
                 onDeleteMessage={(msg) => deleteMessage.mutate(msg.id)}
-                onNotifyMessage={(msg) => notifyMessage.mutate(msg)}
+                onNotifyMessage={handleNotifyClick}
                 onReplyMessage={(msg) => setThreadMessage(msg)}
               />
               <TeamMessageInput
@@ -2932,6 +3091,21 @@ export default function TeamChat() {
         tenantId={tenantId}
         files={linkDialogFiles}
         onLinked={() => setLinkDialogFiles([])}
+      />
+
+      {/* Notify target dialog */}
+      <NotifyTargetDialog
+        open={notifyDialogOpen}
+        onOpenChange={(open) => { if (!open) { setNotifyDialogOpen(false); setNotifyDialogMessage(null); } }}
+        members={members}
+        currentUserId={userId}
+        channelHasGroupLink={!!activeChannel?.notification_group_link}
+        isPending={notifyMessage.isPending}
+        onSend={(targetOverride) => {
+          if (notifyDialogMessage) {
+            notifyMessage.mutate({ msg: notifyDialogMessage, targetOverride });
+          }
+        }}
       />
     </div>
   );
