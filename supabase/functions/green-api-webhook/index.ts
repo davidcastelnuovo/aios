@@ -158,6 +158,79 @@ function extractMessageText(messageData: any, typeMessage: string): string {
   }
 }
 
+// Helper function to forward a message to linked team channels
+async function forwardToTeamChannels(
+  supabaseClient: any,
+  tenantId: string,
+  connectionUserId: string,
+  chatId: string,
+  senderName: string | null,
+  messageText: string,
+  messageData: any,
+  whatsappGroupId?: string | null
+) {
+  try {
+    // Find linked team channels - by whatsapp_group_id or whatsapp_chat_id
+    let query = supabaseClient
+      .from('team_channel_whatsapp_links')
+      .select('channel_id, forward_files, display_name')
+      .eq('tenant_id', tenantId);
+
+    if (whatsappGroupId) {
+      query = query.eq('whatsapp_group_id', whatsappGroupId);
+    } else {
+      query = query.eq('whatsapp_chat_id', chatId);
+    }
+
+    const { data: links, error } = await query;
+
+    if (error || !links?.length) return;
+
+    console.log(`📨 Forwarding to ${links.length} linked team channel(s)`);
+
+    // Extract file attachments from message data
+    const attachments: any[] = [];
+    const fileData = messageData?.fileMessageData;
+    if (fileData?.downloadUrl) {
+      const isImage = messageData?.typeMessage === 'imageMessage';
+      attachments.push({
+        name: fileData.fileName || (isImage ? 'image.jpg' : 'file'),
+        url: fileData.downloadUrl,
+        type: isImage ? 'image' : 'file',
+      });
+    }
+
+    for (const link of links) {
+      const prefix = `📱 *וואטסאפ* | ${senderName || chatId.split('@')[0]}`;
+      const content = `${prefix}\n${messageText}`;
+
+      const insertData: any = {
+        channel_id: link.channel_id,
+        tenant_id: tenantId,
+        sender_id: connectionUserId,
+        content,
+        is_edited: false,
+      };
+
+      if (link.forward_files && attachments.length > 0) {
+        insertData.attachments = attachments;
+      }
+
+      const { error: insertErr } = await supabaseClient
+        .from('team_messages')
+        .insert(insertData);
+
+      if (insertErr) {
+        console.error('❌ Failed to forward to team channel:', insertErr.message);
+      } else {
+        console.log('✅ Forwarded to team channel:', link.channel_id);
+      }
+    }
+  } catch (e) {
+    console.error('❌ Error forwarding to team channels:', e);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -399,6 +472,8 @@ Deno.serve(async (req) => {
         }
         
         console.log('✅ WhatsApp-sent group message saved successfully');
+        // Forward to linked team channels
+        await forwardToTeamChannels(supabaseClient, tenantId, connectionUserId, chatId, null, messageText, messageContent, groupId);
         return new Response(JSON.stringify({ success: true, contactType: 'group' }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
@@ -930,6 +1005,9 @@ Deno.serve(async (req) => {
 
       console.log('✅ Group message saved successfully');
 
+      // Forward to linked team channels
+      await forwardToTeamChannels(supabaseClient, tenantId, connectionUserId, senderData.chatId, senderData.senderName, messageText, messageData, groupId);
+
       // For incoming group messages, add "unread" tag automatically
       if (isIncoming) {
         console.log('🏷️ Adding unread tag for incoming group message...');
@@ -1187,6 +1265,9 @@ Deno.serve(async (req) => {
     }
 
     console.log('✅ Message saved successfully');
+
+    // Forward to linked team channels (individual chats)
+    await forwardToTeamChannels(supabaseClient, tenantId, connectionUserId, senderData.chatId, senderData.senderName, messageText, messageData);
 
     // For incoming messages, add "unread" tag automatically
     if (!isOutgoing) {

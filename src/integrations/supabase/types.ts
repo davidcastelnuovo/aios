@@ -3947,6 +3947,84 @@ export type Database = {
           },
         ]
       }
+      team_channel_whatsapp_links: {
+        Row: {
+          channel_id: string
+          client_id: string | null
+          created_at: string | null
+          created_by: string | null
+          display_name: string | null
+          forward_files: boolean | null
+          id: string
+          lead_id: string | null
+          tenant_id: string
+          whatsapp_chat_id: string | null
+          whatsapp_group_id: string | null
+        }
+        Insert: {
+          channel_id: string
+          client_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          display_name?: string | null
+          forward_files?: boolean | null
+          id?: string
+          lead_id?: string | null
+          tenant_id: string
+          whatsapp_chat_id?: string | null
+          whatsapp_group_id?: string | null
+        }
+        Update: {
+          channel_id?: string
+          client_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          display_name?: string | null
+          forward_files?: boolean | null
+          id?: string
+          lead_id?: string | null
+          tenant_id?: string
+          whatsapp_chat_id?: string | null
+          whatsapp_group_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_channel_whatsapp_links_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "team_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_channel_whatsapp_links_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_channel_whatsapp_links_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_channel_whatsapp_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_channel_whatsapp_links_whatsapp_group_id_fkey"
+            columns: ["whatsapp_group_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_channels: {
         Row: {
           agency_id: string | null

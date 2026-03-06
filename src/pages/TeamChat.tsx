@@ -2076,6 +2076,9 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
   const [color, setColor] = useState(channel.color);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [newChatId, setNewChatId] = useState("");
+  const [newDisplayName, setNewDisplayName] = useState("");
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (open) {
@@ -2086,6 +2089,29 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
   }, [open, channel]);
 
   const colors = ["#3B82F6", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#06B6D4", "#F97316"];
+
+  // Fetch WhatsApp groups in tenant
+  const { data: waGroups = [] } = useQuery({
+    queryKey: ["wa-groups-for-link", tenantId],
+    queryFn: async () => {
+      const { data } = await supabase.from("whatsapp_groups").select("id, group_name, group_chat_id").eq("tenant_id", tenantId);
+      return data || [];
+    },
+    enabled: open,
+  });
+
+  // Fetch existing links
+  const { data: waLinks = [], refetch: refetchLinks } = useQuery({
+    queryKey: ["wa-channel-links", channel.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("team_channel_whatsapp_links")
+        .select("*")
+        .eq("channel_id", channel.id);
+      return data || [];
+    },
+    enabled: open,
+  });
 
   const updateChannel = useMutation({
     mutationFn: async () => {
@@ -2100,10 +2126,47 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
     onError: (err: any) => toast.error(err.message),
   });
 
+  const addWaLink = useMutation({
+    mutationFn: async ({ groupId, chatId, displayName }: { groupId?: string; chatId?: string; displayName?: string }) => {
+      const insertData: any = {
+        channel_id: channel.id,
+        tenant_id: tenantId,
+        display_name: displayName || null,
+        forward_files: true,
+      };
+      if (groupId) {
+        insertData.whatsapp_group_id = groupId;
+      } else if (chatId) {
+        insertData.whatsapp_chat_id = chatId;
+      }
+      const { error } = await supabase.from("team_channel_whatsapp_links").insert(insertData);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("שיוך וואטסאפ נוסף");
+      setNewChatId("");
+      setNewDisplayName("");
+      refetchLinks();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const removeWaLink = useMutation({
+    mutationFn: async (linkId: string) => {
+      const { error } = await supabase.from("team_channel_whatsapp_links").delete().eq("id", linkId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("שיוך הוסר");
+      refetchLinks();
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const deleteChannel = async () => {
     setDeleting(true);
     try {
-      // Delete members, messages, then channel
+      await supabase.from("team_channel_whatsapp_links").delete().eq("channel_id", channel.id);
       await supabase.from("team_channel_members").delete().eq("channel_id", channel.id);
       await supabase.from("team_messages").delete().eq("channel_id", channel.id);
       const { error } = await supabase.from("team_channels").delete().eq("id", channel.id);
@@ -2120,6 +2183,10 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
 
   if (!isAdmin) return null;
 
+  // Groups not yet linked
+  const linkedGroupIds = new Set(waLinks.filter((l: any) => l.whatsapp_group_id).map((l: any) => l.whatsapp_group_id));
+  const availableGroups = waGroups.filter((g: any) => !linkedGroupIds.has(g.id));
+
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -2128,7 +2195,7 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
             <Settings className="h-4 w-4" />
           </Button>
         </DialogTrigger>
-        <DialogContent dir="rtl" className="sm:max-w-md">
+        <DialogContent dir="rtl" className="sm:max-w-md max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>הגדרות ערוץ</DialogTitle>
             <DialogDescription>ערוך את פרטי הערוץ או מחק אותו</DialogDescription>
@@ -2150,6 +2217,90 @@ function EditChannelDialog({ channel, tenantId, isAdmin, onUpdated, onDeleted }:
                 ))}
               </div>
             </div>
+
+            {/* WhatsApp Links Section */}
+            <Separator />
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium flex items-center gap-2">
+                <Phone className="h-4 w-4" />
+                שיוך וואטסאפ לערוץ
+              </h4>
+              <p className="text-[10px] text-muted-foreground">הודעות מקבוצות/צ'אטים משויכים יועברו אוטומטית לערוץ זה</p>
+
+              {/* Existing links */}
+              {waLinks.length > 0 && (
+                <div className="space-y-1">
+                  {waLinks.map((link: any) => {
+                    const group = waGroups.find((g: any) => g.id === link.whatsapp_group_id);
+                    return (
+                      <div key={link.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-muted/50 text-xs">
+                        <div className="flex items-center gap-2">
+                          <Globe className="h-3.5 w-3.5 text-green-600" />
+                          <span>{link.display_name || group?.group_name || link.whatsapp_chat_id || "צ'אט"}</span>
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeWaLink.mutate(link.id)}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Add from existing WhatsApp groups */}
+              {availableGroups.length > 0 && (
+                <div>
+                  <Label className="text-xs text-muted-foreground">הוסף קבוצת וואטסאפ</Label>
+                  <div className="space-y-1 max-h-32 overflow-y-auto mt-1">
+                    {availableGroups.map((g: any) => (
+                      <button
+                        key={g.id}
+                        className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-muted transition-colors text-xs"
+                        onClick={() => addWaLink.mutate({ groupId: g.id, displayName: g.group_name })}
+                        disabled={addWaLink.isPending}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Users className="h-3.5 w-3.5 text-green-600" />
+                          <span>{g.group_name}</span>
+                        </div>
+                        <Plus className="h-3.5 w-3.5 text-primary" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Add by chatId manually */}
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">או הוסף לפי chatId</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={newChatId}
+                    onChange={(e) => setNewChatId(e.target.value)}
+                    placeholder="לדוגמה: 972501234567@c.us"
+                    className="text-xs"
+                    dir="ltr"
+                  />
+                </div>
+                <Input
+                  value={newDisplayName}
+                  onChange={(e) => setNewDisplayName(e.target.value)}
+                  placeholder="שם תצוגה (אופציונלי)"
+                  className="text-xs"
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full"
+                  disabled={!newChatId.trim() || addWaLink.isPending}
+                  onClick={() => addWaLink.mutate({ chatId: newChatId.trim(), displayName: newDisplayName.trim() || newChatId.trim() })}
+                >
+                  <Plus className="h-3.5 w-3.5 ml-1" />
+                  הוסף צ'אט
+                </Button>
+              </div>
+            </div>
+
             <DialogFooter className="flex gap-2 sm:gap-0">
               <Button variant="destructive" size="sm" onClick={() => setShowDeleteConfirm(true)}>
                 <Trash2 className="h-4 w-4 ml-1" /> מחק ערוץ
