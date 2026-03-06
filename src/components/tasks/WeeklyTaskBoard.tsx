@@ -1156,10 +1156,9 @@ export function WeeklyTaskBoard() {
           </div>
         </div>
 
-        {/* Desktop: Side by side with fixed panel */}
-        <div className="hidden md:flex gap-2 flex-1 relative min-h-0">
-          {/* Scrollable days container - with padding for fixed panel */}
-          <div className="flex gap-2 overflow-x-auto pb-4 flex-1 pr-[280px] min-h-0">
+        {/* Desktop: Side by side with sticky panel */}
+        <div className="hidden md:block flex-1 relative min-h-0 overflow-x-auto">
+          <div className="flex gap-2 pb-4 min-h-0 w-fit">
             {viewMode === "daily" && (
               <DailyView
                 date={currentDate}
