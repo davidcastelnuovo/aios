@@ -133,14 +133,14 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Build query - filter by tenant and contact
-    // For shared access, we don't filter by connection_user_id since user is viewing shared data
+    // Build query - fetch newest messages first (descending), then reverse for chronological order
+    const MAX_MESSAGES = 2000;
     let query = supabase
       .from('chat_messages')
       .select('*')
       .eq('tenant_id', tenantId)
-      .order('created_at', { ascending: true })
-      .limit(limit);
+      .order('created_at', { ascending: false })
+      .limit(MAX_MESSAGES);
 
     if (clientId) {
       query = query.eq('client_id', clientId);
@@ -162,10 +162,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Found ${messages?.length || 0} messages`);
+    // Reverse to get chronological order (oldest first for display)
+    const sortedMessages = messages?.reverse() || [];
+
+    console.log(`Found ${sortedMessages.length} messages`);
 
     return new Response(
-      JSON.stringify({ messages: messages || [] }),
+      JSON.stringify({ messages: sortedMessages }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
