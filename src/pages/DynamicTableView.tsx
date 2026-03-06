@@ -529,7 +529,41 @@ export default function DynamicTableView() {
       
       // If scenario is already selected in table settings, use it directly
       if (scenarioId) {
-        console.log('Running existing Make.com scenario:', scenarioId);
+        console.log('Patching dates and running existing Make.com scenario:', scenarioId);
+        
+        // Calculate dynamic date range: last 30 days
+        const now = new Date();
+        const thirtyDaysAgo = new Date(now);
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+        const endDate = now.toISOString().split('T')[0];
+        
+        const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-ads-sync`;
+        
+        // First patch the blueprint with current dates
+        try {
+          await supabase.functions.invoke('make-api', {
+            body: {
+              action: 'patch_scenario_blueprint',
+              api_token: makeApiToken,
+              team_id: makeTeamId,
+              region: makeRegion,
+              scenario_id: scenarioId,
+              table_id: table.id,
+              tenant_id: table.tenant_id,
+              webhook_url: webhookUrl,
+              customer_id: integrationSettings.google_ads_customer_id,
+              campaign_type: integrationSettings.campaign_type || 'leads',
+              start_date: startDate,
+              end_date: endDate,
+            },
+          });
+          console.log('Blueprint dates patched successfully');
+        } catch (patchErr) {
+          console.warn('Failed to patch dates, running scenario anyway:', patchErr);
+        }
+        
+        // Then run the scenario
         const runResponse = await supabase.functions.invoke('make-api', {
           body: {
             action: 'run_scenario',
@@ -1083,6 +1117,13 @@ export default function DynamicTableView() {
 
       const integrationSettings = (table?.integration_settings as Record<string, any>) || {};
       
+      // Calculate dynamic date range: last 30 days
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+      const endDate = now.toISOString().split('T')[0];
+      
       const { data, error } = await supabase.functions.invoke('make-api', {
         body: {
           action: 'patch_scenario_blueprint',
@@ -1095,6 +1136,8 @@ export default function DynamicTableView() {
           webhook_url: webhookUrl,
           customer_id: integrationSettings.google_ads_customer_id,
           campaign_type: integrationSettings.campaign_type || 'leads',
+          start_date: startDate,
+          end_date: endDate,
         },
       });
 
