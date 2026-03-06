@@ -158,3 +158,6 @@ verify_jwt = false
 
 [functions.run-ai-agent]
 verify_jwt = false
+
+[functions.process-chat-invite]
+verify_jwt = false
