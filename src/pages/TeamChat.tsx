@@ -17,7 +17,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target, Settings, Pencil, ArrowRight, Check, Upload, Sparkles, Camera, Bell } from "lucide-react";
+import { Plus, Send, Hash, Lock, Users, UserPlus, X, Smile, Trash2, ListTodo, Paperclip, Link2, FileText, Image as ImageIcon, File, Mic, Square, Loader2, Building2, User, Target, Settings, Pencil, ArrowRight, Check, Upload, Sparkles, Camera, Bell, MessageSquare, Reply } from "lucide-react";
 import { ConvertMessageToTaskDialog } from "@/components/chat/ConvertMessageToTaskDialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
@@ -69,6 +69,7 @@ interface TeamMessage {
   created_at: string;
   attachments?: TeamAttachment[];
   sender_profile?: { full_name: string; email: string };
+  reply_count?: number;
 }
 
 interface ChannelMember {
@@ -536,28 +537,32 @@ function ChannelSidebar({
     channels: channels.filter((ch) => ch.category_id === cat.id),
   })).filter((cat) => cat.channels.length > 0);
 
-  const renderChannelItem = (ch: TeamChannel) => (
-    <button
-      key={ch.id}
-      onClick={() => onSelect(ch.id)}
-      className={cn(
-        "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-right",
-        activeChannelId === ch.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground"
-      )}
-    >
-      {ch.avatar_url ? (
-        <img src={ch.avatar_url} alt={ch.name} className="h-4 w-4 rounded shrink-0 object-cover" />
-      ) : (
-        ch.is_private ? <Lock className="h-3.5 w-3.5 shrink-0" /> : <Hash className="h-3.5 w-3.5 shrink-0" />
-      )}
-      <span className="flex-1 truncate">{ch.name}</span>
-      {(unreadCounts[ch.id] || 0) > 0 && (
-        <Badge variant="destructive" className="h-5 min-w-5 text-xs px-1">
-          {unreadCounts[ch.id]}
-        </Badge>
-      )}
-    </button>
-  );
+  const renderChannelItem = (ch: TeamChannel) => {
+    const unread = unreadCounts[ch.id] || 0;
+    return (
+      <button
+        key={ch.id}
+        onClick={() => onSelect(ch.id)}
+        className={cn(
+          "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors text-right",
+          activeChannelId === ch.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground",
+          unread > 0 && activeChannelId !== ch.id && "font-bold text-foreground"
+        )}
+      >
+        {ch.avatar_url ? (
+          <img src={ch.avatar_url} alt={ch.name} className="h-4 w-4 rounded shrink-0 object-cover" />
+        ) : (
+          ch.is_private ? <Lock className="h-3.5 w-3.5 shrink-0" /> : <Hash className="h-3.5 w-3.5 shrink-0" />
+        )}
+        <span className="flex-1 truncate">{ch.name}</span>
+        {unread > 0 && (
+          <Badge variant="destructive" className="h-5 min-w-5 text-xs px-1">
+            {unread}
+          </Badge>
+        )}
+      </button>
+    );
+  };
 
   return (
     <div className="w-full md:w-64 border-l bg-muted/30 flex flex-col h-full">
@@ -619,7 +624,7 @@ function ChannelSidebar({
 }
 
 // =================== TeamMessageList ===================
-function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessage, onDeleteMessage, onNotifyMessage }: { messages: TeamMessage[]; currentUserId?: string; onConvertToTask?: (msg: TeamMessage) => void; onEditMessage?: (msg: TeamMessage, newContent: string) => void; onDeleteMessage?: (msg: TeamMessage) => void; onNotifyMessage?: (msg: TeamMessage) => void }) {
+function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessage, onDeleteMessage, onNotifyMessage, onReplyMessage, allMessages }: { messages: TeamMessage[]; currentUserId?: string; onConvertToTask?: (msg: TeamMessage) => void; onEditMessage?: (msg: TeamMessage, newContent: string) => void; onDeleteMessage?: (msg: TeamMessage) => void; onNotifyMessage?: (msg: TeamMessage) => void; onReplyMessage?: (msg: TeamMessage) => void; allMessages?: TeamMessage[] }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -698,6 +703,16 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
                           {msg.is_edited && <span className="text-[10px] text-muted-foreground">(נערך)</span>}
                         </div>
                       )}
+                      {/* Reply indicator - show which message this replies to */}
+                      {msg.parent_message_id && (() => {
+                        const parentMsg = allMessages?.find(m => m.id === msg.parent_message_id);
+                        return parentMsg ? (
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5 cursor-pointer hover:text-foreground" onClick={() => onReplyMessage?.(parentMsg)}>
+                            <Reply className="h-3 w-3 rotate-180" />
+                            <span className="truncate max-w-[250px]">בתגובה ל: {parentMsg.sender_profile?.full_name} — {parentMsg.content?.slice(0, 50)}{(parentMsg.content?.length || 0) > 50 ? "..." : ""}</span>
+                          </div>
+                        ) : null;
+                      })()}
                       {isEditing ? (
                         <div className="space-y-1">
                           <Textarea
@@ -746,9 +761,22 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
                           ))}
                         </div>
                       )}
+                      {/* Reply count indicator */}
+                      {(msg.reply_count || 0) > 0 && (
+                        <button
+                          onClick={() => onReplyMessage?.(msg)}
+                          className="flex items-center gap-1 mt-1 text-xs text-primary hover:underline"
+                        >
+                          <MessageSquare className="h-3 w-3" />
+                          {msg.reply_count} תגובות
+                        </button>
+                      )}
                     </div>
                     {/* Action buttons - visible on hover */}
                     <div className="absolute left-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="הגב להודעה" onClick={() => onReplyMessage?.(msg)}>
+                        <MessageSquare className="h-3.5 w-3.5" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="שלח התראה לחברי הערוץ" onClick={() => onNotifyMessage?.(msg)}>
                         <Bell className="h-3.5 w-3.5" />
                       </Button>
@@ -1688,6 +1716,160 @@ function ChannelHeader({
   );
 }
 
+// =================== ThreadDialog ===================
+function ThreadDialog({
+  parentMessage,
+  open,
+  onOpenChange,
+  channelId,
+  tenantId,
+  currentUserId,
+}: {
+  parentMessage: TeamMessage | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  channelId: string;
+  tenantId: string;
+  currentUserId?: string;
+}) {
+  const [replyText, setReplyText] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+
+  const { data: replies = [], refetch: refetchReplies } = useQuery({
+    queryKey: ["thread-replies", parentMessage?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("team_messages")
+        .select("*")
+        .eq("parent_message_id", parentMessage!.id)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+
+      const senderIds = [...new Set(data.map((m: any) => m.sender_id))];
+      if (senderIds.length === 0) return [];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", senderIds);
+
+      const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+      return data.map((m: any) => ({
+        ...m,
+        sender_profile: profileMap.get(m.sender_id),
+      })) as TeamMessage[];
+    },
+    enabled: !!parentMessage?.id && open,
+  });
+
+  // Realtime for thread
+  useEffect(() => {
+    if (!parentMessage?.id || !open) return;
+    const channel = supabase
+      .channel(`thread-${parentMessage.id}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "team_messages", filter: `parent_message_id=eq.${parentMessage.id}` },
+        () => refetchReplies()
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [parentMessage?.id, open, refetchReplies]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [replies.length]);
+
+  const sendReply = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("team_messages").insert({
+        channel_id: channelId,
+        tenant_id: tenantId,
+        sender_id: currentUserId!,
+        content: replyText.trim(),
+        parent_message_id: parentMessage!.id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setReplyText("");
+      refetchReplies();
+      // Invalidate main messages to update reply_count
+      queryClient.invalidateQueries({ queryKey: ["team-messages", channelId] });
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  if (!parentMessage) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent dir="rtl" className="sm:max-w-lg max-h-[80vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="text-sm">שרשור תגובות</DialogTitle>
+          <DialogDescription className="sr-only">תגובות להודעה</DialogDescription>
+        </DialogHeader>
+
+        {/* Parent message */}
+        <div className="p-3 rounded-lg bg-muted/50 border">
+          <div className="flex items-baseline gap-2 mb-1">
+            <span className="font-semibold text-sm">{parentMessage.sender_profile?.full_name || "משתמש"}</span>
+            <span className="text-xs text-muted-foreground">{format(new Date(parentMessage.created_at), "HH:mm dd/MM", { locale: he })}</span>
+          </div>
+          <p className="text-sm whitespace-pre-wrap">{parentMessage.content}</p>
+        </div>
+
+        <Separator />
+
+        {/* Replies */}
+        <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0 space-y-2 max-h-[40vh]">
+          {replies.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">אין תגובות עדיין. היה הראשון להגיב!</p>
+          )}
+          {replies.map((reply) => (
+            <div key={reply.id} className="flex gap-2 px-1">
+              <Avatar className="h-6 w-6 shrink-0 mt-0.5">
+                <AvatarFallback className="text-[10px]">
+                  {(reply.sender_profile?.full_name || "?")[0]}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2">
+                  <span className="font-medium text-xs">{reply.sender_profile?.full_name || "משתמש"}</span>
+                  <span className="text-[10px] text-muted-foreground">{format(new Date(reply.created_at), "HH:mm")}</span>
+                </div>
+                <p className="text-sm whitespace-pre-wrap break-words">{reply.content}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Reply input */}
+        <div className="flex gap-2 items-end pt-2 border-t">
+          <Textarea
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            placeholder="כתוב תגובה..."
+            className="min-h-[36px] max-h-24 resize-none text-sm"
+            rows={1}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                if (replyText.trim()) sendReply.mutate();
+              }
+            }}
+          />
+          <Button size="icon" onClick={() => replyText.trim() && sendReply.mutate()} disabled={!replyText.trim() || sendReply.isPending}>
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // =================== Main TeamChat Page ===================
 export default function TeamChat() {
   const { tenantId, tenant } = useCurrentTenant();
@@ -1699,6 +1881,7 @@ export default function TeamChat() {
   const [taskMessage, setTaskMessage] = useState<TeamMessage | null>(null);
   const [linkDialogFiles, setLinkDialogFiles] = useState<{ id: string; file_name: string; file_url: string }[]>([]);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
+  const [threadMessage, setThreadMessage] = useState<TeamMessage | null>(null);
 
   // Fetch channels
   const { data: allChannels = [], refetch: refetchChannels } = useQuery({
@@ -1739,32 +1922,46 @@ export default function TeamChat() {
 
   const activeChannel = channels.find((c) => c.id === activeChannelId);
 
-  // Fetch messages for active channel
+  // Fetch messages for active channel (excluding replies - only top-level)
   const { data: messages = [], refetch: refetchMessages } = useQuery({
     queryKey: ["team-messages", activeChannelId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      // Fetch all messages (including replies) for the channel
+      const { data: allMsgs, error } = await supabase
         .from("team_messages")
         .select("*")
         .eq("channel_id", activeChannelId!)
         .order("created_at", { ascending: true })
-        .limit(200);
+        .limit(500);
       if (error) throw error;
 
-      const senderIds = [...new Set(data.map((m: any) => m.sender_id))];
+      const senderIds = [...new Set(allMsgs.map((m: any) => m.sender_id))];
       const { data: profiles } = await supabase
         .from("profiles")
         .select("id, full_name, email")
         .in("id", senderIds);
 
       const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
-      return data.map((m: any) => ({
+
+      // Count replies per parent message
+      const replyCounts: Record<string, number> = {};
+      allMsgs.forEach((m: any) => {
+        if (m.parent_message_id) {
+          replyCounts[m.parent_message_id] = (replyCounts[m.parent_message_id] || 0) + 1;
+        }
+      });
+
+      return allMsgs.map((m: any) => ({
         ...m,
         sender_profile: profileMap.get(m.sender_id),
+        reply_count: replyCounts[m.id] || 0,
       })) as TeamMessage[];
     },
     enabled: !!activeChannelId,
   });
+
+  // Filter to top-level messages only for display
+  const topLevelMessages = messages.filter(m => !m.parent_message_id);
 
   // Fetch members for active channel
   const { data: members = [] } = useQuery({
@@ -1780,7 +1977,7 @@ export default function TeamChat() {
     enabled: !!activeChannelId,
   });
 
-  // Realtime subscription
+  // Realtime subscription for active channel messages
   useEffect(() => {
     if (!activeChannelId) return;
 
@@ -1797,6 +1994,26 @@ export default function TeamChat() {
       supabase.removeChannel(channel);
     };
   }, [activeChannelId, refetchMessages]);
+
+  // Realtime subscription for unread counts (listen to all team_messages in tenant)
+  useEffect(() => {
+    if (!tenantId) return;
+
+    const channel = supabase
+      .channel(`team-unread-${tenantId}`)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "team_messages", filter: `tenant_id=eq.${tenantId}` },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["team-unread-counts"] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tenantId, queryClient]);
 
   // Edit message mutation
   const editMessage = useMutation({
@@ -1845,7 +2062,79 @@ export default function TeamChat() {
     onError: (err: any) => toast.error("שגיאה בשליחת התראה: " + (err?.message || err)),
   });
 
-  const unreadCounts: Record<string, number> = {};
+  // Unread counts query
+  const { data: readStatuses = [] } = useQuery({
+    queryKey: ["team-read-status", userId, tenantId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("team_message_read_status")
+        .select("channel_id, last_read_at")
+        .eq("user_id", userId!);
+      return data || [];
+    },
+    enabled: !!userId,
+  });
+
+  // Compute unread per channel - count messages after last_read_at
+  const { data: unreadCounts = {} } = useQuery<Record<string, number>>({
+    queryKey: ["team-unread-counts", tenantId, userId, allChannels.map(c => c.id).join(","), readStatuses],
+    queryFn: async () => {
+      const counts: Record<string, number> = {};
+      const readMap = new Map(readStatuses.map((r: any) => [r.channel_id, r.last_read_at]));
+      
+      for (const ch of allChannels) {
+        const lastRead = readMap.get(ch.id);
+        let query = supabase
+          .from("team_messages")
+          .select("id", { count: "exact", head: true })
+          .eq("channel_id", ch.id)
+          .is("parent_message_id", null); // Only count top-level messages
+        
+        if (lastRead) {
+          query = query.gt("created_at", lastRead);
+        }
+        // Exclude own messages
+        query = query.neq("sender_id", userId!);
+        
+        const { count } = await query;
+        if (count && count > 0) {
+          counts[ch.id] = count;
+        }
+      }
+      return counts;
+    },
+    enabled: !!userId && allChannels.length > 0,
+    refetchInterval: 30000, // Refresh every 30s
+  });
+
+  // Mark channel as read when switching
+  const markAsRead = useCallback(async (channelId: string) => {
+    if (!userId) return;
+    await supabase
+      .from("team_message_read_status")
+      .upsert({
+        channel_id: channelId,
+        user_id: userId,
+        last_read_at: new Date().toISOString(),
+        last_read_message_id: null,
+      }, { onConflict: "channel_id,user_id" });
+    queryClient.invalidateQueries({ queryKey: ["team-read-status", userId, tenantId] });
+    queryClient.invalidateQueries({ queryKey: ["team-unread-counts"] });
+  }, [userId, tenantId, queryClient]);
+
+  // Mark as read when channel changes
+  useEffect(() => {
+    if (activeChannelId) {
+      markAsRead(activeChannelId);
+    }
+  }, [activeChannelId, markAsRead]);
+
+  // Also mark as read when new messages arrive in active channel
+  useEffect(() => {
+    if (activeChannelId && messages.length > 0) {
+      markAsRead(activeChannelId);
+    }
+  }, [messages.length, activeChannelId, markAsRead]);
 
   if (!tenantId) return null;
 
@@ -1882,12 +2171,14 @@ export default function TeamChat() {
                 onChannelDeleted={() => { setActiveChannelId(null); refetchChannels(); }}
               />
               <TeamMessageList
-                messages={messages}
+                messages={topLevelMessages}
+                allMessages={messages}
                 currentUserId={userId}
                 onConvertToTask={(msg) => setTaskMessage(msg)}
                 onEditMessage={(msg, newContent) => editMessage.mutate({ id: msg.id, content: newContent })}
                 onDeleteMessage={(msg) => deleteMessage.mutate(msg.id)}
                 onNotifyMessage={(msg) => notifyMessage.mutate(msg)}
+                onReplyMessage={(msg) => setThreadMessage(msg)}
               />
               <TeamMessageInput
                 channelId={activeChannel.id}
@@ -1916,6 +2207,16 @@ export default function TeamChat() {
           )}
         </div>
       )}
+
+      {/* Thread Dialog */}
+      <ThreadDialog
+        parentMessage={threadMessage}
+        open={!!threadMessage}
+        onOpenChange={(open) => { if (!open) setThreadMessage(null); }}
+        channelId={activeChannelId || ""}
+        tenantId={tenantId}
+        currentUserId={userId}
+      />
 
       {/* Link files dialog */}
       <LinkFileToEntityDialog
