@@ -192,12 +192,18 @@ export default function Gmail() {
     enabled: !!userId,
   });
 
-  // Fetch messages with date query
+  // Fetch messages with date query + allowed labels
   const { data: messagesData, isLoading, refetch } = useQuery({
-    queryKey: ['gmail-messages', fullQuery, currentPageToken],
+    queryKey: ['gmail-messages', fullQuery, currentPageToken, allowedLabels],
     queryFn: async () => {
+      // Build query with allowed label filters
+      let finalQuery = fullQuery;
+      if (allowedLabels.length > 0) {
+        const labelFilter = allowedLabels.map((lid: string) => `label:${lid}`).join(' OR ');
+        finalQuery = finalQuery ? `${finalQuery} (${labelFilter})` : `(${labelFilter})`;
+      }
       const { data, error } = await supabase.functions.invoke('gmail-api', {
-        body: { action: 'list', query: fullQuery, maxResults: 25, pageToken: currentPageToken },
+        body: { action: 'list', query: finalQuery, maxResults: 25, pageToken: currentPageToken },
       });
       if (error) throw error;
       return data as { messages: EmailMessage[]; nextPageToken?: string; resultSizeEstimate?: number };
@@ -228,11 +234,6 @@ export default function Gmail() {
     let msgs = messagesData.messages.filter((m) => {
       const fromEmail = m.from.match(/<(.+?)>/)?.[1]?.toLowerCase() || m.from.toLowerCase();
       if ((blockedSenders as string[]).includes(fromEmail)) return false;
-      // Filter by allowed labels — if labels are configured, only show messages that have at least one allowed label
-      if (allowedLabels.length > 0) {
-        const hasAllowedLabel = m.labelIds?.some(lid => allowedLabels.includes(lid));
-        if (!hasAllowedLabel) return false;
-      }
       return true;
     });
     if (selectedCategory) {
@@ -243,7 +244,7 @@ export default function Gmail() {
       msgs = msgs.filter((m) => !effectiveCategoryMap[m.id] || effectiveCategoryMap[m.id].length === 0);
     }
     return msgs;
-  }, [messagesData?.messages, blockedSenders, selectedCategory, effectiveCategoryMap, allowedLabels]);
+  }, [messagesData?.messages, blockedSenders, selectedCategory, effectiveCategoryMap]);
 
   // Get single message
   const fetchMessage = useMutation({
