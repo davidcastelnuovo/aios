@@ -321,14 +321,9 @@ export default function Gmail() {
 
   const formatTime = (dateStr: string) => {
     const d = new Date(dateStr);
-    const today = new Date();
-    const isToday = d.toDateString() === today.toDateString();
+    const day = d.toLocaleDateString('he-IL', { day: '2-digit', month: '2-digit' });
     const time = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
-    if (isToday) {
-      return time;
-    }
-    const date = d.toLocaleDateString('he-IL', { day: 'numeric', month: '2-digit' });
-    return `${date} ${time}`;
+    return `${day} ${time}`;
   };
 
   // Multi-select helpers
@@ -601,8 +596,8 @@ export default function Gmail() {
                   </div>
                   <div className="w-5 flex-shrink-0" />
                   <div className="w-[180px] flex-shrink-0 text-right pe-3">שולח</div>
+                  <div className="w-[110px] flex-shrink-0 text-right pe-2">תאריך</div>
                   <div className="flex-1 min-w-0 text-right">נושא</div>
-                  <div className="w-[60px] flex-shrink-0 text-left ps-2">שעה</div>
                 </div>
                 <div className="divide-y divide-border">
                   {filteredMessages.map((msg) => {
@@ -639,6 +634,11 @@ export default function Gmail() {
                           msg.isUnread ? "font-bold text-foreground" : "text-foreground/80"
                         )}>
                           {fromName}
+                        </div>
+
+                        {/* Time/date - fixed width, placed before subject so it's always visible */}
+                        <div className="w-[110px] flex-shrink-0 text-xs text-muted-foreground text-right pe-2">
+                          {formatTime(msg.date)}
                         </div>
 
                         {/* Subject + snippet */}
@@ -688,11 +688,6 @@ export default function Gmail() {
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => blockSender.mutate(extractEmail(msg.from))}>
                             <Ban className="h-3 w-3" />
                           </Button>
-                        </div>
-
-                        {/* Time/date - fixed width */}
-                        <div className="w-[110px] flex-shrink-0 text-xs text-muted-foreground text-left ps-2">
-                          {formatTime(msg.date)}
                         </div>
                       </div>
                     );
