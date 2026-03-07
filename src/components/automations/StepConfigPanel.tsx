@@ -61,10 +61,11 @@ const LEAD_SOURCE_OPTIONS = [
 ];
 
 // Available fields by trigger type
-function getAvailableFields(triggerType: string | undefined): { key: string; label: string }[] {
+function getAvailableFields(triggerType: string | undefined, triggerConfig?: Record<string, any>): { key: string; label: string }[] {
+  let fields: { key: string; label: string }[] = [];
   switch (triggerType) {
     case "lead_created":
-      return [
+      fields = [
         { key: "contact_name", label: "שם איש קשר" },
         { key: "company_name", label: "שם חברה" },
         { key: "phone", label: "טלפון" },
@@ -72,8 +73,9 @@ function getAvailableFields(triggerType: string | undefined): { key: string; lab
         { key: "source", label: "מקור" },
         { key: "notes", label: "הערות" },
       ];
+      break;
     case "lead_status_changed":
-      return [
+      fields = [
         { key: "contact_name", label: "שם איש קשר" },
         { key: "company_name", label: "שם חברה" },
         { key: "phone", label: "טלפון" },
@@ -81,38 +83,60 @@ function getAvailableFields(triggerType: string | undefined): { key: string; lab
         { key: "old_status", label: "סטטוס קודם" },
         { key: "new_status", label: "סטטוס חדש" },
       ];
+      break;
     case "client_created":
     case "client_status_changed":
-      return [
+      fields = [
         { key: "name", label: "שם לקוח" },
         { key: "contact_name", label: "שם איש קשר" },
         { key: "phone", label: "טלפון" },
         { key: "email", label: "אימייל" },
       ];
+      break;
     case "task_assigned":
     case "task_status_changed":
     case "task_overdue":
-      return [
+      fields = [
         { key: "title", label: "כותרת משימה" },
         { key: "assignee_name", label: "שם מבצע" },
       ];
+      break;
     case "meeting_created":
-      return [
+      fields = [
         { key: "title", label: "כותרת פגישה" },
         { key: "date", label: "תאריך" },
       ];
+      break;
     case "manual_command":
-      return [
+      fields = [
         { key: "command_text", label: "טקסט הפקודה" },
         { key: "user_name", label: "שם המשתמש" },
       ];
+      break;
     default:
-      return [
+      fields = [
         { key: "contact_name", label: "שם איש קשר" },
         { key: "phone", label: "טלפון" },
         { key: "email", label: "אימייל" },
       ];
+      break;
   }
+
+  // Add Facebook form fields if trigger is lead_created with facebook_form source
+  if (triggerType === "lead_created" && triggerConfig?.lead_source === "facebook_form") {
+    const fbFields = triggerConfig?.facebook_form_fields as Array<{ key: string; label: string; type?: string }> | undefined;
+    if (fbFields && Array.isArray(fbFields)) {
+      const existingKeys = new Set(fields.map(f => f.key));
+      for (const fbField of fbFields) {
+        const fieldKey = `fb_${fbField.key}`;
+        if (!existingKeys.has(fieldKey)) {
+          fields.push({ key: fieldKey, label: `📋 ${fbField.label || fbField.key}` });
+        }
+      }
+    }
+  }
+
+  return fields;
 }
 
 interface StepConfigPanelProps {
@@ -129,10 +153,17 @@ interface FacebookPage {
   access_token?: string;
 }
 
+interface FacebookFormField {
+  key: string;
+  label: string;
+  type?: string;
+}
+
 interface FacebookForm {
   id: string;
   name: string;
   status: string;
+  fields?: FacebookFormField[];
 }
 
 export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }: StepConfigPanelProps) {
