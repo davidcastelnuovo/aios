@@ -461,6 +461,18 @@ Deno.serve(async (req) => {
                     command_text: payloadData?.command_text || payloadData?.text || 'הפעל את האוטומציה',
                     automation_id: automation.id,
                     user_name: payloadData?.user_name || 'מערכת',
+                    lead_data: {
+                      lead_id: payloadData?.lead_id,
+                      contact_name: payloadData?.contact_name,
+                      phone: payloadData?.phone,
+                      email: payloadData?.email,
+                      company_name: payloadData?.company_name,
+                      source: payloadData?.source,
+                      notes: payloadData?.notes,
+                      status: payloadData?.status,
+                      pipeline_stage: payloadData?.pipeline_stage,
+                      agency_name: payloadData?.agency_name,
+                    },
                   }),
                 })
                 response = await agentRes.json()
