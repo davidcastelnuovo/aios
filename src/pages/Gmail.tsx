@@ -222,12 +222,18 @@ export default function Gmail() {
     return map;
   }, [messageCategoryMap, messagesData?.messages, categoryRules]);
 
-  // Filter blocked senders and by category
+  // Filter blocked senders, allowed labels, and by category
   const filteredMessages = useMemo(() => {
     if (!messagesData?.messages) return [];
     let msgs = messagesData.messages.filter((m) => {
       const fromEmail = m.from.match(/<(.+?)>/)?.[1]?.toLowerCase() || m.from.toLowerCase();
-      return !(blockedSenders as string[]).includes(fromEmail);
+      if ((blockedSenders as string[]).includes(fromEmail)) return false;
+      // Filter by allowed labels — if labels are configured, only show messages that have at least one allowed label
+      if (allowedLabels.length > 0) {
+        const hasAllowedLabel = m.labelIds?.some(lid => allowedLabels.includes(lid));
+        if (!hasAllowedLabel) return false;
+      }
+      return true;
     });
     if (selectedCategory) {
       // When category is selected, the Gmail API query already filters by subject patterns
@@ -237,7 +243,7 @@ export default function Gmail() {
       msgs = msgs.filter((m) => !effectiveCategoryMap[m.id] || effectiveCategoryMap[m.id].length === 0);
     }
     return msgs;
-  }, [messagesData?.messages, blockedSenders, selectedCategory, effectiveCategoryMap]);
+  }, [messagesData?.messages, blockedSenders, selectedCategory, effectiveCategoryMap, allowedLabels]);
 
   // Get single message
   const fetchMessage = useMutation({
