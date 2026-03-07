@@ -75,6 +75,13 @@ Deno.serve(async (req) => {
       if (lead_data.notes) leadParts.push(`הערות: ${lead_data.notes}`)
       if (lead_data.lead_id) leadParts.push(`מזהה ליד: ${lead_data.lead_id}`)
 
+      // Include all fb_ prefixed fields (Facebook form data)
+      for (const [key, value] of Object.entries(lead_data)) {
+        if (key.startsWith('fb_') && value) {
+          leadParts.push(`${key.replace('fb_', '')}: ${value}`)
+        }
+      }
+
       if (leadParts.length > 0) {
         systemParts.push(`\n\nהנה פרטי הליד/איש הקשר שעבורו אתה מבצע את המשימה:\n${leadParts.join('\n')}`)
         systemParts.push('\nהשתמש בפרטים אלו כדי לבצע את המשימה. אין צורך לבקש פרטים נוספים.')
