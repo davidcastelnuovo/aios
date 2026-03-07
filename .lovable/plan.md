@@ -1,30 +1,21 @@
 
 
-# תיקון שגיאת redirect_uri_mismatch - Gmail OAuth
+# תיקון RTL בעמוד Gmail
 
 ## הבעיה
-השגיאה `redirect_uri_mismatch` (error 400) מגוגל פירושה שה-redirect URI שנשלח בבקשת ה-OAuth לא תואם לאף URI שמוגדר ב-Google Cloud Console.
+העמוד כבר מוגדר עם `dir="rtl"`, אבל יש מספר מקומות שבהם נעשה שימוש ב-margin פיזי (`mr-auto`, `ml-2`) במקום לוגי, מה שגורם ליישור לא נכון ב-RTL.
 
-ה-redirect URI שהפונקציה שולחת הוא:
-```
-https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/gmail-auth
-```
+## שינויים ב-`src/pages/Gmail.tsx`
 
-## מה צריך לעשות
-**זה לא תיקון קוד - זו הגדרה ב-Google Cloud Console.**
+1. **שורה 352** — `mr-auto` → `ml-auto`: תאריך ההודעה צריך להידחף לצד שמאל (בכיוון RTL, `ml-auto` דוחף שמאלה)
+2. **שורה 248** — `ml-2` ליד אייקון Send → `me-2` (או להסיר — הגאפ של הפלקס מטפל)
+3. **שורה 296** — `ml-1` ליד אייקון חזור → `me-1`
+4. **שורה 301** — `ml-1` ליד אייקון השב → `me-1`
+5. **שורה 305** — `ml-1` ליד אייקון חסום → `me-1`
+6. **שורה 382** — `ml-2` בדרופדאון קטגוריה → `me-2`
+7. **שורה 424** — `ml-2` באייקון שליחה → `me-2`
 
-יש להוסיף את הכתובת הזו כ-**Authorized redirect URI** ב-Google Cloud Console:
+בנוסף, וידוא שה-`DropdownMenuContent align="end"` עובד נכון עם RTL.
 
-1. לך ל-[Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials)
-2. לחץ על ה-OAuth 2.0 Client ID שמשמש את הפרויקט
-3. בסקציית **Authorized redirect URIs**, הוסף:
-   ```
-   https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/gmail-auth
-   ```
-4. שמור את השינויים
-
-לאחר ההוספה, יכול לקחת כמה דקות עד שגוגל תעדכן את ההגדרות.
-
-## הקוד תקין
-הקוד ב-`gmail-auth/index.ts` כבר משתמש ב-redirect URI נקי (ללא query params), ולכן אין שינויי קוד נדרשים.
+שינויים קטנים בלבד — החלפת margin פיזי בלוגי כדי שהכל יתיישר נכון.
 
