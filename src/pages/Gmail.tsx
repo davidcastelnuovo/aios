@@ -83,10 +83,22 @@ export default function Gmail() {
     return `after:${fy}/${fm}/${fd} before:${ty}/${tm}/${td}`;
   };
 
+  // Build subject query from category rules when a category is selected
+  const categorySubjectQuery = useMemo(() => {
+    if (!selectedCategory || categoryRules.length === 0) return null;
+    const rulesForCategory = categoryRules.filter(r => r.category_id === selectedCategory);
+    if (rulesForCategory.length === 0) return null;
+    return rulesForCategory.map(r => `subject:"${r.subject_pattern}"`).join(' OR ');
+  }, [selectedCategory, categoryRules]);
+
   const fullQuery = useMemo(() => {
+    // When viewing a category, use subject-based query (ignore date filter)
+    if (categorySubjectQuery) {
+      return activeSearch ? `(${categorySubjectQuery}) ${activeSearch}` : categorySubjectQuery;
+    }
     const dateQ = buildDateQuery();
     return activeSearch ? `${dateQ} ${activeSearch}` : dateQ;
-  }, [selectedDateRange, activeSearch]);
+  }, [selectedDateRange, activeSearch, categorySubjectQuery]);
 
   // Check connection
   const { data: connectionStatus } = useQuery({
@@ -201,8 +213,8 @@ export default function Gmail() {
       return !(blockedSenders as string[]).includes(fromEmail);
     });
     if (selectedCategory) {
-      // Show only messages in the selected category
-      msgs = msgs.filter((m) => effectiveCategoryMap[m.id]?.includes(selectedCategory));
+      // When category is selected, the Gmail API query already filters by subject patterns
+      // No additional local filtering needed — show all results from API
     } else {
       // "All" view: hide messages that have been categorized
       msgs = msgs.filter((m) => !effectiveCategoryMap[m.id] || effectiveCategoryMap[m.id].length === 0);
@@ -379,12 +391,15 @@ export default function Gmail() {
 
       // 2. Save subject rule for future auto-categorization
       if (subjectLower) {
-        await supabase.from('gmail_category_rules').upsert({
+        const { error: ruleError } = await supabase.from('gmail_category_rules').upsert({
           tenant_id: tenantId!,
           user_id: userId!,
           subject_pattern: subjectLower,
           category_id: categoryId,
         }, { onConflict: 'user_id,subject_pattern' });
+        if (ruleError) {
+          console.error('Error upserting category rule:', ruleError);
+        }
       }
 
       // 3. Search Gmail for ALL messages with same subject and categorize them
