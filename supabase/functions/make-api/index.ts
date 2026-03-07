@@ -1008,47 +1008,28 @@ serve(async (req) => {
                 if (module.mapper) {
                   module.mapper.url = patchWebhookUrl;
                   
-                  // Handle jsonStringBodyContent
-                  if (module.mapper.jsonStringBodyContent) {
-                    try {
-                      let bodyObj = JSON.parse(module.mapper.jsonStringBodyContent);
-                      bodyObj.table_id = table_id;
-                      bodyObj.campaign_type = campaign_type || bodyObj.campaign_type || 'leads';
-                      if (tenant_id) {
-                        bodyObj.tenant_id = tenant_id;
-                      }
-                      if (start_date && end_date) {
-                        bodyObj.start_date = start_date;
-                        bodyObj.end_date = end_date;
-                      }
-                      module.mapper.jsonStringBodyContent = JSON.stringify(bodyObj);
-                      patchedHttpModule = true;
-                      console.log("Patched jsonStringBodyContent with new table_id/campaign_type/date range");
-                    } catch (e) {
-                      console.warn("Failed to parse jsonStringBodyContent:", e);
-                    }
+                  // ALWAYS replace body with correct field references
+                  const googleAdsModuleId = blueprintData.flow.find((m: any) => m.module && isGoogleAdsModule(m.module))?.id || 3;
+                  const correctBody: Record<string, any> = {
+                    table_id: table_id,
+                    campaign_type: campaign_type || 'leads',
+                  };
+                  if (tenant_id) {
+                    correctBody.tenant_id = tenant_id;
                   }
+                  if (start_date && end_date) {
+                    correctBody.start_date = start_date;
+                    correctBody.end_date = end_date;
+                  }
+                  correctBody.records = `[{{toJSON(map(${googleAdsModuleId}.results; "item"; $merge(item.campaign; item.metrics; item.segments)))}}]`;
                   
-                  // Handle data field (fallback)
+                  module.mapper.jsonStringBodyContent = JSON.stringify(correctBody);
+                  patchedHttpModule = true;
+                  console.log("Replaced jsonStringBodyContent with correct field references using module id:", googleAdsModuleId);
+                  
+                  // Clear data field if it exists to avoid confusion
                   if (module.mapper.data) {
-                    try {
-                      let dataObj = typeof module.mapper.data === 'string' 
-                        ? JSON.parse(module.mapper.data) 
-                        : module.mapper.data;
-                      dataObj.table_id = table_id;
-                      dataObj.campaign_type = campaign_type || dataObj.campaign_type || 'leads';
-                      if (tenant_id) {
-                        dataObj.tenant_id = tenant_id;
-                      }
-                      if (start_date && end_date) {
-                        dataObj.start_date = start_date;
-                        dataObj.end_date = end_date;
-                      }
-                      module.mapper.data = JSON.stringify(dataObj);
-                      patchedHttpModule = true;
-                    } catch {
-                      // Ignore parse errors
-                    }
+                    delete module.mapper.data;
                   }
                 }
               }
