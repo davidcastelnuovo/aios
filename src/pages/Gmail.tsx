@@ -144,6 +144,21 @@ export default function Gmail() {
     enabled: !!userId,
   });
 
+  // Build subject query from category rules when a category is selected
+  const categorySubjectQuery = useMemo(() => {
+    if (!selectedCategory || categoryRules.length === 0) return null;
+    const rulesForCategory = categoryRules.filter(r => r.category_id === selectedCategory);
+    if (rulesForCategory.length === 0) return null;
+    return rulesForCategory.map(r => `subject:"${r.subject_pattern}"`).join(' OR ');
+  }, [selectedCategory, categoryRules]);
+
+  const fullQuery = useMemo(() => {
+    if (categorySubjectQuery) {
+      return activeSearch ? `(${categorySubjectQuery}) ${activeSearch}` : categorySubjectQuery;
+    }
+    return fullQueryBase;
+  }, [fullQueryBase, activeSearch, categorySubjectQuery]);
+
   // Message categories mapping
   const { data: messageCategoryMap = {} } = useQuery({
     queryKey: ['gmail-message-categories', userId],
