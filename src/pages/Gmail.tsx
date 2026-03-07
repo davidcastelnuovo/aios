@@ -18,7 +18,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
-import { format, addDays, subDays } from "date-fns";
+import { format, addDays } from "date-fns";
 import { he } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
