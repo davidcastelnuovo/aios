@@ -1,24 +1,30 @@
 
 
-## הפיכת האפליקציה ל-PWA (Progressive Web App)
+# תיקון שגיאת redirect_uri_mismatch - Gmail OAuth
 
-כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
+## הבעיה
+השגיאה `redirect_uri_mismatch` (error 400) מגוגל פירושה שה-redirect URI שנשלח בבקשת ה-OAuth לא תואם לאף URI שמוגדר ב-Google Cloud Console.
 
-### 1. קובץ `public/manifest.json`
-- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
-- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
+ה-redirect URI שהפונקציה שולחת הוא:
+```
+https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/gmail-auth
+```
 
-### 2. Service Worker — `public/sw.js`
-- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
-- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
+## מה צריך לעשות
+**זה לא תיקון קוד - זו הגדרה ב-Google Cloud Console.**
 
-### 3. רישום ב-`index.html`
-- תג `<link rel="manifest">` ב-head
-- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
-- סקריפט רישום Service Worker
+יש להוסיף את הכתובת הזו כ-**Authorized redirect URI** ב-Google Cloud Console:
 
-### תוצאה
-- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
-- באייפון: Share → Add to Home Screen
-- האפליקציה תיפתח במסך מלא בלי שורת כתובת
+1. לך ל-[Google Cloud Console → APIs & Services → Credentials](https://console.cloud.google.com/apis/credentials)
+2. לחץ על ה-OAuth 2.0 Client ID שמשמש את הפרויקט
+3. בסקציית **Authorized redirect URIs**, הוסף:
+   ```
+   https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/gmail-auth
+   ```
+4. שמור את השינויים
+
+לאחר ההוספה, יכול לקחת כמה דקות עד שגוגל תעדכן את ההגדרות.
+
+## הקוד תקין
+הקוד ב-`gmail-auth/index.ts` כבר משתמש ב-redirect URI נקי (ללא query params), ולכן אין שינויי קוד נדרשים.
 
