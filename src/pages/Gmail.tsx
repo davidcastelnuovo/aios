@@ -685,7 +685,7 @@ export default function Gmail() {
                 </div>
                 <div className="divide-y divide-border">
                   {filteredMessages.map((msg) => {
-                    const msgCategories = (messageCategoryMap as Record<string, string[]>)[msg.id] || [];
+                    const msgCategories = effectiveCategoryMap[msg.id] || [];
                     const fromName = extractName(msg.from);
                     const isSelected = selectedIds.has(msg.id);
                     return (
