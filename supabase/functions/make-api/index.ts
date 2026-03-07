@@ -724,16 +724,14 @@ serve(async (req) => {
                   
                   // Handle jsonStringBodyContent (Make.com uses this for raw JSON body)
                   // ALWAYS replace with correct field references to ensure proper data mapping
+                  // NOTE: Make.com does NOT support toJSON/map/$merge - use direct field references
                   {
                     const googleAdsModuleId = blueprintData.flow.find((m: any) => m.module && isGoogleAdsModule(m.module))?.id || 3;
-                    const correctBody = {
-                      table_id: table_id,
-                      campaign_type: campaign_type || 'leads',
-                      ...(tenant_id ? { tenant_id } : {}),
-                      records: `[{{toJSON(map(${googleAdsModuleId}.results; "item"; $merge(item.campaign; item.metrics; item.segments)))}}]`
-                    };
-                    module.mapper.jsonStringBodyContent = JSON.stringify(correctBody);
-                    console.log("Replaced jsonStringBodyContent with correct field references using module id:", googleAdsModuleId);
+                    const gid = googleAdsModuleId;
+                    // Build body with direct Make.com variable references for each field
+                    const bodyTemplate = `{"table_id":"${table_id}","campaign_type":"${campaign_type || 'leads'}"${tenant_id ? `,"tenant_id":"${tenant_id}"` : ''},"records":[{"date":"{{${gid}.segments.date}}","campaign_id":"{{${gid}.campaign.id}}","campaign_name":"{{${gid}.campaign.name}}","impressions":"{{${gid}.metrics.impressions}}","clicks":"{{${gid}.metrics.clicks}}","cost_micros":"{{${gid}.metrics.costMicros}}","conversions":"{{${gid}.metrics.conversions}}","ctr":"{{${gid}.metrics.ctr}}","average_cpc":"{{${gid}.metrics.averageCpc}}"}]}`;
+                    module.mapper.jsonStringBodyContent = bodyTemplate;
+                    console.log("Replaced jsonStringBodyContent with direct field references using module id:", gid);
                   }
                   
                   // Update the body/data with new table_id (fallback for other template formats)
@@ -1008,24 +1006,17 @@ serve(async (req) => {
                 if (module.mapper) {
                   module.mapper.url = patchWebhookUrl;
                   
-                  // ALWAYS replace body with correct field references
+                  // ALWAYS replace body with correct direct field references
+                  // NOTE: Make.com does NOT support toJSON/map/$merge - use direct variable references
                   const googleAdsModuleId = blueprintData.flow.find((m: any) => m.module && isGoogleAdsModule(m.module))?.id || 3;
-                  const correctBody: Record<string, any> = {
-                    table_id: table_id,
-                    campaign_type: campaign_type || 'leads',
-                  };
-                  if (tenant_id) {
-                    correctBody.tenant_id = tenant_id;
-                  }
-                  if (start_date && end_date) {
-                    correctBody.start_date = start_date;
-                    correctBody.end_date = end_date;
-                  }
-                  correctBody.records = `[{{toJSON(map(${googleAdsModuleId}.results; "item"; $merge(item.campaign; item.metrics; item.segments)))}}]`;
+                  const gid = googleAdsModuleId;
+                  const startDatePart = (start_date && end_date) ? `,"start_date":"${start_date}","end_date":"${end_date}"` : '';
+                  const tenantPart = tenant_id ? `,"tenant_id":"${tenant_id}"` : '';
+                  const bodyTemplate = `{"table_id":"${table_id}","campaign_type":"${campaign_type || 'leads'}"${tenantPart}${startDatePart},"records":[{"date":"{{${gid}.segments.date}}","campaign_id":"{{${gid}.campaign.id}}","campaign_name":"{{${gid}.campaign.name}}","impressions":"{{${gid}.metrics.impressions}}","clicks":"{{${gid}.metrics.clicks}}","cost_micros":"{{${gid}.metrics.costMicros}}","conversions":"{{${gid}.metrics.conversions}}","ctr":"{{${gid}.metrics.ctr}}","average_cpc":"{{${gid}.metrics.averageCpc}}"}]}`;
                   
-                  module.mapper.jsonStringBodyContent = JSON.stringify(correctBody);
+                  module.mapper.jsonStringBodyContent = bodyTemplate;
                   patchedHttpModule = true;
-                  console.log("Replaced jsonStringBodyContent with correct field references using module id:", googleAdsModuleId);
+                  console.log("Replaced jsonStringBodyContent with direct field references using module id:", gid);
                   
                   // Clear data field if it exists to avoid confusion
                   if (module.mapper.data) {
