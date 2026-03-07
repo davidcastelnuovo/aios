@@ -1,0 +1,432 @@
+import { useState, useMemo } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Search, Mail, Send, ArrowRight, ArrowLeft, RefreshCw, Loader2, Ban, Tag, Settings, Star, MailOpen, X, Reply } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
+import { useTenantPath } from "@/hooks/useTenantPath";
+
+interface EmailMessage {
+  id: string;
+  threadId: string;
+  snippet: string;
+  labelIds: string[];
+  from: string;
+  to: string;
+  subject: string;
+  date: string;
+  isUnread: boolean;
+  body?: string;
+}
+
+export default function Gmail() {
+  const { tenantId } = useCurrentTenant();
+  const { userId } = useCurrentUser();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { buildPath } = useTenantPath();
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeSearch, setActiveSearch] = useState('');
+  const [selectedMessage, setSelectedMessage] = useState<EmailMessage | null>(null);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeTo, setComposeTo] = useState('');
+  const [composeSubject, setComposeSubject] = useState('');
+  const [composeBody, setComposeBody] = useState('');
+  const [replyMode, setReplyMode] = useState(false);
+  const [pageToken, setPageToken] = useState<string | undefined>();
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  // Check connection
+  const { data: connectionStatus } = useQuery({
+    queryKey: ['gmail-status', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('gmail-auth', {
+        body: { action: 'status' },
+      });
+      if (error) throw error;
+      return data as { connected: boolean; google_email: string | null };
+    },
+    enabled: !!userId,
+  });
+
+  // Categories
+  const { data: categories = [] } = useQuery({
+    queryKey: ['gmail-categories', tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('gmail_categories')
+        .select('*')
+        .eq('tenant_id', tenantId!)
+        .order('sort_order');
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId,
+  });
+
+  // Blocked senders
+  const { data: blockedSenders = [] } = useQuery({
+    queryKey: ['gmail-blocked-senders', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('gmail_blocked_senders')
+        .select('email_address')
+        .eq('user_id', userId!);
+      if (error) throw error;
+      return data.map((b: any) => b.email_address.toLowerCase());
+    },
+    enabled: !!userId,
+  });
+
+  // Message categories mapping
+  const { data: messageCategoryMap = {} } = useQuery({
+    queryKey: ['gmail-message-categories', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('gmail_message_categories')
+        .select('message_id, category_id')
+        .eq('user_id', userId!);
+      if (error) throw error;
+      const map: Record<string, string[]> = {};
+      data.forEach((d: any) => {
+        if (!map[d.message_id]) map[d.message_id] = [];
+        map[d.message_id].push(d.category_id);
+      });
+      return map;
+    },
+    enabled: !!userId,
+  });
+
+  // Fetch messages
+  const { data: messagesData, isLoading, refetch } = useQuery({
+    queryKey: ['gmail-messages', activeSearch, pageToken],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('gmail-api', {
+        body: { action: 'list', query: activeSearch || undefined, maxResults: 25, pageToken },
+      });
+      if (error) throw error;
+      return data as { messages: EmailMessage[]; nextPageToken?: string; resultSizeEstimate?: number };
+    },
+    enabled: !!connectionStatus?.connected,
+  });
+
+  // Filter blocked senders and by category
+  const filteredMessages = useMemo(() => {
+    if (!messagesData?.messages) return [];
+    let msgs = messagesData.messages.filter((m) => {
+      const fromEmail = m.from.match(/<(.+?)>/)?.[1]?.toLowerCase() || m.from.toLowerCase();
+      return !(blockedSenders as string[]).includes(fromEmail);
+    });
+    if (selectedCategory) {
+      msgs = msgs.filter((m) => (messageCategoryMap as Record<string, string[]>)[m.id]?.includes(selectedCategory));
+    }
+    return msgs;
+  }, [messagesData?.messages, blockedSenders, selectedCategory, messageCategoryMap]);
+
+  // Get single message
+  const fetchMessage = useMutation({
+    mutationFn: async (messageId: string) => {
+      const { data, error } = await supabase.functions.invoke('gmail-api', {
+        body: { action: 'get', messageId },
+      });
+      if (error) throw error;
+      return data as EmailMessage;
+    },
+    onSuccess: (msg) => setSelectedMessage(msg),
+  });
+
+  // Send message
+  const sendMutation = useMutation({
+    mutationFn: async () => {
+      const body: any = { action: 'send', to: composeTo, subject: composeSubject, body: composeBody };
+      if (replyMode && selectedMessage) {
+        body.inReplyTo = selectedMessage.id;
+        body.threadId = selectedMessage.threadId;
+      }
+      const { data, error } = await supabase.functions.invoke('gmail-api', { body });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('המייל נשלח בהצלחה!');
+      setComposeOpen(false);
+      setComposeTo('');
+      setComposeSubject('');
+      setComposeBody('');
+      setReplyMode(false);
+      refetch();
+    },
+    onError: () => toast.error('שגיאה בשליחת המייל'),
+  });
+
+  // Block sender
+  const blockSender = useMutation({
+    mutationFn: async (email: string) => {
+      const { error } = await supabase.from('gmail_blocked_senders').insert({
+        tenant_id: tenantId!,
+        user_id: userId!,
+        email_address: email.toLowerCase(),
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['gmail-blocked-senders'] });
+      toast.success('השולח נחסם');
+    },
+    onError: () => toast.error('שגיאה בחסימת שולח'),
+  });
+
+  // Assign category
+  const assignCategory = useMutation({
+    mutationFn: async ({ messageId, categoryId }: { messageId: string; categoryId: string }) => {
+      const { error } = await supabase.from('gmail_message_categories').upsert({
+        tenant_id: tenantId!,
+        user_id: userId!,
+        message_id: messageId,
+        category_id: categoryId,
+      }, { onConflict: 'user_id,message_id,category_id' });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['gmail-message-categories'] });
+      toast.success('קטגוריה עודכנה');
+    },
+  });
+
+  const handleReply = (msg: EmailMessage) => {
+    setReplyMode(true);
+    setComposeTo(msg.from.match(/<(.+?)>/)?.[1] || msg.from);
+    setComposeSubject(`Re: ${msg.subject}`);
+    setComposeBody('');
+    setComposeOpen(true);
+  };
+
+  const extractEmail = (str: string) => str.match(/<(.+?)>/)?.[1] || str;
+  const extractName = (str: string) => str.replace(/<.+?>/, '').trim().replace(/"/g, '') || str;
+
+  if (!connectionStatus?.connected) {
+    return (
+      <div className="container mx-auto p-6 flex flex-col items-center justify-center min-h-[60vh]" dir="rtl">
+        <Mail className="h-16 w-16 text-muted-foreground mb-4" />
+        <h2 className="text-xl font-semibold mb-2">Gmail לא מחובר</h2>
+        <p className="text-muted-foreground mb-4">חבר את חשבון הגוגל שלך כדי להתחיל</p>
+        <Button onClick={() => navigate(buildPath('gmail-settings'))}>
+          <Settings className="h-4 w-4 ml-2" />
+          הגדרות Gmail
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto p-6 space-y-4" dir="rtl">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Mail className="h-6 w-6" />
+            תיבת דואר
+          </h1>
+          <Badge variant="outline" className="text-xs">{connectionStatus?.google_email}</Badge>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate(buildPath('gmail-settings'))}>
+            <Settings className="h-4 w-4" />
+          </Button>
+          <Button size="sm" onClick={() => { setReplyMode(false); setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeOpen(true); }}>
+            <Send className="h-4 w-4 ml-2" />
+            מייל חדש
+          </Button>
+        </div>
+      </div>
+
+      {/* Search + Categories Filter */}
+      <div className="flex gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="חיפוש מיילים..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { setActiveSearch(searchQuery); setPageToken(undefined); } }}
+            className="pr-9"
+          />
+        </div>
+        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
+          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+        </Button>
+        <Button
+          variant={selectedCategory === null ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setSelectedCategory(null)}
+        >
+          הכל
+        </Button>
+        {categories.map((cat: any) => (
+          <Button
+            key={cat.id}
+            variant={selectedCategory === cat.id ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setSelectedCategory(cat.id === selectedCategory ? null : cat.id)}
+            className="gap-1"
+          >
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
+            {cat.name}
+          </Button>
+        ))}
+      </div>
+
+      {/* Message list or detail */}
+      {selectedMessage ? (
+        <Card>
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <Button variant="ghost" size="sm" onClick={() => setSelectedMessage(null)}>
+                <ArrowRight className="h-4 w-4 ml-1" />
+                חזור
+              </Button>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => handleReply(selectedMessage)}>
+                  <Reply className="h-4 w-4 ml-1" />
+                  השב
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => blockSender.mutate(extractEmail(selectedMessage.from))}>
+                  <Ban className="h-4 w-4 ml-1" />
+                  חסום
+                </Button>
+              </div>
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold">{selectedMessage.subject || '(ללא נושא)'}</h2>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                <span>מאת: {extractName(selectedMessage.from)}</span>
+                <span dir="ltr" className="text-xs">&lt;{extractEmail(selectedMessage.from)}&gt;</span>
+              </div>
+              <div className="text-xs text-muted-foreground">{selectedMessage.date}</div>
+            </div>
+            <div
+              className="border rounded p-4 bg-muted/30 prose prose-sm max-w-none overflow-auto"
+              dir="auto"
+              dangerouslySetInnerHTML={{ __html: selectedMessage.body || selectedMessage.snippet }}
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="flex items-center justify-center p-12">
+                <Loader2 className="animate-spin h-8 w-8 text-muted-foreground" />
+              </div>
+            ) : filteredMessages.length === 0 ? (
+              <div className="text-center p-12 text-muted-foreground">
+                <Mail className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>אין הודעות</p>
+              </div>
+            ) : (
+              <ScrollArea className="max-h-[70vh]">
+                <div className="divide-y">
+                  {filteredMessages.map((msg) => {
+                    const msgCategories = (messageCategoryMap as Record<string, string[]>)[msg.id] || [];
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer transition-colors ${msg.isUnread ? 'bg-primary/5 font-semibold' : ''}`}
+                        onClick={() => fetchMessage.mutate(msg.id)}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            {msg.isUnread && <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />}
+                            <span className="text-sm truncate">{extractName(msg.from)}</span>
+                            <span className="text-xs text-muted-foreground mr-auto whitespace-nowrap" dir="ltr">
+                              {new Date(msg.date).toLocaleDateString('he-IL')}
+                            </span>
+                          </div>
+                          <div className="text-sm truncate">{msg.subject || '(ללא נושא)'}</div>
+                          <div className="text-xs text-muted-foreground truncate">{msg.snippet}</div>
+                          {msgCategories.length > 0 && (
+                            <div className="flex gap-1 mt-1">
+                              {msgCategories.map((cId) => {
+                                const cat = categories.find((c: any) => c.id === cId);
+                                return cat ? (
+                                  <span key={cId} className="text-xs px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: cat.color }}>
+                                    {cat.name}
+                                  </span>
+                                ) : null;
+                              })}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                          {categories.length > 0 && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                  <Tag className="h-3.5 w-3.5" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {categories.map((cat: any) => (
+                                  <DropdownMenuItem key={cat.id} onClick={() => assignCategory.mutate({ messageId: msg.id, categoryId: cat.id })}>
+                                    <div className="w-3 h-3 rounded-full ml-2" style={{ backgroundColor: cat.color }} />
+                                    {cat.name}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => blockSender.mutate(extractEmail(msg.from))}>
+                            <Ban className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            )}
+            {messagesData?.nextPageToken && (
+              <div className="p-3 border-t text-center">
+                <Button variant="ghost" size="sm" onClick={() => setPageToken(messagesData.nextPageToken)}>
+                  טען עוד הודעות
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Compose Dialog */}
+      <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
+        <DialogContent className="max-w-lg" dir="rtl">
+          <DialogHeader>
+            <DialogTitle>{replyMode ? 'השב למייל' : 'מייל חדש'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input placeholder="אל:" dir="ltr" value={composeTo} onChange={(e) => setComposeTo(e.target.value)} />
+            <Input placeholder="נושא:" value={composeSubject} onChange={(e) => setComposeSubject(e.target.value)} />
+            <Textarea placeholder="תוכן ההודעה..." value={composeBody} onChange={(e) => setComposeBody(e.target.value)} rows={8} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setComposeOpen(false)}>ביטול</Button>
+            <Button onClick={() => sendMutation.mutate()} disabled={sendMutation.isPending}>
+              {sendMutation.isPending ? <Loader2 className="animate-spin h-4 w-4 ml-2" /> : <Send className="h-4 w-4 ml-2" />}
+              שלח
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
