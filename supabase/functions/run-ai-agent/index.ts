@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { agent_id, command_text, automation_id, user_name } = await req.json()
+    const { agent_id, command_text, automation_id, user_name, lead_data } = await req.json()
 
     if (!agent_id || !command_text) {
       throw new Error('Missing agent_id or command_text')
