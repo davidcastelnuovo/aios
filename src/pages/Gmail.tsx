@@ -590,7 +590,7 @@ export default function Gmail() {
             ) : (
               <ScrollArea className="max-h-[calc(100vh-260px)]">
                 {/* Header row with select all */}
-                <div className="flex flex-row-reverse items-center h-9 px-3 border-b bg-muted/30 text-xs text-muted-foreground">
+                <div className="flex items-center h-9 px-3 border-b bg-muted/30 text-xs text-muted-foreground">
                   <div className="w-8 flex-shrink-0 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={filteredMessages.length > 0 && selectedIds.size === filteredMessages.length}
@@ -611,7 +611,7 @@ export default function Gmail() {
                       <div
                         key={msg.id}
                         className={cn(
-                          "flex flex-row-reverse items-center h-10 px-3 hover:bg-muted/50 cursor-pointer transition-colors group border-b border-border last:border-b-0",
+                          "flex items-center h-10 px-3 hover:bg-muted/50 cursor-pointer transition-colors group border-b border-border last:border-b-0",
                           msg.isUnread && "bg-primary/5",
                           isSelected && "bg-primary/10"
                         )}
