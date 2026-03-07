@@ -776,7 +776,7 @@ serve(async (req) => {
 
               controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'tool_call', tool: toolName, args: toolArgs })}\n\n`));
 
-              const toolResult = await executeTool({ name: toolName, args: toolArgs }, supabaseClient, user.id, tenantId);
+              const toolResult = await executeTool({ name: toolName, args: toolArgs }, supabaseClient, user.id, tenantId, token);
 
               messages.push({ role: 'tool_call', tool: toolName, args: toolArgs, result: toolResult, timestamp: new Date().toISOString() });
 
