@@ -342,7 +342,7 @@ export default function Gmail() {
                     return (
                       <div
                         key={msg.id}
-                        className={`flex flex-row-reverse items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer transition-colors ${msg.isUnread ? 'bg-primary/5 font-semibold' : ''}`}
+                        className={`flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer transition-colors ${msg.isUnread ? 'bg-primary/5 font-semibold' : ''}`}
                         onClick={() => fetchMessage.mutate(msg.id)}
                       >
                         <div className="flex-1 min-w-0 text-right">
