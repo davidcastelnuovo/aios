@@ -781,19 +781,28 @@ export default function Gmail() {
             )}
 
             {/* Pagination footer */}
-            {(messagesData?.nextPageToken || currentPage > 1) && (
-              <div className="flex items-center justify-between px-4 py-2 border-t bg-muted/20">
-                <Button variant="ghost" size="sm" className="h-8" onClick={goToPrevPage} disabled={currentPage <= 1}>
-                  <ChevronRight className="h-4 w-4 me-1" />
-                  הקודם
-                </Button>
-                <span className="text-xs text-muted-foreground">עמוד {currentPage}</span>
-                <Button variant="ghost" size="sm" className="h-8" onClick={goToNextPage} disabled={!messagesData?.nextPageToken}>
-                  הבא
-                  <ChevronLeft className="h-4 w-4 ms-1" />
-                </Button>
-              </div>
-            )}
+            {(() => {
+              const totalEstimate = messagesData?.resultSizeEstimate || 0;
+              const totalPages = Math.max(1, Math.ceil(totalEstimate / 25));
+              return (
+                <div className="flex items-center justify-between px-4 py-2 border-t bg-muted/20">
+                  <Button variant="ghost" size="sm" className="h-8" onClick={goToPrevPage} disabled={currentPage <= 1}>
+                    <ChevronRight className="h-4 w-4 me-1" />
+                    הקודם
+                  </Button>
+                  <div className="flex flex-col items-center gap-0.5">
+                    <span className="text-xs text-muted-foreground">עמוד {currentPage} מתוך {totalPages}</span>
+                    {totalEstimate > 0 && (
+                      <span className="text-[10px] text-muted-foreground/70">נמצאו כ-{totalEstimate} אימיילים</span>
+                    )}
+                  </div>
+                  <Button variant="ghost" size="sm" className="h-8" onClick={goToNextPage} disabled={!messagesData?.nextPageToken}>
+                    הבא
+                    <ChevronLeft className="h-4 w-4 ms-1" />
+                  </Button>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       )}
