@@ -1707,6 +1707,48 @@ export type Database = {
           },
         ]
       }
+      gmail_category_rules: {
+        Row: {
+          category_id: string
+          created_at: string
+          id: string
+          subject_pattern: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          category_id: string
+          created_at?: string
+          id?: string
+          subject_pattern: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          category_id?: string
+          created_at?: string
+          id?: string
+          subject_pattern?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmail_category_rules_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "gmail_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gmail_category_rules_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gmail_message_categories: {
         Row: {
           category_id: string

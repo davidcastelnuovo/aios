@@ -130,6 +130,20 @@ export default function Gmail() {
     enabled: !!userId,
   });
 
+  // Category rules (subject -> category mapping)
+  const { data: categoryRules = [] } = useQuery({
+    queryKey: ['gmail-category-rules', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('gmail_category_rules')
+        .select('subject_pattern, category_id')
+        .eq('user_id', userId!);
+      if (error) throw error;
+      return data as { subject_pattern: string; category_id: string }[];
+    },
+    enabled: !!userId,
+  });
+
   // Message categories mapping
   const { data: messageCategoryMap = {} } = useQuery({
     queryKey: ['gmail-message-categories', userId],
@@ -162,6 +176,23 @@ export default function Gmail() {
     enabled: !!connectionStatus?.connected,
   });
 
+  // Build effective category map: DB entries + rule-based auto-matching
+  const effectiveCategoryMap = useMemo(() => {
+    const map: Record<string, string[]> = { ...(messageCategoryMap as Record<string, string[]>) };
+    if (messagesData?.messages && categoryRules.length > 0) {
+      for (const msg of messagesData.messages) {
+        if (!map[msg.id]) {
+          const subjectLower = (msg.subject || '').toLowerCase().trim();
+          const matchingRule = categoryRules.find(r => r.subject_pattern === subjectLower);
+          if (matchingRule) {
+            map[msg.id] = [matchingRule.category_id];
+          }
+        }
+      }
+    }
+    return map;
+  }, [messageCategoryMap, messagesData?.messages, categoryRules]);
+
   // Filter blocked senders and by category
   const filteredMessages = useMemo(() => {
     if (!messagesData?.messages) return [];
@@ -170,10 +201,10 @@ export default function Gmail() {
       return !(blockedSenders as string[]).includes(fromEmail);
     });
     if (selectedCategory) {
-      msgs = msgs.filter((m) => (messageCategoryMap as Record<string, string[]>)[m.id]?.includes(selectedCategory));
+      msgs = msgs.filter((m) => effectiveCategoryMap[m.id]?.includes(selectedCategory));
     }
     return msgs;
-  }, [messagesData?.messages, blockedSenders, selectedCategory, messageCategoryMap]);
+  }, [messagesData?.messages, blockedSenders, selectedCategory, effectiveCategoryMap]);
 
   // Get single message
   const fetchMessage = useMutation({
@@ -300,20 +331,50 @@ export default function Gmail() {
     },
   });
 
-  // Assign category (single)
+  // Assign category (single) — also saves a subject rule and applies to all matching messages
   const assignCategory = useMutation({
     mutationFn: async ({ messageId, categoryId }: { messageId: string; categoryId: string }) => {
-      const { error } = await supabase.from('gmail_message_categories').upsert({
+      // Find the message to get its subject
+      const msg = messagesData?.messages?.find(m => m.id === messageId);
+      const subjectLower = (msg?.subject || '').toLowerCase().trim();
+
+      // 1. Assign category to this message
+      await supabase.from('gmail_message_categories').upsert({
         tenant_id: tenantId!,
         user_id: userId!,
         message_id: messageId,
         category_id: categoryId,
       }, { onConflict: 'user_id,message_id,category_id' });
-      if (error) throw error;
+
+      // 2. Save subject rule for future auto-categorization
+      if (subjectLower) {
+        await supabase.from('gmail_category_rules').upsert({
+          tenant_id: tenantId!,
+          user_id: userId!,
+          subject_pattern: subjectLower,
+          category_id: categoryId,
+        }, { onConflict: 'user_id,subject_pattern' });
+      }
+
+      // 3. Apply to all visible messages with the same subject
+      if (subjectLower && messagesData?.messages) {
+        const matchingMsgs = messagesData.messages.filter(
+          m => m.id !== messageId && (m.subject || '').toLowerCase().trim() === subjectLower
+        );
+        for (const m of matchingMsgs) {
+          await supabase.from('gmail_message_categories').upsert({
+            tenant_id: tenantId!,
+            user_id: userId!,
+            message_id: m.id,
+            category_id: categoryId,
+          }, { onConflict: 'user_id,message_id,category_id' });
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['gmail-message-categories'] });
-      toast.success('קטגוריה עודכנה');
+      queryClient.invalidateQueries({ queryKey: ['gmail-category-rules'] });
+      toast.success('קטגוריה עודכנה לכל האימיילים עם אותו נושא');
     },
   });
 
@@ -624,7 +685,7 @@ export default function Gmail() {
                 </div>
                 <div className="divide-y divide-border">
                   {filteredMessages.map((msg) => {
-                    const msgCategories = (messageCategoryMap as Record<string, string[]>)[msg.id] || [];
+                    const msgCategories = effectiveCategoryMap[msg.id] || [];
                     const fromName = extractName(msg.from);
                     const isSelected = selectedIds.has(msg.id);
                     return (
