@@ -244,7 +244,7 @@ export default function Gmail() {
       msgs = msgs.filter((m) => !effectiveCategoryMap[m.id] || effectiveCategoryMap[m.id].length === 0);
     }
     return msgs;
-  }, [messagesData?.messages, blockedSenders, selectedCategory, effectiveCategoryMap, allowedLabels]);
+  }, [messagesData?.messages, blockedSenders, selectedCategory, effectiveCategoryMap]);
 
   // Get single message
   const fetchMessage = useMutation({
