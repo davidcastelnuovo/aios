@@ -131,7 +131,7 @@ serve(async (req) => {
       const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
       if (!clientId) throw new Error('Missing GOOGLE_CLIENT_ID');
 
-      const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-auth?action=callback`;
+      const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-auth`;
       const tenantId = requestBody.tenantId;
       if (!tenantId) throw new Error('Missing tenantId');
 
