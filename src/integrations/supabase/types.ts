@@ -1634,6 +1634,41 @@ export type Database = {
         }
         Relationships: []
       }
+      gmail_allowed_labels: {
+        Row: {
+          created_at: string | null
+          id: string
+          label_id: string
+          label_name: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          label_id: string
+          label_name: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          label_id?: string
+          label_name?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gmail_allowed_labels_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gmail_blocked_senders: {
         Row: {
           blocked_at: string
