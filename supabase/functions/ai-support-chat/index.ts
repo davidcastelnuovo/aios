@@ -271,7 +271,7 @@ async function executeTool(
           const fmt = (d: Date) => `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
           q = `after:${fmt(new Date(date))} before:${fmt(nextDay)} ${q}`.trim();
         }
-        const authHeader2 = `Bearer ${(await supabaseClient.auth.getSession()).data.session?.access_token}`;
+        const authHeader2 = `Bearer ${userToken}`;
         const res = await fetch(`${SUPABASE_URL}/functions/v1/gmail-api`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
@@ -284,7 +284,7 @@ async function executeTool(
 
       case 'get_email': {
         const { message_id } = toolCall.args;
-        const authHeader2 = `Bearer ${(await supabaseClient.auth.getSession()).data.session?.access_token}`;
+        const authHeader2 = `Bearer ${userToken}`;
         const res = await fetch(`${SUPABASE_URL}/functions/v1/gmail-api`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
@@ -297,7 +297,7 @@ async function executeTool(
 
       case 'send_email': {
         const { to, subject, body: emailBody } = toolCall.args;
-        const authHeader2 = `Bearer ${(await supabaseClient.auth.getSession()).data.session?.access_token}`;
+        const authHeader2 = `Bearer ${userToken}`;
         const res = await fetch(`${SUPABASE_URL}/functions/v1/gmail-api`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
@@ -310,7 +310,7 @@ async function executeTool(
 
       case 'delete_email': {
         const { message_id } = toolCall.args;
-        const authHeader2 = `Bearer ${(await supabaseClient.auth.getSession()).data.session?.access_token}`;
+        const authHeader2 = `Bearer ${userToken}`;
         const res = await fetch(`${SUPABASE_URL}/functions/v1/gmail-api`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
