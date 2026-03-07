@@ -61,10 +61,11 @@ const LEAD_SOURCE_OPTIONS = [
 ];
 
 // Available fields by trigger type
-function getAvailableFields(triggerType: string | undefined): { key: string; label: string }[] {
+function getAvailableFields(triggerType: string | undefined, triggerConfig?: Record<string, any>): { key: string; label: string }[] {
+  let fields: { key: string; label: string }[] = [];
   switch (triggerType) {
     case "lead_created":
-      return [
+      fields = [
         { key: "contact_name", label: "שם איש קשר" },
         { key: "company_name", label: "שם חברה" },
         { key: "phone", label: "טלפון" },
@@ -72,8 +73,9 @@ function getAvailableFields(triggerType: string | undefined): { key: string; lab
         { key: "source", label: "מקור" },
         { key: "notes", label: "הערות" },
       ];
+      break;
     case "lead_status_changed":
-      return [
+      fields = [
         { key: "contact_name", label: "שם איש קשר" },
         { key: "company_name", label: "שם חברה" },
         { key: "phone", label: "טלפון" },
@@ -81,38 +83,60 @@ function getAvailableFields(triggerType: string | undefined): { key: string; lab
         { key: "old_status", label: "סטטוס קודם" },
         { key: "new_status", label: "סטטוס חדש" },
       ];
+      break;
     case "client_created":
     case "client_status_changed":
-      return [
+      fields = [
         { key: "name", label: "שם לקוח" },
         { key: "contact_name", label: "שם איש קשר" },
         { key: "phone", label: "טלפון" },
         { key: "email", label: "אימייל" },
       ];
+      break;
     case "task_assigned":
     case "task_status_changed":
     case "task_overdue":
-      return [
+      fields = [
         { key: "title", label: "כותרת משימה" },
         { key: "assignee_name", label: "שם מבצע" },
       ];
+      break;
     case "meeting_created":
-      return [
+      fields = [
         { key: "title", label: "כותרת פגישה" },
         { key: "date", label: "תאריך" },
       ];
+      break;
     case "manual_command":
-      return [
+      fields = [
         { key: "command_text", label: "טקסט הפקודה" },
         { key: "user_name", label: "שם המשתמש" },
       ];
+      break;
     default:
-      return [
+      fields = [
         { key: "contact_name", label: "שם איש קשר" },
         { key: "phone", label: "טלפון" },
         { key: "email", label: "אימייל" },
       ];
+      break;
   }
+
+  // Add Facebook form fields if trigger is lead_created with facebook_form source
+  if (triggerType === "lead_created" && triggerConfig?.lead_source === "facebook_form") {
+    const fbFields = triggerConfig?.facebook_form_fields as Array<{ key: string; label: string; type?: string }> | undefined;
+    if (fbFields && Array.isArray(fbFields)) {
+      const existingKeys = new Set(fields.map(f => f.key));
+      for (const fbField of fbFields) {
+        const fieldKey = `fb_${fbField.key}`;
+        if (!existingKeys.has(fieldKey)) {
+          fields.push({ key: fieldKey, label: `📋 ${fbField.label || fbField.key}` });
+        }
+      }
+    }
+  }
+
+  return fields;
 }
 
 interface StepConfigPanelProps {
@@ -129,10 +153,17 @@ interface FacebookPage {
   access_token?: string;
 }
 
+interface FacebookFormField {
+  key: string;
+  label: string;
+  type?: string;
+}
+
 interface FacebookForm {
   id: string;
   name: string;
   status: string;
+  fields?: FacebookFormField[];
 }
 
 export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }: StepConfigPanelProps) {
@@ -144,7 +175,8 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
   // Detect trigger type from flow
   const triggerNode = allNodes.find((n) => n.step_type === "trigger");
   const triggerType = triggerNode?.action_type;
-  const availableFields = getAvailableFields(triggerType);
+  const triggerConfig = triggerNode?.configuration;
+  const availableFields = getAvailableFields(triggerType, triggerConfig);
 
   const isLeadCreatedTrigger = node.step_type === "trigger" && node.action_type === "lead_created";
   const leadSource = node.configuration?.lead_source || "any";
@@ -923,6 +955,18 @@ function LeadSourceConfig({
             <p className="text-xs text-muted-foreground">
               טופס: <span className="text-foreground">{configuration?.facebook_form_name || configuration?.facebook_form_id}</span>
             </p>
+            {configuration?.facebook_form_fields && Array.isArray(configuration.facebook_form_fields) && configuration.facebook_form_fields.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-border/50">
+                <p className="text-xs font-medium text-muted-foreground mb-1">שדות הטופס (זמינים כמשתנים):</p>
+                <div className="flex flex-wrap gap-1 justify-end">
+                  {configuration.facebook_form_fields.map((f: FacebookFormField) => (
+                    <Badge key={f.key} variant="secondary" className="text-[10px] font-mono">
+                      {`{{fb_${f.key}}}`}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -952,6 +996,7 @@ function LeadSourceConfig({
             facebook_page_name: selected.pageName,
             facebook_form_id: selected.formId,
             facebook_form_name: selected.formName,
+            facebook_form_fields: selected.formFields || [],
           });
           setShowFbDialog(false);
         }}
@@ -978,6 +1023,7 @@ function FacebookFormSelectionDialog({
     pageName: string;
     formId: string;
     formName: string;
+    formFields: FacebookFormField[];
   }) => void;
 }) {
   const [selectedIntegrationId, setSelectedIntegrationId] = useState(configuration?.facebook_integration_id || "");
@@ -1239,6 +1285,7 @@ function FacebookFormSelectionDialog({
                 pageName: selectedPage?.name || selectedPageId,
                 formId: selectedFormId,
                 formName: selectedForm?.name || selectedFormId,
+                formFields: selectedForm?.fields || [],
               });
             }}
           >
