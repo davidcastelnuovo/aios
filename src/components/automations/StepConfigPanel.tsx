@@ -206,7 +206,7 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="left" className="w-[360px] sm:w-[400px]">
+      <SheetContent side="left" className="w-[360px] sm:w-[400px] overflow-y-auto">
         <SheetHeader>
           <SheetTitle className="text-right">
             {node.step_type === "trigger" ? "הגדרת טריגר" :
@@ -597,31 +597,63 @@ function GreenAPIActionConfig({
           className="text-right"
           rows={4}
         />
-        <div className="space-y-1">
+        <div className="space-y-2">
           <p className="text-xs text-muted-foreground text-right">הכנס משתנה:</p>
-          <div className="flex flex-wrap gap-1 justify-end">
-            {availableFields.map((field) => (
-              <Button
-                key={field.key}
-                type="button"
-                variant="outline"
-                size="sm"
-                className="text-xs h-6 px-2"
-                onClick={() => insertVariable(field.key)}
-              >
-                {field.label}
-              </Button>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="text-xs h-6 px-2 border-primary text-primary"
-              onClick={() => insertVariable("agent_output")}
-            >
-              🤖 תוצאת סוכן AI
-            </Button>
-          </div>
+          {(() => {
+            const systemFields = availableFields.filter((f) => !f.key.startsWith("fb_"));
+            const fbFields = availableFields.filter((f) => f.key.startsWith("fb_"));
+            return (
+              <>
+                {systemFields.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-medium text-muted-foreground text-right">שדות מערכת</p>
+                    <div className="flex flex-wrap gap-1 justify-end">
+                      {systemFields.map((field) => (
+                        <Button
+                          key={field.key}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-6 px-2"
+                          onClick={() => insertVariable(field.key)}
+                        >
+                          {field.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {fbFields.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-medium text-blue-500 text-right">שדות פייסבוק</p>
+                    <div className="flex flex-wrap gap-1 justify-end">
+                      {fbFields.map((field) => (
+                        <Button
+                          key={field.key}
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-6 px-2 border-blue-400 text-blue-600 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-950/50"
+                          onClick={() => insertVariable(field.key)}
+                        >
+                          {field.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-6 px-2 border-primary text-primary"
+                  onClick={() => insertVariable("agent_output")}
+                >
+                  🤖 תוצאת סוכן AI
+                </Button>
+              </>
+            );
+          })()}
         </div>
       </div>
     </div>
@@ -787,22 +819,54 @@ function AgentStepConfig({
           />
 
           {/* Insert variable buttons */}
-          <div className="space-y-1">
+          <div className="space-y-2">
             <p className="text-xs text-muted-foreground text-right">הכנס משתנה:</p>
-            <div className="flex flex-wrap gap-1 justify-end">
-              {availableFields.map((field) => (
-                <Button
-                  key={field.key}
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-6 px-2"
-                  onClick={() => insertVariableToInstruction(field.key)}
-                >
-                  {field.label}
-                </Button>
-              ))}
-            </div>
+            {(() => {
+              const systemFields = availableFields.filter((f) => !f.key.startsWith("fb_"));
+              const fbFields = availableFields.filter((f) => f.key.startsWith("fb_"));
+              return (
+                <>
+                  {systemFields.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-medium text-muted-foreground text-right">שדות מערכת</p>
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        {systemFields.map((field) => (
+                          <Button
+                            key={field.key}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-6 px-2"
+                            onClick={() => insertVariableToInstruction(field.key)}
+                          >
+                            {field.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {fbFields.length > 0 && (
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-medium text-blue-500 text-right">שדות פייסבוק</p>
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        {fbFields.map((field) => (
+                          <Button
+                            key={field.key}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="text-xs h-6 px-2 border-blue-400 text-blue-600 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-950/50"
+                            onClick={() => insertVariableToInstruction(field.key)}
+                          >
+                            {field.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
 
           {/* Quick Templates */}
