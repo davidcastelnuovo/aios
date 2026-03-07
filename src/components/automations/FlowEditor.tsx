@@ -39,6 +39,7 @@ export default function FlowEditor() {
   const [dragNodeId, setDragNodeId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [showManualTrigger, setShowManualTrigger] = useState(false);
+  const [showTestWithLead, setShowTestWithLead] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   // Fetch automation
@@ -298,6 +299,11 @@ export default function FlowEditor() {
           </Button>
         )}
 
+        <Button variant="outline" onClick={() => setShowTestWithLead(true)}>
+          <TestTube className="h-4 w-4 ml-2" />
+          בדוק עם ליד
+        </Button>
+
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom((z) => Math.min(z + 0.1, 2))}>
             <ZoomIn className="h-4 w-4" />
@@ -405,6 +411,14 @@ export default function FlowEditor() {
       <ManualTriggerDialog
         open={showManualTrigger}
         onOpenChange={setShowManualTrigger}
+        automationId={automationId || ""}
+        automationName={automationName}
+      />
+
+      {/* Test with lead dialog */}
+      <TestFlowWithLeadDialog
+        open={showTestWithLead}
+        onOpenChange={setShowTestWithLead}
         automationId={automationId || ""}
         automationName={automationName}
       />

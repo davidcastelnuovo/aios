@@ -102,14 +102,7 @@ export function TestFlowWithLeadDialog({
         timestamp: new Date().toISOString(),
       };
 
-      // Include custom_fields if present
-      if (selectedLead.custom_fields && typeof selectedLead.custom_fields === "object") {
-        const cf = selectedLead.custom_fields as Record<string, any>;
-        Object.entries(cf).forEach(([key, value]) => {
-          testData[`fb_${key}`] = value;
-          testData[key] = value;
-        });
-      }
+      // custom_fields are not in the select, but the backend will resolve them via lead_id
 
       const response = await supabase.functions.invoke("trigger-automation", {
         body: {
