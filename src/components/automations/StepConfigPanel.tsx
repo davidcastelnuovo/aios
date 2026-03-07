@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, Facebook, CheckCircle2, Search, Bot, Plus, Sparkles } from "lucide-react";
+import { Loader2, Facebook, CheckCircle2, Search, Bot, Plus, Sparkles, Copy, FileText, Phone, Scissors, Languages, RotateCcw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -316,6 +316,7 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
               tenantId={tenantId}
               configuration={node.configuration}
               onConfigChange={handleConfigChange}
+              availableFields={availableFields}
             />
           )}
 
@@ -639,18 +640,36 @@ const AI_ENGINES = [
   { value: "openai/gpt-5.2", label: "GPT-5.2" },
 ];
 
+const QUICK_TEMPLATES = [
+  { icon: Phone, label: "📱 פרמוט טלפון", text: "פרמט את מספר הטלפון {{phone}} לפורמט בינלאומי +972XXXXXXXXX. החזר רק את המספר המפורמט." },
+  { icon: Scissors, label: "✂️ הפרדת שם", text: "הפרד את {{contact_name}} לשם פרטי ושם משפחה. החזר JSON בפורמט: {\"first_name\": \"...\", \"last_name\": \"...\"}" },
+  { icon: Languages, label: "🌐 תרגום לעברית", text: "תרגם את {{contact_name}} לעברית. החזר רק את השם המתורגם." },
+  { icon: FileText, label: "📝 סיכום טקסט", text: "סכם את הטקסט הבא בצורה תמציתית:\n{{notes}}" },
+  { icon: RotateCcw, label: "🔄 המרת פורמט", text: "המר את הנתונים הבאים לפורמט JSON מובנה:\n{{notes}}" },
+];
+
+const OUTPUT_FORMATS = [
+  { value: "text", label: "טקסט חופשי" },
+  { value: "json", label: "JSON מובנה" },
+  { value: "single_value", label: "ערך בודד" },
+];
+
 function AgentStepConfig({
   tenantId,
   configuration,
   onConfigChange,
+  availableFields,
 }: {
   tenantId: string | undefined;
   configuration: Record<string, any>;
   onConfigChange: (key: string, value: any) => void;
+  availableFields: { key: string; label: string }[];
 }) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const instructionRef = useRef<HTMLTextAreaElement>(null);
 
   const { data: agents, isLoading } = useQuery({
     queryKey: ["ai-agents", tenantId],
@@ -669,6 +688,29 @@ function AgentStepConfig({
   });
 
   const selectedAgent = agents?.find((a: any) => a.id === configuration?.agent_id);
+
+  const insertVariableToInstruction = (fieldKey: string) => {
+    const variable = `{{${fieldKey}}}`;
+    const currentValue = configuration?.step_instruction || "";
+    const textarea = instructionRef.current;
+    const pos = textarea?.selectionStart ?? currentValue.length;
+    const newValue = currentValue.slice(0, pos) + variable + currentValue.slice(pos);
+    onConfigChange("step_instruction", newValue);
+    // Restore cursor position after variable
+    setTimeout(() => {
+      if (textarea) {
+        const newPos = pos + variable.length;
+        textarea.selectionStart = newPos;
+        textarea.selectionEnd = newPos;
+        textarea.focus();
+      }
+    }, 0);
+  };
+
+  const applyTemplate = (templateText: string) => {
+    onConfigChange("step_instruction", templateText);
+    setShowTemplates(false);
+  };
 
   return (
     <div className="space-y-4">
@@ -726,6 +768,95 @@ function AgentStepConfig({
             <p>מנוע: {AI_ENGINES.find(e => e.value === selectedAgent.engine)?.label || selectedAgent.engine}</p>
             {selectedAgent.personality && <p>אופי: {selectedAgent.personality.slice(0, 60)}...</p>}
             {selectedAgent.talent && <p>טלנט: {selectedAgent.talent.slice(0, 60)}...</p>}
+          </div>
+        </div>
+      )}
+
+      {/* Step Instruction */}
+      {selectedAgent && (
+        <div className="space-y-2 border-t pt-4">
+          <Label className="text-right block font-medium">הוראה / משימה לשלב זה</Label>
+          <Textarea
+            ref={instructionRef}
+            value={configuration?.step_instruction || ""}
+            onChange={(e) => onConfigChange("step_instruction", e.target.value)}
+            placeholder="מה הסוכן צריך לעשות? למשל: פרמט את הטלפון {{phone}} לפורמט +972..."
+            className="text-right min-h-[100px]"
+            rows={5}
+          />
+
+          {/* Insert variable buttons */}
+          <div className="space-y-1">
+            <p className="text-xs text-muted-foreground text-right">הכנס משתנה:</p>
+            <div className="flex flex-wrap gap-1 justify-end">
+              {availableFields.map((field) => (
+                <Button
+                  key={field.key}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-6 px-2"
+                  onClick={() => insertVariableToInstruction(field.key)}
+                >
+                  {field.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Quick Templates */}
+          <div className="space-y-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-xs gap-1 h-7"
+              onClick={() => setShowTemplates(!showTemplates)}
+            >
+              <Sparkles className="h-3 w-3" />
+              {showTemplates ? "הסתר תבניות" : "תבניות מוכנות"}
+            </Button>
+            {showTemplates && (
+              <div className="grid gap-1.5">
+                {QUICK_TEMPLATES.map((tpl, i) => (
+                  <Button
+                    key={i}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-auto py-1.5 px-2 text-right justify-end"
+                    onClick={() => applyTemplate(tpl.text)}
+                  >
+                    {tpl.label}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Output Format */}
+          <div className="space-y-2 border-t pt-3">
+            <Label className="text-right block">פורמט תשובה צפוי</Label>
+            <Select
+              value={configuration?.output_format || "text"}
+              onValueChange={(v) => onConfigChange("output_format", v)}
+            >
+              <SelectTrigger className="text-right">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {OUTPUT_FORMATS.map((f) => (
+                  <SelectItem key={f.value} value={f.value}>
+                    {f.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground text-right">
+              {configuration?.output_format === "json" && "הסוכן יתבקש להחזיר תשובה בפורמט JSON בלבד"}
+              {configuration?.output_format === "single_value" && "הסוכן יתבקש להחזיר ערך בודד ללא הסברים"}
+              {(!configuration?.output_format || configuration?.output_format === "text") && "הסוכן יחזיר טקסט חופשי"}
+            </p>
           </div>
         </div>
       )}
