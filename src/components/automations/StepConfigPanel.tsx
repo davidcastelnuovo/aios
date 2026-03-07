@@ -899,6 +899,7 @@ function LeadSourceConfig({
   onConfigChange: (key: string, value: any) => void;
   onBulkConfigChange: (updates: Record<string, any>) => void;
 }) {
+  const { toast } = useToast();
   const [showFbDialog, setShowFbDialog] = useState(false);
   const isFacebookForm = leadSource === "facebook_form";
 
