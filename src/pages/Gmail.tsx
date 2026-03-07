@@ -234,11 +234,6 @@ export default function Gmail() {
     let msgs = messagesData.messages.filter((m) => {
       const fromEmail = m.from.match(/<(.+?)>/)?.[1]?.toLowerCase() || m.from.toLowerCase();
       if ((blockedSenders as string[]).includes(fromEmail)) return false;
-      // Filter by allowed labels — if labels are configured, only show messages that have at least one allowed label
-      if (allowedLabels.length > 0) {
-        const hasAllowedLabel = m.labelIds?.some(lid => allowedLabels.includes(lid));
-        if (!hasAllowedLabel) return false;
-      }
       return true;
     });
     if (selectedCategory) {
