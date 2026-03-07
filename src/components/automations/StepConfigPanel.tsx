@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, Facebook, CheckCircle2, Search, Bot, Plus, Sparkles } from "lucide-react";
+import { Loader2, Facebook, CheckCircle2, Search, Bot, Plus, Sparkles, Copy, FileText, Phone, Scissors, Languages, RotateCcw } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -316,6 +316,7 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
               tenantId={tenantId}
               configuration={node.configuration}
               onConfigChange={handleConfigChange}
+              availableFields={availableFields}
             />
           )}
 
