@@ -338,6 +338,18 @@ Deno.serve(async (req) => {
                         command_text: commandText,
                         automation_id: automation.id,
                         user_name: payloadData?.user_name || 'מערכת',
+                        lead_data: {
+                          lead_id: stepData.lead_id,
+                          contact_name: stepData.contact_name,
+                          phone: stepData.phone,
+                          email: stepData.email,
+                          company_name: stepData.company_name,
+                          source: stepData.source,
+                          notes: stepData.notes,
+                          status: stepData.status,
+                          pipeline_stage: stepData.pipeline_stage,
+                          agency_name: stepData.agency_name,
+                        },
                       }),
                     })
                     stepResponse = await agentRes.json()
