@@ -8,13 +8,14 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { ArrowRight, Save, ZoomIn, ZoomOut, RotateCcw, MessageSquare, TestTube } from "lucide-react";
+import { ArrowRight, Save, ZoomIn, ZoomOut, RotateCcw, MessageSquare, TestTube, History } from "lucide-react";
 import { FlowNode, FlowNodeData } from "./FlowNode";
 import { FlowConnector } from "./FlowConnector";
 import { StepConfigPanel } from "./StepConfigPanel";
 import { AddStepMenu } from "./AddStepMenu";
 import { ManualTriggerDialog } from "./ManualTriggerDialog";
 import { TestFlowWithLeadDialog } from "./TestFlowWithLeadDialog";
+import { ExecutionHistoryPanel } from "./ExecutionHistoryPanel";
 
 const NODE_WIDTH = 220;
 const NODE_HEIGHT = 90;
