@@ -15,9 +15,11 @@ serve(async (req) => {
   try {
     const url = new URL(req.url);
     const queryAction = url.searchParams.get('action');
+    const hasOAuthCode = !!url.searchParams.get('code');
+    const hasOAuthState = !!url.searchParams.get('state');
 
     // OAuth callback
-    if (queryAction === 'callback') {
+    if (queryAction === 'callback' || (hasOAuthCode && hasOAuthState)) {
       const code = url.searchParams.get('code');
       if (!code) throw new Error('No authorization code provided');
 
