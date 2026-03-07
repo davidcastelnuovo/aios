@@ -247,6 +247,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             {children}
           </main>
           </div>
+          <AIOSDialog open={aiosOpen} onOpenChange={setAiosOpen} />
         </div>
       </SidebarProvider>
     </ViewAsProvider>
