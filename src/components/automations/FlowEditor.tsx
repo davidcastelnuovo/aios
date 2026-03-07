@@ -41,6 +41,7 @@ export default function FlowEditor() {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [showManualTrigger, setShowManualTrigger] = useState(false);
   const [showTestWithLead, setShowTestWithLead] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   // Fetch automation
