@@ -5447,6 +5447,7 @@ export type Database = {
         | "meeting_same_day"
         | "inbound_webhook_task"
         | "inbound_webhook_lead"
+        | "manual_command"
       chat_provider: "manychat" | "green_api" | "internal"
       client_mood_status:
         | "happy"
@@ -5666,6 +5667,7 @@ export const Constants = {
         "meeting_same_day",
         "inbound_webhook_task",
         "inbound_webhook_lead",
+        "manual_command",
       ],
       chat_provider: ["manychat", "green_api", "internal"],
       client_mood_status: [
