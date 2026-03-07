@@ -345,7 +345,7 @@ export default function Gmail() {
                         className={`flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer transition-colors ${msg.isUnread ? 'bg-primary/5 font-semibold' : ''}`}
                         onClick={() => fetchMessage.mutate(msg.id)}
                       >
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 text-right">
                           <div className="flex items-center gap-2">
                             {msg.isUnread && <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />}
                             <span className="text-sm truncate">{extractName(msg.from)}</span>
