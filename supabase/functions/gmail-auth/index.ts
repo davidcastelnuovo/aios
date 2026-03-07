@@ -15,9 +15,11 @@ serve(async (req) => {
   try {
     const url = new URL(req.url);
     const queryAction = url.searchParams.get('action');
+    const hasOAuthCode = !!url.searchParams.get('code');
+    const hasOAuthState = !!url.searchParams.get('state');
 
     // OAuth callback
-    if (queryAction === 'callback') {
+    if (queryAction === 'callback' || (hasOAuthCode && hasOAuthState)) {
       const code = url.searchParams.get('code');
       if (!code) throw new Error('No authorization code provided');
 
@@ -28,7 +30,7 @@ serve(async (req) => {
 
       const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
       const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
-      const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-auth?action=callback`;
+      const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-auth`;
       if (!clientId || !clientSecret) throw new Error('Missing Google credentials');
 
       // Exchange code for tokens
@@ -129,7 +131,7 @@ serve(async (req) => {
       const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
       if (!clientId) throw new Error('Missing GOOGLE_CLIENT_ID');
 
-      const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-auth?action=callback`;
+      const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-auth`;
       const tenantId = requestBody.tenantId;
       if (!tenantId) throw new Error('Missing tenantId');
 
