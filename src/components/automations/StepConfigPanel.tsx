@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Loader2, Facebook, CheckCircle2, Search, Bot, Plus, Sparkles, Copy, FileText, Phone, Scissors, Languages, RotateCcw } from "lucide-react";
+import { Loader2, Facebook, CheckCircle2, Search, Bot, Plus, Sparkles, Copy, FileText, Phone, Scissors, Languages, RotateCcw, ChevronDown, ClipboardCopy } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -1082,42 +1083,46 @@ function LeadSourceConfig({
           </div>
 
           {configuration?.facebook_form_fields && Array.isArray(configuration.facebook_form_fields) && configuration.facebook_form_fields.length > 0 && (
-            <div className="pt-2 border-t border-border/50 space-y-2">
-              <div className="flex items-center justify-between">
-                <Badge variant="secondary" className="text-[10px]">
-                  {configuration.facebook_form_fields.length} שדות
-                </Badge>
-                <p className="text-xs font-semibold text-foreground">שדות הטופס למיפוי</p>
-              </div>
-              <div className="rounded-md border border-border overflow-hidden">
-                <table className="w-full text-xs" dir="rtl">
-                  <thead>
-                    <tr className="bg-muted">
-                      <th className="px-2 py-1.5 text-right font-medium text-muted-foreground">שם השדה</th>
-                      <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">משתנה</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {configuration.facebook_form_fields.map((f: FacebookFormField, idx: number) => (
-                      <tr key={f.key} className={idx % 2 === 0 ? "bg-background" : "bg-muted/30"}>
-                        <td className="px-2 py-1.5 text-right text-foreground">{f.label || f.key}</td>
-                        <td className="px-2 py-1.5 text-left">
-                          <code
-                            className="text-[10px] bg-muted px-1 py-0.5 rounded cursor-pointer hover:bg-accent transition-colors font-mono"
-                            onClick={() => {
-                              navigator.clipboard.writeText(`{{fb_${f.key}}}`);
-                              toast({ title: "הועתק!", description: `{{fb_${f.key}}}` });
-                            }}
-                            title="לחץ להעתקה"
-                          >
-                            {`{{fb_${f.key}}}`}
-                          </code>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div className="pt-2 border-t border-border/50">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-full justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <ClipboardCopy className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span>שדות הטופס למיפוי</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                        {configuration.facebook_form_fields.length}
+                      </Badge>
+                      <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-0" align="start" dir="rtl">
+                  <div className="px-3 py-2 border-b border-border bg-muted/50">
+                    <p className="text-xs font-medium text-muted-foreground">לחץ על שדה כדי להעתיק</p>
+                  </div>
+                  <ScrollArea className="max-h-48">
+                    <div className="p-1">
+                      {configuration.facebook_form_fields.map((f: FacebookFormField) => (
+                        <button
+                          key={f.key}
+                          type="button"
+                          className="w-full flex items-center justify-between px-2.5 py-2 rounded-md text-xs hover:bg-accent transition-colors group"
+                          onClick={() => {
+                            navigator.clipboard.writeText(`{{fb_${f.key}}}`);
+                            toast({ title: "הועתק!", description: `{{fb_${f.key}}}` });
+                          }}
+                        >
+                          <code className="font-mono text-[11px] text-foreground">{`{{fb_${f.key}}}`}</code>
+                          <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
             </div>
           )}
 
