@@ -246,19 +246,46 @@ export default function Gmail() {
     onError: () => toast.error('שגיאה בשליחת המייל'),
   });
 
-  // Block sender
+  // Block sender + all senders with same subject
   const blockSender = useMutation({
-    mutationFn: async (email: string) => {
-      const { error } = await supabase.from('gmail_blocked_senders').insert({
+    mutationFn: async ({ email, subject }: { email: string; subject?: string }) => {
+      // Block the original sender
+      await supabase.from('gmail_blocked_senders').insert({
         tenant_id: tenantId!,
         user_id: userId!,
         email_address: email.toLowerCase(),
       });
-      if (error) throw error;
+
+      // Search for all messages with the same subject and block their senders too
+      if (subject) {
+        try {
+          const searchRes = await supabase.functions.invoke('gmail-api', {
+            body: { action: 'list', query: `subject:"${subject}"`, maxResults: 500 },
+          });
+          const allMatching = searchRes.data?.messages || [];
+          const uniqueEmails = new Set<string>([email.toLowerCase()]);
+
+          for (const m of allMatching) {
+            if (m.from) {
+              const senderEmail = m.from.match(/<([^>]+)>/)?.[1] || m.from.split(/\s/).pop() || '';
+              if (senderEmail && !uniqueEmails.has(senderEmail.toLowerCase())) {
+                uniqueEmails.add(senderEmail.toLowerCase());
+                await supabase.from('gmail_blocked_senders').insert({
+                  tenant_id: tenantId!,
+                  user_id: userId!,
+                  email_address: senderEmail.toLowerCase(),
+                }).then(() => {}); // ignore duplicates
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Error searching related senders:', e);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['gmail-blocked-senders'] });
-      toast.success('השולח נחסם');
+      toast.success('השולח וכל השולחים עם אותו נושא נחסמו');
     },
     onError: () => toast.error('שגיאה בחסימת שולח'),
   });
@@ -694,7 +721,7 @@ export default function Gmail() {
                   <Trash2 className="h-4 w-4 me-1" />
                   מחק
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => blockSender.mutate(extractEmail(selectedMessage.from))}>
+                <Button variant="outline" size="sm" onClick={() => blockSender.mutate({ email: extractEmail(selectedMessage.from), subject: selectedMessage.subject })}>
                   <Ban className="h-4 w-4 me-1" />
                   חסום
                 </Button>
@@ -828,7 +855,7 @@ export default function Gmail() {
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => trashMutation.mutate(msg.id)}>
                             <Trash2 className="h-3 w-3" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => blockSender.mutate(extractEmail(msg.from))}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => blockSender.mutate({ email: extractEmail(msg.from), subject: msg.subject })}>
                             <Ban className="h-3 w-3" />
                           </Button>
                         </div>
