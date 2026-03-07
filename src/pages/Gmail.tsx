@@ -83,22 +83,10 @@ export default function Gmail() {
     return `after:${fy}/${fm}/${fd} before:${ty}/${tm}/${td}`;
   };
 
-  // Build subject query from category rules when a category is selected
-  const categorySubjectQuery = useMemo(() => {
-    if (!selectedCategory || categoryRules.length === 0) return null;
-    const rulesForCategory = categoryRules.filter(r => r.category_id === selectedCategory);
-    if (rulesForCategory.length === 0) return null;
-    return rulesForCategory.map(r => `subject:"${r.subject_pattern}"`).join(' OR ');
-  }, [selectedCategory, categoryRules]);
-
-  const fullQuery = useMemo(() => {
-    // When viewing a category, use subject-based query (ignore date filter)
-    if (categorySubjectQuery) {
-      return activeSearch ? `(${categorySubjectQuery}) ${activeSearch}` : categorySubjectQuery;
-    }
+  const fullQueryBase = useMemo(() => {
     const dateQ = buildDateQuery();
     return activeSearch ? `${dateQ} ${activeSearch}` : dateQ;
-  }, [selectedDateRange, activeSearch, categorySubjectQuery]);
+  }, [selectedDateRange, activeSearch]);
 
   // Check connection
   const { data: connectionStatus } = useQuery({
