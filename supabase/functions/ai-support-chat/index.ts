@@ -70,7 +70,8 @@ async function executeTool(
   toolCall: ToolCall, 
   supabaseClient: any, 
   userId: string, 
-  tenantId: string
+  tenantId: string,
+  userToken?: string
 ): Promise<{ success: boolean; result?: any; error?: string }> {
   console.log('Executing tool:', toolCall.name, 'with args:', toolCall.args);
 
