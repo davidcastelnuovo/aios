@@ -240,19 +240,6 @@ export function TestFlowWithLeadDialog({
                   )}
                 </div>
 
-                {/* Custom fields preview */}
-                {selectedLead.custom_fields && typeof selectedLead.custom_fields === "object" && Object.keys(selectedLead.custom_fields as object).length > 0 && (
-                  <div className="border-t pt-2 mt-2">
-                    <p className="text-xs font-medium text-blue-600 mb-1">שדות פייסבוק:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {Object.entries(selectedLead.custom_fields as Record<string, any>).map(([key, val]) => (
-                        <Badge key={key} variant="outline" className="text-xs border-blue-300 text-blue-600 bg-blue-50">
-                          {key}: {String(val)}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
