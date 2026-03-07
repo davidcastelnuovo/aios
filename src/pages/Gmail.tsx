@@ -561,6 +561,8 @@ export default function Gmail() {
             className="h-8 text-xs"
             onClick={() => {
               const today = startOfDay(new Date());
+              setSearchQuery('');
+              setActiveSearch('');
               setSelectedDateRange({ from: today, to: today });
               resetPagination();
             }}
@@ -574,6 +576,8 @@ export default function Gmail() {
             onClick={() => {
               const today = startOfDay(new Date());
               const weekStart = startOfWeek(today, { weekStartsOn: 0 });
+              setSearchQuery('');
+              setActiveSearch('');
               setSelectedDateRange({ from: weekStart, to: today });
               resetPagination();
             }}
@@ -587,6 +591,8 @@ export default function Gmail() {
             onClick={() => {
               const today = startOfDay(new Date());
               const thirtyDaysAgo = subDays(today, 30);
+              setSearchQuery('');
+              setActiveSearch('');
               setSelectedDateRange({ from: thirtyDaysAgo, to: today });
               resetPagination();
             }}
