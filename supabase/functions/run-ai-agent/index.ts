@@ -61,6 +61,26 @@ Deno.serve(async (req) => {
     if (agent.talent) systemParts.push(`הטלנט שלך: ${agent.talent}.`)
     systemParts.push('ענה בעברית. היה תמציתי ומועיל.')
 
+    // Auto-inject lead context if available
+    if (lead_data) {
+      const leadParts: string[] = []
+      if (lead_data.contact_name) leadParts.push(`שם: ${lead_data.contact_name}`)
+      if (lead_data.company_name) leadParts.push(`חברה: ${lead_data.company_name}`)
+      if (lead_data.phone) leadParts.push(`טלפון: ${lead_data.phone}`)
+      if (lead_data.email) leadParts.push(`אימייל: ${lead_data.email}`)
+      if (lead_data.source) leadParts.push(`מקור: ${lead_data.source}`)
+      if (lead_data.status) leadParts.push(`סטטוס: ${lead_data.status}`)
+      if (lead_data.pipeline_stage) leadParts.push(`שלב: ${lead_data.pipeline_stage}`)
+      if (lead_data.agency_name) leadParts.push(`סוכנות: ${lead_data.agency_name}`)
+      if (lead_data.notes) leadParts.push(`הערות: ${lead_data.notes}`)
+      if (lead_data.lead_id) leadParts.push(`מזהה ליד: ${lead_data.lead_id}`)
+
+      if (leadParts.length > 0) {
+        systemParts.push(`\n\nהנה פרטי הליד/איש הקשר שעבורו אתה מבצע את המשימה:\n${leadParts.join('\n')}`)
+        systemParts.push('\nהשתמש בפרטים אלו כדי לבצע את המשימה. אין צורך לבקש פרטים נוספים.')
+      }
+    }
+
     const systemPrompt = systemParts.join(' ')
     const model = resolveModel(agent.engine)
 
