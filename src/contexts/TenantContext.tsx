@@ -167,7 +167,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      return userTenants[0] as any;
+      // Prefer marketingcaptain tenant if user is a member
+      const mcTenant = userTenants.find((t: any) => (t as any)?.tenants?.slug === 'marketingcaptain');
+      return (mcTenant || userTenants[0]) as any;
     },
     staleTime: 1000 * 60 * 5,
     enabled: !tenantSlug,
