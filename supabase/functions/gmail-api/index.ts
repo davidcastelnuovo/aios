@@ -48,9 +48,19 @@ function parseEmailHeader(payload: any, headerName: string): string {
   return header?.value || '';
 }
 
+function decodeBase64Utf8(base64url: string): string {
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
 function getEmailBody(payload: any): string {
   if (payload.body?.data) {
-    return atob(payload.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+    return decodeBase64Utf8(payload.body.data);
   }
   if (payload.parts) {
     // Prefer text/html, fallback to text/plain
@@ -58,7 +68,7 @@ function getEmailBody(payload: any): string {
     const textPart = payload.parts.find((p: any) => p.mimeType === 'text/plain');
     const part = htmlPart || textPart;
     if (part?.body?.data) {
-      return atob(part.body.data.replace(/-/g, '+').replace(/_/g, '/'));
+      return decodeBase64Utf8(part.body.data);
     }
     // Nested multipart
     for (const p of payload.parts) {
