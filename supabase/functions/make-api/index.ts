@@ -960,6 +960,20 @@ serve(async (req) => {
                   }
                 }
                 
+                // Always ensure segments.date for daily breakdown
+                if (module.mapper) {
+                  if (!module.mapper.segments || !Array.isArray(module.mapper.segments)) {
+                    module.mapper.segments = ["segments.date"];
+                  } else if (!module.mapper.segments.includes("segments.date")) {
+                    module.mapper.segments.push("segments.date");
+                  }
+                  // Ensure campaign attributes
+                  if (!module.mapper.attributes || !Array.isArray(module.mapper.attributes)) {
+                    module.mapper.attributes = ["campaign.id", "campaign.name"];
+                  }
+                  console.log("Ensured segments.date and campaign attributes in Google Ads module");
+                }
+                
                 // Update date range if start_date and end_date are provided
                 if (start_date && end_date && module.mapper) {
                   // Format dates to DD/MM/YYYY for Make.com Google Ads module
