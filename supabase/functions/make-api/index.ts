@@ -702,6 +702,17 @@ serve(async (req) => {
                   module.mapper.accountId = formattedCustomerId; // Some templates use accountId
                   // Update metrics based on campaign type
                   module.mapper.metrics = selectedMetrics;
+                  // Ensure segments.date is included for daily breakdown
+                  if (!module.mapper.segments || !Array.isArray(module.mapper.segments)) {
+                    module.mapper.segments = ["segments.date"];
+                  } else if (!module.mapper.segments.includes("segments.date")) {
+                    module.mapper.segments.push("segments.date");
+                  }
+                  // Ensure campaign attributes are included
+                  if (!module.mapper.attributes || !Array.isArray(module.mapper.attributes)) {
+                    module.mapper.attributes = ["campaign.id", "campaign.name"];
+                  }
+                  console.log(`Ensured segments.date and campaign attributes in Google Ads module`);
                 }
               }
               
@@ -712,26 +723,17 @@ serve(async (req) => {
                   module.mapper.url = webhook_url;
                   
                   // Handle jsonStringBodyContent (Make.com uses this for raw JSON body)
-                  if (module.mapper.jsonStringBodyContent) {
-                    try {
-                      let bodyObj = JSON.parse(module.mapper.jsonStringBodyContent);
-                      bodyObj.table_id = table_id;
-                      bodyObj.campaign_type = campaign_type || bodyObj.campaign_type || 'leads';
-                      if (tenant_id) {
-                        bodyObj.tenant_id = tenant_id;
-                      }
-                      module.mapper.jsonStringBodyContent = JSON.stringify(bodyObj);
-                      console.log("Updated jsonStringBodyContent with new table_id and campaign_type");
-                    } catch (e) {
-                      // If parsing fails, try string replacement
-                      console.warn("Failed to parse jsonStringBodyContent, trying regex replace");
-                      if (typeof module.mapper.jsonStringBodyContent === 'string') {
-                        module.mapper.jsonStringBodyContent = module.mapper.jsonStringBodyContent.replace(
-                          /"table_id"\s*:\s*"[^"]*"/,
-                          `"table_id": "${table_id}"`
-                        );
-                      }
-                    }
+                  // ALWAYS replace with correct field references to ensure proper data mapping
+                  {
+                    const googleAdsModuleId = blueprintData.flow.find((m: any) => m.module && isGoogleAdsModule(m.module))?.id || 3;
+                    const correctBody = {
+                      table_id: table_id,
+                      campaign_type: campaign_type || 'leads',
+                      ...(tenant_id ? { tenant_id } : {}),
+                      records: `[{{toJSON(map(${googleAdsModuleId}.results; "item"; $merge(item.campaign; item.metrics; item.segments)))}}]`
+                    };
+                    module.mapper.jsonStringBodyContent = JSON.stringify(correctBody);
+                    console.log("Replaced jsonStringBodyContent with correct field references using module id:", googleAdsModuleId);
                   }
                   
                   // Update the body/data with new table_id (fallback for other template formats)
