@@ -174,6 +174,7 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
 
   // Detect trigger type from flow
   const triggerNode = allNodes.find((n) => n.step_type === "trigger");
+  const triggerType = triggerNode?.action_type;
   const triggerConfig = triggerNode?.configuration;
   const availableFields = getAvailableFields(triggerType, triggerConfig);
 
@@ -1010,6 +1011,7 @@ function FacebookFormSelectionDialog({
     pageName: string;
     formId: string;
     formName: string;
+    formFields: FacebookFormField[];
   }) => void;
 }) {
   const [selectedIntegrationId, setSelectedIntegrationId] = useState(configuration?.facebook_integration_id || "");
