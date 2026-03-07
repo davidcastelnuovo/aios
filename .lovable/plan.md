@@ -1,18 +1,24 @@
 
 
-# תיקון שגיאת חיבור Gmail - CORS Headers
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## הבעיה
-הפונקציה `gmail-auth` פרוסה ועובדת (curl מחזיר 200), אבל הדפדפן מקבל "Failed to fetch" כי ה-CORS headers חסרים headers שה-Supabase JS client שולח. ה-preflight (OPTIONS) request נכשל.
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-## הפתרון
-עדכון ה-`corsHeaders` בשתי הפונקציות (`gmail-auth` ו-`gmail-api`) להוספת כל ה-headers הנדרשים:
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-```
-'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version'
-```
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-## קבצים לעריכה
-1. `supabase/functions/gmail-auth/index.ts` - עדכון corsHeaders (שורה 7)
-2. `supabase/functions/gmail-api/index.ts` - עדכון corsHeaders (שורה 7)
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
+
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 
