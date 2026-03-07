@@ -69,7 +69,7 @@ export function TestFlowWithLeadDialog({
       if (!tenantId) return [];
       const { data, error } = await supabase
         .from("leads")
-        .select("id, company_name, contact_name, phone, email, source, notes, agency_id, custom_fields, manychat_subscriber_id, status, industry")
+        .select("id, company_name, contact_name, phone, email, source, notes, agency_id, manychat_subscriber_id, status, industry")
         .eq("tenant_id", tenantId)
         .order("created_at", { ascending: false })
         .limit(200);
