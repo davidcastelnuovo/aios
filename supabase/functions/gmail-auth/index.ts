@@ -30,7 +30,7 @@ serve(async (req) => {
 
       const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
       const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
-      const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-auth?action=callback`;
+      const redirectUri = `${Deno.env.get('SUPABASE_URL')}/functions/v1/gmail-auth`;
       if (!clientId || !clientSecret) throw new Error('Missing Google credentials');
 
       // Exchange code for tokens
