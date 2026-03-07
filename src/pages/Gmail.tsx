@@ -130,6 +130,20 @@ export default function Gmail() {
     enabled: !!userId,
   });
 
+  // Allowed labels
+  const { data: allowedLabels = [] } = useQuery({
+    queryKey: ['gmail-allowed-labels', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('gmail_allowed_labels')
+        .select('label_id')
+        .eq('user_id', userId!);
+      if (error) throw error;
+      return data.map((l: any) => l.label_id as string);
+    },
+    enabled: !!userId,
+  });
+
   // Category rules (subject -> category mapping)
   const { data: categoryRules = [] } = useQuery({
     queryKey: ['gmail-category-rules', userId],
