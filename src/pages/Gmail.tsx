@@ -588,9 +588,9 @@ export default function Gmail() {
                 <p>אין הודעות לתאריך זה</p>
               </div>
             ) : (
-              <ScrollArea className="max-h-[calc(100vh-260px)]">
+              <ScrollArea className="max-h-[calc(100vh-260px)]" dir="rtl">
                 {/* Header row with select all */}
-                <div className="flex items-center h-9 px-3 border-b bg-muted/30 text-xs text-muted-foreground">
+                <div dir="rtl" className="flex items-center h-9 px-3 border-b bg-muted/30 text-xs text-muted-foreground">
                   <div className="w-8 flex-shrink-0 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={filteredMessages.length > 0 && selectedIds.size === filteredMessages.length}
@@ -610,6 +610,7 @@ export default function Gmail() {
                     return (
                       <div
                         key={msg.id}
+                        dir="rtl"
                         className={cn(
                           "flex items-center h-10 px-3 hover:bg-muted/50 cursor-pointer transition-colors group border-b border-border last:border-b-0",
                           msg.isUnread && "bg-primary/5",
