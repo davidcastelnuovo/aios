@@ -18,7 +18,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
-import { format, addDays } from "date-fns";
+import { format, addDays, startOfDay, startOfWeek, subDays } from "date-fns";
 import { he } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
@@ -550,6 +550,48 @@ export default function Gmail() {
           </Popover>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goToPrevDay}>
             <ChevronLeft className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Quick date filters */}
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => {
+              const today = startOfDay(new Date());
+              setSelectedDateRange({ from: today, to: today });
+              resetPagination();
+            }}
+          >
+            היום
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => {
+              const today = startOfDay(new Date());
+              const weekStart = startOfWeek(today, { weekStartsOn: 0 });
+              setSelectedDateRange({ from: weekStart, to: today });
+              resetPagination();
+            }}
+          >
+            השבוע
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={() => {
+              const today = startOfDay(new Date());
+              const thirtyDaysAgo = subDays(today, 30);
+              setSelectedDateRange({ from: thirtyDaysAgo, to: today });
+              resetPagination();
+            }}
+          >
+            30 יום
           </Button>
         </div>
 
