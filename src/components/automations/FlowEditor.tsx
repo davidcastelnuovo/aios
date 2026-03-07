@@ -306,6 +306,11 @@ export default function FlowEditor() {
           בדוק עם ליד
         </Button>
 
+        <Button variant="outline" onClick={() => setShowHistory(true)}>
+          <History className="h-4 w-4 ml-2" />
+          היסטוריה
+        </Button>
+
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setZoom((z) => Math.min(z + 0.1, 2))}>
             <ZoomIn className="h-4 w-4" />
@@ -423,6 +428,13 @@ export default function FlowEditor() {
         onOpenChange={setShowTestWithLead}
         automationId={automationId || ""}
         automationName={automationName}
+      />
+
+      {/* Execution history panel */}
+      <ExecutionHistoryPanel
+        open={showHistory}
+        onClose={() => setShowHistory(false)}
+        automationId={automationId || ""}
       />
     </div>
   );
