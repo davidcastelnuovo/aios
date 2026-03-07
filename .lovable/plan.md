@@ -1,36 +1,24 @@
 
 
-# תיקון: ברירת מחדל MarketingCaptain בהתחברות
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## הבעיה
-בכל התחברות חדשה, `resolveTenantSlug` שולף את רשימת הטנאנטים מ-`tenant_users` ובוחר את הראשון עם `status === 'active'`. הסדר לא מובטח, ולכן PodcastStudio נבחר לפני MarketingCaptain.
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-## הפתרון
-שינוי הלוגיקה ב-`resolveTenantSlug` כך שכאשר אין `user_active_tenant`, הפונקציה תעדיף את MarketingCaptain (slug = `marketingcaptain`) מתוך רשימת הטנאנטים של המשתמש. רק אם המשתמש לא חבר ב-MarketingCaptain, תיבחר האופציה הראשונה כפי שהיה.
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-## קבצים לעריכה
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-### `src/hooks/useResolveTenant.ts`
-- בשלב 2 (fallback), לאחר שליפת `userTenants`, לבדוק אם יש tenant עם slug `marketingcaptain` ולהעדיף אותו
-- שורה ~53: שינוי הלוגיקה של `candidate` selection:
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-```typescript
-// Prefer marketingcaptain tenant if user is a member
-const mcTenant = userTenants.find((t: any) => t?.tenants?.slug === 'marketingcaptain');
-const candidate = mcTenant || 
-  userTenants.find((t: any) => t?.tenants?.status === 'active') || 
-  userTenants[0];
-```
-
-### `src/contexts/TenantContext.tsx`
-- בשאילתה `user-tenant` (שורה ~142), אותה לוגיקה - כשאין `activeTenant`, להעדיף MarketingCaptain:
-
-```typescript
-// Prefer marketingcaptain
-const mcTenant = userTenants.find((t: any) => t?.tenants?.slug === 'marketingcaptain');
-return mcTenant || userTenants[0];
-```
-
-## סיכום
-שינוי קטן בשני קבצים - העדפת MarketingCaptain כברירת מחדל לכל מי שחבר בו, בלי לשבור שום דבר למשתמשים שלא חברים בו.
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 

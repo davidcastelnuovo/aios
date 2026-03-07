@@ -50,7 +50,9 @@ export async function resolveTenantSlug(userId: string, retries = 3): Promise<st
         continue;
       }
 
-      const candidate: any = (userTenants || []).find((t: any) => t?.tenants?.status === "active") || (userTenants || [])[0];
+      // Prefer marketingcaptain tenant if user is a member
+      const mcTenant = (userTenants || []).find((t: any) => t?.tenants?.slug === 'marketingcaptain');
+      const candidate: any = mcTenant || (userTenants || []).find((t: any) => t?.tenants?.status === "active") || (userTenants || [])[0];
       const candidateSlug = candidate?.tenants?.slug as string | undefined;
       const candidateTenantId = candidate?.tenant_id as string | undefined;
 
