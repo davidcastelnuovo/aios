@@ -260,6 +260,65 @@ async function executeTool(
         return { success: true, result: { automation_id: data.id, name: data.name, trigger_type: data.trigger_type, action_type: data.action_type, active: data.active } };
       }
 
+      case 'list_emails': {
+        const { query, maxResults = 10, date } = toolCall.args;
+        let q = query || '';
+        if (date) {
+          const nextDay = new Date(date);
+          nextDay.setDate(nextDay.getDate() + 1);
+          const fmt = (d: Date) => `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+          q = `after:${fmt(new Date(date))} before:${fmt(nextDay)} ${q}`.trim();
+        }
+        const authHeader2 = `Bearer ${(await supabaseClient.auth.getSession()).data.session?.access_token}`;
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/gmail-api`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
+          body: JSON.stringify({ action: 'list', query: q, maxResults }),
+        });
+        const data = await res.json();
+        if (!res.ok) return { success: false, error: data.error || 'Gmail API error' };
+        return { success: true, result: { count: data.messages?.length || 0, emails: (data.messages || []).map((m: any) => ({ id: m.id, from: m.from, subject: m.subject, snippet: m.snippet, date: m.date, isUnread: m.isUnread })) } };
+      }
+
+      case 'get_email': {
+        const { message_id } = toolCall.args;
+        const authHeader2 = `Bearer ${(await supabaseClient.auth.getSession()).data.session?.access_token}`;
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/gmail-api`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
+          body: JSON.stringify({ action: 'get', messageId: message_id }),
+        });
+        const data = await res.json();
+        if (!res.ok) return { success: false, error: data.error || 'Gmail API error' };
+        return { success: true, result: { id: data.id, from: data.from, to: data.to, subject: data.subject, date: data.date, body: data.body?.slice(0, 2000) } };
+      }
+
+      case 'send_email': {
+        const { to, subject, body: emailBody } = toolCall.args;
+        const authHeader2 = `Bearer ${(await supabaseClient.auth.getSession()).data.session?.access_token}`;
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/gmail-api`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
+          body: JSON.stringify({ action: 'send', to, subject, body: emailBody }),
+        });
+        const data = await res.json();
+        if (!res.ok) return { success: false, error: data.error || 'Send failed' };
+        return { success: true, result: { sent: true, to, subject } };
+      }
+
+      case 'delete_email': {
+        const { message_id } = toolCall.args;
+        const authHeader2 = `Bearer ${(await supabaseClient.auth.getSession()).data.session?.access_token}`;
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/gmail-api`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
+          body: JSON.stringify({ action: 'trash', messageId: message_id }),
+        });
+        const data = await res.json();
+        if (!res.ok) return { success: false, error: data.error || 'Delete failed' };
+        return { success: true, result: { deleted: true, message_id } };
+      }
+
       case 'send_message': {
         const { contact_type, contact_id, message_text } = toolCall.args;
         
