@@ -1273,6 +1273,7 @@ function FacebookFormSelectionDialog({
                 pageName: selectedPage?.name || selectedPageId,
                 formId: selectedFormId,
                 formName: selectedForm?.name || selectedFormId,
+                formFields: selectedForm?.fields || [],
               });
             }}
           >
