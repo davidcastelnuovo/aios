@@ -933,41 +933,71 @@ function LeadSourceConfig({
 
       {/* Show selected form summary */}
       {isFacebookForm && hasSelection && (
-        <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+        <div className="rounded-lg border bg-muted/50 p-3 space-y-3">
           <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowFbDialog(true)}
-              className="text-xs"
-            >
-              שנה
-            </Button>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span className="text-sm font-medium">טופס מחובר</span>
-            </div>
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            <span className="text-sm font-medium">טופס מחובר</span>
           </div>
           <div className="text-right space-y-1">
             <p className="text-xs text-muted-foreground">
-              עמוד: <span className="text-foreground">{configuration?.facebook_page_name || configuration?.facebook_page_id}</span>
+              <span className="font-semibold text-foreground">עמוד:</span>{" "}
+              {configuration?.facebook_page_name || configuration?.facebook_page_id}
             </p>
             <p className="text-xs text-muted-foreground">
-              טופס: <span className="text-foreground">{configuration?.facebook_form_name || configuration?.facebook_form_id}</span>
+              <span className="font-semibold text-foreground">טופס:</span>{" "}
+              {configuration?.facebook_form_name || configuration?.facebook_form_id}
             </p>
-            {configuration?.facebook_form_fields && Array.isArray(configuration.facebook_form_fields) && configuration.facebook_form_fields.length > 0 && (
-              <div className="mt-2 pt-2 border-t border-border/50">
-                <p className="text-xs font-medium text-muted-foreground mb-1">שדות הטופס (זמינים כמשתנים):</p>
-                <div className="flex flex-wrap gap-1 justify-end">
-                  {configuration.facebook_form_fields.map((f: FacebookFormField) => (
-                    <Badge key={f.key} variant="secondary" className="text-[10px] font-mono">
-                      {`{{fb_${f.key}}}`}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
+
+          {configuration?.facebook_form_fields && Array.isArray(configuration.facebook_form_fields) && configuration.facebook_form_fields.length > 0 && (
+            <div className="pt-2 border-t border-border/50 space-y-2">
+              <div className="flex items-center justify-between">
+                <Badge variant="secondary" className="text-[10px]">
+                  {configuration.facebook_form_fields.length} שדות
+                </Badge>
+                <p className="text-xs font-semibold text-foreground">שדות הטופס למיפוי</p>
+              </div>
+              <div className="rounded-md border border-border overflow-hidden">
+                <table className="w-full text-xs" dir="rtl">
+                  <thead>
+                    <tr className="bg-muted">
+                      <th className="px-2 py-1.5 text-right font-medium text-muted-foreground">שם השדה</th>
+                      <th className="px-2 py-1.5 text-left font-medium text-muted-foreground">משתנה</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {configuration.facebook_form_fields.map((f: FacebookFormField, idx: number) => (
+                      <tr key={f.key} className={idx % 2 === 0 ? "bg-background" : "bg-muted/30"}>
+                        <td className="px-2 py-1.5 text-right text-foreground">{f.label || f.key}</td>
+                        <td className="px-2 py-1.5 text-left">
+                          <code
+                            className="text-[10px] bg-muted px-1 py-0.5 rounded cursor-pointer hover:bg-accent transition-colors font-mono"
+                            onClick={() => {
+                              navigator.clipboard.writeText(`{{fb_${f.key}}}`);
+                              toast({ title: "הועתק!", description: `{{fb_${f.key}}}` });
+                            }}
+                            title="לחץ להעתקה"
+                          >
+                            {`{{fb_${f.key}}}`}
+                          </code>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full gap-2"
+            onClick={() => setShowFbDialog(true)}
+          >
+            <Facebook className="h-4 w-4" />
+            החלף טופס
+          </Button>
         </div>
       )}
 
