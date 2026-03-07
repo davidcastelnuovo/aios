@@ -280,6 +280,25 @@ serve(async (req) => {
       });
     }
 
+    // LIST LABELS
+    if (action === 'listLabels') {
+      const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/labels', {
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Gmail API error');
+
+      const labels = (data.labels || []).map((l: any) => ({
+        id: l.id,
+        name: l.name,
+        type: l.type, // 'system' or 'user'
+      }));
+
+      return new Response(JSON.stringify({ labels }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     throw new Error('Invalid action');
   } catch (error) {
     console.error('Gmail API error:', error);
