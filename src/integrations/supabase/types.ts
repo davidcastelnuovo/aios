@@ -3659,6 +3659,66 @@ export type Database = {
           },
         ]
       }
+      supplier_invoices: {
+        Row: {
+          ai_extracted: boolean
+          created_at: string
+          file_name: string | null
+          file_url: string | null
+          id: string
+          invoice_amount: number
+          invoice_date: string | null
+          invoice_month: string
+          invoice_name: string
+          notes: string | null
+          supplier_id: string
+          tenant_id: string
+        }
+        Insert: {
+          ai_extracted?: boolean
+          created_at?: string
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          invoice_amount?: number
+          invoice_date?: string | null
+          invoice_month?: string
+          invoice_name?: string
+          notes?: string | null
+          supplier_id: string
+          tenant_id: string
+        }
+        Update: {
+          ai_extracted?: boolean
+          created_at?: string
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          invoice_amount?: number
+          invoice_date?: string | null
+          invoice_month?: string
+          invoice_name?: string
+          notes?: string | null
+          supplier_id?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_invoices_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_invoices_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       suppliers: {
         Row: {
           agency_id_1: string | null
