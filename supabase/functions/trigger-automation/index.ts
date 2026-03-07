@@ -312,9 +312,11 @@ Deno.serve(async (req) => {
                     let commandText = stepConfig.step_instruction || payloadData?.command_text || payloadData?.text || 'הפעל את האוטומציה'
                     
                     // Replace {{variable}} placeholders with actual values from stepData
-                    commandText = commandText.replace(/\{\{(\w+)\}\}/g, (match: string, key: string) => {
-                      if (stepData[key] !== undefined && stepData[key] !== null) return String(stepData[key])
-                      if (payloadData?.[key] !== undefined && payloadData?.[key] !== null) return String(payloadData[key])
+                    // Use [^}]+ instead of \w+ to support Hebrew characters and special symbols in variable names
+                    commandText = commandText.replace(/\{\{([^}]+)\}\}/g, (match: string, key: string) => {
+                      const trimmedKey = key.trim()
+                      if (stepData[trimmedKey] !== undefined && stepData[trimmedKey] !== null) return String(stepData[trimmedKey])
+                      if (payloadData?.[trimmedKey] !== undefined && payloadData?.[trimmedKey] !== null) return String(payloadData[trimmedKey])
                       return match // Keep placeholder if no value found
                     })
 
@@ -349,6 +351,11 @@ Deno.serve(async (req) => {
                           status: stepData.status,
                           pipeline_stage: stepData.pipeline_stage,
                           agency_name: stepData.agency_name,
+                          // Include all fb_ prefixed fields from payload
+                          ...Object.fromEntries(
+                            Object.entries(stepData)
+                              .filter(([k]) => k.startsWith('fb_'))
+                          ),
                         },
                       }),
                     })

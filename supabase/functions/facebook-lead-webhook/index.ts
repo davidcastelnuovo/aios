@@ -321,6 +321,25 @@ serve(async (req) => {
               }
               // ========== END DEDUPLICATION LOGIC ==========
 
+              // Build facebook form data with fb_ prefix for all fields
+              const fbPrefixedFields: Record<string, string> = {};
+              for (const [fbFieldName, fbFieldValue] of Object.entries(fieldData)) {
+                // Create fb_ prefixed key, replacing spaces with underscores
+                const fbKey = `fb_${fbFieldName}`;
+                fbPrefixedFields[fbKey] = fbFieldValue as string;
+              }
+
+              // Append all custom form fields to notes
+              const customFieldLines: string[] = [];
+              for (const [fbFieldName, fbFieldValue] of Object.entries(fieldData)) {
+                if (fbFieldValue && !['full_name', 'first_name', 'last_name', 'email', 'phone_number', 'phone'].includes(fbFieldName)) {
+                  customFieldLines.push(`${fbFieldName}: ${fbFieldValue}`);
+                }
+              }
+              if (customFieldLines.length > 0) {
+                leadRecord.notes = (leadRecord.notes || '') + '\n\n--- שדות טופס פייסבוק ---\n' + customFieldLines.join('\n');
+              }
+
               // Insert new lead
               const { data: newLead, error: insertError } = await supabase
                 .from('leads')
@@ -360,7 +379,7 @@ serve(async (req) => {
                       tag_id: formMappings.tag_id,
                       lead_id: newLead.id,
                       tenant_id: integration.tenant_id,
-                      user_id: '00000000-0000-0000-0000-000000000000', // System user placeholder
+                      user_id: '00000000-0000-0000-0000-000000000000',
                     });
                   
                   if (tagError) {
@@ -368,6 +387,44 @@ serve(async (req) => {
                   } else {
                     console.log('Tag applied to lead:', formMappings.tag_id);
                   }
+                }
+
+                // Trigger automations with lead_created event + all fb_ prefixed fields
+                try {
+                  const triggerUrl = `${supabaseUrl}/functions/v1/trigger-automation`;
+                  const triggerPayload = {
+                    trigger_type: 'lead_created',
+                    tenant_id: integration.tenant_id,
+                    data: {
+                      lead_id: newLead.id,
+                      contact_name: leadRecord.contact_name || '',
+                      company_name: leadRecord.company_name || '',
+                      phone: leadRecord.phone || '',
+                      email: leadRecord.email || '',
+                      source: leadRecord.source || 'paid_ads',
+                      status: leadRecord.status || 'new',
+                      agency_id: leadRecord.agency_id || '',
+                      notes: leadRecord.notes || '',
+                      // Include all fb_ prefixed form fields for variable replacement
+                      ...fbPrefixedFields,
+                    },
+                  };
+                  
+                  console.log('🚀 Triggering automations for new Facebook lead:', newLead.id);
+                  const triggerRes = await fetch(triggerUrl, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${supabaseServiceKey}`,
+                    },
+                    body: JSON.stringify(triggerPayload),
+                  });
+                  
+                  const triggerResult = await triggerRes.json();
+                  console.log('Automation trigger result:', triggerResult);
+                } catch (triggerError) {
+                  console.error('Error triggering automations:', triggerError);
+                  // Don't fail the webhook if automation trigger fails
                 }
 
                 // Update last_sync_at
