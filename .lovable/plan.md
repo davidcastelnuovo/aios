@@ -1,24 +1,16 @@
 
 
-## הפיכת האפליקציה ל-PWA (Progressive Web App)
+# תיקון: כפתורי סינון מהיר לא מנקים חיפוש טקסט
 
-כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
+## הבעיה
+כשלוחצים על "היום" / "השבוע" / "30 יום", רק טווח התאריכים משתנה אבל ה-`activeSearch` (חיפוש טקסט) נשאר פעיל. אם חיפשת קודם "חשבוניות", הפילטר ממשיך לסנן לפי הטקסט הזה גם כשלוחצים על כפתור תאריך מהיר.
 
-### 1. קובץ `public/manifest.json`
-- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
-- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
+## התיקון
+בכל אחד מ-3 כפתורי הסינון המהיר, להוסיף ניקוי של שדה החיפוש:
+```tsx
+setSearchQuery('');
+setActiveSearch('');
+```
 
-### 2. Service Worker — `public/sw.js`
-- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
-- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
-
-### 3. רישום ב-`index.html`
-- תג `<link rel="manifest">` ב-head
-- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
-- סקריפט רישום Service Worker
-
-### תוצאה
-- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
-- באייפון: Share → Add to Home Screen
-- האפליקציה תיפתח במסך מלא בלי שורת כתובת
+זה שינוי של 6 שורות בקובץ `src/pages/Gmail.tsx` (2 שורות × 3 כפתורים).
 
