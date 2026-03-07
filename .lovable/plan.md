@@ -1,32 +1,24 @@
 
 
-# תוכנית: תיוג אוטומטי של כל האימיילים עם אותו נושא
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## הבעיה
-כרגע כשמתייגים אימייל, הכלל נשמר ומוחל רק על האימיילים **הנוכחיים בעמוד** (25 הודעות). אימיילים ישנים יותר עם אותו נושא לא מתויגים.
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-## הפתרון
-אחרי תיוג אימייל, לבצע חיפוש ב-Gmail API לפי `subject:"הנושא"` כדי למצוא **את כל** האימיילים עם אותו נושא, ולשייך את כולם לקטגוריה.
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-## שינויים
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-### `src/pages/Gmail.tsx` — פונקציית `assignCategory`
-בשלב 3 של ה-mutation (שורות 363-376), במקום לסנן רק מתוך `messagesData.messages`:
-1. לקרוא ל-edge function `gmail-api` עם `action: 'list'` ו-`query: subject:"..."` + `maxResults: 500`
-2. לעבור על כל התוצאות ולשמור `gmail_message_categories` לכל אחת
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-### לוגיקה
-```
-// Step 3: Search Gmail for ALL messages with same subject
-const searchRes = await supabase.functions.invoke('gmail-api', {
-  body: { action: 'list', query: `subject:"${exactSubject}"`, maxResults: 500 }
-});
-const allMatching = searchRes.data?.messages || [];
-// Upsert category for each found message
-for (const m of allMatching) {
-  await supabase.from('gmail_message_categories').upsert({...});
-}
-```
-
-שינוי בקובץ אחד בלבד (`src/pages/Gmail.tsx`), בפונקציית `assignCategory`.
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 

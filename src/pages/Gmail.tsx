@@ -360,18 +360,25 @@ export default function Gmail() {
         }, { onConflict: 'user_id,subject_pattern' });
       }
 
-      // 3. Apply to all visible messages with the same subject
-      if (subjectLower && messagesData?.messages) {
-        const matchingMsgs = messagesData.messages.filter(
-          m => m.id !== messageId && (m.subject || '').toLowerCase().trim() === subjectLower
-        );
-        for (const m of matchingMsgs) {
-          await supabase.from('gmail_message_categories').upsert({
-            tenant_id: tenantId!,
-            user_id: userId!,
-            message_id: m.id,
-            category_id: categoryId,
-          }, { onConflict: 'user_id,message_id,category_id' });
+      // 3. Search Gmail for ALL messages with same subject and categorize them
+      if (subjectLower) {
+        try {
+          const searchRes = await supabase.functions.invoke('gmail-api', {
+            body: { action: 'list', query: `subject:"${msg?.subject || ''}"`, maxResults: 500 }
+          });
+          const allMatching = searchRes.data?.messages || [];
+          for (const m of allMatching) {
+            if (m.id !== messageId) {
+              await supabase.from('gmail_message_categories').upsert({
+                tenant_id: tenantId!,
+                user_id: userId!,
+                message_id: m.id,
+                category_id: categoryId,
+              }, { onConflict: 'user_id,message_id,category_id' });
+            }
+          }
+        } catch (err) {
+          console.error('Failed to search for matching emails:', err);
         }
       }
     },
