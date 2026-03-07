@@ -1,24 +1,30 @@
 
 
-## הפיכת האפליקציה ל-PWA (Progressive Web App)
+# תיקון ג'יבריש עברית באימיילים - Gmail API
 
-כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
+## הבעיה
+הפונקציה `getEmailBody` משתמשת ב-`atob()` לפענוח base64, אבל `atob` מחזיר string בינארי (Latin-1) ולא UTF-8. טקסט עברי (ותווי Unicode אחרים) נשבר ומוצג כג'יבריש.
 
-### 1. קובץ `public/manifest.json`
-- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
-- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
+## הפתרון
+החלפת `atob()` בפונקציית decode שתומכת ב-UTF-8 נכון. ב-Deno אפשר להשתמש ב-`TextDecoder`:
 
-### 2. Service Worker — `public/sw.js`
-- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
-- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
+```typescript
+function decodeBase64Utf8(base64url: string): string {
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new TextDecoder('utf-8').decode(bytes);
+}
+```
 
-### 3. רישום ב-`index.html`
-- תג `<link rel="manifest">` ב-head
-- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
-- סקריפט רישום Service Worker
+## שינויים ב-`supabase/functions/gmail-api/index.ts`
+1. הוספת פונקציית `decodeBase64Utf8` (לפני `getEmailBody`)
+2. החלפת 2 קריאות `atob(...)` ב-`getEmailBody` בקריאות ל-`decodeBase64Utf8(...)`
+   - שורה 53: `return decodeBase64Utf8(payload.body.data);`
+   - שורה 61: `return decodeBase64Utf8(part.body.data);`
 
-### תוצאה
-- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
-- באייפון: Share → Add to Home Screen
-- האפליקציה תיפתח במסך מלא בלי שורת כתובת
+שינוי קטן — פונקציה חדשה אחת + 2 שורות מוחלפות.
 
