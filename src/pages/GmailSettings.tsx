@@ -262,6 +262,9 @@ export default function GmailSettings() {
         </CardContent>
       </Card>
 
+      {/* Allowed Labels */}
+      <AllowedLabelsSection tenantId={tenantId} userId={userId} isConnected={!!connectionStatus?.connected} />
+
       {/* Blocked Senders */}
       <Card>
         <CardHeader>
@@ -298,5 +301,128 @@ export default function GmailSettings() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// Allowed Labels sub-component
+function AllowedLabelsSection({ tenantId, userId, isConnected }: { tenantId: string | undefined; userId: string | undefined; isConnected: boolean }) {
+  const queryClient = useQueryClient();
+  const [availableLabels, setAvailableLabels] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [loadingLabels, setLoadingLabels] = useState(false);
+
+  // Fetch saved allowed labels
+  const { data: allowedLabels = [] } = useQuery({
+    queryKey: ['gmail-allowed-labels', userId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('gmail_allowed_labels')
+        .select('*')
+        .eq('user_id', userId!);
+      if (error) throw error;
+      return data as { id: string; label_id: string; label_name: string }[];
+    },
+    enabled: !!userId,
+  });
+
+  const fetchLabels = async () => {
+    setLoadingLabels(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('gmail-api', {
+        body: { action: 'listLabels' },
+      });
+      if (error) throw error;
+      setAvailableLabels(data.labels || []);
+    } catch (e) {
+      toast.error('שגיאה בטעינת תגיות');
+    } finally {
+      setLoadingLabels(false);
+    }
+  };
+
+  const allowedLabelIds = new Set(allowedLabels.map(l => l.label_id));
+
+  const toggleLabel = async (label: { id: string; name: string }) => {
+    if (allowedLabelIds.has(label.id)) {
+      // Remove
+      const { error } = await supabase
+        .from('gmail_allowed_labels')
+        .delete()
+        .eq('user_id', userId!)
+        .eq('label_id', label.id);
+      if (error) { toast.error('שגיאה בהסרת תגית'); return; }
+    } else {
+      // Add
+      const { error } = await supabase
+        .from('gmail_allowed_labels')
+        .insert({
+          tenant_id: tenantId!,
+          user_id: userId!,
+          label_id: label.id,
+          label_name: label.name,
+        });
+      if (error) { toast.error('שגיאה בהוספת תגית'); return; }
+    }
+    queryClient.invalidateQueries({ queryKey: ['gmail-allowed-labels'] });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Tag className="h-5 w-5" />
+          תגיות מורשות
+        </CardTitle>
+        <CardDescription>בחר אילו תגיות Gmail מורשות להכנס למערכת. רק אימיילים עם התגיות שנבחרו יוצגו.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Button onClick={fetchLabels} disabled={loadingLabels || !isConnected} variant="outline" className="gap-2">
+          {loadingLabels ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          טען תגיות מ-Gmail
+        </Button>
+
+        {!isConnected && (
+          <p className="text-sm text-muted-foreground">חבר את Gmail תחילה כדי לטעון תגיות</p>
+        )}
+
+        {allowedLabels.length > 0 && (
+          <div>
+            <p className="text-sm font-medium mb-2">תגיות פעילות:</p>
+            <div className="flex flex-wrap gap-2">
+              {allowedLabels.map((l) => (
+                <Badge key={l.id} variant="secondary" className="gap-1 cursor-pointer" onClick={() => toggleLabel({ id: l.label_id, name: l.label_name })}>
+                  {l.label_name}
+                  <Trash2 className="h-3 w-3" />
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {allowedLabels.length === 0 && availableLabels.length === 0 && (
+          <p className="text-sm text-muted-foreground">לא הוגדרו תגיות מורשות — כל האימיילים יוצגו</p>
+        )}
+
+        {availableLabels.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-sm font-medium">תגיות זמינות:</p>
+            <div className="max-h-[300px] overflow-y-auto space-y-1 border rounded-md p-3">
+              {availableLabels
+                .filter(l => l.type === 'user' || ['INBOX', 'STARRED', 'IMPORTANT', 'SENT', 'CATEGORY_PERSONAL', 'CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS'].includes(l.id))
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((label) => (
+                  <div key={label.id} className="flex items-center gap-2 py-1">
+                    <Checkbox
+                      checked={allowedLabelIds.has(label.id)}
+                      onCheckedChange={() => toggleLabel(label)}
+                    />
+                    <span className="text-sm">{label.name}</span>
+                    {label.type === 'system' && <Badge variant="outline" className="text-[10px] px-1">מערכת</Badge>}
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
