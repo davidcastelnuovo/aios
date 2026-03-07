@@ -4,15 +4,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
+const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
+const AI_MODEL = 'google/gemini-3-flash-preview';
+
 function buildSystemPrompt(userName: string, userEmail: string, campaignerName?: string, campaignerId?: string) {
-  return `אתה עוזר AI אישי של מערכת ניהול קמפיינים דיגיטליים.
+  return `אתה **AIOS** - עוזר AI חכם ומרכזי של מערכת CRM לניהול סוכנויות שיווק.
 
 👤 **אתה מדבר עם:**
 - **שם:** ${userName}
@@ -26,35 +29,35 @@ ${campaignerId ? `- **מזהה קמפיינר:** ${campaignerId}` : ''}
 - **tasks** (משימות) - משימות שקשורות ללקוחות/סוכנויות
 - **campaigners** (קמפיינרים) - עובדים שמבצעים את העבודה
 - **leads** (לידים) - לקוחות פוטנציאליים
+- **automations** (אוטומציות) - כללים אוטומטיים שמגיבים לאירועים
 
 🔧 **פעולות שאתה יכול לבצע:**
-1. **הצגת המשימות שלי** - רשימת כל המשימות הפתוחות של ${userName}
-2. **יצירת משימה חדשה** - פתיחת משימה חדשה במערכת (ללא צורך לציין סוכנות או קמפיינר - זה אוטומטי!)
-3. **עדכון סטטוס משימה** - שינוי סטטוס משימה קיימת
-4. **חיפוש ישויות** - מציאת סוכנויות, לקוחות או קמפיינרים
-5. **מידע על לקוח** - פרטים מלאים על לקוח ספציפי
-6. **סיכום יומי** - סיכום של כל המשימות והפעילות
+1. **משימות** - יצירה, עדכון סטטוס, הצגת רשימות
+2. **לידים** - יצירה, עדכון סטטוס, חיפוש, הצגת רשימות
+3. **לקוחות** - יצירה, הצגת מידע, הצגת רשימות
+4. **אוטומציות** - יצירת אוטומציות חדשות (trigger + action)
+5. **הודעות** - שליחת הודעות WhatsApp ללקוחות/לידים
+6. **חיפוש** - מציאת סוכנויות, לקוחות, קמפיינרים
 
 💬 **הנחיות תקשורת:**
-- דבר בעברית בצורה חברית, ישירה ומקצועית
+- דבר בעברית, בצורה ישירה ומקצועית
 - התייחס למשתמש בשמו (${userName})
-${campaignerName ? `- כשאתה מדבר על משימות, זכור שאתה מדבר עם ${campaignerName} הקמפיינר` : ''}
-- היה פרו-אקטיבי - הצע דברים שיכולים לעזור למשתמש
-- אם המשתמש שואל "מה יש לי?" או "מה פתוח?" - הצג את המשימות שלו
-- סדר משימות לפי עדיפות וחשיבות
+- היה פרו-אקטיבי - הצע דברים שיכולים לעזור
 - תמיד הסבר מה עשית אחרי ביצוע פעולה
 - אם משהו לא ברור, שאל במקום לנחש
+- השתמש ב-markdown לעיצוב התשובות
 
 ⚠️ **קריטי - שימוש ב-IDs:**
-- כאשר אתה מחפש ישות (לקוח, סוכנות, קמפיינר) עם search_entities ומקבל תוצאות, חובה להשתמש ב-UUID המדויק מהתוצאה!
-- לדוגמה: אם קיבלת {"id": "3668c531-184c-4be5-b739-c6c35f7caf00", "name": "נקסוס"} - השתמש בדיוק ב-"3668c531-184c-4be5-b739-c6c35f7caf00"
-- **אל תמציא** IDs או תכתוב טקסט כמו "client_id_of_..." - זה יגרום לשגיאה!
-- כדי ליצור משימה, מספיק לתת כותרת בלבד. אם המשתמש מזכיר לקוח, חפש אותו קודם ואז השתמש ב-ID האמיתי.
+- כאשר אתה מחפש ישות ומקבל תוצאות, חובה להשתמש ב-UUID המדויק מהתוצאה!
+- **אל תמציא** IDs - חפש קודם ואז השתמש ב-ID האמיתי.
 
-⚠️ **חשוב:**
-- היה תמיד מועיל ומדויק
-- תעדף משימות דחופות ובעדיפות גבוהה
-- הצג מידע בצורה ברורה עם אייקונים ומבנה נקי`;
+⚠️ **לפני יצירת אוטומציה:**
+- וודא שהמשתמש ציין trigger_type ו-action_type ברורים
+- שאל לפרטים חסרים אם צריך
+
+⚠️ **לפני שליחת הודעה:**
+- חפש קודם את איש הקשר כדי לקבל את ה-ID שלו
+- וודא שיש לו מספר טלפון`;
 }
 
 interface ToolCall {
@@ -64,7 +67,7 @@ interface ToolCall {
 
 async function executeTool(
   toolCall: ToolCall, 
-  supabase: any, 
+  supabaseClient: any, 
   userId: string, 
   tenantId: string
 ): Promise<{ success: boolean; result?: any; error?: string }> {
@@ -75,237 +78,232 @@ async function executeTool(
       case 'create_task': {
         const { title, client_id, priority, due_date, notes } = toolCall.args;
         
-        // Get user's campaigner_id and their first agency
-        const { data: profileData } = await supabase
+        const { data: profileData } = await supabaseClient
           .from('profiles')
           .select('campaigner_id')
           .eq('id', userId)
           .single();
         
         if (!profileData?.campaigner_id) {
-          return {
-            success: false,
-            error: 'לא נמצא קמפיינר מקושר למשתמש שלך. אנא פנה למנהל המערכת.'
-          };
+          return { success: false, error: 'לא נמצא קמפיינר מקושר למשתמש שלך.' };
         }
 
-        const userCampaignerId = profileData.campaigner_id;
-
-        // Get the first agency associated with this campaigner
-        const { data: campaignerAgency } = await supabase
+        const { data: campaignerAgency } = await supabaseClient
           .from('campaigner_agencies')
           .select('agency_id')
-          .eq('campaigner_id', userCampaignerId)
+          .eq('campaigner_id', profileData.campaigner_id)
           .limit(1)
           .single();
 
         if (!campaignerAgency?.agency_id) {
-          return {
-            success: false,
-            error: 'לא נמצאה סוכנות מקושרת לקמפיינר שלך. אנא פנה למנהל המערכת.'
-          };
+          return { success: false, error: 'לא נמצאה סוכנות מקושרת לקמפיינר שלך.' };
         }
 
         const taskData: any = {
           title,
           agency_id: campaignerAgency.agency_id,
-          campaigner_id: userCampaignerId,
+          campaigner_id: profileData.campaigner_id,
           tenant_id: tenantId,
           priority: priority || 5,
           status: 'open',
           task_type: 'other',
         };
-
         if (client_id) taskData.client_id = client_id;
         if (due_date) taskData.due_date = due_date;
         if (notes) taskData.notes = notes;
 
-        const { data, error } = await supabase
-          .from('tasks')
-          .insert(taskData)
+        const { data, error } = await supabaseClient
+          .from('tasks').insert(taskData)
           .select('*, clients(name), agencies(name), campaigners(full_name)')
           .single();
-
         if (error) throw error;
 
-        return {
-          success: true,
-          result: {
-            task_id: data.id,
-            title: data.title,
-            client_name: data.clients?.name,
-            agency_name: data.agencies?.name,
-            campaigner_name: data.campaigners?.full_name,
-            priority: data.priority,
-            due_date: data.due_date,
-          }
-        };
+        return { success: true, result: { task_id: data.id, title: data.title, client_name: data.clients?.name, agency_name: data.agencies?.name, campaigner_name: data.campaigners?.full_name, priority: data.priority, due_date: data.due_date } };
       }
 
       case 'update_task_status': {
         const { task_id, status } = toolCall.args;
-
-        const { data, error } = await supabase
-          .from('tasks')
-          .update({ status })
-          .eq('id', task_id)
-          .eq('tenant_id', tenantId)
-          .select('*, clients(name), agencies(name)')
-          .single();
-
+        const { data, error } = await supabaseClient
+          .from('tasks').update({ status }).eq('id', task_id).eq('tenant_id', tenantId)
+          .select('*, clients(name), agencies(name)').single();
         if (error) throw error;
-
-        return {
-          success: true,
-          result: {
-            task_id: data.id,
-            title: data.title,
-            status: data.status,
-            client_name: data.clients?.name,
-            agency_name: data.agencies?.name,
-          }
-        };
+        return { success: true, result: { task_id: data.id, title: data.title, status: data.status, client_name: data.clients?.name } };
       }
 
       case 'list_tasks': {
         const { agency_id, client_id, status, limit = 20, my_tasks = false } = toolCall.args;
-
-        // Get user's campaigner_id
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('campaigner_id')
-          .eq('id', userId)
-          .single();
-        
+        const { data: profileData } = await supabaseClient.from('profiles').select('campaigner_id').eq('id', userId).single();
         const userCampaignerId = profileData?.campaigner_id;
-        console.log('User campaigner_id:', userCampaignerId, 'my_tasks:', my_tasks);
 
-        let query = supabase
-          .from('tasks')
+        let query = supabaseClient.from('tasks')
           .select('*, clients(name), agencies(name), campaigners(full_name)')
           .eq('tenant_id', tenantId)
           .order('priority', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(limit);
 
-        // If my_tasks is true, filter by user's campaigner
-        if (my_tasks && userCampaignerId) {
-          query = query.eq('campaigner_id', userCampaignerId);
-        }
-
+        if (my_tasks && userCampaignerId) query = query.eq('campaigner_id', userCampaignerId);
         if (agency_id) query = query.eq('agency_id', agency_id);
         if (client_id) query = query.eq('client_id', client_id);
         if (status) query = query.eq('status', status);
 
         const { data, error } = await query;
+        if (error) throw error;
 
-        if (error) {
-          console.error('❌ list_tasks query error:', error);
-          throw error;
-        }
-
-        console.log('✅ list_tasks query completed:', {
-          tenant_id: tenantId,
-          my_tasks,
-          userCampaignerId,
-          tasksFound: data?.length || 0,
-          taskTitles: data?.map((t: any) => t.title) || []
-        });
-
-        // If my_tasks was requested but no campaigner_id, notify user
-        const noCampaignerWarning = my_tasks && !userCampaignerId 
-          ? 'שים לב: הפרופיל שלך לא מקושר לקמפיינר. מציג את כל המשימות בארגון.' 
-          : null;
-
-        const result = {
+        return { success: true, result: {
           count: data.length,
-          warning: noCampaignerWarning,
           is_filtered_by_user: my_tasks && !!userCampaignerId,
-          tasks: data.map((t: any) => ({
-            id: t.id,
-            title: t.title,
-            status: t.status,
-            priority: t.priority,
-            due_date: t.due_date,
-            client_name: t.clients?.name,
-            agency_name: t.agencies?.name,
-            campaigner_name: t.campaigners?.full_name,
-          }))
-        };
-
-        console.log('📋 list_tasks returning result:', JSON.stringify(result).slice(0, 500));
-
-        return {
-          success: true,
-          result
-        };
+          tasks: data.map((t: any) => ({ id: t.id, title: t.title, status: t.status, priority: t.priority, due_date: t.due_date, client_name: t.clients?.name, agency_name: t.agencies?.name, campaigner_name: t.campaigners?.full_name }))
+        }};
       }
 
       case 'get_client_info': {
         const { client_id } = toolCall.args;
-
-        const { data, error } = await supabase
-          .from('clients')
-          .select('*, agencies(name)')
-          .eq('id', client_id)
-          .eq('tenant_id', tenantId)
-          .single();
-
+        const { data, error } = await supabaseClient.from('clients').select('*, agencies(name)').eq('id', client_id).eq('tenant_id', tenantId).single();
         if (error) throw error;
-
-        return {
-          success: true,
-          result: {
-            id: data.id,
-            name: data.name,
-            status: data.status,
-            email: data.email,
-            phone: data.phone,
-            industry: data.industry,
-            agency_name: data.agencies?.name,
-            monthly_budget: data.monthly_budget,
-            retainer: data.retainer,
-            start_date: data.start_date,
-          }
-        };
+        return { success: true, result: { id: data.id, name: data.name, status: data.status, email: data.email, phone: data.phone, industry: data.industry, agency_name: data.agencies?.name, monthly_budget: data.monthly_budget, retainer: data.retainer, start_date: data.start_date } };
       }
 
       case 'search_entities': {
         const { entity_type, search_term } = toolCall.args;
+        let tableName = '', selectFields = '*', nameField = 'name';
+        if (entity_type === 'agency') { tableName = 'agencies'; selectFields = 'id, name, status'; }
+        else if (entity_type === 'client') { tableName = 'clients'; selectFields = 'id, name, status, email, phone, agencies(name)'; }
+        else if (entity_type === 'campaigner') { tableName = 'campaigners'; selectFields = 'id, full_name, email, phone, role, active'; nameField = 'full_name'; }
+        else if (entity_type === 'lead') { tableName = 'leads'; selectFields = 'id, company_name, contact_name, email, phone, status, source'; nameField = 'company_name'; }
+        else throw new Error(`Unknown entity type: ${entity_type}`);
+
+        const { data, error } = await supabaseClient.from(tableName).select(selectFields).eq('tenant_id', tenantId).ilike(nameField, `%${search_term}%`).limit(10);
+        if (error) throw error;
+        return { success: true, result: { entity_type, count: data.length, results: data } };
+      }
+
+      // === NEW TOOLS ===
+
+      case 'create_lead': {
+        const { company_name, contact_name, phone, email, source, notes } = toolCall.args;
         
-        let tableName = '';
-        let selectFields = '*';
-        
-        if (entity_type === 'agency') {
-          tableName = 'agencies';
-          selectFields = 'id, name, active';
-        } else if (entity_type === 'client') {
-          tableName = 'clients';
-          selectFields = 'id, name, status, email, phone, agencies(name)';
-        } else if (entity_type === 'campaigner') {
-          tableName = 'campaigners';
-          selectFields = 'id, full_name, email, phone, role, active';
-        } else {
-          throw new Error(`Unknown entity type: ${entity_type}`);
+        // Get default agency
+        const { data: defaultAgency } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).eq('is_default', true).limit(1).single();
+        const agencyId = defaultAgency?.id;
+        if (!agencyId) {
+          const { data: firstAgency } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single();
+          if (!firstAgency?.id) return { success: false, error: 'לא נמצאה סוכנות' };
         }
 
-        const { data, error } = await supabase
-          .from(tableName)
-          .select(selectFields)
-          .eq('tenant_id', tenantId)
-          .ilike(entity_type === 'campaigner' ? 'full_name' : 'name', `%${search_term}%`)
-          .limit(10);
-
-        if (error) throw error;
-
-        return {
-          success: true,
-          result: {
-            entity_type,
-            count: data.length,
-            results: data
-          }
+        const leadData: any = {
+          company_name: company_name || contact_name || 'ליד חדש',
+          contact_name,
+          phone,
+          email,
+          source: source || 'aios',
+          notes,
+          status: 'new',
+          agency_id: agencyId || (await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single()).data?.id,
+          tenant_id: tenantId,
         };
+
+        const { data, error } = await supabaseClient.from('leads').insert(leadData).select('id, company_name, contact_name, status').single();
+        if (error) throw error;
+        return { success: true, result: { lead_id: data.id, company_name: data.company_name, contact_name: data.contact_name, status: data.status } };
+      }
+
+      case 'update_lead_status': {
+        const { lead_id, status } = toolCall.args;
+        const { data, error } = await supabaseClient.from('leads').update({ status }).eq('id', lead_id).eq('tenant_id', tenantId).select('id, company_name, status').single();
+        if (error) throw error;
+        return { success: true, result: { lead_id: data.id, company_name: data.company_name, status: data.status } };
+      }
+
+      case 'list_leads': {
+        const { status, limit = 20, source } = toolCall.args;
+        let query = supabaseClient.from('leads').select('id, company_name, contact_name, phone, email, status, source, created_at, agencies(name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
+        if (status) query = query.eq('status', status);
+        if (source) query = query.eq('source', source);
+        const { data, error } = await query;
+        if (error) throw error;
+        return { success: true, result: { count: data.length, leads: data.map((l: any) => ({ id: l.id, company_name: l.company_name, contact_name: l.contact_name, phone: l.phone, email: l.email, status: l.status, source: l.source, agency_name: l.agencies?.name, created_at: l.created_at })) } };
+      }
+
+      case 'list_clients': {
+        const { status, limit = 20 } = toolCall.args;
+        let query = supabaseClient.from('clients').select('id, name, contact_name, phone, email, status, agencies(name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
+        if (status) query = query.eq('status', status);
+        const { data, error } = await query;
+        if (error) throw error;
+        return { success: true, result: { count: data.length, clients: data.map((c: any) => ({ id: c.id, name: c.name, contact_name: c.contact_name, phone: c.phone, email: c.email, status: c.status, agency_name: c.agencies?.name })) } };
+      }
+
+      case 'create_client': {
+        const { name, contact_name, phone, email, industry, notes } = toolCall.args;
+        const { data: defaultAgency } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).eq('is_default', true).limit(1).single();
+        let agencyId = defaultAgency?.id;
+        if (!agencyId) {
+          const { data: firstAgency } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single();
+          agencyId = firstAgency?.id;
+        }
+        if (!agencyId) return { success: false, error: 'לא נמצאה סוכנות' };
+
+        const { data, error } = await supabaseClient.from('clients').insert({
+          name, contact_name, phone, email, industry, notes, status: 'active', agency_id: agencyId, tenant_id: tenantId,
+        }).select('id, name, status').single();
+        if (error) throw error;
+        return { success: true, result: { client_id: data.id, name: data.name, status: data.status } };
+      }
+
+      case 'create_automation': {
+        const { name, description, trigger_type, action_type, configuration } = toolCall.args;
+        const { data, error } = await supabaseClient.from('automations').insert({
+          name, description, trigger_type, action_type, configuration: configuration || {}, tenant_id: tenantId, active: true,
+        }).select('id, name, trigger_type, action_type, active').single();
+        if (error) throw error;
+        return { success: true, result: { automation_id: data.id, name: data.name, trigger_type: data.trigger_type, action_type: data.action_type, active: data.active } };
+      }
+
+      case 'send_message': {
+        const { contact_type, contact_id, message_text } = toolCall.args;
+        
+        // Get contact phone
+        let phone: string | null = null;
+        let contactName: string | null = null;
+        
+        if (contact_type === 'lead') {
+          const { data } = await supabaseClient.from('leads').select('phone, company_name, contact_name, active_chat_provider').eq('id', contact_id).single();
+          phone = data?.phone;
+          contactName = data?.contact_name || data?.company_name;
+        } else if (contact_type === 'client') {
+          const { data } = await supabaseClient.from('clients').select('phone, name, contact_name, active_chat_provider').eq('id', contact_id).single();
+          phone = data?.phone;
+          contactName = data?.contact_name || data?.name;
+        }
+
+        if (!phone) return { success: false, error: 'לא נמצא מספר טלפון עבור איש הקשר' };
+
+        // Try sending via Green API
+        try {
+          const sendResponse = await fetch(`${SUPABASE_URL}/functions/v1/send-green-api-message`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+            body: JSON.stringify({
+              phone,
+              message: message_text,
+              tenantId,
+              [`${contact_type}_id`]: contact_id,
+            }),
+          });
+
+          if (!sendResponse.ok) {
+            const errText = await sendResponse.text();
+            throw new Error(errText);
+          }
+
+          return { success: true, result: { sent_to: contactName, phone, message_preview: message_text.slice(0, 50) } };
+        } catch (e: any) {
+          return { success: false, error: `שגיאה בשליחת ההודעה: ${e.message}` };
+        }
       }
 
       default:
@@ -317,275 +315,296 @@ async function executeTool(
   }
 }
 
+const tools = [
+  {
+    type: 'function',
+    function: {
+      name: 'create_task',
+      description: 'יצירת משימה חדשה במערכת',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'כותרת המשימה' },
+          client_id: { type: 'string', description: 'מזהה הלקוח (UUID, אופציונלי)' },
+          priority: { type: 'integer', description: 'עדיפות 1-10', minimum: 1, maximum: 10 },
+          due_date: { type: 'string', format: 'date', description: 'תאריך יעד (YYYY-MM-DD)' },
+          notes: { type: 'string', description: 'הערות' },
+        },
+        required: ['title'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_task_status',
+      description: 'עדכון סטטוס משימה קיימת',
+      parameters: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'string', description: 'מזהה המשימה (UUID)' },
+          status: { type: 'string', enum: ['open', 'in_progress', 'completed', 'cancelled'], description: 'סטטוס חדש' },
+        },
+        required: ['task_id', 'status'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_tasks',
+      description: 'קבלת רשימת משימות. אם "מה יש לי?" - השתמש ב-my_tasks=true',
+      parameters: {
+        type: 'object',
+        properties: {
+          my_tasks: { type: 'boolean', description: 'רק משימות של המשתמש הנוכחי' },
+          agency_id: { type: 'string', description: 'סינון לפי סוכנות (UUID)' },
+          client_id: { type: 'string', description: 'סינון לפי לקוח (UUID)' },
+          status: { type: 'string', enum: ['open', 'in_progress', 'completed', 'cancelled'], description: 'סינון לפי סטטוס' },
+          limit: { type: 'integer', description: 'מספר מקסימלי (ברירת מחדל: 20)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_client_info',
+      description: 'קבלת מידע מפורט על לקוח',
+      parameters: {
+        type: 'object',
+        properties: { client_id: { type: 'string', description: 'מזהה הלקוח (UUID)' } },
+        required: ['client_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_entities',
+      description: 'חיפוש סוכנויות, לקוחות, קמפיינרים או לידים לפי שם',
+      parameters: {
+        type: 'object',
+        properties: {
+          entity_type: { type: 'string', enum: ['agency', 'client', 'campaigner', 'lead'], description: 'סוג הישות' },
+          search_term: { type: 'string', description: 'מונח החיפוש' },
+        },
+        required: ['entity_type', 'search_term'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_lead',
+      description: 'יצירת ליד חדש במערכת',
+      parameters: {
+        type: 'object',
+        properties: {
+          company_name: { type: 'string', description: 'שם החברה' },
+          contact_name: { type: 'string', description: 'שם איש הקשר' },
+          phone: { type: 'string', description: 'מספר טלפון' },
+          email: { type: 'string', description: 'אימייל' },
+          source: { type: 'string', description: 'מקור הליד' },
+          notes: { type: 'string', description: 'הערות' },
+        },
+        required: ['contact_name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_lead_status',
+      description: 'עדכון סטטוס ליד',
+      parameters: {
+        type: 'object',
+        properties: {
+          lead_id: { type: 'string', description: 'מזהה הליד (UUID)' },
+          status: { type: 'string', description: 'סטטוס חדש (לפי pipeline stages של הארגון)' },
+        },
+        required: ['lead_id', 'status'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_leads',
+      description: 'הצגת רשימת לידים',
+      parameters: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', description: 'סינון לפי סטטוס' },
+          source: { type: 'string', description: 'סינון לפי מקור' },
+          limit: { type: 'integer', description: 'מספר מקסימלי (ברירת מחדל: 20)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_clients',
+      description: 'הצגת רשימת לקוחות',
+      parameters: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', description: 'סינון לפי סטטוס' },
+          limit: { type: 'integer', description: 'מספר מקסימלי (ברירת מחדל: 20)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_client',
+      description: 'יצירת לקוח חדש',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'שם הלקוח/חברה' },
+          contact_name: { type: 'string', description: 'שם איש הקשר' },
+          phone: { type: 'string', description: 'טלפון' },
+          email: { type: 'string', description: 'אימייל' },
+          industry: { type: 'string', description: 'תעשייה' },
+          notes: { type: 'string', description: 'הערות' },
+        },
+        required: ['name'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_automation',
+      description: 'יצירת אוטומציה חדשה במערכת. trigger_type: lead_status_changed, task_status_changed, manual_command, meeting_created, inbound_webhook_task. action_type: send_whatsapp, create_task, add_lead_update, add_client_update, create_manychat_subscriber, add_manychat_tag.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'שם האוטומציה' },
+          description: { type: 'string', description: 'תיאור' },
+          trigger_type: { type: 'string', description: 'סוג הטריגר' },
+          action_type: { type: 'string', description: 'סוג הפעולה' },
+          configuration: { type: 'object', description: 'הגדרות הפעולה (template, tag_id, etc.)' },
+        },
+        required: ['name', 'trigger_type', 'action_type'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'send_message',
+      description: 'שליחת הודעת WhatsApp ללקוח או ליד',
+      parameters: {
+        type: 'object',
+        properties: {
+          contact_type: { type: 'string', enum: ['lead', 'client'], description: 'סוג איש הקשר' },
+          contact_id: { type: 'string', description: 'מזהה איש הקשר (UUID)' },
+          message_text: { type: 'string', description: 'תוכן ההודעה' },
+        },
+        required: ['contact_type', 'contact_id', 'message_text'],
+      },
+    },
+  },
+];
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');
+
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      throw new Error('Missing authorization header');
-    }
+    if (!authHeader) throw new Error('Missing authorization header');
 
-    const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+    const supabaseClient = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
     
-    // Get user from token
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      throw new Error('Unauthorized');
-    }
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+    if (authError || !user) throw new Error('Unauthorized');
 
-    // Parse request body early to get tenant_slug
     const reqBody = await req.json();
     const { message, conversation_id, tenant_slug } = reqBody;
 
-    console.log('📍 Request tenant_slug:', tenant_slug);
-
+    // Resolve tenant
     let tenantId: string | null = null;
-
-    // If tenant_slug provided, use it to find the correct tenant
     if (tenant_slug) {
-      const { data: tenantBySlug } = await supabase
-        .from('tenants')
-        .select('id, name')
-        .eq('slug', tenant_slug)
-        .single();
-      
-      if (tenantBySlug) {
-        tenantId = tenantBySlug.id;
-        console.log('✅ Found tenant by slug:', tenantBySlug.name, tenantId);
-      }
+      const { data: tenantBySlug } = await supabaseClient.from('tenants').select('id').eq('slug', tenant_slug).single();
+      if (tenantBySlug) tenantId = tenantBySlug.id;
     }
-
-    // Fallback: Get user's active tenant or first tenant
     if (!tenantId) {
-      // Try user_active_tenant first
-      const { data: activeTenant } = await supabase
-        .from('user_active_tenant')
-        .select('tenant_id')
-        .eq('user_id', user.id)
-        .single();
-      
-      if (activeTenant?.tenant_id) {
-        tenantId = activeTenant.tenant_id;
-        console.log('📍 Using active tenant:', tenantId);
-      } else {
-        // Fall back to first tenant_users entry
-        const { data: tenantData } = await supabase
-          .from('tenant_users')
-          .select('tenant_id')
-          .eq('user_id', user.id)
-          .limit(1)
-          .single();
-        
-        tenantId = tenantData?.tenant_id;
-        console.log('📍 Using first tenant_users entry:', tenantId);
-      }
+      const { data: activeTenant } = await supabaseClient.from('user_active_tenant').select('tenant_id').eq('user_id', user.id).single();
+      tenantId = activeTenant?.tenant_id || null;
     }
-
     if (!tenantId) {
-      throw new Error('אין לך גישה למערכת. אנא צור קשר עם מנהל המערכת.');
+      const { data: tenantData } = await supabaseClient.from('tenant_users').select('tenant_id').eq('user_id', user.id).limit(1).single();
+      tenantId = tenantData?.tenant_id || null;
     }
+    if (!tenantId) throw new Error('אין לך גישה למערכת');
 
-    // Get user profile and campaigner info
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('full_name, email, campaigner_id')
-      .eq('id', user.id)
-      .single();
-
+    // Get user profile
+    const { data: profileData } = await supabaseClient.from('profiles').select('full_name, email, campaigner_id').eq('id', user.id).single();
     let campaignerName: string | null = null;
     let campaignerId: string | null = null;
 
     if (profileData?.campaigner_id) {
-      const { data: campaignerData } = await supabase
-        .from('campaigners')
-        .select('full_name, id')
-        .eq('id', profileData.campaigner_id)
-        .single();
-      
-      if (campaignerData) {
-        campaignerName = campaignerData.full_name;
-        campaignerId = campaignerData.id;
-      }
+      const { data: campaignerData } = await supabaseClient.from('campaigners').select('full_name, id').eq('id', profileData.campaigner_id).single();
+      if (campaignerData) { campaignerName = campaignerData.full_name; campaignerId = campaignerData.id; }
     }
 
     const userName = profileData?.full_name || user.email?.split('@')[0] || 'משתמש';
     const userEmail = profileData?.email || user.email || '';
 
-    // message, conversation_id already extracted from reqBody above
-
-    // Load conversation history if exists
+    // Load conversation
     let conversation = null;
     let messages: any[] = [];
-
     if (conversation_id) {
-      const { data: convData } = await supabase
-        .from('ai_conversations')
-        .select('*')
-        .eq('id', conversation_id)
-        .eq('user_id', user.id)
-        .single();
-
-      if (convData) {
-        conversation = convData;
-        messages = convData.messages || [];
-      }
+      const { data: convData } = await supabaseClient.from('ai_conversations').select('*').eq('id', conversation_id).eq('user_id', user.id).single();
+      if (convData) { conversation = convData; messages = convData.messages || []; }
     }
 
-    // Add user message
-    messages.push({
-      role: 'user',
-      content: message,
-      timestamp: new Date().toISOString(),
-    });
+    messages.push({ role: 'user', content: message, timestamp: new Date().toISOString() });
 
-    // Prepare messages for AI
-    const aiMessages = messages
-      .filter(m => m.role !== 'tool_call')
-      .map(m => ({ role: m.role, content: m.content }));
+    const aiMessages = messages.filter(m => m.role !== 'tool_call').map(m => ({ role: m.role, content: m.content }));
 
-    // Call OpenAI API with tools
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Call Lovable AI Gateway
+    const response = await fetch(AI_GATEWAY_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: AI_MODEL,
         messages: [
           { role: 'system', content: buildSystemPrompt(userName, userEmail, campaignerName || undefined, campaignerId || undefined) },
           ...aiMessages,
         ],
-        tools: [
-          {
-            type: 'function',
-            function: {
-              name: 'create_task',
-              description: 'יצירת משימה חדשה במערכת. הסוכנות והקמפיינר נקבעים אוטומטית לפי המשתמש המחובר.',
-              parameters: {
-                type: 'object',
-                properties: {
-                  title: { type: 'string', description: 'כותרת המשימה' },
-                  client_id: { type: 'string', description: 'מזהה הלקוח (UUID, אופציונלי)' },
-                  priority: { type: 'integer', description: 'עדיפות 1-10 (אופציונלי)', minimum: 1, maximum: 10 },
-                  due_date: { type: 'string', format: 'date', description: 'תאריך יעד (YYYY-MM-DD, אופציונלי)' },
-                  notes: { type: 'string', description: 'הערות נוספות (אופציונלי)' },
-                },
-                required: ['title'],
-              },
-            },
-          },
-          {
-            type: 'function',
-            function: {
-              name: 'update_task_status',
-              description: 'עדכון סטטוס משימה קיימת',
-              parameters: {
-                type: 'object',
-                properties: {
-                  task_id: { type: 'string', description: 'מזהה המשימה (UUID)' },
-                  status: { 
-                    type: 'string', 
-                    enum: ['open', 'in_progress', 'completed', 'cancelled'],
-                    description: 'סטטוס חדש למשימה'
-                  },
-                },
-                required: ['task_id', 'status'],
-              },
-            },
-          },
-          {
-            type: 'function',
-            function: {
-              name: 'list_tasks',
-              description: 'קבלת רשימת משימות. אם המשתמש שואל "מה יש לי?" או "המשימות שלי" - השתמש ב-my_tasks=true',
-              parameters: {
-                type: 'object',
-                properties: {
-                  my_tasks: { 
-                    type: 'boolean', 
-                    description: 'האם להציג רק את המשימות של המשתמש הנוכחי (true) או כל המשימות (false). ברירת מחדל: false'
-                  },
-                  agency_id: { type: 'string', description: 'סינון לפי סוכנות (UUID, אופציונלי)' },
-                  client_id: { type: 'string', description: 'סינון לפי לקוח (UUID, אופציונלי)' },
-                  status: { 
-                    type: 'string',
-                    enum: ['open', 'in_progress', 'completed', 'cancelled'],
-                    description: 'סינון לפי סטטוס (אופציונלי)'
-                  },
-                  limit: { type: 'integer', description: 'מספר מקסימלי של תוצאות (ברירת מחדל: 10)' },
-                },
-              },
-            },
-          },
-          {
-            type: 'function',
-            function: {
-              name: 'get_client_info',
-              description: 'קבלת מידע מפורט על לקוח',
-              parameters: {
-                type: 'object',
-                properties: {
-                  client_id: { type: 'string', description: 'מזהה הלקוח (UUID)' },
-                },
-                required: ['client_id'],
-              },
-            },
-          },
-          {
-            type: 'function',
-            function: {
-              name: 'search_entities',
-              description: 'חיפוש סוכנויות, לקוחות או קמפיינרים לפי שם',
-              parameters: {
-                type: 'object',
-                properties: {
-                  entity_type: {
-                    type: 'string',
-                    enum: ['agency', 'client', 'campaigner'],
-                    description: 'סוג הישות לחיפוש',
-                  },
-                  search_term: { type: 'string', description: 'מונח החיפוש' },
-                },
-                required: ['entity_type', 'search_term'],
-              },
-            },
-          },
-        ],
+        tools,
         stream: true,
       }),
     });
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: 'חריגה ממגבלת הקצב, אנא נסה שוב מאוחר יותר' }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: 'נדרש תשלום, אנא הוסף יתרה ל-workspace' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+      if (response.status === 429) return new Response(JSON.stringify({ error: 'חריגה ממגבלת הקצב' }), { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      if (response.status === 402) return new Response(JSON.stringify({ error: 'נדרש תשלום' }), { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      const errText = await response.text();
+      console.error('AI Gateway error:', response.status, errText);
       throw new Error(`AI Gateway error: ${response.status}`);
     }
 
-    // Stream the response
+    // Stream response
     const stream = new ReadableStream({
       async start(controller) {
         const reader = response.body!.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
         let assistantMessage = '';
-        
-        // Accumulate tool call data across streaming chunks
         const toolCallAccumulators: Record<number, { name: string; arguments: string }> = {};
         let finishReason: string | null = null;
 
@@ -603,111 +622,52 @@ serve(async (req) => {
               if (!line.startsWith('data: ')) continue;
 
               const data = line.slice(6);
-              if (data === '[DONE]') {
-                finishReason = 'stop';
-                continue;
-              }
+              if (data === '[DONE]') { finishReason = finishReason || 'stop'; continue; }
 
               try {
                 const parsed = JSON.parse(data);
                 const delta = parsed.choices?.[0]?.delta;
                 const choiceFinishReason = parsed.choices?.[0]?.finish_reason;
-                
-                if (choiceFinishReason) {
-                  finishReason = choiceFinishReason;
-                }
+                if (choiceFinishReason) finishReason = choiceFinishReason;
 
-                // Accumulate tool calls across chunks
                 if (delta?.tool_calls) {
-                  for (const toolCall of delta.tool_calls) {
-                    const index = toolCall.index ?? 0;
-                    
-                    if (!toolCallAccumulators[index]) {
-                      toolCallAccumulators[index] = { name: '', arguments: '' };
-                    }
-                    
-                    if (toolCall.function?.name) {
-                      toolCallAccumulators[index].name = toolCall.function.name;
-                    }
-                    if (toolCall.function?.arguments) {
-                      toolCallAccumulators[index].arguments += toolCall.function.arguments;
-                    }
+                  for (const tc of delta.tool_calls) {
+                    const idx = tc.index ?? 0;
+                    if (!toolCallAccumulators[idx]) toolCallAccumulators[idx] = { name: '', arguments: '' };
+                    if (tc.function?.name) toolCallAccumulators[idx].name = tc.function.name;
+                    if (tc.function?.arguments) toolCallAccumulators[idx].arguments += tc.function.arguments;
                   }
                 } else if (delta?.content) {
-                  // Regular content
                   assistantMessage += delta.content;
-                  controller.enqueue(
-                    new TextEncoder().encode(
-                      `data: ${JSON.stringify({ type: 'token', content: delta.content })}\n\n`
-                    )
-                  );
+                  controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'token', content: delta.content })}\n\n`));
                 }
-              } catch (e) {
-                console.error('Parse error:', e);
-              }
+              } catch (e) { /* ignore parse errors */ }
             }
           }
           
-          // Process accumulated tool calls after streaming is complete
+          // Execute accumulated tool calls
           if (finishReason === 'tool_calls' || Object.keys(toolCallAccumulators).length > 0) {
             for (const [_, accumulated] of Object.entries(toolCallAccumulators)) {
               if (!accumulated.name) continue;
-              
               let toolArgs = {};
-              try {
-                toolArgs = JSON.parse(accumulated.arguments || '{}');
-              } catch (e) {
-                console.error('Failed to parse tool arguments:', accumulated.arguments, e);
-                continue;
-              }
+              try { toolArgs = JSON.parse(accumulated.arguments || '{}'); } catch { continue; }
               
               const toolName = accumulated.name;
-              console.log('Executing accumulated tool:', toolName, 'with args:', toolArgs);
 
-              // Send tool execution notification
-              controller.enqueue(
-                new TextEncoder().encode(
-                  `data: ${JSON.stringify({ type: 'tool_call', tool: toolName, args: toolArgs })}\n\n`
-                )
-              );
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'tool_call', tool: toolName, args: toolArgs })}\n\n`));
 
-              // Execute tool
-              const toolResult = await executeTool(
-                { name: toolName, args: toolArgs },
-                supabase,
-                user.id,
-                tenantId
-              );
+              const toolResult = await executeTool({ name: toolName, args: toolArgs }, supabaseClient, user.id, tenantId);
 
-              console.log('🔧 Tool execution result:', {
-                toolName,
-                success: toolResult.success,
-                error: toolResult.error,
-                resultPreview: toolResult.result ? JSON.stringify(toolResult.result).slice(0, 300) : null
-              });
+              messages.push({ role: 'tool_call', tool: toolName, args: toolArgs, result: toolResult, timestamp: new Date().toISOString() });
 
-              // Add tool call to messages
-              messages.push({
-                role: 'tool_call',
-                tool: toolName,
-                args: toolArgs,
-                result: toolResult,
-                timestamp: new Date().toISOString(),
-              });
-
-              // If tool succeeded, get AI's response with the result
               if (toolResult.success) {
                 const toolResultContent = JSON.stringify(toolResult.result);
-                console.log('📤 Sending tool result to OpenAI:', toolResultContent.slice(0, 500));
 
-                const followUpResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+                const followUpResponse = await fetch(AI_GATEWAY_URL, {
                   method: 'POST',
-                  headers: {
-                    'Authorization': `Bearer ${OPENAI_API_KEY}`,
-                    'Content-Type': 'application/json',
-                  },
+                  headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    model: 'gpt-4o',
+                    model: AI_MODEL,
                     messages: [
                       { role: 'system', content: buildSystemPrompt(userName, userEmail, campaignerName || undefined, campaignerId || undefined) },
                       ...aiMessages,
@@ -718,100 +678,54 @@ serve(async (req) => {
                   }),
                 });
 
-                if (!followUpResponse.ok) {
-                  console.error('❌ Follow-up OpenAI request failed:', followUpResponse.status, await followUpResponse.text());
-                } else {
-                  console.log('✅ Follow-up OpenAI request started successfully');
-                }
-
-                const followReader = followUpResponse.body!.getReader();
-                let followBuffer = '';
-
-                while (true) {
-                  const { done: followDone, value: followValue } = await followReader.read();
-                  if (followDone) break;
-
-                  followBuffer += decoder.decode(followValue, { stream: true });
-                  const followLines = followBuffer.split('\n');
-                  followBuffer = followLines.pop() || '';
-
-                  for (const followLine of followLines) {
-                    if (!followLine.trim() || followLine.startsWith(':')) continue;
-                    if (!followLine.startsWith('data: ')) continue;
-
-                    const followData = followLine.slice(6);
-                    if (followData === '[DONE]') continue;
-
-                    try {
-                      const followParsed = JSON.parse(followData);
-                      const followContent = followParsed.choices?.[0]?.delta?.content;
-                      if (followContent) {
-                        assistantMessage += followContent;
-                        controller.enqueue(
-                          new TextEncoder().encode(
-                            `data: ${JSON.stringify({ type: 'token', content: followContent })}\n\n`
-                          )
-                        );
-                      }
-                    } catch (e) {
-                      // Ignore parse errors
+                if (followUpResponse.ok) {
+                  const followReader = followUpResponse.body!.getReader();
+                  let followBuffer = '';
+                  while (true) {
+                    const { done: followDone, value: followValue } = await followReader.read();
+                    if (followDone) break;
+                    followBuffer += decoder.decode(followValue, { stream: true });
+                    const followLines = followBuffer.split('\n');
+                    followBuffer = followLines.pop() || '';
+                    for (const followLine of followLines) {
+                      if (!followLine.trim() || followLine.startsWith(':') || !followLine.startsWith('data: ')) continue;
+                      const followData = followLine.slice(6);
+                      if (followData === '[DONE]') continue;
+                      try {
+                        const followParsed = JSON.parse(followData);
+                        const followContent = followParsed.choices?.[0]?.delta?.content;
+                        if (followContent) {
+                          assistantMessage += followContent;
+                          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'token', content: followContent })}\n\n`));
+                        }
+                      } catch { /* ignore */ }
                     }
                   }
                 }
               } else {
-                // Tool failed, inform user
-                const errorMsg = `❌ שגיאה בביצוע הפעולה: ${toolResult.error}`;
+                const errorMsg = `❌ שגיאה: ${toolResult.error}`;
                 assistantMessage = errorMsg;
-                controller.enqueue(
-                  new TextEncoder().encode(
-                    `data: ${JSON.stringify({ type: 'token', content: errorMsg })}\n\n`
-                  )
-                );
+                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'token', content: errorMsg })}\n\n`));
               }
             }
           }
 
-          // Add assistant message to history
+          // Save
           if (assistantMessage) {
-            messages.push({
-              role: 'assistant',
-              content: assistantMessage,
-              timestamp: new Date().toISOString(),
-            });
+            messages.push({ role: 'assistant', content: assistantMessage, timestamp: new Date().toISOString() });
           }
 
-          // Save conversation
           const conversationTitle = conversation?.title || message.slice(0, 50);
-          
           if (conversation_id && conversation) {
-            await supabase
-              .from('ai_conversations')
-              .update({ messages, updated_at: new Date().toISOString() })
-              .eq('id', conversation_id);
+            await supabaseClient.from('ai_conversations').update({ messages, updated_at: new Date().toISOString() }).eq('id', conversation_id);
           } else {
-            const { data: newConv } = await supabase
-              .from('ai_conversations')
-              .insert({
-                user_id: user.id,
-                tenant_id: tenantId,
-                title: conversationTitle,
-                messages,
-              })
-              .select()
-              .single();
-
+            const { data: newConv } = await supabaseClient.from('ai_conversations').insert({ user_id: user.id, tenant_id: tenantId, title: conversationTitle, messages }).select().single();
             if (newConv) {
-              controller.enqueue(
-                new TextEncoder().encode(
-                  `data: ${JSON.stringify({ type: 'conversation_id', id: newConv.id })}\n\n`
-                )
-              );
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'conversation_id', id: newConv.id })}\n\n`));
             }
           }
 
-          controller.enqueue(
-            new TextEncoder().encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`)
-          );
+          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`));
           controller.close();
         } catch (error: any) {
           console.error('Streaming error:', error);
@@ -821,21 +735,10 @@ serve(async (req) => {
     });
 
     return new Response(stream, {
-      headers: {
-        ...corsHeaders,
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
+      headers: { ...corsHeaders, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' },
     });
   } catch (error: any) {
     console.error('Error in ai-support-chat:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    );
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });

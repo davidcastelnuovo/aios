@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
-import { LogOut, Building2 } from "lucide-react";
+import { LogOut, Building2, Sparkles } from "lucide-react";
+import { AIOSDialog } from "@/components/AIOSDialog";
 import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -37,6 +39,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { selectedAgency, setSelectedAgency, agencies } = useAgency();
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
+  const [aiosOpen, setAiosOpen] = useState(false);
 
   // Fetch available tenants for the user
   const { data: userTenants } = useQuery({
@@ -194,6 +197,16 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </h1>
               </div>
               <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-full relative group"
+                  onClick={() => setAiosOpen(true)}
+                  title="AIOS - עוזר AI"
+                >
+                  <Sparkles className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
+                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
+                </Button>
                 {agencies && agencies.length > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground hidden sm:inline">סוכנות:</span>
@@ -234,6 +247,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             {children}
           </main>
           </div>
+          <AIOSDialog open={aiosOpen} onOpenChange={setAiosOpen} />
         </div>
       </SidebarProvider>
     </ViewAsProvider>
