@@ -9,7 +9,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Mail, Send, ArrowRight, RefreshCw, Loader2, Ban, Tag, Settings, ChevronLeft, ChevronRight, CalendarIcon, Reply } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Search, Mail, Send, ArrowRight, RefreshCw, Loader2, Ban, Tag, Settings, ChevronLeft, ChevronRight, CalendarIcon, Reply, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -50,6 +51,9 @@ export default function Gmail() {
   const [composeBody, setComposeBody] = useState('');
   const [replyMode, setReplyMode] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
   // Date & pagination state
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -215,7 +219,79 @@ export default function Gmail() {
     onError: () => toast.error('שגיאה בחסימת שולח'),
   });
 
-  // Assign category
+  // Trash message
+  const trashMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      const { data, error } = await supabase.functions.invoke('gmail-api', {
+        body: { action: 'trash', messageId },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('ההודעה נמחקה');
+      refetch();
+    },
+    onError: () => toast.error('שגיאה במחיקת ההודעה'),
+  });
+
+  // Bulk trash
+  const bulkTrashMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      for (const id of ids) {
+        const { error } = await supabase.functions.invoke('gmail-api', {
+          body: { action: 'trash', messageId: id },
+        });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      toast.success(`${selectedIds.size} הודעות נמחקו`);
+      setSelectedIds(new Set());
+      refetch();
+    },
+    onError: () => toast.error('שגיאה במחיקת הודעות'),
+  });
+
+  // Bulk block
+  const bulkBlockMutation = useMutation({
+    mutationFn: async (emails: string[]) => {
+      const unique = [...new Set(emails)];
+      for (const email of unique) {
+        await supabase.from('gmail_blocked_senders').insert({
+          tenant_id: tenantId!,
+          user_id: userId!,
+          email_address: email.toLowerCase(),
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['gmail-blocked-senders'] });
+      setSelectedIds(new Set());
+      toast.success('שולחים נחסמו');
+    },
+  });
+
+  // Bulk assign category
+  const bulkAssignCategory = useMutation({
+    mutationFn: async ({ ids, categoryId }: { ids: string[]; categoryId: string }) => {
+      for (const messageId of ids) {
+        await supabase.from('gmail_message_categories').upsert({
+          tenant_id: tenantId!,
+          user_id: userId!,
+          message_id: messageId,
+          category_id: categoryId,
+        }, { onConflict: 'user_id,message_id,category_id' });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['gmail-message-categories'] });
+      setSelectedIds(new Set());
+      toast.success('קטגוריה עודכנה');
+    },
+  });
+
+  // Assign category (single)
   const assignCategory = useMutation({
     mutationFn: async ({ messageId, categoryId }: { messageId: string; categoryId: string }) => {
       const { error } = await supabase.from('gmail_message_categories').upsert({
@@ -253,6 +329,35 @@ export default function Gmail() {
     return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
   };
 
+  // Multi-select helpers
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredMessages.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredMessages.map(m => m.id)));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    bulkTrashMutation.mutate([...selectedIds]);
+  };
+
+  const handleBulkBlock = () => {
+    const emails = filteredMessages
+      .filter(m => selectedIds.has(m.id))
+      .map(m => extractEmail(m.from));
+    bulkBlockMutation.mutate(emails);
+  };
+
   // Date navigation
   const goToPrevDay = () => {
     setSelectedDate(prev => subDays(prev, 1));
@@ -266,6 +371,7 @@ export default function Gmail() {
     setCurrentPage(1);
     setCurrentPageToken(undefined);
     setPageTokenHistory([]);
+    setSelectedIds(new Set());
   };
 
   // Pagination
@@ -274,6 +380,7 @@ export default function Gmail() {
       setPageTokenHistory(prev => [...prev, currentPageToken || '']);
       setCurrentPageToken(messagesData.nextPageToken);
       setCurrentPage(prev => prev + 1);
+      setSelectedIds(new Set());
     }
   };
   const goToPrevPage = () => {
@@ -283,6 +390,7 @@ export default function Gmail() {
       setPageTokenHistory(newHistory);
       setCurrentPageToken(prevToken === '' ? undefined : prevToken);
       setCurrentPage(prev => prev - 1);
+      setSelectedIds(new Set());
     }
   };
 
@@ -299,6 +407,8 @@ export default function Gmail() {
       </div>
     );
   }
+
+  const hasSelection = selectedIds.size > 0;
 
   return (
     <div className="container mx-auto p-4 space-y-3" dir="rtl">
@@ -391,6 +501,41 @@ export default function Gmail() {
         </div>
       </div>
 
+      {/* Bulk action toolbar */}
+      {hasSelection && (
+        <div className="flex items-center gap-2 bg-primary/10 rounded-md px-3 py-2 border border-primary/20">
+          <span className="text-sm font-medium">{selectedIds.size} נבחרו</span>
+          <div className="flex gap-1 ms-auto">
+            {categories.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-8 gap-1">
+                    <Tag className="h-3.5 w-3.5" />
+                    קטגוריה
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {categories.map((cat: any) => (
+                    <DropdownMenuItem key={cat.id} onClick={() => bulkAssignCategory.mutate({ ids: [...selectedIds], categoryId: cat.id })}>
+                      <div className="w-3 h-3 rounded-full me-2" style={{ backgroundColor: cat.color }} />
+                      {cat.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <Button variant="outline" size="sm" className="h-8 gap-1" onClick={handleBulkBlock}>
+              <Ban className="h-3.5 w-3.5" />
+              חסום
+            </Button>
+            <Button variant="destructive" size="sm" className="h-8 gap-1" onClick={handleBulkDelete} disabled={bulkTrashMutation.isPending}>
+              {bulkTrashMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+              מחק
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Message detail view */}
       {selectedMessage ? (
         <Card>
@@ -404,6 +549,10 @@ export default function Gmail() {
                 <Button variant="outline" size="sm" onClick={() => handleReply(selectedMessage)}>
                   <Reply className="h-4 w-4 me-1" />
                   השב
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => { trashMutation.mutate(selectedMessage.id); setSelectedMessage(null); }}>
+                  <Trash2 className="h-4 w-4 me-1" />
+                  מחק
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => blockSender.mutate(extractEmail(selectedMessage.from))}>
                   <Ban className="h-4 w-4 me-1" />
@@ -440,19 +589,42 @@ export default function Gmail() {
               </div>
             ) : (
               <ScrollArea className="max-h-[calc(100vh-260px)]">
+                {/* Header row with select all */}
+                <div className="flex items-center h-9 px-3 border-b bg-muted/30 text-xs text-muted-foreground">
+                  <div className="w-8 flex-shrink-0 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={filteredMessages.length > 0 && selectedIds.size === filteredMessages.length}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </div>
+                  <div className="w-5 flex-shrink-0" />
+                  <div className="w-[180px] flex-shrink-0 text-right pe-3">שולח</div>
+                  <div className="flex-1 min-w-0">נושא</div>
+                  <div className="w-[60px] flex-shrink-0 text-left ps-2">שעה</div>
+                </div>
                 <div className="divide-y divide-border">
                   {filteredMessages.map((msg) => {
                     const msgCategories = (messageCategoryMap as Record<string, string[]>)[msg.id] || [];
                     const fromName = extractName(msg.from);
+                    const isSelected = selectedIds.has(msg.id);
                     return (
                       <div
                         key={msg.id}
                         className={cn(
                           "flex items-center h-10 px-3 hover:bg-muted/50 cursor-pointer transition-colors group border-b border-border last:border-b-0",
-                          msg.isUnread && "bg-primary/5"
+                          msg.isUnread && "bg-primary/5",
+                          isSelected && "bg-primary/10"
                         )}
                         onClick={() => fetchMessage.mutate(msg.id)}
                       >
+                        {/* Checkbox */}
+                        <div className="w-8 flex-shrink-0 flex items-center justify-center" onClick={(e) => { e.stopPropagation(); toggleSelect(msg.id); }}>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleSelect(msg.id)}
+                          />
+                        </div>
+
                         {/* Unread indicator */}
                         <div className="w-5 flex-shrink-0 flex items-center justify-center">
                           {msg.isUnread && <div className="w-2 h-2 rounded-full bg-primary" />}
@@ -507,6 +679,9 @@ export default function Gmail() {
                               </DropdownMenuContent>
                             </DropdownMenu>
                           )}
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => trashMutation.mutate(msg.id)}>
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => blockSender.mutate(extractEmail(msg.from))}>
                             <Ban className="h-3 w-3" />
                           </Button>

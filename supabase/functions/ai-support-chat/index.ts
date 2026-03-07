@@ -38,6 +38,7 @@ ${campaignerId ? `- **מזהה קמפיינר:** ${campaignerId}` : ''}
 4. **אוטומציות** - יצירת אוטומציות חדשות (trigger + action)
 5. **הודעות** - שליחת הודעות WhatsApp ללקוחות/לידים
 6. **חיפוש** - מציאת סוכנויות, לקוחות, קמפיינרים
+7. **אימיילים** - קריאה, שליחה, מחיקה של אימיילים מ-Gmail
 
 💬 **הנחיות תקשורת:**
 - דבר בעברית, בצורה ישירה ומקצועית
@@ -69,7 +70,8 @@ async function executeTool(
   toolCall: ToolCall, 
   supabaseClient: any, 
   userId: string, 
-  tenantId: string
+  tenantId: string,
+  userToken?: string
 ): Promise<{ success: boolean; result?: any; error?: string }> {
   console.log('Executing tool:', toolCall.name, 'with args:', toolCall.args);
 
@@ -258,6 +260,65 @@ async function executeTool(
         }).select('id, name, trigger_type, action_type, active').single();
         if (error) throw error;
         return { success: true, result: { automation_id: data.id, name: data.name, trigger_type: data.trigger_type, action_type: data.action_type, active: data.active } };
+      }
+
+      case 'list_emails': {
+        const { query, maxResults = 10, date } = toolCall.args;
+        let q = query || '';
+        if (date) {
+          const nextDay = new Date(date);
+          nextDay.setDate(nextDay.getDate() + 1);
+          const fmt = (d: Date) => `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;
+          q = `after:${fmt(new Date(date))} before:${fmt(nextDay)} ${q}`.trim();
+        }
+        const authHeader2 = `Bearer ${userToken}`;
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/gmail-api`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
+          body: JSON.stringify({ action: 'list', query: q, maxResults }),
+        });
+        const data = await res.json();
+        if (!res.ok) return { success: false, error: data.error || 'Gmail API error' };
+        return { success: true, result: { count: data.messages?.length || 0, emails: (data.messages || []).map((m: any) => ({ id: m.id, from: m.from, subject: m.subject, snippet: m.snippet, date: m.date, isUnread: m.isUnread })) } };
+      }
+
+      case 'get_email': {
+        const { message_id } = toolCall.args;
+        const authHeader2 = `Bearer ${userToken}`;
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/gmail-api`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
+          body: JSON.stringify({ action: 'get', messageId: message_id }),
+        });
+        const data = await res.json();
+        if (!res.ok) return { success: false, error: data.error || 'Gmail API error' };
+        return { success: true, result: { id: data.id, from: data.from, to: data.to, subject: data.subject, date: data.date, body: data.body?.slice(0, 2000) } };
+      }
+
+      case 'send_email': {
+        const { to, subject, body: emailBody } = toolCall.args;
+        const authHeader2 = `Bearer ${userToken}`;
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/gmail-api`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
+          body: JSON.stringify({ action: 'send', to, subject, body: emailBody }),
+        });
+        const data = await res.json();
+        if (!res.ok) return { success: false, error: data.error || 'Send failed' };
+        return { success: true, result: { sent: true, to, subject } };
+      }
+
+      case 'delete_email': {
+        const { message_id } = toolCall.args;
+        const authHeader2 = `Bearer ${userToken}`;
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/gmail-api`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': authHeader2 },
+          body: JSON.stringify({ action: 'trash', messageId: message_id }),
+        });
+        const data = await res.json();
+        if (!res.ok) return { success: false, error: data.error || 'Delete failed' };
+        return { success: true, result: { deleted: true, message_id } };
       }
 
       case 'send_message': {
@@ -509,6 +570,65 @@ const tools = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'list_emails',
+      description: 'שליפת רשימת אימיילים מ-Gmail. אפשר לסנן לפי query או תאריך.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'חיפוש חופשי (כמו בחיפוש Gmail)' },
+          maxResults: { type: 'integer', description: 'מספר מקסימלי (ברירת מחדל: 10)' },
+          date: { type: 'string', format: 'date', description: 'תאריך ספציפי (YYYY-MM-DD)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_email',
+      description: 'קריאת תוכן אימייל ספציפי לפי מזהה',
+      parameters: {
+        type: 'object',
+        properties: {
+          message_id: { type: 'string', description: 'מזהה ההודעה' },
+        },
+        required: ['message_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'send_email',
+      description: 'שליחת אימייל חדש דרך Gmail',
+      parameters: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', description: 'כתובת אימייל של הנמען' },
+          subject: { type: 'string', description: 'נושא ההודעה' },
+          body: { type: 'string', description: 'תוכן ההודעה (HTML או טקסט)' },
+        },
+        required: ['to', 'subject', 'body'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_email',
+      description: 'מחיקת אימייל (העברה לאשפה)',
+      parameters: {
+        type: 'object',
+        properties: {
+          message_id: { type: 'string', description: 'מזהה ההודעה למחיקה' },
+        },
+        required: ['message_id'],
+      },
+    },
+  },
 ];
 
 serve(async (req) => {
@@ -656,7 +776,7 @@ serve(async (req) => {
 
               controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'tool_call', tool: toolName, args: toolArgs })}\n\n`));
 
-              const toolResult = await executeTool({ name: toolName, args: toolArgs }, supabaseClient, user.id, tenantId);
+              const toolResult = await executeTool({ name: toolName, args: toolArgs }, supabaseClient, user.id, tenantId, token);
 
               messages.push({ role: 'tool_call', tool: toolName, args: toolArgs, result: toolResult, timestamp: new Date().toISOString() });
 

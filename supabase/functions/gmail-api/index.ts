@@ -258,6 +258,28 @@ serve(async (req) => {
       });
     }
 
+    // TRASH message
+    if (action === 'trash') {
+      const { messageId } = body;
+      if (!messageId) throw new Error('Missing messageId');
+
+      const res = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/trash`,
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${accessToken}` },
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || 'Trash failed');
+      }
+
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     throw new Error('Invalid action');
   } catch (error) {
     console.error('Gmail API error:', error);
