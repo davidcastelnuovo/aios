@@ -1,21 +1,24 @@
 
 
-# תיקון RTL בתוצאות אוטומציה
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## הבעיה
-הטקסט בתוצאות הסוכן (agent output) ובפאנל ההיסטוריה מוצג LTR במקום RTL, כך שהעברית לא מיושרת נכון.
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-## שינויים
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-### 1. `src/components/automations/TestFlowWithLeadDialog.tsx`
-- הוספת `dir="rtl"` ל-`DialogContent`
-- הוספת `text-right` לאזורי התוצאות והפלט של הסוכן
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-### 2. `src/components/automations/ExecutionHistoryPanel.tsx`
-- הוספת `dir="rtl"` ו-`text-right` לאזורי תוצאת הסוכן, הפקודה, והשגיאות
-- וידוא שכל הטקסטים העבריים מיושרים ימינה
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-## קבצים
-1. `src/components/automations/TestFlowWithLeadDialog.tsx`
-2. `src/components/automations/ExecutionHistoryPanel.tsx`
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 

@@ -210,7 +210,8 @@ export function ManualTriggerDialog({
                 )}
               </div>
               <div
-                className={`rounded-lg px-3 py-2 max-w-[80%] text-sm whitespace-pre-wrap ${
+                dir="rtl"
+                className={`rounded-lg px-3 py-2 max-w-[80%] text-sm whitespace-pre-wrap text-right ${
                   msg.role === "user"
                     ? "bg-primary text-primary-foreground"
                     : "bg-card border"
