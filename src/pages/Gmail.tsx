@@ -201,7 +201,11 @@ export default function Gmail() {
       return !(blockedSenders as string[]).includes(fromEmail);
     });
     if (selectedCategory) {
+      // Show only messages in the selected category
       msgs = msgs.filter((m) => effectiveCategoryMap[m.id]?.includes(selectedCategory));
+    } else {
+      // "All" view: hide messages that have been categorized
+      msgs = msgs.filter((m) => !effectiveCategoryMap[m.id] || effectiveCategoryMap[m.id].length === 0);
     }
     return msgs;
   }, [messagesData?.messages, blockedSenders, selectedCategory, effectiveCategoryMap]);
