@@ -38,6 +38,7 @@ ${campaignerId ? `- **מזהה קמפיינר:** ${campaignerId}` : ''}
 4. **אוטומציות** - יצירת אוטומציות חדשות (trigger + action)
 5. **הודעות** - שליחת הודעות WhatsApp ללקוחות/לידים
 6. **חיפוש** - מציאת סוכנויות, לקוחות, קמפיינרים
+7. **אימיילים** - קריאה, שליחה, מחיקה של אימיילים מ-Gmail
 
 💬 **הנחיות תקשורת:**
 - דבר בעברית, בצורה ישירה ומקצועית
@@ -565,6 +566,65 @@ const tools = [
           message_text: { type: 'string', description: 'תוכן ההודעה' },
         },
         required: ['contact_type', 'contact_id', 'message_text'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_emails',
+      description: 'שליפת רשימת אימיילים מ-Gmail. אפשר לסנן לפי query או תאריך.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'חיפוש חופשי (כמו בחיפוש Gmail)' },
+          maxResults: { type: 'integer', description: 'מספר מקסימלי (ברירת מחדל: 10)' },
+          date: { type: 'string', format: 'date', description: 'תאריך ספציפי (YYYY-MM-DD)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_email',
+      description: 'קריאת תוכן אימייל ספציפי לפי מזהה',
+      parameters: {
+        type: 'object',
+        properties: {
+          message_id: { type: 'string', description: 'מזהה ההודעה' },
+        },
+        required: ['message_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'send_email',
+      description: 'שליחת אימייל חדש דרך Gmail',
+      parameters: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', description: 'כתובת אימייל של הנמען' },
+          subject: { type: 'string', description: 'נושא ההודעה' },
+          body: { type: 'string', description: 'תוכן ההודעה (HTML או טקסט)' },
+        },
+        required: ['to', 'subject', 'body'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_email',
+      description: 'מחיקת אימייל (העברה לאשפה)',
+      parameters: {
+        type: 'object',
+        properties: {
+          message_id: { type: 'string', description: 'מזהה ההודעה למחיקה' },
+        },
+        required: ['message_id'],
       },
     },
   },
