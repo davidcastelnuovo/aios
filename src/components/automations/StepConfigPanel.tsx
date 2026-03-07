@@ -174,8 +174,8 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
 
   // Detect trigger type from flow
   const triggerNode = allNodes.find((n) => n.step_type === "trigger");
-  const triggerType = triggerNode?.action_type;
-  const availableFields = getAvailableFields(triggerType);
+  const triggerConfig = triggerNode?.configuration;
+  const availableFields = getAvailableFields(triggerType, triggerConfig);
 
   const isLeadCreatedTrigger = node.step_type === "trigger" && node.action_type === "lead_created";
   const leadSource = node.configuration?.lead_source || "any";
@@ -983,6 +983,7 @@ function LeadSourceConfig({
             facebook_page_name: selected.pageName,
             facebook_form_id: selected.formId,
             facebook_form_name: selected.formName,
+            facebook_form_fields: selected.formFields || [],
           });
           setShowFbDialog(false);
         }}
