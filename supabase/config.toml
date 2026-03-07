@@ -161,3 +161,9 @@ verify_jwt = false
 
 [functions.process-chat-invite]
 verify_jwt = false
+
+[functions.gmail-auth]
+verify_jwt = false
+
+[functions.gmail-api]
+verify_jwt = true
