@@ -1,38 +1,24 @@
 
 
-# תיקון: אימיילים עם אותו נושא לא עוברים לקטגוריה
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## שורש הבעיה
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-שתי בעיות:
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-### בעיה 1: תצוגת קטגוריה מסננת רק מהעמוד הנוכחי
-כשלוחצים על קטגוריה, הקוד מסנן רק את 25 ההודעות שכבר נטענו בעמוד הנוכחי. אימיילים מתויגים שנמצאים בעמודים אחרים לא יופיעו כלל.
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-### בעיה 2: חוקי הקטגוריה (`gmail_category_rules`) לא נשמרים
-הטבלה `gmail_category_rules` ריקה לחלוטין למרות שה-upsert אמור לשמור כלל. סביר שהשגיאה נבלעת בשקט כי אין בדיקת error.
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-## התיקון
-
-### 1. שמירת כללים — הוספת בדיקת שגיאה (`Gmail.tsx`)
-בפונקציית `assignCategory`, לבדוק את תוצאת ה-upsert ל-`gmail_category_rules` ולהדפיס שגיאה אם נכשל.
-
-### 2. שינוי ה-query כשצופים בקטגוריה (`Gmail.tsx`)
-כשיש `selectedCategory` פעיל:
-- לשלוף את כל ה-`message_id`ים מ-`gmail_message_categories` + להחיל כללים מ-`gmail_category_rules`
-- לשנות את ה-Gmail API query לכלול `subject:"..."` לפי כל הנושאים בכללים של אותה קטגוריה
-- כך כשנכנסים לקטגוריה, רואים את **כל** האימיילים הרלוונטיים ולא רק 25 מהעמוד הנוכחי
-
-### גישה מעשית
-הדרך הפשוטה ביותר: כשנבחרת קטגוריה, לבנות query לפי כל ה-subject patterns מהכללים:
-```
-subject:"נושא 1" OR subject:"נושא 2" OR ...
-```
-ולשלוח אותו ל-Gmail API במקום ה-query הרגיל. כך Gmail יחזיר את כל ההודעות הרלוונטיות.
-
-### קבצים לשינוי
-- `src/pages/Gmail.tsx` — 
-  1. הוספת error handling ל-upsert של `gmail_category_rules`
-  2. שינוי ה-`fullQuery` כשיש `selectedCategory` כך שישלוף מ-Gmail לפי הנושאים בכללים
-  3. הסרת הסינון הלוקלי ב-`filteredMessages` כשצופים בקטגוריה (כי ה-query כבר מסנן)
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 
