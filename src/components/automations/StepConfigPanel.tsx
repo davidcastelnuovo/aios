@@ -955,6 +955,18 @@ function LeadSourceConfig({
             <p className="text-xs text-muted-foreground">
               טופס: <span className="text-foreground">{configuration?.facebook_form_name || configuration?.facebook_form_id}</span>
             </p>
+            {configuration?.facebook_form_fields && Array.isArray(configuration.facebook_form_fields) && configuration.facebook_form_fields.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-border/50">
+                <p className="text-xs font-medium text-muted-foreground mb-1">שדות הטופס (זמינים כמשתנים):</p>
+                <div className="flex flex-wrap gap-1 justify-end">
+                  {configuration.facebook_form_fields.map((f: FacebookFormField) => (
+                    <Badge key={f.key} variant="secondary" className="text-[10px] font-mono">
+                      {`{{fb_${f.key}}}`}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
