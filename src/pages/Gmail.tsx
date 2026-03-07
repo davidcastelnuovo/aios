@@ -18,8 +18,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
-import { format, addDays, subDays } from "date-fns";
+import { format, addDays } from "date-fns";
 import { he } from "date-fns/locale";
+import type { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 
 interface EmailMessage {
@@ -56,7 +57,10 @@ export default function Gmail() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
   // Date & pagination state
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>({
+    from: new Date(),
+    to: new Date(),
+  });
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageTokenHistory, setPageTokenHistory] = useState<string[]>([]);
@@ -64,20 +68,25 @@ export default function Gmail() {
 
   // Build date query
   const buildDateQuery = () => {
-    const y = selectedDate.getFullYear();
-    const m = selectedDate.getMonth() + 1;
-    const d = selectedDate.getDate();
-    const next = addDays(selectedDate, 1);
-    const ny = next.getFullYear();
-    const nm = next.getMonth() + 1;
-    const nd = next.getDate();
-    return `after:${y}/${m}/${d} before:${ny}/${nm}/${nd}`;
+    const from = selectedDateRange?.from ?? new Date();
+    const to = selectedDateRange?.to ?? from;
+    const toExclusive = addDays(to, 1);
+
+    const fy = from.getFullYear();
+    const fm = from.getMonth() + 1;
+    const fd = from.getDate();
+
+    const ty = toExclusive.getFullYear();
+    const tm = toExclusive.getMonth() + 1;
+    const td = toExclusive.getDate();
+
+    return `after:${fy}/${fm}/${fd} before:${ty}/${tm}/${td}`;
   };
 
   const fullQuery = useMemo(() => {
     const dateQ = buildDateQuery();
     return activeSearch ? `${dateQ} ${activeSearch}` : dateQ;
-  }, [selectedDate, activeSearch]);
+  }, [selectedDateRange, activeSearch]);
 
   // Check connection
   const { data: connectionStatus } = useQuery({
@@ -356,14 +365,20 @@ export default function Gmail() {
   };
 
   // Date navigation
-  const goToPrevDay = () => {
-    setSelectedDate(prev => subDays(prev, 1));
+  const shiftDateRangeByDays = (days: number) => {
+    setSelectedDateRange((prev) => {
+      const from = prev?.from ?? new Date();
+      const to = prev?.to ?? from;
+      return {
+        from: addDays(from, days),
+        to: addDays(to, days),
+      };
+    });
     resetPagination();
   };
-  const goToNextDay = () => {
-    setSelectedDate(prev => addDays(prev, 1));
-    resetPagination();
-  };
+
+  const goToPrevDay = () => shiftDateRangeByDays(-1);
+  const goToNextDay = () => shiftDateRangeByDays(1);
   const resetPagination = () => {
     setCurrentPage(1);
     setCurrentPageToken(undefined);
@@ -452,14 +467,22 @@ export default function Gmail() {
             <PopoverTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-sm font-medium px-2">
                 <CalendarIcon className="h-3.5 w-3.5" />
-                {format(selectedDate, 'd בMMMM yyyy', { locale: he })}
+                {selectedDateRange?.from
+                  ? selectedDateRange.to
+                    ? `${format(selectedDateRange.from, 'd בMMMM yyyy', { locale: he })} - ${format(selectedDateRange.to, 'd בMMMM yyyy', { locale: he })}`
+                    : format(selectedDateRange.from, 'd בMMMM yyyy', { locale: he })
+                  : 'בחר טווח תאריכים'}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="center">
               <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={(d) => { if (d) { setSelectedDate(d); resetPagination(); setDatePickerOpen(false); } }}
+                mode="range"
+                selected={selectedDateRange}
+                onSelect={(range) => {
+                  setSelectedDateRange(range);
+                  resetPagination();
+                  if (range?.from && range?.to) setDatePickerOpen(false);
+                }}
                 className={cn("p-3 pointer-events-auto")}
               />
             </PopoverContent>
