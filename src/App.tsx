@@ -71,6 +71,8 @@ const Recordings = lazy(() => import("./pages/Recordings"));
 const AutomationFlow = lazy(() => import("./pages/AutomationFlow"));
 const TeamChat = lazy(() => import("./pages/TeamChat"));
 const ChatInvite = lazy(() => import("./pages/ChatInvite"));
+const GmailSettings = lazy(() => import("./pages/GmailSettings"));
+const Gmail = lazy(() => import("./pages/Gmail"));
 
 // QueryClient with optimized defaults for better caching
 const queryClient = new QueryClient({
@@ -180,6 +182,8 @@ const App = () => (
                   <Route path="/t/:tenantSlug/zoom-settings" element={<ProtectedRoute requiredPermission="lead_integrations"><AppLayout><ZoomSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/recordings" element={<ProtectedRoute requiredPermission="recordings"><AppLayout><Recordings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/team-chat" element={<ProtectedRoute requiredPermission="team_chat"><AppLayout><TeamChat /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/gmail-settings" element={<ProtectedRoute><AppLayout><GmailSettings /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/gmail" element={<ProtectedRoute><AppLayout><Gmail /></AppLayout></ProtectedRoute>} />
                   
                   {/* Legacy route - redirect to root */}
                   

@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video } from "lucide-react";
+import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video, Mail } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -258,6 +258,18 @@ export default function Integrations() {
     enabled: !!currentTenantId,
   });
 
+  // Check Gmail connection status
+  const { data: gmailStatus } = useQuery({
+    queryKey: ['gmail-status-integrations'],
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke('gmail-auth', {
+        body: { action: 'status' },
+      });
+      if (error) return null;
+      return data as { connected: boolean } | null;
+    },
+  });
+
   const integrations: IntegrationCardProps[] = [
     {
       icon: <Webhook className="h-6 w-6" />,
@@ -430,6 +442,20 @@ export default function Integrations() {
       isConnected: !!zoomIntegration,
       route: "zoom-settings",
       gradient: "bg-gradient-to-r from-blue-500 to-blue-700",
+    },
+    {
+      icon: <Mail className="h-6 w-6" />,
+      title: "Gmail",
+      description: "חיבור תיבת Gmail לשליחה, קבלה וארגון מיילים",
+      features: [
+        "שליחה וקבלה של מיילים",
+        "ארגון לפי קטגוריות",
+        "חסימת שולחים",
+        "חיפוש מתקדם",
+      ],
+      isConnected: !!gmailStatus?.connected,
+      route: "gmail-settings",
+      gradient: "bg-gradient-to-r from-red-500 to-red-700",
     },
   ];
 
