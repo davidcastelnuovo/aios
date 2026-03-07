@@ -1,18 +1,24 @@
 
 
-# תיקון בוחר תאריכים בפילטר לידים
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## הבעיה
-הלוח שנה (Calendar) בתוך ה-Popover של פילטר התאריכים לא מגיב ללחיצות כי חסר `pointer-events-auto` ברכיב Calendar. זה בעיה ידועה כש-Calendar נמצא בתוך Dialog + Popover.
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-## הפתרון
-שני שינויים:
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-1. **`src/components/ui/calendar.tsx`** — הוספת `pointer-events-auto` ל-className הדיפולטי של DayPicker (שורה 14):
-   - `cn("p-3", className)` → `cn("p-3 pointer-events-auto", className)`
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-2. **`src/components/leads/LeadFiltersDialog.tsx`** — וידוא שה-Calendar ב-date pickers עובד תקין (שורות 646, 669). אם השינוי ב-calendar.tsx מספיק, לא צריך לשנות כאן.
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-## תוצאה
-המשתמש יוכל ללחוץ על תאריכים בלוח השנה ולבחור טווח "מתאריך" - "עד תאריך" בפילטר הלידים.
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 
