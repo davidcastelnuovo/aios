@@ -333,7 +333,7 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
                   {msg.role === 'user' ? (
                     <div className="flex justify-end">
                       <Card className="p-2.5 max-w-[80%] bg-primary text-primary-foreground border-0">
-                        <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                        <p dir="rtl" className="whitespace-pre-wrap text-sm text-right">{msg.content}</p>
                       </Card>
                     </div>
                   ) : msg.role === 'tool_call' ? (
@@ -346,7 +346,7 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
                   ) : (
                     <div className="flex justify-start">
                       <Card className="p-2.5 max-w-[85%] bg-card border">
-                        <div className="prose prose-sm dark:prose-invert max-w-none text-sm [&>p]:mb-1 [&>ul]:my-1 [&>ol]:my-1">
+                        <div dir="rtl" className="prose prose-sm dark:prose-invert max-w-none text-sm text-right [&>p]:mb-1 [&>ul]:my-1 [&>ol]:my-1">
                           <ReactMarkdown>{msg.content || ''}</ReactMarkdown>
                         </div>
                       </Card>
@@ -358,7 +358,7 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
               {streamingMessage && (
                 <div className="flex justify-start">
                   <Card className="p-2.5 max-w-[85%] bg-card border">
-                    <div className="prose prose-sm dark:prose-invert max-w-none text-sm [&>p]:mb-1">
+                    <div dir="rtl" className="prose prose-sm dark:prose-invert max-w-none text-sm text-right [&>p]:mb-1">
                       <ReactMarkdown>{streamingMessage}</ReactMarkdown>
                     </div>
                     <Loader2 className="h-3 w-3 animate-spin inline-block mr-1 mt-1" />
