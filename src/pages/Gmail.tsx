@@ -618,7 +618,7 @@ export default function Gmail() {
                         onClick={() => fetchMessage.mutate(msg.id)}
                       >
                         {/* Checkbox */}
-                        <div className="w-8 flex-shrink-0 flex items-center justify-center" onClick={(e) => { e.stopPropagation(); toggleSelect(msg.id); }}>
+                        <div className="w-8 flex-shrink-0 flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
                           <Checkbox
                             checked={isSelected}
                             onCheckedChange={() => toggleSelect(msg.id)}
