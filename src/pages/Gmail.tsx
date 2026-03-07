@@ -192,12 +192,18 @@ export default function Gmail() {
     enabled: !!userId,
   });
 
-  // Fetch messages with date query
+  // Fetch messages with date query + allowed labels
   const { data: messagesData, isLoading, refetch } = useQuery({
-    queryKey: ['gmail-messages', fullQuery, currentPageToken],
+    queryKey: ['gmail-messages', fullQuery, currentPageToken, allowedLabels],
     queryFn: async () => {
+      // Build query with allowed label filters
+      let finalQuery = fullQuery;
+      if (allowedLabels.length > 0) {
+        const labelFilter = allowedLabels.map((lid: string) => `label:${lid}`).join(' OR ');
+        finalQuery = finalQuery ? `${finalQuery} (${labelFilter})` : `(${labelFilter})`;
+      }
       const { data, error } = await supabase.functions.invoke('gmail-api', {
-        body: { action: 'list', query: fullQuery, maxResults: 25, pageToken: currentPageToken },
+        body: { action: 'list', query: finalQuery, maxResults: 25, pageToken: currentPageToken },
       });
       if (error) throw error;
       return data as { messages: EmailMessage[]; nextPageToken?: string; resultSizeEstimate?: number };
