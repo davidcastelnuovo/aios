@@ -245,7 +245,7 @@ export default function Gmail() {
             <Settings className="h-4 w-4" />
           </Button>
           <Button size="sm" onClick={() => { setReplyMode(false); setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeOpen(true); }}>
-            <Send className="h-4 w-4 ml-2" />
+            <Send className="h-4 w-4 me-2" />
             מייל חדש
           </Button>
         </div>
@@ -293,16 +293,16 @@ export default function Gmail() {
           <CardContent className="p-6 space-y-4">
             <div className="flex items-center justify-between">
               <Button variant="ghost" size="sm" onClick={() => setSelectedMessage(null)}>
-                <ArrowRight className="h-4 w-4 ml-1" />
+                <ArrowRight className="h-4 w-4 me-1" />
                 חזור
               </Button>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => handleReply(selectedMessage)}>
-                  <Reply className="h-4 w-4 ml-1" />
+                  <Reply className="h-4 w-4 me-1" />
                   השב
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => blockSender.mutate(extractEmail(selectedMessage.from))}>
-                  <Ban className="h-4 w-4 ml-1" />
+                  <Ban className="h-4 w-4 me-1" />
                   חסום
                 </Button>
               </div>
@@ -349,7 +349,7 @@ export default function Gmail() {
                           <div className="flex items-center gap-2">
                             {msg.isUnread && <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />}
                             <span className="text-sm truncate">{extractName(msg.from)}</span>
-                            <span className="text-xs text-muted-foreground mr-auto whitespace-nowrap" dir="ltr">
+                            <span className="text-xs text-muted-foreground ms-auto whitespace-nowrap" dir="ltr">
                               {new Date(msg.date).toLocaleDateString('he-IL')}
                             </span>
                           </div>
@@ -379,7 +379,7 @@ export default function Gmail() {
                               <DropdownMenuContent align="end">
                                 {categories.map((cat: any) => (
                                   <DropdownMenuItem key={cat.id} onClick={() => assignCategory.mutate({ messageId: msg.id, categoryId: cat.id })}>
-                                    <div className="w-3 h-3 rounded-full ml-2" style={{ backgroundColor: cat.color }} />
+                                    <div className="w-3 h-3 rounded-full me-2" style={{ backgroundColor: cat.color }} />
                                     {cat.name}
                                   </DropdownMenuItem>
                                 ))}
@@ -421,7 +421,7 @@ export default function Gmail() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setComposeOpen(false)}>ביטול</Button>
             <Button onClick={() => sendMutation.mutate()} disabled={sendMutation.isPending}>
-              {sendMutation.isPending ? <Loader2 className="animate-spin h-4 w-4 ml-2" /> : <Send className="h-4 w-4 ml-2" />}
+              {sendMutation.isPending ? <Loader2 className="animate-spin h-4 w-4 me-2" /> : <Send className="h-4 w-4 me-2" />}
               שלח
             </Button>
           </DialogFooter>
