@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { CreatePaymentLinkDialog } from "@/components/forms/CreatePaymentLinkDialog";
-import { EditSupplierDialog } from "@/components/forms/EditSupplierDialog";
+import { SupplierInvoicesDialog } from "@/components/forms/SupplierInvoicesDialog";
 import { EditCampaignerDialog } from "@/components/forms/EditCampaignerDialog";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { format, subMonths } from "date-fns";
@@ -1664,9 +1664,9 @@ export default function AccountingIntegrations() {
         client={paymentLinkClient}
       />
 
-      {/* Edit Supplier Dialog */}
+      {/* Supplier Invoices Dialog */}
       {editingSupplier && (
-        <EditSupplierDialog
+        <SupplierInvoicesDialog
           supplier={editingSupplier}
           open={!!editingSupplier}
           onOpenChange={(open) => !open && setEditingSupplier(null)}
