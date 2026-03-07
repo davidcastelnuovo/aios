@@ -308,6 +308,24 @@ Deno.serve(async (req) => {
                 if (effectiveActionType === 'agent') {
                   const agentId = stepConfig.agent_id
                   if (agentId) {
+                    // Build command_text from step_instruction with variable replacement
+                    let commandText = stepConfig.step_instruction || payloadData?.command_text || payloadData?.text || 'הפעל את האוטומציה'
+                    
+                    // Replace {{variable}} placeholders with actual values from stepData
+                    commandText = commandText.replace(/\{\{(\w+)\}\}/g, (match: string, key: string) => {
+                      if (stepData[key] !== undefined && stepData[key] !== null) return String(stepData[key])
+                      if (payloadData?.[key] !== undefined && payloadData?.[key] !== null) return String(payloadData[key])
+                      return match // Keep placeholder if no value found
+                    })
+
+                    // Append output format instruction if specified
+                    const outputFormat = stepConfig.output_format
+                    if (outputFormat === 'json') {
+                      commandText += '\n\nחשוב: החזר את התשובה בפורמט JSON בלבד, ללא טקסט נוסף.'
+                    } else if (outputFormat === 'single_value') {
+                      commandText += '\n\nחשוב: החזר ערך בודד בלבד, ללא הסברים או טקסט נוסף.'
+                    }
+
                     const agentUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/run-ai-agent`
                     const agentRes = await fetch(agentUrl, {
                       method: 'POST',
@@ -317,7 +335,7 @@ Deno.serve(async (req) => {
                       },
                       body: JSON.stringify({
                         agent_id: agentId,
-                        command_text: payloadData?.command_text || payloadData?.text || 'הפעל את האוטומציה',
+                        command_text: commandText,
                         automation_id: automation.id,
                         user_name: payloadData?.user_name || 'מערכת',
                       }),
