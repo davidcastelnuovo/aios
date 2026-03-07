@@ -323,10 +323,12 @@ export default function Gmail() {
     const d = new Date(dateStr);
     const today = new Date();
     const isToday = d.toDateString() === today.toDateString();
+    const time = d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
     if (isToday) {
-      return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+      return time;
     }
-    return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
+    const date = d.toLocaleDateString('he-IL', { day: 'numeric', month: '2-digit' });
+    return `${date} ${time}`;
   };
 
   // Multi-select helpers
@@ -640,7 +642,7 @@ export default function Gmail() {
                         </div>
 
                         {/* Subject + snippet */}
-                        <div className="flex-1 min-w-0 flex items-center gap-2 text-sm truncate">
+                        <div className="flex-1 min-w-0 flex items-center gap-2 text-sm truncate overflow-hidden">
                           <span className={cn(
                             "truncate",
                             msg.isUnread ? "font-semibold text-foreground" : "text-foreground/80"
@@ -689,7 +691,7 @@ export default function Gmail() {
                         </div>
 
                         {/* Time/date - fixed width */}
-                        <div className="w-[60px] flex-shrink-0 text-xs text-muted-foreground text-left ps-2">
+                        <div className="w-[110px] flex-shrink-0 text-xs text-muted-foreground text-left ps-2">
                           {formatTime(msg.date)}
                         </div>
                       </div>
