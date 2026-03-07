@@ -6,8 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Mail, Send, ArrowRight, ArrowLeft, RefreshCw, Loader2, Ban, Tag, Settings, Star, MailOpen, X, Reply } from "lucide-react";
+import { Search, Mail, Send, ArrowRight, RefreshCw, Loader2, Ban, Tag, Settings, ChevronLeft, ChevronRight, CalendarIcon, Reply } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -15,6 +17,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
+import { format, addDays, subDays } from "date-fns";
+import { he } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 interface EmailMessage {
   id: string;
@@ -44,8 +49,31 @@ export default function Gmail() {
   const [composeSubject, setComposeSubject] = useState('');
   const [composeBody, setComposeBody] = useState('');
   const [replyMode, setReplyMode] = useState(false);
-  const [pageToken, setPageToken] = useState<string | undefined>();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  
+  // Date & pagination state
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageTokenHistory, setPageTokenHistory] = useState<string[]>([]);
+  const [currentPageToken, setCurrentPageToken] = useState<string | undefined>();
+
+  // Build date query
+  const buildDateQuery = () => {
+    const y = selectedDate.getFullYear();
+    const m = selectedDate.getMonth() + 1;
+    const d = selectedDate.getDate();
+    const next = addDays(selectedDate, 1);
+    const ny = next.getFullYear();
+    const nm = next.getMonth() + 1;
+    const nd = next.getDate();
+    return `after:${y}/${m}/${d} before:${ny}/${nm}/${nd}`;
+  };
+
+  const fullQuery = useMemo(() => {
+    const dateQ = buildDateQuery();
+    return activeSearch ? `${dateQ} ${activeSearch}` : dateQ;
+  }, [selectedDate, activeSearch]);
 
   // Check connection
   const { data: connectionStatus } = useQuery({
@@ -108,12 +136,12 @@ export default function Gmail() {
     enabled: !!userId,
   });
 
-  // Fetch messages
+  // Fetch messages with date query
   const { data: messagesData, isLoading, refetch } = useQuery({
-    queryKey: ['gmail-messages', activeSearch, pageToken],
+    queryKey: ['gmail-messages', fullQuery, currentPageToken],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke('gmail-api', {
-        body: { action: 'list', query: activeSearch || undefined, maxResults: 25, pageToken },
+        body: { action: 'list', query: fullQuery, maxResults: 25, pageToken: currentPageToken },
       });
       if (error) throw error;
       return data as { messages: EmailMessage[]; nextPageToken?: string; resultSizeEstimate?: number };
@@ -215,6 +243,49 @@ export default function Gmail() {
   const extractEmail = (str: string) => str.match(/<(.+?)>/)?.[1] || str;
   const extractName = (str: string) => str.replace(/<.+?>/, '').trim().replace(/"/g, '') || str;
 
+  const formatTime = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const today = new Date();
+    const isToday = d.toDateString() === today.toDateString();
+    if (isToday) {
+      return d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' });
+    }
+    return d.toLocaleDateString('he-IL', { day: 'numeric', month: 'short' });
+  };
+
+  // Date navigation
+  const goToPrevDay = () => {
+    setSelectedDate(prev => subDays(prev, 1));
+    resetPagination();
+  };
+  const goToNextDay = () => {
+    setSelectedDate(prev => addDays(prev, 1));
+    resetPagination();
+  };
+  const resetPagination = () => {
+    setCurrentPage(1);
+    setCurrentPageToken(undefined);
+    setPageTokenHistory([]);
+  };
+
+  // Pagination
+  const goToNextPage = () => {
+    if (messagesData?.nextPageToken) {
+      setPageTokenHistory(prev => [...prev, currentPageToken || '']);
+      setCurrentPageToken(messagesData.nextPageToken);
+      setCurrentPage(prev => prev + 1);
+    }
+  };
+  const goToPrevPage = () => {
+    if (currentPage > 1) {
+      const newHistory = [...pageTokenHistory];
+      const prevToken = newHistory.pop();
+      setPageTokenHistory(newHistory);
+      setCurrentPageToken(prevToken === '' ? undefined : prevToken);
+      setCurrentPage(prev => prev - 1);
+    }
+  };
+
   if (!connectionStatus?.connected) {
     return (
       <div className="container mx-auto p-6 flex flex-col items-center justify-center min-h-[60vh]" dir="rtl">
@@ -230,18 +301,18 @@ export default function Gmail() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-4" dir="rtl">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Mail className="h-6 w-6" />
+    <div className="container mx-auto p-4 space-y-3" dir="rtl">
+      {/* Top bar */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <Mail className="h-5 w-5" />
             תיבת דואר
           </h1>
-          <Badge variant="outline" className="text-xs">{connectionStatus?.google_email}</Badge>
+          <Badge variant="outline" className="text-xs hidden sm:inline-flex">{connectionStatus?.google_email}</Badge>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => navigate(buildPath('gmail-settings'))}>
+          <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => navigate(buildPath('gmail-settings'))}>
             <Settings className="h-4 w-4" />
           </Button>
           <Button size="sm" onClick={() => { setReplyMode(false); setComposeTo(''); setComposeSubject(''); setComposeBody(''); setComposeOpen(true); }}>
@@ -251,43 +322,76 @@ export default function Gmail() {
         </div>
       </div>
 
-      {/* Search + Categories Filter */}
-      <div className="flex gap-2 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
+      {/* Toolbar: Search + Date Navigation + Categories */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Search */}
+        <div className="relative flex-1 min-w-[180px] max-w-sm">
           <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="חיפוש מיילים..."
+            placeholder="חיפוש..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { setActiveSearch(searchQuery); setPageToken(undefined); } }}
-            className="pr-9"
+            onKeyDown={(e) => { if (e.key === 'Enter') { setActiveSearch(searchQuery); resetPagination(); } }}
+            className="pr-9 h-9"
           />
         </div>
-        <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
+
+        {/* Date navigation */}
+        <div className="flex items-center gap-1 border rounded-md bg-background px-1">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goToNextDay}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-sm font-medium px-2">
+                <CalendarIcon className="h-3.5 w-3.5" />
+                {format(selectedDate, 'd בMMMM yyyy', { locale: he })}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="center">
+              <Calendar
+                mode="single"
+                selected={selectedDate}
+                onSelect={(d) => { if (d) { setSelectedDate(d); resetPagination(); setDatePickerOpen(false); } }}
+                className={cn("p-3 pointer-events-auto")}
+              />
+            </PopoverContent>
+          </Popover>
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={goToPrevDay}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => refetch()} disabled={isLoading}>
           <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
         </Button>
-        <Button
-          variant={selectedCategory === null ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setSelectedCategory(null)}
-        >
-          הכל
-        </Button>
-        {categories.map((cat: any) => (
+
+        {/* Category filters */}
+        <div className="flex gap-1 flex-wrap">
           <Button
-            key={cat.id}
-            variant={selectedCategory === cat.id ? 'default' : 'outline'}
+            variant={selectedCategory === null ? 'default' : 'outline'}
             size="sm"
-            onClick={() => setSelectedCategory(cat.id === selectedCategory ? null : cat.id)}
-            className="gap-1"
+            className="h-8 text-xs"
+            onClick={() => setSelectedCategory(null)}
           >
-            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
-            {cat.name}
+            הכל
           </Button>
-        ))}
+          {categories.map((cat: any) => (
+            <Button
+              key={cat.id}
+              variant={selectedCategory === cat.id ? 'default' : 'outline'}
+              size="sm"
+              className="h-8 text-xs gap-1"
+              onClick={() => setSelectedCategory(cat.id === selectedCategory ? null : cat.id)}
+            >
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
+              {cat.name}
+            </Button>
+          ))}
+        </div>
       </div>
 
-      {/* Message list or detail */}
+      {/* Message detail view */}
       {selectedMessage ? (
         <Card>
           <CardContent className="p-6 space-y-4">
@@ -323,7 +427,7 @@ export default function Gmail() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <Card className="overflow-hidden">
           <CardContent className="p-0">
             {isLoading ? (
               <div className="flex items-center justify-center p-12">
@@ -332,48 +436,65 @@ export default function Gmail() {
             ) : filteredMessages.length === 0 ? (
               <div className="text-center p-12 text-muted-foreground">
                 <Mail className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                <p>אין הודעות</p>
+                <p>אין הודעות לתאריך זה</p>
               </div>
             ) : (
-              <ScrollArea className="max-h-[70vh]">
-                <div className="divide-y">
+              <ScrollArea className="max-h-[calc(100vh-260px)]">
+                <div className="divide-y divide-border">
                   {filteredMessages.map((msg) => {
                     const msgCategories = (messageCategoryMap as Record<string, string[]>)[msg.id] || [];
+                    const fromName = extractName(msg.from);
                     return (
                       <div
                         key={msg.id}
-                        className={`flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer transition-colors ${msg.isUnread ? 'bg-primary/5 font-semibold' : ''}`}
+                        className={cn(
+                          "flex items-center h-10 px-3 hover:bg-muted/50 cursor-pointer transition-colors group border-b border-border last:border-b-0",
+                          msg.isUnread && "bg-primary/5"
+                        )}
                         onClick={() => fetchMessage.mutate(msg.id)}
                       >
-                        <div className="flex-1 min-w-0 text-right">
-                          <div className="flex items-center gap-2">
-                            {msg.isUnread && <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />}
-                            <span className="text-sm truncate">{extractName(msg.from)}</span>
-                            <span className="text-xs text-muted-foreground ms-auto whitespace-nowrap" dir="ltr">
-                              {new Date(msg.date).toLocaleDateString('he-IL')}
-                            </span>
-                          </div>
-                          <div className="text-sm truncate">{msg.subject || '(ללא נושא)'}</div>
-                          <div className="text-xs text-muted-foreground truncate">{msg.snippet}</div>
-                          {msgCategories.length > 0 && (
-                            <div className="flex gap-1 mt-1">
-                              {msgCategories.map((cId) => {
-                                const cat = categories.find((c: any) => c.id === cId);
-                                return cat ? (
-                                  <span key={cId} className="text-xs px-1.5 py-0.5 rounded-full text-white" style={{ backgroundColor: cat.color }}>
-                                    {cat.name}
-                                  </span>
-                                ) : null;
-                              })}
-                            </div>
-                          )}
+                        {/* Unread indicator */}
+                        <div className="w-5 flex-shrink-0 flex items-center justify-center">
+                          {msg.isUnread && <div className="w-2 h-2 rounded-full bg-primary" />}
                         </div>
-                        <div className="flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+
+                        {/* Sender name - fixed width */}
+                        <div className={cn(
+                          "w-[180px] flex-shrink-0 text-sm truncate text-right pe-3",
+                          msg.isUnread ? "font-bold text-foreground" : "text-foreground/80"
+                        )}>
+                          {fromName}
+                        </div>
+
+                        {/* Subject + snippet */}
+                        <div className="flex-1 min-w-0 flex items-center gap-2 text-sm truncate">
+                          <span className={cn(
+                            "truncate",
+                            msg.isUnread ? "font-semibold text-foreground" : "text-foreground/80"
+                          )}>
+                            {msg.subject || '(ללא נושא)'}
+                          </span>
+                          <span className="text-muted-foreground truncate hidden sm:inline">
+                            — {msg.snippet}
+                          </span>
+                          {/* Category badges inline */}
+                          {msgCategories.length > 0 && msgCategories.map((cId) => {
+                            const cat = categories.find((c: any) => c.id === cId);
+                            return cat ? (
+                              <span key={cId} className="text-[10px] px-1.5 py-0.5 rounded-full text-white flex-shrink-0" style={{ backgroundColor: cat.color }}>
+                                {cat.name}
+                              </span>
+                            ) : null;
+                          })}
+                        </div>
+
+                        {/* Actions (visible on hover) */}
+                        <div className="flex gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
                           {categories.length > 0 && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" className="h-7 w-7">
-                                  <Tag className="h-3.5 w-3.5" />
+                                  <Tag className="h-3 w-3" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
@@ -387,8 +508,13 @@ export default function Gmail() {
                             </DropdownMenu>
                           )}
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => blockSender.mutate(extractEmail(msg.from))}>
-                            <Ban className="h-3.5 w-3.5" />
+                            <Ban className="h-3 w-3" />
                           </Button>
+                        </div>
+
+                        {/* Time/date - fixed width */}
+                        <div className="w-[60px] flex-shrink-0 text-xs text-muted-foreground text-left ps-2">
+                          {formatTime(msg.date)}
                         </div>
                       </div>
                     );
@@ -396,10 +522,18 @@ export default function Gmail() {
                 </div>
               </ScrollArea>
             )}
-            {messagesData?.nextPageToken && (
-              <div className="p-3 border-t text-center">
-                <Button variant="ghost" size="sm" onClick={() => setPageToken(messagesData.nextPageToken)}>
-                  טען עוד הודעות
+
+            {/* Pagination footer */}
+            {(messagesData?.nextPageToken || currentPage > 1) && (
+              <div className="flex items-center justify-between px-4 py-2 border-t bg-muted/20">
+                <Button variant="ghost" size="sm" className="h-8" onClick={goToPrevPage} disabled={currentPage <= 1}>
+                  <ChevronRight className="h-4 w-4 me-1" />
+                  הקודם
+                </Button>
+                <span className="text-xs text-muted-foreground">עמוד {currentPage}</span>
+                <Button variant="ghost" size="sm" className="h-8" onClick={goToNextPage} disabled={!messagesData?.nextPageToken}>
+                  הבא
+                  <ChevronLeft className="h-4 w-4 ms-1" />
                 </Button>
               </div>
             )}
