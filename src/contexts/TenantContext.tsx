@@ -77,62 +77,68 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      try {
-        console.log("🔄 Syncing tenant to DB:", currentTenantId);
-        
-        // CRITICAL: Cancel all queries and clear cache FIRST
-        await queryClient.cancelQueries();
-        
-        // Clear all tenant-specific data
-        const keysToRemove = [
-          "tasks", "clients", "agencies", "agencies-filter", "user-agency-ids",
-          "leads", "campaigners", "client-onboarding", "finance", "sales-people",
-          "suppliers", "products", "automations", "time-entries", "chat-contacts",
-          "crm-tables", "crm-records", "tenant-for-operations"
-        ];
-        
-        keysToRemove.forEach(key => {
-          queryClient.removeQueries({ queryKey: [key] });
-        });
-        
-        // Also invalidate to force refetch
-        await queryClient.invalidateQueries({ queryKey: ["agencies-filter"] });
-        await queryClient.invalidateQueries({ queryKey: ["tenant-for-operations"] });
-        
-        // Update localStorage
-        localStorage.setItem("selectedTenantId", currentTenantId);
-        
-        // Update user_active_tenant in database
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { error } = await (supabase as any)
-            .from("user_active_tenant")
-            .upsert({
-              user_id: user.id,
-              tenant_id: currentTenantId,
-              updated_at: new Date().toISOString(),
-            }, {
-              onConflict: "user_id"
-            });
+      const timeoutPromise = new Promise<void>((resolve) => {
+        setTimeout(() => {
+          console.warn("⚠️ Tenant sync timed out after 5s, unblocking UI");
+          resolve();
+        }, 5000);
+      });
+
+      const syncPromise = (async () => {
+        try {
+          console.log("🔄 Syncing tenant to DB:", currentTenantId);
           
-          if (error) {
-            console.error("Error updating active tenant in DB:", error);
-          } else {
-            console.log("✅ Active tenant synced to DB:", currentTenantId);
+          // CRITICAL: Cancel all queries and clear cache FIRST
+          await queryClient.cancelQueries();
+          
+          // Clear all tenant-specific data
+          const keysToRemove = [
+            "tasks", "clients", "agencies", "agencies-filter", "user-agency-ids",
+            "leads", "campaigners", "client-onboarding", "finance", "sales-people",
+            "suppliers", "products", "automations", "time-entries", "chat-contacts",
+            "crm-tables", "crm-records", "tenant-for-operations"
+          ];
+          
+          keysToRemove.forEach(key => {
+            queryClient.removeQueries({ queryKey: [key] });
+          });
+          
+          // Also invalidate to force refetch
+          await queryClient.invalidateQueries({ queryKey: ["agencies-filter"] });
+          await queryClient.invalidateQueries({ queryKey: ["tenant-for-operations"] });
+          
+          // Update localStorage
+          localStorage.setItem("selectedTenantId", currentTenantId);
+          
+          // Update user_active_tenant in database
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { error } = await (supabase as any)
+              .from("user_active_tenant")
+              .upsert({
+                user_id: user.id,
+                tenant_id: currentTenantId,
+                updated_at: new Date().toISOString(),
+              }, {
+                onConflict: "user_id"
+              });
+            
+            if (error) {
+              console.error("Error updating active tenant in DB:", error);
+            } else {
+              console.log("✅ Active tenant synced to DB:", currentTenantId);
+            }
+            
+            // Small delay to ensure DB processed the update
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
-          
-          // Small delay to ensure DB processed the update
-          await new Promise(resolve => setTimeout(resolve, 100));
+        } catch (error) {
+          console.error("Error syncing tenant:", error);
         }
-        
-        // Mark as synced AFTER everything completes
-        setIsActiveTenantSynced(true);
-        
-      } catch (error) {
-        console.error("Error syncing tenant:", error);
-        // Still mark as synced to unblock UI
-        setIsActiveTenantSynced(true);
-      }
+      })();
+
+      await Promise.race([syncPromise, timeoutPromise]);
+      setIsActiveTenantSynced(true);
     };
     
     syncTenantToDb();
