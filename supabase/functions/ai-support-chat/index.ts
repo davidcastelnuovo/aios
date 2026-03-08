@@ -501,7 +501,7 @@ const tools = [
           title: { type: 'string', description: 'כותרת המשימה' },
           client_id: { type: 'string', description: 'מזהה הלקוח (UUID, אופציונלי)' },
           priority: { type: 'integer', description: 'עדיפות 1-10', minimum: 1, maximum: 10 },
-          due_date: { type: 'string', format: 'date', description: 'תאריך יעד (YYYY-MM-DD). חובה לציין תאריך כשהמשתמש אומר "להיום" או "למחר" וכו.' },
+          due_date: { type: 'string', format: 'date', description: 'תאריך יעד עתידי בפורמט YYYY-MM-DD (אלא אם המשתמש ביקש מפורשות תאריך עבר)' },
           due_time: { type: 'string', description: 'שעת יעד בפורמט HH:MM (לדוגמה: 09:00, 14:30). אם לא צוין, ברירת מחדל 09:00' },
           notes: { type: 'string', description: 'הערות' },
         },
