@@ -53,6 +53,9 @@ type FormValues = z.infer<typeof formSchema>;
 
 export function AddClientForm() {
   const [open, setOpen] = useState(false);
+  const [additionalContacts, setAdditionalContacts] = useState<Array<{ contact_name: string; phone: string; email: string; role: string }>>([]);
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [newContact, setNewContact] = useState({ contact_name: "", phone: "", email: "", role: "" });
   const queryClient = useQueryClient();
   const { tenantId } = useCurrentTenant();
   const { getFieldLabel } = useCustomFieldLabels('client');
