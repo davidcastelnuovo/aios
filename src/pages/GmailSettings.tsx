@@ -107,6 +107,31 @@ export default function GmailSettings() {
   // Add category
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryColor, setNewCategoryColor] = useState('#3B82F6');
+  const [newCategoryLabelId, setNewCategoryLabelId] = useState('');
+  const [availableLabelsList, setAvailableLabelsList] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [loadingLabelsList, setLoadingLabelsList] = useState(false);
+
+  const fetchLabelsList = async () => {
+    if (availableLabelsList.length > 0) return;
+    setLoadingLabelsList(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('gmail-api', {
+        body: { action: 'listLabels' },
+      });
+      if (error) throw error;
+      setAvailableLabelsList(data.labels || []);
+    } catch {
+      toast.error('שגיאה בטעינת תגיות');
+    } finally {
+      setLoadingLabelsList(false);
+    }
+  };
+
+  // Load labels when connected
+  useEffect(() => {
+    if (connectionStatus?.connected) fetchLabelsList();
+  }, [connectionStatus?.connected]);
+
   const addCategory = useMutation({
     mutationFn: async () => {
       if (!newCategoryName.trim()) throw new Error('שם קטגוריה נדרש');
@@ -115,11 +140,13 @@ export default function GmailSettings() {
         name: newCategoryName.trim(),
         color: newCategoryColor,
         sort_order: categories.length,
-      });
+        gmail_label_id: newCategoryLabelId || null,
+      } as any);
       if (error) throw error;
     },
     onSuccess: () => {
       setNewCategoryName('');
+      setNewCategoryLabelId('');
       queryClient.invalidateQueries({ queryKey: ['gmail-categories'] });
       toast.success('קטגוריה נוספה');
     },
