@@ -637,40 +637,36 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Trigger lead_created automation
+    // Fire-and-forget automation trigger (don't await, don't block response)
     if (tenantId) {
-      try {
-        const automationResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseKey}`,
+      const automationAbort = new AbortController();
+      setTimeout(() => automationAbort.abort(), 5000); // 5s max
+      fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify({
+          trigger_type: 'lead_created',
+          data: {
+            id: lead.id,
+            lead_id: lead.id,
+            company_name: lead.company_name,
+            contact_name: lead.contact_name,
+            phone: lead.phone,
+            email: lead.email,
+            status: lead.status,
+            source: lead.source,
+            agency_id: lead.agency_id,
           },
-          body: JSON.stringify({
-            trigger_type: 'lead_created',
-            data: {
-              id: lead.id,
-              lead_id: lead.id,
-              company_name: lead.company_name,
-              contact_name: lead.contact_name,
-              phone: lead.phone,
-              email: lead.email,
-              status: lead.status,
-              source: lead.source,
-              agency_id: lead.agency_id,
-            },
-            tenant_id: tenantId,
-          }),
-        });
-        
-        if (automationResponse.ok) {
-          console.log('✅ lead_created automation triggered successfully');
-        } else {
-          console.error('⚠️ Failed to trigger automation:', await automationResponse.text());
-        }
-      } catch (automationError) {
-        console.error('⚠️ Error triggering lead_created automation:', automationError);
-      }
+          tenant_id: tenantId,
+        }),
+        signal: automationAbort.signal,
+      }).then(r => {
+        if (r.ok) console.log('✅ lead_created automation triggered');
+        else r.text().then(t => console.error('⚠️ Automation trigger failed:', t));
+      }).catch(e => console.error('⚠️ Automation trigger error:', e.message));
     }
 
     return new Response(
