@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Mail, Send, ArrowRight, RefreshCw, Loader2, Ban, Tag, Settings, ChevronLeft, ChevronRight, CalendarIcon, Reply, Trash2 } from "lucide-react";
+import { Search, Mail, Send, ArrowRight, RefreshCw, Loader2, Ban, Tag, Settings, ChevronLeft, ChevronRight, CalendarIcon, Reply, Trash2, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
