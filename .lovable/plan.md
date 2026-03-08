@@ -1,23 +1,24 @@
 
 
-# הוספת תמיכה ב-`{{message_text}}` בהחלפת משתנים באוטומציות
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## הבעיה
-הפונקציה `replaceTemplateVariables` ב-`trigger-automation` לא כוללת את `message_text` במפת המשתנים. הנתון מגיע בפיילואד (מ-Green API webhook ומ-ManyChat) אבל לא מוחלף בטמפלייט.
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-## הפתרון
-הוספת `message_text` (וגם `sender_name`, `sender_phone`, `group_name` שגם מגיעים בפיילואד) למפת המשתנים בפונקציה `replaceTemplateVariables`.
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-### שינוי ב-`supabase/functions/trigger-automation/index.ts`:
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-בשורה ~1807 (סוף מפת ה-variables), הוספת:
-```typescript
-// Chat/message variables
-message_text: data.message_text || '',
-sender_name: data.sender_name || '',
-sender_phone: data.sender_phone || '',
-group_name: data.group_name || '',
-```
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-שינוי בקובץ אחד בלבד, תיקון של 4 שורות.
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 
