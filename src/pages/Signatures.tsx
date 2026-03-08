@@ -140,7 +140,7 @@ export default function Signatures() {
               name: r.name,
               email: r.email,
               sign_order: i + 1,
-              signature_position: r.signaturePosition,
+              signature_position: r.signaturePosition as any,
             }))
           );
         if (recError) throw recError;

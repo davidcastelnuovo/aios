@@ -41,7 +41,7 @@ export default function SignDocument() {
     enabled: !!token,
   });
 
-  const signaturePosition = recipient?.signature_position as SignaturePosition | null;
+  const signaturePosition = recipient?.signature_position as unknown as SignaturePosition | null;
   const useOverlay = !!signaturePosition && recipient?.signature_documents?.file_url;
 
   // Setup standalone canvas (fallback)
