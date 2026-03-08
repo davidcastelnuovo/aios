@@ -194,6 +194,16 @@ export default function AISupport() {
             } else if (parsed.type === 'title_update') {
               // Title was auto-generated, refresh conversation list
               queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
+            } else if (parsed.type === 'invalidate') {
+              // Auto-refresh UI when agent modifies data
+              const entity = parsed.entity;
+              if (entity) {
+                queryClient.invalidateQueries({ queryKey: [entity] });
+                // Also invalidate related query keys
+                if (entity === 'tasks') {
+                  queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+                }
+              }
             } else if (parsed.type === 'done') {
               if (assistantContent) {
                 setMessages(prev => [...prev, {

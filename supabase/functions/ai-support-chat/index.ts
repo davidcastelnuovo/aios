@@ -18,6 +18,7 @@ function buildSystemPrompt(
   userName: string,
   userEmail: string,
   currentDateContext: string,
+  memoryContext: string,
   campaignerName?: string,
   campaignerId?: string,
 ) {
@@ -32,7 +33,10 @@ ${currentDateContext}
 ${campaignerName ? `- **תפקיד:** קמפיינר - ${campaignerName}` : ''}
 ${campaignerId ? `- **מזהה קמפיינר:** ${campaignerId}` : ''}
 
-📋 **מבנה המערכת:**
+${memoryContext ? `🧠 **זיכרון מתמשך — מידע שנשמר משיחות קודמות:**
+${memoryContext}
+
+` : ''}📋 **מבנה המערכת:**
 - **agencies** (סוכנויות) - חברות שמנהלות קמפיינים
 - **clients** (לקוחות) - לקוחות של הסוכנויות
 - **tasks** (משימות) - משימות שקשורות ללקוחות/סוכנויות
@@ -48,6 +52,7 @@ ${campaignerId ? `- **מזהה קמפיינר:** ${campaignerId}` : ''}
 5. **הודעות** - שליחת הודעות WhatsApp ללקוחות/לידים
 6. **חיפוש** - מציאת סוכנויות, לקוחות, קמפיינרים
 7. **אימיילים** - קריאה, שליחה, מחיקה של אימיילים מ-Gmail
+8. **זיכרון** - שמירה, שליפה ומחיקה של מידע לזיכרון ארוך טווח
 
 📅 **חשוב לגבי משימות ויומן:**
 - כשאתה יוצר או מעדכן משימה עם תאריך, תמיד נסה לסנכרן אותה ליומן
@@ -57,6 +62,12 @@ ${campaignerId ? `- **מזהה קמפיינר:** ${campaignerId}` : ''}
 - אם המשתמש מבקש לערוך משימה קיימת, חובה להשתמש ב-list_tasks + update_task ולא ליצור משימה חדשה
 - אם המשתמש לא ציין שעה, ברירת מחדל: 09:00
 - אחרי יצירה/עדכון, דווח לפי שדה calendar_synced (ולא לפי הנחה)
+
+🧠 **חשוב לגבי זיכרון:**
+- כשהמשתמש מספר לך העדפות, שמות פרויקטים, הוראות חוזרות, או מידע חשוב — **שמור אותם אוטומטית** באמצעות save_memory
+- קטגוריות מומלצות: "preferences" (העדפות), "projects" (פרויקטים), "clients" (לקוחות), "workflows" (תהליכים), "personal" (אישי)
+- אל תשמור מידע טריוויאלי — רק דברים שיעזרו לך בשיחות עתידיות
+- כש-key כבר קיים, הוא יתעדכן אוטומטית (UPSERT)
 
 💬 **הנחיות תקשורת:**
 - דבר בעברית, בצורה ישירה ומקצועית
@@ -118,6 +129,9 @@ function buildLocalDateTimeRange(dateStr: string, timeStr: string, durationMinut
   return { startLocalDateTime, endLocalDateTime, safeTime };
 }
 
+// Track which entities were modified during tool execution
+const modifiedEntities: Set<string> = new Set();
+
 async function executeTool(
   toolCall: ToolCall, 
   supabaseClient: any, 
@@ -172,6 +186,9 @@ async function executeTool(
           .select('*, clients(name), agencies(name), campaigners(full_name)')
           .single();
         if (error) throw error;
+
+        // Mark tasks as modified for UI invalidation
+        modifiedEntities.add('tasks');
 
         // Auto-sync to Google Calendar if due_date is set
         let calendarSynced = false;
@@ -306,6 +323,9 @@ async function executeTool(
 
         if (updateError || !updatedTask) throw updateError || new Error('שגיאה בעדכון המשימה');
 
+        // Mark tasks as modified for UI invalidation
+        modifiedEntities.add('tasks');
+
         let calendarSynced = false;
         let calendarSyncError: string | null = null;
         let calendarEventId: string | null = updatedTask.google_calendar_event_id || null;
@@ -436,6 +456,7 @@ async function executeTool(
           .from('tasks').update({ status }).eq('id', task_id).eq('tenant_id', tenantId)
           .select('*, clients(name), agencies(name)').single();
         if (error) throw error;
+        modifiedEntities.add('tasks');
         return { success: true, result: { task_id: data.id, title: data.title, status: data.status, client_name: data.clients?.name } };
       }
 
@@ -487,12 +508,9 @@ async function executeTool(
         return { success: true, result: { entity_type, count: data.length, results: data } };
       }
 
-      // === NEW TOOLS ===
-
       case 'create_lead': {
         const { company_name, contact_name, phone, email, source, notes } = toolCall.args;
         
-        // Get default agency
         const { data: defaultAgency } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).eq('is_default', true).limit(1).single();
         const agencyId = defaultAgency?.id;
         if (!agencyId) {
@@ -514,6 +532,7 @@ async function executeTool(
 
         const { data, error } = await supabaseClient.from('leads').insert(leadData).select('id, company_name, contact_name, status').single();
         if (error) throw error;
+        modifiedEntities.add('leads');
         return { success: true, result: { lead_id: data.id, company_name: data.company_name, contact_name: data.contact_name, status: data.status } };
       }
 
@@ -521,6 +540,7 @@ async function executeTool(
         const { lead_id, status } = toolCall.args;
         const { data, error } = await supabaseClient.from('leads').update({ status }).eq('id', lead_id).eq('tenant_id', tenantId).select('id, company_name, status').single();
         if (error) throw error;
+        modifiedEntities.add('leads');
         return { success: true, result: { lead_id: data.id, company_name: data.company_name, status: data.status } };
       }
 
@@ -557,6 +577,7 @@ async function executeTool(
           name, contact_name, phone, email, industry, notes, status: 'active', agency_id: agencyId, tenant_id: tenantId,
         }).select('id, name, status').single();
         if (error) throw error;
+        modifiedEntities.add('clients');
         return { success: true, result: { client_id: data.id, name: data.name, status: data.status } };
       }
 
@@ -631,7 +652,6 @@ async function executeTool(
       case 'send_message': {
         const { contact_type, contact_id, message_text } = toolCall.args;
         
-        // Get contact phone
         let phone: string | null = null;
         let contactName: string | null = null;
         
@@ -647,7 +667,6 @@ async function executeTool(
 
         if (!phone) return { success: false, error: 'לא נמצא מספר טלפון עבור איש הקשר' };
 
-        // Try sending via Green API
         try {
           const sendResponse = await fetch(`${SUPABASE_URL}/functions/v1/send-green-api-message`, {
             method: 'POST',
@@ -672,6 +691,49 @@ async function executeTool(
         } catch (e: any) {
           return { success: false, error: `שגיאה בשליחת ההודעה: ${e.message}` };
         }
+      }
+
+      // === MEMORY TOOLS ===
+
+      case 'save_memory': {
+        const { category, key, content } = toolCall.args;
+        const { data, error } = await supabaseClient
+          .from('ai_memory')
+          .upsert(
+            { user_id: userId, tenant_id: tenantId, category, key, content, updated_at: new Date().toISOString() },
+            { onConflict: 'user_id,tenant_id,category,key' }
+          )
+          .select('id, category, key')
+          .single();
+        if (error) throw error;
+        return { success: true, result: { saved: true, category, key } };
+      }
+
+      case 'recall_memory': {
+        const { category } = toolCall.args;
+        let query = supabaseClient
+          .from('ai_memory')
+          .select('category, key, content, updated_at')
+          .eq('user_id', userId)
+          .eq('tenant_id', tenantId)
+          .order('updated_at', { ascending: false });
+        if (category) query = query.eq('category', category);
+        const { data, error } = await query.limit(50);
+        if (error) throw error;
+        return { success: true, result: { count: data.length, memories: data } };
+      }
+
+      case 'delete_memory': {
+        const { category, key } = toolCall.args;
+        const { error } = await supabaseClient
+          .from('ai_memory')
+          .delete()
+          .eq('user_id', userId)
+          .eq('tenant_id', tenantId)
+          .eq('category', category)
+          .eq('key', key);
+        if (error) throw error;
+        return { success: true, result: { deleted: true, category, key } };
       }
 
       default:
@@ -957,6 +1019,51 @@ const tools = [
       },
     },
   },
+  // === MEMORY TOOLS ===
+  {
+    type: 'function',
+    function: {
+      name: 'save_memory',
+      description: 'שמירת פריט זיכרון לשימוש בשיחות עתידיות. השתמש כדי לזכור העדפות, פרויקטים, תהליכים ומידע חשוב שהמשתמש מספר.',
+      parameters: {
+        type: 'object',
+        properties: {
+          category: { type: 'string', description: 'קטגוריה: preferences, projects, clients, workflows, personal', enum: ['preferences', 'projects', 'clients', 'workflows', 'personal'] },
+          key: { type: 'string', description: 'מזהה ייחודי לפריט (לדוגמה: "default_priority", "project_x_details")' },
+          content: { type: 'string', description: 'תוכן הזיכרון' },
+        },
+        required: ['category', 'key', 'content'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'recall_memory',
+      description: 'שליפת זיכרונות שנשמרו. אפשר לסנן לפי קטגוריה.',
+      parameters: {
+        type: 'object',
+        properties: {
+          category: { type: 'string', description: 'סינון לפי קטגוריה (אופציונלי)', enum: ['preferences', 'projects', 'clients', 'workflows', 'personal'] },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_memory',
+      description: 'מחיקת פריט זיכרון ספציפי',
+      parameters: {
+        type: 'object',
+        properties: {
+          category: { type: 'string', description: 'קטגוריה' },
+          key: { type: 'string', description: 'מזהה הפריט למחיקה' },
+        },
+        required: ['category', 'key'],
+      },
+    },
+  },
 ];
 
 serve(async (req) => {
@@ -1015,6 +1122,35 @@ serve(async (req) => {
       timeZone: 'Asia/Jerusalem',
     }).format(now)} | UTC: ${now.toISOString()}`;
 
+    // Load persistent memory for system prompt
+    let memoryContext = '';
+    try {
+      const { data: memories } = await supabaseClient
+        .from('ai_memory')
+        .select('category, key, content')
+        .eq('user_id', user.id)
+        .eq('tenant_id', tenantId)
+        .order('category')
+        .order('updated_at', { ascending: false })
+        .limit(100);
+
+      if (memories && memories.length > 0) {
+        const grouped: Record<string, string[]> = {};
+        for (const m of memories) {
+          if (!grouped[m.category]) grouped[m.category] = [];
+          grouped[m.category].push(`• **${m.key}**: ${m.content}`);
+        }
+        memoryContext = Object.entries(grouped)
+          .map(([cat, items]) => `**[${cat}]**\n${items.join('\n')}`)
+          .join('\n\n');
+      }
+    } catch (memErr) {
+      console.error('Failed to load memory:', memErr);
+    }
+
+    // Clear modified entities tracker for this request
+    modifiedEntities.clear();
+
     // Load conversation
     let conversation = null;
     let messages: any[] = [];
@@ -1037,7 +1173,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: AI_MODEL,
         messages: [
-          { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, campaignerName || undefined, campaignerId || undefined) },
+          { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, campaignerName || undefined, campaignerId || undefined) },
           ...aiMessages,
         ],
         tools,
@@ -1108,7 +1244,7 @@ serve(async (req) => {
 
           // Build running conversation for follow-ups
           let followUpMessages: any[] = [
-            { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, campaignerName || undefined, campaignerId || undefined) },
+            { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, memoryContext, campaignerName || undefined, campaignerId || undefined) },
             ...aiMessages,
           ];
 
@@ -1200,6 +1336,13 @@ serve(async (req) => {
 
             currentToolCalls = nextToolCalls;
             currentFinishReason = nextFinishReason;
+          }
+
+          // Send invalidation events for modified entities
+          if (modifiedEntities.size > 0) {
+            for (const entity of modifiedEntities) {
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'invalidate', entity })}\n\n`));
+            }
           }
 
           // Save
