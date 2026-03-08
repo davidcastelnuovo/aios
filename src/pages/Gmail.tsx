@@ -131,16 +131,16 @@ export default function Gmail() {
     enabled: !!userId,
   });
 
-  // Allowed labels
+  // Allowed labels — dedicated query key to avoid cache collision with GmailSettings
   const { data: allowedLabels = [] } = useQuery({
-    queryKey: ['gmail-allowed-labels', userId],
+    queryKey: ['gmail-allowed-label-ids', userId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('gmail_allowed_labels')
         .select('label_id')
         .eq('user_id', userId!);
       if (error) throw error;
-      return data.map((l: any) => l.label_id as string);
+      return data.map((l: any) => String(l.label_id)).filter(Boolean);
     },
     enabled: !!userId,
   });
