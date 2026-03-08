@@ -313,6 +313,8 @@ Deno.serve(async (req) => {
     const isIncoming = typeWebhook === 'incomingMessageReceived';
     const isOutgoing = typeWebhook === 'outgoingMessageReceived' || 
                        typeWebhook === 'outgoingAPIMessageReceived';
+    // Manual outgoing = sent from WhatsApp app directly (NOT via API/automations)
+    const isManualOutgoing = typeWebhook === 'outgoingMessageReceived';
     const isOutgoingStatus = typeWebhook === 'outgoingMessageStatus';
     
     // Handle outgoingMessageStatus for messages sent from WhatsApp directly
