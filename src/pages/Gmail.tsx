@@ -756,6 +756,10 @@ export default function Gmail() {
               <Ban className="h-3.5 w-3.5" />
               חסום
             </Button>
+            <Button variant="secondary" size="sm" className="h-8 gap-1" onClick={() => setProcessInvoicesOpen(true)}>
+              <FileText className="h-3.5 w-3.5" />
+              עבד חשבוניות
+            </Button>
             <Button variant="destructive" size="sm" className="h-8 gap-1" onClick={handleBulkDelete} disabled={bulkTrashMutation.isPending}>
               {bulkTrashMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               מחק
