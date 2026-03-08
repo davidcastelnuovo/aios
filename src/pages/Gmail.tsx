@@ -201,9 +201,16 @@ export default function Gmail() {
     enabled: !!userId,
   });
 
+  // Determine effective labelIds for the API call
+  const effectiveLabelIds = useMemo(() => {
+    if (selectedCategoryLabelId) return [selectedCategoryLabelId];
+    if (allowedLabels.length > 0) return allowedLabels;
+    return undefined;
+  }, [selectedCategoryLabelId, allowedLabels]);
+
   // Fetch messages with date query + allowed labels
   const { data: messagesData, isLoading, refetch } = useQuery({
-    queryKey: ['gmail-messages', fullQuery, currentPageToken, allowedLabels],
+    queryKey: ['gmail-messages', fullQuery, currentPageToken, effectiveLabelIds],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke('gmail-api', {
         body: {
@@ -211,7 +218,7 @@ export default function Gmail() {
           query: fullQuery,
           maxResults: 25,
           pageToken: currentPageToken,
-          labelIds: allowedLabels.length > 0 ? allowedLabels : undefined,
+          labelIds: effectiveLabelIds,
         },
       });
       if (error) throw error;

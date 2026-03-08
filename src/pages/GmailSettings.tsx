@@ -287,17 +287,28 @@ export default function GmailSettings() {
             <p className="text-sm text-muted-foreground">אין קטגוריות עדיין</p>
           ) : (
             <div className="space-y-2">
-              {categories.map((cat: any) => (
-                <div key={cat.id} className="flex items-center justify-between p-2 rounded border">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: cat.color }} />
-                    <span className="text-sm">{cat.name}</span>
+              {categories.map((cat: any) => {
+                const labelName = cat.gmail_label_id
+                  ? availableLabelsList.find(l => l.id === cat.gmail_label_id)?.name || cat.gmail_label_id
+                  : null;
+                return (
+                  <div key={cat.id} className="flex items-center justify-between p-2 rounded border">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: cat.color }} />
+                      <span className="text-sm">{cat.name}</span>
+                      {labelName && (
+                        <Badge variant="outline" className="text-[10px] px-1.5">
+                          <Tag className="h-3 w-3 me-1" />
+                          {labelName}
+                        </Badge>
+                      )}
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => deleteCategory.mutate(cat.id)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => deleteCategory.mutate(cat.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
