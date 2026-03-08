@@ -58,10 +58,7 @@ export default function Gmail() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [processInvoicesOpen, setProcessInvoicesOpen] = useState(false);
   // Date & pagination state
-  const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>({
-    from: new Date(),
-    to: new Date(),
-  });
+  const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>(undefined);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageTokenHistory, setPageTokenHistory] = useState<string[]>([]);
