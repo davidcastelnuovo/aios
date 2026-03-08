@@ -124,7 +124,13 @@ serve(async (req) => {
       if (query) params.set('q', query);
       params.set('maxResults', String(maxResults));
       if (pageToken) params.set('pageToken', pageToken);
-      if (labelIds) params.set('labelIds', labelIds);
+      if (Array.isArray(labelIds)) {
+        labelIds.forEach((id) => {
+          if (typeof id === 'string' && id.trim()) params.append('labelIds', id);
+        });
+      } else if (typeof labelIds === 'string' && labelIds.trim()) {
+        params.append('labelIds', labelIds);
+      }
 
       const res = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`, {
         headers: { 'Authorization': `Bearer ${accessToken}` },

@@ -196,14 +196,14 @@ export default function Gmail() {
   const { data: messagesData, isLoading, refetch } = useQuery({
     queryKey: ['gmail-messages', fullQuery, currentPageToken, allowedLabels],
     queryFn: async () => {
-      // Build query with allowed label filters
-      let finalQuery = fullQuery;
-      if (allowedLabels.length > 0) {
-        const labelFilter = allowedLabels.map((lid: string) => `label:${lid}`).join(' OR ');
-        finalQuery = finalQuery ? `${finalQuery} (${labelFilter})` : `(${labelFilter})`;
-      }
       const { data, error } = await supabase.functions.invoke('gmail-api', {
-        body: { action: 'list', query: finalQuery, maxResults: 25, pageToken: currentPageToken },
+        body: {
+          action: 'list',
+          query: fullQuery,
+          maxResults: 25,
+          pageToken: currentPageToken,
+          labelIds: allowedLabels.length > 0 ? allowedLabels : undefined,
+        },
       });
       if (error) throw error;
       return data as { messages: EmailMessage[]; nextPageToken?: string; resultSizeEstimate?: number };
