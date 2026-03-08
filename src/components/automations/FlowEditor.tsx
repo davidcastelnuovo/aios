@@ -299,7 +299,18 @@ export default function FlowEditor() {
         <Input
           value={automationName}
           onChange={(e) => setAutomationName(e.target.value)}
-          className="max-w-xs text-right font-semibold"
+          onBlur={() => {
+            if (automationId && automationName) {
+              supabase
+                .from("automations")
+                .update({ name: automationName } as any)
+                .eq("id", automationId)
+                .then(() => {
+                  queryClient.invalidateQueries({ queryKey: ["automation", automationId] });
+                });
+            }
+          }}
+          className="max-w-[280px] text-right font-semibold border-transparent hover:border-input focus:border-input transition-colors"
           placeholder="שם האוטומציה"
         />
 
