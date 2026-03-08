@@ -92,15 +92,19 @@ serve(async (req) => {
 
       console.log(`Found ${formEntries.length} mapped forms`);
 
+      // Determine since timestamp: use last_sync_at if available, otherwise 24 hours ago
+      const lastSyncAt = integration.last_sync_at 
+        ? new Date(integration.last_sync_at as string) 
+        : null;
+      const sinceDate = lastSyncAt || new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const sinceTimestamp = Math.floor(sinceDate.getTime() / 1000);
+      console.log(`Fetching leads since: ${sinceDate.toISOString()} (${lastSyncAt ? 'from last_sync_at' : 'default 24h'})`);
+
       // Process each mapped form
       for (const [formId, mapping] of formEntries) {
         console.log(`\n📝 Syncing form: ${mapping.form_name || formId}`);
 
         try {
-          // Get leads from Facebook for this form (last 30 days)
-          const thirtyDaysAgo = new Date();
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-          const sinceTimestamp = Math.floor(thirtyDaysAgo.getTime() / 1000);
 
           const fbUrl = `https://graph.facebook.com/v19.0/${formId}/leads?access_token=${accessToken}&since=${sinceTimestamp}&limit=500`;
           const fbResponse = await fetch(fbUrl);
