@@ -196,6 +196,50 @@ Deno.serve(async (req) => {
     const requestBody = await req.json()
     console.log('Automation triggered:', requestBody)
 
+    // ===== AUTOMATION SAFETY GUARDS =====
+    const MAX_EXECUTION_DEPTH = 10
+    const MAX_ACTIONS_PER_RUN = 50
+    const MAX_RUNTIME_SECONDS = 60
+    const executionStartTime = Date.now()
+
+    // Extract execution context for loop detection
+    const executionId = requestBody._execution_id || crypto.randomUUID()
+    const executionDepth = requestBody._execution_depth || 0
+    const executionChain: string[] = requestBody._execution_chain || []
+
+    // Guard: max depth
+    if (executionDepth >= MAX_EXECUTION_DEPTH) {
+      console.error(`🛑 SAFETY: Max execution depth (${MAX_EXECUTION_DEPTH}) reached. Aborting to prevent infinite recursion.`)
+      return new Response(
+        JSON.stringify({ error: 'Max automation depth exceeded', depth: executionDepth }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
+      )
+    }
+
+    // Guard: loop detection - same trigger+entity already in chain
+    const loopKey = `${requestBody.trigger_type || requestBody.automationId}:${requestBody.data?.lead_id || requestBody.data?.entity_id || 'no-entity'}`
+    if (executionChain.includes(loopKey)) {
+      console.error(`🛑 SAFETY: Loop detected! Key "${loopKey}" already in execution chain: [${executionChain.join(' → ')}]`)
+      return new Response(
+        JSON.stringify({ error: 'Automation loop detected', loop_key: loopKey }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
+      )
+    }
+
+    // Track this execution in automation_executions table (best-effort)
+    const { data: execRecord } = await supabase.from('automation_executions').insert({
+      execution_id: executionId,
+      tenant_id: requestBody.tenant_id || null,
+      automation_id: requestBody.automationId || null,
+      trigger_type: requestBody.trigger_type || null,
+      depth: executionDepth,
+      status: 'running',
+      started_at: new Date().toISOString(),
+    }).select('id').single()
+
+    console.log(`🔄 Execution ${executionId} depth=${executionDepth} chain=[${executionChain.join('→')}]`)
+    // ===== END SAFETY GUARDS =====
+
     let automations: any[] = []
     let payloadData: any
     let tenantId: string
