@@ -115,6 +115,17 @@ function getAvailableFields(triggerType: string | undefined, triggerConfig?: Rec
         { key: "user_name", label: "שם המשתמש" },
       ];
       break;
+    case "whatsapp_message_received":
+      fields = [
+        { key: "sender_name", label: "שם השולח" },
+        { key: "sender_phone", label: "טלפון השולח" },
+        { key: "message_text", label: "תוכן ההודעה" },
+        { key: "group_name", label: "שם הקבוצה" },
+        { key: "contact_type", label: "סוג איש קשר" },
+        { key: "contact_id", label: "מזהה איש קשר" },
+        { key: "contact_name", label: "שם איש קשר" },
+      ];
+      break;
     default:
       fields = [
         { key: "contact_name", label: "שם איש קשר" },
