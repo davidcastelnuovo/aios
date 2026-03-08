@@ -76,6 +76,7 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   task_overdue: "משימה באיחור",
   inbound_webhook_task: "Webhook נכנס",
   manual_command: "פקודה ידנית (צ'אט)",
+  whatsapp_message_received: "הודעת WhatsApp נכנסת",
 };
 
 interface FlowNodeProps {
