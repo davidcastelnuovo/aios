@@ -167,3 +167,6 @@ verify_jwt = false
 
 [functions.gmail-api]
 verify_jwt = true
+
+[functions.process-job-queue]
+verify_jwt = false
