@@ -60,7 +60,7 @@ import { useUserTenants } from "@/hooks/useUserTenants";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenant } from "@/contexts/TenantContext";
-import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useTheme } from "@/contexts/ThemeContext";
