@@ -252,13 +252,27 @@ export default function GmailSettings() {
           <CardDescription>צור קטגוריות לארגון המיילים שלך</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Input
               placeholder="שם קטגוריה..."
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addCategory.mutate()}
+              className="flex-1 min-w-[150px]"
             />
+            <select
+              value={newCategoryLabelId}
+              onChange={(e) => setNewCategoryLabelId(e.target.value)}
+              className="h-10 rounded-md border border-input bg-muted px-3 py-2 text-sm min-w-[150px]"
+            >
+              <option value="">ללא תגית Gmail</option>
+              {availableLabelsList
+                .filter(l => l.type === 'user' || ['INBOX', 'STARRED', 'IMPORTANT', 'SENT', 'CATEGORY_PERSONAL', 'CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS'].includes(l.id))
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(l => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+            </select>
             <input
               type="color"
               value={newCategoryColor}
