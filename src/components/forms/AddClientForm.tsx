@@ -138,7 +138,7 @@ export function AddClientForm() {
       if (!tenantId) {
         throw new Error("לא נמצא tenant_id למשתמש");
       }
-      const { error } = await supabase.from("clients").insert({
+      const { data: newClient, error } = await supabase.from("clients").insert({
         name: values.name,
         contact_name: values.contact_name || null,
         agency_id: values.agency_id,
@@ -151,13 +151,28 @@ export function AddClientForm() {
         website: values.website || null,
         notes: values.notes || null,
         is_seo_client: values.is_seo_client,
-      });
+      }).select("id").single();
       if (error) throw error;
+
+      // Save additional contacts
+      if (additionalContacts.length > 0 && newClient) {
+        const contactsToInsert = additionalContacts.map(c => ({
+          client_id: newClient.id,
+          tenant_id: tenantId,
+          contact_name: c.contact_name,
+          phone: c.phone || null,
+          email: c.email || null,
+          role: c.role || null,
+        }));
+        const { error: contactsError } = await supabase.from("client_contacts").insert(contactsToInsert);
+        if (contactsError) console.error("Error saving contacts:", contactsError);
+      }
     },
     onSuccess: () => {
       toast.success("הלקוח נוסף בהצלחה");
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       form.reset();
+      setAdditionalContacts([]);
       setOpen(false);
     },
     onError: (error) => {
