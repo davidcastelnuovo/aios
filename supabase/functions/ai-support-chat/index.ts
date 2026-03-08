@@ -894,7 +894,7 @@ serve(async (req) => {
 
           // Build running conversation for follow-ups
           let followUpMessages: any[] = [
-            { role: 'system', content: buildSystemPrompt(userName, userEmail, campaignerName || undefined, campaignerId || undefined) },
+            { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, campaignerName || undefined, campaignerId || undefined) },
             ...aiMessages,
           ];
 
