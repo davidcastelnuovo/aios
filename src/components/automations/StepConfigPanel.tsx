@@ -35,6 +35,7 @@ const TRIGGER_OPTIONS = [
   { value: "task_overdue", label: "משימה באיחור" },
   { value: "inbound_webhook_task", label: "Webhook נכנס" },
   { value: "manual_command", label: "פקודה ידנית (צ'אט)" },
+  { value: "whatsapp_message_received", label: "הודעת WhatsApp נכנסת" },
 ];
 
 const ACTION_OPTIONS = [
