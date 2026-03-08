@@ -58,10 +58,7 @@ export default function Gmail() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [processInvoicesOpen, setProcessInvoicesOpen] = useState(false);
   // Date & pagination state
-  const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>({
-    from: new Date(),
-    to: new Date(),
-  });
+  const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>(undefined);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageTokenHistory, setPageTokenHistory] = useState<string[]>([]);
@@ -69,8 +66,10 @@ export default function Gmail() {
 
   // Build date query
   const buildDateQuery = () => {
-    const from = selectedDateRange?.from ?? new Date();
-    const to = selectedDateRange?.to ?? from;
+    if (!selectedDateRange?.from || !selectedDateRange?.to) return '';
+
+    const from = selectedDateRange.from;
+    const to = selectedDateRange.to;
     const toExclusive = addDays(to, 1);
 
     const fy = from.getFullYear();
@@ -86,7 +85,8 @@ export default function Gmail() {
 
   const fullQueryBase = useMemo(() => {
     const dateQ = buildDateQuery();
-    return activeSearch ? `${dateQ} ${activeSearch}` : dateQ;
+    if (dateQ && activeSearch) return `${dateQ} ${activeSearch}`;
+    return dateQ || activeSearch;
   }, [selectedDateRange, activeSearch]);
 
   // Check connection
