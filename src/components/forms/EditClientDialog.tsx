@@ -995,7 +995,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                     ) : (
                       <>
                         <CalendarIcon className="ml-2 h-4 w-4" />
-                        {client.email ? "קבע פגישה ושלח הזמנה" : "קבע פגישה"}
+                        {selectedMeetingEmails.length > 0 ? `קבע פגישה ושלח זימון ל-${selectedMeetingEmails.length} אנשי קשר` : "קבע פגישה"}
                       </>
                     )}
                   </Button>
