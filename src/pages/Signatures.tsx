@@ -13,12 +13,14 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, FileText, Upload, Send, Eye, Trash2, CheckCircle, Clock, XCircle, Copy, ExternalLink } from "lucide-react";
+import { Plus, FileText, Upload, Send, Eye, Trash2, CheckCircle, Clock, XCircle, Copy, ExternalLink, Link } from "lucide-react";
 import { format } from "date-fns";
+import SignatureFieldPlacer, { getRecipientColor, type SignaturePosition } from "@/components/signatures/SignatureFieldPlacer";
 
 interface Recipient {
   name: string;
   email: string;
+  signaturePosition: SignaturePosition | null;
 }
 
 const statusLabels: Record<string, { label: string; color: string }> = {
@@ -42,13 +44,16 @@ export default function Signatures() {
   const { userId } = useCurrentUser();
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [createTab, setCreateTab] = useState<"create" | "upload">("create");
+  const [createTab, setCreateTab] = useState<"create" | "upload" | "url">("create");
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [recipients, setRecipients] = useState<Recipient[]>([{ name: "", email: "" }]);
+  const [documentUrl, setDocumentUrl] = useState("");
+  const [recipients, setRecipients] = useState<Recipient[]>([{ name: "", email: "", signaturePosition: null }]);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
+  const [showPlacement, setShowPlacement] = useState(false);
 
   // Fetch documents
   const { data: documents, isLoading } = useQuery({
@@ -88,10 +93,10 @@ export default function Signatures() {
       if (!tenantId || !userId) throw new Error("Missing tenant or user");
       
       let fileUrl: string | null = null;
-      const docType = createTab === "upload" ? "uploaded" : "created";
+      let docType = "created";
 
-      // Upload file if needed
       if (createTab === "upload" && uploadFile) {
+        docType = "uploaded";
         const filePath = `${tenantId}/${Date.now()}_${uploadFile.name}`;
         const { error: uploadError } = await supabase.storage
           .from("signature-documents")
@@ -102,6 +107,9 @@ export default function Signatures() {
           .from("signature-documents")
           .getPublicUrl(filePath);
         fileUrl = urlData.publicUrl;
+      } else if (createTab === "url" && documentUrl) {
+        docType = "uploaded";
+        fileUrl = documentUrl;
       }
 
       // Create document
@@ -120,7 +128,7 @@ export default function Signatures() {
         .single();
       if (docError) throw docError;
 
-      // Add recipients
+      // Add recipients with positions
       const validRecipients = recipients.filter(r => r.name && r.email);
       if (validRecipients.length > 0) {
         const { error: recError } = await supabase
@@ -132,6 +140,7 @@ export default function Signatures() {
               name: r.name,
               email: r.email,
               sign_order: i + 1,
+              signature_position: r.signaturePosition,
             }))
           );
         if (recError) throw recError;
@@ -181,18 +190,48 @@ export default function Signatures() {
   const resetForm = () => {
     setTitle("");
     setContent("");
-    setRecipients([{ name: "", email: "" }]);
+    setDocumentUrl("");
+    setRecipients([{ name: "", email: "", signaturePosition: null }]);
     setUploadFile(null);
+    setUploadPreviewUrl(null);
     setCreateTab("create");
+    setShowPlacement(false);
   };
 
-  const addRecipient = () => setRecipients([...recipients, { name: "", email: "" }]);
+  const addRecipient = () => setRecipients([...recipients, { name: "", email: "", signaturePosition: null }]);
   const removeRecipient = (i: number) => setRecipients(recipients.filter((_, idx) => idx !== i));
-  const updateRecipient = (i: number, field: keyof Recipient, val: string) => {
+  const updateRecipient = (i: number, field: "name" | "email", val: string) => {
     const updated = [...recipients];
-    updated[i][field] = val;
+    updated[i] = { ...updated[i], [field]: val };
     setRecipients(updated);
   };
+
+  const handleFileChange = (file: File | null) => {
+    setUploadFile(file);
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setUploadPreviewUrl(url);
+    } else {
+      setUploadPreviewUrl(null);
+    }
+  };
+
+  const handlePositionChange = (index: number, position: SignaturePosition) => {
+    const updated = [...recipients];
+    updated[index] = { ...updated[index], signaturePosition: position };
+    setRecipients(updated);
+  };
+
+  // Get preview URL for placement
+  const getPreviewUrl = (): string | null => {
+    if (createTab === "upload" && uploadPreviewUrl) return uploadPreviewUrl;
+    if (createTab === "url" && documentUrl) return documentUrl;
+    return null;
+  };
+
+  const previewUrl = getPreviewUrl();
+  const hasValidRecipients = recipients.some(r => r.name && r.email);
+  const canShowPlacement = (createTab === "upload" || createTab === "url") && previewUrl && hasValidRecipients;
 
   const getSigningLink = (token: string) => {
     return `${window.location.origin}/sign/${token}`;
@@ -210,107 +249,163 @@ export default function Signatures() {
           <h1 className="text-2xl font-bold text-foreground">חתימות דיגיטליות</h1>
           <p className="text-muted-foreground">ניהול מסמכים וחתימות דיגיטליות</p>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <Dialog open={isCreateOpen} onOpenChange={(open) => { setIsCreateOpen(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>
             <Button onClick={() => { resetForm(); setIsCreateOpen(true); }}>
               <Plus className="h-4 w-4 ml-2" />
               מסמך חדש
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" dir="rtl">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
             <DialogHeader>
-              <DialogTitle>יצירת מסמך חדש</DialogTitle>
+              <DialogTitle>{showPlacement ? "הגדרת מיקום חתימות" : "יצירת מסמך חדש"}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label>שם המסמך</Label>
-                <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="הזן שם למסמך..." />
-              </div>
 
-              <Tabs value={createTab} onValueChange={v => setCreateTab(v as any)}>
-                <TabsList className="w-full">
-                  <TabsTrigger value="create" className="flex-1">
-                    <FileText className="h-4 w-4 ml-2" />
-                    יצירת מסמך
-                  </TabsTrigger>
-                  <TabsTrigger value="upload" className="flex-1">
-                    <Upload className="h-4 w-4 ml-2" />
-                    העלאת מסמך
-                  </TabsTrigger>
-                </TabsList>
-                <TabsContent value="create" className="space-y-3">
-                  <div>
-                    <Label>תוכן המסמך</Label>
-                    <Textarea
-                      value={content}
-                      onChange={e => setContent(e.target.value)}
-                      placeholder="הקלד את תוכן המסמך כאן..."
-                      rows={10}
-                      className="font-mono text-sm"
-                    />
-                  </div>
-                </TabsContent>
-                <TabsContent value="upload" className="space-y-3">
-                  <div>
-                    <Label>העלה קובץ (PDF, DOCX, תמונה)</Label>
-                    <Input
-                      type="file"
-                      accept=".pdf,.docx,.doc,.png,.jpg,.jpeg"
-                      onChange={e => setUploadFile(e.target.files?.[0] || null)}
-                      className="mt-1"
-                    />
-                    {uploadFile && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        קובץ נבחר: {uploadFile.name}
-                      </p>
-                    )}
-                  </div>
-                </TabsContent>
-              </Tabs>
-
-              {/* Recipients */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-base font-semibold">חותמים</Label>
-                  <Button variant="outline" size="sm" onClick={addRecipient}>
-                    <Plus className="h-3 w-3 ml-1" />
-                    הוסף חותם
+            {showPlacement && previewUrl ? (
+              <div className="space-y-4">
+                <SignatureFieldPlacer
+                  fileUrl={previewUrl}
+                  recipients={recipients.filter(r => r.name).map((r, i) => ({
+                    index: i,
+                    name: r.name,
+                    color: getRecipientColor(i),
+                    position: r.signaturePosition,
+                  }))}
+                  onPositionChange={handlePositionChange}
+                />
+                <div className="flex gap-2 justify-end pt-2">
+                  <Button variant="outline" onClick={() => setShowPlacement(false)}>חזור</Button>
+                  <Button
+                    onClick={() => createMutation.mutate()}
+                    disabled={!title || createMutation.isPending}
+                  >
+                    {createMutation.isPending ? "יוצר..." : "צור מסמך"}
                   </Button>
                 </div>
-                {recipients.map((r, i) => (
-                  <div key={i} className="flex gap-2 items-center">
-                    <Input
-                      placeholder="שם"
-                      value={r.name}
-                      onChange={e => updateRecipient(i, "name", e.target.value)}
-                      className="flex-1"
-                    />
-                    <Input
-                      placeholder="אימייל"
-                      type="email"
-                      value={r.email}
-                      onChange={e => updateRecipient(i, "email", e.target.value)}
-                      className="flex-1"
-                    />
-                    {recipients.length > 1 && (
-                      <Button variant="ghost" size="icon" onClick={() => removeRecipient(i)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
               </div>
+            ) : (
+              <div className="space-y-4">
+                <div>
+                  <Label>שם המסמך</Label>
+                  <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="הזן שם למסמך..." />
+                </div>
 
-              <div className="flex gap-2 justify-end pt-4">
-                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>ביטול</Button>
-                <Button
-                  onClick={() => createMutation.mutate()}
-                  disabled={!title || createMutation.isPending || (createTab === "create" && !content) || (createTab === "upload" && !uploadFile)}
-                >
-                  {createMutation.isPending ? "יוצר..." : "צור מסמך"}
-                </Button>
+                <Tabs value={createTab} onValueChange={v => setCreateTab(v as any)}>
+                  <TabsList className="w-full">
+                    <TabsTrigger value="create" className="flex-1">
+                      <FileText className="h-4 w-4 ml-2" />
+                      יצירת מסמך
+                    </TabsTrigger>
+                    <TabsTrigger value="upload" className="flex-1">
+                      <Upload className="h-4 w-4 ml-2" />
+                      העלאת מסמך
+                    </TabsTrigger>
+                    <TabsTrigger value="url" className="flex-1">
+                      <Link className="h-4 w-4 ml-2" />
+                      קישור למסמך
+                    </TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="create" className="space-y-3">
+                    <div>
+                      <Label>תוכן המסמך</Label>
+                      <Textarea
+                        value={content}
+                        onChange={e => setContent(e.target.value)}
+                        placeholder="הקלד את תוכן המסמך כאן..."
+                        rows={10}
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="upload" className="space-y-3">
+                    <div>
+                      <Label>העלה קובץ (PDF, DOCX, תמונה)</Label>
+                      <Input
+                        type="file"
+                        accept=".pdf,.docx,.doc,.png,.jpg,.jpeg"
+                        onChange={e => handleFileChange(e.target.files?.[0] || null)}
+                        className="mt-1"
+                      />
+                      {uploadFile && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          קובץ נבחר: {uploadFile.name}
+                        </p>
+                      )}
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="url" className="space-y-3">
+                    <div>
+                      <Label>קישור למסמך (PDF, תמונה)</Label>
+                      <Input
+                        value={documentUrl}
+                        onChange={e => setDocumentUrl(e.target.value)}
+                        placeholder="https://example.com/document.pdf"
+                        dir="ltr"
+                        className="text-left"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        הדבק קישור ישיר לקובץ PDF או תמונה
+                      </p>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+
+                {/* Recipients */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-base font-semibold">חותמים</Label>
+                    <Button variant="outline" size="sm" onClick={addRecipient}>
+                      <Plus className="h-3 w-3 ml-1" />
+                      הוסף חותם
+                    </Button>
+                  </div>
+                  {recipients.map((r, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <div className="w-3 h-3 rounded flex-shrink-0" style={{ backgroundColor: getRecipientColor(i) }} />
+                      <Input
+                        placeholder="שם"
+                        value={r.name}
+                        onChange={e => updateRecipient(i, "name", e.target.value)}
+                        className="flex-1"
+                      />
+                      <Input
+                        placeholder="אימייל"
+                        type="email"
+                        value={r.email}
+                        onChange={e => updateRecipient(i, "email", e.target.value)}
+                        className="flex-1"
+                      />
+                      {recipients.length > 1 && (
+                        <Button variant="ghost" size="icon" onClick={() => removeRecipient(i)}>
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-2 justify-end pt-4">
+                  <Button variant="outline" onClick={() => setIsCreateOpen(false)}>ביטול</Button>
+                  {canShowPlacement && (
+                    <Button variant="secondary" onClick={() => setShowPlacement(true)}>
+                      הגדר מיקום חתימות
+                    </Button>
+                  )}
+                  <Button
+                    onClick={() => createMutation.mutate()}
+                    disabled={
+                      !title ||
+                      createMutation.isPending ||
+                      (createTab === "create" && !content) ||
+                      (createTab === "upload" && !uploadFile) ||
+                      (createTab === "url" && !documentUrl)
+                    }
+                  >
+                    {createMutation.isPending ? "יוצר..." : "צור מסמך"}
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
@@ -468,6 +563,9 @@ export default function Signatures() {
                             <div>
                               <p className="font-medium text-sm">{r.name}</p>
                               <p className="text-xs text-muted-foreground">{r.email}</p>
+                              {r.signature_position && (
+                                <p className="text-xs text-primary">📍 מיקום חתימה מוגדר</p>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
