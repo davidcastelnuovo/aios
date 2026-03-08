@@ -41,7 +41,7 @@ ${campaignerId ? `- **מזהה קמפיינר:** ${campaignerId}` : ''}
 - **automations** (אוטומציות) - כללים אוטומטיים שמגיבים לאירועים
 
 🔧 **פעולות שאתה יכול לבצע:**
-1. **משימות** - יצירה (כולל ניסיון סנכרון ליומן Google), עדכון סטטוס, הצגת רשימות
+1. **משימות** - יצירה, עדכון משימה קיימת (כותרת/תאריך/שעה/עדיפות/הערות), עדכון סטטוס, הצגת רשימות
 2. **לידים** - יצירה, עדכון סטטוס, חיפוש, הצגת רשימות
 3. **לקוחות** - יצירה, הצגת מידע, הצגת רשימות
 4. **אוטומציות** - יצירת אוטומציות חדשות (trigger + action)
@@ -50,12 +50,13 @@ ${campaignerId ? `- **מזהה קמפיינר:** ${campaignerId}` : ''}
 7. **אימיילים** - קריאה, שליחה, מחיקה של אימיילים מ-Gmail
 
 📅 **חשוב לגבי משימות ויומן:**
-- כשאתה יוצר משימה עם תאריך, תמיד נסה לסנכרן אותה ליומן
+- כשאתה יוצר או מעדכן משימה עם תאריך, תמיד נסה לסנכרן אותה ליומן
 - תמיד ציין due_date כשהמשתמש אומר "להיום", "למחר", "יום שלישי הקרוב" וכו'
 - עבור ביטויים יחסיים ("הקרוב", "הבא"), חובה לבחור תאריך עתידי לפי התאריך הנוכחי למעלה
 - אסור לבחור תאריך עבר אלא אם המשתמש ביקש מפורשות תאריך עבר ספציפי
+- אם המשתמש מבקש לערוך משימה קיימת, חובה להשתמש ב-list_tasks + update_task ולא ליצור משימה חדשה
 - אם המשתמש לא ציין שעה, ברירת מחדל: 09:00
-- אחרי יצירת משימה, דווח לפי שדה calendar_synced (ולא לפי הנחה)
+- אחרי יצירה/עדכון, דווח לפי שדה calendar_synced (ולא לפי הנחה)
 
 💬 **הנחיות תקשורת:**
 - דבר בעברית, בצורה ישירה ומקצועית
@@ -81,6 +82,40 @@ ${campaignerId ? `- **מזהה קמפיינר:** ${campaignerId}` : ''}
 interface ToolCall {
   name: string;
   args: Record<string, any>;
+}
+
+function formatDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateString(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function normalizeTimeString(timeValue: string | null | undefined, fallback = '09:00'): string {
+  if (!timeValue) return fallback;
+  const match = timeValue.match(/^(\d{2}):(\d{2})/);
+  if (!match) return fallback;
+  return `${match[1]}:${match[2]}`;
+}
+
+function buildLocalDateTimeRange(dateStr: string, timeStr: string, durationMinutes = 30) {
+  const safeTime = normalizeTimeString(timeStr);
+  const [hour, minute] = safeTime.split(':').map(Number);
+
+  const start = parseDateString(dateStr);
+  start.setHours(hour, minute, 0, 0);
+
+  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+
+  const startLocalDateTime = `${formatDateString(start)}T${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}:00`;
+  const endLocalDateTime = `${formatDateString(end)}T${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}:00`;
+
+  return { startLocalDateTime, endLocalDateTime, safeTime };
 }
 
 async function executeTool(
@@ -166,21 +201,13 @@ async function executeTool(
               if (due_date < todayInIsrael) {
                 calendarSyncError = 'due_date_in_past';
               } else {
-                const timeToUse = due_time || '09:00';
-                const safeTime = /^\d{2}:\d{2}$/.test(timeToUse) ? timeToUse : '09:00';
+                const { startLocalDateTime, endLocalDateTime, safeTime } = buildLocalDateTimeRange(
+                  due_date,
+                  due_time || '09:00',
+                  30,
+                );
 
-                // Send local date-time (without timezone suffix) and let add-calendar-event enforce Asia/Jerusalem
-                const startLocalDateTime = `${due_date}T${safeTime}:00`;
-                const [startHour, startMinute] = safeTime.split(':').map((v: string) => Number(v));
-                const endTotalMinutes = (startHour * 60) + startMinute + 30;
-                const endHour = String(Math.floor((endTotalMinutes % 1440) / 60)).padStart(2, '0');
-                const endMinute = String(endTotalMinutes % 60).padStart(2, '0');
-                const endDateObj = new Date(`${due_date}T00:00:00Z`);
-                if (endTotalMinutes >= 1440) endDateObj.setUTCDate(endDateObj.getUTCDate() + 1);
-                const endDate = endDateObj.toISOString().slice(0, 10);
-                const endLocalDateTime = `${endDate}T${endHour}:${endMinute}:00`;
-
-                scheduledStartIso = startLocalDateTime;
+                scheduledStartIso = `${due_date}T${safeTime}:00`;
 
                 const calResponse = await fetch(`${SUPABASE_URL}/functions/v1/add-calendar-event`, {
                   method: 'POST',
@@ -239,6 +266,166 @@ async function executeTool(
             calendar_html_link: calendarHtmlLink,
             calendar_google_email: calendarGoogleEmail,
             calendar_start_iso: scheduledStartIso,
+          },
+        };
+      }
+
+      case 'update_task': {
+        const { task_id, title, priority, due_date, due_time, notes, status } = toolCall.args;
+
+        const { data: existingTask, error: existingError } = await supabaseClient
+          .from('tasks')
+          .select('id, title, notes, due_date, due_time, priority, status, google_calendar_event_id')
+          .eq('id', task_id)
+          .eq('tenant_id', tenantId)
+          .single();
+
+        if (existingError || !existingTask) {
+          return { success: false, error: 'לא נמצאה משימה לעדכון' };
+        }
+
+        const updateData: Record<string, any> = {};
+        if (title !== undefined) updateData.title = title;
+        if (priority !== undefined) updateData.priority = priority;
+        if (due_date !== undefined) updateData.due_date = due_date;
+        if (due_time !== undefined) updateData.due_time = due_time;
+        if (notes !== undefined) updateData.notes = notes;
+        if (status !== undefined) updateData.status = status;
+
+        if (Object.keys(updateData).length === 0) {
+          return { success: false, error: 'לא נשלחו שדות לעדכון' };
+        }
+
+        const { data: updatedTask, error: updateError } = await supabaseClient
+          .from('tasks')
+          .update(updateData)
+          .eq('id', task_id)
+          .eq('tenant_id', tenantId)
+          .select('id, title, notes, due_date, due_time, priority, status, google_calendar_event_id')
+          .single();
+
+        if (updateError || !updatedTask) throw updateError || new Error('שגיאה בעדכון המשימה');
+
+        let calendarSynced = false;
+        let calendarSyncError: string | null = null;
+        let calendarEventId: string | null = updatedTask.google_calendar_event_id || null;
+        let calendarHtmlLink: string | null = null;
+
+        const finalDueDate = updatedTask.due_date;
+        const finalDueTime = normalizeTimeString(updatedTask.due_time, '09:00');
+
+        const shouldSyncCalendar = !!finalDueDate && (
+          due_date !== undefined ||
+          due_time !== undefined ||
+          title !== undefined ||
+          notes !== undefined ||
+          !!updatedTask.google_calendar_event_id
+        );
+
+        if (shouldSyncCalendar) {
+          try {
+            const { data: calendarToken } = await supabaseClient
+              .from('calendar_tokens')
+              .select('id')
+              .eq('user_id', userId)
+              .single();
+
+            if (!calendarToken) {
+              calendarSyncError = 'calendar_not_connected';
+            } else {
+              const todayInIsrael = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Jerusalem',
+              }).format(new Date());
+
+              if (finalDueDate < todayInIsrael) {
+                calendarSyncError = 'due_date_in_past';
+              } else {
+                const { startLocalDateTime, endLocalDateTime } = buildLocalDateTimeRange(
+                  finalDueDate,
+                  finalDueTime,
+                  30,
+                );
+
+                if (updatedTask.google_calendar_event_id) {
+                  const updateResponse = await fetch(`${SUPABASE_URL}/functions/v1/update-calendar-event`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${userToken}`,
+                    },
+                    body: JSON.stringify({
+                      eventId: updatedTask.google_calendar_event_id,
+                      summary: updatedTask.title,
+                      description: updatedTask.notes || 'משימה ממערכת Marketing Captain',
+                      start: startLocalDateTime,
+                      end: endLocalDateTime,
+                    }),
+                  });
+
+                  if (updateResponse.ok) {
+                    const updateCalData = await updateResponse.json();
+                    calendarSynced = true;
+                    calendarEventId = updateCalData.eventId || updatedTask.google_calendar_event_id;
+                    calendarHtmlLink = updateCalData.htmlLink || null;
+                  } else {
+                    calendarSyncError = 'calendar_update_error';
+                    console.error('Failed to update calendar event:', await updateResponse.text());
+                  }
+                } else {
+                  const addResponse = await fetch(`${SUPABASE_URL}/functions/v1/add-calendar-event`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${userToken}`,
+                    },
+                    body: JSON.stringify({
+                      summary: updatedTask.title,
+                      description: updatedTask.notes || 'משימה ממערכת Marketing Captain',
+                      start: startLocalDateTime,
+                      end: endLocalDateTime,
+                    }),
+                  });
+
+                  if (addResponse.ok) {
+                    const addCalData = await addResponse.json();
+                    if (addCalData.eventId) {
+                      calendarSynced = true;
+                      calendarEventId = addCalData.eventId;
+                      calendarHtmlLink = addCalData.htmlLink || null;
+                      await supabaseClient
+                        .from('tasks')
+                        .update({ google_calendar_event_id: addCalData.eventId })
+                        .eq('id', updatedTask.id)
+                        .eq('tenant_id', tenantId);
+                    } else {
+                      calendarSyncError = 'calendar_event_id_missing';
+                    }
+                  } else {
+                    calendarSyncError = 'calendar_create_error';
+                    console.error('Failed to create calendar event on update:', await addResponse.text());
+                  }
+                }
+              }
+            }
+          } catch (calendarErr) {
+            calendarSyncError = 'calendar_sync_exception';
+            console.error('Calendar sync error on update_task:', calendarErr);
+          }
+        }
+
+        return {
+          success: true,
+          result: {
+            task_id: updatedTask.id,
+            title: updatedTask.title,
+            priority: updatedTask.priority,
+            due_date: updatedTask.due_date,
+            due_time: updatedTask.due_time,
+            status: updatedTask.status,
+            calendar_synced: calendarSynced,
+            calendar_sync_error: calendarSyncError,
+            calendar_event_id: calendarEventId,
+            calendar_html_link: calendarHtmlLink,
           },
         };
       }
@@ -513,6 +700,26 @@ const tools = [
           notes: { type: 'string', description: 'הערות' },
         },
         required: ['title'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_task',
+      description: 'עדכון משימה קיימת לפי מזהה. כולל עדכון כותרת/תאריך/שעה/עדיפות/הערות/סטטוס וסנכרון ליומן כשצריך.',
+      parameters: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'string', description: 'מזהה המשימה (UUID)' },
+          title: { type: 'string', description: 'כותרת חדשה למשימה' },
+          priority: { type: 'integer', description: 'עדיפות 1-10', minimum: 1, maximum: 10 },
+          due_date: { type: 'string', format: 'date', description: 'תאריך יעד בפורמט YYYY-MM-DD' },
+          due_time: { type: 'string', description: 'שעת יעד בפורמט HH:MM' },
+          notes: { type: 'string', description: 'הערות למשימה' },
+          status: { type: 'string', enum: ['open', 'in_progress', 'completed', 'cancelled'], description: 'סטטוס חדש (אופציונלי)' },
+        },
+        required: ['task_id'],
       },
     },
   },
