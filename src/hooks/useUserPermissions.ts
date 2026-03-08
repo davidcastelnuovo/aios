@@ -1,8 +1,7 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "./useCurrentUser";
 import { useUserRole } from "./useUserRole";
-import { useEffect } from "react";
 
 export type ModulePermission = 
   | "dashboard"
