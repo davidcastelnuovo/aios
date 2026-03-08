@@ -408,8 +408,10 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       contactEmail: client.email,
       contactId: client.id,
       contactType: 'client',
+      additionalEmails: selectedMeetingEmails,
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["clients"] });
+        setSelectedMeetingEmails([]);
       },
     });
   };
