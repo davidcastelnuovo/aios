@@ -1776,13 +1776,24 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     const last9 = cleanPhone.slice(-9)
     chatId = `972${last9}@c.us`
     console.log(`Sending to manual phone: ${chatId}`)
-  } else if (phone_mode === "field" && phone_field && data[phone_field]) {
-    // Dynamic field mode - resolve phone from data field
-    const fieldPhone = data[phone_field]
-    const cleanPhone = fieldPhone.replace(/\D/g, '')
-    const last9 = cleanPhone.slice(-9)
-    chatId = `972${last9}@c.us`
-    console.log(`Sending to dynamic field phone (${phone_field}): ${chatId}`)
+  } else if ((phone_mode === "field" || (!phone_mode && phone_field)) && phone_field && data?.[phone_field]) {
+    // Dynamic field mode - resolve destination from data field (supports both phone and group chat id)
+    const fieldValue = String(data[phone_field]).trim()
+    const fieldKey = String(phone_field).toLowerCase()
+    const shouldTreatAsGroup =
+      data?.contact_type === 'group' ||
+      fieldKey.includes('group') ||
+      fieldValue.includes('@g.us')
+
+    if (shouldTreatAsGroup) {
+      chatId = fieldValue.includes('@g.us') ? fieldValue : `${fieldValue}@g.us`
+      console.log(`Sending to dynamic group field (${phone_field}): ${chatId}`)
+    } else {
+      const cleanPhone = fieldValue.replace(/\D/g, '')
+      const last9 = cleanPhone.slice(-9)
+      chatId = `972${last9}@c.us`
+      console.log(`Sending to dynamic field phone (${phone_field}): ${chatId}`)
+    }
   } else {
     // Default: send to contact (lead/client)
     let contactPhone: string | null = null

@@ -707,6 +707,7 @@ const QUICK_TEMPLATES = [
 
 const OUTPUT_FORMATS = [
   { value: "text", label: "טקסט חופשי" },
+  { value: "single_reply", label: "תשובה אחת ישירה" },
   { value: "json", label: "JSON מובנה" },
   { value: "single_value", label: "ערך בודד" },
 ];
