@@ -211,17 +211,26 @@ export function AIOSDialog({ open, onOpenChange }: AIOSDialogProps) {
 
   const toolLabelMap: Record<string, string> = {
     create_task: "יוצר משימה",
+    update_task: "מעדכן משימה",
     update_task_status: "מעדכן סטטוס משימה",
     list_tasks: "שולף משימות",
     search_entities: "מחפש",
     get_client_info: "שולף מידע על לקוח",
     create_automation: "יוצר אוטומציה",
-    send_message: "שולח הודעה",
+    send_message: "שולח הודעת WhatsApp",
+    get_chat_history: "שולף היסטוריית שיחות",
     create_lead: "יוצר ליד",
     update_lead_status: "מעדכן סטטוס ליד",
     list_leads: "שולף לידים",
     list_clients: "שולף לקוחות",
     create_client: "יוצר לקוח",
+    list_emails: "שולף אימיילים",
+    get_email: "קורא אימייל",
+    send_email: "שולח אימייל",
+    delete_email: "מוחק אימייל",
+    save_memory: "שומר לזיכרון",
+    recall_memory: "שולף זיכרון",
+    delete_memory: "מוחק זיכרון",
   };
 
   const SidebarContent = () => (
