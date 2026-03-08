@@ -822,14 +822,33 @@ serve(async (req) => {
             }
           }
           
-          // Execute accumulated tool calls
-          if (finishReason === 'tool_calls' || Object.keys(toolCallAccumulators).length > 0) {
-            for (const [_, accumulated] of Object.entries(toolCallAccumulators)) {
+          // Execute accumulated tool calls with recursive support (up to 3 rounds)
+          const MAX_TOOL_ROUNDS = 3;
+          let toolRound = 0;
+          let currentToolCalls = { ...toolCallAccumulators };
+          let currentFinishReason = finishReason;
+
+          // Build running conversation for follow-ups
+          let followUpMessages: any[] = [
+            { role: 'system', content: buildSystemPrompt(userName, userEmail, campaignerName || undefined, campaignerId || undefined) },
+            ...aiMessages,
+          ];
+
+          while ((currentFinishReason === 'tool_calls' || Object.keys(currentToolCalls).length > 0) && toolRound < MAX_TOOL_ROUNDS) {
+            toolRound++;
+            console.log(`Tool round ${toolRound}/${MAX_TOOL_ROUNDS}, tools:`, Object.values(currentToolCalls).map(t => t.name));
+
+            // Build tool_calls array for the assistant message
+            const toolCallsForMessage: any[] = [];
+            const toolResultsForMessage: any[] = [];
+
+            for (const [idx, accumulated] of Object.entries(currentToolCalls)) {
               if (!accumulated.name) continue;
               let toolArgs = {};
               try { toolArgs = JSON.parse(accumulated.arguments || '{}'); } catch { continue; }
               
               const toolName = accumulated.name;
+              const callId = `call_${toolRound}_${idx}`;
 
               controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'tool_call', tool: toolName, args: toolArgs })}\n\n`));
 
@@ -837,54 +856,72 @@ serve(async (req) => {
 
               messages.push({ role: 'tool_call', tool: toolName, args: toolArgs, result: toolResult, timestamp: new Date().toISOString() });
 
-              if (toolResult.success) {
-                const toolResultContent = JSON.stringify(toolResult.result);
-
-                const followUpResponse = await fetch(AI_GATEWAY_URL, {
-                  method: 'POST',
-                  headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    model: AI_MODEL,
-                    messages: [
-                      { role: 'system', content: buildSystemPrompt(userName, userEmail, campaignerName || undefined, campaignerId || undefined) },
-                      ...aiMessages,
-                      { role: 'assistant', content: null, tool_calls: [{ id: 'call_1', type: 'function', function: { name: toolName, arguments: JSON.stringify(toolArgs) } }] },
-                      { role: 'tool', tool_call_id: 'call_1', content: toolResultContent },
-                    ],
-                    stream: true,
-                  }),
-                });
-
-                if (followUpResponse.ok) {
-                  const followReader = followUpResponse.body!.getReader();
-                  let followBuffer = '';
-                  while (true) {
-                    const { done: followDone, value: followValue } = await followReader.read();
-                    if (followDone) break;
-                    followBuffer += decoder.decode(followValue, { stream: true });
-                    const followLines = followBuffer.split('\n');
-                    followBuffer = followLines.pop() || '';
-                    for (const followLine of followLines) {
-                      if (!followLine.trim() || followLine.startsWith(':') || !followLine.startsWith('data: ')) continue;
-                      const followData = followLine.slice(6);
-                      if (followData === '[DONE]') continue;
-                      try {
-                        const followParsed = JSON.parse(followData);
-                        const followContent = followParsed.choices?.[0]?.delta?.content;
-                        if (followContent) {
-                          assistantMessage += followContent;
-                          controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'token', content: followContent })}\n\n`));
-                        }
-                      } catch { /* ignore */ }
-                    }
-                  }
-                }
-              } else {
-                const errorMsg = `❌ שגיאה: ${toolResult.error}`;
-                assistantMessage = errorMsg;
-                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'token', content: errorMsg })}\n\n`));
-              }
+              toolCallsForMessage.push({ id: callId, type: 'function', function: { name: toolName, arguments: JSON.stringify(toolArgs) } });
+              toolResultsForMessage.push({ role: 'tool', tool_call_id: callId, content: JSON.stringify(toolResult.success ? toolResult.result : { error: toolResult.error }) });
             }
+
+            if (toolCallsForMessage.length === 0) break;
+
+            // Add assistant tool_calls + tool results to conversation
+            followUpMessages.push({ role: 'assistant', content: null, tool_calls: toolCallsForMessage });
+            followUpMessages.push(...toolResultsForMessage);
+
+            // Call AI again with full context
+            const followUpResponse = await fetch(AI_GATEWAY_URL, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: AI_MODEL,
+                messages: followUpMessages,
+                tools,
+                stream: true,
+              }),
+            });
+
+            // Reset for next round
+            const nextToolCalls: Record<number, { name: string; arguments: string }> = {};
+            let nextFinishReason: string | null = null;
+
+            if (followUpResponse.ok) {
+              const followReader = followUpResponse.body!.getReader();
+              let followBuffer = '';
+              while (true) {
+                const { done: followDone, value: followValue } = await followReader.read();
+                if (followDone) break;
+                followBuffer += decoder.decode(followValue, { stream: true });
+                const followLines = followBuffer.split('\n');
+                followBuffer = followLines.pop() || '';
+                for (const followLine of followLines) {
+                  if (!followLine.trim() || followLine.startsWith(':') || !followLine.startsWith('data: ')) continue;
+                  const followData = followLine.slice(6);
+                  if (followData === '[DONE]') { nextFinishReason = nextFinishReason || 'stop'; continue; }
+                  try {
+                    const followParsed = JSON.parse(followData);
+                    const followDelta = followParsed.choices?.[0]?.delta;
+                    const followFinish = followParsed.choices?.[0]?.finish_reason;
+                    if (followFinish) nextFinishReason = followFinish;
+
+                    if (followDelta?.tool_calls) {
+                      for (const tc of followDelta.tool_calls) {
+                        const tcIdx = tc.index ?? 0;
+                        if (!nextToolCalls[tcIdx]) nextToolCalls[tcIdx] = { name: '', arguments: '' };
+                        if (tc.function?.name) nextToolCalls[tcIdx].name = tc.function.name;
+                        if (tc.function?.arguments) nextToolCalls[tcIdx].arguments += tc.function.arguments;
+                      }
+                    } else if (followDelta?.content) {
+                      assistantMessage += followDelta.content;
+                      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'token', content: followDelta.content })}\n\n`));
+                    }
+                  } catch { /* ignore */ }
+                }
+              }
+            } else {
+              console.error('Follow-up AI call failed:', followUpResponse.status);
+              break;
+            }
+
+            currentToolCalls = nextToolCalls;
+            currentFinishReason = nextFinishReason;
           }
 
           // Save
@@ -892,13 +929,45 @@ serve(async (req) => {
             messages.push({ role: 'assistant', content: assistantMessage, timestamp: new Date().toISOString() });
           }
 
+          const isNewConversation = !conversation_id || !conversation;
           const conversationTitle = conversation?.title || message.slice(0, 50);
+          let savedConversationId = conversation_id;
+
           if (conversation_id && conversation) {
             await supabaseClient.from('ai_conversations').update({ messages, updated_at: new Date().toISOString() }).eq('id', conversation_id);
           } else {
             const { data: newConv } = await supabaseClient.from('ai_conversations').insert({ user_id: user.id, tenant_id: tenantId, title: conversationTitle, messages }).select().single();
             if (newConv) {
+              savedConversationId = newConv.id;
               controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'conversation_id', id: newConv.id })}\n\n`));
+            }
+          }
+
+          // Auto-generate title for new conversations using AI
+          if (isNewConversation && savedConversationId && assistantMessage) {
+            try {
+              const titleResponse = await fetch(AI_GATEWAY_URL, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  model: 'google/gemini-2.5-flash-lite',
+                  messages: [
+                    { role: 'system', content: 'תן כותרת קצרה בעברית (עד 5 מילים) לשיחה הבאה. תחזיר רק את הכותרת, בלי גרשיים או סימני פיסוק מיותרים.' },
+                    { role: 'user', content: `הודעת המשתמש: ${message}\nתשובת העוזר: ${assistantMessage.slice(0, 300)}` },
+                  ],
+                  stream: false,
+                }),
+              });
+              if (titleResponse.ok) {
+                const titleData = await titleResponse.json();
+                const generatedTitle = titleData.choices?.[0]?.message?.content?.trim();
+                if (generatedTitle && generatedTitle.length > 0 && generatedTitle.length < 100) {
+                  await supabaseClient.from('ai_conversations').update({ title: generatedTitle }).eq('id', savedConversationId);
+                  controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'title_update', title: generatedTitle })}\n\n`));
+                }
+              }
+            } catch (titleErr) {
+              console.error('Auto-title generation failed:', titleErr);
             }
           }
 
