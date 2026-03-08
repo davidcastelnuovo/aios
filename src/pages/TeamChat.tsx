@@ -1817,7 +1817,7 @@ function ManageChannelMembersDialog({
       return data;
     },
     onSuccess: (data) => {
-      const link = `${window.location.origin}/chat-invite/${data.token}`;
+      const link = `${getPublicOrigin()}/chat-invite/${data.token}`;
       setInviteLink(link);
       queryClient.invalidateQueries({ queryKey: ["team-channel-invite", channel.id] });
       toast.success("קישור הזמנה נוצר בהצלחה");

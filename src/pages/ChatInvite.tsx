@@ -164,7 +164,7 @@ export default function ChatInvite() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/chat-invite/${token}`,
+          redirectTo: `https://after-lead.lovable.app/chat-invite/${token}`,
         },
       });
       if (error) throw error;
