@@ -1006,15 +1006,31 @@ const tools = [
     type: 'function',
     function: {
       name: 'send_message',
-      description: 'שליחת הודעת WhatsApp ללקוח או ליד',
+      description: 'שליחת הודעת WhatsApp ללקוח או ליד. ההודעה תכלול חתימה אוטומטית שמציגה אותך כעוזר דיגיטלי.',
       parameters: {
         type: 'object',
         properties: {
           contact_type: { type: 'string', enum: ['lead', 'client'], description: 'סוג איש הקשר' },
           contact_id: { type: 'string', description: 'מזהה איש הקשר (UUID)' },
-          message_text: { type: 'string', description: 'תוכן ההודעה' },
+          message_text: { type: 'string', description: 'תוכן ההודעה (ללא הצגה עצמית - היא תתווסף אוטומטית)' },
         },
         required: ['contact_type', 'contact_id', 'message_text'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_chat_history',
+      description: 'שליפת היסטוריית שיחות WhatsApp עם לקוח או ליד. שימושי כדי להבין הקשר לפני שליחת הודעה.',
+      parameters: {
+        type: 'object',
+        properties: {
+          contact_type: { type: 'string', enum: ['lead', 'client'], description: 'סוג איש הקשר' },
+          contact_id: { type: 'string', description: 'מזהה איש הקשר (UUID)' },
+          limit: { type: 'integer', description: 'מספר הודעות מקסימלי (ברירת מחדל: 20)' },
+        },
+        required: ['contact_type', 'contact_id'],
       },
     },
   },
