@@ -122,9 +122,10 @@ export function useMeetingScheduler(tenantId?: string) {
     contactEmail?: string;
     contactId: string;
     contactType: 'lead' | 'client';
+    additionalEmails?: string[];
     onSuccess?: () => void;
   }) => {
-    const { contactName, contactEmail, contactId, contactType, onSuccess } = params;
+    const { contactName, contactEmail, contactId, contactType, additionalEmails, onSuccess } = params;
 
     if (!meetingDate || !meetingTime) {
       toast.error("נא לבחור תאריך ושעה");
