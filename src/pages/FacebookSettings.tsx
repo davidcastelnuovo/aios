@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Facebook, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft, Loader2, TestTube, Download, Search } from "lucide-react";
+import { Facebook, Unlink, RefreshCw, CheckCircle2, AlertCircle, Copy, Webhook, Target, ArrowLeft, Loader2, TestTube, Download, Search, ListTree } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { FacebookFormMappingSection } from "@/components/forms/FacebookFormMappingSection";
@@ -630,15 +630,27 @@ export default function FacebookSettings() {
                   )}
 
                   {selectedPageName && (
-                    <Alert className="text-right">
-                      <AlertTitle className="flex items-center gap-2 flex-row-reverse justify-end">
-                        <CheckCircle2 className="h-4 w-4" />
-                        עמוד פעיל
-                      </AlertTitle>
-                      <AlertDescription className="text-right">
-                        לידים מהעמוד "{selectedPageName}" יתקבלו אוטומטית למערכת
-                      </AlertDescription>
-                    </Alert>
+                    <>
+                      <Alert className="text-right">
+                        <AlertTitle className="flex items-center gap-2 flex-row-reverse justify-end">
+                          <CheckCircle2 className="h-4 w-4" />
+                          עמוד פעיל
+                        </AlertTitle>
+                        <AlertDescription className="text-right">
+                          לידים מהעמוד "{selectedPageName}" יתקבלו אוטומטית למערכת
+                        </AlertDescription>
+                      </Alert>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          document.getElementById('form-mapping-section')?.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                        className="gap-2 w-full"
+                      >
+                        <ListTree className="h-4 w-4" />
+                        הגדר מיפוי טפסים
+                      </Button>
+                    </>
                   )}
 
                   {/* Sync & Test Buttons */}
