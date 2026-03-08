@@ -794,6 +794,13 @@ serve(async (req) => {
     const userName = profileData?.full_name || user.email?.split('@')[0] || 'משתמש';
     const userEmail = profileData?.email || user.email || '';
 
+    const now = new Date();
+    const currentDateContext = `Israel: ${new Intl.DateTimeFormat('he-IL', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: 'Asia/Jerusalem',
+    }).format(now)} | UTC: ${now.toISOString()}`;
+
     // Load conversation
     let conversation = null;
     let messages: any[] = [];
@@ -816,7 +823,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: AI_MODEL,
         messages: [
-          { role: 'system', content: buildSystemPrompt(userName, userEmail, campaignerName || undefined, campaignerId || undefined) },
+          { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, campaignerName || undefined, campaignerId || undefined) },
           ...aiMessages,
         ],
         tools,
