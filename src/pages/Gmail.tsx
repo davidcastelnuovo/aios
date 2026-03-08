@@ -22,6 +22,7 @@ import { format, addDays, startOfDay, startOfWeek, subDays } from "date-fns";
 import { he } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
+import { ProcessInvoicesDialog } from "@/components/gmail/ProcessInvoicesDialog";
 
 interface EmailMessage {
   id: string;
