@@ -96,19 +96,29 @@ Deno.serve(async (req) => {
 
     // 3. Call AI Gateway
     const startTime = Date.now()
+    const safeTemperature = typeof temperature === 'number'
+      ? Math.min(2, Math.max(0, temperature))
+      : undefined
+
+    const gatewayPayload: Record<string, any> = {
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: command_text },
+      ],
+    }
+
+    if (safeTemperature !== undefined) {
+      gatewayPayload.temperature = safeTemperature
+    }
+
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${lovableApiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: command_text },
-        ],
-      }),
+      body: JSON.stringify(gatewayPayload),
     })
 
     if (!aiResponse.ok) {

@@ -379,6 +379,7 @@ Deno.serve(async (req) => {
                       body: JSON.stringify({
                         agent_id: agentId,
                         command_text: commandText,
+                        temperature: agentTemperature,
                         automation_id: automation.id,
                         user_name: payloadData?.user_name || 'מערכת',
                         lead_data: {

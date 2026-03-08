@@ -945,6 +945,7 @@ function AgentStepConfig({
             <p className="text-xs text-muted-foreground text-right">
               {configuration?.output_format === "json" && "הסוכן יתבקש להחזיר תשובה בפורמט JSON בלבד"}
               {configuration?.output_format === "single_value" && "הסוכן יתבקש להחזיר ערך בודד ללא הסברים"}
+              {configuration?.output_format === "single_reply" && "הסוכן יחזיר תשובה אחת קצרה וישירה, ללא חלופות/בדיחות"}
               {(!configuration?.output_format || configuration?.output_format === "text") && "הסוכן יחזיר טקסט חופשי"}
             </p>
           </div>
