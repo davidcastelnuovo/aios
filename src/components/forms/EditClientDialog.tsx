@@ -935,9 +935,38 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                     />
                   </div>
 
-                  {!client.email && (
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 text-sm text-yellow-800 dark:text-yellow-200">
-                      ללקוח לא מוגדר אימייל - לא תישלח הזמנה במייל
+                  {/* Attendee selection */}
+                  {allContactEmails.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        שלח זימון ל:
+                      </label>
+                      <div className="space-y-1.5">
+                        {allContactEmails.map((contact) => (
+                          <label key={contact.email} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm">
+                            <Checkbox
+                              checked={selectedMeetingEmails.includes(contact.email)}
+                              onCheckedChange={(checked) => {
+                                setSelectedMeetingEmails(prev =>
+                                  checked
+                                    ? [...prev, contact.email]
+                                    : prev.filter(e => e !== contact.email)
+                                );
+                              }}
+                            />
+                            <span className="font-medium">{contact.name}</span>
+                            <span className="text-muted-foreground">({contact.source})</span>
+                            <span className="text-muted-foreground mr-auto">{contact.email}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {allContactEmails.length === 0 && (
+                    <div className="bg-muted/50 border rounded-lg p-3 text-sm text-muted-foreground">
+                      אין אנשי קשר עם אימייל — הזימון לא יישלח במייל
                     </div>
                   )}
 
