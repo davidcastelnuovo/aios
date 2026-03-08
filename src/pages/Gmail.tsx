@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Mail, Send, ArrowRight, RefreshCw, Loader2, Ban, Tag, Settings, ChevronLeft, ChevronRight, CalendarIcon, Reply, Trash2 } from "lucide-react";
+import { Search, Mail, Send, ArrowRight, RefreshCw, Loader2, Ban, Tag, Settings, ChevronLeft, ChevronRight, CalendarIcon, Reply, Trash2, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -22,6 +22,7 @@ import { format, addDays, startOfDay, startOfWeek, subDays } from "date-fns";
 import { he } from "date-fns/locale";
 import type { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
+import { ProcessInvoicesDialog } from "@/components/gmail/ProcessInvoicesDialog";
 
 interface EmailMessage {
   id: string;
@@ -55,7 +56,7 @@ export default function Gmail() {
   
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  
+  const [processInvoicesOpen, setProcessInvoicesOpen] = useState(false);
   // Date & pagination state
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>({
     from: new Date(),
@@ -755,6 +756,10 @@ export default function Gmail() {
               <Ban className="h-3.5 w-3.5" />
               חסום
             </Button>
+            <Button variant="secondary" size="sm" className="h-8 gap-1" onClick={() => setProcessInvoicesOpen(true)}>
+              <FileText className="h-3.5 w-3.5" />
+              עבד חשבוניות
+            </Button>
             <Button variant="destructive" size="sm" className="h-8 gap-1" onClick={handleBulkDelete} disabled={bulkTrashMutation.isPending}>
               {bulkTrashMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               מחק
@@ -973,6 +978,13 @@ export default function Gmail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Process Invoices Dialog */}
+      <ProcessInvoicesDialog
+        open={processInvoicesOpen}
+        onOpenChange={setProcessInvoicesOpen}
+        messageIds={selectedIds.size > 0 ? [...selectedIds] : filteredMessages.map(m => m.id)}
+      />
     </div>
   );
 }
