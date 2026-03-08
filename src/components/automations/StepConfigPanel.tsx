@@ -120,10 +120,13 @@ function getAvailableFields(triggerType: string | undefined, triggerConfig?: Rec
         { key: "sender_name", label: "שם השולח" },
         { key: "sender_phone", label: "טלפון השולח" },
         { key: "message_text", label: "תוכן ההודעה" },
+        { key: "group_id", label: "מזהה קבוצה" },
         { key: "group_name", label: "שם הקבוצה" },
-        { key: "contact_type", label: "סוג איש קשר" },
+        { key: "group_chat_id", label: "מזהה צ'אט קבוצה (WhatsApp)" },
+        { key: "contact_type", label: "סוג איש קשר (client/lead/group)" },
         { key: "contact_id", label: "מזהה איש קשר" },
         { key: "contact_name", label: "שם איש קשר" },
+        { key: "connection_user_id", label: "מזהה חיבור" },
       ];
       break;
     default:
