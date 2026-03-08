@@ -529,7 +529,86 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
               />
             </div>
 
-            <FormField
+            {/* Additional Contacts Section */}
+            <div className="space-y-3 pt-3 border-t">
+              <div className="flex items-center justify-between">
+                <FormLabel className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  אנשי קשר נוספים
+                  {clientContacts && clientContacts.length > 0 && (
+                    <Badge variant="secondary" className="h-5 px-1.5 text-xs">{clientContacts.length}</Badge>
+                  )}
+                </FormLabel>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAddContact(!showAddContact)}
+                >
+                  <Plus className="h-3 w-3 ml-1" />
+                  הוסף איש קשר
+                </Button>
+              </div>
+
+              {showAddContact && (
+                <div className="space-y-2 p-3 rounded-lg border bg-muted/30">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="שם *"
+                      value={newContact.contact_name}
+                      onChange={(e) => setNewContact(prev => ({ ...prev, contact_name: e.target.value }))}
+                    />
+                    <Input
+                      placeholder="תפקיד"
+                      value={newContact.role}
+                      onChange={(e) => setNewContact(prev => ({ ...prev, role: e.target.value }))}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="טלפון"
+                      value={newContact.phone}
+                      onChange={(e) => setNewContact(prev => ({ ...prev, phone: e.target.value }))}
+                    />
+                    <Input
+                      placeholder="אימייל"
+                      type="email"
+                      value={newContact.email}
+                      onChange={(e) => setNewContact(prev => ({ ...prev, email: e.target.value }))}
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddContact(false)}>ביטול</Button>
+                    <Button type="button" size="sm" onClick={handleAddContact} disabled={addContactMutation.isPending}>
+                      {addContactMutation.isPending ? "מוסיף..." : "הוסף"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {clientContacts && clientContacts.length > 0 && (
+                <div className="space-y-2">
+                  {clientContacts.map((contact: any) => (
+                    <div key={contact.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm">
+                      <div className="flex-1 grid grid-cols-4 gap-2">
+                        <span className="font-medium">{contact.contact_name}</span>
+                        <span className="text-muted-foreground">{contact.role || "—"}</span>
+                        <span className="text-muted-foreground">{contact.phone || "—"}</span>
+                        <span className="text-muted-foreground">{contact.email || "—"}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => deleteContactMutation.mutate(contact.id)}
+                        className="hover:bg-destructive/20 rounded-full p-1"
+                      >
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
               control={form.control}
               name="folder_link"
               render={({ field }) => (
