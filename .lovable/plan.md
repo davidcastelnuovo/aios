@@ -1,24 +1,28 @@
 
 
-## הפיכת האפליקציה ל-PWA (Progressive Web App)
+# שינוי תדירות cron-sync-facebook-leads ל-כל 15 דקות
 
-כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
+## מה נעשה
+נבטל את ה-cron job הנוכחי (שרץ כל דקה) ונגדיר מחדש לכל 15 דקות.
 
-### 1. קובץ `public/manifest.json`
-- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
-- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
+## מיגרציית SQL
+```sql
+-- ביטול ה-cron הנוכחי
+SELECT cron.unschedule(6);
 
-### 2. Service Worker — `public/sw.js`
-- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
-- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
+-- תזמון מחדש - כל 15 דקות
+SELECT cron.schedule(
+  'sync-facebook-leads-15min',
+  '*/15 * * * *',
+  $$
+  SELECT net.http_post(
+    url:='https://jnzguisakdtcollxmgzd.supabase.co/functions/v1/cron-sync-facebook-leads',
+    headers:='{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impuemd1aXNha2R0Y29sbHhtZ3pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA1NTcxNTcsImV4cCI6MjA3NjEzMzE1N30.VrxuppQtj-cByA2ml2krzwoM1rHwelXIr0f5D3eP4KM"}'::jsonb,
+    body:='{}'::jsonb
+  ) as request_id;
+  $$
+);
+```
 
-### 3. רישום ב-`index.html`
-- תג `<link rel="manifest">` ב-head
-- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
-- סקריפט רישום Service Worker
-
-### תוצאה
-- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
-- באייפון: Share → Add to Home Screen
-- האפליקציה תיפתח במסך מלא בלי שורת כתובת
+זה יפחית את העומס על בסיס הנתונים פי 15 - במקום ~850 שאילתות כל דקה, זה יהיה כל 15 דקות.
 
