@@ -109,6 +109,7 @@ const iconMap: Record<string, any> = {
   Database: Table,
   Layers: Table,
   FileSignature: PenLine,
+  Mail,
 };
 
 export function AppSidebar() {
