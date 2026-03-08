@@ -186,7 +186,11 @@ const App = () => (
                   <Route path="/t/:tenantSlug/team-chat" element={<ProtectedRoute requiredPermission="team_chat"><AppLayout><TeamChat /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/gmail-settings" element={<ProtectedRoute><AppLayout><GmailSettings /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/gmail" element={<ProtectedRoute><AppLayout><Gmail /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/signatures" element={<ProtectedRoute requiredPermission="signatures"><AppLayout><Signatures /></AppLayout></ProtectedRoute>} />
                   
+                  {/* Public signing page */}
+                  <Route path="/sign/:token" element={<SignDocument />} />
+                   
                   {/* Legacy route - redirect to root */}
                   
                   {/* Catch-all for 404 - must be last */}
