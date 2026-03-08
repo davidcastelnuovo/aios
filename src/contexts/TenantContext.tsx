@@ -18,8 +18,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { tenantSlug } = useParams();
   const navigate = useNavigate();
-  const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
+  const [currentTenantId, setCurrentTenantId] = useState<string | null>(() => localStorage.getItem("selectedTenantId"));
   const [isActiveTenantSynced, setIsActiveTenantSynced] = useState(false);
+  const [isBootstrapTimedOut, setIsBootstrapTimedOut] = useState(false);
   const previousTenantIdRef = useRef<string | null>(null);
 
   // Get tenant by slug from URL
@@ -227,6 +228,20 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   const isLoading = isLoadingUserTenant || isLoadingTenant || isLoadingSlug;
 
+  useEffect(() => {
+    if (currentTenantId || !isLoading) {
+      setIsBootstrapTimedOut(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      console.warn("⚠️ Tenant bootstrap timed out after 8s, unblocking UI");
+      setIsBootstrapTimedOut(true);
+    }, 8000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [currentTenantId, isLoading]);
+
   // CRITICAL: Block rendering until tenant is synced to DB
   if (currentTenantId && !isActiveTenantSynced) {
     return (
@@ -236,8 +251,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  // Block while loading if no tenant yet
-  if (isLoading && !currentTenant && !userTenant) {
+  // Block while loading if no tenant yet (with fail-safe timeout)
+  if (isLoading && !isBootstrapTimedOut && !currentTenant && !userTenant) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
