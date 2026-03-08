@@ -39,6 +39,7 @@ export default function FlowEditor() {
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [dragNodeId, setDragNodeId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const wasDraggingRef = useRef(false);
   const [showManualTrigger, setShowManualTrigger] = useState(false);
   const [showTestWithLead, setShowTestWithLead] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
