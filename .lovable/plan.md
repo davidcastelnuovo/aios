@@ -1,24 +1,33 @@
 
 
-## הפיכת האפליקציה ל-PWA (Progressive Web App)
+# תיקון UX: הוספת בחירת טופס ישירות בקטע הראשי
 
-כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
+## הבעיה
+יש שני כרטיסים נפרדים:
+1. **כרטיס ראשי** (`FacebookSettings.tsx`) - בוחרים עמוד, רואים "עמוד פעיל", אבל **אין בחירת טופס**
+2. **כרטיס מיפוי** (`FacebookFormMappingSection`) - מופיע למטה מתחת, עם בחירת עמוד **כפולה** + בחירת טופס
 
-### 1. קובץ `public/manifest.json`
-- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
-- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
+המשתמש רואה את הכרטיס הראשי עם "עמוד פעיל" וחושב שזה הכל - לא גולל למטה לכרטיס המיפוי.
 
-### 2. Service Worker — `public/sw.js`
-- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
-- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
+## הפתרון
+להוסיף לינק/כפתור בולט בכרטיס הראשי שמפנה לקטע המיפוי, ולהוסיף `id` לכרטיס המיפוי כדי לגלול אליו אוטומטית.
 
-### 3. רישום ב-`index.html`
-- תג `<link rel="manifest">` ב-head
-- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
-- סקריפט רישום Service Worker
+### שינויים:
 
-### תוצאה
-- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
-- באייפון: Share → Add to Home Screen
-- האפליקציה תיפתח במסך מלא בלי שורת כתובת
+**1. `FacebookSettings.tsx`** - אחרי "עמוד פעיל" (שורה 641), להוסיף כפתור "הגדר טפסים" שגולל למטה לקטע המיפוי:
+```tsx
+<Button variant="outline" onClick={() => {
+  document.getElementById('form-mapping-section')?.scrollIntoView({ behavior: 'smooth' });
+}} className="gap-2 w-full">
+  <ListTree className="h-4 w-4" />
+  הגדר מיפוי טפסים
+</Button>
+```
+
+**2. `FacebookFormMappingSection.tsx`** - להוסיף `id="form-mapping-section"` ל-Card הראשי (שורה 418) כדי שהגלילה תעבוד.
+
+| קובץ | שינוי |
+|-------|-------|
+| `src/pages/FacebookSettings.tsx` | הוספת כפתור "הגדר מיפוי טפסים" אחרי "עמוד פעיל" |
+| `src/components/forms/FacebookFormMappingSection.tsx` | הוספת `id` לקטע המיפוי |
 
