@@ -1,39 +1,24 @@
 
 
-# תיקון: מסך לבן כשהדאטה-בייס לא מגיב
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## הבעיה
-ב-`TenantContext.tsx`, כשהמערכת מנסה לסנכרן את ה-tenant לדאטה-בייס (שורה 106-126), אם הדאטה-בייס לא מגיב (timeout), הפונקציה נתקעת לנצח. ה-UI חסום (שורה 225) כי `isActiveTenantSynced` נשאר `false`.
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-למרות שיש catch block, הוא לא עוזר כשהפרומיס לא מחזיר תשובה בכלל (timeout ללא rejection).
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-## הפתרון
-הוסיף timeout של 5 שניות לפונקציית `syncTenantToDb`. אם הסנכרון לא מסתיים תוך 5 שניות — לסמן כ-synced ולהמשיך (הנתונים יהיו נכונים ב-99% מהמקרים כי ה-URL כבר מגדיר את ה-tenant).
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-## שינויים
-**קובץ: `src/contexts/TenantContext.tsx`**
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-בפונקציית `syncTenantToDb` (שורות ~68-139), לעטוף את כל הלוגיקה ב-`Promise.race` עם timeout:
-
-```typescript
-const syncTenantToDb = async () => {
-  if (!currentTenantId || isActiveTenantSynced) return;
-
-  const timeoutPromise = new Promise<void>((resolve) => {
-    setTimeout(() => {
-      console.warn("⚠️ Tenant sync timed out after 5s, unblocking UI");
-      resolve();
-    }, 5000);
-  });
-
-  const syncPromise = (async () => {
-    // ... existing sync logic ...
-  })();
-
-  await Promise.race([syncPromise, timeoutPromise]);
-  setIsActiveTenantSynced(true);
-};
-```
-
-זה מבטיח שה-UI לעולם לא ייתקע יותר מ-5 שניות, גם אם הדאטה-בייס לא מגיב.
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 
