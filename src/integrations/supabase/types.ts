@@ -243,6 +243,59 @@ export type Database = {
           },
         ]
       }
+      automation_executions: {
+        Row: {
+          actions_count: number
+          automation_id: string
+          depth: number
+          entity_id: string | null
+          error: string | null
+          execution_id: string
+          finished_at: string | null
+          id: string
+          started_at: string
+          status: string
+          tenant_id: string
+          trigger_type: string | null
+        }
+        Insert: {
+          actions_count?: number
+          automation_id: string
+          depth?: number
+          entity_id?: string | null
+          error?: string | null
+          execution_id: string
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          tenant_id: string
+          trigger_type?: string | null
+        }
+        Update: {
+          actions_count?: number
+          automation_id?: string
+          depth?: number
+          entity_id?: string | null
+          error?: string | null
+          execution_id?: string
+          finished_at?: string | null
+          id?: string
+          started_at?: string
+          status?: string
+          tenant_id?: string
+          trigger_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "automation_executions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       automation_flow_steps: {
         Row: {
           action_type: string | null
@@ -2128,6 +2181,53 @@ export type Database = {
           },
         ]
       }
+      integration_health: {
+        Row: {
+          consecutive_failures: number
+          cooldown_until: string | null
+          id: string
+          is_circuit_open: boolean
+          last_failure_at: string | null
+          last_success_at: string | null
+          provider: string
+          tenant_id: string
+          total_calls: number
+          total_failures: number
+        }
+        Insert: {
+          consecutive_failures?: number
+          cooldown_until?: string | null
+          id?: string
+          is_circuit_open?: boolean
+          last_failure_at?: string | null
+          last_success_at?: string | null
+          provider: string
+          tenant_id: string
+          total_calls?: number
+          total_failures?: number
+        }
+        Update: {
+          consecutive_failures?: number
+          cooldown_until?: string | null
+          id?: string
+          is_circuit_open?: boolean
+          last_failure_at?: string | null
+          last_success_at?: string | null
+          provider?: string
+          tenant_id?: string
+          total_calls?: number
+          total_failures?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_health_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integration_tenant_access: {
         Row: {
           accessing_tenant_id: string
@@ -2251,6 +2351,68 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "invitation_tokens_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_queue: {
+        Row: {
+          attempts: number
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          idempotency_key: string | null
+          job_type: Database["public"]["Enums"]["job_type"]
+          locked_until: string | null
+          max_attempts: number
+          payload: Json
+          priority: Database["public"]["Enums"]["job_priority"]
+          result: Json | null
+          started_at: string | null
+          status: Database["public"]["Enums"]["job_status"]
+          tenant_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          job_type?: Database["public"]["Enums"]["job_type"]
+          locked_until?: string | null
+          max_attempts?: number
+          payload?: Json
+          priority?: Database["public"]["Enums"]["job_priority"]
+          result?: Json | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["job_status"]
+          tenant_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          idempotency_key?: string | null
+          job_type?: Database["public"]["Enums"]["job_type"]
+          locked_until?: string | null
+          max_attempts?: number
+          payload?: Json
+          priority?: Database["public"]["Enums"]["job_priority"]
+          result?: Json | null
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["job_status"]
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_queue_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -2883,6 +3045,35 @@ export type Database = {
           },
           {
             foreignKeyName: "payment_links_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processed_events: {
+        Row: {
+          event_key: string
+          id: string
+          processed_at: string
+          tenant_id: string
+        }
+        Insert: {
+          event_key: string
+          id?: string
+          processed_at?: string
+          tenant_id: string
+        }
+        Update: {
+          event_key?: string
+          id?: string
+          processed_at?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processed_events_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -4958,6 +5149,41 @@ export type Database = {
           },
         ]
       }
+      tenant_rate_limits: {
+        Row: {
+          current_count: number
+          id: string
+          max_per_minute: number
+          resource_type: string
+          tenant_id: string
+          window_start: string
+        }
+        Insert: {
+          current_count?: number
+          id?: string
+          max_per_minute?: number
+          resource_type: string
+          tenant_id: string
+          window_start?: string
+        }
+        Update: {
+          current_count?: number
+          id?: string
+          max_per_minute?: number
+          resource_type?: string
+          tenant_id?: string
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_rate_limits_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_settings: {
         Row: {
           created_at: string
@@ -5589,6 +5815,45 @@ export type Database = {
         Args: { target_user_id: string }
         Returns: boolean
       }
+      check_circuit_breaker: {
+        Args: { p_provider: string; p_tenant_id: string }
+        Returns: boolean
+      }
+      check_idempotency: {
+        Args: { p_event_key: string; p_tenant_id: string }
+        Returns: boolean
+      }
+      check_rate_limit:
+        | {
+            Args: { p_resource_type: string; p_tenant_id: string }
+            Returns: boolean
+          }
+        | {
+            Args: {
+              p_default_max?: number
+              p_resource_type: string
+              p_tenant_id: string
+            }
+            Returns: boolean
+          }
+      claim_next_job: {
+        Args: { p_job_types?: string[] }
+        Returns: {
+          attempts: number
+          id: string
+          job_type: string
+          max_attempts: number
+          payload: Json
+          priority: number
+          tenant_id: string
+        }[]
+      }
+      cleanup_old_events: { Args: never; Returns: number }
+      cleanup_old_jobs: { Args: never; Returns: number }
+      complete_job: {
+        Args: { p_error?: string; p_job_id: string; p_success: boolean }
+        Returns: undefined
+      }
       copy_custom_fields_to_tenant: {
         Args: { _source_tenant_id: string; _target_tenant_id: string }
         Returns: undefined
@@ -5604,6 +5869,16 @@ export type Database = {
           p_tenant_id: string
         }
         Returns: number
+      }
+      enqueue_job: {
+        Args: {
+          p_job_type: string
+          p_max_attempts?: number
+          p_payload?: Json
+          p_priority?: number
+          p_tenant_id: string
+        }
+        Returns: string
       }
       generate_tracking_id: { Args: never; Returns: string }
       get_chat_contacts: {
@@ -5826,6 +6101,24 @@ export type Database = {
         Returns: string
       }
       mark_all_chats_read: { Args: { p_tenant_id: string }; Returns: number }
+      record_integration_failure: {
+        Args: { p_provider: string; p_tenant_id: string }
+        Returns: undefined
+      }
+      record_integration_result: {
+        Args: {
+          p_cooldown_minutes?: number
+          p_failure_threshold?: number
+          p_provider: string
+          p_success: boolean
+          p_tenant_id: string
+        }
+        Returns: undefined
+      }
+      record_integration_success: {
+        Args: { p_provider: string; p_tenant_id: string }
+        Returns: undefined
+      }
       search_contacts_for_chat:
         | {
             Args: { p_search_term: string }
@@ -5964,6 +6257,9 @@ export type Database = {
         | "not_progressing"
       client_status: "active" | "paused" | "ended" | "onboarding"
       finance_type: "income" | "expense"
+      job_priority: "critical" | "high" | "medium" | "low"
+      job_status: "queued" | "running" | "done" | "failed" | "dead_letter"
+      job_type: "user_action" | "workflow" | "integration" | "heavy_job"
       lead_response_status:
         | "no_answer_1"
         | "no_answer_2"
@@ -6187,6 +6483,9 @@ export const Constants = {
       ],
       client_status: ["active", "paused", "ended", "onboarding"],
       finance_type: ["income", "expense"],
+      job_priority: ["critical", "high", "medium", "low"],
+      job_status: ["queued", "running", "done", "failed", "dead_letter"],
+      job_type: ["user_action", "workflow", "integration", "heavy_job"],
       lead_response_status: [
         "no_answer_1",
         "no_answer_2",
