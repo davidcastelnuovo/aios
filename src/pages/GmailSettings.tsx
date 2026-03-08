@@ -364,7 +364,7 @@ function AllowedLabelsSection({ tenantId, userId, isConnected }: { tenantId: str
 
   // Fetch saved allowed labels
   const { data: allowedLabels = [] } = useQuery({
-    queryKey: ['gmail-allowed-labels', userId],
+    queryKey: ['gmail-allowed-labels-full', userId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('gmail_allowed_labels')
