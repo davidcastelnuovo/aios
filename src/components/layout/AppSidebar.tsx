@@ -314,6 +314,7 @@ export function AppSidebar() {
       'recordings': 'recordings',
       'team-chat': 'team_chat',
       'signatures': 'signatures',
+      'gmail': 'gmail',
       'site_analytics': 'clients', // אנליטיקס אתרים - מי שיש לו גישה ללקוחות יכול לראות
       'rank_tracking': 'clients', // מעקב מיקומים - מי שיש לו גישה ללקוחות יכול לראות
     };
