@@ -27,6 +27,14 @@ import { he } from "date-fns/locale";
 import { useAgency } from "@/contexts/AgencyContext";
 import { LinkFileToEntityDialog } from "@/components/chat/LinkFileToEntityDialog";
 
+const getPublicOrigin = () => {
+  const origin = window.location.origin;
+  if (origin.includes("lovableproject.com") || origin.includes("id-preview--")) {
+    return "https://after-lead.lovable.app";
+  }
+  return origin;
+};
+
 // Types
 interface ChannelCategory {
   id: string;
