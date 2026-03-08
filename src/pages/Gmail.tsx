@@ -229,7 +229,7 @@ export default function Gmail() {
       if (error) throw error;
       return data as { messages: EmailMessage[]; nextPageToken?: string; resultSizeEstimate?: number };
     },
-    enabled: !!connectionStatus?.connected,
+    enabled: !!connectionStatus?.connected && allowedLabelsLoaded,
   });
 
   // Build effective category map: DB entries + rule-based auto-matching
