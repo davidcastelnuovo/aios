@@ -1392,7 +1392,7 @@ Deno.serve(async (req) => {
     }
 
     // Trigger automations for incoming/outgoing WhatsApp messages
-    if (isIncoming || isOutgoing) {
+    if (isIncoming || isManualOutgoing) {
       try {
         console.log('🤖 Triggering automations for incoming WhatsApp message...');
         
