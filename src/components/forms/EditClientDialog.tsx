@@ -609,7 +609,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
               )}
             </div>
 
-              control={form.control}
+            <FormField
               name="folder_link"
               render={({ field }) => (
                 <FormItem>
