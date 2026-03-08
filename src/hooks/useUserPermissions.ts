@@ -76,30 +76,8 @@ export function useUserPermissions() {
   // Global loading: until we know the user id OR query finished
   const isLoading = !user?.id || queryLoading;
 
-  // Real-time subscription for permission changes
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const channel = supabase
-      .channel('user-permissions-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'user_permissions',
-          filter: `user_id=eq.${user.id}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ["user-permissions", user.id] });
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id, queryClient]);
+  // Removed realtime subscription to reduce DB connection pressure.
+  // Permissions are cached and will refresh on page reload or after staleTime.
 
   const hasPermission = (module: ModulePermission): boolean => {
     // While loading or user unknown, do NOT allow (prevents leaks)

@@ -78,67 +78,48 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const timeoutPromise = new Promise<void>((resolve) => {
-        setTimeout(() => {
-          console.warn("⚠️ Tenant sync timed out after 5s, unblocking UI");
-          resolve();
-        }, 5000);
-      });
-
-      const syncPromise = (async () => {
-        try {
-          console.log("🔄 Syncing tenant to DB:", currentTenantId);
-          
-          // CRITICAL: Cancel all queries and clear cache FIRST
-          await queryClient.cancelQueries();
-          
-          // Clear all tenant-specific data
-          const keysToRemove = [
-            "tasks", "clients", "agencies", "agencies-filter", "user-agency-ids",
-            "leads", "campaigners", "client-onboarding", "finance", "sales-people",
-            "suppliers", "products", "automations", "time-entries", "chat-contacts",
-            "crm-tables", "crm-records", "tenant-for-operations"
-          ];
-          
-          keysToRemove.forEach(key => {
-            queryClient.removeQueries({ queryKey: [key] });
-          });
-          
-          // Also invalidate to force refetch
-          await queryClient.invalidateQueries({ queryKey: ["agencies-filter"] });
-          await queryClient.invalidateQueries({ queryKey: ["tenant-for-operations"] });
-          
-          // Update localStorage
-          localStorage.setItem("selectedTenantId", currentTenantId);
-          
-          // Update user_active_tenant in database
-          const { data: { user } } = await supabase.auth.getUser();
+      try {
+        console.log("🔄 Syncing tenant to DB:", currentTenantId);
+        
+        // Clear only tenant-specific cached data (don't cancel ALL queries)
+        const keysToRemove = [
+          "tasks", "clients", "agencies", "agencies-filter", "user-agency-ids",
+          "leads", "campaigners", "client-onboarding", "finance", "sales-people",
+          "suppliers", "products", "automations", "time-entries", "chat-contacts",
+          "crm-tables", "crm-records", "tenant-for-operations"
+        ];
+        
+        keysToRemove.forEach(key => {
+          queryClient.removeQueries({ queryKey: [key] });
+        });
+        
+        // Update localStorage immediately
+        localStorage.setItem("selectedTenantId", currentTenantId);
+        
+        // Fire-and-forget: sync to DB without blocking UI
+        supabase.auth.getUser().then(({ data: { user } }) => {
           if (user) {
-            const { error } = await (supabase as any)
+            (supabase as any)
               .from("user_active_tenant")
               .upsert({
                 user_id: user.id,
                 tenant_id: currentTenantId,
                 updated_at: new Date().toISOString(),
-              }, {
-                onConflict: "user_id"
+              }, { onConflict: "user_id" })
+              .then(({ error }: any) => {
+                if (error) {
+                  console.error("Error updating active tenant in DB:", error);
+                } else {
+                  console.log("✅ Active tenant synced to DB:", currentTenantId);
+                }
               });
-            
-            if (error) {
-              console.error("Error updating active tenant in DB:", error);
-            } else {
-              console.log("✅ Active tenant synced to DB:", currentTenantId);
-            }
-            
-            // Small delay to ensure DB processed the update
-            await new Promise(resolve => setTimeout(resolve, 100));
           }
-        } catch (error) {
-          console.error("Error syncing tenant:", error);
-        }
-      })();
+        });
+      } catch (error) {
+        console.error("Error syncing tenant:", error);
+      }
 
-      await Promise.race([syncPromise, timeoutPromise]);
+      // Unblock UI immediately - don't wait for DB write
       setIsActiveTenantSynced(true);
     };
     
