@@ -21,7 +21,6 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const [currentTenantId, setCurrentTenantId] = useState<string | null>(() => localStorage.getItem("selectedTenantId"));
   const [isActiveTenantSynced, setIsActiveTenantSynced] = useState(false);
   const [isBootstrapTimedOut, setIsBootstrapTimedOut] = useState(false);
-  const [isSyncTimedOut, setIsSyncTimedOut] = useState(false);
   const previousTenantIdRef = useRef<string | null>(null);
 
   // Get tenant by slug from URL
@@ -57,7 +56,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       
       // Always update local state to match URL
       if (currentTenantId !== urlTenantId) {
-        console.log("ð URL tenant differs from state. Updating to:", urlTenantId, tenantSlug);
+        console.log("🔄 URL tenant differs from state. Updating to:", urlTenantId, tenantSlug);
         setCurrentTenantId(urlTenantId);
         setIsActiveTenantSynced(false); // Force re-sync to DB
       }
@@ -80,7 +79,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       }
 
       try {
-        console.log("ð Syncing tenant to DB:", currentTenantId);
+        console.log("🔄 Syncing tenant to DB:", currentTenantId);
         
         // Clear only tenant-specific cached data (don't cancel ALL queries)
         const keysToRemove = [
@@ -111,7 +110,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
                 if (error) {
                   console.error("Error updating active tenant in DB:", error);
                 } else {
-                  console.log("â Active tenant synced to DB:", currentTenantId);
+                  console.log("✅ Active tenant synced to DB:", currentTenantId);
                 }
               });
           }
@@ -208,21 +207,6 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
   // Note: URL Auto-Fix logic moved to checkDbBeforeSync above for earlier execution
 
-  // Fail-safe timeout for the sync spinner (in case isActiveTenantSynced never becomes true)
-  useEffect(() => {
-    if (isActiveTenantSynced || !currentTenantId) {
-      setIsSyncTimedOut(false);
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      console.warn("⚠️ Tenant sync timed out after 5s, unblocking UI");
-      setIsSyncTimedOut(true);
-    }, 5000);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [isActiveTenantSynced, currentTenantId]);
-
   const isLoading = isLoadingUserTenant || isLoadingTenant || isLoadingSlug;
 
   useEffect(() => {
@@ -232,7 +216,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     }
 
     const timeoutId = window.setTimeout(() => {
-      console.warn("â ï¸ Tenant bootstrap timed out after 8s, unblocking UI");
+      console.warn("⚠️ Tenant bootstrap timed out after 8s, unblocking UI");
       setIsBootstrapTimedOut(true);
     }, 8000);
 
@@ -240,7 +224,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   }, [currentTenantId, isLoading]);
 
   // CRITICAL: Block rendering until tenant is synced to DB
-  if (currentTenantId && !isActiveTenantSynced && !isSyncTimedOut) {
+  if (currentTenantId && !isActiveTenantSynced) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
