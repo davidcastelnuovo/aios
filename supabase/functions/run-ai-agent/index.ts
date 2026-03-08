@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { agent_id, command_text, automation_id, user_name, lead_data } = await req.json()
+    const { agent_id, command_text, temperature, automation_id, user_name, lead_data } = await req.json()
 
     if (!agent_id || !command_text) {
       throw new Error('Missing agent_id or command_text')
@@ -96,19 +96,29 @@ Deno.serve(async (req) => {
 
     // 3. Call AI Gateway
     const startTime = Date.now()
+    const safeTemperature = typeof temperature === 'number'
+      ? Math.min(2, Math.max(0, temperature))
+      : undefined
+
+    const gatewayPayload: Record<string, any> = {
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: command_text },
+      ],
+    }
+
+    if (safeTemperature !== undefined) {
+      gatewayPayload.temperature = safeTemperature
+    }
+
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${lovableApiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: command_text },
-        ],
-      }),
+      body: JSON.stringify(gatewayPayload),
     })
 
     if (!aiResponse.ok) {

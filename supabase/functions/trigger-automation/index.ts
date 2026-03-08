@@ -357,10 +357,16 @@ Deno.serve(async (req) => {
 
                     // Append output format instruction if specified
                     const outputFormat = stepConfig.output_format
+                    let agentTemperature: number | undefined = undefined
                     if (outputFormat === 'json') {
                       commandText += '\n\nחשוב: החזר את התשובה בפורמט JSON בלבד, ללא טקסט נוסף.'
+                      agentTemperature = 0.1
                     } else if (outputFormat === 'single_value') {
                       commandText += '\n\nחשוב: החזר ערך בודד בלבד, ללא הסברים או טקסט נוסף.'
+                      agentTemperature = 0.1
+                    } else if (outputFormat === 'single_reply') {
+                      commandText += '\n\nחשוב מאוד: החזר תשובה אחת ישירה בלבד, במשפט קצר, ללא רשימות, ללא חלופות, ללא הומור וללא ניסוחים כמו "הנה כמה אפשרויות".'
+                      agentTemperature = 0.1
                     }
 
                     const agentUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/run-ai-agent`
@@ -373,6 +379,7 @@ Deno.serve(async (req) => {
                       body: JSON.stringify({
                         agent_id: agentId,
                         command_text: commandText,
+                        temperature: agentTemperature,
                         automation_id: automation.id,
                         user_name: payloadData?.user_name || 'מערכת',
                         lead_data: {
@@ -1776,13 +1783,24 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     const last9 = cleanPhone.slice(-9)
     chatId = `972${last9}@c.us`
     console.log(`Sending to manual phone: ${chatId}`)
-  } else if (phone_mode === "field" && phone_field && data[phone_field]) {
-    // Dynamic field mode - resolve phone from data field
-    const fieldPhone = data[phone_field]
-    const cleanPhone = fieldPhone.replace(/\D/g, '')
-    const last9 = cleanPhone.slice(-9)
-    chatId = `972${last9}@c.us`
-    console.log(`Sending to dynamic field phone (${phone_field}): ${chatId}`)
+  } else if ((phone_mode === "field" || (!phone_mode && phone_field)) && phone_field && data?.[phone_field]) {
+    // Dynamic field mode - resolve destination from data field (supports both phone and group chat id)
+    const fieldValue = String(data[phone_field]).trim()
+    const fieldKey = String(phone_field).toLowerCase()
+    const shouldTreatAsGroup =
+      data?.contact_type === 'group' ||
+      fieldKey.includes('group') ||
+      fieldValue.includes('@g.us')
+
+    if (shouldTreatAsGroup) {
+      chatId = fieldValue.includes('@g.us') ? fieldValue : `${fieldValue}@g.us`
+      console.log(`Sending to dynamic group field (${phone_field}): ${chatId}`)
+    } else {
+      const cleanPhone = fieldValue.replace(/\D/g, '')
+      const last9 = cleanPhone.slice(-9)
+      chatId = `972${last9}@c.us`
+      console.log(`Sending to dynamic field phone (${phone_field}): ${chatId}`)
+    }
   } else {
     // Default: send to contact (lead/client)
     let contactPhone: string | null = null
