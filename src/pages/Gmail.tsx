@@ -56,7 +56,7 @@ export default function Gmail() {
   
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  
+  const [processInvoicesOpen, setProcessInvoicesOpen] = useState(false);
   // Date & pagination state
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange | undefined>({
     from: new Date(),
