@@ -78,7 +78,7 @@ async function executeTool(
   try {
     switch (toolCall.name) {
       case 'create_task': {
-        const { title, client_id, priority, due_date, notes } = toolCall.args;
+        const { title, client_id, priority, due_date, due_time, notes } = toolCall.args;
         
         const { data: profileData } = await supabaseClient
           .from('profiles')
@@ -112,6 +112,7 @@ async function executeTool(
         };
         if (client_id) taskData.client_id = client_id;
         if (due_date) taskData.due_date = due_date;
+        if (due_time) taskData.due_time = due_time;
         if (notes) taskData.notes = notes;
 
         const { data, error } = await supabaseClient
@@ -120,7 +121,56 @@ async function executeTool(
           .single();
         if (error) throw error;
 
-        return { success: true, result: { task_id: data.id, title: data.title, client_name: data.clients?.name, agency_name: data.agencies?.name, campaigner_name: data.campaigners?.full_name, priority: data.priority, due_date: data.due_date } };
+        // Auto-sync to Google Calendar if due_date is set
+        let calendarSynced = false;
+        if (due_date) {
+          try {
+            const { data: calendarToken } = await supabaseClient
+              .from('calendar_tokens')
+              .select('id')
+              .eq('user_id', userId)
+              .single();
+
+            if (calendarToken) {
+              const timeToUse = due_time || '09:00';
+              const startDateTime = new Date(`${due_date}T${timeToUse}:00`);
+              const durationMs = 30 * 60 * 1000;
+              const endDateTime = new Date(startDateTime.getTime() + durationMs);
+
+              const calResponse = await fetch(`${SUPABASE_URL}/functions/v1/add-calendar-event`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${userToken}`,
+                },
+                body: JSON.stringify({
+                  summary: title,
+                  description: notes || 'משימה ממערכת Marketing Captain',
+                  start: startDateTime.toISOString(),
+                  end: endDateTime.toISOString(),
+                }),
+              });
+
+              if (calResponse.ok) {
+                const calData = await calResponse.json();
+                if (calData.eventId) {
+                  await supabaseClient
+                    .from('tasks')
+                    .update({ google_calendar_event_id: calData.eventId })
+                    .eq('id', data.id);
+                  calendarSynced = true;
+                  console.log(`Calendar event created for task: ${title}`);
+                }
+              } else {
+                console.error('Failed to create calendar event:', await calResponse.text());
+              }
+            }
+          } catch (calErr) {
+            console.error('Calendar sync error:', calErr);
+          }
+        }
+
+        return { success: true, result: { task_id: data.id, title: data.title, client_name: data.clients?.name, agency_name: data.agencies?.name, campaigner_name: data.campaigners?.full_name, priority: data.priority, due_date: data.due_date, due_time: data.due_time, calendar_synced: calendarSynced } };
       }
 
       case 'update_task_status': {
@@ -381,14 +431,15 @@ const tools = [
     type: 'function',
     function: {
       name: 'create_task',
-      description: 'יצירת משימה חדשה במערכת',
+      description: 'יצירת משימה חדשה במערכת. כשמגדירים תאריך, המשימה מסונכרנת אוטומטית ליומן Google.',
       parameters: {
         type: 'object',
         properties: {
           title: { type: 'string', description: 'כותרת המשימה' },
           client_id: { type: 'string', description: 'מזהה הלקוח (UUID, אופציונלי)' },
           priority: { type: 'integer', description: 'עדיפות 1-10', minimum: 1, maximum: 10 },
-          due_date: { type: 'string', format: 'date', description: 'תאריך יעד (YYYY-MM-DD)' },
+          due_date: { type: 'string', format: 'date', description: 'תאריך יעד (YYYY-MM-DD). חובה לציין תאריך כשהמשתמש אומר "להיום" או "למחר" וכו.' },
+          due_time: { type: 'string', description: 'שעת יעד בפורמט HH:MM (לדוגמה: 09:00, 14:30). אם לא צוין, ברירת מחדל 09:00' },
           notes: { type: 'string', description: 'הערות' },
         },
         required: ['title'],
