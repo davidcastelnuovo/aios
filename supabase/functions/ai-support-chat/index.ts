@@ -140,54 +140,100 @@ async function executeTool(
 
         // Auto-sync to Google Calendar if due_date is set
         let calendarSynced = false;
+        let calendarSyncError: string | null = null;
+        let calendarEventId: string | null = null;
+        let calendarHtmlLink: string | null = null;
+        let calendarGoogleEmail: string | null = null;
+        let scheduledStartIso: string | null = null;
+
         if (due_date) {
           try {
             const { data: calendarToken } = await supabaseClient
               .from('calendar_tokens')
-              .select('id')
+              .select('id, google_email')
               .eq('user_id', userId)
               .single();
 
-            if (calendarToken) {
-              const timeToUse = due_time || '09:00';
-              const startDateTime = new Date(`${due_date}T${timeToUse}:00`);
-              const durationMs = 30 * 60 * 1000;
-              const endDateTime = new Date(startDateTime.getTime() + durationMs);
+            if (!calendarToken) {
+              calendarSyncError = 'calendar_not_connected';
+            } else {
+              calendarGoogleEmail = calendarToken.google_email || null;
 
-              const calResponse = await fetch(`${SUPABASE_URL}/functions/v1/add-calendar-event`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${userToken}`,
-                },
-                body: JSON.stringify({
-                  summary: title,
-                  description: notes || 'משימה ממערכת Marketing Captain',
-                  start: startDateTime.toISOString(),
-                  end: endDateTime.toISOString(),
-                }),
-              });
+              const todayInIsrael = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Jerusalem',
+              }).format(new Date());
 
-              if (calResponse.ok) {
-                const calData = await calResponse.json();
-                if (calData.eventId) {
-                  await supabaseClient
-                    .from('tasks')
-                    .update({ google_calendar_event_id: calData.eventId })
-                    .eq('id', data.id);
-                  calendarSynced = true;
-                  console.log(`Calendar event created for task: ${title}`);
-                }
+              if (due_date < todayInIsrael) {
+                calendarSyncError = 'due_date_in_past';
               } else {
-                console.error('Failed to create calendar event:', await calResponse.text());
+                const timeToUse = due_time || '09:00';
+                const safeTime = /^\d{2}:\d{2}$/.test(timeToUse) ? timeToUse : '09:00';
+
+                // Build local datetime with explicit Asia/Jerusalem offset to avoid timezone drift
+                const startDateTime = new Date(`${due_date}T${safeTime}:00+03:00`);
+                const durationMs = 30 * 60 * 1000;
+                const endDateTime = new Date(startDateTime.getTime() + durationMs);
+                scheduledStartIso = startDateTime.toISOString();
+
+                const calResponse = await fetch(`${SUPABASE_URL}/functions/v1/add-calendar-event`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${userToken}`,
+                  },
+                  body: JSON.stringify({
+                    summary: title,
+                    description: notes || 'משימה ממערכת Marketing Captain',
+                    start: startDateTime.toISOString(),
+                    end: endDateTime.toISOString(),
+                  }),
+                });
+
+                if (calResponse.ok) {
+                  const calData = await calResponse.json();
+                  if (calData.eventId) {
+                    calendarEventId = calData.eventId;
+                    calendarHtmlLink = calData.htmlLink || null;
+                    await supabaseClient
+                      .from('tasks')
+                      .update({ google_calendar_event_id: calData.eventId })
+                      .eq('id', data.id);
+                    calendarSynced = true;
+                    console.log(`Calendar event created for task: ${title}`);
+                  } else {
+                    calendarSyncError = 'calendar_event_id_missing';
+                  }
+                } else {
+                  calendarSyncError = 'calendar_api_error';
+                  console.error('Failed to create calendar event:', await calResponse.text());
+                }
               }
             }
           } catch (calErr) {
+            calendarSyncError = 'calendar_sync_exception';
             console.error('Calendar sync error:', calErr);
           }
         }
 
-        return { success: true, result: { task_id: data.id, title: data.title, client_name: data.clients?.name, agency_name: data.agencies?.name, campaigner_name: data.campaigners?.full_name, priority: data.priority, due_date: data.due_date, due_time: data.due_time, calendar_synced: calendarSynced } };
+        return {
+          success: true,
+          result: {
+            task_id: data.id,
+            title: data.title,
+            client_name: data.clients?.name,
+            agency_name: data.agencies?.name,
+            campaigner_name: data.campaigners?.full_name,
+            priority: data.priority,
+            due_date: data.due_date,
+            due_time: data.due_time,
+            calendar_synced: calendarSynced,
+            calendar_sync_error: calendarSyncError,
+            calendar_event_id: calendarEventId,
+            calendar_html_link: calendarHtmlLink,
+            calendar_google_email: calendarGoogleEmail,
+            calendar_start_iso: scheduledStartIso,
+          },
+        };
       }
 
       case 'update_task_status': {
