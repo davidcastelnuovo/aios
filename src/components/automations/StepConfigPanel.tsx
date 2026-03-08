@@ -385,6 +385,16 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
             />
           )}
 
+          {/* Create Task config */}
+          {node.action_type === "create_task" && (
+            <CreateTaskActionConfig
+              tenantId={tenantId}
+              configuration={node.configuration}
+              availableFields={availableFields}
+              onConfigChange={handleConfigChange}
+            />
+          )}
+
           {/* Status update config */}
           {node.action_type === "update_status" && (
             <>
