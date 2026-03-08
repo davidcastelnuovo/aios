@@ -1,0 +1,1 @@
+ALTER TABLE public.signature_recipients ADD COLUMN signature_position jsonb DEFAULT null;

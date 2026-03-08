@@ -3510,6 +3510,7 @@ export type Database = {
           sign_order: number | null
           sign_token: string | null
           signature_data: string | null
+          signature_position: Json | null
           signed_at: string | null
           status: string
           tenant_id: string
@@ -3525,6 +3526,7 @@ export type Database = {
           sign_order?: number | null
           sign_token?: string | null
           signature_data?: string | null
+          signature_position?: Json | null
           signed_at?: string | null
           status?: string
           tenant_id: string
@@ -3540,6 +3542,7 @@ export type Database = {
           sign_order?: number | null
           sign_token?: string | null
           signature_data?: string | null
+          signature_position?: Json | null
           signed_at?: string | null
           status?: string
           tenant_id?: string
