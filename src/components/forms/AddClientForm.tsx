@@ -32,7 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus } from "lucide-react";
+import { Plus, Trash2, Users } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 
 const formSchema = z.object({
