@@ -978,6 +978,13 @@ export default function Gmail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Process Invoices Dialog */}
+      <ProcessInvoicesDialog
+        open={processInvoicesOpen}
+        onOpenChange={setProcessInvoicesOpen}
+        messageIds={selectedIds.size > 0 ? [...selectedIds] : filteredMessages.map(m => m.id)}
+      />
     </div>
   );
 }
