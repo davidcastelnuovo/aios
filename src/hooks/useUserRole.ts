@@ -36,6 +36,8 @@ export function useUserRole() {
     refetchOnWindowFocus: false,
   });
 
+  // Lazy-load campaigner_id only when user has campaigner role
+  const isCampaignerRole = roles?.includes("campaigner") || false;
   const { data: campaignerId } = useQuery({
     queryKey: ["user-campaigner-id", session?.user?.id],
     queryFn: async () => {
@@ -47,11 +49,13 @@ export function useUserRole() {
         .maybeSingle();
       return data?.campaigner_id || null;
     },
-    enabled: !!session?.user?.id,
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    enabled: !!session?.user?.id && isCampaignerRole,
+    staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
   });
 
+  // Lazy-load sales person agencies only when user has sales_person role
+  const isSalesPersonRole = roles?.includes("sales_person") || false;
   const { data: salesPersonAgencyIds } = useQuery({
     queryKey: ["user-sales-person-agency-ids", session?.user?.id],
     queryFn: async () => {
@@ -71,8 +75,8 @@ export function useUserRole() {
       
       return agencies?.map(a => a.agency_id) || null;
     },
-    enabled: !!session?.user?.id,
-    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    enabled: !!session?.user?.id && isSalesPersonRole,
+    staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
   });
 

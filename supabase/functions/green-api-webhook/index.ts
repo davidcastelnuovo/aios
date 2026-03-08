@@ -252,6 +252,19 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // Quick health check - if DB is under pressure, return early to avoid piling up
+    const healthCheck = await Promise.race([
+      supabaseClient.from('tenants').select('id').limit(1),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('DB timeout')), 5000))
+    ]).catch(() => null);
+
+    if (!healthCheck) {
+      console.warn('⚠️ DB health check failed, returning early to reduce pressure');
+      return new Response(JSON.stringify({ received: true, deferred: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const webhookData = await req.json();
     console.log('📨 Received Green API webhook:', JSON.stringify(webhookData, null, 2));
 
