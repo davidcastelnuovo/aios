@@ -37,6 +37,7 @@ export type ModulePermission =
   | "accounting_integrations" // Accounting integrations
   | "recordings" // Recordings management
   | "team_chat" // Team internal communication
+  | "signatures" // Digital signatures
   | "settings"; // System settings
 
 export function useUserPermissions() {

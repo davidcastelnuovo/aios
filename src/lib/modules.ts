@@ -19,6 +19,7 @@ export const MAIN_MODULES: ModuleConfig[] = [
   { id: "chat", label: "צ'אט", description: "מודול צ'אט עם לקוחות ולידים", category: "main" },
   { id: "team_chat", label: "צ'אט צוות", description: "תקשורת פנים-ארגונית בסגנון Slack", category: "main" },
   { id: "recordings", label: "הקלטות", description: "ניהול הקלטות מכל המקורות", category: "main" },
+  { id: "signatures", label: "חתימות דיגיטליות", description: "ניהול מסמכים וחתימות דיגיטליות", category: "main" },
 ];
 
 // מודולי מכירות

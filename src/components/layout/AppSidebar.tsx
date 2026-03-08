@@ -34,6 +34,7 @@ import {
   MessageSquare,
   MessagesSquare,
   Download,
+  PenLine,
 } from "lucide-react";
 import {
   Sidebar,
@@ -106,6 +107,7 @@ const iconMap: Record<string, any> = {
   FolderKanban: Table,
   Database: Table,
   Layers: Table,
+  FileSignature: PenLine,
 };
 
 export function AppSidebar() {
@@ -309,6 +311,7 @@ export function AppSidebar() {
       'dynamic-tables': 'dynamic_tables',
       'recordings': 'recordings',
       'team-chat': 'team_chat',
+      'signatures': 'signatures',
       'site_analytics': 'clients', // אנליטיקס אתרים - מי שיש לו גישה ללקוחות יכול לראות
       'rank_tracking': 'clients', // מעקב מיקומים - מי שיש לו גישה ללקוחות יכול לראות
     };
