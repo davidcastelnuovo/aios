@@ -60,7 +60,7 @@ import { useUserTenants } from "@/hooks/useUserTenants";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useTenant } from "@/contexts/TenantContext";
-import { useCurrentTenant } from "@/hooks/useCurrentTenant";
+
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useAgency } from "@/contexts/AgencyContext";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -125,12 +125,11 @@ export function AppSidebar() {
 
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId } = useTenant();
-  const { tenantId: urlTenantId } = useCurrentTenant(); // Get tenant from URL
   const { selectedAgency } = useAgency();
   const tenantPath = useTenantPath();
   
-  // Use URL tenant ID for display, context tenant for operations
-  const displayTenantId = urlTenantId || currentTenantId;
+  // After TenantContext fix, currentTenantId always matches URL
+  const displayTenantId = currentTenantId;
   
   const { data: userTenants, isLoading: isLoadingTenants } = useQuery({
     queryKey: ["user-tenants", userId],
