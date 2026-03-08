@@ -81,6 +81,90 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
     useFolderLinksAndAttachments(client);
 
   const meetingScheduler = useMeetingScheduler(tenantId);
+  const [selectedMeetingEmails, setSelectedMeetingEmails] = useState<string[]>([]);
+
+  // Client contacts
+  interface ClientContact {
+    id?: string;
+    contact_name: string;
+    phone: string;
+    email: string;
+    role: string;
+    is_primary: boolean;
+  }
+
+  const { data: clientContacts, refetch: refetchContacts } = useQuery({
+    queryKey: ["client-contacts", client.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("client_contacts")
+        .select("*")
+        .eq("client_id", client.id)
+        .order("created_at");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!client.id && open,
+  });
+
+  const addContactMutation = useMutation({
+    mutationFn: async (contact: Omit<ClientContact, 'id' | 'is_primary'>) => {
+      if (!tenantId) throw new Error("Missing tenant");
+      const { error } = await supabase.from("client_contacts").insert({
+        client_id: client.id,
+        tenant_id: tenantId,
+        contact_name: contact.contact_name,
+        phone: contact.phone || null,
+        email: contact.email || null,
+        role: contact.role || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("איש קשר נוסף בהצלחה");
+      refetchContacts();
+    },
+    onError: () => toast.error("שגיאה בהוספת איש קשר"),
+  });
+
+  const deleteContactMutation = useMutation({
+    mutationFn: async (contactId: string) => {
+      const { error } = await supabase.from("client_contacts").delete().eq("id", contactId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("איש קשר הוסר");
+      refetchContacts();
+    },
+    onError: () => toast.error("שגיאה בהסרת איש קשר"),
+  });
+
+  const [newContact, setNewContact] = useState({ contact_name: "", phone: "", email: "", role: "" });
+  const [showAddContact, setShowAddContact] = useState(false);
+
+  const handleAddContact = () => {
+    if (!newContact.contact_name.trim()) {
+      toast.error("שם איש קשר נדרש");
+      return;
+    }
+    addContactMutation.mutate(newContact);
+    setNewContact({ contact_name: "", phone: "", email: "", role: "" });
+    setShowAddContact(false);
+  };
+
+  // Get all emails for meeting invitations
+  const allContactEmails = useMemo(() => {
+    const emails: { email: string; name: string; source: string }[] = [];
+    if (client.email) {
+      emails.push({ email: client.email, name: client.contact_name || client.name, source: "ראשי" });
+    }
+    clientContacts?.forEach((c: any) => {
+      if (c.email) {
+        emails.push({ email: c.email, name: c.contact_name, source: c.role || "נוסף" });
+      }
+    });
+    return emails;
+  }, [client.email, client.contact_name, client.name, clientContacts]);
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
