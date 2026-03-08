@@ -205,7 +205,11 @@ export default function Gmail() {
   // Determine effective labelIds for the API call
   const effectiveLabelIds = useMemo(() => {
     if (selectedCategoryLabelId) return [selectedCategoryLabelId];
-    if (allowedLabels.length > 0) return allowedLabels;
+    // Ensure all entries are strictly strings (defensive against cache pollution)
+    const normalized = allowedLabels
+      .map((item: any) => typeof item === 'string' ? item : (item?.label_id || item?.id || ''))
+      .filter((id: string) => typeof id === 'string' && id.trim() !== '');
+    if (normalized.length > 0) return normalized;
     return undefined;
   }, [selectedCategoryLabelId, allowedLabels]);
 
