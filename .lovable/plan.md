@@ -1,24 +1,40 @@
 
 
-## הפיכת האפליקציה ל-PWA (Progressive Web App)
+# הוספת Gmail לתפריט
 
-כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
+## מצב נוכחי
+- עמוד Gmail קיים בנתיב `/gmail` (ב-`App.tsx`)
+- **אין פריט תפריט** בטבלת `menu_items` עבור Gmail
+- התפריט נטען דינמית מהדאטהבייס
 
-### 1. קובץ `public/manifest.json`
-- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
-- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
+## מה צריך לעשות
 
-### 2. Service Worker — `public/sw.js`
-- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
-- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
+### 1. הוספת פריט תפריט ל-DB (migration)
+הוספת שורת `menu_items` לכל 11 הטנאנטים:
+```sql
+INSERT INTO menu_items (tenant_id, menu_key, original_label, route, icon, is_visible, sort_order)
+SELECT id, 'gmail', 'דואר נכנס', '/gmail', 'Mail', true, 11
+FROM tenants;
+```
 
-### 3. רישום ב-`index.html`
-- תג `<link rel="manifest">` ב-head
-- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
-- סקריפט רישום Service Worker
+- `menu_key`: `gmail`
+- `original_label`: `דואר נכנס`
+- `icon`: `Mail` (Lucide icon)
+- `sort_order`: 11 (אחרי חתימות דיגיטליות)
+- `is_visible`: true
 
-### תוצאה
-- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
-- באייפון: Share → Add to Home Screen
-- האפליקציה תיפתח במסך מלא בלי שורת כתובת
+### 2. הוספת permission mapping ב-AppSidebar
+בתוך `modulePermissions` צריך להוסיף:
+```ts
+'gmail': 'gmail',
+```
+
+כך המערכת תדע לבדוק הרשאות עבור הפריט הזה.
+
+## קבצים לשינוי
+
+| קובץ | שינוי |
+|-------|-------|
+| DB migration | הוספת שורות `menu_items` לכל הטנאנטים |
+| `src/components/layout/AppSidebar.tsx` | הוספת `'gmail': 'gmail'` ל-`modulePermissions` |
 
