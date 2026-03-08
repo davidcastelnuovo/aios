@@ -158,13 +158,22 @@ export default function Gmail() {
     enabled: !!userId,
   });
 
+  // Get the selected category's gmail_label_id (if any)
+  const selectedCategoryLabelId = useMemo(() => {
+    if (!selectedCategory) return null;
+    const cat = categories.find((c: any) => c.id === selectedCategory);
+    return cat?.gmail_label_id || null;
+  }, [selectedCategory, categories]);
+
   // Build subject query from category rules when a category is selected
   const categorySubjectQuery = useMemo(() => {
+    // If category has a gmail_label_id, we filter via labelIds instead of subject query
+    if (selectedCategoryLabelId) return null;
     if (!selectedCategory || categoryRules.length === 0) return null;
     const rulesForCategory = categoryRules.filter(r => r.category_id === selectedCategory);
     if (rulesForCategory.length === 0) return null;
     return rulesForCategory.map(r => `subject:"${r.subject_pattern}"`).join(' OR ');
-  }, [selectedCategory, categoryRules]);
+  }, [selectedCategory, categoryRules, selectedCategoryLabelId]);
 
   const fullQuery = useMemo(() => {
     if (categorySubjectQuery) {
@@ -192,9 +201,16 @@ export default function Gmail() {
     enabled: !!userId,
   });
 
+  // Determine effective labelIds for the API call
+  const effectiveLabelIds = useMemo(() => {
+    if (selectedCategoryLabelId) return [selectedCategoryLabelId];
+    if (allowedLabels.length > 0) return allowedLabels;
+    return undefined;
+  }, [selectedCategoryLabelId, allowedLabels]);
+
   // Fetch messages with date query + allowed labels
   const { data: messagesData, isLoading, refetch } = useQuery({
-    queryKey: ['gmail-messages', fullQuery, currentPageToken, allowedLabels],
+    queryKey: ['gmail-messages', fullQuery, currentPageToken, effectiveLabelIds],
     queryFn: async () => {
       const { data, error } = await supabase.functions.invoke('gmail-api', {
         body: {
@@ -202,7 +218,7 @@ export default function Gmail() {
           query: fullQuery,
           maxResults: 25,
           pageToken: currentPageToken,
-          labelIds: allowedLabels.length > 0 ? allowedLabels : undefined,
+          labelIds: effectiveLabelIds,
         },
       });
       if (error) throw error;

@@ -107,6 +107,31 @@ export default function GmailSettings() {
   // Add category
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryColor, setNewCategoryColor] = useState('#3B82F6');
+  const [newCategoryLabelId, setNewCategoryLabelId] = useState('');
+  const [availableLabelsList, setAvailableLabelsList] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [loadingLabelsList, setLoadingLabelsList] = useState(false);
+
+  const fetchLabelsList = async () => {
+    if (availableLabelsList.length > 0) return;
+    setLoadingLabelsList(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('gmail-api', {
+        body: { action: 'listLabels' },
+      });
+      if (error) throw error;
+      setAvailableLabelsList(data.labels || []);
+    } catch {
+      toast.error('שגיאה בטעינת תגיות');
+    } finally {
+      setLoadingLabelsList(false);
+    }
+  };
+
+  // Load labels when connected
+  useEffect(() => {
+    if (connectionStatus?.connected) fetchLabelsList();
+  }, [connectionStatus?.connected]);
+
   const addCategory = useMutation({
     mutationFn: async () => {
       if (!newCategoryName.trim()) throw new Error('שם קטגוריה נדרש');
@@ -115,11 +140,13 @@ export default function GmailSettings() {
         name: newCategoryName.trim(),
         color: newCategoryColor,
         sort_order: categories.length,
-      });
+        gmail_label_id: newCategoryLabelId || null,
+      } as any);
       if (error) throw error;
     },
     onSuccess: () => {
       setNewCategoryName('');
+      setNewCategoryLabelId('');
       queryClient.invalidateQueries({ queryKey: ['gmail-categories'] });
       toast.success('קטגוריה נוספה');
     },
@@ -225,13 +252,27 @@ export default function GmailSettings() {
           <CardDescription>צור קטגוריות לארגון המיילים שלך</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Input
               placeholder="שם קטגוריה..."
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addCategory.mutate()}
+              className="flex-1 min-w-[150px]"
             />
+            <select
+              value={newCategoryLabelId}
+              onChange={(e) => setNewCategoryLabelId(e.target.value)}
+              className="h-10 rounded-md border border-input bg-muted px-3 py-2 text-sm min-w-[150px]"
+            >
+              <option value="">ללא תגית Gmail</option>
+              {availableLabelsList
+                .filter(l => l.type === 'user' || ['INBOX', 'STARRED', 'IMPORTANT', 'SENT', 'CATEGORY_PERSONAL', 'CATEGORY_SOCIAL', 'CATEGORY_PROMOTIONS', 'CATEGORY_UPDATES', 'CATEGORY_FORUMS'].includes(l.id))
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map(l => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+            </select>
             <input
               type="color"
               value={newCategoryColor}
@@ -246,17 +287,28 @@ export default function GmailSettings() {
             <p className="text-sm text-muted-foreground">אין קטגוריות עדיין</p>
           ) : (
             <div className="space-y-2">
-              {categories.map((cat: any) => (
-                <div key={cat.id} className="flex items-center justify-between p-2 rounded border">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: cat.color }} />
-                    <span className="text-sm">{cat.name}</span>
+              {categories.map((cat: any) => {
+                const labelName = cat.gmail_label_id
+                  ? availableLabelsList.find(l => l.id === cat.gmail_label_id)?.name || cat.gmail_label_id
+                  : null;
+                return (
+                  <div key={cat.id} className="flex items-center justify-between p-2 rounded border">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: cat.color }} />
+                      <span className="text-sm">{cat.name}</span>
+                      {labelName && (
+                        <Badge variant="outline" className="text-[10px] px-1.5">
+                          <Tag className="h-3 w-3 me-1" />
+                          {labelName}
+                        </Badge>
+                      )}
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => deleteCategory.mutate(cat.id)}>
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => deleteCategory.mutate(cat.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>

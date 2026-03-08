@@ -1,0 +1,1 @@
+ALTER TABLE gmail_categories ADD COLUMN gmail_label_id text DEFAULT null;
