@@ -35,6 +35,7 @@ import {
   MessagesSquare,
   Download,
   PenLine,
+  Mail,
 } from "lucide-react";
 import {
   Sidebar,
@@ -108,6 +109,7 @@ const iconMap: Record<string, any> = {
   Database: Table,
   Layers: Table,
   FileSignature: PenLine,
+  Mail,
 };
 
 export function AppSidebar() {
@@ -312,6 +314,7 @@ export function AppSidebar() {
       'recordings': 'recordings',
       'team-chat': 'team_chat',
       'signatures': 'signatures',
+      'gmail': 'gmail',
       'site_analytics': 'clients', // אנליטיקס אתרים - מי שיש לו גישה ללקוחות יכול לראות
       'rank_tracking': 'clients', // מעקב מיקומים - מי שיש לו גישה ללקוחות יכול לראות
     };
