@@ -260,13 +260,17 @@ export default function Gmail() {
       return msgs;
     }
 
-    // "All" view: hide categorized emails only when no allowed-label filter is active
+    // "All" view: hide only explicitly DB-categorized emails (not auto-matched by rules)
+    // This prevents page 2+ from being empty due to rule-based auto-matching
     if (allowedLabels.length === 0) {
-      msgs = msgs.filter((m) => !effectiveCategoryMap[m.id] || effectiveCategoryMap[m.id].length === 0);
+      msgs = msgs.filter((m) => {
+        const dbCategories = (messageCategoryMap as Record<string, string[]>)[m.id];
+        return !dbCategories || dbCategories.length === 0;
+      });
     }
 
     return msgs;
-  }, [messagesData?.messages, blockedSenders, selectedCategory, effectiveCategoryMap, allowedLabels.length]);
+  }, [messagesData?.messages, blockedSenders, selectedCategory, messageCategoryMap, allowedLabels.length]);
 
   // Get single message
   const fetchMessage = useMutation({
