@@ -1798,7 +1798,7 @@ function ManageChannelMembersDialog({
 
   useEffect(() => {
     if (existingInvite?.token) {
-      setInviteLink(`${window.location.origin}/chat-invite/${existingInvite.token}`);
+      setInviteLink(`${getPublicOrigin()}/chat-invite/${existingInvite.token}`);
     }
   }, [existingInvite]);
 
