@@ -1,36 +1,24 @@
 
 
-# תוכנית: סנכרון לידים מפייסבוק כל דקה (Cron Polling)
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## הבעיה
-ה-Webhook של פייסבוק לא מגיע לשרת (כנראה בעיית הגדרה באפליקציית פייסבוק). צריך מנגנון שמבטיח שלידים יגיעו תוך דקה לכל היותר.
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-## הפתרון: Cron Job כל דקה
-הפונקציה `cron-sync-facebook-leads` כבר קיימת ועובדת מצוין -- היא סורקת את כל הטפסים הממופים, בודקת כפילויות, ויוצרת לידים חדשים. **כל מה שחסר הוא cron job שמפעיל אותה כל דקה.**
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-### עומס על המערכת?
-- הפונקציה עושה קריאה אחת ל-Facebook API **לכל טופס ממופה** (לא לכל ליד)
-- אם אין לידים חדשים, היא פשוט מדלגת -- כמעט אפס עומס
-- Facebook API מגביל ל-200 קריאות לשעה -- קריאה כל דקה זה 60 לשעה, הרבה מתחת למגבלה
-- **זה הפתרון הסטנדרטי** שרוב מערכות CRM משתמשות בו כ-fallback
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-### שינויים נדרשים
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-**שינוי 1: הוספת Cron Job כל דקה**
-- הרצת SQL שיוצר `cron.schedule` שמפעיל את `cron-sync-facebook-leads` כל דקה
-- זה בדיוק כמו ה-cron שכבר קיים ל-`cron-sync-facebook-insights` (רץ פעם בשבוע)
-
-**שינוי 2: הוספת כפתור "סנכרן עכשיו" + מצב Cron בדף FacebookSettings**
-- כפתור שמאפשר סנכרון ידני מיידי
-- הצגת זמן הסנכרון האחרון מ-`last_sync_at`
-- הצגת ה-Webhook URL שצריך להגדיר בפייסבוק (כבר מוצג חלקית)
-
-**שינוי 3: אופטימיזציה קלה ל-cron-sync-facebook-leads**
-- הוספת `since` parameter דינמי -- במקום לסרוק 30 יום, לסרוק רק מ-`last_sync_at` (או 24 שעות אם אין)
-- זה מקטין משמעותית את כמות הנתונים שחוזרים מפייסבוק
-
-### קבצים שישתנו
-- `supabase/functions/cron-sync-facebook-leads/index.ts` -- אופטימיזציית since
-- `src/pages/FacebookSettings.tsx` -- כפתור סנכרון + הצגת סטטוס
-- SQL insert לטבלת `cron.job` (לא migration)
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 
