@@ -3448,6 +3448,119 @@ export type Database = {
           },
         ]
       }
+      signature_documents: {
+        Row: {
+          completed_at: string | null
+          content: string | null
+          created_at: string | null
+          created_by: string
+          document_type: string
+          file_url: string | null
+          id: string
+          status: string
+          tenant_id: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          content?: string | null
+          created_at?: string | null
+          created_by: string
+          document_type?: string
+          file_url?: string | null
+          id?: string
+          status?: string
+          tenant_id: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          content?: string | null
+          created_at?: string | null
+          created_by?: string
+          document_type?: string
+          file_url?: string | null
+          id?: string
+          status?: string
+          tenant_id?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_documents_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      signature_recipients: {
+        Row: {
+          created_at: string | null
+          document_id: string
+          email: string
+          id: string
+          ip_address: string | null
+          name: string
+          role: string | null
+          sign_order: number | null
+          sign_token: string | null
+          signature_data: string | null
+          signed_at: string | null
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          document_id: string
+          email: string
+          id?: string
+          ip_address?: string | null
+          name: string
+          role?: string | null
+          sign_order?: number | null
+          sign_token?: string | null
+          signature_data?: string | null
+          signed_at?: string | null
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string | null
+          document_id?: string
+          email?: string
+          id?: string
+          ip_address?: string | null
+          name?: string
+          role?: string | null
+          sign_order?: number | null
+          sign_token?: string | null
+          signature_data?: string | null
+          signed_at?: string | null
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_recipients_document_id_fkey"
+            columns: ["document_id"]
+            isOneToOne: false
+            referencedRelation: "signature_documents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_recipients_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_events: {
         Row: {
           event_category: string | null
