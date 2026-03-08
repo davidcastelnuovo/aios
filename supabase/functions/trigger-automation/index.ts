@@ -1805,6 +1805,11 @@ function replaceTemplateVariables(template: string, data: any, tenantSlug?: stri
     tasks_link: `${baseUrl}/tasks`,
     leads_link: `${baseUrl}/leads`,
     clients_link: `${baseUrl}/clients`,
+    // Chat/message variables
+    message_text: data.message_text || '',
+    sender_name: data.sender_name || '',
+    sender_phone: data.sender_phone || '',
+    group_name: data.group_name || '',
   }
   
   let result = template
