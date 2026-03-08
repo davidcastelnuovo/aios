@@ -1192,6 +1192,7 @@ function WhatsAppTriggerConfig({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">כל ההודעות</SelectItem>
+            <SelectItem value="all_groups">כל הקבוצות</SelectItem>
             <SelectItem value="group">קבוצה ספציפית</SelectItem>
             <SelectItem value="tagged_contact">איש קשר מתויג</SelectItem>
           </SelectContent>

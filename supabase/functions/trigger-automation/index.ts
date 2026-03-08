@@ -309,6 +309,7 @@ Deno.serve(async (req) => {
           if (config.keyword && payloadData.message_text && 
               !payloadData.message_text.toLowerCase().includes(config.keyword.toLowerCase())) return false
           if (config.source_filter === 'group' && !payloadData.group_id) return false
+          if (config.source_filter === 'all_groups' && !payloadData.group_id) return false
           if (config.source_filter === 'private' && payloadData.group_id) return false
           return true
         })
