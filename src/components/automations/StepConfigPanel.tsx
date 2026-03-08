@@ -273,6 +273,15 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
             />
           )}
 
+          {/* WhatsApp message received trigger config */}
+          {node.step_type === "trigger" && node.action_type === "whatsapp_message_received" && (
+            <WhatsAppTriggerConfig
+              tenantId={tenantId}
+              configuration={node.configuration}
+              onConfigChange={handleConfigChange}
+            />
+          )}
+
           {/* Delay config */}
           {node.step_type === "delay" && (
             <>
