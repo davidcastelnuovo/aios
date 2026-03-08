@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback } from "react";
-import { Card } from "@/components/ui/card";
 
 export interface SignaturePosition {
   x: number; // percentage 0-100
@@ -29,13 +28,12 @@ export function getRecipientColor(index: number) {
   return COLORS[index % COLORS.length];
 }
 
-export default function SignatureFieldPlacer({ fileUrl, recipients, onPositionChange }: SignatureFieldPlacerProps) {
+export default function SignatureFieldPlacer({ fileUrl, recipients, onPositionChange, fullScreen }: SignatureFieldPlacerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<number | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   const isImage = /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(fileUrl);
-  const isPdf = /\.pdf(\?|$)/i.test(fileUrl);
 
   const handleContainerClick = useCallback((e: React.MouseEvent, recipientIndex: number) => {
     const container = containerRef.current;
@@ -44,7 +42,6 @@ export default function SignatureFieldPlacer({ fileUrl, recipients, onPositionCh
     const xPct = ((e.clientX - rect.left) / rect.width) * 100;
     const yPct = ((e.clientY - rect.top) / rect.height) * 100;
 
-    // Default size: 25% width, 8% height
     onPositionChange(recipientIndex, {
       x: Math.max(0, Math.min(75, xPct - 12.5)),
       y: Math.max(0, Math.min(92, yPct - 4)),
@@ -88,8 +85,8 @@ export default function SignatureFieldPlacer({ fileUrl, recipients, onPositionCh
 
   const handleMouseUp = () => setDragging(null);
 
-  // Find first recipient without position to auto-place on click
   const pendingRecipient = recipients.findIndex(r => !r.position);
+  const containerHeight = fullScreen ? '80vh' : '400px';
 
   return (
     <div className="space-y-3">
@@ -113,30 +110,37 @@ export default function SignatureFieldPlacer({ fileUrl, recipients, onPositionCh
       <div
         ref={containerRef}
         className="relative border-2 border-dashed border-border rounded-lg overflow-hidden bg-white select-none"
-        style={{ minHeight: 400 }}
-        onClick={(e) => {
-          if (pendingRecipient >= 0) handleContainerClick(e, pendingRecipient);
-        }}
+        style={{ minHeight: containerHeight }}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
         {/* Document preview */}
-        {isImage && (
+        {isImage ? (
           <img src={fileUrl} alt="Document" className="w-full h-auto" draggable={false} />
+        ) : (
+          <iframe
+            src={fileUrl}
+            className="w-full border-0 pointer-events-none"
+            style={{ height: fullScreen ? '80vh' : '600px' }}
+            title="Document preview"
+          />
         )}
-        {isPdf && (
-          <iframe src={fileUrl} className="w-full border-0" style={{ height: 600 }} title="Document preview" />
-        )}
-        {!isImage && !isPdf && (
-          <iframe src={fileUrl} className="w-full border-0" style={{ height: 600 }} title="Document preview" />
-        )}
+
+        {/* Transparent interaction layer — captures clicks/drags above iframe */}
+        <div
+          className="absolute inset-0 z-[5]"
+          style={{ cursor: pendingRecipient >= 0 ? 'crosshair' : (dragging !== null ? 'grabbing' : 'default') }}
+          onClick={(e) => {
+            if (pendingRecipient >= 0) handleContainerClick(e, pendingRecipient);
+          }}
+        />
 
         {/* Signature fields overlay */}
         {recipients.map((r, i) => r.position && (
           <div
             key={i}
-            className="absolute border-2 rounded cursor-move flex items-center justify-center text-xs font-medium text-white"
+            className="absolute border-2 rounded cursor-move flex items-center justify-center text-xs font-medium"
             style={{
               left: `${r.position.x}%`,
               top: `${r.position.y}%`,
