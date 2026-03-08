@@ -1,37 +1,24 @@
 
 
-# הוספת גלילה בגלגלת (wheel) לוויטבורד
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## המצב הנוכחי
-הקנבס תומך ב-pan בגרירת עכבר (mouse drag) וב-zoom עם כפתורים, אבל **אין תמיכה בגלגלת העכבר** – לא לגלילה ולא לזום.
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-## הפתרון
-להוסיף `onWheel` handler לקנבס:
-- **גלילה רגילה** (wheel) → pan אנכי/אופקי
-- **Ctrl+wheel** → zoom in/out
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-### שינוי ב-`src/components/automations/FlowEditor.tsx`:
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-1. הוספת `handleWheel` callback:
-```typescript
-const handleWheel = useCallback((e: React.WheelEvent) => {
-  e.preventDefault();
-  if (e.ctrlKey || e.metaKey) {
-    // Zoom
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    setZoom(z => Math.min(Math.max(z + delta, 0.3), 2));
-  } else {
-    // Pan
-    setPan(p => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
-  }
-}, []);
-```
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-2. הוספת `onWheel={handleWheel}` ל-div של הקנבס (שורה 334)
-
-3. הוספת `useEffect` עם `{ passive: false }` על ה-canvas ref כדי למנוע את ברירת המחדל של הדפדפן (ב-React, `onWheel` לא יכול לעשות `preventDefault` ב-passive listener)
-
-| קובץ | שינוי |
-|-------|-------|
-| `src/components/automations/FlowEditor.tsx` | הוספת wheel handler לגלילה + zoom |
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 
