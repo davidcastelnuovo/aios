@@ -14,8 +14,17 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const AI_GATEWAY_URL = 'https://ai.gateway.lovable.dev/v1/chat/completions';
 const AI_MODEL = 'google/gemini-3-flash-preview';
 
-function buildSystemPrompt(userName: string, userEmail: string, campaignerName?: string, campaignerId?: string) {
+function buildSystemPrompt(
+  userName: string,
+  userEmail: string,
+  currentDateContext: string,
+  campaignerName?: string,
+  campaignerId?: string,
+) {
   return `אתה **AIOS** - עוזר AI חכם ומרכזי של מערכת CRM לניהול סוכנויות שיווק.
+
+🕒 **תאריך/שעה נוכחיים (להתייחסות חובה):**
+${currentDateContext}
 
 👤 **אתה מדבר עם:**
 - **שם:** ${userName}
@@ -32,7 +41,7 @@ ${campaignerId ? `- **מזהה קמפיינר:** ${campaignerId}` : ''}
 - **automations** (אוטומציות) - כללים אוטומטיים שמגיבים לאירועים
 
 🔧 **פעולות שאתה יכול לבצע:**
-1. **משימות** - יצירה (כולל סנכרון אוטומטי ליומן Google!), עדכון סטטוס, הצגת רשימות
+1. **משימות** - יצירה (כולל ניסיון סנכרון ליומן Google), עדכון סטטוס, הצגת רשימות
 2. **לידים** - יצירה, עדכון סטטוס, חיפוש, הצגת רשימות
 3. **לקוחות** - יצירה, הצגת מידע, הצגת רשימות
 4. **אוטומציות** - יצירת אוטומציות חדשות (trigger + action)
@@ -41,10 +50,12 @@ ${campaignerId ? `- **מזהה קמפיינר:** ${campaignerId}` : ''}
 7. **אימיילים** - קריאה, שליחה, מחיקה של אימיילים מ-Gmail
 
 📅 **חשוב לגבי משימות ויומן:**
-- כשאתה יוצר משימה עם תאריך, היא מסונכרנת אוטומטית ליומן Google של המשתמש
-- תמיד ציין due_date כשהמשתמש אומר "להיום", "למחר" וכו'
-- אם המשתמש לא ציין שעה, המשימה תיכנס ליומן בשעה 09:00 כברירת מחדל
-- אחרי יצירת משימה, דווח למשתמש אם היא סונכרנה ליומן או לא
+- כשאתה יוצר משימה עם תאריך, תמיד נסה לסנכרן אותה ליומן
+- תמיד ציין due_date כשהמשתמש אומר "להיום", "למחר", "יום שלישי הקרוב" וכו'
+- עבור ביטויים יחסיים ("הקרוב", "הבא"), חובה לבחור תאריך עתידי לפי התאריך הנוכחי למעלה
+- אסור לבחור תאריך עבר אלא אם המשתמש ביקש מפורשות תאריך עבר ספציפי
+- אם המשתמש לא ציין שעה, ברירת מחדל: 09:00
+- אחרי יצירת משימה, דווח לפי שדה calendar_synced (ולא לפי הנחה)
 
 💬 **הנחיות תקשורת:**
 - דבר בעברית, בצורה ישירה ומקצועית
@@ -129,54 +140,107 @@ async function executeTool(
 
         // Auto-sync to Google Calendar if due_date is set
         let calendarSynced = false;
+        let calendarSyncError: string | null = null;
+        let calendarEventId: string | null = null;
+        let calendarHtmlLink: string | null = null;
+        let calendarGoogleEmail: string | null = null;
+        let scheduledStartIso: string | null = null;
+
         if (due_date) {
           try {
             const { data: calendarToken } = await supabaseClient
               .from('calendar_tokens')
-              .select('id')
+              .select('id, google_email')
               .eq('user_id', userId)
               .single();
 
-            if (calendarToken) {
-              const timeToUse = due_time || '09:00';
-              const startDateTime = new Date(`${due_date}T${timeToUse}:00`);
-              const durationMs = 30 * 60 * 1000;
-              const endDateTime = new Date(startDateTime.getTime() + durationMs);
+            if (!calendarToken) {
+              calendarSyncError = 'calendar_not_connected';
+            } else {
+              calendarGoogleEmail = calendarToken.google_email || null;
 
-              const calResponse = await fetch(`${SUPABASE_URL}/functions/v1/add-calendar-event`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${userToken}`,
-                },
-                body: JSON.stringify({
-                  summary: title,
-                  description: notes || 'משימה ממערכת Marketing Captain',
-                  start: startDateTime.toISOString(),
-                  end: endDateTime.toISOString(),
-                }),
-              });
+              const todayInIsrael = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Jerusalem',
+              }).format(new Date());
 
-              if (calResponse.ok) {
-                const calData = await calResponse.json();
-                if (calData.eventId) {
-                  await supabaseClient
-                    .from('tasks')
-                    .update({ google_calendar_event_id: calData.eventId })
-                    .eq('id', data.id);
-                  calendarSynced = true;
-                  console.log(`Calendar event created for task: ${title}`);
-                }
+              if (due_date < todayInIsrael) {
+                calendarSyncError = 'due_date_in_past';
               } else {
-                console.error('Failed to create calendar event:', await calResponse.text());
+                const timeToUse = due_time || '09:00';
+                const safeTime = /^\d{2}:\d{2}$/.test(timeToUse) ? timeToUse : '09:00';
+
+                // Send local date-time (without timezone suffix) and let add-calendar-event enforce Asia/Jerusalem
+                const startLocalDateTime = `${due_date}T${safeTime}:00`;
+                const [startHour, startMinute] = safeTime.split(':').map((v: string) => Number(v));
+                const endTotalMinutes = (startHour * 60) + startMinute + 30;
+                const endHour = String(Math.floor((endTotalMinutes % 1440) / 60)).padStart(2, '0');
+                const endMinute = String(endTotalMinutes % 60).padStart(2, '0');
+                const endDateObj = new Date(`${due_date}T00:00:00Z`);
+                if (endTotalMinutes >= 1440) endDateObj.setUTCDate(endDateObj.getUTCDate() + 1);
+                const endDate = endDateObj.toISOString().slice(0, 10);
+                const endLocalDateTime = `${endDate}T${endHour}:${endMinute}:00`;
+
+                scheduledStartIso = startLocalDateTime;
+
+                const calResponse = await fetch(`${SUPABASE_URL}/functions/v1/add-calendar-event`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${userToken}`,
+                  },
+                  body: JSON.stringify({
+                    summary: title,
+                    description: notes || 'משימה ממערכת Marketing Captain',
+                    start: startLocalDateTime,
+                    end: endLocalDateTime,
+                  }),
+                });
+
+                if (calResponse.ok) {
+                  const calData = await calResponse.json();
+                  if (calData.eventId) {
+                    calendarEventId = calData.eventId;
+                    calendarHtmlLink = calData.htmlLink || null;
+                    await supabaseClient
+                      .from('tasks')
+                      .update({ google_calendar_event_id: calData.eventId })
+                      .eq('id', data.id);
+                    calendarSynced = true;
+                    console.log(`Calendar event created for task: ${title}`);
+                  } else {
+                    calendarSyncError = 'calendar_event_id_missing';
+                  }
+                } else {
+                  calendarSyncError = 'calendar_api_error';
+                  console.error('Failed to create calendar event:', await calResponse.text());
+                }
               }
             }
           } catch (calErr) {
+            calendarSyncError = 'calendar_sync_exception';
             console.error('Calendar sync error:', calErr);
           }
         }
 
-        return { success: true, result: { task_id: data.id, title: data.title, client_name: data.clients?.name, agency_name: data.agencies?.name, campaigner_name: data.campaigners?.full_name, priority: data.priority, due_date: data.due_date, due_time: data.due_time, calendar_synced: calendarSynced } };
+        return {
+          success: true,
+          result: {
+            task_id: data.id,
+            title: data.title,
+            client_name: data.clients?.name,
+            agency_name: data.agencies?.name,
+            campaigner_name: data.campaigners?.full_name,
+            priority: data.priority,
+            due_date: data.due_date,
+            due_time: data.due_time,
+            calendar_synced: calendarSynced,
+            calendar_sync_error: calendarSyncError,
+            calendar_event_id: calendarEventId,
+            calendar_html_link: calendarHtmlLink,
+            calendar_google_email: calendarGoogleEmail,
+            calendar_start_iso: scheduledStartIso,
+          },
+        };
       }
 
       case 'update_task_status': {
@@ -444,7 +508,7 @@ const tools = [
           title: { type: 'string', description: 'כותרת המשימה' },
           client_id: { type: 'string', description: 'מזהה הלקוח (UUID, אופציונלי)' },
           priority: { type: 'integer', description: 'עדיפות 1-10', minimum: 1, maximum: 10 },
-          due_date: { type: 'string', format: 'date', description: 'תאריך יעד (YYYY-MM-DD). חובה לציין תאריך כשהמשתמש אומר "להיום" או "למחר" וכו.' },
+          due_date: { type: 'string', format: 'date', description: 'תאריך יעד עתידי בפורמט YYYY-MM-DD (אלא אם המשתמש ביקש מפורשות תאריך עבר)' },
           due_time: { type: 'string', description: 'שעת יעד בפורמט HH:MM (לדוגמה: 09:00, 14:30). אם לא צוין, ברירת מחדל 09:00' },
           notes: { type: 'string', description: 'הערות' },
         },
@@ -737,6 +801,13 @@ serve(async (req) => {
     const userName = profileData?.full_name || user.email?.split('@')[0] || 'משתמש';
     const userEmail = profileData?.email || user.email || '';
 
+    const now = new Date();
+    const currentDateContext = `Israel: ${new Intl.DateTimeFormat('he-IL', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: 'Asia/Jerusalem',
+    }).format(now)} | UTC: ${now.toISOString()}`;
+
     // Load conversation
     let conversation = null;
     let messages: any[] = [];
@@ -759,7 +830,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: AI_MODEL,
         messages: [
-          { role: 'system', content: buildSystemPrompt(userName, userEmail, campaignerName || undefined, campaignerId || undefined) },
+          { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, campaignerName || undefined, campaignerId || undefined) },
           ...aiMessages,
         ],
         tools,
@@ -830,7 +901,7 @@ serve(async (req) => {
 
           // Build running conversation for follow-ups
           let followUpMessages: any[] = [
-            { role: 'system', content: buildSystemPrompt(userName, userEmail, campaignerName || undefined, campaignerId || undefined) },
+            { role: 'system', content: buildSystemPrompt(userName, userEmail, currentDateContext, campaignerName || undefined, campaignerId || undefined) },
             ...aiMessages,
           ];
 
