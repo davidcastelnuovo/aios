@@ -73,6 +73,8 @@ const TeamChat = lazy(() => import("./pages/TeamChat"));
 const ChatInvite = lazy(() => import("./pages/ChatInvite"));
 const GmailSettings = lazy(() => import("./pages/GmailSettings"));
 const Gmail = lazy(() => import("./pages/Gmail"));
+const Signatures = lazy(() => import("./pages/Signatures"));
+const SignDocument = lazy(() => import("./pages/SignDocument"));
 
 // QueryClient with optimized defaults for better caching
 const queryClient = new QueryClient({
