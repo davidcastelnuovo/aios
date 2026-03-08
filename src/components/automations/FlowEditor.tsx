@@ -264,12 +264,19 @@ export default function FlowEditor() {
 
   const handleNodeMouseDown = (e: React.MouseEvent, node: FlowNodeData) => {
     e.stopPropagation();
+    wasDraggingRef.current = false;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const mouseX = (e.clientX - rect.left - pan.x) / zoom;
     const mouseY = (e.clientY - rect.top - pan.y) / zoom;
     setDragNodeId(node.id);
     setDragOffset({ x: mouseX - node.position_x, y: mouseY - node.position_y });
+  };
+
+  const handleNodeClick = (nodeId: string) => {
+    if (!wasDraggingRef.current) {
+      setSelectedNodeId(nodeId);
+    }
   };
 
   // Build connections
