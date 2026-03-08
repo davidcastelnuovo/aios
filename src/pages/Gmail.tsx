@@ -254,23 +254,10 @@ export default function Gmail() {
       return true;
     });
 
-    if (selectedCategory) {
-      // When category is selected, the Gmail API query already filters by subject patterns
-      // No additional local filtering needed — show all results from API
-      return msgs;
-    }
-
-    // "All" view: hide only explicitly DB-categorized emails (not auto-matched by rules)
-    // This prevents page 2+ from being empty due to rule-based auto-matching
-    if (allowedLabels.length === 0) {
-      msgs = msgs.filter((m) => {
-        const dbCategories = (messageCategoryMap as Record<string, string[]>)[m.id];
-        return !dbCategories || dbCategories.length === 0;
-      });
-    }
-
+    // "All" view: show all messages (no local category filtering)
+    // Category-specific views: the Gmail API query already filters by subject patterns / labelIds
     return msgs;
-  }, [messagesData?.messages, blockedSenders, selectedCategory, messageCategoryMap, allowedLabels.length]);
+  }, [messagesData?.messages, blockedSenders]);
 
   // Get single message
   const fetchMessage = useMutation({
