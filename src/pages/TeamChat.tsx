@@ -985,33 +985,51 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
                 const isOwn = msg.sender_id === currentUserId;
                 const isEditing = editingId === msg.id;
 
+                // Generate consistent color for each sender
+                const senderColorPalette = [
+                  'hsl(0 65% 60%)', 'hsl(210 70% 65%)', 'hsl(130 45% 55%)', 'hsl(35 85% 60%)',
+                  'hsl(280 55% 60%)', 'hsl(170 50% 50%)', 'hsl(340 65% 60%)', 'hsl(85 50% 55%)'
+                ];
+                const senderHash = (msg.sender_id || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+                const senderColor = senderColorPalette[senderHash % senderColorPalette.length];
+
                 return (
-                  <div key={msg.id} className={cn("group flex gap-2 hover:bg-muted/50 rounded px-2 py-0.5 relative", sameAuthor ? "pt-0" : "pt-2")}>
-                    <div className="w-8 shrink-0">
-                      {!sameAuthor && (
-                        <Avatar className="h-8 w-8">
+                  <div key={msg.id} className={cn(
+                    "group flex items-end gap-2 relative px-2",
+                    isOwn ? "flex-row-reverse" : "flex-row",
+                    sameAuthor ? "pt-0.5" : "pt-3"
+                  )}>
+                    {/* Avatar - only for others, only when author changes */}
+                    <div className="w-7 shrink-0">
+                      {!isOwn && !sameAuthor && (
+                        <Avatar className="h-7 w-7">
                           <AvatarImage src={msg.sender_profile?.avatar_url || undefined} />
-                          <AvatarFallback className="text-xs" style={{ backgroundColor: isOwn ? "hsl(var(--primary))" : "hsl(var(--muted))" }}>
+                          <AvatarFallback className="text-[10px] text-white" style={{ backgroundColor: senderColor }}>
                             {(msg.sender_profile?.full_name || "?")[0]}
                           </AvatarFallback>
                         </Avatar>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      {!sameAuthor && (
-                        <div className="flex items-baseline gap-2">
-                          <span className="font-semibold text-sm">{msg.sender_profile?.full_name || "משתמש"}</span>
-                          <span className="text-xs text-muted-foreground">{format(new Date(msg.created_at), "HH:mm")}</span>
-                          {msg.is_edited && <span className="text-[10px] text-muted-foreground">(נערך)</span>}
-                        </div>
+                    {/* Bubble */}
+                    <div className={cn(
+                      "max-w-[75%] rounded-xl px-3 py-1.5 shadow-sm relative",
+                      isOwn
+                        ? "bg-green-100 dark:bg-green-900/40 rounded-bl-sm"
+                        : "bg-card border border-border rounded-br-sm"
+                    )}>
+                      {/* Sender name - only for others, only when author changes */}
+                      {!isOwn && !sameAuthor && (
+                        <p className="text-xs font-semibold mb-0.5" style={{ color: senderColor }}>
+                          {msg.sender_profile?.full_name || "משתמש"}
+                        </p>
                       )}
-                      {/* Reply indicator - show which message this replies to */}
+                      {/* Reply indicator */}
                       {msg.parent_message_id && (() => {
                         const parentMsg = allMessages?.find(m => m.id === msg.parent_message_id);
                         return parentMsg ? (
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5 cursor-pointer hover:text-foreground" onClick={() => onReplyMessage?.(parentMsg)}>
-                            <Reply className="h-3 w-3 rotate-180" />
-                            <span className="truncate max-w-[250px]">בתגובה ל: {parentMsg.sender_profile?.full_name} — {parentMsg.content?.slice(0, 50)}{(parentMsg.content?.length || 0) > 50 ? "..." : ""}</span>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1 cursor-pointer hover:text-foreground bg-muted/50 rounded px-2 py-1 border-r-2 border-primary" onClick={() => onReplyMessage?.(parentMsg)}>
+                            <Reply className="h-3 w-3 rotate-180 shrink-0" />
+                            <span className="truncate max-w-[220px]">{parentMsg.sender_profile?.full_name} — {parentMsg.content?.slice(0, 40)}{(parentMsg.content?.length || 0) > 40 ? "..." : ""}</span>
                           </div>
                         ) : null;
                       })()}
@@ -1039,7 +1057,6 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
                           {msg.content && (
                             <p className="text-sm whitespace-pre-wrap break-words">
                               {msg.content}
-                              {sameAuthor && msg.is_edited && <span className="text-[10px] text-muted-foreground mr-1">(נערך)</span>}
                             </p>
                           )}
                         </>
@@ -1061,7 +1078,7 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
                                   <img
                                     src={att.url}
                                     alt={att.name}
-                                    className="max-w-[240px] max-h-[200px] rounded-lg object-cover"
+                                    className="max-w-[220px] max-h-[180px] rounded-lg object-cover"
                                     loading="lazy"
                                   />
                                 </button>
@@ -1083,11 +1100,16 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
                           ))}
                         </div>
                       )}
+                      {/* Timestamp + edited indicator inside bubble */}
+                      <div className={cn("flex items-center gap-1 mt-0.5", isOwn ? "justify-start" : "justify-end")}>
+                        <span className="text-[10px] text-muted-foreground">{format(new Date(msg.created_at), "HH:mm")}</span>
+                        {msg.is_edited && <span className="text-[10px] text-muted-foreground">(נערך)</span>}
+                      </div>
                       {/* Reply count indicator */}
                       {(msg.reply_count || 0) > 0 && (
                         <button
                           onClick={() => onReplyMessage?.(msg)}
-                          className="flex items-center gap-1 mt-1 text-xs text-primary hover:underline"
+                          className="flex items-center gap-1 mt-0.5 text-xs text-primary hover:underline"
                         >
                           <MessageSquare className="h-3 w-3" />
                           {msg.reply_count} תגובות
@@ -1095,23 +1117,26 @@ function TeamMessageList({ messages, currentUserId, onConvertToTask, onEditMessa
                       )}
                     </div>
                     {/* Action buttons - visible on hover */}
-                    <div className="absolute left-1 top-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="הגב להודעה" onClick={() => onReplyMessage?.(msg)}>
-                        <MessageSquare className="h-3.5 w-3.5" />
+                    <div className={cn(
+                      "absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-0.5 bg-card border rounded-lg shadow-sm p-0.5",
+                      isOwn ? "right-2" : "left-2"
+                    )}>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" title="הגב להודעה" onClick={() => onReplyMessage?.(msg)}>
+                        <MessageSquare className="h-3 w-3" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="שלח התראה לחברי הערוץ" onClick={() => onNotifyMessage?.(msg)}>
-                        <Bell className="h-3.5 w-3.5" />
+                      <Button variant="ghost" size="icon" className="h-6 w-6" title="שלח התראה" onClick={() => onNotifyMessage?.(msg)}>
+                        <Bell className="h-3 w-3" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" title="המרה למשימה" onClick={() => onConvertToTask?.(msg)}>
-                        <ListTodo className="h-3.5 w-3.5" />
+                      <Button variant="ghost" size="icon" className="h-6 w-6" title="המרה למשימה" onClick={() => onConvertToTask?.(msg)}>
+                        <ListTodo className="h-3 w-3" />
                       </Button>
                       {isOwn && !isEditing && (
                         <>
-                          <Button variant="ghost" size="icon" className="h-7 w-7" title="ערוך הודעה" onClick={() => startEdit(msg)}>
-                            <Pencil className="h-3.5 w-3.5" />
+                          <Button variant="ghost" size="icon" className="h-6 w-6" title="ערוך" onClick={() => startEdit(msg)}>
+                            <Pencil className="h-3 w-3" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" title="מחק הודעה" onClick={() => setDeleteConfirmMsg(msg)}>
-                            <Trash2 className="h-3.5 w-3.5" />
+                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive" title="מחק" onClick={() => setDeleteConfirmMsg(msg)}>
+                            <Trash2 className="h-3 w-3" />
                           </Button>
                         </>
                       )}
