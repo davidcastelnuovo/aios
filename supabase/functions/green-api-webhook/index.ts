@@ -1063,6 +1063,63 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Trigger automations for incoming group WhatsApp messages
+      if (isIncoming) {
+        try {
+          console.log('🤖 Triggering automations for incoming group WhatsApp message...');
+          
+          // Fetch group tags
+          let groupTags: string[] = [];
+          const { data: groupTagsData } = await supabaseClient
+            .from('chat_contact_tags')
+            .select('tag_id')
+            .eq('tenant_id', tenantId)
+            .eq('group_id', groupId);
+          if (groupTagsData) {
+            groupTags = groupTagsData.map((t: any) => t.tag_id);
+          }
+
+          // Fetch group name
+          const { data: groupRecord } = await supabaseClient
+            .from('whatsapp_groups')
+            .select('group_name, group_chat_id')
+            .eq('id', groupId)
+            .single();
+
+          const automationPayload = {
+            trigger_type: 'whatsapp_message_received',
+            tenant_id: tenantId,
+            data: {
+              sender_name: senderData.senderName || null,
+              sender_phone: phoneNumber,
+              message_text: messageText,
+              group_id: groupId,
+              group_name: groupRecord?.group_name || null,
+              group_chat_id: groupRecord?.group_chat_id || null,
+              contact_type: 'group',
+              contact_id: groupId,
+              contact_name: groupRecord?.group_name || null,
+              connection_user_id: connectionUserId,
+              tags: groupTags,
+            },
+          };
+
+          const triggerUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/trigger-automation`;
+          fetch(triggerUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: JSON.stringify(automationPayload),
+          }).catch(err => console.error('❌ Error triggering group automation:', err));
+          
+          console.log('✅ Group automation trigger sent (fire-and-forget)');
+        } catch (automationError) {
+          console.error('❌ Error preparing group automation trigger:', automationError);
+        }
+      }
+
       return new Response(JSON.stringify({ 
         success: true,
         contactType: 'group',
