@@ -35,7 +35,7 @@ serve(async (req) => {
     // Get all active facebook_lead_ads integrations
     const { data: integrations, error: intError } = await supabase
       .from('tenant_integrations')
-      .select('id, tenant_id, settings, api_key, shared_from_integration_id')
+      .select('id, tenant_id, settings, api_key, shared_from_integration_id, last_sync_at')
       .eq('integration_type', 'facebook_lead_ads')
       .eq('is_active', true);
 
