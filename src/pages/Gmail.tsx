@@ -66,8 +66,10 @@ export default function Gmail() {
 
   // Build date query
   const buildDateQuery = () => {
-    const from = selectedDateRange?.from ?? new Date();
-    const to = selectedDateRange?.to ?? from;
+    if (!selectedDateRange?.from || !selectedDateRange?.to) return '';
+
+    const from = selectedDateRange.from;
+    const to = selectedDateRange.to;
     const toExclusive = addDays(to, 1);
 
     const fy = from.getFullYear();
@@ -83,7 +85,8 @@ export default function Gmail() {
 
   const fullQueryBase = useMemo(() => {
     const dateQ = buildDateQuery();
-    return activeSearch ? `${dateQ} ${activeSearch}` : dateQ;
+    if (dateQ && activeSearch) return `${dateQ} ${activeSearch}`;
+    return dateQ || activeSearch;
   }, [selectedDateRange, activeSearch]);
 
   // Check connection
