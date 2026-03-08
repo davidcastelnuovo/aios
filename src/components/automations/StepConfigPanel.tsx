@@ -1251,15 +1251,15 @@ function WhatsAppTriggerConfig({
 
       {/* Keyword filter */}
       <div className="space-y-2">
-        <Label className="text-right block">מילת מפתח (אופציונלי)</Label>
+        <Label className="text-right block">מילות מפתח (אופציונלי)</Label>
         <Input
           value={configuration?.keyword || ""}
           onChange={(e) => onConfigChange("keyword", e.target.value)}
-          placeholder="סינון לפי מילה בהודעה..."
+          placeholder="מילה1, מילה2, מילה3..."
           className="text-right"
         />
         <p className="text-xs text-muted-foreground text-right">
-          רק הודעות שמכילות את המילה יפעילו את האוטומציה
+          הפרד בפסיקים — מספיק שההודעה תכיל אחת מהמילים כדי להפעיל את האוטומציה
         </p>
       </div>
 

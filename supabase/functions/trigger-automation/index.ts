@@ -306,8 +306,14 @@ Deno.serve(async (req) => {
           const config = step.configuration || {}
           if (config.group_id && config.group_id !== payloadData.group_id) return false
           if (config.connection_user_id && config.connection_user_id !== payloadData.connection_user_id) return false
-          if (config.keyword && payloadData.message_text && 
-              !payloadData.message_text.toLowerCase().includes(config.keyword.toLowerCase())) return false
+          if (config.keyword && payloadData.message_text) {
+            const keywords = config.keyword.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean)
+            const msgText = payloadData.message_text.toLowerCase()
+            const hasMatch = keywords.some((kw: string) => msgText.includes(kw))
+            if (!hasMatch) return false
+          } else if (config.keyword && !payloadData.message_text) {
+            return false
+          }
           if (config.source_filter === 'group' && !payloadData.group_id) return false
           if (config.source_filter === 'all_groups' && !payloadData.group_id) return false
           if (config.source_filter === 'private' && payloadData.group_id) return false
