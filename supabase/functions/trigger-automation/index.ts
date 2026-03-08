@@ -247,7 +247,7 @@ Deno.serve(async (req) => {
       // 2. Also find flow automations whose trigger step has the matching action_type
       const { data: flowTriggerSteps, error: flowError } = await supabase
         .from('automation_flow_steps')
-        .select('automation_id')
+        .select('automation_id, configuration')
         .eq('tenant_id', payload.tenant_id)
         .eq('step_type', 'trigger')
         .eq('action_type', payload.trigger_type)
@@ -257,7 +257,19 @@ Deno.serve(async (req) => {
       }
 
       if (flowTriggerSteps && flowTriggerSteps.length > 0) {
-        const flowAutomationIds = flowTriggerSteps.map((s: any) => s.automation_id)
+        // Filter by trigger configuration BEFORE fetching automations
+        const matchingSteps = flowTriggerSteps.filter((step: any) => {
+          const config = step.configuration || {}
+          if (config.group_id && config.group_id !== payloadData.group_id) return false
+          if (config.connection_user_id && config.connection_user_id !== payloadData.connection_user_id) return false
+          if (config.keyword && payloadData.message_text && 
+              !payloadData.message_text.toLowerCase().includes(config.keyword.toLowerCase())) return false
+          if (config.source_filter === 'group' && !payloadData.group_id) return false
+          if (config.source_filter === 'private' && payloadData.group_id) return false
+          return true
+        })
+        console.log(`Filtered ${flowTriggerSteps.length} trigger steps down to ${matchingSteps.length} matching steps`)
+        const flowAutomationIds = matchingSteps.map((s: any) => s.automation_id)
         // Filter out IDs already found
         const existingIds = new Set(automations.map((a: any) => a.id))
         const newFlowIds = flowAutomationIds.filter((id: string) => !existingIds.has(id))
