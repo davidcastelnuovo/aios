@@ -1,38 +1,24 @@
 
 
-# תיקון לופ אינסופי באוטומציות WhatsApp
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## הבעיה
-כשהאוטומציה שולחת הודעה לקבוצה דרך Green API, ההודעה חוזרת כ-webhook מסוג `outgoingAPIMessageReceived` → זה מפעיל את האוטומציה שוב → שולח שוב → לופ אינסופי.
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-## שורש הבעיה
-בקוד של `green-api-webhook/index.ts`, הטריגר לאוטומציות מופעל גם על `isIncoming` וגם על `isOutgoing`, כש-`isOutgoing` כולל גם `outgoingAPIMessageReceived` (הודעות שנשלחו דרך API, כולל אוטומציות).
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-שני מקומות בקוד (שורות 1067 ו-1393):
-```
-if (isIncoming || isOutgoing) {  // ← כאן הבעיה - isOutgoing כולל גם API
-    // trigger automations...
-}
-```
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-## הפתרון
-שינוי ב-`green-api-webhook/index.ts` בלבד:
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-1. **הוספת משתנה חדש** `isManualOutgoing` שמבדיל בין הודעות יוצאות ידניות (`outgoingMessageReceived`) לבין הודעות שנשלחו דרך API (`outgoingAPIMessageReceived`)
-2. **שינוי תנאי ההפעלה של אוטומציות** מ-`isIncoming || isOutgoing` ל-`isIncoming || isManualOutgoing` בשני המקומות (קבוצות ופרטי)
-
-```text
-לפני:
-  isOutgoing = outgoingMessageReceived || outgoingAPIMessageReceived
-  trigger if: isIncoming || isOutgoing  ← לופ!
-
-אחרי:
-  isManualOutgoing = outgoingMessageReceived (בלבד, ללא API)
-  trigger if: isIncoming || isManualOutgoing  ← בטוח!
-```
-
-הודעות שנשלחות דרך API (כולל אוטומציות) עדיין יישמרו בדאטאבייס כרגיל, רק לא יפעילו אוטומציות נוספות.
-
-## קבצים לשינוי
-- `supabase/functions/green-api-webhook/index.ts` — שורה ~314 (הגדרת המשתנה), שורות ~1067 ו-~1393 (תנאי טריגר)
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 
