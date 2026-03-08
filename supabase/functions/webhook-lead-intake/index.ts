@@ -340,13 +340,36 @@ Deno.serve(async (req) => {
       
       // First try to find by phone
       if (normalizedPhone) {
+        // Build possible phone variants for DB-level filtering
+        const phoneVariants = [
+          payload.phone,                                    // original
+          normalizedPhone,                                  // stripped
+          normalizedPhone.replace(/^972/, '0'),             // local format
+          '+' + normalizedPhone,                            // with +
+          '+972' + normalizedPhone.replace(/^972/, ''),     // international
+        ].filter(Boolean) as string[];
+        const uniqueVariants = [...new Set(phoneVariants)];
+
         const { data: leadsByPhone } = await supabase
           .from('leads')
           .select('*')
-          .eq('tenant_id', tenantId);
+          .eq('tenant_id', tenantId)
+          .in('phone', uniqueVariants)
+          .limit(1);
         
-        // Check with normalized phone comparison
-        existingLead = leadsByPhone?.find(l => normalizePhone(l.phone) === normalizedPhone) || null;
+        existingLead = leadsByPhone?.[0] || null;
+
+        // If not found by exact variants, do a broader but limited search
+        if (!existingLead) {
+          const { data: recentLeads } = await supabase
+            .from('leads')
+            .select('*')
+            .eq('tenant_id', tenantId)
+            .not('phone', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(500);
+          existingLead = recentLeads?.find(l => normalizePhone(l.phone) === normalizedPhone) || null;
+        }
         
         if (existingLead) {
           console.log(`📌 Found existing lead by phone: ${existingLead.id} (${existingLead.company_name})`);
