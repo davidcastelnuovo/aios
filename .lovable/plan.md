@@ -1,24 +1,23 @@
 
 
-## הפיכת האפליקציה ל-PWA (Progressive Web App)
+# תוכנית: הוספת אפשרות "כל הקבוצות" בפילטר מקור הודעות
 
-כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
+## מה נשנה
 
-### 1. קובץ `public/manifest.json`
-- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
-- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
+בדרופדאון "מקור הודעות" בטריגר WhatsApp, נוסיף אפשרות חדשה **"כל הקבוצות"** שתפעיל את האוטומציה רק על הודעות שמגיעות מקבוצות ווטסאפ (כולן), בלי צורך לבחור קבוצה ספציפית.
 
-### 2. Service Worker — `public/sw.js`
-- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
-- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
+### הדרופדאון יראה כך:
+- כל ההודעות ✓
+- **כל הקבוצות** ← חדש
+- קבוצה ספציפית
+- איש קשר מתויג
 
-### 3. רישום ב-`index.html`
-- תג `<link rel="manifest">` ב-head
-- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
-- סקריפט רישום Service Worker
+## קובץ אחד לשינוי
 
-### תוצאה
-- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
-- באייפון: Share → Add to Home Screen
-- האפליקציה תיפתח במסך מלא בלי שורת כתובת
+**`src/components/automations/StepConfigPanel.tsx`**:
+1. הוספת `SelectItem` עם value `"all_groups"` בדרופדאון מקור הודעות
+2. אין צורך בשום UI נוסף כי זה פילטר גנרי (לא צריך לבחור קבוצה)
+
+**`supabase/functions/trigger-automation/index.ts`**:
+3. עדכון לוגיקת הסינון כך ש-`source_filter === "all_groups"` יבדוק שההודעה הנכנסת היא מקבוצה (לפי `group_id` או `@g.us` ב-chat ID)
 
