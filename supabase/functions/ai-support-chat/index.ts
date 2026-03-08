@@ -270,6 +270,166 @@ async function executeTool(
         };
       }
 
+      case 'update_task': {
+        const { task_id, title, priority, due_date, due_time, notes, status } = toolCall.args;
+
+        const { data: existingTask, error: existingError } = await supabaseClient
+          .from('tasks')
+          .select('id, title, notes, due_date, due_time, priority, status, google_calendar_event_id')
+          .eq('id', task_id)
+          .eq('tenant_id', tenantId)
+          .single();
+
+        if (existingError || !existingTask) {
+          return { success: false, error: 'לא נמצאה משימה לעדכון' };
+        }
+
+        const updateData: Record<string, any> = {};
+        if (title !== undefined) updateData.title = title;
+        if (priority !== undefined) updateData.priority = priority;
+        if (due_date !== undefined) updateData.due_date = due_date;
+        if (due_time !== undefined) updateData.due_time = due_time;
+        if (notes !== undefined) updateData.notes = notes;
+        if (status !== undefined) updateData.status = status;
+
+        if (Object.keys(updateData).length === 0) {
+          return { success: false, error: 'לא נשלחו שדות לעדכון' };
+        }
+
+        const { data: updatedTask, error: updateError } = await supabaseClient
+          .from('tasks')
+          .update(updateData)
+          .eq('id', task_id)
+          .eq('tenant_id', tenantId)
+          .select('id, title, notes, due_date, due_time, priority, status, google_calendar_event_id')
+          .single();
+
+        if (updateError || !updatedTask) throw updateError || new Error('שגיאה בעדכון המשימה');
+
+        let calendarSynced = false;
+        let calendarSyncError: string | null = null;
+        let calendarEventId: string | null = updatedTask.google_calendar_event_id || null;
+        let calendarHtmlLink: string | null = null;
+
+        const finalDueDate = updatedTask.due_date;
+        const finalDueTime = normalizeTimeString(updatedTask.due_time, '09:00');
+
+        const shouldSyncCalendar = !!finalDueDate && (
+          due_date !== undefined ||
+          due_time !== undefined ||
+          title !== undefined ||
+          notes !== undefined ||
+          !!updatedTask.google_calendar_event_id
+        );
+
+        if (shouldSyncCalendar) {
+          try {
+            const { data: calendarToken } = await supabaseClient
+              .from('calendar_tokens')
+              .select('id')
+              .eq('user_id', userId)
+              .single();
+
+            if (!calendarToken) {
+              calendarSyncError = 'calendar_not_connected';
+            } else {
+              const todayInIsrael = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Jerusalem',
+              }).format(new Date());
+
+              if (finalDueDate < todayInIsrael) {
+                calendarSyncError = 'due_date_in_past';
+              } else {
+                const { startLocalDateTime, endLocalDateTime } = buildLocalDateTimeRange(
+                  finalDueDate,
+                  finalDueTime,
+                  30,
+                );
+
+                if (updatedTask.google_calendar_event_id) {
+                  const updateResponse = await fetch(`${SUPABASE_URL}/functions/v1/update-calendar-event`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${userToken}`,
+                    },
+                    body: JSON.stringify({
+                      eventId: updatedTask.google_calendar_event_id,
+                      summary: updatedTask.title,
+                      description: updatedTask.notes || 'משימה ממערכת Marketing Captain',
+                      start: startLocalDateTime,
+                      end: endLocalDateTime,
+                    }),
+                  });
+
+                  if (updateResponse.ok) {
+                    const updateCalData = await updateResponse.json();
+                    calendarSynced = true;
+                    calendarEventId = updateCalData.eventId || updatedTask.google_calendar_event_id;
+                    calendarHtmlLink = updateCalData.htmlLink || null;
+                  } else {
+                    calendarSyncError = 'calendar_update_error';
+                    console.error('Failed to update calendar event:', await updateResponse.text());
+                  }
+                } else {
+                  const addResponse = await fetch(`${SUPABASE_URL}/functions/v1/add-calendar-event`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${userToken}`,
+                    },
+                    body: JSON.stringify({
+                      summary: updatedTask.title,
+                      description: updatedTask.notes || 'משימה ממערכת Marketing Captain',
+                      start: startLocalDateTime,
+                      end: endLocalDateTime,
+                    }),
+                  });
+
+                  if (addResponse.ok) {
+                    const addCalData = await addResponse.json();
+                    if (addCalData.eventId) {
+                      calendarSynced = true;
+                      calendarEventId = addCalData.eventId;
+                      calendarHtmlLink = addCalData.htmlLink || null;
+                      await supabaseClient
+                        .from('tasks')
+                        .update({ google_calendar_event_id: addCalData.eventId })
+                        .eq('id', updatedTask.id)
+                        .eq('tenant_id', tenantId);
+                    } else {
+                      calendarSyncError = 'calendar_event_id_missing';
+                    }
+                  } else {
+                    calendarSyncError = 'calendar_create_error';
+                    console.error('Failed to create calendar event on update:', await addResponse.text());
+                  }
+                }
+              }
+            }
+          } catch (calendarErr) {
+            calendarSyncError = 'calendar_sync_exception';
+            console.error('Calendar sync error on update_task:', calendarErr);
+          }
+        }
+
+        return {
+          success: true,
+          result: {
+            task_id: updatedTask.id,
+            title: updatedTask.title,
+            priority: updatedTask.priority,
+            due_date: updatedTask.due_date,
+            due_time: updatedTask.due_time,
+            status: updatedTask.status,
+            calendar_synced: calendarSynced,
+            calendar_sync_error: calendarSyncError,
+            calendar_event_id: calendarEventId,
+            calendar_html_link: calendarHtmlLink,
+          },
+        };
+      }
+
       case 'update_task_status': {
         const { task_id, status } = toolCall.args;
         const { data, error } = await supabaseClient
