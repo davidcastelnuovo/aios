@@ -117,7 +117,7 @@ const TRIGGER_OPTIONS = [
   { value: "task_calendar_created", label: "משימה נוספה ליומן" },
   { value: "task_overdue", label: "משימה לא הושלמה בזמן" },
   { value: "inbound_webhook_task", label: "קבלת משימה מ-Webhook" },
-  { value: "inbound_webhook_lead", label: "קליטת ליד מ-Webhook (מסקיו)" },
+  { value: "inbound_webhook_lead", label: "קליטת ליד מ-Webhook" },
 ];
 
 // LEAD_STATUS_OPTIONS removed - now using dynamic statuses from useLeadStatuses hook

@@ -1,31 +1,24 @@
 
 
-# שינוי ברירת מחדל: קליטת לידים מ-Facebook Webhook במקום חיפוש
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## מצב נוכחי
-- ה-`facebook-lead-webhook` כבר יוצר לידים ומפעיל `trigger_type: 'lead_created'` (שורה 397 ב-facebook-lead-webhook)
-- **אבל** הוא **לא** מפעיל את `inbound_webhook_lead` כמו שה-`webhook-maskyoo-intake` עושה
-- בטריגר של האוטומציות, `inbound_webhook_lead` מופיע כ-"קליטת ליד מ-Webhook (מסקיו)" - צריך לשנות לטקסט כללי יותר
-- ב-`TRIGGER_LABELS` בדף Automations חסר `inbound_webhook_lead` לגמרי
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-## מה צריך לשנות
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-### 1. Facebook Lead Webhook - הוספת trigger `inbound_webhook_lead`
-בקובץ `supabase/functions/facebook-lead-webhook/index.ts`, אחרי שליד נוצר (שורה ~392), נוסיף trigger נוסף של `inbound_webhook_lead` (בדיוק כמו שעושה `webhook-maskyoo-intake`), כך שאוטומציות מסוג זה יופעלו גם מלידים של פייסבוק.
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-### 2. שינוי טקסט הטריגר
-- `AddAutomationForm.tsx` שורה 120: לשנות מ-"קליטת ליד מ-Webhook (מסקיו)" ל-**"קליטת ליד מ-Webhook"**
-- `EditAutomationDialog.tsx` שורה 420: אותו שינוי
-- `Automations.tsx` שורה 44 (TRIGGER_LABELS): להוסיף `inbound_webhook_lead: "קליטת ליד מ-Webhook"`
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-### 3. לגבי צד פייסבוק
-**לא צריך לשנות שום דבר בפייסבוק** - ה-webhook כבר מוגדר ועובד. השינוי הוא רק בצד שלנו - להוסיף trigger נוסף כשליד מגיע מפייסבוק, כדי שאוטומציות `inbound_webhook_lead` יופעלו גם מלידים של פייסבוק ולא רק ממסקיו.
-
-## סיכום השינויים
-| קובץ | שינוי |
-|-------|-------|
-| `facebook-lead-webhook/index.ts` | הוספת `inbound_webhook_lead` trigger לאחר יצירת ליד |
-| `AddAutomationForm.tsx` | שינוי label ל-"קליטת ליד מ-Webhook" |
-| `EditAutomationDialog.tsx` | שינוי label ל-"קליטת ליד מ-Webhook" |
-| `Automations.tsx` | הוספת `inbound_webhook_lead` ל-TRIGGER_LABELS |
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 

@@ -42,6 +42,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   meeting_created: "נוצרה פגישה",
   task_overdue: "משימה לא הושלמה בזמן",
   inbound_webhook_task: "קבלת משימה מ-Webhook",
+  inbound_webhook_lead: "קליטת ליד מ-Webhook",
 };
 
 const ACTION_LABELS: Record<string, string> = {

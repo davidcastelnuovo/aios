@@ -427,6 +427,42 @@ serve(async (req) => {
                   // Don't fail the webhook if automation trigger fails
                 }
 
+                // Also trigger inbound_webhook_lead (same as maskyoo-intake does)
+                try {
+                  const inboundTriggerUrl = `${supabaseUrl}/functions/v1/trigger-automation`;
+                  const inboundTriggerPayload = {
+                    trigger_type: 'inbound_webhook_lead',
+                    tenant_id: integration.tenant_id,
+                    data: {
+                      lead_id: newLead.id,
+                      contact_name: leadRecord.contact_name || '',
+                      company_name: leadRecord.company_name || '',
+                      phone: leadRecord.phone || '',
+                      email: leadRecord.email || '',
+                      source: leadRecord.source || 'paid_ads',
+                      status: leadRecord.status || 'new',
+                      agency_id: leadRecord.agency_id || '',
+                      notes: leadRecord.notes || '',
+                      ...fbPrefixedFields,
+                    },
+                  };
+                  
+                  console.log('🚀 Triggering inbound_webhook_lead for Facebook lead:', newLead.id);
+                  const inboundRes = await fetch(inboundTriggerUrl, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${supabaseServiceKey}`,
+                    },
+                    body: JSON.stringify(inboundTriggerPayload),
+                  });
+                  
+                  const inboundResult = await inboundRes.json();
+                  console.log('Inbound webhook lead trigger result:', inboundResult);
+                } catch (inboundError) {
+                  console.error('Error triggering inbound_webhook_lead:', inboundError);
+                }
+
                 // Update last_sync_at
                 await supabase
                   .from('tenant_integrations')
