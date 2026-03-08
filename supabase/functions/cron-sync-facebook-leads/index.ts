@@ -307,7 +307,7 @@ serve(async (req) => {
               const leadRecord: Record<string, any> = {
                 tenant_id: integration.tenant_id,
                 agency_id: mapping.agency_id,
-                sales_person_id: mapping.sales_person_id || null,
+                sales_person_id: (mapping.sales_person_id && mapping.sales_person_id !== 'none') ? mapping.sales_person_id : null,
                 source: 'paid_ads',
                 status: 'new',
                 notes: `leadgen_id: ${leadgenId}\nFacebook Form: ${mapping.form_name || formId}\nCreated: ${fbLead.created_time || 'unknown'}`,
