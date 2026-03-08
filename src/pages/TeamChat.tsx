@@ -27,6 +27,14 @@ import { he } from "date-fns/locale";
 import { useAgency } from "@/contexts/AgencyContext";
 import { LinkFileToEntityDialog } from "@/components/chat/LinkFileToEntityDialog";
 
+const getPublicOrigin = () => {
+  const origin = window.location.origin;
+  if (origin.includes("lovableproject.com") || origin.includes("id-preview--")) {
+    return "https://after-lead.lovable.app";
+  }
+  return origin;
+};
+
 // Types
 interface ChannelCategory {
   id: string;
@@ -1790,7 +1798,7 @@ function ManageChannelMembersDialog({
 
   useEffect(() => {
     if (existingInvite?.token) {
-      setInviteLink(`${window.location.origin}/chat-invite/${existingInvite.token}`);
+      setInviteLink(`${getPublicOrigin()}/chat-invite/${existingInvite.token}`);
     }
   }, [existingInvite]);
 
@@ -1809,7 +1817,7 @@ function ManageChannelMembersDialog({
       return data;
     },
     onSuccess: (data) => {
-      const link = `${window.location.origin}/chat-invite/${data.token}`;
+      const link = `${getPublicOrigin()}/chat-invite/${data.token}`;
       setInviteLink(link);
       queryClient.invalidateQueries({ queryKey: ["team-channel-invite", channel.id] });
       toast.success("קישור הזמנה נוצר בהצלחה");
