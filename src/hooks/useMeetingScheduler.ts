@@ -143,7 +143,10 @@ export function useMeetingScheduler(tenantId?: string) {
       endDateTime.setHours(startDateTime.getHours() + 1);
 
       const subject = meetingSubject || `פגישה עם ${contactName}`;
-      const attendees = contactEmail ? [contactEmail] : [];
+      const attendees = [
+        ...(contactEmail ? [contactEmail] : []),
+        ...(additionalEmails || []),
+      ].filter((email, index, self) => self.indexOf(email) === index); // dedupe
 
       // יצירת אירוע ביומן
       const { error: calendarError } = await supabase.functions.invoke('add-calendar-event', {
