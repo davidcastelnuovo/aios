@@ -229,6 +229,7 @@ Deno.serve(async (req) => {
       payloadData = payload.data
       tenantId = payload.tenant_id!
 
+      // 1. Find non-flow automations by trigger_type in automations table
       const { data: foundAutomations, error: fetchError } = await supabase
         .from('automations')
         .select('*')
@@ -242,6 +243,40 @@ Deno.serve(async (req) => {
       }
 
       automations = foundAutomations || []
+
+      // 2. Also find flow automations whose trigger step has the matching action_type
+      const { data: flowTriggerSteps, error: flowError } = await supabase
+        .from('automation_flow_steps')
+        .select('automation_id')
+        .eq('tenant_id', payload.tenant_id)
+        .eq('step_type', 'trigger')
+        .eq('action_type', payload.trigger_type)
+
+      if (flowError) {
+        console.error('Error fetching flow trigger steps:', flowError)
+      }
+
+      if (flowTriggerSteps && flowTriggerSteps.length > 0) {
+        const flowAutomationIds = flowTriggerSteps.map((s: any) => s.automation_id)
+        // Filter out IDs already found
+        const existingIds = new Set(automations.map((a: any) => a.id))
+        const newFlowIds = flowAutomationIds.filter((id: string) => !existingIds.has(id))
+
+        if (newFlowIds.length > 0) {
+          const { data: flowAutomations, error: flowAutoError } = await supabase
+            .from('automations')
+            .select('*')
+            .in('id', newFlowIds)
+            .eq('active', true)
+
+          if (flowAutoError) {
+            console.error('Error fetching flow automations:', flowAutoError)
+          } else if (flowAutomations) {
+            console.log(`Found ${flowAutomations.length} additional flow automation(s) via trigger steps`)
+            automations = [...automations, ...flowAutomations]
+          }
+        }
+      }
     }
 
     console.log(`Found ${automations.length} automation(s) to execute`)
