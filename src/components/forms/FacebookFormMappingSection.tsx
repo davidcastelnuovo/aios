@@ -415,7 +415,7 @@ export function FacebookFormMappingSection({ tenantId, integrationId, accessToke
   }
 
   return (
-    <Card>
+    <Card id="form-mapping-section">
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span className="flex items-center gap-2">
