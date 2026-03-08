@@ -201,21 +201,13 @@ async function executeTool(
               if (due_date < todayInIsrael) {
                 calendarSyncError = 'due_date_in_past';
               } else {
-                const timeToUse = due_time || '09:00';
-                const safeTime = /^\d{2}:\d{2}$/.test(timeToUse) ? timeToUse : '09:00';
+                const { startLocalDateTime, endLocalDateTime, safeTime } = buildLocalDateTimeRange(
+                  due_date,
+                  due_time || '09:00',
+                  30,
+                );
 
-                // Send local date-time (without timezone suffix) and let add-calendar-event enforce Asia/Jerusalem
-                const startLocalDateTime = `${due_date}T${safeTime}:00`;
-                const [startHour, startMinute] = safeTime.split(':').map((v: string) => Number(v));
-                const endTotalMinutes = (startHour * 60) + startMinute + 30;
-                const endHour = String(Math.floor((endTotalMinutes % 1440) / 60)).padStart(2, '0');
-                const endMinute = String(endTotalMinutes % 60).padStart(2, '0');
-                const endDateObj = new Date(`${due_date}T00:00:00Z`);
-                if (endTotalMinutes >= 1440) endDateObj.setUTCDate(endDateObj.getUTCDate() + 1);
-                const endDate = endDateObj.toISOString().slice(0, 10);
-                const endLocalDateTime = `${endDate}T${endHour}:${endMinute}:00`;
-
-                scheduledStartIso = startLocalDateTime;
+                scheduledStartIso = `${due_date}T${safeTime}:00`;
 
                 const calResponse = await fetch(`${SUPABASE_URL}/functions/v1/add-calendar-event`, {
                   method: 'POST',
