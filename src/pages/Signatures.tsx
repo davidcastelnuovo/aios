@@ -242,6 +242,43 @@ export default function Signatures() {
     toast.success("הקישור הועתק");
   };
 
+  // Full-screen placement overlay
+  if (showPlacement && previewUrl) {
+    return (
+      <div className="fixed inset-0 z-50 bg-background flex flex-col" dir="rtl">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-border bg-background">
+          <h2 className="text-lg font-bold text-foreground">הגדרת מיקום חתימות — {title}</h2>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setShowPlacement(false)}>
+              חזור
+            </Button>
+            <Button
+              onClick={() => createMutation.mutate()}
+              disabled={!title || createMutation.isPending}
+            >
+              {createMutation.isPending ? "יוצר..." : "צור מסמך"}
+            </Button>
+          </div>
+        </div>
+        {/* Placer content */}
+        <div className="flex-1 overflow-auto p-4">
+          <SignatureFieldPlacer
+            fileUrl={previewUrl}
+            fullScreen
+            recipients={recipients.filter(r => r.name).map((r, i) => ({
+              index: i,
+              name: r.name,
+              color: getRecipientColor(i),
+              position: r.signaturePosition,
+            }))}
+            onPositionChange={handlePositionChange}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-6" dir="rtl">
       <div className="flex items-center justify-between">
@@ -258,154 +295,130 @@ export default function Signatures() {
           </DialogTrigger>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
             <DialogHeader>
-              <DialogTitle>{showPlacement ? "הגדרת מיקום חתימות" : "יצירת מסמך חדש"}</DialogTitle>
+              <DialogTitle>יצירת מסמך חדש</DialogTitle>
             </DialogHeader>
 
-            {showPlacement && previewUrl ? (
-              <div className="space-y-4">
-                <SignatureFieldPlacer
-                  fileUrl={previewUrl}
-                  recipients={recipients.filter(r => r.name).map((r, i) => ({
-                    index: i,
-                    name: r.name,
-                    color: getRecipientColor(i),
-                    position: r.signaturePosition,
-                  }))}
-                  onPositionChange={handlePositionChange}
-                />
-                <div className="flex gap-2 justify-end pt-2">
-                  <Button variant="outline" onClick={() => setShowPlacement(false)}>חזור</Button>
-                  <Button
-                    onClick={() => createMutation.mutate()}
-                    disabled={!title || createMutation.isPending}
-                  >
-                    {createMutation.isPending ? "יוצר..." : "צור מסמך"}
-                  </Button>
-                </div>
+            <div className="space-y-4">
+              <div>
+                <Label>שם המסמך</Label>
+                <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="הזן שם למסמך..." />
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <Label>שם המסמך</Label>
-                  <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="הזן שם למסמך..." />
-                </div>
 
-                <Tabs value={createTab} onValueChange={v => setCreateTab(v as any)}>
-                  <TabsList className="w-full">
-                    <TabsTrigger value="create" className="flex-1">
-                      <FileText className="h-4 w-4 ml-2" />
-                      יצירת מסמך
-                    </TabsTrigger>
-                    <TabsTrigger value="upload" className="flex-1">
-                      <Upload className="h-4 w-4 ml-2" />
-                      העלאת מסמך
-                    </TabsTrigger>
-                    <TabsTrigger value="url" className="flex-1">
-                      <Link className="h-4 w-4 ml-2" />
-                      קישור למסמך
-                    </TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="create" className="space-y-3">
-                    <div>
-                      <Label>תוכן המסמך</Label>
-                      <Textarea
-                        value={content}
-                        onChange={e => setContent(e.target.value)}
-                        placeholder="הקלד את תוכן המסמך כאן..."
-                        rows={10}
-                        className="font-mono text-sm"
-                      />
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="upload" className="space-y-3">
-                    <div>
-                      <Label>העלה קובץ (PDF, DOCX, תמונה)</Label>
-                      <Input
-                        type="file"
-                        accept=".pdf,.docx,.doc,.png,.jpg,.jpeg"
-                        onChange={e => handleFileChange(e.target.files?.[0] || null)}
-                        className="mt-1"
-                      />
-                      {uploadFile && (
-                        <p className="text-sm text-muted-foreground mt-1">
-                          קובץ נבחר: {uploadFile.name}
-                        </p>
-                      )}
-                    </div>
-                  </TabsContent>
-                  <TabsContent value="url" className="space-y-3">
-                    <div>
-                      <Label>קישור למסמך (PDF, תמונה)</Label>
-                      <Input
-                        value={documentUrl}
-                        onChange={e => setDocumentUrl(e.target.value)}
-                        placeholder="https://example.com/document.pdf"
-                        dir="ltr"
-                        className="text-left"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        הדבק קישור ישיר לקובץ PDF או תמונה
-                      </p>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-
-                {/* Recipients */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-base font-semibold">חותמים</Label>
-                    <Button variant="outline" size="sm" onClick={addRecipient}>
-                      <Plus className="h-3 w-3 ml-1" />
-                      הוסף חותם
-                    </Button>
+              <Tabs value={createTab} onValueChange={v => setCreateTab(v as any)}>
+                <TabsList className="w-full">
+                  <TabsTrigger value="create" className="flex-1">
+                    <FileText className="h-4 w-4 ml-2" />
+                    יצירת מסמך
+                  </TabsTrigger>
+                  <TabsTrigger value="upload" className="flex-1">
+                    <Upload className="h-4 w-4 ml-2" />
+                    העלאת מסמך
+                  </TabsTrigger>
+                  <TabsTrigger value="url" className="flex-1">
+                    <Link className="h-4 w-4 ml-2" />
+                    קישור למסמך
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="create" className="space-y-3">
+                  <div>
+                    <Label>תוכן המסמך</Label>
+                    <Textarea
+                      value={content}
+                      onChange={e => setContent(e.target.value)}
+                      placeholder="הקלד את תוכן המסמך כאן..."
+                      rows={10}
+                      className="font-mono text-sm"
+                    />
                   </div>
-                  {recipients.map((r, i) => (
-                    <div key={i} className="flex gap-2 items-center">
-                      <div className="w-3 h-3 rounded flex-shrink-0" style={{ backgroundColor: getRecipientColor(i) }} />
-                      <Input
-                        placeholder="שם"
-                        value={r.name}
-                        onChange={e => updateRecipient(i, "name", e.target.value)}
-                        className="flex-1"
-                      />
-                      <Input
-                        placeholder="אימייל"
-                        type="email"
-                        value={r.email}
-                        onChange={e => updateRecipient(i, "email", e.target.value)}
-                        className="flex-1"
-                      />
-                      {recipients.length > 1 && (
-                        <Button variant="ghost" size="icon" onClick={() => removeRecipient(i)}>
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                </TabsContent>
+                <TabsContent value="upload" className="space-y-3">
+                  <div>
+                    <Label>העלה קובץ (PDF, DOCX, תמונה)</Label>
+                    <Input
+                      type="file"
+                      accept=".pdf,.docx,.doc,.png,.jpg,.jpeg"
+                      onChange={e => handleFileChange(e.target.files?.[0] || null)}
+                      className="mt-1"
+                    />
+                    {uploadFile && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        קובץ נבחר: {uploadFile.name}
+                      </p>
+                    )}
+                  </div>
+                </TabsContent>
+                <TabsContent value="url" className="space-y-3">
+                  <div>
+                    <Label>קישור למסמך (PDF, תמונה)</Label>
+                    <Input
+                      value={documentUrl}
+                      onChange={e => setDocumentUrl(e.target.value)}
+                      placeholder="https://example.com/document.pdf"
+                      dir="ltr"
+                      className="text-left"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      הדבק קישור ישיר לקובץ PDF או תמונה
+                    </p>
+                  </div>
+                </TabsContent>
+              </Tabs>
 
-                <div className="flex gap-2 justify-end pt-4">
-                  <Button variant="outline" onClick={() => setIsCreateOpen(false)}>ביטול</Button>
-                  {canShowPlacement && (
-                    <Button variant="secondary" onClick={() => setShowPlacement(true)}>
-                      הגדר מיקום חתימות
-                    </Button>
-                  )}
-                  <Button
-                    onClick={() => createMutation.mutate()}
-                    disabled={
-                      !title ||
-                      createMutation.isPending ||
-                      (createTab === "create" && !content) ||
-                      (createTab === "upload" && !uploadFile) ||
-                      (createTab === "url" && !documentUrl)
-                    }
-                  >
-                    {createMutation.isPending ? "יוצר..." : "צור מסמך"}
+              {/* Recipients */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-base font-semibold">חותמים</Label>
+                  <Button variant="outline" size="sm" onClick={addRecipient}>
+                    <Plus className="h-3 w-3 ml-1" />
+                    הוסף חותם
                   </Button>
                 </div>
+                {recipients.map((r, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <div className="w-3 h-3 rounded flex-shrink-0" style={{ backgroundColor: getRecipientColor(i) }} />
+                    <Input
+                      placeholder="שם"
+                      value={r.name}
+                      onChange={e => updateRecipient(i, "name", e.target.value)}
+                      className="flex-1"
+                    />
+                    <Input
+                      placeholder="אימייל"
+                      type="email"
+                      value={r.email}
+                      onChange={e => updateRecipient(i, "email", e.target.value)}
+                      className="flex-1"
+                    />
+                    {recipients.length > 1 && (
+                      <Button variant="ghost" size="icon" onClick={() => removeRecipient(i)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
               </div>
-            )}
+
+              <div className="flex gap-2 justify-end pt-4">
+                <Button variant="outline" onClick={() => setIsCreateOpen(false)}>ביטול</Button>
+                {canShowPlacement && (
+                  <Button variant="secondary" onClick={() => { setIsCreateOpen(false); setShowPlacement(true); }}>
+                    הגדר מיקום חתימות
+                  </Button>
+                )}
+                <Button
+                  onClick={() => createMutation.mutate()}
+                  disabled={
+                    !title ||
+                    createMutation.isPending ||
+                    (createTab === "create" && !content) ||
+                    (createTab === "upload" && !uploadFile) ||
+                    (createTab === "url" && !documentUrl)
+                  }
+                >
+                  {createMutation.isPending ? "יוצר..." : "צור מסמך"}
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
