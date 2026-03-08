@@ -42,7 +42,6 @@ export type ModulePermission =
 export function useUserPermissions() {
   const { user } = useCurrentUser();
   const { isOwner, isSuperAdmin } = useUserRole();
-  const queryClient = useQueryClient();
 
   const { data: permissionsData, isLoading: queryLoading } = useQuery({
     queryKey: ["user-permissions", user?.id],
