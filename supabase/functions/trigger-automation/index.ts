@@ -372,8 +372,22 @@ Deno.serve(async (req) => {
 
             let previousStepOutput: any = null
             const stepResults: any[] = []
+            let actionCount = 0
 
             for (const step of (flowSteps || [])) {
+              // SAFETY: Runtime timeout check
+              const elapsedSeconds = (Date.now() - executionStartTime) / 1000
+              if (elapsedSeconds >= MAX_RUNTIME_SECONDS) {
+                console.error(`🛑 SAFETY: Runtime limit (${MAX_RUNTIME_SECONDS}s) exceeded after ${elapsedSeconds.toFixed(1)}s. Stopping flow.`)
+                stepResults.push({ step_id: step.id, action_type: step.action_type, success: false, error: 'Runtime limit exceeded' })
+                break
+              }
+              // SAFETY: Max actions check
+              if (actionCount >= MAX_ACTIONS_PER_RUN) {
+                console.error(`🛑 SAFETY: Max actions per run (${MAX_ACTIONS_PER_RUN}) reached. Stopping flow.`)
+                stepResults.push({ step_id: step.id, action_type: step.action_type, success: false, error: 'Max actions exceeded' })
+                break
+              }
               console.log(`Executing step: ${step.step_type}/${step.action_type} (${step.id})`)
               
               // Skip trigger steps
@@ -511,6 +525,7 @@ Deno.serve(async (req) => {
                   console.log(`Unknown action_type: ${step.action_type}, step_type: ${step.step_type}, skipping`)
                 }
 
+                actionCount++
                 stepResults.push({ step_id: step.id, action_type: effectiveActionType, success: true, response: stepResponse })
               } catch (stepErr: any) {
                 console.error(`Error in flow step ${step.id}:`, stepErr)
