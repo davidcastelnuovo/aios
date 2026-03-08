@@ -125,12 +125,11 @@ export function AppSidebar() {
 
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId } = useTenant();
-  const { tenantId: urlTenantId } = useCurrentTenant(); // Get tenant from URL
   const { selectedAgency } = useAgency();
   const tenantPath = useTenantPath();
   
-  // Use URL tenant ID for display, context tenant for operations
-  const displayTenantId = urlTenantId || currentTenantId;
+  // After TenantContext fix, currentTenantId always matches URL
+  const displayTenantId = currentTenantId;
   
   const { data: userTenants, isLoading: isLoadingTenants } = useQuery({
     queryKey: ["user-tenants", userId],

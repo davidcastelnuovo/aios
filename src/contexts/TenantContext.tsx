@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, ReactNode, useEffect, useRef } from "react";
+import { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
 interface TenantContextType {
@@ -14,14 +14,42 @@ interface TenantContextType {
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
+function getSlugFromPath(pathname: string): string | null {
+  const match = pathname.match(/^\/t\/([^/]+)/);
+  return match ? match[1] : null;
+}
+
 export function TenantProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const { tenantSlug } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Parse tenantSlug directly from URL instead of useParams (which doesn't work outside Routes)
+  const [tenantSlug, setTenantSlug] = useState<string | null>(() => getSlugFromPath(window.location.pathname));
+
   const [currentTenantId, setCurrentTenantId] = useState<string | null>(() => localStorage.getItem("selectedTenantId"));
   const [isActiveTenantSynced, setIsActiveTenantSynced] = useState(false);
   const [isBootstrapTimedOut, setIsBootstrapTimedOut] = useState(false);
   const previousTenantIdRef = useRef<string | null>(null);
+
+  // Update tenantSlug when location changes (react-router navigation)
+  useEffect(() => {
+    const newSlug = getSlugFromPath(location.pathname);
+    if (newSlug !== tenantSlug) {
+      setTenantSlug(newSlug);
+    }
+  }, [location.pathname, tenantSlug]);
+
+  // Also listen for popstate (back/forward) and programmatic navigation
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const newSlug = getSlugFromPath(window.location.pathname);
+      setTenantSlug(prev => prev !== newSlug ? newSlug : prev);
+    };
+
+    window.addEventListener('popstate', handleLocationChange);
+    return () => window.removeEventListener('popstate', handleLocationChange);
+  }, []);
 
   // Get tenant by slug from URL
   const { data: tenantFromSlug, isLoading: isLoadingSlug } = useQuery({
@@ -47,25 +75,21 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   });
 
   // CRITICAL: "URL wins" strategy - URL is always the source of truth
-  // When the URL has a tenant slug, we use that tenant and sync to DB
-  // This prevents the issue where stale state/localStorage causes RLS violations
   useEffect(() => {
-    // If URL has a tenant, it's the source of truth
     if (tenantFromSlug?.id) {
       const urlTenantId = tenantFromSlug.id;
       
-      // Always update local state to match URL
       if (currentTenantId !== urlTenantId) {
         console.log("🔄 URL tenant differs from state. Updating to:", urlTenantId, tenantSlug);
         setCurrentTenantId(urlTenantId);
-        setIsActiveTenantSynced(false); // Force re-sync to DB
+        setIsActiveTenantSynced(false);
       }
       
       previousTenantIdRef.current = urlTenantId;
     }
   }, [tenantFromSlug?.id, tenantSlug, currentTenantId]);
 
-  // Sync tenant to database and clear cache
+  // Sync tenant to database and clear cache - AWAIT the DB write
   useEffect(() => {
     const syncTenantToDb = async () => {
       if (!currentTenantId) {
@@ -73,7 +97,6 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Already synced for this tenant
       if (isActiveTenantSynced) {
         return;
       }
@@ -81,7 +104,6 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       try {
         console.log("🔄 Syncing tenant to DB:", currentTenantId);
         
-        // Clear only tenant-specific cached data (don't cancel ALL queries)
         const keysToRemove = [
           "tasks", "clients", "agencies", "agencies-filter", "user-agency-ids",
           "leads", "campaigners", "client-onboarding", "finance", "sales-people",
@@ -93,33 +115,28 @@ export function TenantProvider({ children }: { children: ReactNode }) {
           queryClient.removeQueries({ queryKey: [key] });
         });
         
-        // Update localStorage immediately
         localStorage.setItem("selectedTenantId", currentTenantId);
         
-        // Fire-and-forget: sync to DB without blocking UI
-        supabase.auth.getUser().then(({ data: { user } }) => {
-          if (user) {
-            (supabase as any)
-              .from("user_active_tenant")
-              .upsert({
-                user_id: user.id,
-                tenant_id: currentTenantId,
-                updated_at: new Date().toISOString(),
-              }, { onConflict: "user_id" })
-              .then(({ error }: any) => {
-                if (error) {
-                  console.error("Error updating active tenant in DB:", error);
-                } else {
-                  console.log("✅ Active tenant synced to DB:", currentTenantId);
-                }
-              });
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { error } = await (supabase as any)
+            .from("user_active_tenant")
+            .upsert({
+              user_id: user.id,
+              tenant_id: currentTenantId,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: "user_id" });
+
+          if (error) {
+            console.error("Error updating active tenant in DB:", error);
+          } else {
+            console.log("✅ Active tenant synced to DB:", currentTenantId);
           }
-        });
+        }
       } catch (error) {
         console.error("Error syncing tenant:", error);
       }
 
-      // Unblock UI immediately - don't wait for DB write
       setIsActiveTenantSynced(true);
     };
     
@@ -155,7 +172,6 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      // Prefer marketingcaptain tenant if user is a member
       const mcTenant = userTenants.find((t: any) => (t as any)?.tenants?.slug === 'marketingcaptain');
       return (mcTenant || userTenants[0]) as any;
     },
@@ -204,8 +220,6 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       navigate(`/t/${currentTenant.slug}/${page}`, { replace: true });
     }
   }, [currentTenant?.slug, navigate]);
-
-  // Note: URL Auto-Fix logic moved to checkDbBeforeSync above for earlier execution
 
   const isLoading = isLoadingUserTenant || isLoadingTenant || isLoadingSlug;
 
