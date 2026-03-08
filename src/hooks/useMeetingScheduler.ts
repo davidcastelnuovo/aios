@@ -122,9 +122,10 @@ export function useMeetingScheduler(tenantId?: string) {
     contactEmail?: string;
     contactId: string;
     contactType: 'lead' | 'client';
+    additionalEmails?: string[];
     onSuccess?: () => void;
   }) => {
-    const { contactName, contactEmail, contactId, contactType, onSuccess } = params;
+    const { contactName, contactEmail, contactId, contactType, additionalEmails, onSuccess } = params;
 
     if (!meetingDate || !meetingTime) {
       toast.error("נא לבחור תאריך ושעה");
@@ -142,7 +143,10 @@ export function useMeetingScheduler(tenantId?: string) {
       endDateTime.setHours(startDateTime.getHours() + 1);
 
       const subject = meetingSubject || `פגישה עם ${contactName}`;
-      const attendees = contactEmail ? [contactEmail] : [];
+      const attendees = [
+        ...(contactEmail ? [contactEmail] : []),
+        ...(additionalEmails || []),
+      ].filter((email, index, self) => self.indexOf(email) === index); // dedupe
 
       // יצירת אירוע ביומן
       const { error: calendarError } = await supabase.functions.invoke('add-calendar-event', {

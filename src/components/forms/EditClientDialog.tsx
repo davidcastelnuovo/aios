@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, X, Calendar as CalendarIcon, Clock, CheckCircle2, Paperclip } from "lucide-react";
+import { Loader2, X, Calendar as CalendarIcon, Clock, CheckCircle2, Paperclip, Plus, Trash2, Users } from "lucide-react";
 import { FolderLinksField } from "@/components/forms/FolderLinksField";
 import { AttachmentsField } from "@/components/forms/AttachmentsField";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -81,6 +81,90 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
     useFolderLinksAndAttachments(client);
 
   const meetingScheduler = useMeetingScheduler(tenantId);
+  const [selectedMeetingEmails, setSelectedMeetingEmails] = useState<string[]>([]);
+
+  // Client contacts
+  interface ClientContact {
+    id?: string;
+    contact_name: string;
+    phone: string;
+    email: string;
+    role: string;
+    is_primary: boolean;
+  }
+
+  const { data: clientContacts, refetch: refetchContacts } = useQuery({
+    queryKey: ["client-contacts", client.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("client_contacts")
+        .select("*")
+        .eq("client_id", client.id)
+        .order("created_at");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!client.id && open,
+  });
+
+  const addContactMutation = useMutation({
+    mutationFn: async (contact: Omit<ClientContact, 'id' | 'is_primary'>) => {
+      if (!tenantId) throw new Error("Missing tenant");
+      const { error } = await supabase.from("client_contacts").insert({
+        client_id: client.id,
+        tenant_id: tenantId,
+        contact_name: contact.contact_name,
+        phone: contact.phone || null,
+        email: contact.email || null,
+        role: contact.role || null,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("איש קשר נוסף בהצלחה");
+      refetchContacts();
+    },
+    onError: () => toast.error("שגיאה בהוספת איש קשר"),
+  });
+
+  const deleteContactMutation = useMutation({
+    mutationFn: async (contactId: string) => {
+      const { error } = await supabase.from("client_contacts").delete().eq("id", contactId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("איש קשר הוסר");
+      refetchContacts();
+    },
+    onError: () => toast.error("שגיאה בהסרת איש קשר"),
+  });
+
+  const [newContact, setNewContact] = useState({ contact_name: "", phone: "", email: "", role: "" });
+  const [showAddContact, setShowAddContact] = useState(false);
+
+  const handleAddContact = () => {
+    if (!newContact.contact_name.trim()) {
+      toast.error("שם איש קשר נדרש");
+      return;
+    }
+    addContactMutation.mutate(newContact);
+    setNewContact({ contact_name: "", phone: "", email: "", role: "" });
+    setShowAddContact(false);
+  };
+
+  // Get all emails for meeting invitations
+  const allContactEmails = useMemo(() => {
+    const emails: { email: string; name: string; source: string }[] = [];
+    if (client.email) {
+      emails.push({ email: client.email, name: client.contact_name || client.name, source: "ראשי" });
+    }
+    clientContacts?.forEach((c: any) => {
+      if (c.email) {
+        emails.push({ email: c.email, name: c.contact_name, source: c.role || "נוסף" });
+      }
+    });
+    return emails;
+  }, [client.email, client.contact_name, client.name, clientContacts]);
 
   const { data: agencies } = useQuery({
     queryKey: ["agencies"],
@@ -324,8 +408,10 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
       contactEmail: client.email,
       contactId: client.id,
       contactType: 'client',
+      additionalEmails: selectedMeetingEmails,
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ["clients"] });
+        setSelectedMeetingEmails([]);
       },
     });
   };
@@ -445,8 +531,87 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
               />
             </div>
 
+            {/* Additional Contacts Section */}
+            <div className="space-y-3 pt-3 border-t">
+              <div className="flex items-center justify-between">
+                <FormLabel className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  אנשי קשר נוספים
+                  {clientContacts && clientContacts.length > 0 && (
+                    <Badge variant="secondary" className="h-5 px-1.5 text-xs">{clientContacts.length}</Badge>
+                  )}
+                </FormLabel>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAddContact(!showAddContact)}
+                >
+                  <Plus className="h-3 w-3 ml-1" />
+                  הוסף איש קשר
+                </Button>
+              </div>
+
+              {showAddContact && (
+                <div className="space-y-2 p-3 rounded-lg border bg-muted/30">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="שם *"
+                      value={newContact.contact_name}
+                      onChange={(e) => setNewContact(prev => ({ ...prev, contact_name: e.target.value }))}
+                    />
+                    <Input
+                      placeholder="תפקיד"
+                      value={newContact.role}
+                      onChange={(e) => setNewContact(prev => ({ ...prev, role: e.target.value }))}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="טלפון"
+                      value={newContact.phone}
+                      onChange={(e) => setNewContact(prev => ({ ...prev, phone: e.target.value }))}
+                    />
+                    <Input
+                      placeholder="אימייל"
+                      type="email"
+                      value={newContact.email}
+                      onChange={(e) => setNewContact(prev => ({ ...prev, email: e.target.value }))}
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddContact(false)}>ביטול</Button>
+                    <Button type="button" size="sm" onClick={handleAddContact} disabled={addContactMutation.isPending}>
+                      {addContactMutation.isPending ? "מוסיף..." : "הוסף"}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {clientContacts && clientContacts.length > 0 && (
+                <div className="space-y-2">
+                  {clientContacts.map((contact: any) => (
+                    <div key={contact.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 text-sm">
+                      <div className="flex-1 grid grid-cols-4 gap-2">
+                        <span className="font-medium">{contact.contact_name}</span>
+                        <span className="text-muted-foreground">{contact.role || "—"}</span>
+                        <span className="text-muted-foreground">{contact.phone || "—"}</span>
+                        <span className="text-muted-foreground">{contact.email || "—"}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => deleteContactMutation.mutate(contact.id)}
+                        className="hover:bg-destructive/20 rounded-full p-1"
+                      >
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <FormField
-              control={form.control}
               name="folder_link"
               render={({ field }) => (
                 <FormItem>
@@ -770,9 +935,38 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                     />
                   </div>
 
-                  {!client.email && (
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3 text-sm text-yellow-800 dark:text-yellow-200">
-                      ללקוח לא מוגדר אימייל - לא תישלח הזמנה במייל
+                  {/* Attendee selection */}
+                  {allContactEmails.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        שלח זימון ל:
+                      </label>
+                      <div className="space-y-1.5">
+                        {allContactEmails.map((contact) => (
+                          <label key={contact.email} className="flex items-center gap-2 p-2 rounded-md bg-muted/50 cursor-pointer text-sm">
+                            <Checkbox
+                              checked={selectedMeetingEmails.includes(contact.email)}
+                              onCheckedChange={(checked) => {
+                                setSelectedMeetingEmails(prev =>
+                                  checked
+                                    ? [...prev, contact.email]
+                                    : prev.filter(e => e !== contact.email)
+                                );
+                              }}
+                            />
+                            <span className="font-medium">{contact.name}</span>
+                            <span className="text-muted-foreground">({contact.source})</span>
+                            <span className="text-muted-foreground mr-auto">{contact.email}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {allContactEmails.length === 0 && (
+                    <div className="bg-muted/50 border rounded-lg p-3 text-sm text-muted-foreground">
+                      אין אנשי קשר עם אימייל — הזימון לא יישלח במייל
                     </div>
                   )}
 
@@ -801,7 +995,7 @@ export function EditClientDialog({ client, open, onOpenChange }: EditClientDialo
                     ) : (
                       <>
                         <CalendarIcon className="ml-2 h-4 w-4" />
-                        {client.email ? "קבע פגישה ושלח הזמנה" : "קבע פגישה"}
+                        {selectedMeetingEmails.length > 0 ? `קבע פגישה ושלח זימון ל-${selectedMeetingEmails.length} אנשי קשר` : "קבע פגישה"}
                       </>
                     )}
                   </Button>

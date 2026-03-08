@@ -846,6 +846,57 @@ export type Database = {
           },
         ]
       }
+      client_contacts: {
+        Row: {
+          client_id: string
+          contact_name: string
+          created_at: string | null
+          email: string | null
+          id: string
+          is_primary: boolean | null
+          phone: string | null
+          role: string | null
+          tenant_id: string
+        }
+        Insert: {
+          client_id: string
+          contact_name: string
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          is_primary?: boolean | null
+          phone?: string | null
+          role?: string | null
+          tenant_id: string
+        }
+        Update: {
+          client_id?: string
+          contact_name?: string
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          is_primary?: boolean | null
+          phone?: string | null
+          role?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_contacts_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "client_contacts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       client_onboarding: {
         Row: {
           agency_id: string
