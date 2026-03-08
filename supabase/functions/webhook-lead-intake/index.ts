@@ -340,13 +340,36 @@ Deno.serve(async (req) => {
       
       // First try to find by phone
       if (normalizedPhone) {
+        // Build possible phone variants for DB-level filtering
+        const phoneVariants = [
+          payload.phone,                                    // original
+          normalizedPhone,                                  // stripped
+          normalizedPhone.replace(/^972/, '0'),             // local format
+          '+' + normalizedPhone,                            // with +
+          '+972' + normalizedPhone.replace(/^972/, ''),     // international
+        ].filter(Boolean) as string[];
+        const uniqueVariants = [...new Set(phoneVariants)];
+
         const { data: leadsByPhone } = await supabase
           .from('leads')
           .select('*')
-          .eq('tenant_id', tenantId);
+          .eq('tenant_id', tenantId)
+          .in('phone', uniqueVariants)
+          .limit(1);
         
-        // Check with normalized phone comparison
-        existingLead = leadsByPhone?.find(l => normalizePhone(l.phone) === normalizedPhone) || null;
+        existingLead = leadsByPhone?.[0] || null;
+
+        // If not found by exact variants, do a broader but limited search
+        if (!existingLead) {
+          const { data: recentLeads } = await supabase
+            .from('leads')
+            .select('*')
+            .eq('tenant_id', tenantId)
+            .not('phone', 'is', null)
+            .order('created_at', { ascending: false })
+            .limit(500);
+          existingLead = recentLeads?.find(l => normalizePhone(l.phone) === normalizedPhone) || null;
+        }
         
         if (existingLead) {
           console.log(`📌 Found existing lead by phone: ${existingLead.id} (${existingLead.company_name})`);
@@ -614,40 +637,36 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Trigger lead_created automation
+    // Fire-and-forget automation trigger (don't await, don't block response)
     if (tenantId) {
-      try {
-        const automationResponse = await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseKey}`,
+      const automationAbort = new AbortController();
+      setTimeout(() => automationAbort.abort(), 5000); // 5s max
+      fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify({
+          trigger_type: 'lead_created',
+          data: {
+            id: lead.id,
+            lead_id: lead.id,
+            company_name: lead.company_name,
+            contact_name: lead.contact_name,
+            phone: lead.phone,
+            email: lead.email,
+            status: lead.status,
+            source: lead.source,
+            agency_id: lead.agency_id,
           },
-          body: JSON.stringify({
-            trigger_type: 'lead_created',
-            data: {
-              id: lead.id,
-              lead_id: lead.id,
-              company_name: lead.company_name,
-              contact_name: lead.contact_name,
-              phone: lead.phone,
-              email: lead.email,
-              status: lead.status,
-              source: lead.source,
-              agency_id: lead.agency_id,
-            },
-            tenant_id: tenantId,
-          }),
-        });
-        
-        if (automationResponse.ok) {
-          console.log('✅ lead_created automation triggered successfully');
-        } else {
-          console.error('⚠️ Failed to trigger automation:', await automationResponse.text());
-        }
-      } catch (automationError) {
-        console.error('⚠️ Error triggering lead_created automation:', automationError);
-      }
+          tenant_id: tenantId,
+        }),
+        signal: automationAbort.signal,
+      }).then(r => {
+        if (r.ok) console.log('✅ lead_created automation triggered');
+        else r.text().then(t => console.error('⚠️ Automation trigger failed:', t));
+      }).catch(e => console.error('⚠️ Automation trigger error:', e.message));
     }
 
     return new Response(
