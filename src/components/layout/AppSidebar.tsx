@@ -311,6 +311,7 @@ export function AppSidebar() {
       'dynamic-tables': 'dynamic_tables',
       'recordings': 'recordings',
       'team-chat': 'team_chat',
+      'signatures': 'signatures',
       'site_analytics': 'clients', // אנליטיקס אתרים - מי שיש לו גישה ללקוחות יכול לראות
       'rank_tracking': 'clients', // מעקב מיקומים - מי שיש לו גישה ללקוחות יכול לראות
     };
