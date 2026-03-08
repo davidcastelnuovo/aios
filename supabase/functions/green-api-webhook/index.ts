@@ -1063,8 +1063,8 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Trigger automations for incoming group WhatsApp messages
-      if (isIncoming) {
+      // Trigger automations for incoming/outgoing group WhatsApp messages
+      if (isIncoming || isOutgoing) {
         try {
           console.log('🤖 Triggering automations for incoming group WhatsApp message...');
           
@@ -1389,8 +1389,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Trigger automations for incoming WhatsApp messages
-    if (isIncoming) {
+    // Trigger automations for incoming/outgoing WhatsApp messages
+    if (isIncoming || isOutgoing) {
       try {
         console.log('🤖 Triggering automations for incoming WhatsApp message...');
         
