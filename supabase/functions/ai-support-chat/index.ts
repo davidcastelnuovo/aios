@@ -706,6 +706,26 @@ const tools = [
   {
     type: 'function',
     function: {
+      name: 'update_task',
+      description: 'עדכון משימה קיימת לפי מזהה. כולל עדכון כותרת/תאריך/שעה/עדיפות/הערות/סטטוס וסנכרון ליומן כשצריך.',
+      parameters: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'string', description: 'מזהה המשימה (UUID)' },
+          title: { type: 'string', description: 'כותרת חדשה למשימה' },
+          priority: { type: 'integer', description: 'עדיפות 1-10', minimum: 1, maximum: 10 },
+          due_date: { type: 'string', format: 'date', description: 'תאריך יעד בפורמט YYYY-MM-DD' },
+          due_time: { type: 'string', description: 'שעת יעד בפורמט HH:MM' },
+          notes: { type: 'string', description: 'הערות למשימה' },
+          status: { type: 'string', enum: ['open', 'in_progress', 'completed', 'cancelled'], description: 'סטטוס חדש (אופציונלי)' },
+        },
+        required: ['task_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'update_task_status',
       description: 'עדכון סטטוס משימה קיימת',
       parameters: {
