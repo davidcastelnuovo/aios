@@ -420,7 +420,7 @@ export default function FlowEditor() {
               <FlowNode
                 node={node}
                 isSelected={selectedNodeId === node.id}
-                onClick={() => setSelectedNodeId(node.id)}
+                onClick={() => handleNodeClick(node.id)}
                 onDelete={() => deleteNode(node.id)}
                 isDragging={dragNodeId === node.id}
               />
