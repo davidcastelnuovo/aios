@@ -7,10 +7,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Bot, Send, Plus, Loader2, Wrench, Menu } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Bot, Send, Plus, Loader2, Wrench, Menu, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useIsMobile } from "@/hooks/use-mobile";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   role: 'user' | 'assistant' | 'tool_call';
@@ -36,6 +38,7 @@ export default function AISupport() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [deleteConvId, setDeleteConvId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { userId } = useCurrentUser();
@@ -52,7 +55,6 @@ export default function AISupport() {
 
       if (error) throw error;
       
-      // Transform data to match Conversation type
       return (data || []).map(conv => ({
         id: conv.id,
         title: conv.title || '',
@@ -84,6 +86,25 @@ export default function AISupport() {
     setStreamingMessage("");
     setInput("");
     setSheetOpen(false);
+  };
+
+  const deleteConversation = async (convId: string) => {
+    try {
+      const { error } = await supabase
+        .from('ai_conversations')
+        .delete()
+        .eq('id', convId);
+      if (error) throw error;
+
+      if (currentConversationId === convId) {
+        startNewConversation();
+      }
+      queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
+      toast({ title: "השיחה נמחקה" });
+    } catch (err: any) {
+      toast({ title: "שגיאה", description: err.message, variant: "destructive" });
+    }
+    setDeleteConvId(null);
   };
 
   const sendMessage = async () => {
@@ -170,6 +191,9 @@ export default function AISupport() {
             } else if (parsed.type === 'conversation_id') {
               newConversationId = parsed.id;
               setCurrentConversationId(parsed.id);
+            } else if (parsed.type === 'title_update') {
+              // Title was auto-generated, refresh conversation list
+              queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
             } else if (parsed.type === 'done') {
               if (assistantContent) {
                 setMessages(prev => [...prev, {
@@ -181,7 +205,6 @@ export default function AISupport() {
               }
               setIsStreaming(false);
               
-              // Refresh conversations list
               queryClient.invalidateQueries({ queryKey: ['ai-conversations'] });
             }
           } catch (e) {
@@ -208,7 +231,7 @@ export default function AISupport() {
   };
 
   // Sidebar content component for reuse
-  const SidebarContent = () => (
+  const SidebarContentComponent = () => (
     <>
       <div className="p-4 border-b border-border">
         <Button 
@@ -233,22 +256,37 @@ export default function AISupport() {
         ) : (
           <div className="p-2 space-y-1">
             {conversations.map((conv) => (
-              <button
+              <div
                 key={conv.id}
-                onClick={() => loadConversation(conv)}
-                className={`w-full text-right p-3 rounded-md transition-colors ${
+                className={`group relative flex items-center rounded-md transition-colors ${
                   currentConversationId === conv.id
                     ? 'bg-primary/10 text-primary'
                     : 'hover:bg-muted'
                 }`}
               >
-                <div className="font-medium text-sm truncate max-w-[180px]">
-                  {(conv.title || 'שיחה חדשה').split(' ').slice(0, 3).join(' ')}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {new Date(conv.created_at).toLocaleDateString('he-IL')}
-                </div>
-              </button>
+                <button
+                  onClick={() => loadConversation(conv)}
+                  className="flex-1 text-right p-3 min-w-0"
+                >
+                  <div className="font-medium text-sm truncate">
+                    {conv.title || 'שיחה חדשה'}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {new Date(conv.created_at).toLocaleDateString('he-IL')}
+                  </div>
+                </button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 ml-1 mr-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDeleteConvId(conv.id);
+                  }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             ))}
           </div>
         )}
@@ -258,10 +296,31 @@ export default function AISupport() {
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-background" dir="rtl">
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={!!deleteConvId} onOpenChange={(open) => !open && setDeleteConvId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>מחיקת שיחה</AlertDialogTitle>
+            <AlertDialogDescription>
+              האם אתה בטוח שברצונך למחוק את השיחה? פעולה זו לא ניתנת לביטול.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteConvId && deleteConversation(deleteConvId)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              מחק
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Desktop Sidebar */}
       {!isMobile && (
         <div className="w-64 border-l border-border bg-card flex flex-col">
-          <SidebarContent />
+          <SidebarContentComponent />
         </div>
       )}
 
@@ -282,7 +341,7 @@ export default function AISupport() {
                     <SheetTitle>שיחות</SheetTitle>
                   </SheetHeader>
                   <div className="flex flex-col h-[calc(100vh-80px)]">
-                    <SidebarContent />
+                    <SidebarContentComponent />
                   </div>
                 </SheetContent>
               </Sheet>
@@ -296,6 +355,11 @@ export default function AISupport() {
                 אני כאן לעזור לך עם המערכת
               </p>
             </div>
+            {isMobile && (
+              <Button variant="outline" size="icon" className="h-10 w-10 flex-shrink-0" onClick={startNewConversation}>
+                <Plus className="h-5 w-5" />
+              </Button>
+            )}
           </div>
         </div>
 
@@ -345,7 +409,9 @@ export default function AISupport() {
                   ) : (
                     <div className="flex justify-start">
                       <Card className="p-2 md:p-3 max-w-[85%] md:max-w-[80%] bg-card border">
-                        <p className="whitespace-pre-wrap text-sm md:text-base">{msg.content}</p>
+                        <div className="prose prose-sm dark:prose-invert max-w-none text-sm md:text-base">
+                          <ReactMarkdown>{msg.content || ''}</ReactMarkdown>
+                        </div>
                       </Card>
                     </div>
                   )}
@@ -355,7 +421,9 @@ export default function AISupport() {
               {streamingMessage && (
                 <div className="flex justify-start">
                   <Card className="p-2 md:p-3 max-w-[85%] md:max-w-[80%] bg-card border">
-                    <p className="whitespace-pre-wrap text-sm md:text-base">{streamingMessage}</p>
+                    <div className="prose prose-sm dark:prose-invert max-w-none text-sm md:text-base">
+                      <ReactMarkdown>{streamingMessage}</ReactMarkdown>
+                    </div>
                     <Loader2 className="h-3 w-3 animate-spin inline-block mr-1" />
                   </Card>
                 </div>
