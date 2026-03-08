@@ -132,7 +132,7 @@ export default function Gmail() {
   });
 
   // Allowed labels — dedicated query key to avoid cache collision with GmailSettings
-  const { data: allowedLabels = [] } = useQuery({
+  const { data: allowedLabels = [], isSuccess: allowedLabelsLoaded } = useQuery({
     queryKey: ['gmail-allowed-label-ids', userId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -229,7 +229,7 @@ export default function Gmail() {
       if (error) throw error;
       return data as { messages: EmailMessage[]; nextPageToken?: string; resultSizeEstimate?: number };
     },
-    enabled: !!connectionStatus?.connected,
+    enabled: !!connectionStatus?.connected && allowedLabelsLoaded,
   });
 
   // Build effective category map: DB entries + rule-based auto-matching
