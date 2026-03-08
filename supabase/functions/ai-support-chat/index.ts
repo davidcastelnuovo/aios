@@ -84,6 +84,40 @@ interface ToolCall {
   args: Record<string, any>;
 }
 
+function formatDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateString(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function normalizeTimeString(timeValue: string | null | undefined, fallback = '09:00'): string {
+  if (!timeValue) return fallback;
+  const match = timeValue.match(/^(\d{2}):(\d{2})/);
+  if (!match) return fallback;
+  return `${match[1]}:${match[2]}`;
+}
+
+function buildLocalDateTimeRange(dateStr: string, timeStr: string, durationMinutes = 30) {
+  const safeTime = normalizeTimeString(timeStr);
+  const [hour, minute] = safeTime.split(':').map(Number);
+
+  const start = parseDateString(dateStr);
+  start.setHours(hour, minute, 0, 0);
+
+  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+
+  const startLocalDateTime = `${formatDateString(start)}T${String(start.getHours()).padStart(2, '0')}:${String(start.getMinutes()).padStart(2, '0')}:00`;
+  const endLocalDateTime = `${formatDateString(end)}T${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}:00`;
+
+  return { startLocalDateTime, endLocalDateTime, safeTime };
+}
+
 async function executeTool(
   toolCall: ToolCall, 
   supabaseClient: any, 
