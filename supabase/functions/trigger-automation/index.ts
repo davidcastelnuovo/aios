@@ -541,11 +541,9 @@ Deno.serve(async (req) => {
 // Helper function to check conditions
 function checkConditions(conditions: any, data: any, triggerType?: string): boolean {
   try {
-    // Simple condition checking - can be extended
     for (const [key, value] of Object.entries(conditions)) {
-      // Special handling for new_status - only relevant for lead_status_changed trigger
+      // Special handling for new_status - only relevant for status change triggers
       if (key === 'new_status') {
-        // Skip new_status condition for non-status triggers (like meeting_created)
         if (triggerType && triggerType !== 'lead_status_changed' && triggerType !== 'task_status_changed') {
           console.log(`⏭️ Skipping new_status condition for trigger: ${triggerType}`);
           continue;
@@ -554,7 +552,42 @@ function checkConditions(conditions: any, data: any, triggerType?: string): bool
         if (dataStatus !== value) {
           return false;
         }
-      } else if (data[key] !== value) {
+      }
+      // WhatsApp message received trigger conditions
+      else if (triggerType === 'whatsapp_message_received') {
+        if (key === 'source_filter') {
+          // source_filter is handled via group_id/tag_id, skip it
+          continue;
+        }
+        if (key === 'group_id' && value) {
+          if (data.group_id !== value) {
+            console.log(`⏭️ Group ID mismatch: expected ${value}, got ${data.group_id}`);
+            return false;
+          }
+        }
+        if (key === 'keyword' && value) {
+          const keyword = String(value).toLowerCase();
+          const msgText = (data.message_text || '').toLowerCase();
+          if (!msgText.includes(keyword)) {
+            console.log(`⏭️ Keyword "${value}" not found in message`);
+            return false;
+          }
+        }
+        if (key === 'tag_id' && value) {
+          const contactTags = data.tags || [];
+          if (!contactTags.includes(value)) {
+            console.log(`⏭️ Tag ${value} not found on contact. Contact tags: ${contactTags}`);
+            return false;
+          }
+        }
+        if (key === 'connection_user_id' && value) {
+          if (data.connection_user_id !== value) {
+            console.log(`⏭️ Connection user ID mismatch: expected ${value}, got ${data.connection_user_id}`);
+            return false;
+          }
+        }
+      }
+      else if (data[key] !== value) {
         return false;
       }
     }

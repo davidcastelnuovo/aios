@@ -1063,6 +1063,63 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Trigger automations for incoming group WhatsApp messages
+      if (isIncoming) {
+        try {
+          console.log('🤖 Triggering automations for incoming group WhatsApp message...');
+          
+          // Fetch group tags
+          let groupTags: string[] = [];
+          const { data: groupTagsData } = await supabaseClient
+            .from('chat_contact_tags')
+            .select('tag_id')
+            .eq('tenant_id', tenantId)
+            .eq('group_id', groupId);
+          if (groupTagsData) {
+            groupTags = groupTagsData.map((t: any) => t.tag_id);
+          }
+
+          // Fetch group name
+          const { data: groupRecord } = await supabaseClient
+            .from('whatsapp_groups')
+            .select('group_name, group_chat_id')
+            .eq('id', groupId)
+            .single();
+
+          const automationPayload = {
+            trigger_type: 'whatsapp_message_received',
+            tenant_id: tenantId,
+            data: {
+              sender_name: senderData.senderName || null,
+              sender_phone: phoneNumber,
+              message_text: messageText,
+              group_id: groupId,
+              group_name: groupRecord?.group_name || null,
+              group_chat_id: groupRecord?.group_chat_id || null,
+              contact_type: 'group',
+              contact_id: groupId,
+              contact_name: groupRecord?.group_name || null,
+              connection_user_id: connectionUserId,
+              tags: groupTags,
+            },
+          };
+
+          const triggerUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/trigger-automation`;
+          fetch(triggerUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+            },
+            body: JSON.stringify(automationPayload),
+          }).catch(err => console.error('❌ Error triggering group automation:', err));
+          
+          console.log('✅ Group automation trigger sent (fire-and-forget)');
+        } catch (automationError) {
+          console.error('❌ Error preparing group automation trigger:', automationError);
+        }
+      }
+
       return new Response(JSON.stringify({ 
         success: true,
         contactType: 'group',
@@ -1329,6 +1386,72 @@ Deno.serve(async (req) => {
         }
       } else {
         console.log('ℹ️ No unread tag found in tenant');
+      }
+    }
+
+    // Trigger automations for incoming WhatsApp messages
+    if (isIncoming) {
+      try {
+        console.log('🤖 Triggering automations for incoming WhatsApp message...');
+        
+        // Fetch contact tags for the sender
+        let contactTags: string[] = [];
+        const tagQuery = supabaseClient
+          .from('chat_contact_tags')
+          .select('tag_id')
+          .eq('tenant_id', tenantId);
+        
+        if (clientId) {
+          tagQuery.eq('client_id', clientId);
+        } else if (leadId) {
+          tagQuery.eq('lead_id', leadId);
+        } else {
+          tagQuery.eq('sender_phone', phoneNumber);
+        }
+        
+        const { data: contactTagsData } = await tagQuery;
+        if (contactTagsData) {
+          contactTags = contactTagsData.map((t: any) => t.tag_id);
+        }
+
+        // Determine contact name
+        const contactName = clientId
+          ? (await supabaseClient.from('clients').select('name').eq('id', clientId).single())?.data?.name
+          : leadId
+          ? (await supabaseClient.from('leads').select('contact_name').eq('id', leadId).single())?.data?.contact_name
+          : senderData.senderName || phoneNumber;
+
+        const automationPayload = {
+          trigger_type: 'whatsapp_message_received',
+          tenant_id: tenantId,
+          data: {
+            sender_name: senderData.senderName || null,
+            sender_phone: phoneNumber,
+            message_text: messageText,
+            group_id: null,
+            group_name: null,
+            group_chat_id: null,
+            contact_type: clientId ? 'client' : (leadId ? 'lead' : 'unknown'),
+            contact_id: clientId || leadId || null,
+            contact_name: contactName || null,
+            connection_user_id: connectionUserId,
+            tags: contactTags,
+          },
+        };
+
+        const triggerUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/trigger-automation`;
+        fetch(triggerUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify(automationPayload),
+        }).catch(err => console.error('❌ Error triggering automation:', err));
+        
+        console.log('✅ Automation trigger sent (fire-and-forget)');
+      } catch (automationError) {
+        console.error('❌ Error preparing automation trigger:', automationError);
       }
     }
 

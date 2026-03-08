@@ -35,6 +35,7 @@ const TRIGGER_OPTIONS = [
   { value: "task_overdue", label: "משימה באיחור" },
   { value: "inbound_webhook_task", label: "Webhook נכנס" },
   { value: "manual_command", label: "פקודה ידנית (צ'אט)" },
+  { value: "whatsapp_message_received", label: "הודעת WhatsApp נכנסת" },
 ];
 
 const ACTION_OPTIONS = [
@@ -112,6 +113,17 @@ function getAvailableFields(triggerType: string | undefined, triggerConfig?: Rec
       fields = [
         { key: "command_text", label: "טקסט הפקודה" },
         { key: "user_name", label: "שם המשתמש" },
+      ];
+      break;
+    case "whatsapp_message_received":
+      fields = [
+        { key: "sender_name", label: "שם השולח" },
+        { key: "sender_phone", label: "טלפון השולח" },
+        { key: "message_text", label: "תוכן ההודעה" },
+        { key: "group_name", label: "שם הקבוצה" },
+        { key: "contact_type", label: "סוג איש קשר" },
+        { key: "contact_id", label: "מזהה איש קשר" },
+        { key: "contact_name", label: "שם איש קשר" },
       ];
       break;
     default:
@@ -258,6 +270,15 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
               configuration={node.configuration}
               onConfigChange={handleConfigChange}
               onBulkConfigChange={handleBulkConfigChange}
+            />
+          )}
+
+          {/* WhatsApp message received trigger config */}
+          {node.step_type === "trigger" && node.action_type === "whatsapp_message_received" && (
+            <WhatsAppTriggerConfig
+              tenantId={tenantId}
+              configuration={node.configuration}
+              onConfigChange={handleConfigChange}
             />
           )}
 
@@ -1078,6 +1099,177 @@ function CreateAgentDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Sub-component for WhatsApp message received trigger configuration
+function WhatsAppTriggerConfig({
+  tenantId,
+  configuration,
+  onConfigChange,
+}: {
+  tenantId: string | undefined;
+  configuration: Record<string, any>;
+  onConfigChange: (key: string, value: any) => void;
+}) {
+  const sourceFilter = configuration?.source_filter || "all";
+
+  // Fetch WhatsApp groups
+  const { data: groups } = useQuery({
+    queryKey: ["whatsapp-groups-for-trigger", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("whatsapp_groups")
+        .select("id, group_name, group_chat_id")
+        .eq("tenant_id", tenantId)
+        .order("group_name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  // Fetch chat tags
+  const { data: tags } = useQuery({
+    queryKey: ["chat-tags-for-trigger", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("chat_tags")
+        .select("id, name, color")
+        .eq("tenant_id", tenantId)
+        .order("sort_order");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  // Fetch Green API integrations
+  const { data: greenApiIntegrations } = useQuery({
+    queryKey: ["green-api-integrations-for-trigger", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("tenant_integrations")
+        .select("id, settings, is_active, user_id, instance_id")
+        .eq("tenant_id", tenantId)
+        .eq("integration_type", "green_api")
+        .eq("is_active", true);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  return (
+    <div className="space-y-4">
+      {/* Source filter */}
+      <div className="space-y-2">
+        <Label className="text-right block">מקור הודעות</Label>
+        <Select
+          value={sourceFilter}
+          onValueChange={(v) => onConfigChange("source_filter", v)}
+        >
+          <SelectTrigger className="text-right">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">כל ההודעות</SelectItem>
+            <SelectItem value="group">קבוצה ספציפית</SelectItem>
+            <SelectItem value="tagged_contact">איש קשר מתויג</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Group selector */}
+      {sourceFilter === "group" && (
+        <div className="space-y-2">
+          <Label className="text-right block">בחר קבוצה</Label>
+          <Select
+            value={configuration?.group_id || ""}
+            onValueChange={(v) => onConfigChange("group_id", v)}
+          >
+            <SelectTrigger className="text-right">
+              <SelectValue placeholder="בחר קבוצה..." />
+            </SelectTrigger>
+            <SelectContent>
+              {(groups || []).map((g) => (
+                <SelectItem key={g.id} value={g.id}>
+                  {g.group_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {/* Tag selector */}
+      {sourceFilter === "tagged_contact" && (
+        <div className="space-y-2">
+          <Label className="text-right block">בחר טאג</Label>
+          <Select
+            value={configuration?.tag_id || ""}
+            onValueChange={(v) => onConfigChange("tag_id", v)}
+          >
+            <SelectTrigger className="text-right">
+              <SelectValue placeholder="בחר טאג..." />
+            </SelectTrigger>
+            <SelectContent>
+              {(tags || []).map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="inline-block w-3 h-3 rounded-full"
+                      style={{ backgroundColor: t.color }}
+                    />
+                    {t.name}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {/* Keyword filter */}
+      <div className="space-y-2">
+        <Label className="text-right block">מילת מפתח (אופציונלי)</Label>
+        <Input
+          value={configuration?.keyword || ""}
+          onChange={(e) => onConfigChange("keyword", e.target.value)}
+          placeholder="סינון לפי מילה בהודעה..."
+          className="text-right"
+        />
+        <p className="text-xs text-muted-foreground text-right">
+          רק הודעות שמכילות את המילה יפעילו את האוטומציה
+        </p>
+      </div>
+
+      {/* Green API connection selector */}
+      {greenApiIntegrations && greenApiIntegrations.length > 1 && (
+        <div className="space-y-2">
+          <Label className="text-right block">חיבור Green API</Label>
+          <Select
+            value={configuration?.connection_user_id || "all"}
+            onValueChange={(v) => onConfigChange("connection_user_id", v === "all" ? "" : v)}
+          >
+            <SelectTrigger className="text-right">
+              <SelectValue placeholder="כל החיבורים" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">כל החיבורים</SelectItem>
+              {greenApiIntegrations.map((int) => (
+                <SelectItem key={int.id} value={int.user_id}>
+                  {(int.settings as any)?.display_name || `חיבור ${int.instance_id}`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+    </div>
   );
 }
 
