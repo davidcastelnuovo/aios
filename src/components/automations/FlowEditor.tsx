@@ -39,6 +39,7 @@ export default function FlowEditor() {
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [dragNodeId, setDragNodeId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const wasDraggingRef = useRef(false);
   const [showManualTrigger, setShowManualTrigger] = useState(false);
   const [showTestWithLead, setShowTestWithLead] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
@@ -247,6 +248,7 @@ export default function FlowEditor() {
       setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
     }
     if (dragNodeId) {
+      wasDraggingRef.current = true;
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
       const x = (e.clientX - rect.left - pan.x) / zoom - dragOffset.x;
@@ -262,12 +264,19 @@ export default function FlowEditor() {
 
   const handleNodeMouseDown = (e: React.MouseEvent, node: FlowNodeData) => {
     e.stopPropagation();
+    wasDraggingRef.current = false;
     const rect = canvasRef.current?.getBoundingClientRect();
     if (!rect) return;
     const mouseX = (e.clientX - rect.left - pan.x) / zoom;
     const mouseY = (e.clientY - rect.top - pan.y) / zoom;
     setDragNodeId(node.id);
     setDragOffset({ x: mouseX - node.position_x, y: mouseY - node.position_y });
+  };
+
+  const handleNodeClick = (nodeId: string) => {
+    if (!wasDraggingRef.current) {
+      setSelectedNodeId(nodeId);
+    }
   };
 
   // Build connections
@@ -411,7 +420,7 @@ export default function FlowEditor() {
               <FlowNode
                 node={node}
                 isSelected={selectedNodeId === node.id}
-                onClick={() => setSelectedNodeId(node.id)}
+                onClick={() => handleNodeClick(node.id)}
                 onDelete={() => deleteNode(node.id)}
                 isDragging={dragNodeId === node.id}
               />
