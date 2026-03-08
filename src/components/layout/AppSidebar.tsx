@@ -107,6 +107,7 @@ const iconMap: Record<string, any> = {
   FolderKanban: Table,
   Database: Table,
   Layers: Table,
+  FileSignature: PenLine,
 };
 
 export function AppSidebar() {
