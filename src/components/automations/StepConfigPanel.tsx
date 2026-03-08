@@ -1738,3 +1738,184 @@ function FacebookFormSelectionDialog({
     </Dialog>
   );
 }
+
+// Sub-component for Create Task action configuration
+function CreateTaskActionConfig({
+  tenantId,
+  configuration,
+  availableFields,
+  onConfigChange,
+}: {
+  tenantId: string | undefined;
+  configuration: Record<string, any>;
+  availableFields: { key: string; label: string }[];
+  onConfigChange: (key: string, value: any) => void;
+}) {
+  const titleRef = useRef<HTMLInputElement>(null);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const [activeField, setActiveField] = useState<"title" | "notes">("title");
+
+  const { data: agencies } = useQuery({
+    queryKey: ["agencies-for-task-config", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("agencies")
+        .select("id, name")
+        .eq("tenant_id", tenantId)
+        .eq("status", "active")
+        .order("name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  const { data: campaigners } = useQuery({
+    queryKey: ["campaigners-for-task-config", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      const { data, error } = await supabase
+        .from("campaigners")
+        .select("id, full_name")
+        .eq("tenant_id", tenantId)
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!tenantId,
+  });
+
+  const insertVariable = (fieldKey: string) => {
+    const variable = `{{${fieldKey}}}`;
+    if (activeField === "title") {
+      const el = titleRef.current;
+      const currentValue = configuration?.task_title_template || "";
+      const pos = el?.selectionStart ?? currentValue.length;
+      const newValue = currentValue.slice(0, pos) + variable + currentValue.slice(pos);
+      onConfigChange("task_title_template", newValue);
+    } else {
+      const el = notesRef.current;
+      const currentValue = configuration?.task_notes_template || "";
+      const pos = el?.selectionStart ?? currentValue.length;
+      const newValue = currentValue.slice(0, pos) + variable + currentValue.slice(pos);
+      onConfigChange("task_notes_template", newValue);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {availableFields.length > 0 && (
+        <div className="space-y-2">
+          <Label className="text-right block text-xs text-muted-foreground">הכנס משתנה מהטריגר:</Label>
+          <div className="flex flex-wrap gap-1 justify-end">
+            {availableFields.map((field) => (
+              <Badge
+                key={field.key}
+                variant="outline"
+                className="cursor-pointer hover:bg-accent text-xs"
+                onClick={() => insertVariable(field.key)}
+              >
+                {field.label}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label className="text-right block">כותרת משימה</Label>
+        <Input
+          ref={titleRef}
+          value={configuration?.task_title_template || ""}
+          onChange={(e) => onConfigChange("task_title_template", e.target.value)}
+          onFocus={() => setActiveField("title")}
+          placeholder="למשל: טיפול בליד {{contact_name}}"
+          className="text-right"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-right block">הערות</Label>
+        <Textarea
+          ref={notesRef}
+          value={configuration?.task_notes_template || ""}
+          onChange={(e) => onConfigChange("task_notes_template", e.target.value)}
+          onFocus={() => setActiveField("notes")}
+          placeholder="למשל: ליצור קשר עם {{contact_name}} בטלפון {{phone}}"
+          className="text-right min-h-[80px]"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-right block">עדיפות (1-10)</Label>
+        <Select
+          value={String(configuration?.task_priority || "")}
+          onValueChange={(v) => onConfigChange("task_priority", Number(v))}
+        >
+          <SelectTrigger className="text-right">
+            <SelectValue placeholder="בחר עדיפות..." />
+          </SelectTrigger>
+          <SelectContent>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+              <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-right block">ימים לדד-ליין</Label>
+        <Input
+          type="number"
+          min={0}
+          value={configuration?.task_due_days ?? ""}
+          onChange={(e) => onConfigChange("task_due_days", e.target.value ? Number(e.target.value) : null)}
+          placeholder="למשל: 3 (ימים מרגע היצירה)"
+          className="text-right"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-right block">סוכנות ברירת מחדל</Label>
+        <Select
+          value={configuration?.default_agency_id || ""}
+          onValueChange={(v) => onConfigChange("default_agency_id", v)}
+        >
+          <SelectTrigger className="text-right">
+            <SelectValue placeholder="בחר סוכנות..." />
+          </SelectTrigger>
+          <SelectContent>
+            {agencies?.map((a) => (
+              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label className="text-right block">קמפיינר ברירת מחדל</Label>
+        <Select
+          value={configuration?.default_campaigner_id || ""}
+          onValueChange={(v) => onConfigChange("default_campaigner_id", v)}
+        >
+          <SelectTrigger className="text-right">
+            <SelectValue placeholder="בחר קמפיינר..." />
+          </SelectTrigger>
+          <SelectContent>
+            {campaigners?.map((c) => (
+              <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="rounded-lg border border-dashed p-3 text-right">
+        <p className="text-xs text-muted-foreground">
+          💡 שיוך ליד/לקוח מתבצע אוטומטית מנתוני הטריגר. אם הטריגר מכיל ליד או לקוח, המשימה תשויך אליו.
+        </p>
+      </div>
+    </div>
+  );
+}
