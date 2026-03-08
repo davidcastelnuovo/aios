@@ -525,6 +525,7 @@ Deno.serve(async (req) => {
                   console.log(`Unknown action_type: ${step.action_type}, step_type: ${step.step_type}, skipping`)
                 }
 
+                actionCount++
                 stepResults.push({ step_id: step.id, action_type: effectiveActionType, success: true, response: stepResponse })
               } catch (stepErr: any) {
                 console.error(`Error in flow step ${step.id}:`, stepErr)
