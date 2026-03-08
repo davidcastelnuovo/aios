@@ -18,8 +18,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { tenantSlug } = useParams();
   const navigate = useNavigate();
-  const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
+  const [currentTenantId, setCurrentTenantId] = useState<string | null>(() => localStorage.getItem("selectedTenantId"));
   const [isActiveTenantSynced, setIsActiveTenantSynced] = useState(false);
+  const [isBootstrapTimedOut, setIsBootstrapTimedOut] = useState(false);
   const previousTenantIdRef = useRef<string | null>(null);
 
   // Get tenant by slug from URL
