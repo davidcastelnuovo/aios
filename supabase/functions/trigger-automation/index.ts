@@ -357,10 +357,16 @@ Deno.serve(async (req) => {
 
                     // Append output format instruction if specified
                     const outputFormat = stepConfig.output_format
+                    let agentTemperature: number | undefined = undefined
                     if (outputFormat === 'json') {
                       commandText += '\n\nחשוב: החזר את התשובה בפורמט JSON בלבד, ללא טקסט נוסף.'
+                      agentTemperature = 0.1
                     } else if (outputFormat === 'single_value') {
                       commandText += '\n\nחשוב: החזר ערך בודד בלבד, ללא הסברים או טקסט נוסף.'
+                      agentTemperature = 0.1
+                    } else if (outputFormat === 'single_reply') {
+                      commandText += '\n\nחשוב מאוד: החזר תשובה אחת ישירה בלבד, במשפט קצר, ללא רשימות, ללא חלופות, ללא הומור וללא ניסוחים כמו "הנה כמה אפשרויות".'
+                      agentTemperature = 0.1
                     }
 
                     const agentUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/run-ai-agent`
