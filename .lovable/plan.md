@@ -1,49 +1,24 @@
 
-מושלם, זיהיתי את הבעיה המדויקת ומה צריך לבנות כדי לסגור אותה בצורה יציבה.
 
-## מה קרה בפועל (Root Cause)
-ב־`/gmail` יש התנגשות cache של React Query:
-- ב־`Gmail.tsx` אותו query key מחזיר **מערך מחרוזות** (`label_id` בלבד).
-- ב־`GmailSettings.tsx` אותו query key מחזיר **אובייקטים מלאים** (`select *`).
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-שניהם משתמשים באותו key: `['gmail-allowed-labels', userId]`, ולכן לפעמים ה־Inbox מקבל אובייקטים במקום string IDs.
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-כתוצאה מזה בבקשת `gmail-api` נשלחים `labelIds` כאובייקטים (לא מחרוזות), וה־Edge function מסנן רק ערכי string — אז בפועל אין סינון תגיות ונכנסים “כל האימיילים” (כולל “לידים לקוחות”).
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-## תוכנית יישום
-1. להפריד query keys בין:
-   - allowed label IDs לשימוש Inbox
-   - allowed labels מלאים לשימוש Settings  
-   כך שלא תהיה זליגת טיפוסים בין מסכים.
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-2. להקשיח את `Gmail.tsx`:
-   - ליצור נירמול בטוח ל־`effectiveLabelIds` כך שתמיד יהיו `string[]` בלבד.
-   - להוסיף guard שמסנן ערכים לא תקינים לפני קריאה ל־`gmail-api`.
-   - לשמור queryKey של messages תלוי במערך IDs המנורמל בלבד.
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-3. להקשיח גם את `gmail-api` (defensive coding):
-   - ב־action `list`, לתמוך גם במקרה שמגיע אובייקט ולהפיק ממנו `label_id`/`id` אם קיים.
-   - כך גם אם UI ישלח בעתיד payload “מלוכלך”, עדיין יתקבל סינון תגיות תקין.
-
-4. עדכון invalidations:
-   - בכל שינוי בתגיות המורשות ב־Settings לבצע invalidate לשני keys הרלוונטיים (IDs + rows), כדי שה־Inbox יתעדכן מיידית.
-
-5. בדיקת נכונות (E2E):
-   - לוודא שב־Network הבקשה ל־`gmail-api` שולחת `labelIds` כמחרוזות בלבד.
-   - לוודא שבתצוגת “הכל” מופיעים רק אימיילים עם תגיות מורשות.
-   - לוודא שאימיילים עם “לידים לקוחות” לא מופיעים אם התגית לא מורשית.
-
-## הערה עסקית חשובה
-כרגע מוגדרות אצלך תגיות מורשות שכוללות גם `IMPORTANT`/`חשובים`. גם אחרי התיקון זה עדיין עשוי להכניס מיילים שאינם חשבוניות אם הם “חשובים”.  
-אם המטרה היא רק חשבוניות, ניישם גם שיפור קטן:
-- להציג אזהרה ב־Settings כשנבחרת תגית מערכת כללית (כמו IMPORTANT),
-- או לאפשר “מצב חשבוניות בלבד” שמסנן רק תגיות חשבונית שהוגדרו.
-
-## פרטי מימוש טכניים (למפתח)
-- קבצים עיקריים:
-  - `src/pages/Gmail.tsx`
-  - `src/pages/GmailSettings.tsx`
-  - `supabase/functions/gmail-api/index.ts`
-- אין צורך בשינוי סכימה/מיגרציה.
-- אין שינוי ב־RLS.
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 

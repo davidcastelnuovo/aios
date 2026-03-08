@@ -364,7 +364,7 @@ function AllowedLabelsSection({ tenantId, userId, isConnected }: { tenantId: str
 
   // Fetch saved allowed labels
   const { data: allowedLabels = [] } = useQuery({
-    queryKey: ['gmail-allowed-labels', userId],
+    queryKey: ['gmail-allowed-labels-full', userId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('gmail_allowed_labels')
@@ -414,7 +414,8 @@ function AllowedLabelsSection({ tenantId, userId, isConnected }: { tenantId: str
         });
       if (error) { toast.error('שגיאה בהוספת תגית'); return; }
     }
-    queryClient.invalidateQueries({ queryKey: ['gmail-allowed-labels'] });
+    queryClient.invalidateQueries({ queryKey: ['gmail-allowed-labels-full'] });
+    queryClient.invalidateQueries({ queryKey: ['gmail-allowed-label-ids'] });
   };
 
   return (

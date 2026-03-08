@@ -125,8 +125,11 @@ serve(async (req) => {
       params.set('maxResults', String(maxResults));
       if (pageToken) params.set('pageToken', pageToken);
       if (Array.isArray(labelIds)) {
-        labelIds.forEach((id) => {
-          if (typeof id === 'string' && id.trim()) params.append('labelIds', id);
+        labelIds.forEach((item: unknown) => {
+          // Defensive: handle both string IDs and object rows (e.g. { label_id: "..." })
+          const id = typeof item === 'string' ? item
+            : (item && typeof item === 'object' ? ((item as any).label_id || (item as any).id || '') : '');
+          if (typeof id === 'string' && id.trim()) params.append('labelIds', id.trim());
         });
       } else if (typeof labelIds === 'string' && labelIds.trim()) {
         params.append('labelIds', labelIds);
