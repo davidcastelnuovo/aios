@@ -657,6 +657,10 @@ async function executeTool(
       case 'send_message': {
         const { contact_type, contact_id, message_text } = toolCall.args;
         
+        // Get the sender's name for the AI signature
+        const { data: senderProfile } = await supabaseClient.from('profiles').select('full_name').eq('id', userId).single();
+        const senderName = senderProfile?.full_name || 'המנהל';
+        
         let phone: string | null = null;
         let contactName: string | null = null;
         
@@ -672,6 +676,10 @@ async function executeTool(
 
         if (!phone) return { success: false, error: 'לא נמצא מספר טלפון עבור איש הקשר' };
 
+        // Prepend AI self-introduction
+        const aiSignature = `🤖 *הודעה מהעוזר הדיגיטלי של ${senderName}*\n\n`;
+        const fullMessage = aiSignature + message_text;
+
         try {
           const sendResponse = await fetch(`${SUPABASE_URL}/functions/v1/send-green-api-message`, {
             method: 'POST',
@@ -681,7 +689,7 @@ async function executeTool(
             },
             body: JSON.stringify({
               phone,
-              message: message_text,
+              message: fullMessage,
               tenantId,
               [`${contact_type}_id`]: contact_id,
             }),
@@ -692,10 +700,55 @@ async function executeTool(
             throw new Error(errText);
           }
 
-          return { success: true, result: { sent_to: contactName, phone, message_preview: message_text.slice(0, 50) } };
+          return { success: true, result: { sent_to: contactName, phone, message_preview: message_text.slice(0, 50), ai_signature_added: true } };
         } catch (e: any) {
           return { success: false, error: `שגיאה בשליחת ההודעה: ${e.message}` };
         }
+      }
+
+      case 'get_chat_history': {
+        const { contact_type, contact_id, limit = 20 } = toolCall.args;
+        
+        let query = supabaseClient
+          .from('chat_messages')
+          .select('id, direction, message_text, sender_name, sender_phone, created_at, provider')
+          .eq('tenant_id', tenantId)
+          .order('created_at', { ascending: false })
+          .limit(limit);
+
+        if (contact_type === 'lead') {
+          query = query.eq('lead_id', contact_id);
+        } else if (contact_type === 'client') {
+          query = query.eq('client_id', contact_id);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        // Also get contact info
+        let contactName = '';
+        if (contact_type === 'lead') {
+          const { data: lead } = await supabaseClient.from('leads').select('company_name, contact_name, phone').eq('id', contact_id).single();
+          contactName = lead?.contact_name || lead?.company_name || '';
+        } else {
+          const { data: client } = await supabaseClient.from('clients').select('name, contact_name, phone').eq('id', contact_id).single();
+          contactName = client?.contact_name || client?.name || '';
+        }
+
+        return {
+          success: true,
+          result: {
+            contact_name: contactName,
+            contact_type,
+            message_count: data?.length || 0,
+            messages: (data || []).reverse().map((m: any) => ({
+              direction: m.direction === 'inbound' ? 'נכנסת' : 'יוצאת',
+              text: m.message_text?.slice(0, 500),
+              sender: m.sender_name || (m.direction === 'inbound' ? contactName : 'אני'),
+              date: m.created_at,
+            })),
+          },
+        };
       }
 
       // === MEMORY TOOLS ===
