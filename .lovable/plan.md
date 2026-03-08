@@ -1,24 +1,28 @@
 
 
-## הפיכת האפליקציה ל-PWA (Progressive Web App)
+# תיקון: קישור הזמנה לצ'אט משתמש בדומיין הלא נכון
 
-כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
+## הבעיה
+בקובץ `src/pages/TeamChat.tsx`, קישור ההזמנה נבנה כך:
+```
+window.location.origin + "/chat-invite/" + token
+```
+זה מחזיר את הדומיין של הפריביו (`lovableproject.com`) במקום הדומיין של האפליקציה המפורסמת (`after-lead.lovable.app` או דומיין מותאם אישית).
 
-### 1. קובץ `public/manifest.json`
-- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
-- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
+## הפתרון
+להחליף את `window.location.origin` בקישורי ההזמנה בדומיין המפורסם של האפליקציה. שתי אפשרויות:
 
-### 2. Service Worker — `public/sw.js`
-- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
-- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
+1. **שימוש ב-env variable** — להגדיר `VITE_APP_URL` או להשתמש בדומיין הפורסם הקיים
+2. **לוגיקה חכמה** — אם הדומיין הנוכחי מכיל `lovableproject.com`, להחליף לדומיין המפורסם
 
-### 3. רישום ב-`index.html`
-- תג `<link rel="manifest">` ב-head
-- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
-- סקריפט רישום Service Worker
+הגישה הטובה ביותר: להוסיף פונקציית עזר `getPublicOrigin()` שמחזירה את הדומיין המפורסם (`https://after-lead.lovable.app`) כאשר הדומיין הנוכחי הוא lovableproject/lovable.app, ואחרת משתמשת ב-`window.location.origin`.
 
-### תוצאה
-- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
-- באייפון: Share → Add to Home Screen
-- האפליקציה תיפתח במסך מלא בלי שורת כתובת
+## שינויים
+**קובץ: `src/pages/TeamChat.tsx`**
+- שורה ~1793: החלפת `window.location.origin` ב-`getPublicOrigin()`
+- שורה ~1812: אותו דבר
+- הוספת פונקציית עזר בראש הקובץ
+
+**קובץ: `src/pages/ChatInvite.tsx`**
+- שורה ~167: עדכון ה-`redirectTo` של Google OAuth באותה צורה
 
