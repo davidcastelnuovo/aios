@@ -34,6 +34,7 @@ import {
   MessageSquare,
   MessagesSquare,
   Download,
+  PenLine,
 } from "lucide-react";
 import {
   Sidebar,
