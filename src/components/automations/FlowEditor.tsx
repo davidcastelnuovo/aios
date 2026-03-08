@@ -248,6 +248,7 @@ export default function FlowEditor() {
       setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
     }
     if (dragNodeId) {
+      wasDraggingRef.current = true;
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
       const x = (e.clientX - rect.left - pan.x) / zoom - dragOffset.x;
