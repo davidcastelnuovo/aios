@@ -53,6 +53,7 @@ async function patchAndRunScenario(
 ) {
   // Step 1: Get blueprint
   const bpResponse = await makeAPICall(apiToken, region, `/scenarios/${scenarioId}/blueprint`);
+  console.log("RAW BLUEPRINT RESPONSE:", JSON.stringify(bpResponse).slice(0, 2000));
   let bp = bpResponse;
   if (bp.response?.blueprint) bp = bp.response.blueprint;
   else if (bp.blueprint) bp = bp.blueprint;
