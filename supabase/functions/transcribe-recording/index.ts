@@ -456,6 +456,48 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
   return { error: `Failed to download valid media from Zoom: ${lastError}`, status: 500 };
 }
 
+// ── Helper: stream Zoom recording to Storage (for large files) ────────
+async function streamZoomToStorage(supabase: any, recording: any, recordingId: string): Promise<{
+  error?: string; signedUrl?: string; contentType?: string; fileName?: string;
+}> {
+  // Download the file from Zoom
+  const result = await downloadZoomMedia(supabase, recording);
+  if (result.error) return { error: result.error };
+
+  const blob = result.blob!;
+  const ct = result.contentType || 'audio/mp4';
+
+  // Detect proper extension
+  const headerBytes = new Uint8Array(await blob.slice(0, 16).arrayBuffer());
+  const detectedMime = detectMimeFromBytes(headerBytes) || ct;
+  const ext = MIME_TO_EXT[detectedMime] || '.m4a';
+  const tempPath = `transcription-temp/${recordingId}-${Date.now()}${ext}`;
+
+  console.log(`📤 Uploading ${(blob.size / 1024 / 1024).toFixed(1)}MB to Storage: ${tempPath}`);
+
+  const { error: uploadError } = await supabase.storage
+    .from('recordings')
+    .upload(tempPath, blob, { contentType: detectedMime, upsert: true });
+
+  if (uploadError) {
+    return { error: `Failed to upload to Storage: ${uploadError.message}` };
+  }
+
+  const { data: signedData, error: signedError } = await supabase.storage
+    .from('recordings')
+    .createSignedUrl(tempPath, 60 * 60);
+
+  if (signedError || !signedData?.signedUrl) {
+    return { error: `Failed to create signed URL: ${signedError?.message || 'unknown'}` };
+  }
+
+  return {
+    signedUrl: signedData.signedUrl,
+    contentType: detectedMime,
+    fileName: `zoom_recording${ext}`,
+  };
+}
+
 // ── Helper: transcribe a blob (shared logic) ─────────────────────────
 async function transcribeBlob(supabase: any, recordingId: string, audioBlob: Blob, fileName: string, contentType: string, mode: string | undefined, recordingType?: string | null) {
   const fileSizeMB = audioBlob.size / (1024 * 1024);
