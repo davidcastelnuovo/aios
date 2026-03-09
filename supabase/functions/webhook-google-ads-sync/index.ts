@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
       const campaignName = String(record.campaign_name ?? record.campaignName ?? record["campaign.name"] ?? record.name ?? "").trim();
 
       if (!campaignId || !normalizedDate) {
-        console.warn("Skipped invalid record - campaignId:", campaignId, "date:", normalizedDate, "raw keys:", Object.keys(record).join(", "), "raw record:", JSON.stringify(record).slice(0, 500));
+        console.log("SKIPPED INVALID RECORD - campaignId:", campaignId, "date:", normalizedDate, "raw keys:", Object.keys(record).join(", "), "raw record:", JSON.stringify(record).slice(0, 500));
         skippedInvalidCount++;
         continue;
       }
