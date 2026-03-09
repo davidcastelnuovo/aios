@@ -264,6 +264,27 @@ export function TestFlowWithLeadDialog({
         return [{ leadId: "whatsapp", leadName: lastMessageData.sender_name, success: true, data: response.data }];
       }
 
+      // Manual input mode
+      if (inputMode === "manual") {
+        const testData: any = {
+          test: true,
+          manual: true,
+          contact_name: manualData.contact_name || manualData.company_name,
+          company_name: manualData.company_name,
+          phone: manualData.phone,
+          email: manualData.email,
+          source: manualData.source,
+          notes: manualData.notes,
+          timestamp: new Date().toISOString(),
+        };
+
+        const response = await supabase.functions.invoke("trigger-automation", {
+          body: { automationId, tenant_id: tenantId, data: testData },
+        });
+        if (response.error) throw response.error;
+        return [{ leadId: "manual", leadName: manualData.contact_name || manualData.company_name || "ידני", success: true, data: response.data }];
+      }
+
       // Lead-based batch test
       if (selectedLeadIds.size === 0) throw new Error("יש לבחור לפחות ליד אחד");
 
