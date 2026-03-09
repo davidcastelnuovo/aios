@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel, SelectSeparator } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -371,9 +371,18 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
                 className="text-right"
                 rows={4}
               />
-              <p className="text-xs text-muted-foreground text-right">
-                משתנים זמינים: {availableFields.map((f) => `{{${f.key}}}`).join(", ")}
-              </p>
+              <div className="text-xs text-muted-foreground text-right space-y-1">
+                <p>
+                  <span className="font-semibold">שדות מערכת:</span>{" "}
+                  {availableFields.filter(f => !f.key.startsWith("fb_")).map((f) => `{{${f.key}}}`).join(", ")}
+                </p>
+                {availableFields.some(f => f.key.startsWith("fb_")) && (
+                  <p>
+                    <span className="font-semibold text-blue-600">שדות פייסבוק:</span>{" "}
+                    <span className="text-blue-600">{availableFields.filter(f => f.key.startsWith("fb_")).map((f) => `{{${f.key}}}`).join(", ")}</span>
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
@@ -594,11 +603,27 @@ function GreenAPIActionConfig({
               <SelectValue placeholder="בחר שדה..." />
             </SelectTrigger>
             <SelectContent>
-              {availableFields.map((field) => (
-                <SelectItem key={field.key} value={field.key}>
-                  {field.label} ({`{{${field.key}}}`})
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                <SelectLabel className="text-xs font-bold text-muted-foreground">שדות מערכת</SelectLabel>
+                {availableFields.filter(f => !f.key.startsWith("fb_")).map((field) => (
+                  <SelectItem key={field.key} value={field.key}>
+                    {field.label} ({`{{${field.key}}}`})
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+              {availableFields.some(f => f.key.startsWith("fb_")) && (
+                <>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel className="text-xs font-bold text-blue-600">שדות פייסבוק</SelectLabel>
+                    {availableFields.filter(f => f.key.startsWith("fb_")).map((field) => (
+                      <SelectItem key={field.key} value={field.key} className="text-blue-700 bg-blue-50/50">
+                        {field.label} ({`{{${field.key}}}`})
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </>
+              )}
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground text-right">
@@ -2060,7 +2085,7 @@ function CreateTaskActionConfig({
         <div className="space-y-2">
           <Label className="text-right block text-xs text-muted-foreground">הכנס משתנה מהטריגר:</Label>
           <div className="flex flex-wrap gap-1 justify-end">
-            {availableFields.map((field) => (
+            {availableFields.filter(f => !f.key.startsWith("fb_")).map((field) => (
               <Badge
                 key={field.key}
                 variant="outline"
@@ -2070,6 +2095,21 @@ function CreateTaskActionConfig({
                 {field.label}
               </Badge>
             ))}
+            {availableFields.some(f => f.key.startsWith("fb_")) && (
+              <>
+                <span className="text-[10px] text-blue-600 font-semibold self-center mx-1">|</span>
+                {availableFields.filter(f => f.key.startsWith("fb_")).map((field) => (
+                  <Badge
+                    key={field.key}
+                    variant="outline"
+                    className="cursor-pointer hover:bg-blue-100 text-xs bg-blue-50 text-blue-700 border-blue-200"
+                    onClick={() => insertVariable(field.key)}
+                  >
+                    {field.label}
+                  </Badge>
+                ))}
+              </>
+            )}
           </div>
         </div>
       )}
