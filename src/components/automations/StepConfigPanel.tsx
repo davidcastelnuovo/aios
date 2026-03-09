@@ -1194,13 +1194,15 @@ function WhatsAppTriggerConfig({
           <SelectContent>
             <SelectItem value="all">כל ההודעות</SelectItem>
             <SelectItem value="all_groups">כל הקבוצות</SelectItem>
+            <SelectItem value="all_groups_except">כל הקבוצות חוץ מ...</SelectItem>
+            <SelectItem value="multiple_groups">קבוצות מרובות</SelectItem>
             <SelectItem value="group">קבוצה ספציפית</SelectItem>
             <SelectItem value="tagged_contact">איש קשר מתויג</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      {/* Group selector */}
+      {/* Single group selector */}
       {sourceFilter === "group" && (
         <div className="space-y-2">
           <Label className="text-right block">בחר קבוצה</Label>
@@ -1219,6 +1221,76 @@ function WhatsAppTriggerConfig({
               ))}
             </SelectContent>
           </Select>
+        </div>
+      )}
+
+      {/* Multiple groups selector */}
+      {sourceFilter === "multiple_groups" && (
+        <div className="space-y-2">
+          <Label className="text-right block">בחר קבוצות</Label>
+          <div className="border rounded-md p-2 max-h-48 overflow-y-auto space-y-1">
+            {(groups || []).map((g) => {
+              const selectedIds: string[] = configuration?.selected_group_ids || [];
+              const isSelected = selectedIds.includes(g.id);
+              return (
+                <label key={g.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded p-1 justify-end">
+                  <span className="text-sm">{g.group_name}</span>
+                  <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={(checked) => {
+                      const newIds = checked
+                        ? [...selectedIds, g.id]
+                        : selectedIds.filter((id: string) => id !== g.id);
+                      onConfigChange("selected_group_ids", newIds);
+                    }}
+                  />
+                </label>
+              );
+            })}
+            {(!groups || groups.length === 0) && (
+              <p className="text-xs text-muted-foreground text-center py-2">אין קבוצות</p>
+            )}
+          </div>
+          {(configuration?.selected_group_ids?.length || 0) > 0 && (
+            <p className="text-xs text-muted-foreground text-right">
+              {configuration.selected_group_ids.length} קבוצות נבחרו
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Exclude groups selector */}
+      {sourceFilter === "all_groups_except" && (
+        <div className="space-y-2">
+          <Label className="text-right block">קבוצות להחרגה</Label>
+          <div className="border rounded-md p-2 max-h-48 overflow-y-auto space-y-1">
+            {(groups || []).map((g) => {
+              const excludedIds: string[] = configuration?.excluded_group_ids || [];
+              const isExcluded = excludedIds.includes(g.id);
+              return (
+                <label key={g.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 rounded p-1 justify-end">
+                  <span className="text-sm">{g.group_name}</span>
+                  <Checkbox
+                    checked={isExcluded}
+                    onCheckedChange={(checked) => {
+                      const newIds = checked
+                        ? [...excludedIds, g.id]
+                        : excludedIds.filter((id: string) => id !== g.id);
+                      onConfigChange("excluded_group_ids", newIds);
+                    }}
+                  />
+                </label>
+              );
+            })}
+            {(!groups || groups.length === 0) && (
+              <p className="text-xs text-muted-foreground text-center py-2">אין קבוצות</p>
+            )}
+          </div>
+          {(configuration?.excluded_group_ids?.length || 0) > 0 && (
+            <p className="text-xs text-muted-foreground text-right">
+              {configuration.excluded_group_ids.length} קבוצות מוחרגות
+            </p>
+          )}
         </div>
       )}
 
