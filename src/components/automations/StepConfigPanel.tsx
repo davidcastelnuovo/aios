@@ -603,11 +603,27 @@ function GreenAPIActionConfig({
               <SelectValue placeholder="בחר שדה..." />
             </SelectTrigger>
             <SelectContent>
-              {availableFields.map((field) => (
-                <SelectItem key={field.key} value={field.key}>
-                  {field.label} ({`{{${field.key}}}`})
-                </SelectItem>
-              ))}
+              <SelectGroup>
+                <SelectLabel className="text-xs font-bold text-muted-foreground">שדות מערכת</SelectLabel>
+                {availableFields.filter(f => !f.key.startsWith("fb_")).map((field) => (
+                  <SelectItem key={field.key} value={field.key}>
+                    {field.label} ({`{{${field.key}}}`})
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+              {availableFields.some(f => f.key.startsWith("fb_")) && (
+                <>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel className="text-xs font-bold text-blue-600">שדות פייסבוק</SelectLabel>
+                    {availableFields.filter(f => f.key.startsWith("fb_")).map((field) => (
+                      <SelectItem key={field.key} value={field.key} className="text-blue-700 bg-blue-50/50">
+                        {field.label} ({`{{${field.key}}}`})
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </>
+              )}
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground text-right">
