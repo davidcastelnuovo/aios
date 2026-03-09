@@ -85,8 +85,7 @@ async function patchAndRunScenario(
         delete mod.mapper.metrics;
         delete mod.mapper.segments;
         delete mod.mapper.attributes;
-
-
+      }
 
       if (mod.module && isHttpModule(mod.module) && mod.mapper) {
         mod.mapper.url = webhookUrl;
