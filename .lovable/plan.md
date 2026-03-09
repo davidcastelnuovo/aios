@@ -1,30 +1,24 @@
 
 
-# Plan: Fix Lead Pull Query in Flow Trigger
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## Problem
-The "Pull Leads" button shows "No leads found" even though leads exist in the database with matching `Facebook Form: {formId}` in their notes. The issue is likely with the Supabase `.or()` filter syntax — the `%` wildcard characters inside `.or()` raw PostgREST filter strings may not be handled correctly.
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-## Evidence
-- DB has 3 leads with `Facebook Form: 1952043998852618` in notes for the correct tenant
-- Direct SQL query finds them fine
-- The `.or()` method in Supabase JS uses raw PostgREST syntax where `%` handling can be inconsistent
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-## Fix
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-### File: `src/components/automations/StepConfigPanel.tsx`
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-Replace the `.or()` filter with `.ilike()` on the notes column using a single broader pattern that covers both formats:
-
-```typescript
-// Before (line 1424):
-.or(`notes.ilike.%Form ID: ${formId}%,notes.ilike.%Facebook Form: ${formId}%`)
-
-// After:
-.ilike("notes", `%${formId}%`)
-```
-
-This simpler approach just searches for the form ID anywhere in notes, which is sufficient since form IDs are unique numeric identifiers that won't produce false matches. This avoids any `.or()` PostgREST syntax issues entirely.
-
-Also add a console.log for debugging if zero results, so future issues are traceable.
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 
