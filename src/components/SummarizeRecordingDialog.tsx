@@ -378,17 +378,36 @@ export default function SummarizeRecordingDialog({
         return;
       }
 
-      if (data?.error === 'file_too_large' && data?.no_alternative) {
-        toast({
-          title: "הקובץ גדול מדי לתמלול אוטומטי",
-          description: data.message || `${data.size_mb}MB — נא להדביק תמלול ידנית`,
-          variant: "destructive",
-        });
-        setIsTranscribing(false);
-        return;
+      // Large file: server returned audio_url for client-side chunking (needs_chunking flag)
+      if (data?.needs_chunking && data?.audio_url) {
+        toast({ title: "הקובץ גדול – מתחיל תמלול מחולק..." });
+        try {
+          const audioResp = await fetch(data.audio_url);
+          if (!audioResp.ok) throw new Error('Failed to download prepared audio for chunking');
+          const audioBlob = await audioResp.blob();
+          const fullText = await transcribeChunked(audioBlob, (current, total) => {
+            setTranscribeProgress({ current, total });
+          });
+          await supabase
+            .from('zoom_recordings')
+            .update({ transcription: fullText, transcription_status: 'completed', transcription_error: null } as any)
+            .eq('id', recording.id);
+          setTranscript(fullText);
+          setFailedError(null);
+          queryClient.invalidateQueries({ queryKey: ['recordings'] });
+          toast({ title: "התמלול הושלם בהצלחה!" });
+          setIsTranscribing(false);
+          return;
+        } catch (chunkErr: any) {
+          setFailedError(chunkErr.message || "שגיאה בתמלול מחולק");
+          toast({ title: "שגיאה בתמלול מחולק", description: chunkErr.message, variant: "destructive" });
+          setIsTranscribing(false);
+          return;
+        }
       }
 
-      if (data?.error === 'file_too_large' && !data?.no_alternative) {
+      if (data?.error === 'file_too_large') {
+        // Fallback: try download+chunk mode
         await attemptDownloadAndChunk(recording.id);
         return;
       }
