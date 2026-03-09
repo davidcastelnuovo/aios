@@ -122,6 +122,7 @@ function getAvailableFields(triggerType: string | undefined, triggerConfig?: Rec
         { key: "message_text", label: "תוכן ההודעה" },
         { key: "group_id", label: "מזהה קבוצה" },
         { key: "group_name", label: "שם הקבוצה" },
+        { key: "group_invite_link", label: "קישור הזמנה לקבוצה" },
         { key: "group_chat_id", label: "מזהה צ'אט קבוצה (WhatsApp)" },
         { key: "contact_type", label: "סוג איש קשר (client/lead/group)" },
         { key: "contact_id", label: "מזהה איש קשר" },
