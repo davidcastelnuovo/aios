@@ -465,50 +465,76 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
     }
   }
 
-  // Second pass (self-heal): if Zoom URL expired/unauthorized, pull fresh download URLs from Zoom API
+  // Second pass (self-heal): if Zoom URL expired/unauthorized, pull fresh download URLs via users/me/recordings
+  // This endpoint works with existing scopes (no cloud_recording:read:list_recording_files needed)
   if (sawUnauthorized && zoomAccessToken && recording.meeting_id) {
     try {
-      console.log('🔄 Stored Zoom URL unauthorized, fetching fresh recording URLs from Zoom API...');
-      const recordingsResp = await fetch(`https://api.zoom.us/v2/meetings/${encodeURIComponent(String(recording.meeting_id))}/recordings`, {
+      console.log('🔄 Stored Zoom URL unauthorized, fetching fresh URLs via users/me/recordings...');
+      
+      // Calculate date range: ±2 days around the recording's start_time
+      const startTime = recording.start_time ? new Date(recording.start_time) : new Date();
+      const fromDate = new Date(startTime.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const toDate = new Date(startTime.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      
+      const params = new URLSearchParams({ from: fromDate, to: toDate, page_size: '100' });
+      const listResp = await fetch(`https://api.zoom.us/v2/users/me/recordings?${params}`, {
         headers: { Authorization: `Bearer ${zoomAccessToken}` },
       });
 
-      if (recordingsResp.ok) {
-        const recordingsData = await recordingsResp.json();
-        const files = Array.isArray(recordingsData?.recording_files) ? recordingsData.recording_files : [];
-        const targetType = String(recording.recording_type || '').toLowerCase();
-        const targetSize = typeof recording.file_size === 'number' ? recording.file_size : null;
+      if (listResp.ok) {
+        const listData = await listResp.json();
+        const meetings = Array.isArray(listData?.meetings) ? listData.meetings : [];
+        const meetingIdStr = String(recording.meeting_id);
+        
+        // Find the matching meeting by meeting_id
+        const matchedMeeting = meetings.find((m: any) => String(m.id) === meetingIdStr || String(m.uuid) === meetingIdStr);
+        
+        if (matchedMeeting) {
+          const files = Array.isArray(matchedMeeting.recording_files) ? matchedMeeting.recording_files : [];
+          const targetType = String(recording.recording_type || '').toLowerCase();
+          const targetSize = typeof recording.file_size === 'number' ? recording.file_size : null;
 
-        const exactType = files.filter((f: any) => String(f?.recording_type || '').toLowerCase() === targetType);
-        const sameMime = files.filter((f: any) => String(f?.file_type || '').toUpperCase() === 'M4A');
-        const prioritized = [...exactType, ...sameMime, ...files].filter(Boolean);
+          const exactType = files.filter((f: any) => String(f?.recording_type || '').toLowerCase() === targetType);
+          const sameMime = files.filter((f: any) => String(f?.file_type || '').toUpperCase() === 'M4A');
+          const prioritized = [...exactType, ...sameMime, ...files].filter(Boolean);
 
-        const uniqueFreshUrls = [...new Set(
-          prioritized
-            .sort((a: any, b: any) => {
-              if (!targetSize) return 0;
-              const da = Math.abs((Number(a?.file_size) || 0) - targetSize);
-              const db = Math.abs((Number(b?.file_size) || 0) - targetSize);
-              return da - db;
-            })
-            .flatMap((f: any) => [f?.download_url, f?.play_url])
-            .filter(Boolean)
-        )] as string[];
+          const uniqueFreshUrls = [...new Set(
+            prioritized
+              .sort((a: any, b: any) => {
+                if (!targetSize) return 0;
+                const da = Math.abs((Number(a?.file_size) || 0) - targetSize);
+                const db = Math.abs((Number(b?.file_size) || 0) - targetSize);
+                return da - db;
+              })
+              .flatMap((f: any) => [f?.download_url, f?.play_url])
+              .filter(Boolean)
+          )] as string[];
 
-        for (const freshUrl of uniqueFreshUrls) {
-          const freshResult = await tryDownloadFromUrl(freshUrl);
-          if (freshResult.blob) {
-            console.log('✅ Downloaded media using fresh Zoom recording URL');
-            return { blob: freshResult.blob, fileName: 'zoom_recording', contentType: freshResult.contentType };
+          console.log(`  Found meeting with ${files.length} files, trying ${uniqueFreshUrls.length} fresh URLs...`);
+
+          for (const freshUrl of uniqueFreshUrls) {
+            const freshResult = await tryDownloadFromUrl(freshUrl);
+            if (freshResult.blob) {
+              console.log('✅ Downloaded media using fresh URL from users/me/recordings');
+              
+              // Update the stored URL in DB for future use
+              const bestUrl = freshUrl.split('?')[0];
+              await supabase
+                .from('zoom_recordings')
+                .update({ recording_url: bestUrl })
+                .eq('id', recording.id);
+              
+              return { blob: freshResult.blob, fileName: 'zoom_recording', contentType: freshResult.contentType };
+            }
           }
+          lastError = 'Found meeting but all fresh download URLs failed';
+        } else {
+          lastError = `Meeting ${meetingIdStr} not found in recent recordings list (searched ${fromDate} to ${toDate})`;
+          console.log(`⚠️ ${lastError}. Available meetings: ${meetings.map((m: any) => m.id).join(', ')}`);
         }
       } else {
-        const errText = await recordingsResp.text();
-        if (errText.includes('does not contain scopes') || errText.includes('cloud_recording:read:list_recording_files')) {
-          lastError = 'חיבור Zoom חסר הרשאות cloud recording לקריאת קבצי הקלטה. יש לחבר מחדש את Zoom עם הרשאות הקלטות.';
-        } else {
-          lastError = `Zoom recordings API failed: ${recordingsResp.status} ${errText.slice(0, 120)}`;
-        }
+        const errText = await listResp.text();
+        lastError = `Zoom users/me/recordings API failed: ${listResp.status} ${errText.slice(0, 120)}`;
       }
     } catch (refreshErr) {
       lastError = `Zoom URL refresh failed: ${refreshErr instanceof Error ? refreshErr.message : String(refreshErr)}`;

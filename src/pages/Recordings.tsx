@@ -303,6 +303,19 @@ export default function Recordings() {
           <p className="text-muted-foreground mt-1">ניהול הקלטות מכל המקורות</p>
         </div>
         <div className="flex gap-2">
+          {zoomIntegration?.is_active && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                fetchRecordingsMutation.mutate();
+              }}
+              disabled={fetchRecordingsMutation.isPending}
+            >
+              {fetchRecordingsMutation.isPending ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : <RotateCcw className="h-4 w-4 ml-2" />}
+              רענן הקלטות
+            </Button>
+          )}
           <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
             <DialogTrigger asChild>
               <Button>
