@@ -1561,29 +1561,71 @@ function LeadSourceConfig({
             </div>
           )}
 
-          {/* Pull existing lead button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full gap-2"
-            onClick={handlePullLead}
-            disabled={fetchingLead}
-          >
-            {fetchingLead ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Search className="h-4 w-4" />
-            )}
-            משוך ליד קיים לבדיקה
-          </Button>
+          {/* Pull existing lead with date range */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Select value={pullDateRange} onValueChange={setPullDateRange}>
+                <SelectTrigger className="text-right text-xs h-8 flex-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="today">היום</SelectItem>
+                  <SelectItem value="yesterday">אתמול</SelectItem>
+                  <SelectItem value="last_week">שבוע אחרון</SelectItem>
+                  <SelectItem value="all">הכל</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 shrink-0"
+                onClick={handlePullLead}
+                disabled={fetchingLead}
+              >
+                {fetchingLead ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4" />
+                )}
+                משוך לידים
+              </Button>
+            </div>
+          </div>
 
-          {/* Show pulled lead data */}
-          {pulledLead && (
+          {/* Show pulled lead data with navigation */}
+          {pulledLeads.length > 0 && (
             <div className="rounded-md border bg-background p-2 space-y-1">
-              <p className="text-xs font-medium text-muted-foreground mb-1.5">נתוני ליד אחרון:</p>
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs font-medium text-muted-foreground">
+                  ליד {pulledLeadIndex + 1} מתוך {pulledLeads.length}
+                </p>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    disabled={pulledLeadIndex <= 0}
+                    onClick={() => setPulledLeadIndex(pulledLeadIndex - 1)}
+                  >
+                    ←
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 w-6 p-0"
+                    disabled={pulledLeadIndex >= pulledLeads.length - 1}
+                    onClick={() => setPulledLeadIndex(pulledLeadIndex + 1)}
+                  >
+                    →
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {pulledLeads[pulledLeadIndex]?.name} · {pulledLeads[pulledLeadIndex]?.date}
+              </p>
               <ScrollArea className="max-h-40">
                 <div className="space-y-1">
-                  {Object.entries(pulledLead).map(([key, value]) => (
+                  {pulledLead && Object.entries(pulledLead).map(([key, value]) => (
                     <div key={key} className="flex items-center justify-between gap-2 text-xs px-1 py-0.5 rounded hover:bg-muted/50">
                       <button
                         type="button"
