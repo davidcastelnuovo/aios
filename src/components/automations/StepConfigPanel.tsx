@@ -1379,10 +1379,74 @@ function LeadSourceConfig({
 }) {
   const { toast } = useToast();
   const [showFbDialog, setShowFbDialog] = useState(false);
+  const [fetchingLead, setFetchingLead] = useState(false);
+  const [pulledLead, setPulledLead] = useState<Record<string, string> | null>(null);
   const isFacebookForm = leadSource === "facebook_form";
 
   // Display current selection summary
   const hasSelection = configuration?.facebook_form_id && configuration?.facebook_page_name;
+
+  const handlePullLead = async () => {
+    if (!tenantId || !configuration?.facebook_form_id || !configuration?.facebook_integration_id) {
+      toast({ title: "חסרים נתונים", description: "יש לבחור טופס ואינטגרציה קודם", variant: "destructive" });
+      return;
+    }
+    
+    setFetchingLead(true);
+    setPulledLead(null);
+    
+    try {
+      // Fetch the most recent lead from this form in the DB
+      const formId = configuration.facebook_form_id;
+      const { data: recentLeads } = await supabase
+        .from("leads")
+        .select("*")
+        .eq("tenant_id", tenantId)
+        .or(`notes.ilike.%Form ID: ${formId}%,notes.ilike.%Facebook Form: ${formId}%`)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      
+      if (recentLeads && recentLeads.length > 0) {
+        const lead = recentLeads[0];
+        const fields: Record<string, string> = {};
+        
+        // Extract standard fields
+        if (lead.contact_name) fields["contact_name"] = lead.contact_name;
+        if (lead.company_name) fields["company_name"] = lead.company_name;
+        if (lead.phone) fields["phone"] = lead.phone;
+        if (lead.email) fields["email"] = lead.email;
+        if (lead.source) fields["source"] = lead.source;
+        if (lead.status) fields["status"] = lead.status;
+        
+        // Extract fb_ fields from notes
+        const notes = lead.notes || "";
+        const fbFieldSection = notes.split("--- שדות טופס פייסבוק ---")[1];
+        if (fbFieldSection) {
+          const lines = fbFieldSection.trim().split("\n");
+          for (const line of lines) {
+            const colonIdx = line.indexOf(":");
+            if (colonIdx > 0) {
+              const key = line.substring(0, colonIdx).trim();
+              const value = line.substring(colonIdx + 1).trim();
+              if (key && value) {
+                fields[`fb_${key}`] = value;
+              }
+            }
+          }
+        }
+        
+        setPulledLead(fields);
+        toast({ title: "ליד נמשך בהצלחה", description: `${lead.company_name || lead.contact_name || "ליד"} (${new Date(lead.created_at).toLocaleDateString("he-IL")})` });
+      } else {
+        toast({ title: "לא נמצאו לידים", description: "אין לידים מטופס זה עדיין במערכת", variant: "destructive" });
+      }
+    } catch (err) {
+      console.error("Error pulling lead:", err);
+      toast({ title: "שגיאה", description: "לא ניתן למשוך ליד", variant: "destructive" });
+    } finally {
+      setFetchingLead(false);
+    }
+  };
 
   return (
     <>
@@ -1469,6 +1533,50 @@ function LeadSourceConfig({
                   </ScrollArea>
                 </PopoverContent>
               </Popover>
+            </div>
+          )}
+
+          {/* Pull existing lead button */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full gap-2"
+            onClick={handlePullLead}
+            disabled={fetchingLead}
+          >
+            {fetchingLead ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Search className="h-4 w-4" />
+            )}
+            משוך ליד קיים לבדיקה
+          </Button>
+
+          {/* Show pulled lead data */}
+          {pulledLead && (
+            <div className="rounded-md border bg-background p-2 space-y-1">
+              <p className="text-xs font-medium text-muted-foreground mb-1.5">נתוני ליד אחרון:</p>
+              <ScrollArea className="max-h-40">
+                <div className="space-y-1">
+                  {Object.entries(pulledLead).map(([key, value]) => (
+                    <div key={key} className="flex items-center justify-between gap-2 text-xs px-1 py-0.5 rounded hover:bg-muted/50">
+                      <button
+                        type="button"
+                        className="font-mono text-[11px] text-primary hover:underline cursor-pointer"
+                        onClick={() => {
+                          navigator.clipboard.writeText(`{{${key}}}`);
+                          toast({ title: "הועתק!", description: `{{${key}}}` });
+                        }}
+                      >
+                        {`{{${key}}}`}
+                      </button>
+                      <span className="text-muted-foreground truncate max-w-[160px] text-right" title={value}>
+                        {value}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
             </div>
           )}
 
