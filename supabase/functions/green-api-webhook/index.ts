@@ -1094,12 +1094,41 @@ Deno.serve(async (req) => {
             groupTags = groupTagsData.map((t: any) => t.tag_id);
           }
 
-          // Fetch group name
+          // Fetch group name and invite link
           const { data: groupRecord } = await supabaseClient
             .from('whatsapp_groups')
-            .select('group_name, group_chat_id')
+            .select('group_name, group_chat_id, invite_link')
             .eq('id', groupId)
             .single();
+
+          // Fetch invite link if not cached
+          let groupInviteLink = groupRecord?.invite_link || null;
+          if (!groupInviteLink && instanceId && apiToken && groupRecord?.group_chat_id) {
+            try {
+              console.log('🔗 Fetching group invite link for:', groupRecord.group_chat_id);
+              const inviteResponse = await fetch(
+                `https://api.green-api.com/waInstance${instanceId}/getGroupInviteLink/${apiToken}`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ groupId: groupRecord.group_chat_id })
+                }
+              );
+              if (inviteResponse.ok) {
+                const inviteData = await inviteResponse.json();
+                groupInviteLink = inviteData.inviteLink || null;
+                if (groupInviteLink) {
+                  await supabaseClient
+                    .from('whatsapp_groups')
+                    .update({ invite_link: groupInviteLink })
+                    .eq('id', groupId);
+                  console.log('✅ Saved group invite link:', groupInviteLink);
+                }
+              }
+            } catch (e) {
+              console.error('⚠️ Could not fetch group invite link:', e);
+            }
+          }
 
           const automationPayload = {
             trigger_type: 'whatsapp_message_received',
@@ -1114,6 +1143,7 @@ Deno.serve(async (req) => {
               contact_type: 'group',
               contact_id: groupId,
               contact_name: groupRecord?.group_name || null,
+              group_invite_link: groupInviteLink || null,
               connection_user_id: connectionUserId,
               tags: groupTags,
             },

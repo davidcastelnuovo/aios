@@ -1817,6 +1817,7 @@ function replaceTemplateVariables(template: string, data: any, tenantSlug?: stri
     sender_name: data.contact_name || data.sender_name || '',
     sender_phone: data.sender_phone || '',
     group_name: data.group_name || '',
+    group_invite_link: data.group_invite_link || '',
   }
   
   let result = template
