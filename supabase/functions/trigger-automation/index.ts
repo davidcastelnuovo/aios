@@ -217,7 +217,8 @@ Deno.serve(async (req) => {
     }
 
     // Guard: loop detection - same trigger+entity already in chain
-    const loopKey = `${requestBody.trigger_type || requestBody.automationId}:${requestBody.data?.lead_id || requestBody.data?.entity_id || 'no-entity'}`
+    const entityKey = requestBody.data?.lead_id || requestBody.data?.entity_id || requestBody.data?.group_id || requestBody.data?.client_id || 'no-entity'
+    const loopKey = `${requestBody.trigger_type || requestBody.automationId}:${entityKey}`
     if (executionChain.includes(loopKey)) {
       console.error(`🛑 SAFETY: Loop detected! Key "${loopKey}" already in execution chain: [${executionChain.join(' → ')}]`)
       return new Response(
