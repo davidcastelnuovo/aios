@@ -1380,11 +1380,15 @@ function LeadSourceConfig({
   const { toast } = useToast();
   const [showFbDialog, setShowFbDialog] = useState(false);
   const [fetchingLead, setFetchingLead] = useState(false);
-  const [pulledLead, setPulledLead] = useState<Record<string, string> | null>(null);
+  const [pulledLeads, setPulledLeads] = useState<Array<{ fields: Record<string, string>; name: string; date: string; id: string }>>([]);
+  const [pulledLeadIndex, setPulledLeadIndex] = useState(0);
+  const [pullDateRange, setPullDateRange] = useState<string>("last_week");
   const isFacebookForm = leadSource === "facebook_form";
 
   // Display current selection summary
   const hasSelection = configuration?.facebook_form_id && configuration?.facebook_page_name;
+
+  const pulledLead = pulledLeads.length > 0 ? pulledLeads[pulledLeadIndex]?.fields : null;
 
   const handlePullLead = async () => {
     if (!tenantId || !configuration?.facebook_form_id || !configuration?.facebook_integration_id) {
@@ -1393,56 +1397,77 @@ function LeadSourceConfig({
     }
     
     setFetchingLead(true);
-    setPulledLead(null);
+    setPulledLeads([]);
+    setPulledLeadIndex(0);
     
     try {
-      // Fetch the most recent lead from this form in the DB
       const formId = configuration.facebook_form_id;
-      const { data: recentLeads } = await supabase
+      const now = new Date();
+      let fromDate: string | undefined;
+      
+      if (pullDateRange === "today") {
+        fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+      } else if (pullDateRange === "yesterday") {
+        const y = new Date(now);
+        y.setDate(y.getDate() - 1);
+        fromDate = new Date(y.getFullYear(), y.getMonth(), y.getDate()).toISOString();
+      } else if (pullDateRange === "last_week") {
+        const w = new Date(now);
+        w.setDate(w.getDate() - 7);
+        fromDate = new Date(w.getFullYear(), w.getMonth(), w.getDate()).toISOString();
+      }
+
+      let query = supabase
         .from("leads")
         .select("*")
         .eq("tenant_id", tenantId)
         .or(`notes.ilike.%Form ID: ${formId}%,notes.ilike.%Facebook Form: ${formId}%`)
-        .order("created_at", { ascending: false })
-        .limit(1);
+        .order("created_at", { ascending: false });
+      
+      if (fromDate) query = query.gte("created_at", fromDate);
+      
+      const { data: recentLeads } = await query.limit(50);
       
       if (recentLeads && recentLeads.length > 0) {
-        const lead = recentLeads[0];
-        const fields: Record<string, string> = {};
-        
-        // Extract standard fields
-        if (lead.contact_name) fields["contact_name"] = lead.contact_name;
-        if (lead.company_name) fields["company_name"] = lead.company_name;
-        if (lead.phone) fields["phone"] = lead.phone;
-        if (lead.email) fields["email"] = lead.email;
-        if (lead.source) fields["source"] = lead.source;
-        if (lead.status) fields["status"] = lead.status;
-        
-        // Extract fb_ fields from notes
-        const notes = lead.notes || "";
-        const fbFieldSection = notes.split("--- שדות טופס פייסבוק ---")[1];
-        if (fbFieldSection) {
-          const lines = fbFieldSection.trim().split("\n");
-          for (const line of lines) {
-            const colonIdx = line.indexOf(":");
-            if (colonIdx > 0) {
-              const key = line.substring(0, colonIdx).trim();
-              const value = line.substring(colonIdx + 1).trim();
-              if (key && value) {
-                fields[`fb_${key}`] = value;
+        const parsed = recentLeads.map((lead) => {
+          const fields: Record<string, string> = {};
+          if (lead.contact_name) fields["contact_name"] = lead.contact_name;
+          if (lead.company_name) fields["company_name"] = lead.company_name;
+          if (lead.phone) fields["phone"] = lead.phone;
+          if (lead.email) fields["email"] = lead.email;
+          if (lead.source) fields["source"] = lead.source;
+          if (lead.status) fields["status"] = lead.status;
+          
+          const notes = lead.notes || "";
+          const fbFieldSection = notes.split("--- שדות טופס פייסבוק ---")[1];
+          if (fbFieldSection) {
+            const lines = fbFieldSection.trim().split("\n");
+            for (const line of lines) {
+              const colonIdx = line.indexOf(":");
+              if (colonIdx > 0) {
+                const key = line.substring(0, colonIdx).trim();
+                const value = line.substring(colonIdx + 1).trim();
+                if (key && value) fields[`fb_${key}`] = value;
               }
             }
           }
-        }
+          
+          return {
+            fields,
+            name: lead.company_name || lead.contact_name || "ליד",
+            date: new Date(lead.created_at).toLocaleDateString("he-IL"),
+            id: lead.id,
+          };
+        });
         
-        setPulledLead(fields);
-        toast({ title: "ליד נמשך בהצלחה", description: `${lead.company_name || lead.contact_name || "ליד"} (${new Date(lead.created_at).toLocaleDateString("he-IL")})` });
+        setPulledLeads(parsed);
+        toast({ title: `${parsed.length} לידים נמשכו`, description: `מציג ליד 1 מתוך ${parsed.length}` });
       } else {
-        toast({ title: "לא נמצאו לידים", description: "אין לידים מטופס זה עדיין במערכת", variant: "destructive" });
+        toast({ title: "לא נמצאו לידים", description: "אין לידים מטופס זה בטווח הנבחר", variant: "destructive" });
       }
     } catch (err) {
       console.error("Error pulling lead:", err);
-      toast({ title: "שגיאה", description: "לא ניתן למשוך ליד", variant: "destructive" });
+      toast({ title: "שגיאה", description: "לא ניתן למשוך לידים", variant: "destructive" });
     } finally {
       setFetchingLead(false);
     }
