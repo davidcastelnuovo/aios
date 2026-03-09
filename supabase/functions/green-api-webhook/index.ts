@@ -888,15 +888,15 @@ Deno.serve(async (req) => {
       let groupId = existingGroup?.id;
       let groupIsBlocked = existingGroup?.is_blocked || false;
 
-      // Helper function to fetch REAL group name from Green API using getGroupData
-      async function fetchRealGroupName(groupChatId: string): Promise<string | null> {
+      // Helper function to fetch REAL group data from Green API using getGroupData
+      async function fetchGroupDataFromApi(groupChatId: string): Promise<{ name: string | null; inviteLink: string | null }> {
         try {
           if (!instanceId || !apiToken) {
             console.log('⚠️ Missing credentials for Green API call');
-            return null;
+            return { name: null, inviteLink: null };
           }
           
-          console.log('🔍 Fetching real group name using getGroupData for:', groupChatId);
+          console.log('🔍 Fetching real group data using getGroupData for:', groupChatId);
           
           const response = await fetch(
             `https://api.green-api.com/waInstance${instanceId}/getGroupData/${apiToken}`,
@@ -909,17 +909,18 @@ Deno.serve(async (req) => {
           
           if (response.ok) {
             const groupData = await response.json();
-            console.log('📋 Green API getGroupData response:', JSON.stringify(groupData));
-            const realName = groupData.subject || null;
-            console.log('✅ Real group name from API (subject):', realName);
-            return realName;
+            console.log('📋 Green API getGroupData response (subject, inviteLink):', groupData.subject, groupData.groupInviteLink);
+            return {
+              name: groupData.subject || null,
+              inviteLink: groupData.groupInviteLink || null,
+            };
           } else {
             console.error('❌ Failed to fetch group data:', response.status, await response.text());
-            return null;
+            return { name: null, inviteLink: null };
           }
         } catch (e) {
-          console.error('❌ Error fetching group name:', e);
-          return null;
+          console.error('❌ Error fetching group data:', e);
+          return { name: null, inviteLink: null };
         }
       }
 
