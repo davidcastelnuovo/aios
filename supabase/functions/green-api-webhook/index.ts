@@ -1143,6 +1143,7 @@ Deno.serve(async (req) => {
               contact_type: 'group',
               contact_id: groupId,
               contact_name: groupRecord?.group_name || null,
+              group_invite_link: groupInviteLink || null,
               connection_user_id: connectionUserId,
               tags: groupTags,
             },
