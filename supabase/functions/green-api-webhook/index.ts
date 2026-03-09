@@ -925,17 +925,22 @@ Deno.serve(async (req) => {
       }
 
       if (!groupId) {
-        // Create new group - fetch real name from Green API
-        let realGroupName = await fetchRealGroupName(groupChatId);
-        const newGroupName = realGroupName || `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
+        // Create new group - fetch real name and invite link from Green API
+        const groupApiData = await fetchGroupDataFromApi(groupChatId);
+        const newGroupName = groupApiData.name || `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
         
+        const insertData: any = {
+          tenant_id: tenantId,
+          group_chat_id: groupChatId,
+          group_name: newGroupName,
+        };
+        if (groupApiData.inviteLink) {
+          insertData.invite_link = groupApiData.inviteLink;
+        }
+
         const { data: newGroup, error: groupError } = await supabaseClient
           .from('whatsapp_groups')
-          .insert({
-            tenant_id: tenantId,
-            group_chat_id: groupChatId,
-            group_name: newGroupName,
-          })
+          .insert(insertData)
           .select('id')
           .single();
 
@@ -945,22 +950,30 @@ Deno.serve(async (req) => {
         }
 
         groupId = newGroup.id;
-        console.log('✅ Created new group with real name:', newGroupName);
+        console.log('✅ Created new group with real name:', newGroupName, 'invite_link:', groupApiData.inviteLink || 'none');
       } else if (existingGroup) {
         const currentName = existingGroup.group_name || '';
         const looksLikePlaceholder = currentName.startsWith('קבוצה ');
         const looksLikeSenderName = /🌴|📱|👤/.test(currentName) || currentName.split(' ').length <= 2;
         
         if (looksLikePlaceholder || looksLikeSenderName) {
-          console.log('🔄 Current group name might be incorrect, fetching real name...');
-          const realGroupName = await fetchRealGroupName(groupChatId);
+          console.log('🔄 Current group name might be incorrect, fetching real data...');
+          const groupApiData = await fetchGroupDataFromApi(groupChatId);
           
-          if (realGroupName && realGroupName !== currentName) {
+          const updateFields: any = {};
+          if (groupApiData.name && groupApiData.name !== currentName) {
+            updateFields.group_name = groupApiData.name;
+          }
+          if (groupApiData.inviteLink) {
+            updateFields.invite_link = groupApiData.inviteLink;
+          }
+          
+          if (Object.keys(updateFields).length > 0) {
             await supabaseClient
               .from('whatsapp_groups')
-              .update({ group_name: realGroupName })
+              .update(updateFields)
               .eq('id', groupId);
-            console.log('📝 Updated group name from:', currentName, 'to:', realGroupName);
+            console.log('📝 Updated group:', updateFields);
           }
         }
       }
