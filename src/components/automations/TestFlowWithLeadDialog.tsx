@@ -659,12 +659,12 @@ export function TestFlowWithLeadDialog({
             {testMutation.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                מריץ {selectedLeadIds.size > 1 ? `(${selectedLeadIds.size})` : ""}...
+                מריץ...
               </>
             ) : (
               <>
                 <TestTube className="h-4 w-4 ml-2" />
-                הרץ {selectedLeadIds.size > 1 ? `על ${selectedLeadIds.size} לידים` : "טסט"}
+                {inputMode === "manual" ? "הרץ טסט ידני" : selectedLeadIds.size > 1 ? `הרץ על ${selectedLeadIds.size} לידים` : "הרץ טסט"}
               </>
             )}
           </Button>
