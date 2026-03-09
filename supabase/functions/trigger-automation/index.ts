@@ -1962,6 +1962,12 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
       contactPhone = client?.phone
     }
     
+    // Fallback: use phone directly from data (manual test / webhook)
+    if (!contactPhone && data.phone) {
+      contactPhone = data.phone
+      console.log(`Using phone from data directly: ${contactPhone}`)
+    }
+    
     if (!contactPhone) {
       throw new Error('לא נמצא מספר טלפון לשליחה')
     }
