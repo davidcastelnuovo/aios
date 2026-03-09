@@ -710,7 +710,24 @@ function checkConditions(conditions: any, data: any, triggerType?: string): bool
       // WhatsApp message received trigger conditions
       else if (triggerType === 'whatsapp_message_received') {
         if (key === 'source_filter') {
-          // source_filter is handled via group_id/tag_id, skip it
+          // Handle source_filter logic here
+          if (value === 'group' && !data.group_id) return false;
+          if (value === 'all_groups' && !data.group_id) return false;
+          if (value === 'all_groups_except') {
+            if (!data.group_id) return false;
+            const excludedIds = conditions.excluded_group_ids || [];
+            if (excludedIds.length > 0 && excludedIds.includes(data.group_id)) return false;
+          }
+          if (value === 'multiple_groups') {
+            if (!data.group_id) return false;
+            const selectedIds = conditions.selected_group_ids || [];
+            if (selectedIds.length > 0 && !selectedIds.includes(data.group_id)) return false;
+          }
+          if (value === 'private' && data.group_id) return false;
+          continue;
+        }
+        if (key === 'selected_group_ids' || key === 'excluded_group_ids') {
+          // Already handled by source_filter above
           continue;
         }
         if (key === 'group_id' && value) {
