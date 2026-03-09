@@ -266,6 +266,12 @@ export function TestFlowWithLeadDialog({
 
       // Manual input mode
       if (inputMode === "manual") {
+        const isFacebookTrigger =
+          automation?.trigger_type === "inbound_webhook_lead" ||
+          automation?.trigger_type === "lead_created" ||
+          triggerStep?.action_type === "inbound_webhook_lead" ||
+          triggerStep?.action_type === "lead_created";
+
         const testData: any = {
           test: true,
           manual: true,
@@ -273,10 +279,29 @@ export function TestFlowWithLeadDialog({
           company_name: manualData.company_name,
           phone: manualData.phone,
           email: manualData.email,
-          source: manualData.source,
-          notes: manualData.notes,
+          source: manualData.source || (isFacebookTrigger ? "facebook" : ""),
+          notes: manualData.notes || "",
           timestamp: new Date().toISOString(),
         };
+
+        // If trigger is Facebook/webhook, add fb_ prefixed fields to mimic real FB lead data
+        if (isFacebookTrigger) {
+          if (manualData.phone) testData.fb_phone = manualData.phone;
+          if (manualData.contact_name) testData.fb_full_name = manualData.contact_name;
+          if (manualData.email) testData.fb_email = manualData.email;
+          if (manualData.company_name) testData.fb_company_name = manualData.company_name;
+
+          // Append fb_ fields to notes like real FB leads do
+          const fbEntries = [
+            manualData.contact_name && `fb_full_name: ${manualData.contact_name}`,
+            manualData.phone && `fb_phone: ${manualData.phone}`,
+            manualData.email && `fb_email: ${manualData.email}`,
+            manualData.company_name && `fb_company_name: ${manualData.company_name}`,
+          ].filter(Boolean);
+          if (fbEntries.length > 0) {
+            testData.notes = (testData.notes ? testData.notes + "\n" : "") + fbEntries.join("\n");
+          }
+        }
 
         const response = await supabase.functions.invoke("trigger-automation", {
           body: { automationId, tenant_id: tenantId, data: testData },
