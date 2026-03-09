@@ -405,6 +405,216 @@ serve(async (req) => {
         .eq('id', integration.id);
     }
 
+    // ========== PASS 2: Flow-based form scanning ==========
+    // Find flow trigger steps that reference facebook_form_id not covered by any integration form_mappings
+    console.log('\n🔄 Pass 2: Checking flow trigger steps for unmapped forms...');
+    
+    const { data: allFlowSteps } = await supabase
+      .from('automation_flow_steps')
+      .select('automation_id, configuration, tenant_id')
+      .eq('step_type', 'trigger')
+      .not('configuration->>facebook_form_id', 'is', null);
+    
+    if (allFlowSteps && allFlowSteps.length > 0) {
+      // Build a set of all form_ids already covered by integrations
+      const coveredFormIds = new Set<string>();
+      for (const integration of integrations!) {
+        const settings = integration.settings as IntegrationSettings | null;
+        const mappings = settings?.form_mappings || {};
+        for (const fId of Object.keys(mappings)) {
+          coveredFormIds.add(`${integration.tenant_id}:${fId}`);
+        }
+      }
+      
+      // Group flow steps by form_id + tenant_id to avoid duplicates
+      const flowFormMap = new Map<string, { formId: string; tenantId: string; integrationId: string; automationId: string }>();
+      
+      for (const step of allFlowSteps) {
+        const config = step.configuration as any;
+        const formId = config?.facebook_form_id;
+        const integrationId = config?.facebook_integration_id;
+        if (!formId || !integrationId) continue;
+        
+        const key = `${step.tenant_id}:${formId}`;
+        if (coveredFormIds.has(key)) {
+          console.log(`⏭️ Form ${formId} already covered by integration for tenant ${step.tenant_id}`);
+          continue;
+        }
+        
+        // Verify automation is active
+        const { data: autoCheck } = await supabase
+          .from('automations')
+          .select('id')
+          .eq('id', step.automation_id)
+          .eq('active', true)
+          .maybeSingle();
+        
+        if (!autoCheck) continue;
+        
+        if (!flowFormMap.has(key)) {
+          flowFormMap.set(key, {
+            formId,
+            tenantId: step.tenant_id,
+            integrationId,
+            automationId: step.automation_id,
+          });
+        }
+      }
+      
+      console.log(`Found ${flowFormMap.size} unmapped flow form(s) to sync`);
+      
+      for (const [key, info] of flowFormMap) {
+        console.log(`\n📝 Flow-syncing form ${info.formId} for tenant ${info.tenantId}`);
+        
+        // Get access token from the referenced integration
+        const { data: fbInt } = await supabase
+          .from('tenant_integrations')
+          .select('api_key, shared_from_integration_id, last_sync_at')
+          .eq('id', info.integrationId)
+          .eq('is_active', true)
+          .maybeSingle();
+        
+        let flowToken = fbInt?.api_key;
+        if (!flowToken && fbInt?.shared_from_integration_id) {
+          const { data: srcInt } = await supabase
+            .from('tenant_integrations')
+            .select('api_key')
+            .eq('id', fbInt.shared_from_integration_id)
+            .maybeSingle();
+          flowToken = srcInt?.api_key;
+        }
+        
+        if (!flowToken) {
+          console.log(`⚠️ No access token for flow integration ${info.integrationId}`);
+          continue;
+        }
+        
+        // Use last_sync_at from the integration or default to 24h ago
+        const flowSinceDate = fbInt?.last_sync_at 
+          ? new Date(fbInt.last_sync_at as string) 
+          : new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const flowSinceTimestamp = Math.floor(flowSinceDate.getTime() / 1000);
+        
+        try {
+          const fbUrl = `https://graph.facebook.com/v19.0/${info.formId}/leads?access_token=${flowToken}&since=${flowSinceTimestamp}&limit=500`;
+          const fbResponse = await fetch(fbUrl);
+          
+          if (!fbResponse.ok) {
+            console.error(`Facebook API error for flow form ${info.formId}:`, await fbResponse.text());
+            continue;
+          }
+          
+          const fbData = await fbResponse.json();
+          const leads = fbData.data || [];
+          console.log(`Retrieved ${leads.length} leads from Facebook for flow form ${info.formId}`);
+          
+          for (const fbLead of leads) {
+            const leadgenId = fbLead.id;
+            
+            // Dedup check
+            const { data: existing } = await supabase
+              .from('leads')
+              .select('id')
+              .eq('tenant_id', info.tenantId)
+              .or(`notes.ilike.%${leadgenId}%,notes.ilike.%Facebook Lead ID: ${leadgenId}%`)
+              .limit(1);
+            
+            if (existing && existing.length > 0) {
+              totalSkipped++;
+              continue;
+            }
+            
+            // Check deleted
+            const { data: deleted } = await supabase
+              .from('deleted_facebook_leads')
+              .select('id')
+              .eq('tenant_id', info.tenantId)
+              .eq('leadgen_id', leadgenId)
+              .limit(1);
+            
+            if (deleted && deleted.length > 0) {
+              totalSkipped++;
+              continue;
+            }
+            
+            // Parse fields
+            const fieldData: Record<string, string> = {};
+            if (fbLead.field_data) {
+              for (const field of fbLead.field_data) {
+                fieldData[field.name] = field.values?.[0] || '';
+              }
+            }
+            
+            const leadRecord: Record<string, any> = {
+              tenant_id: info.tenantId,
+              source: 'paid_ads',
+              status: 'new',
+              notes: `leadgen_id: ${leadgenId}\nFacebook Form: ${info.formId}\nCreated: ${fbLead.created_time || 'unknown'}\nSource: Flow-based sync`,
+              company_name: fieldData.full_name || fieldData.company || fieldData.name || 'ליד מפייסבוק',
+              contact_name: fieldData.full_name || `${fieldData.first_name || ''} ${fieldData.last_name || ''}`.trim() || null,
+              email: fieldData.email || null,
+              phone: fieldData.phone_number || fieldData.phone || null,
+            };
+            
+            const { data: newLead, error: insertError } = await supabase
+              .from('leads')
+              .insert(leadRecord)
+              .select()
+              .single();
+            
+            if (insertError) {
+              errors.push(`Flow lead ${leadgenId}: ${insertError.message}`);
+              continue;
+            }
+            
+            console.log(`✅ Flow-synced lead created: ${newLead.id}`);
+            totalSynced++;
+            
+            // Build fb_ fields for trigger payload
+            const fbFields: Record<string, string> = {};
+            for (const [k, v] of Object.entries(fieldData)) {
+              fbFields[`fb_${k}`] = v;
+            }
+            
+            // Trigger automation
+            try {
+              await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${supabaseKey}`,
+                },
+                body: JSON.stringify({
+                  trigger_type: 'lead_created',
+                  data: {
+                    id: newLead.id,
+                    lead_id: newLead.id,
+                    company_name: newLead.company_name,
+                    contact_name: newLead.contact_name,
+                    phone: newLead.phone,
+                    email: newLead.email,
+                    status: newLead.status,
+                    source: newLead.source,
+                    agency_id: newLead.agency_id,
+                    facebook_form_id: info.formId,
+                    ...fbFields,
+                  },
+                  tenant_id: info.tenantId,
+                }),
+              });
+              console.log(`✅ Flow lead_created automation triggered for ${newLead.id}`);
+            } catch (e) {
+              console.error('Flow automation trigger error:', e);
+            }
+          }
+        } catch (formError) {
+          console.error(`Error processing flow form ${info.formId}:`, formError);
+          errors.push(`Flow form ${info.formId}: ${formError}`);
+        }
+      }
+    }
+    // ========== END PASS 2 ==========
+
     console.log(`\n✅ Sync completed: ${totalSynced} synced, ${totalSkipped} skipped, ${errors.length} errors`);
 
     return new Response(JSON.stringify({
