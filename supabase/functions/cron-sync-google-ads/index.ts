@@ -65,37 +65,33 @@ async function patchAndRunScenario(
       if (mod.module && isGoogleAdsModule(mod.module) && mod.mapper) {
         if (customerId) {
           const fmtId = customerId.replace(/-/g, "");
-          mod.mapper.customerId = fmtId;
-          mod.mapper.customer_id = fmtId;
           mod.mapper.accountId = fmtId;
         }
-        // Set CUSTOM date range
+        // Set date range using the format the runCampaignReport module expects
         const formatForMake = (ds: string) => {
           const d = new Date(ds);
           return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
         };
-        mod.mapper.dateRangeType = "CUSTOM";
         mod.mapper.startDate = formatForMake(startDate);
         mod.mapper.endDate = formatForMake(endDate);
-        mod.mapper.start_date = formatForMake(startDate);
-        mod.mapper.end_date = formatForMake(endDate);
-        mod.mapper.dateFrom = formatForMake(startDate);
-        mod.mapper.dateTo = formatForMake(endDate);
+        // Remove fields that don't belong in runCampaignReport
+        delete mod.mapper.dateRangeType;
+        delete mod.mapper.start_date;
+        delete mod.mapper.end_date;
+        delete mod.mapper.dateFrom;
+        delete mod.mapper.dateTo;
+        delete mod.mapper.customerId;
+        delete mod.mapper.customer_id;
+        delete mod.mapper.metrics;
+        delete mod.mapper.segments;
+        delete mod.mapper.attributes;
 
-        if (!mod.mapper.segments || !Array.isArray(mod.mapper.segments)) {
-          mod.mapper.segments = ["segments.date"];
-        } else if (!mod.mapper.segments.includes("segments.date")) {
-          mod.mapper.segments.push("segments.date");
-        }
-        if (!mod.mapper.attributes || !Array.isArray(mod.mapper.attributes)) {
-          mod.mapper.attributes = ["campaign.id", "campaign.name"];
-        }
-      }
+
 
       if (mod.module && isHttpModule(mod.module) && mod.mapper) {
         mod.mapper.url = webhookUrl;
         const gid = bp.flow.find((m: any) => m.module && isGoogleAdsModule(m.module))?.id || 3;
-        const bodyTemplate = `{"table_id":"${tableId}","campaign_type":"${campaignType}","tenant_id":"${tenantId}","start_date":"${startDate}","end_date":"${endDate}","records":[{"date":"{{${gid}.segments.date}}","campaign_id":"{{${gid}.campaign.id}}","campaign_name":"{{${gid}.campaign.name}}","impressions":"{{${gid}.metrics.impressions}}","clicks":"{{${gid}.metrics.clicks}}","cost_micros":"{{${gid}.metrics.costMicros}}","conversions":"{{${gid}.metrics.conversions}}","ctr":"{{${gid}.metrics.ctr}}","average_cpc":"{{${gid}.metrics.averageCpc}}"}]}`;
+        const bodyTemplate = `{"table_id":"${tableId}","campaign_type":"${campaignType}","tenant_id":"${tenantId}","start_date":"${startDate}","end_date":"${endDate}","records":[{"date":"{{${gid}.dimensions.date}}","campaign_id":"{{${gid}.dimensions.campaignId}}","campaign_name":"{{${gid}.dimensions.campaignName}}","impressions":"{{${gid}.metrics.impressions}}","clicks":"{{${gid}.metrics.clicks}}","cost":"{{${gid}.metrics.cost}}","conversions":"{{${gid}.metrics.conversions}}","ctr":"{{${gid}.metrics.ctr}}","average_cpc":"{{${gid}.metrics.averageCpc}}","cost_micros":"{{${gid}.metrics.costMicros}}","conversions_value":"{{${gid}.metrics.conversionsValue}}","all_conversions":"{{${gid}.metrics.allConversions}}"}]}`;
         mod.mapper.jsonStringBodyContent = bodyTemplate;
         if (mod.mapper.data) delete mod.mapper.data;
       }
