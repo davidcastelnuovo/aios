@@ -371,9 +371,18 @@ export function StepConfigPanel({ node, open, onClose, onUpdate, allNodes = [] }
                 className="text-right"
                 rows={4}
               />
-              <p className="text-xs text-muted-foreground text-right">
-                משתנים זמינים: {availableFields.map((f) => `{{${f.key}}}`).join(", ")}
-              </p>
+              <div className="text-xs text-muted-foreground text-right space-y-1">
+                <p>
+                  <span className="font-semibold">שדות מערכת:</span>{" "}
+                  {availableFields.filter(f => !f.key.startsWith("fb_")).map((f) => `{{${f.key}}}`).join(", ")}
+                </p>
+                {availableFields.some(f => f.key.startsWith("fb_")) && (
+                  <p>
+                    <span className="font-semibold text-blue-600">שדות פייסבוק:</span>{" "}
+                    <span className="text-blue-600">{availableFields.filter(f => f.key.startsWith("fb_")).map((f) => `{{${f.key}}}`).join(", ")}</span>
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
