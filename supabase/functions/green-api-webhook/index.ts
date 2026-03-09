@@ -1115,32 +1115,50 @@ Deno.serve(async (req) => {
             .eq('id', groupId)
             .single();
 
-          // Fetch invite link if not cached
+          // Try to get invite link: first from DB cache, then from getGroupData, then from getGroupInviteLink
           let groupInviteLink = groupRecord?.invite_link || null;
           if (!groupInviteLink && instanceId && apiToken && groupRecord?.group_chat_id) {
+            // Try getGroupData first (returns invite link along with other data)
             try {
-              console.log('🔗 Fetching group invite link for:', groupRecord.group_chat_id);
-              const inviteResponse = await fetch(
-                `https://api.green-api.com/waInstance${instanceId}/getGroupInviteLink/${apiToken}`,
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ groupId: groupRecord.group_chat_id })
-                }
-              );
-              if (inviteResponse.ok) {
-                const inviteData = await inviteResponse.json();
-                groupInviteLink = inviteData.inviteLink || null;
-                if (groupInviteLink) {
-                  await supabaseClient
-                    .from('whatsapp_groups')
-                    .update({ invite_link: groupInviteLink })
-                    .eq('id', groupId);
-                  console.log('✅ Saved group invite link:', groupInviteLink);
-                }
+              const groupApiData = await fetchGroupDataFromApi(groupRecord.group_chat_id);
+              if (groupApiData.inviteLink) {
+                groupInviteLink = groupApiData.inviteLink;
+                console.log('✅ Got invite link from getGroupData:', groupInviteLink);
               }
             } catch (e) {
-              console.error('⚠️ Could not fetch group invite link:', e);
+              console.log('⚠️ getGroupData failed for invite link:', e);
+            }
+
+            // Fallback: try dedicated getGroupInviteLink endpoint
+            if (!groupInviteLink) {
+              try {
+                console.log('🔗 Trying getGroupInviteLink for:', groupRecord.group_chat_id);
+                const inviteResponse = await fetch(
+                  `https://api.green-api.com/waInstance${instanceId}/getGroupInviteLink/${apiToken}`,
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ groupId: groupRecord.group_chat_id })
+                  }
+                );
+                if (inviteResponse.ok) {
+                  const inviteData = await inviteResponse.json();
+                  groupInviteLink = inviteData.inviteLink || null;
+                }
+              } catch (e) {
+                console.error('⚠️ Could not fetch group invite link:', e);
+              }
+            }
+
+            // Save to DB if found
+            if (groupInviteLink) {
+              await supabaseClient
+                .from('whatsapp_groups')
+                .update({ invite_link: groupInviteLink })
+                .eq('id', groupId);
+              console.log('✅ Saved group invite link:', groupInviteLink);
+            } else {
+              console.log('⚠️ Could not obtain invite link — bot may not be group admin');
             }
           }
 
