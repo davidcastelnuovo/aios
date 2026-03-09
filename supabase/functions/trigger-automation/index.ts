@@ -2027,10 +2027,19 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   }
   
   // Replace template variables
-  const message = replaceTemplateVariables(message_template, {
+  let message = replaceTemplateVariables(message_template, {
     ...data,
     ...contactRecord,
   }, tenantSlug)
+
+  // If media_type is "link", append the URL to the message text for WhatsApp link preview
+  if (config.media_type === 'link' && config.media_url) {
+    const resolvedLink = replaceTemplateVariables(config.media_url, {
+      ...data,
+      ...contactRecord,
+    }, tenantSlug)
+    message = `${message}\n\n${resolvedLink}`
+  }
   
   // Send message via Green API
   const greenApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendMessage/${apiTokenInstance}`
@@ -2041,6 +2050,7 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
     body: JSON.stringify({
       chatId,
       message,
+      linkPreview: config.media_type === 'link',
     }),
   })
   
