@@ -5,6 +5,115 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const MAKE_API_REGIONS: Record<string, string> = {
+  eu1: "https://eu1.make.com/api/v2",
+  eu2: "https://eu2.make.com/api/v2",
+  us1: "https://us1.make.com/api/v2",
+  us2: "https://us2.make.com/api/v2",
+};
+
+function isGoogleAdsModule(moduleName: string): boolean {
+  if (!moduleName) return false;
+  const n = moduleName.toLowerCase();
+  return n.includes("google-ads") || n.includes("googleads") || n.includes("adwords");
+}
+
+function isHttpModule(moduleName: string): boolean {
+  if (!moduleName) return false;
+  return moduleName.toLowerCase().includes("http");
+}
+
+async function makeAPICall(apiToken: string, region: string, endpoint: string, method = "GET", body?: any) {
+  const baseUrl = MAKE_API_REGIONS[region] || MAKE_API_REGIONS.eu2;
+  const url = `${baseUrl}${endpoint}`;
+  const options: RequestInit = {
+    method,
+    headers: { Authorization: `Token ${apiToken}`, "Content-Type": "application/json" },
+  };
+  if (body && method !== "GET") options.body = JSON.stringify(body);
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Make API ${res.status}: ${text.slice(0, 300)}`);
+  }
+  return res.json();
+}
+
+async function patchAndRunScenario(
+  apiToken: string,
+  region: string,
+  scenarioId: string,
+  tableId: string,
+  tenantId: string,
+  customerId: string | undefined,
+  campaignType: string,
+  startDate: string,
+  endDate: string,
+  webhookUrl: string
+) {
+  // Step 1: Get blueprint
+  const bpResponse = await makeAPICall(apiToken, region, `/scenarios/${scenarioId}/blueprint`);
+  let bp = bpResponse;
+  if (bp.response?.blueprint) bp = bp.response.blueprint;
+  else if (bp.blueprint) bp = bp.blueprint;
+  delete bp.code;
+  delete bp.response;
+
+  // Step 2: Patch blueprint
+  if (bp.flow && Array.isArray(bp.flow)) {
+    for (const mod of bp.flow) {
+      if (mod.module && isGoogleAdsModule(mod.module) && mod.mapper) {
+        if (customerId) {
+          const fmtId = customerId.replace(/-/g, "");
+          mod.mapper.customerId = fmtId;
+          mod.mapper.customer_id = fmtId;
+          mod.mapper.accountId = fmtId;
+        }
+        // Set CUSTOM date range
+        const formatForMake = (ds: string) => {
+          const d = new Date(ds);
+          return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+        };
+        mod.mapper.dateRangeType = "CUSTOM";
+        mod.mapper.startDate = formatForMake(startDate);
+        mod.mapper.endDate = formatForMake(endDate);
+        mod.mapper.start_date = formatForMake(startDate);
+        mod.mapper.end_date = formatForMake(endDate);
+        mod.mapper.dateFrom = formatForMake(startDate);
+        mod.mapper.dateTo = formatForMake(endDate);
+
+        if (!mod.mapper.segments || !Array.isArray(mod.mapper.segments)) {
+          mod.mapper.segments = ["segments.date"];
+        } else if (!mod.mapper.segments.includes("segments.date")) {
+          mod.mapper.segments.push("segments.date");
+        }
+        if (!mod.mapper.attributes || !Array.isArray(mod.mapper.attributes)) {
+          mod.mapper.attributes = ["campaign.id", "campaign.name"];
+        }
+      }
+
+      if (mod.module && isHttpModule(mod.module) && mod.mapper) {
+        mod.mapper.url = webhookUrl;
+        const gid = bp.flow.find((m: any) => m.module && isGoogleAdsModule(m.module))?.id || 3;
+        const bodyTemplate = `{"table_id":"${tableId}","campaign_type":"${campaignType}","tenant_id":"${tenantId}","start_date":"${startDate}","end_date":"${endDate}","records":[{"date":"{{${gid}.segments.date}}","campaign_id":"{{${gid}.campaign.id}}","campaign_name":"{{${gid}.campaign.name}}","impressions":"{{${gid}.metrics.impressions}}","clicks":"{{${gid}.metrics.clicks}}","cost_micros":"{{${gid}.metrics.costMicros}}","conversions":"{{${gid}.metrics.conversions}}","ctr":"{{${gid}.metrics.ctr}}","average_cpc":"{{${gid}.metrics.averageCpc}}"}]}`;
+        mod.mapper.jsonStringBodyContent = bodyTemplate;
+        if (mod.mapper.data) delete mod.mapper.data;
+      }
+    }
+  }
+
+  // Step 3: Save patched blueprint
+  await makeAPICall(apiToken, region, `/scenarios/${scenarioId}`, "PATCH", {
+    blueprint: JSON.stringify(bp),
+  });
+  console.log(`Patched scenario ${scenarioId} for dates ${startDate} to ${endDate}`);
+
+  // Step 4: Run scenario
+  const runResult = await makeAPICall(apiToken, region, `/scenarios/${scenarioId}/run`, "POST", {});
+  console.log(`Ran scenario ${scenarioId}:`, JSON.stringify(runResult).slice(0, 200));
+  return runResult;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -22,92 +131,67 @@ Deno.serve(async (req) => {
       table_ids?: string[];
     };
 
-    // Determine date range
     let startDate: string;
     let endDate: string;
+    let isBackfill = false;
 
     if (backfill_from && backfill_to) {
-      // Backfill mode: use provided range
       startDate = backfill_from;
       endDate = backfill_to;
+      isBackfill = true;
       console.log(`BACKFILL mode: ${startDate} to ${endDate}`);
     } else {
-      // Daily mode: yesterday 07:00 to today 07:00 → effectively yesterday's date
-      const now = new Date();
-      const yesterday = new Date(now);
+      const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       startDate = yesterday.toISOString().slice(0, 10);
-      endDate = yesterday.toISOString().slice(0, 10);
+      endDate = startDate;
       console.log(`DAILY mode: syncing ${startDate}`);
     }
 
     // Get all Google Ads tables
-    let query = supabase
-      .from("crm_tables")
-      .select("*")
-      .eq("integration_type", "google_ads");
-
-    if (table_ids && table_ids.length > 0) {
-      query = query.in("id", table_ids);
-    }
+    let query = supabase.from("crm_tables").select("*").eq("integration_type", "google_ads");
+    if (table_ids && table_ids.length > 0) query = query.in("id", table_ids);
 
     const { data: tables, error: tablesError } = await query;
-
-    if (tablesError) {
-      throw new Error(`Failed to fetch tables: ${tablesError.message}`);
-    }
-
+    if (tablesError) throw new Error(`Failed to fetch tables: ${tablesError.message}`);
     if (!tables || tables.length === 0) {
-      return new Response(
-        JSON.stringify({ message: "No Google Ads tables found" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ message: "No Google Ads tables found" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    console.log(`Found ${tables.length} Google Ads tables to sync`);
-
+    console.log(`Found ${tables.length} Google Ads tables`);
     const results: any[] = [];
+    const webhookUrl = `${supabaseUrl}/functions/v1/webhook-google-ads-sync`;
 
-    // Group tables by tenant to reuse Make API credentials
-    const tablesByTenant = new Map<string, typeof tables>();
-    for (const table of tables) {
-      const tid = table.tenant_id;
-      if (!tablesByTenant.has(tid)) {
-        tablesByTenant.set(tid, []);
-      }
-      tablesByTenant.get(tid)!.push(table);
+    // Group by tenant
+    const byTenant = new Map<string, typeof tables>();
+    for (const t of tables) {
+      if (!byTenant.has(t.tenant_id)) byTenant.set(t.tenant_id, []);
+      byTenant.get(t.tenant_id)!.push(t);
     }
 
-    for (const [tenantId, tenantTables] of tablesByTenant) {
-      // Get Make API credentials for this tenant
-      const { data: makeIntegration } = await supabase
+    for (const [tenantId, tenantTables] of byTenant) {
+      const { data: makeInt } = await supabase
         .from("tenant_integrations")
         .select("*")
         .eq("tenant_id", tenantId)
         .eq("integration_type", "make_api")
         .single();
 
-      if (!makeIntegration) {
-        console.warn(`No Make API integration found for tenant ${tenantId}`);
-        for (const t of tenantTables) {
-          results.push({ table_id: t.id, name: t.name, status: "skipped", reason: "No Make API integration" });
-        }
+      if (!makeInt) {
+        for (const t of tenantTables) results.push({ table: t.name, status: "skipped", reason: "No Make integration" });
         continue;
       }
 
-      const settings = makeIntegration.settings as any;
-      const apiToken = settings?.api_token;
-      const region = settings?.region || "eu2";
+      const s = makeInt.settings as any;
+      const apiToken = s?.api_token;
+      const region = s?.region || "eu2";
 
       if (!apiToken) {
-        console.warn(`No API token for Make integration in tenant ${tenantId}`);
-        for (const t of tenantTables) {
-          results.push({ table_id: t.id, name: t.name, status: "skipped", reason: "No Make API token" });
-        }
+        for (const t of tenantTables) results.push({ table: t.name, status: "skipped", reason: "No API token" });
         continue;
       }
-
-      const teamId = settings?.team_id;
 
       for (const table of tenantTables) {
         const intSettings = table.integration_settings as any;
@@ -116,94 +200,57 @@ Deno.serve(async (req) => {
         const campaignType = intSettings?.campaign_type || "leads";
 
         if (!scenarioId) {
-          results.push({ table_id: table.id, name: table.name, status: "skipped", reason: "No scenario ID" });
+          results.push({ table: table.name, status: "skipped", reason: "No scenario ID" });
           continue;
         }
 
-        console.log(`Syncing table "${table.name}" (${table.id}), scenario ${scenarioId}, dates ${startDate} to ${endDate}`);
+        const sid = String(Math.floor(Number(scenarioId)));
 
-        try {
-          const webhookUrl = `${supabaseUrl}/functions/v1/webhook-google-ads-sync`;
+        if (isBackfill) {
+          // For backfill: split into daily chunks to avoid overloading
+          const current = new Date(startDate);
+          const end = new Date(endDate);
+          let dayCount = 0;
 
-          // Step 1: Patch the scenario blueprint with the correct dates
-          const patchResponse = await fetch(`${supabaseUrl}/functions/v1/make-api`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${supabaseServiceKey}`,
-            },
-            body: JSON.stringify({
-              action: "patch_scenario_blueprint",
-              api_token: apiToken,
-              team_id: teamId,
-              region,
-              scenario_id: String(Math.floor(Number(scenarioId))),
-              table_id: table.id,
-              tenant_id: tenantId,
-              customer_id: customerId ? String(customerId) : undefined,
-              campaign_type: campaignType,
-              webhook_url: webhookUrl,
-              start_date: startDate,
-              end_date: endDate,
-            }),
-          });
-
-          const patchResult = await patchResponse.json();
-
-          if (!patchResult.success) {
-            console.error(`Failed to patch scenario for ${table.name}:`, patchResult.error);
-            results.push({ table_id: table.id, name: table.name, status: "error", reason: `Patch failed: ${patchResult.error}` });
-            continue;
+          while (current <= end) {
+            const dayStr = current.toISOString().slice(0, 10);
+            try {
+              console.log(`Backfill ${table.name}: ${dayStr}`);
+              await patchAndRunScenario(apiToken, region, sid, table.id, tenantId, customerId ? String(customerId) : undefined, campaignType, dayStr, dayStr, webhookUrl);
+              dayCount++;
+              // Wait 5 seconds between days to avoid rate limits
+              await new Promise((r) => setTimeout(r, 5000));
+            } catch (err) {
+              console.error(`Backfill error ${table.name} ${dayStr}:`, err instanceof Error ? err.message : err);
+              results.push({ table: table.name, date: dayStr, status: "error", reason: err instanceof Error ? err.message : String(err) });
+            }
+            current.setDate(current.getDate() + 1);
           }
-
-          // Step 2: Run the scenario
-          const runResponse = await fetch(`${supabaseUrl}/functions/v1/make-api`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${supabaseServiceKey}`,
-            },
-            body: JSON.stringify({
-              action: "run_and_sync_google_ads",
-              api_token: apiToken,
-              team_id: teamId,
-              region,
-              scenario_id: String(Math.floor(Number(scenarioId))),
-              table_id: table.id,
-            }),
-          });
-
-          const runResult = await runResponse.json();
-
-          if (runResult.success) {
-            console.log(`Successfully triggered sync for ${table.name}`);
-            results.push({ table_id: table.id, name: table.name, status: "triggered", dates: `${startDate} to ${endDate}` });
-          } else {
-            console.error(`Failed to run scenario for ${table.name}:`, runResult.error);
-            results.push({ table_id: table.id, name: table.name, status: "error", reason: runResult.error });
+          results.push({ table: table.name, status: "backfilled", days: dayCount });
+        } else {
+          // Daily sync: single date
+          try {
+            await patchAndRunScenario(apiToken, region, sid, table.id, tenantId, customerId ? String(customerId) : undefined, campaignType, startDate, endDate, webhookUrl);
+            results.push({ table: table.name, status: "triggered", date: startDate });
+          } catch (err) {
+            console.error(`Sync error ${table.name}:`, err instanceof Error ? err.message : err);
+            results.push({ table: table.name, status: "error", reason: err instanceof Error ? err.message : String(err) });
           }
-
-          // Wait 2 seconds between scenarios to avoid rate limiting
+          // Wait between tables
           await new Promise((r) => setTimeout(r, 2000));
-        } catch (err) {
-          const errMsg = err instanceof Error ? err.message : String(err);
-          console.error(`Error syncing ${table.name}:`, errMsg);
-          results.push({ table_id: table.id, name: table.name, status: "error", reason: errMsg });
         }
       }
     }
 
-    console.log(`Sync complete. Results:`, JSON.stringify(results));
-
-    return new Response(
-      JSON.stringify({ success: true, tables_processed: results.length, results }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    console.log("Sync complete:", JSON.stringify(results));
+    return new Response(JSON.stringify({ success: true, results }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
     console.error("Cron sync error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
