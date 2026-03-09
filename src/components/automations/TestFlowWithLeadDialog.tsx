@@ -86,6 +86,15 @@ export function TestFlowWithLeadDialog({
   const [testResults, setTestResults] = useState<Array<{ leadId: string; leadName: string; success: boolean; data?: any; error?: string }>>([]);
   const [lastMessageData, setLastMessageData] = useState<any>(null);
   const [isFetchingMessage, setIsFetchingMessage] = useState(false);
+  const [inputMode, setInputMode] = useState<"select" | "manual">("select");
+  const [manualData, setManualData] = useState({
+    contact_name: "",
+    company_name: "",
+    phone: "",
+    email: "",
+    source: "",
+    notes: "",
+  });
 
   // Fetch automation to check trigger type and config
   const { data: automation } = useQuery({
