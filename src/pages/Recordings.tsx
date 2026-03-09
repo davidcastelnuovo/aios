@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Video, Search, Download, Loader2, ExternalLink, Upload, FileVideo, FileText, Plus, Sparkles, CheckCircle2, AlertCircle, Trash2, Pencil, Check, X } from "lucide-react";
+import { Video, Search, Download, Loader2, ExternalLink, Upload, FileVideo, FileText, Plus, Sparkles, CheckCircle2, AlertCircle, Trash2, Pencil, Check, X, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import SummarizeRecordingDialog from "@/components/SummarizeRecordingDialog";
 
