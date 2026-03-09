@@ -610,6 +610,7 @@ serve(async (req) => {
                       status: leadRecord.status || 'new',
                       agency_id: leadRecord.agency_id || '',
                       notes: leadRecord.notes || '',
+                      facebook_form_id: formId,
                       // Include all fb_ prefixed form fields for variable replacement
                       ...fbPrefixedFields,
                     },
