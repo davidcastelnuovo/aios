@@ -422,8 +422,9 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
   const recordingToken = typeof recording.recording_password === 'string' ? recording.recording_password : null;
   const queryTokens = [zoomAccessToken, recordingToken].filter(Boolean) as string[];
   let lastError = 'No Zoom URL candidates found';
+  let sawUnauthorized = false;
 
-  for (const baseUrl of zoomUrls) {
+  const tryDownloadFromUrl = async (baseUrl: string): Promise<{ blob?: Blob; contentType?: string; error?: string; unauthorized?: boolean }> => {
     const candidateUrls = [baseUrl];
     for (const token of queryTokens) {
       const sep = baseUrl.includes('?') ? '&' : '?';
@@ -436,6 +437,7 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
       const responseType = (zoomResp.headers.get('content-type') || '').toLowerCase();
 
       if (!zoomResp.ok) {
+        if (zoomResp.status === 401 || zoomResp.status === 403) sawUnauthorized = true;
         lastError = `HTTP ${zoomResp.status} from Zoom`;
         await zoomResp.text();
         continue;
@@ -449,7 +451,67 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
 
       const blob = await zoomResp.blob();
       const ct = zoomResp.headers.get('content-type') || blob.type || 'application/octet-stream';
-      return { blob, fileName: 'zoom_recording', contentType: ct };
+      return { blob, contentType: ct };
+    }
+
+    return { error: lastError };
+  };
+
+  // First pass: try URLs stored on the recording row
+  for (const baseUrl of zoomUrls) {
+    const directResult = await tryDownloadFromUrl(baseUrl);
+    if (directResult.blob) {
+      return { blob: directResult.blob, fileName: 'zoom_recording', contentType: directResult.contentType };
+    }
+  }
+
+  // Second pass (self-heal): if Zoom URL expired/unauthorized, pull fresh download URLs from Zoom API
+  if (sawUnauthorized && zoomAccessToken && recording.meeting_id) {
+    try {
+      console.log('🔄 Stored Zoom URL unauthorized, fetching fresh recording URLs from Zoom API...');
+      const recordingsResp = await fetch(`https://api.zoom.us/v2/meetings/${encodeURIComponent(String(recording.meeting_id))}/recordings`, {
+        headers: { Authorization: `Bearer ${zoomAccessToken}` },
+      });
+
+      if (recordingsResp.ok) {
+        const recordingsData = await recordingsResp.json();
+        const files = Array.isArray(recordingsData?.recording_files) ? recordingsData.recording_files : [];
+        const targetType = String(recording.recording_type || '').toLowerCase();
+        const targetSize = typeof recording.file_size === 'number' ? recording.file_size : null;
+
+        const exactType = files.filter((f: any) => String(f?.recording_type || '').toLowerCase() === targetType);
+        const sameMime = files.filter((f: any) => String(f?.file_type || '').toUpperCase() === 'M4A');
+        const prioritized = [...exactType, ...sameMime, ...files].filter(Boolean);
+
+        const uniqueFreshUrls = [...new Set(
+          prioritized
+            .sort((a: any, b: any) => {
+              if (!targetSize) return 0;
+              const da = Math.abs((Number(a?.file_size) || 0) - targetSize);
+              const db = Math.abs((Number(b?.file_size) || 0) - targetSize);
+              return da - db;
+            })
+            .flatMap((f: any) => [f?.download_url, f?.play_url])
+            .filter(Boolean)
+        )] as string[];
+
+        for (const freshUrl of uniqueFreshUrls) {
+          const freshResult = await tryDownloadFromUrl(freshUrl);
+          if (freshResult.blob) {
+            console.log('✅ Downloaded media using fresh Zoom recording URL');
+            return { blob: freshResult.blob, fileName: 'zoom_recording', contentType: freshResult.contentType };
+          }
+        }
+      } else {
+        const errText = await recordingsResp.text();
+        if (errText.includes('does not contain scopes') || errText.includes('cloud_recording:read:list_recording_files')) {
+          lastError = 'חיבור Zoom חסר הרשאות cloud recording לקריאת קבצי הקלטה. יש לחבר מחדש את Zoom עם הרשאות הקלטות.';
+        } else {
+          lastError = `Zoom recordings API failed: ${recordingsResp.status} ${errText.slice(0, 120)}`;
+        }
+      }
+    } catch (refreshErr) {
+      lastError = `Zoom URL refresh failed: ${refreshErr instanceof Error ? refreshErr.message : String(refreshErr)}`;
     }
   }
 
