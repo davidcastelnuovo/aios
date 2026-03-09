@@ -504,7 +504,11 @@ async function downloadZoomMedia(supabase: any, recording: any): Promise<{
         }
       } else {
         const errText = await recordingsResp.text();
-        lastError = `Zoom recordings API failed: ${recordingsResp.status} ${errText.slice(0, 120)}`;
+        if (errText.includes('does not contain scopes') || errText.includes('cloud_recording:read:list_recording_files')) {
+          lastError = 'חיבור Zoom חסר הרשאות cloud recording לקריאת קבצי הקלטה. יש לחבר מחדש את Zoom עם הרשאות הקלטות.';
+        } else {
+          lastError = `Zoom recordings API failed: ${recordingsResp.status} ${errText.slice(0, 120)}`;
+        }
       }
     } catch (refreshErr) {
       lastError = `Zoom URL refresh failed: ${refreshErr instanceof Error ? refreshErr.message : String(refreshErr)}`;
