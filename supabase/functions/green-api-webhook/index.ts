@@ -422,8 +422,9 @@ Deno.serve(async (req) => {
         if (!groupId) {
           console.log('📝 Group not found, creating new group record for:', groupChatId);
           
-          // Fetch real group name from Green API
+          // Fetch real group name and invite link from Green API
           let realGroupName: string | null = null;
+          let realInviteLink: string | null = null;
           try {
             if (instanceId && apiToken) {
               const response = await fetch(
@@ -437,22 +438,28 @@ Deno.serve(async (req) => {
               if (response.ok) {
                 const groupData = await response.json();
                 realGroupName = groupData.subject || null;
-                console.log('✅ Fetched real group name:', realGroupName);
+                realInviteLink = groupData.groupInviteLink || null;
+                console.log('✅ Fetched real group name:', realGroupName, 'invite_link:', realInviteLink || 'none');
               }
             }
           } catch (e) {
-            console.log('⚠️ Could not fetch group name:', e);
+            console.log('⚠️ Could not fetch group data:', e);
           }
           
           const newGroupName = realGroupName || `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
           
+          const insertData: any = {
+            tenant_id: tenantId,
+            group_chat_id: groupChatId,
+            group_name: newGroupName,
+          };
+          if (realInviteLink) {
+            insertData.invite_link = realInviteLink;
+          }
+
           const { data: newGroup, error: groupError } = await supabaseClient
             .from('whatsapp_groups')
-            .insert({
-              tenant_id: tenantId,
-              group_chat_id: groupChatId,
-              group_name: newGroupName,
-            })
+            .insert(insertData)
             .select('id')
             .single();
           
@@ -888,15 +895,15 @@ Deno.serve(async (req) => {
       let groupId = existingGroup?.id;
       let groupIsBlocked = existingGroup?.is_blocked || false;
 
-      // Helper function to fetch REAL group name from Green API using getGroupData
-      async function fetchRealGroupName(groupChatId: string): Promise<string | null> {
+      // Helper function to fetch REAL group data from Green API using getGroupData
+      async function fetchGroupDataFromApi(groupChatId: string): Promise<{ name: string | null; inviteLink: string | null }> {
         try {
           if (!instanceId || !apiToken) {
             console.log('⚠️ Missing credentials for Green API call');
-            return null;
+            return { name: null, inviteLink: null };
           }
           
-          console.log('🔍 Fetching real group name using getGroupData for:', groupChatId);
+          console.log('🔍 Fetching real group data using getGroupData for:', groupChatId);
           
           const response = await fetch(
             `https://api.green-api.com/waInstance${instanceId}/getGroupData/${apiToken}`,
@@ -909,32 +916,38 @@ Deno.serve(async (req) => {
           
           if (response.ok) {
             const groupData = await response.json();
-            console.log('📋 Green API getGroupData response:', JSON.stringify(groupData));
-            const realName = groupData.subject || null;
-            console.log('✅ Real group name from API (subject):', realName);
-            return realName;
+            console.log('📋 Green API getGroupData response (subject, inviteLink):', groupData.subject, groupData.groupInviteLink);
+            return {
+              name: groupData.subject || null,
+              inviteLink: groupData.groupInviteLink || null,
+            };
           } else {
             console.error('❌ Failed to fetch group data:', response.status, await response.text());
-            return null;
+            return { name: null, inviteLink: null };
           }
         } catch (e) {
-          console.error('❌ Error fetching group name:', e);
-          return null;
+          console.error('❌ Error fetching group data:', e);
+          return { name: null, inviteLink: null };
         }
       }
 
       if (!groupId) {
-        // Create new group - fetch real name from Green API
-        let realGroupName = await fetchRealGroupName(groupChatId);
-        const newGroupName = realGroupName || `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
+        // Create new group - fetch real name and invite link from Green API
+        const groupApiData = await fetchGroupDataFromApi(groupChatId);
+        const newGroupName = groupApiData.name || `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
         
+        const insertData: any = {
+          tenant_id: tenantId,
+          group_chat_id: groupChatId,
+          group_name: newGroupName,
+        };
+        if (groupApiData.inviteLink) {
+          insertData.invite_link = groupApiData.inviteLink;
+        }
+
         const { data: newGroup, error: groupError } = await supabaseClient
           .from('whatsapp_groups')
-          .insert({
-            tenant_id: tenantId,
-            group_chat_id: groupChatId,
-            group_name: newGroupName,
-          })
+          .insert(insertData)
           .select('id')
           .single();
 
@@ -944,22 +957,30 @@ Deno.serve(async (req) => {
         }
 
         groupId = newGroup.id;
-        console.log('✅ Created new group with real name:', newGroupName);
+        console.log('✅ Created new group with real name:', newGroupName, 'invite_link:', groupApiData.inviteLink || 'none');
       } else if (existingGroup) {
         const currentName = existingGroup.group_name || '';
         const looksLikePlaceholder = currentName.startsWith('קבוצה ');
         const looksLikeSenderName = /🌴|📱|👤/.test(currentName) || currentName.split(' ').length <= 2;
         
         if (looksLikePlaceholder || looksLikeSenderName) {
-          console.log('🔄 Current group name might be incorrect, fetching real name...');
-          const realGroupName = await fetchRealGroupName(groupChatId);
+          console.log('🔄 Current group name might be incorrect, fetching real data...');
+          const groupApiData = await fetchGroupDataFromApi(groupChatId);
           
-          if (realGroupName && realGroupName !== currentName) {
+          const updateFields: any = {};
+          if (groupApiData.name && groupApiData.name !== currentName) {
+            updateFields.group_name = groupApiData.name;
+          }
+          if (groupApiData.inviteLink) {
+            updateFields.invite_link = groupApiData.inviteLink;
+          }
+          
+          if (Object.keys(updateFields).length > 0) {
             await supabaseClient
               .from('whatsapp_groups')
-              .update({ group_name: realGroupName })
+              .update(updateFields)
               .eq('id', groupId);
-            console.log('📝 Updated group name from:', currentName, 'to:', realGroupName);
+            console.log('📝 Updated group:', updateFields);
           }
         }
       }
@@ -1101,32 +1122,50 @@ Deno.serve(async (req) => {
             .eq('id', groupId)
             .single();
 
-          // Fetch invite link if not cached
+          // Try to get invite link: first from DB cache, then from getGroupData, then from getGroupInviteLink
           let groupInviteLink = groupRecord?.invite_link || null;
           if (!groupInviteLink && instanceId && apiToken && groupRecord?.group_chat_id) {
+            // Try getGroupData first (returns invite link along with other data)
             try {
-              console.log('🔗 Fetching group invite link for:', groupRecord.group_chat_id);
-              const inviteResponse = await fetch(
-                `https://api.green-api.com/waInstance${instanceId}/getGroupInviteLink/${apiToken}`,
-                {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ groupId: groupRecord.group_chat_id })
-                }
-              );
-              if (inviteResponse.ok) {
-                const inviteData = await inviteResponse.json();
-                groupInviteLink = inviteData.inviteLink || null;
-                if (groupInviteLink) {
-                  await supabaseClient
-                    .from('whatsapp_groups')
-                    .update({ invite_link: groupInviteLink })
-                    .eq('id', groupId);
-                  console.log('✅ Saved group invite link:', groupInviteLink);
-                }
+              const groupApiData = await fetchGroupDataFromApi(groupRecord.group_chat_id);
+              if (groupApiData.inviteLink) {
+                groupInviteLink = groupApiData.inviteLink;
+                console.log('✅ Got invite link from getGroupData:', groupInviteLink);
               }
             } catch (e) {
-              console.error('⚠️ Could not fetch group invite link:', e);
+              console.log('⚠️ getGroupData failed for invite link:', e);
+            }
+
+            // Fallback: try dedicated getGroupInviteLink endpoint
+            if (!groupInviteLink) {
+              try {
+                console.log('🔗 Trying getGroupInviteLink for:', groupRecord.group_chat_id);
+                const inviteResponse = await fetch(
+                  `https://api.green-api.com/waInstance${instanceId}/getGroupInviteLink/${apiToken}`,
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ groupId: groupRecord.group_chat_id })
+                  }
+                );
+                if (inviteResponse.ok) {
+                  const inviteData = await inviteResponse.json();
+                  groupInviteLink = inviteData.inviteLink || null;
+                }
+              } catch (e) {
+                console.error('⚠️ Could not fetch group invite link:', e);
+              }
+            }
+
+            // Save to DB if found
+            if (groupInviteLink) {
+              await supabaseClient
+                .from('whatsapp_groups')
+                .update({ invite_link: groupInviteLink })
+                .eq('id', groupId);
+              console.log('✅ Saved group invite link:', groupInviteLink);
+            } else {
+              console.log('⚠️ Could not obtain invite link — bot may not be group admin');
             }
           }
 
