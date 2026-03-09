@@ -328,6 +328,8 @@ Deno.serve(async (req) => {
         // Filter by trigger configuration BEFORE fetching automations
         const matchingSteps = flowTriggerSteps.filter((step: any) => {
           const config = step.configuration || {}
+          // Facebook form_id filter: if trigger step specifies a form, only match leads from that form
+          if (config.facebook_form_id && config.facebook_form_id !== payloadData?.facebook_form_id) return false
           if (config.group_id && config.group_id !== payloadData.group_id) return false
           if (config.connection_user_id && config.connection_user_id !== payloadData.connection_user_id) return false
           if (config.keyword && payloadData.message_text) {

@@ -98,9 +98,214 @@ serve(async (req) => {
                 return false;
               });
 
-              // Only process leads from explicitly mapped forms - no fallback to page_id
+              // If no integration mapping found, check flow trigger steps for this form_id
               if (!integration) {
-                console.log('Ignoring lead from unmapped form:', formId, 'page:', pageId, '- form must be explicitly mapped in form_mappings');
+                console.log('No integration form mapping for form:', formId, '- checking flow trigger steps...');
+                
+                // Query automation_flow_steps for trigger steps referencing this form_id
+                const { data: flowSteps } = await supabase
+                  .from('automation_flow_steps')
+                  .select('automation_id, configuration, tenant_id')
+                  .eq('step_type', 'trigger')
+                  .filter('configuration->>facebook_form_id', 'eq', formId);
+                
+                if (!flowSteps || flowSteps.length === 0) {
+                  console.log('No flow trigger steps reference form:', formId, '- skipping');
+                  continue;
+                }
+                
+                console.log(`Found ${flowSteps.length} flow trigger step(s) for form ${formId}`);
+                
+                // Track which tenants we've already processed for this leadgen_id
+                const processedTenants = new Set<string>();
+                
+                for (const flowStep of flowSteps) {
+                  const stepConfig = flowStep.configuration as any;
+                  const flowTenantId = flowStep.tenant_id;
+                  const fbIntegrationId = stepConfig?.facebook_integration_id;
+                  
+                  if (processedTenants.has(flowTenantId)) {
+                    console.log('Already processed tenant', flowTenantId, 'for this lead');
+                    continue;
+                  }
+                  
+                  if (!fbIntegrationId) {
+                    console.log('Flow step has no facebook_integration_id, skipping');
+                    continue;
+                  }
+                  
+                  // Verify the automation is active
+                  const { data: flowAutomation } = await supabase
+                    .from('automations')
+                    .select('id, active')
+                    .eq('id', flowStep.automation_id)
+                    .eq('active', true)
+                    .maybeSingle();
+                  
+                  if (!flowAutomation) {
+                    console.log('Flow automation not active:', flowStep.automation_id);
+                    continue;
+                  }
+                  
+                  // Get access token from the referenced integration
+                  const { data: fbIntegration } = await supabase
+                    .from('tenant_integrations')
+                    .select('api_key, shared_from_integration_id')
+                    .eq('id', fbIntegrationId)
+                    .eq('is_active', true)
+                    .maybeSingle();
+                  
+                  let flowAccessToken = fbIntegration?.api_key;
+                  if (!flowAccessToken && fbIntegration?.shared_from_integration_id) {
+                    const { data: srcInt } = await supabase
+                      .from('tenant_integrations')
+                      .select('api_key')
+                      .eq('id', fbIntegration.shared_from_integration_id)
+                      .maybeSingle();
+                    flowAccessToken = srcInt?.api_key;
+                  }
+                  
+                  if (!flowAccessToken) {
+                    console.log('No access token for flow integration', fbIntegrationId);
+                    continue;
+                  }
+                  
+                  // Check dedup by leadgen_id
+                  const { data: existingLeads } = await supabase
+                    .from('leads')
+                    .select('id')
+                    .eq('tenant_id', flowTenantId)
+                    .or(`notes.ilike.%${leadgenId}%`)
+                    .limit(1);
+                  
+                  if (existingLeads && existingLeads.length > 0) {
+                    console.log('Lead already exists in tenant', flowTenantId, 'for leadgen', leadgenId);
+                    processedTenants.add(flowTenantId);
+                    continue;
+                  }
+                  
+                  // Fetch lead data from Facebook
+                  const flowLeadResponse = await fetch(
+                    `https://graph.facebook.com/v21.0/${leadgenId}?access_token=${flowAccessToken}`
+                  );
+                  if (!flowLeadResponse.ok) {
+                    console.error('Failed to fetch lead from Facebook for flow:', await flowLeadResponse.text());
+                    continue;
+                  }
+                  
+                  const flowLeadData = await flowLeadResponse.json();
+                  const flowFieldData: Record<string, string> = {};
+                  for (const field of flowLeadData.field_data || []) {
+                    flowFieldData[field.name] = field.values?.[0] || '';
+                  }
+                  
+                  // Build lead record
+                  const flowLeadRecord: Record<string, any> = {
+                    company_name: flowFieldData.full_name || flowFieldData.company || 'Facebook Lead',
+                    contact_name: flowFieldData.full_name || `${flowFieldData.first_name || ''} ${flowFieldData.last_name || ''}`.trim() || null,
+                    email: flowFieldData.email || null,
+                    phone: flowFieldData.phone_number || flowFieldData.phone || null,
+                    source: 'paid_ads',
+                    status: 'new',
+                    tenant_id: flowTenantId,
+                    agency_id: stepConfig.agency_id || null,
+                    notes: `Facebook Lead ID: ${leadgenId}\nForm ID: ${formId}\nSource: Facebook Lead Ads (via Flow)`,
+                  };
+                  
+                  // Build fb_ prefixed fields
+                  const flowFbFields: Record<string, string> = {};
+                  for (const [k, v] of Object.entries(flowFieldData)) {
+                    flowFbFields[`fb_${k}`] = v;
+                  }
+                  
+                  // Append custom fields to notes
+                  const customLines: string[] = [];
+                  for (const [k, v] of Object.entries(flowFieldData)) {
+                    if (v && !['full_name', 'first_name', 'last_name', 'email', 'phone_number', 'phone'].includes(k)) {
+                      customLines.push(`${k}: ${v}`);
+                    }
+                  }
+                  if (customLines.length > 0) {
+                    flowLeadRecord.notes += '\n\n--- שדות טופס פייסבוק ---\n' + customLines.join('\n');
+                  }
+                  
+                  // Insert lead
+                  const { data: newFlowLead, error: flowInsertErr } = await supabase
+                    .from('leads')
+                    .insert(flowLeadRecord)
+                    .select('id')
+                    .single();
+                  
+                  if (flowInsertErr) {
+                    console.error('Error inserting flow-based lead:', flowInsertErr);
+                    continue;
+                  }
+                  
+                  processedTenants.add(flowTenantId);
+                  console.log('✅ Flow-based lead created:', newFlowLead.id, 'in tenant', flowTenantId);
+                  
+                  // Trigger lead_created automation with facebook_form_id
+                  try {
+                    await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${supabaseServiceKey}`,
+                      },
+                      body: JSON.stringify({
+                        trigger_type: 'lead_created',
+                        tenant_id: flowTenantId,
+                        data: {
+                          lead_id: newFlowLead.id,
+                          contact_name: flowLeadRecord.contact_name || '',
+                          company_name: flowLeadRecord.company_name || '',
+                          phone: flowLeadRecord.phone || '',
+                          email: flowLeadRecord.email || '',
+                          source: 'paid_ads',
+                          status: 'new',
+                          agency_id: flowLeadRecord.agency_id || '',
+                          notes: flowLeadRecord.notes || '',
+                          facebook_form_id: formId,
+                          ...flowFbFields,
+                        },
+                      }),
+                    });
+                    console.log('🚀 Flow lead_created automation triggered for:', newFlowLead.id);
+                  } catch (e) {
+                    console.error('Error triggering flow automation:', e);
+                  }
+                  
+                  // Also trigger inbound_webhook_lead
+                  try {
+                    await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${supabaseServiceKey}`,
+                      },
+                      body: JSON.stringify({
+                        trigger_type: 'inbound_webhook_lead',
+                        tenant_id: flowTenantId,
+                        data: {
+                          lead_id: newFlowLead.id,
+                          contact_name: flowLeadRecord.contact_name || '',
+                          company_name: flowLeadRecord.company_name || '',
+                          phone: flowLeadRecord.phone || '',
+                          email: flowLeadRecord.email || '',
+                          source: 'paid_ads',
+                          status: 'new',
+                          agency_id: flowLeadRecord.agency_id || '',
+                          notes: flowLeadRecord.notes || '',
+                          facebook_form_id: formId,
+                          ...flowFbFields,
+                        },
+                      }),
+                    });
+                  } catch (e) {
+                    console.error('Error triggering inbound_webhook_lead for flow:', e);
+                  }
+                }
+                
                 continue;
               }
               
@@ -405,6 +610,7 @@ serve(async (req) => {
                       status: leadRecord.status || 'new',
                       agency_id: leadRecord.agency_id || '',
                       notes: leadRecord.notes || '',
+                      facebook_form_id: formId,
                       // Include all fb_ prefixed form fields for variable replacement
                       ...fbPrefixedFields,
                     },
@@ -443,6 +649,7 @@ serve(async (req) => {
                       status: leadRecord.status || 'new',
                       agency_id: leadRecord.agency_id || '',
                       notes: leadRecord.notes || '',
+                      facebook_form_id: formId,
                       ...fbPrefixedFields,
                     },
                   };
