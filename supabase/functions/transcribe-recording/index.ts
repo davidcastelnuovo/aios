@@ -228,14 +228,34 @@ serve(async (req) => {
           return await processZoomRecording(supabase, smallAlt, mode, true, recording_id);
         }
 
-        await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, 'File too large after download');
+        // No small alternative — upload the already-downloaded blob to Storage for client-side chunking
+        console.log(`📤 No small alternative. Uploading ${(audioBlob.size / 1024 / 1024).toFixed(1)}MB to Storage for client-side chunking...`);
+        const ext = (fileName.split('.').pop() || 'm4a').toLowerCase();
+        const tempPath = `transcription-temp/${recording_id}-${Date.now()}.${ext}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('recordings')
+          .upload(tempPath, audioBlob, { contentType, upsert: true });
+
+        if (uploadError) {
+          await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, `Upload failed: ${uploadError.message}`);
+          return new Response(JSON.stringify({ error: `Failed to upload for chunking: ${uploadError.message}` }), {
+            status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        const { data: signedData } = await supabase.storage
+          .from('recordings')
+          .createSignedUrl(tempPath, 60 * 60);
+
         return new Response(JSON.stringify({
-          error: 'file_too_large',
+          audio_url: signedData?.signedUrl,
+          content_type: contentType,
+          file_name: fileName,
           size_mb: Math.round(audioBlob.size / 1024 / 1024),
-          message: `הקובץ גדול מדי (${Math.round(audioBlob.size / 1024 / 1024)}MB). נא להדביק תמלול ידנית.`,
-          no_alternative: true,
+          needs_chunking: true,
         }), {
-          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
     } else {
