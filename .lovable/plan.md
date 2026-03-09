@@ -1,24 +1,30 @@
 
 
-## הפיכת האפליקציה ל-PWA (Progressive Web App)
+# Plan: Visual Separation Between System Fields and Facebook Fields
 
-כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
+## Problem
+In the field mapping dropdowns and badge lists, system fields (contact_name, phone, email, etc.) and Facebook custom fields (fb_*) look the same, making it hard to distinguish between them.
 
-### 1. קובץ `public/manifest.json`
-- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
-- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
+## Changes
 
-### 2. Service Worker — `public/sw.js`
-- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
-- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
+### File: `src/components/automations/StepConfigPanel.tsx`
 
-### 3. רישום ב-`index.html`
-- תג `<link rel="manifest">` ב-head
-- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
-- סקריפט רישום Service Worker
+#### 1. Field Select dropdown (line ~596-601)
+Add visual grouping and color differentiation:
+- Split `availableFields` into system fields and fb_ fields
+- Render system fields first, then a separator, then fb_ fields with a distinct style
+- Use `SelectGroup` + `SelectLabel` for group headers
+- Apply a different background/text color to fb_ items (e.g., `bg-blue-50 text-blue-700` or similar)
 
-### תוצאה
-- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
-- באייפון: Share → Add to Home Screen
-- האפליקציה תיפתח במסך מלא בלי שורת כתובת
+#### 2. Badge variable list (line ~2062-2072)
+Apply color differentiation to badges:
+- System field badges: current style (`variant="outline"`)
+- Facebook field badges: colored variant (e.g., `bg-blue-100 text-blue-800 border-blue-200`)
+- Add a small label separator between the groups ("שדות מערכת" / "שדות פייסבוק")
+
+#### 3. Available fields text display (line ~375)
+Group the variables text by type for clarity.
+
+### Detection Logic
+Simple: any field with key starting with `fb_` is a Facebook field, everything else is a system field.
 
