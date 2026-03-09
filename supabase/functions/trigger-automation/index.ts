@@ -1886,7 +1886,8 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   console.log('Executing Green API message:', config)
   console.log('Data:', data)
   
-  const { message_template, integration_id, send_to_type, manual_phone, manual_group_id, phone_mode, green_api_mode, external_instance_id, external_api_token, phone_field } = config
+  const { message_template, send_to_type, manual_phone, manual_group_id, phone_mode, green_api_mode, external_instance_id, external_api_token, phone_field } = config
+  const integration_id = config.integration_id || config.green_api_integration_id
   
   if (!message_template) {
     throw new Error('תבנית הודעה לא הוגדרה')
