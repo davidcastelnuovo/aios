@@ -19,6 +19,9 @@ Deno.serve(async (req) => {
     const { table_id, records } = body;
 
     console.log("Received webhook for table:", table_id, "with", records?.length || 0, "records");
+    if (records?.length > 0) {
+      console.log("FIRST RECORD SAMPLE:", JSON.stringify(records[0]).slice(0, 800));
+    }
 
     if (!table_id) {
       return new Response(
