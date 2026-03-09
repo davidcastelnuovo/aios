@@ -255,6 +255,7 @@ Deno.serve(async (req) => {
       tenant_id: requestBody.tenant_id || null,
       automation_id: requestBody.automationId || null,
       trigger_type: requestBody.trigger_type || null,
+      entity_id: entityKey !== 'no-entity' ? entityKey : null,
       depth: executionDepth,
       status: 'running',
       started_at: new Date().toISOString(),
