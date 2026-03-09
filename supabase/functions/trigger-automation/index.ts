@@ -227,7 +227,29 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Track this execution in automation_executions table (best-effort)
+    // Guard: cooldown - prevent same trigger+entity from firing again within 30 seconds
+    if (requestBody.trigger_type === 'whatsapp_message_received' && entityKey !== 'no-entity') {
+      const thirtySecondsAgo = new Date(Date.now() - 30000).toISOString()
+      const { data: recentExec } = await supabase
+        .from('automation_executions')
+        .select('id')
+        .eq('tenant_id', requestBody.tenant_id)
+        .eq('trigger_type', 'whatsapp_message_received')
+        .eq('entity_id', entityKey)
+        .gte('started_at', thirtySecondsAgo)
+        .eq('status', 'running')
+        .limit(1)
+        .maybeSingle()
+      
+      if (recentExec) {
+        console.log(`🛑 SAFETY: Cooldown active - same trigger for entity "${entityKey}" ran within last 30s. Skipping.`)
+        return new Response(
+          JSON.stringify({ error: 'Cooldown active', entity: entityKey }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 429 }
+        )
+      }
+    }
+
     const { data: execRecord } = await supabase.from('automation_executions').insert({
       execution_id: executionId,
       tenant_id: requestBody.tenant_id || null,
