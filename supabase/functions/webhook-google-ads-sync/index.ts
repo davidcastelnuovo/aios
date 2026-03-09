@@ -19,6 +19,9 @@ Deno.serve(async (req) => {
     const { table_id, records } = body;
 
     console.log("Received webhook for table:", table_id, "with", records?.length || 0, "records");
+    if (records?.length > 0) {
+      console.log("FIRST RECORD SAMPLE:", JSON.stringify(records[0]).slice(0, 800));
+    }
 
     if (!table_id) {
       return new Response(
@@ -187,12 +190,13 @@ Deno.serve(async (req) => {
 
     for (const record of records) {
       const normalizedDate = normalizeDate(
-        record.date ?? record.segments_date ?? record.segment_date ?? record.day ?? record.data_date
+        record.date ?? record.segments_date ?? record.segment_date ?? record.day ?? record.data_date ?? record["segments.date"]
       );
-      const campaignId = String(record.campaign_id || record.id || "").trim();
-      const campaignName = String(record.campaign_name || record.name || "").trim();
+      const campaignId = String(record.campaign_id ?? record.campaignId ?? record["campaign.id"] ?? record.id ?? "").trim();
+      const campaignName = String(record.campaign_name ?? record.campaignName ?? record["campaign.name"] ?? record.name ?? "").trim();
 
       if (!campaignId || !normalizedDate) {
+        console.log("SKIPPED INVALID RECORD - campaignId:", campaignId, "date:", normalizedDate, "raw keys:", Object.keys(record).join(", "), "raw record:", JSON.stringify(record).slice(0, 500));
         skippedInvalidCount++;
         continue;
       }
