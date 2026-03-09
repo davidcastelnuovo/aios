@@ -422,8 +422,9 @@ Deno.serve(async (req) => {
         if (!groupId) {
           console.log('📝 Group not found, creating new group record for:', groupChatId);
           
-          // Fetch real group name from Green API
+          // Fetch real group name and invite link from Green API
           let realGroupName: string | null = null;
+          let realInviteLink: string | null = null;
           try {
             if (instanceId && apiToken) {
               const response = await fetch(
@@ -437,22 +438,28 @@ Deno.serve(async (req) => {
               if (response.ok) {
                 const groupData = await response.json();
                 realGroupName = groupData.subject || null;
-                console.log('✅ Fetched real group name:', realGroupName);
+                realInviteLink = groupData.groupInviteLink || null;
+                console.log('✅ Fetched real group name:', realGroupName, 'invite_link:', realInviteLink || 'none');
               }
             }
           } catch (e) {
-            console.log('⚠️ Could not fetch group name:', e);
+            console.log('⚠️ Could not fetch group data:', e);
           }
           
           const newGroupName = realGroupName || `קבוצה ${groupChatId.split('@')[0].slice(-4)}`;
           
+          const insertData: any = {
+            tenant_id: tenantId,
+            group_chat_id: groupChatId,
+            group_name: newGroupName,
+          };
+          if (realInviteLink) {
+            insertData.invite_link = realInviteLink;
+          }
+
           const { data: newGroup, error: groupError } = await supabaseClient
             .from('whatsapp_groups')
-            .insert({
-              tenant_id: tenantId,
-              group_chat_id: groupChatId,
-              group_name: newGroupName,
-            })
+            .insert(insertData)
             .select('id')
             .single();
           
