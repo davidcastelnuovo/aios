@@ -1,24 +1,22 @@
 
 
-## הפיכת האפליקציה ל-PWA (Progressive Web App)
+# תוכנית: הפרדת חיבור Green API בפלאו מהחיבור הראשי
 
-כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
+## בעיה שנמצאה
+יש באג קריטי: הפרונטאנד שומר את החיבור שנבחר בשם `green_api_integration_id`, אבל הבקאנד קורא את השדה `integration_id`. כתוצאה מכך, הבחירה הספציפית של חיבור **נתעלמת** והמערכת נופלת ל-fallback — החיבור הפעיל הראשון של הטננט, שזה בדרך כלל החיבור הראשי.
 
-### 1. קובץ `public/manifest.json`
-- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
-- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
+## פתרון
 
-### 2. Service Worker — `public/sw.js`
-- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
-- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
+### קובץ: `supabase/functions/trigger-automation/index.ts`
+בשורה ~1889, לעדכן את ה-destructuring כך שיתמוך בשני שמות השדות:
 
-### 3. רישום ב-`index.html`
-- תג `<link rel="manifest">` ב-head
-- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
-- סקריפט רישום Service Worker
+```typescript
+const { message_template, send_to_type, ... } = config
+const integration_id = config.integration_id || config.green_api_integration_id
+```
 
-### תוצאה
-- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
-- באייפון: Share → Add to Home Screen
-- האפליקציה תיפתח במסך מלא בלי שורת כתובת
+זה שינוי של שורה אחת בלבד שמבטיח שכשמשתמש בוחר חיבור ספציפי בפלאו, הוא באמת ישמש — במקום ליפול ל-fallback של החיבור הראשי.
+
+### קבצים לעריכה:
+- `supabase/functions/trigger-automation/index.ts` — תיקון מיפוי שם השדה
 
