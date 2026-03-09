@@ -1,24 +1,27 @@
 
 
-## הפיכת האפליקציה ל-PWA (Progressive Web App)
+# תוכנית: הוספת הזנה ידנית בדיאלוג בדיקת פלאו
 
-כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
+## סקירה
+הוספת טאב "הזנה ידנית" בדיאלוג הבדיקה שמאפשר להקליד פרטי ליד (שם, טלפון, אימייל וכו') ולהריץ את האוטומציה עליהם, במקום לבחור ליד קיים מהמאגר.
 
-### 1. קובץ `public/manifest.json`
-- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
-- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
+## שינויים
 
-### 2. Service Worker — `public/sw.js`
-- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
-- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
+### קובץ: `src/components/automations/TestFlowWithLeadDialog.tsx`
 
-### 3. רישום ב-`index.html`
-- תג `<link rel="manifest">` ב-head
-- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
-- סקריפט רישום Service Worker
+1. **הוספת טאבים ראשיים** — "בחירה מהמאגר" / "הזנה ידנית" בראש הדיאלוג (מעל טווח התאריכים)
 
-### תוצאה
-- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
-- באייפון: Share → Add to Home Screen
-- האפליקציה תיפתח במסך מלא בלי שורת כתובת
+2. **טאב הזנה ידנית** — טופס עם השדות:
+   - שם איש קשר (`contact_name`)
+   - שם חברה (`company_name`)
+   - טלפון (`phone`)
+   - אימייל (`email`)
+   - מקור (`source`) — אופציונלי
+   - הערות (`notes`) — אופציונלי
+
+3. **לוגיקת הרצה** — כשנבחר מצב ידני, ה-mutation ישלח את הנתונים שהוקלדו ידנית ל-`trigger-automation` באותו פורמט כמו ליד רגיל, עם `test: true` ו-`manual: true`
+
+4. **State חדש** — `inputMode: "select" | "manual"` + `manualData` אובייקט עם השדות
+
+5. **עדכון `canRunTest`** — יתמוך גם במצב ידני (לפחות שם או טלפון מולאו)
 
