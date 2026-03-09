@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTenant } from "@/contexts/TenantContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Video, Search, Download, Loader2, ExternalLink, Upload, FileVideo, FileText, Plus, Sparkles, CheckCircle2, AlertCircle, Trash2, Pencil, Check, X } from "lucide-react";
+import { Video, Search, Download, Loader2, ExternalLink, Upload, FileVideo, FileText, Plus, Sparkles, CheckCircle2, AlertCircle, Trash2, Pencil, Check, X, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 import SummarizeRecordingDialog from "@/components/SummarizeRecordingDialog";
 
@@ -303,6 +303,19 @@ export default function Recordings() {
           <p className="text-muted-foreground mt-1">ניהול הקלטות מכל המקורות</p>
         </div>
         <div className="flex gap-2">
+          {zoomIntegration?.is_active && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                fetchRecordingsMutation.mutate();
+              }}
+              disabled={fetchRecordingsMutation.isPending}
+            >
+              {fetchRecordingsMutation.isPending ? <Loader2 className="h-4 w-4 ml-2 animate-spin" /> : <RotateCcw className="h-4 w-4 ml-2" />}
+              רענן הקלטות
+            </Button>
+          )}
           <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
             <DialogTrigger asChild>
               <Button>
