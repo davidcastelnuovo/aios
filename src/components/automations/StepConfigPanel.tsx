@@ -1421,7 +1421,7 @@ function LeadSourceConfig({
         .from("leads")
         .select("*")
         .eq("tenant_id", tenantId)
-        .or(`notes.ilike.%Form ID: ${formId}%,notes.ilike.%Facebook Form: ${formId}%`)
+        .ilike("notes", `%${formId}%`)
         .order("created_at", { ascending: false });
       
       if (fromDate) query = query.gte("created_at", fromDate);
