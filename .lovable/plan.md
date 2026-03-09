@@ -1,23 +1,24 @@
 
 
-# תוכנית: תיקון שם השולח באוטומציות
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## הבעיה
-כשמשתמשים ב-`{{sender_name}}` בהודעת אוטומציה, המערכת שולחת את הערך הגולמי מ-Green API (`senderData.senderName`) שלפעמים מכיל קוד טכני או מספר טלפון במקום שם אמיתי.
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-## הפתרון
-קובץ אחד לשינוי: **`supabase/functions/trigger-automation/index.ts`**
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-בפונקציה שבונה את המשתנים (`variables`), נעדיף את `contact_name` (שנשלף מבסיס הנתונים - שם הליד/לקוח) על פני `sender_name` (שמגיע גולמי מ-Green API):
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-```typescript
-sender_name: data.contact_name || data.sender_name || '',
-```
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-כך אם יש שם איש קשר מזוהה בבסיס הנתונים, הוא ישמש. רק אם אין - ייפול ל-`senderData.senderName` מ-Green API.
-
-## פרטים טכניים
-- שורה 1817 בקובץ `trigger-automation/index.ts`
-- המשתנה `data.contact_name` כבר מגיע מלא מה-webhook (נשלף מטבלת leads/clients)
-- אין צורך בשינוי ב-webhook עצמו
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 
