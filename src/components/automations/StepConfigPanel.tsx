@@ -703,7 +703,7 @@ function GreenAPIActionConfig({
                     </div>
                   </div>
                 )}
-                <Button
+        <Button
                   type="button"
                   variant="outline"
                   size="sm"
@@ -716,6 +716,62 @@ function GreenAPIActionConfig({
             );
           })()}
         </div>
+      </div>
+
+      {/* Media URL section */}
+      <div className="space-y-2 border-t pt-3">
+        <Label className="text-right block">קישור מדיה (אופציונלי)</Label>
+        <RadioGroup
+          value={configuration?.media_type || "none"}
+          onValueChange={(v) => onConfigChange("media_type", v)}
+          className="flex gap-4 justify-end"
+          dir="rtl"
+        >
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="none" id="media-none" />
+            <Label htmlFor="media-none" className="cursor-pointer text-sm">ללא</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="link" id="media-link" />
+            <Label htmlFor="media-link" className="cursor-pointer text-sm">קישור בהודעה</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <RadioGroupItem value="file" id="media-file" />
+            <Label htmlFor="media-file" className="cursor-pointer text-sm">קובץ / וידאו</Label>
+          </div>
+        </RadioGroup>
+
+        {(configuration?.media_type === "link" || configuration?.media_type === "file") && (
+          <div className="space-y-2">
+            <Input
+              value={configuration?.media_url || ""}
+              onChange={(e) => onConfigChange("media_url", e.target.value)}
+              placeholder="https://youtube.com/watch?v=... או קישור לקובץ"
+              dir="ltr"
+              className="text-left"
+            />
+            <p className="text-xs text-muted-foreground text-right">
+              {configuration?.media_type === "link"
+                ? "הקישור יצורף לסוף ההודעה — וואטסאפ יציג תצוגה מקדימה אוטומטית"
+                : "הקובץ יישלח כקובץ מצורף עם כיתוב מההודעה"}
+            </p>
+            {configuration?.media_type === "file" && (
+              <div className="space-y-1">
+                <Label className="text-right block text-xs">שם קובץ (אופציונלי)</Label>
+                <Input
+                  value={configuration?.media_filename || ""}
+                  onChange={(e) => onConfigChange("media_filename", e.target.value)}
+                  placeholder="video.mp4"
+                  dir="ltr"
+                  className="text-left"
+                />
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground text-right">
+              ניתן להשתמש במשתנים: {"{{"}video_link{"}}"} וכו׳
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

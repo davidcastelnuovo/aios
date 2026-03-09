@@ -2050,12 +2050,43 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   if (!sendResponse.ok) {
     throw new Error(`שגיאה בשליחת הודעה: ${JSON.stringify(sendResult)}`)
   }
+
+  // Handle media URL if configured
+  let mediaResult = null
+  const mediaType = config.media_type
+  const mediaUrl = config.media_url
+
+  if (mediaUrl && mediaType === 'file') {
+    // Send file/video via sendFileByUrl
+    const resolvedMediaUrl = replaceTemplateVariables(mediaUrl, {
+      ...data,
+      ...contactRecord,
+    }, tenantSlug)
+
+    const fileName = config.media_filename || resolvedMediaUrl.split('/').pop()?.split('?')[0] || 'file'
+    const fileApiUrl = `https://api.green-api.com/waInstance${idInstance}/sendFileByUrl/${apiTokenInstance}`
+
+    console.log(`Sending file via Green API: ${resolvedMediaUrl}`)
+    const fileResponse = await fetch(fileApiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chatId,
+        urlFile: resolvedMediaUrl,
+        fileName,
+        caption: message,
+      }),
+    })
+    mediaResult = await fileResponse.json()
+    console.log('Green API file send response:', mediaResult)
+  }
   
   return {
     success: true,
     message_sent: message,
     chat_id: chatId,
     result: sendResult,
+    media_result: mediaResult,
   }
 }
 
