@@ -17,7 +17,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Popover,
   PopoverContent,
@@ -85,6 +86,15 @@ export function TestFlowWithLeadDialog({
   const [testResults, setTestResults] = useState<Array<{ leadId: string; leadName: string; success: boolean; data?: any; error?: string }>>([]);
   const [lastMessageData, setLastMessageData] = useState<any>(null);
   const [isFetchingMessage, setIsFetchingMessage] = useState(false);
+  const [inputMode, setInputMode] = useState<"select" | "manual">("select");
+  const [manualData, setManualData] = useState({
+    contact_name: "",
+    company_name: "",
+    phone: "",
+    email: "",
+    source: "",
+    notes: "",
+  });
 
   // Fetch automation to check trigger type and config
   const { data: automation } = useQuery({
@@ -254,6 +264,27 @@ export function TestFlowWithLeadDialog({
         return [{ leadId: "whatsapp", leadName: lastMessageData.sender_name, success: true, data: response.data }];
       }
 
+      // Manual input mode
+      if (inputMode === "manual") {
+        const testData: any = {
+          test: true,
+          manual: true,
+          contact_name: manualData.contact_name || manualData.company_name,
+          company_name: manualData.company_name,
+          phone: manualData.phone,
+          email: manualData.email,
+          source: manualData.source,
+          notes: manualData.notes,
+          timestamp: new Date().toISOString(),
+        };
+
+        const response = await supabase.functions.invoke("trigger-automation", {
+          body: { automationId, tenant_id: tenantId, data: testData },
+        });
+        if (response.error) throw response.error;
+        return [{ leadId: "manual", leadName: manualData.contact_name || manualData.company_name || "ידני", success: true, data: response.data }];
+      }
+
       // Lead-based batch test
       if (selectedLeadIds.size === 0) throw new Error("יש לבחור לפחות ליד אחד");
 
@@ -310,10 +341,17 @@ export function TestFlowWithLeadDialog({
     setTestResults([]);
     setLastMessageData(null);
     setSearchQuery("");
+    setInputMode("select");
+    setManualData({ contact_name: "", company_name: "", phone: "", email: "", source: "", notes: "" });
     onOpenChange(false);
   };
 
-  const canRunTest = isWhatsAppTrigger ? !!lastMessageData : selectedLeadIds.size > 0;
+  const canRunManual = !!(manualData.contact_name || manualData.phone || manualData.company_name);
+  const canRunTest = isWhatsAppTrigger
+    ? !!lastMessageData
+    : inputMode === "manual"
+      ? canRunManual
+      : selectedLeadIds.size > 0;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -393,113 +431,185 @@ export function TestFlowWithLeadDialog({
               </div>
             )}
 
-            {/* Date Range Tabs */}
-            <div className="space-y-2">
-              <Label>טווח תאריכים:</Label>
-              <Tabs value={dateRange} onValueChange={(v) => { setDateRange(v as DateRange); setSelectedLeadIds(new Set()); }}>
-                <TabsList className="w-full grid grid-cols-4">
-                  <TabsTrigger value="today">היום</TabsTrigger>
-                  <TabsTrigger value="yesterday">אתמול</TabsTrigger>
-                  <TabsTrigger value="last_week">שבוע אחרון</TabsTrigger>
-                  <TabsTrigger value="custom">טווח מותאם</TabsTrigger>
-                </TabsList>
-              </Tabs>
+            {/* Input Mode Tabs */}
+            <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as "select" | "manual")} className="w-full">
+              <TabsList className="w-full grid grid-cols-2">
+                <TabsTrigger value="select">בחירה מהמאגר</TabsTrigger>
+                <TabsTrigger value="manual">הזנה ידנית</TabsTrigger>
+              </TabsList>
 
-              {dateRange === "custom" && (
-                <div className="flex gap-2 items-center">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className={cn("flex-1 justify-start text-right", !customFrom && "text-muted-foreground")}>
-                        <CalendarIcon className="h-4 w-4 ml-2" />
-                        {customFrom ? format(customFrom, "dd/MM/yyyy") : "מתאריך"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={customFrom} onSelect={setCustomFrom} className="p-3 pointer-events-auto" />
-                    </PopoverContent>
-                  </Popover>
-                  <span className="text-sm text-muted-foreground">עד</span>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className={cn("flex-1 justify-start text-right", !customTo && "text-muted-foreground")}>
-                        <CalendarIcon className="h-4 w-4 ml-2" />
-                        {customTo ? format(customTo, "dd/MM/yyyy") : "עד תאריך"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={customTo} onSelect={setCustomTo} className="p-3 pointer-events-auto" />
-                    </PopoverContent>
-                  </Popover>
+              <TabsContent value="select" className="space-y-4 mt-3">
+                {/* Date Range Tabs */}
+                <div className="space-y-2">
+                  <Label>טווח תאריכים:</Label>
+                  <Tabs value={dateRange} onValueChange={(v) => { setDateRange(v as DateRange); setSelectedLeadIds(new Set()); }}>
+                    <TabsList className="w-full grid grid-cols-4">
+                      <TabsTrigger value="today">היום</TabsTrigger>
+                      <TabsTrigger value="yesterday">אתמול</TabsTrigger>
+                      <TabsTrigger value="last_week">שבוע אחרון</TabsTrigger>
+                      <TabsTrigger value="custom">טווח מותאם</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+
+                  {dateRange === "custom" && (
+                    <div className="flex gap-2 items-center">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="sm" className={cn("flex-1 justify-start text-right", !customFrom && "text-muted-foreground")}>
+                            <CalendarIcon className="h-4 w-4 ml-2" />
+                            {customFrom ? format(customFrom, "dd/MM/yyyy") : "מתאריך"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar mode="single" selected={customFrom} onSelect={setCustomFrom} className="p-3 pointer-events-auto" />
+                        </PopoverContent>
+                      </Popover>
+                      <span className="text-sm text-muted-foreground">עד</span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" size="sm" className={cn("flex-1 justify-start text-right", !customTo && "text-muted-foreground")}>
+                            <CalendarIcon className="h-4 w-4 ml-2" />
+                            {customTo ? format(customTo, "dd/MM/yyyy") : "עד תאריך"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar mode="single" selected={customTo} onSelect={setCustomTo} className="p-3 pointer-events-auto" />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* Search + Select All */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="חיפוש לפי שם, טלפון, אימייל..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pr-9 text-right"
+                {/* Search + Select All */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="חיפוש לפי שם, טלפון, אימייל..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pr-9 text-right"
+                      />
+                    </div>
+                    <Button variant="outline" size="sm" onClick={toggleAll} className="shrink-0 gap-1.5">
+                      {selectedLeadIds.size === filteredLeads.length && filteredLeads.length > 0 ? (
+                        <><Square className="h-3.5 w-3.5" /> בטל הכל</>
+                      ) : (
+                        <><CheckSquare className="h-3.5 w-3.5" /> בחר הכל</>
+                      )}
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="secondary" className="text-xs">{filteredLeads.length} לידים</Badge>
+                    {selectedLeadIds.size > 0 && (
+                      <Badge className="text-xs">{selectedLeadIds.size} נבחרו</Badge>
+                    )}
+                  </div>
+                </div>
+
+                {/* Lead List with Checkboxes */}
+                <div className="rounded-lg border">
+                  <ScrollArea className="max-h-[280px]">
+                    {leadsLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : filteredLeads.length === 0 ? (
+                      <div className="text-center py-8 text-sm text-muted-foreground">לא נמצאו לידים בטווח הנבחר</div>
+                    ) : (
+                      <div className="divide-y">
+                        {filteredLeads.map((lead: any) => (
+                          <label
+                            key={lead.id}
+                            className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 cursor-pointer transition-colors"
+                          >
+                            <Checkbox
+                              checked={selectedLeadIds.has(lead.id)}
+                              onCheckedChange={() => toggleLead(lead.id)}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium truncate">{lead.company_name || "ללא שם"}</span>
+                                {lead.source && <Badge variant="outline" className="text-[10px] shrink-0">{lead.source}</Badge>}
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                                {lead.contact_name && <span>{lead.contact_name}</span>}
+                                {lead.phone && <span dir="ltr">{lead.phone}</span>}
+                                <span>{new Date(lead.created_at).toLocaleDateString("he-IL")}</span>
+                              </div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="manual" className="space-y-3 mt-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">שם איש קשר</Label>
+                    <Input
+                      placeholder="שם מלא"
+                      value={manualData.contact_name}
+                      onChange={(e) => setManualData(prev => ({ ...prev, contact_name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">שם חברה</Label>
+                    <Input
+                      placeholder="שם החברה"
+                      value={manualData.company_name}
+                      onChange={(e) => setManualData(prev => ({ ...prev, company_name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">טלפון</Label>
+                    <Input
+                      placeholder="05X-XXXXXXX"
+                      dir="ltr"
+                      className="text-left"
+                      value={manualData.phone}
+                      onChange={(e) => setManualData(prev => ({ ...prev, phone: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">אימייל</Label>
+                    <Input
+                      placeholder="email@example.com"
+                      dir="ltr"
+                      className="text-left"
+                      type="email"
+                      value={manualData.email}
+                      onChange={(e) => setManualData(prev => ({ ...prev, email: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">מקור</Label>
+                    <Input
+                      placeholder="פייסבוק, גוגל..."
+                      value={manualData.source}
+                      onChange={(e) => setManualData(prev => ({ ...prev, source: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">הערות</Label>
+                  <Textarea
+                    placeholder="הערות נוספות..."
+                    rows={2}
+                    value={manualData.notes}
+                    onChange={(e) => setManualData(prev => ({ ...prev, notes: e.target.value }))}
                   />
                 </div>
-                <Button variant="outline" size="sm" onClick={toggleAll} className="shrink-0 gap-1.5">
-                  {selectedLeadIds.size === filteredLeads.length && filteredLeads.length > 0 ? (
-                    <><Square className="h-3.5 w-3.5" /> בטל הכל</>
-                  ) : (
-                    <><CheckSquare className="h-3.5 w-3.5" /> בחר הכל</>
-                  )}
-                </Button>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Badge variant="secondary" className="text-xs">{filteredLeads.length} לידים</Badge>
-                {selectedLeadIds.size > 0 && (
-                  <Badge className="text-xs">{selectedLeadIds.size} נבחרו</Badge>
+                {!canRunManual && (
+                  <p className="text-xs text-muted-foreground">יש למלא לפחות שם, טלפון או שם חברה</p>
                 )}
-              </div>
-            </div>
-
-            {/* Lead List with Checkboxes */}
-            <div className="rounded-lg border">
-              <ScrollArea className="max-h-[280px]">
-                {leadsLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
-                ) : filteredLeads.length === 0 ? (
-                  <div className="text-center py-8 text-sm text-muted-foreground">לא נמצאו לידים בטווח הנבחר</div>
-                ) : (
-                  <div className="divide-y">
-                    {filteredLeads.map((lead: any) => (
-                      <label
-                        key={lead.id}
-                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 cursor-pointer transition-colors"
-                      >
-                        <Checkbox
-                          checked={selectedLeadIds.has(lead.id)}
-                          onCheckedChange={() => toggleLead(lead.id)}
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium truncate">{lead.company_name || "ללא שם"}</span>
-                            {lead.source && <Badge variant="outline" className="text-[10px] shrink-0">{lead.source}</Badge>}
-                          </div>
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-                            {lead.contact_name && <span>{lead.contact_name}</span>}
-                            {lead.phone && <span dir="ltr">{lead.phone}</span>}
-                            <span>{new Date(lead.created_at).toLocaleDateString("he-IL")}</span>
-                          </div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </ScrollArea>
-            </div>
+              </TabsContent>
+            </Tabs>
 
             {/* Test Results */}
             {testResults.length > 0 && (
@@ -549,12 +659,12 @@ export function TestFlowWithLeadDialog({
             {testMutation.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                מריץ {selectedLeadIds.size > 1 ? `(${selectedLeadIds.size})` : ""}...
+                מריץ...
               </>
             ) : (
               <>
                 <TestTube className="h-4 w-4 ml-2" />
-                הרץ {selectedLeadIds.size > 1 ? `על ${selectedLeadIds.size} לידים` : "טסט"}
+                {inputMode === "manual" ? "הרץ טסט ידני" : selectedLeadIds.size > 1 ? `הרץ על ${selectedLeadIds.size} לידים` : "הרץ טסט"}
               </>
             )}
           </Button>
