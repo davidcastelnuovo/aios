@@ -2085,7 +2085,7 @@ function CreateTaskActionConfig({
         <div className="space-y-2">
           <Label className="text-right block text-xs text-muted-foreground">הכנס משתנה מהטריגר:</Label>
           <div className="flex flex-wrap gap-1 justify-end">
-            {availableFields.map((field) => (
+            {availableFields.filter(f => !f.key.startsWith("fb_")).map((field) => (
               <Badge
                 key={field.key}
                 variant="outline"
@@ -2095,6 +2095,21 @@ function CreateTaskActionConfig({
                 {field.label}
               </Badge>
             ))}
+            {availableFields.some(f => f.key.startsWith("fb_")) && (
+              <>
+                <span className="text-[10px] text-blue-600 font-semibold self-center mx-1">|</span>
+                {availableFields.filter(f => f.key.startsWith("fb_")).map((field) => (
+                  <Badge
+                    key={field.key}
+                    variant="outline"
+                    className="cursor-pointer hover:bg-blue-100 text-xs bg-blue-50 text-blue-700 border-blue-200"
+                    onClick={() => insertVariable(field.key)}
+                  >
+                    {field.label}
+                  </Badge>
+                ))}
+              </>
+            )}
           </div>
         </div>
       )}
