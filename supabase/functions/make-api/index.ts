@@ -1012,7 +1012,7 @@ serve(async (req) => {
                   const gid = googleAdsModuleId;
                   const startDatePart = (start_date && end_date) ? `,"start_date":"${start_date}","end_date":"${end_date}"` : '';
                   const tenantPart = tenant_id ? `,"tenant_id":"${tenant_id}"` : '';
-                  const bodyTemplate = `{"table_id":"${table_id}","campaign_type":"${campaign_type || 'leads'}"${tenantPart}${startDatePart},"records":[{"date":"{{${gid}.segments.date}}","campaign_id":"{{${gid}.campaign.id}}","campaign_name":"{{${gid}.campaign.name}}","impressions":"{{${gid}.metrics.impressions}}","clicks":"{{${gid}.metrics.clicks}}","cost_micros":"{{${gid}.metrics.costMicros}}","conversions":"{{${gid}.metrics.conversions}}","ctr":"{{${gid}.metrics.ctr}}","average_cpc":"{{${gid}.metrics.averageCpc}}"}]}`;
+                  const bodyTemplate = `{"table_id":"${table_id}","campaign_type":"${campaign_type || 'leads'}"${tenantPart}${startDatePart},"records":[{"date":"{{${gid}.dimensions.date}}","campaign_id":"{{${gid}.dimensions.campaignId}}","campaign_name":"{{${gid}.dimensions.campaignName}}","impressions":"{{${gid}.metrics.impressions}}","clicks":"{{${gid}.metrics.clicks}}","cost":"{{${gid}.metrics.cost}}","conversions":"{{${gid}.metrics.conversions}}","ctr":"{{${gid}.metrics.ctr}}","average_cpc":"{{${gid}.metrics.averageCpc}}","cost_micros":"{{${gid}.metrics.costMicros}}","conversions_value":"{{${gid}.metrics.conversionsValue}}","all_conversions":"{{${gid}.metrics.allConversions}}"}]}`;
                   
                   module.mapper.jsonStringBodyContent = bodyTemplate;
                   patchedHttpModule = true;
