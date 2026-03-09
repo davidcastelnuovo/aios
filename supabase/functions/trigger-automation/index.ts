@@ -340,6 +340,16 @@ Deno.serve(async (req) => {
           }
           if (config.source_filter === 'group' && !payloadData.group_id) return false
           if (config.source_filter === 'all_groups' && !payloadData.group_id) return false
+          if (config.source_filter === 'all_groups_except') {
+            if (!payloadData.group_id) return false
+            const excludedIds = config.excluded_group_ids || []
+            if (excludedIds.length > 0 && excludedIds.includes(payloadData.group_id)) return false
+          }
+          if (config.source_filter === 'multiple_groups') {
+            if (!payloadData.group_id) return false
+            const selectedIds = config.selected_group_ids || []
+            if (selectedIds.length > 0 && !selectedIds.includes(payloadData.group_id)) return false
+          }
           if (config.source_filter === 'private' && payloadData.group_id) return false
           return true
         })
