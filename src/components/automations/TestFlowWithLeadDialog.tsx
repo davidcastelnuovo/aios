@@ -341,10 +341,17 @@ export function TestFlowWithLeadDialog({
     setTestResults([]);
     setLastMessageData(null);
     setSearchQuery("");
+    setInputMode("select");
+    setManualData({ contact_name: "", company_name: "", phone: "", email: "", source: "", notes: "" });
     onOpenChange(false);
   };
 
-  const canRunTest = isWhatsAppTrigger ? !!lastMessageData : selectedLeadIds.size > 0;
+  const canRunManual = !!(manualData.contact_name || manualData.phone || manualData.company_name);
+  const canRunTest = isWhatsAppTrigger
+    ? !!lastMessageData
+    : inputMode === "manual"
+      ? canRunManual
+      : selectedLeadIds.size > 0;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
