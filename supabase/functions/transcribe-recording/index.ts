@@ -178,14 +178,23 @@ serve(async (req) => {
           return await processZoomRecording(supabase, smallAlt, mode, true, recording_id);
         }
 
-        await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, 'File too large, no alternative found');
+        // No small alternative — stream large file to Storage for client-side chunking
+        console.log(`📤 No small alternative. Streaming ${(knownSize / 1024 / 1024).toFixed(1)}MB to Storage for client-side chunking...`);
+        const streamResult = await streamZoomToStorage(supabase, recording, recording_id);
+        if (streamResult.error) {
+          await setTranscriptionStatus(supabase, recording_id, 'failed', undefined, streamResult.error);
+          return new Response(JSON.stringify({ error: streamResult.error }), {
+            status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
         return new Response(JSON.stringify({
-          error: 'file_too_large',
+          audio_url: streamResult.signedUrl,
+          content_type: streamResult.contentType,
+          file_name: streamResult.fileName,
           size_mb: Math.round(knownSize / 1024 / 1024),
-          message: `הקובץ גדול מדי (${Math.round(knownSize / 1024 / 1024)}MB) ואין הקלטת אודיו חלופית קטנה יותר לפגישה הזו. נא להדביק תמלול ידנית.`,
-          no_alternative: true,
+          needs_chunking: true,
         }), {
-          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
 
