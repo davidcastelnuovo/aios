@@ -15,22 +15,16 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import {
-  Check,
-  ChevronsUpDown,
   TestTube,
   Loader2,
   CheckCircle,
@@ -40,14 +34,38 @@ import {
   Mail,
   Building2,
   MessageSquare,
+  CalendarIcon,
+  Search,
+  CheckSquare,
+  Square,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { startOfDay, subDays, format } from "date-fns";
 
 interface TestFlowWithLeadDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   automationId: string;
   automationName: string;
+}
+
+type DateRange = "today" | "yesterday" | "last_week" | "custom";
+
+function getDateFilter(range: DateRange, customFrom?: Date, customTo?: Date) {
+  const now = new Date();
+  switch (range) {
+    case "today":
+      return { from: startOfDay(now).toISOString(), to: undefined };
+    case "yesterday":
+      return { from: startOfDay(subDays(now, 1)).toISOString(), to: startOfDay(now).toISOString() };
+    case "last_week":
+      return { from: startOfDay(subDays(now, 7)).toISOString(), to: undefined };
+    case "custom":
+      return {
+        from: customFrom ? startOfDay(customFrom).toISOString() : startOfDay(subDays(now, 7)).toISOString(),
+        to: customTo ? startOfDay(subDays(customTo, -1)).toISOString() : undefined,
+      };
+  }
 }
 
 export function TestFlowWithLeadDialog({
@@ -59,9 +77,12 @@ export function TestFlowWithLeadDialog({
   const { tenantId } = useCurrentTenant();
   const { toast } = useToast();
 
-  const [selectedLeadId, setSelectedLeadId] = useState<string>("");
-  const [comboOpen, setComboOpen] = useState(false);
-  const [testResult, setTestResult] = useState<any>(null);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateRange, setDateRange] = useState<DateRange>("last_week");
+  const [customFrom, setCustomFrom] = useState<Date | undefined>();
+  const [customTo, setCustomTo] = useState<Date | undefined>();
+  const [testResults, setTestResults] = useState<Array<{ leadId: string; leadName: string; success: boolean; data?: any; error?: string }>>([]);
   const [lastMessageData, setLastMessageData] = useState<any>(null);
   const [isFetchingMessage, setIsFetchingMessage] = useState(false);
 
@@ -105,24 +126,57 @@ export function TestFlowWithLeadDialog({
 
   const triggerConfig = triggerStep?.configuration || (automation?.configuration as any) || {};
 
-  // Fetch leads with full details
-  const { data: leads = [] } = useQuery({
-    queryKey: ["leads-for-flow-test", tenantId],
+  const dateFilter = getDateFilter(dateRange, customFrom, customTo);
+
+  // Fetch leads with date filtering
+  const { data: leads = [], isLoading: leadsLoading } = useQuery({
+    queryKey: ["leads-for-flow-test", tenantId, dateFilter.from, dateFilter.to],
     queryFn: async () => {
       if (!tenantId) return [];
-      const { data, error } = await supabase
+      let query = supabase
         .from("leads")
-        .select("id, company_name, contact_name, phone, email, source, notes, agency_id, manychat_subscriber_id, status, industry")
+        .select("id, company_name, contact_name, phone, email, source, notes, agency_id, manychat_subscriber_id, status, industry, created_at")
         .eq("tenant_id", tenantId)
-        .order("created_at", { ascending: false })
-        .limit(200);
+        .order("created_at", { ascending: false });
+
+      if (dateFilter.from) query = query.gte("created_at", dateFilter.from);
+      if (dateFilter.to) query = query.lt("created_at", dateFilter.to);
+
+      const { data, error } = await query.limit(500);
       if (error) throw error;
       return data || [];
     },
     enabled: open && !!tenantId,
   });
 
-  const selectedLead = leads.find((l: any) => l.id === selectedLeadId);
+  // Filtered leads by search
+  const filteredLeads = leads.filter((l: any) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (l.company_name || "").toLowerCase().includes(q) ||
+      (l.contact_name || "").toLowerCase().includes(q) ||
+      (l.phone || "").includes(q) ||
+      (l.email || "").toLowerCase().includes(q)
+    );
+  });
+
+  const toggleLead = (id: string) => {
+    setSelectedLeadIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (selectedLeadIds.size === filteredLeads.length) {
+      setSelectedLeadIds(new Set());
+    } else {
+      setSelectedLeadIds(new Set(filteredLeads.map((l: any) => l.id)));
+    }
+  };
 
   // Fetch last WhatsApp message matching automation config
   const handleFetchLastMessage = async () => {
@@ -138,31 +192,22 @@ export function TestFlowWithLeadDialog({
         .order("created_at", { ascending: false })
         .limit(1);
 
-      // Apply filters based on trigger configuration
       const sourceFilter = triggerConfig?.source_filter;
-
       if (sourceFilter === "group" && triggerConfig?.group_id) {
         query = query.eq("group_id", triggerConfig.group_id);
       }
-
       if (triggerConfig?.connection_user_id) {
         query = query.eq("connection_user_id", triggerConfig.connection_user_id);
       }
-
       if (triggerConfig?.keyword) {
         query = query.ilike("message_text", `%${triggerConfig.keyword}%`);
       }
 
       const { data, error } = await query.maybeSingle();
-
       if (error) throw error;
 
       if (!data) {
-        toast({
-          title: "לא נמצאה הודעה",
-          description: "לא נמצאה הודעה תואמת להגדרות הטריגר",
-          variant: "destructive",
-        });
+        toast({ title: "לא נמצאה הודעה", description: "לא נמצאה הודעה תואמת להגדרות הטריגר", variant: "destructive" });
         return;
       }
 
@@ -185,98 +230,94 @@ export function TestFlowWithLeadDialog({
       };
 
       setLastMessageData(msgData);
-
-      toast({
-        title: "הודעה נטענה",
-        description: `"${data.message_text?.substring(0, 50)}..." מ-${msgData.sender_name}`,
-      });
+      toast({ title: "הודעה נטענה", description: `"${data.message_text?.substring(0, 50)}..." מ-${msgData.sender_name}` });
     } catch (err: any) {
-      toast({
-        title: "שגיאה בשליפת הודעה",
-        description: err.message,
-        variant: "destructive",
-      });
+      toast({ title: "שגיאה בשליפת הודעה", description: err.message, variant: "destructive" });
     } finally {
       setIsFetchingMessage(false);
     }
   };
 
-  // Test mutation - direct execution mode
+  // Batch test mutation
   const testMutation = useMutation({
     mutationFn: async () => {
-      // If we have last message data (for whatsapp trigger), use it
+      // WhatsApp trigger with message data
       if (lastMessageData && isWhatsAppTrigger) {
         const response = await supabase.functions.invoke("trigger-automation", {
           body: {
             automationId,
             tenant_id: tenantId,
-            data: {
-              test: true,
-              ...lastMessageData,
-              timestamp: new Date().toISOString(),
-            },
+            data: { test: true, ...lastMessageData, timestamp: new Date().toISOString() },
           },
         });
         if (response.error) throw response.error;
-        return response.data;
+        return [{ leadId: "whatsapp", leadName: lastMessageData.sender_name, success: true, data: response.data }];
       }
 
-      // Original lead-based test
-      if (!selectedLeadId || !selectedLead) {
-        throw new Error("יש לבחור ליד לבדיקה");
+      // Lead-based batch test
+      if (selectedLeadIds.size === 0) throw new Error("יש לבחור לפחות ליד אחד");
+
+      const results: Array<{ leadId: string; leadName: string; success: boolean; data?: any; error?: string }> = [];
+
+      for (const leadId of selectedLeadIds) {
+        const lead = leads.find((l: any) => l.id === leadId);
+        if (!lead) continue;
+
+        try {
+          const testData: any = {
+            test: true,
+            lead_id: leadId,
+            contact_name: lead.contact_name || lead.company_name,
+            company_name: lead.company_name,
+            phone: lead.phone,
+            email: lead.email,
+            source: lead.source,
+            notes: lead.notes,
+            industry: lead.industry,
+            manychat_subscriber_id: lead.manychat_subscriber_id,
+            timestamp: new Date().toISOString(),
+          };
+
+          const response = await supabase.functions.invoke("trigger-automation", {
+            body: { automationId, tenant_id: tenantId, data: testData },
+          });
+
+          if (response.error) {
+            results.push({ leadId, leadName: lead.company_name || lead.contact_name || "ליד", success: false, error: response.error.message });
+          } else {
+            results.push({ leadId, leadName: lead.company_name || lead.contact_name || "ליד", success: true, data: response.data });
+          }
+        } catch (err: any) {
+          results.push({ leadId, leadName: lead.company_name || lead.contact_name || "ליד", success: false, error: err.message });
+        }
       }
 
-      const testData: any = {
-        test: true,
-        lead_id: selectedLeadId,
-        contact_name: selectedLead.contact_name || selectedLead.company_name,
-        company_name: selectedLead.company_name,
-        phone: selectedLead.phone,
-        email: selectedLead.email,
-        source: selectedLead.source,
-        notes: selectedLead.notes,
-        industry: selectedLead.industry,
-        manychat_subscriber_id: selectedLead.manychat_subscriber_id,
-        timestamp: new Date().toISOString(),
-      };
-
-      const response = await supabase.functions.invoke("trigger-automation", {
-        body: {
-          automationId,
-          tenant_id: tenantId,
-          data: testData,
-        },
-      });
-
-      if (response.error) throw response.error;
-      return response.data;
+      return results;
     },
-    onSuccess: (data) => {
-      setTestResult(data);
-      toast({ title: "בדיקה הושלמה", description: "בדוק את התוצאות למטה" });
+    onSuccess: (results) => {
+      setTestResults(results);
+      const successCount = results.filter((r) => r.success).length;
+      toast({ title: "בדיקה הושלמה", description: `${successCount}/${results.length} הצליחו` });
     },
     onError: (error: any) => {
-      setTestResult({ error: error.message });
-      toast({
-        title: "שגיאה בבדיקה",
-        description: error.message,
-        variant: "destructive",
-      });
+      setTestResults([{ leadId: "", leadName: "", success: false, error: error.message }]);
+      toast({ title: "שגיאה בבדיקה", description: error.message, variant: "destructive" });
     },
   });
 
   const handleClose = () => {
-    setSelectedLeadId("");
-    setTestResult(null);
+    setSelectedLeadIds(new Set());
+    setTestResults([]);
     setLastMessageData(null);
+    setSearchQuery("");
     onOpenChange(false);
   };
 
-  const canRunTest = isWhatsAppTrigger ? !!lastMessageData : !!selectedLeadId;
+  const canRunTest = isWhatsAppTrigger ? !!lastMessageData : selectedLeadIds.size > 0;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col" dir="rtl">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col" dir="rtl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <TestTube className="h-5 w-5" />
@@ -284,8 +325,8 @@ export function TestFlowWithLeadDialog({
           </DialogTitle>
           <DialogDescription>
             {isWhatsAppTrigger
-              ? "משוך הודעה אחרונה מהווטסאפ או בחר ליד להרצה"
-              : "בחר ליד קיים מהמאגר והרץ את האוטומציה על הנתונים שלו"}
+              ? "משוך הודעה אחרונה מהווטסאפ או בחר לידים להרצה"
+              : "בחר לידים מהמאגר והרץ את האוטומציה על כולם"}
           </DialogDescription>
         </DialogHeader>
 
@@ -297,38 +338,19 @@ export function TestFlowWithLeadDialog({
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="font-medium">משוך הודעה אחרונה מהווטסאפ</Label>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleFetchLastMessage}
-                    disabled={isFetchingMessage}
-                  >
-                    {isFetchingMessage ? (
-                      <Loader2 className="h-4 w-4 ml-1 animate-spin" />
-                    ) : (
-                      <MessageSquare className="h-4 w-4 ml-1" />
-                    )}
+                  <Button variant="outline" size="sm" onClick={handleFetchLastMessage} disabled={isFetchingMessage}>
+                    {isFetchingMessage ? <Loader2 className="h-4 w-4 ml-1 animate-spin" /> : <MessageSquare className="h-4 w-4 ml-1" />}
                     משוך הודעה
                   </Button>
                 </div>
 
-                {/* Show trigger filters info */}
                 <div className="flex flex-wrap gap-1.5">
-                  {triggerConfig?.source_filter === "group" && (
-                    <Badge variant="secondary" className="text-xs">קבוצה ספציפית</Badge>
-                  )}
-                  {triggerConfig?.source_filter === "tagged_contact" && (
-                    <Badge variant="secondary" className="text-xs">איש קשר מתויג</Badge>
-                  )}
-                  {triggerConfig?.keyword && (
-                    <Badge variant="outline" className="text-xs">מילת מפתח: {triggerConfig.keyword}</Badge>
-                  )}
-                  {!triggerConfig?.source_filter || triggerConfig?.source_filter === "all" ? (
-                    <Badge variant="secondary" className="text-xs">כל ההודעות</Badge>
-                  ) : null}
+                  {triggerConfig?.source_filter === "group" && <Badge variant="secondary" className="text-xs">קבוצה ספציפית</Badge>}
+                  {triggerConfig?.source_filter === "tagged_contact" && <Badge variant="secondary" className="text-xs">איש קשר מתויג</Badge>}
+                  {triggerConfig?.keyword && <Badge variant="outline" className="text-xs">מילת מפתח: {triggerConfig.keyword}</Badge>}
+                  {(!triggerConfig?.source_filter || triggerConfig?.source_filter === "all") && <Badge variant="secondary" className="text-xs">כל ההודעות</Badge>}
                 </div>
 
-                {/* Last message preview */}
                 {lastMessageData && (
                   <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
                     <p className="text-sm font-medium text-muted-foreground">הודעה שנמשכה:</p>
@@ -365,161 +387,152 @@ export function TestFlowWithLeadDialog({
 
                 <div className="relative flex items-center gap-2">
                   <div className="flex-1 border-t" />
-                  <span className="text-xs text-muted-foreground px-2">או בחר ליד</span>
+                  <span className="text-xs text-muted-foreground px-2">או בחר לידים</span>
                   <div className="flex-1 border-t" />
                 </div>
               </div>
             )}
 
-            {/* Lead Selection */}
+            {/* Date Range Tabs */}
             <div className="space-y-2">
-              <Label>בחר ליד:</Label>
-              <Popover open={comboOpen} onOpenChange={setComboOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={comboOpen}
-                    className="w-full justify-between"
-                  >
-                    {selectedLead
-                      ? `${selectedLead.company_name || ""} ${selectedLead.contact_name ? `(${selectedLead.contact_name})` : ""}`
-                      : "חיפוש לפי שם, טלפון, חברה..."}
-                    <ChevronsUpDown className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-full p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="חיפוש ליד..." />
-                    <CommandList>
-                      <CommandEmpty>לא נמצאו לידים</CommandEmpty>
-                      <CommandGroup>
-                        {leads.map((lead: any) => (
-                          <CommandItem
-                            key={lead.id}
-                            value={`${lead.company_name || ""} ${lead.contact_name || ""} ${lead.phone || ""}`}
-                            onSelect={() => {
-                              setSelectedLeadId(lead.id);
-                              setComboOpen(false);
-                              setTestResult(null);
-                              setLastMessageData(null); // Clear message data when selecting lead
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                selectedLeadId === lead.id ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            <div className="flex flex-col">
-                              <span>{lead.company_name || "ללא שם"}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {[lead.contact_name, lead.phone].filter(Boolean).join(" · ")}
-                              </span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+              <Label>טווח תאריכים:</Label>
+              <Tabs value={dateRange} onValueChange={(v) => { setDateRange(v as DateRange); setSelectedLeadIds(new Set()); }}>
+                <TabsList className="w-full grid grid-cols-4">
+                  <TabsTrigger value="today">היום</TabsTrigger>
+                  <TabsTrigger value="yesterday">אתמול</TabsTrigger>
+                  <TabsTrigger value="last_week">שבוע אחרון</TabsTrigger>
+                  <TabsTrigger value="custom">טווח מותאם</TabsTrigger>
+                </TabsList>
+              </Tabs>
+
+              {dateRange === "custom" && (
+                <div className="flex gap-2 items-center">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className={cn("flex-1 justify-start text-right", !customFrom && "text-muted-foreground")}>
+                        <CalendarIcon className="h-4 w-4 ml-2" />
+                        {customFrom ? format(customFrom, "dd/MM/yyyy") : "מתאריך"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={customFrom} onSelect={setCustomFrom} className="p-3 pointer-events-auto" />
+                    </PopoverContent>
+                  </Popover>
+                  <span className="text-sm text-muted-foreground">עד</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className={cn("flex-1 justify-start text-right", !customTo && "text-muted-foreground")}>
+                        <CalendarIcon className="h-4 w-4 ml-2" />
+                        {customTo ? format(customTo, "dd/MM/yyyy") : "עד תאריך"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={customTo} onSelect={setCustomTo} className="p-3 pointer-events-auto" />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
             </div>
 
-            {/* Lead Preview */}
-            {selectedLead && !lastMessageData && (
-              <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
-                <p className="text-sm font-medium text-muted-foreground">פרטי הליד שנבחר:</p>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  {selectedLead.contact_name && (
-                    <div className="flex items-center gap-1.5">
-                      <User className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>{selectedLead.contact_name}</span>
-                    </div>
-                  )}
-                  {selectedLead.phone && (
-                    <div className="flex items-center gap-1.5">
-                      <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span dir="ltr">{selectedLead.phone}</span>
-                    </div>
-                  )}
-                  {selectedLead.email && (
-                    <div className="flex items-center gap-1.5 col-span-2">
-                      <Mail className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>{selectedLead.email}</span>
-                    </div>
-                  )}
-                  {selectedLead.company_name && (
-                    <div className="flex items-center gap-1.5">
-                      <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>{selectedLead.company_name}</span>
-                    </div>
-                  )}
-                  {selectedLead.source && (
-                    <div>
-                      <Badge variant="secondary" className="text-xs">{selectedLead.source}</Badge>
-                    </div>
-                  )}
+            {/* Search + Select All */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="חיפוש לפי שם, טלפון, אימייל..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pr-9 text-right"
+                  />
                 </div>
+                <Button variant="outline" size="sm" onClick={toggleAll} className="shrink-0 gap-1.5">
+                  {selectedLeadIds.size === filteredLeads.length && filteredLeads.length > 0 ? (
+                    <><Square className="h-3.5 w-3.5" /> בטל הכל</>
+                  ) : (
+                    <><CheckSquare className="h-3.5 w-3.5" /> בחר הכל</>
+                  )}
+                </Button>
               </div>
-            )}
 
-            {/* Test Results */}
-            {testResult && (
-              <div className="rounded-lg border p-3 space-y-2">
-                <p className="text-sm font-medium">תוצאות הבדיקה:</p>
-                {testResult.error ? (
-                  <div className="flex items-center gap-2 text-destructive">
-                    <XCircle className="h-4 w-4" />
-                    <span className="text-sm">{testResult.error}</span>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Badge variant="secondary" className="text-xs">{filteredLeads.length} לידים</Badge>
+                {selectedLeadIds.size > 0 && (
+                  <Badge className="text-xs">{selectedLeadIds.size} נבחרו</Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Lead List with Checkboxes */}
+            <div className="rounded-lg border">
+              <ScrollArea className="max-h-[280px]">
+                {leadsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                   </div>
+                ) : filteredLeads.length === 0 ? (
+                  <div className="text-center py-8 text-sm text-muted-foreground">לא נמצאו לידים בטווח הנבחר</div>
                 ) : (
-                  <div className="space-y-2">
-                    {/* Overall status */}
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                      <span className="text-sm text-green-600">האוטומציה הורצה בהצלחה</span>
-                    </div>
-
-                    {/* Step results */}
-                    {testResult.results && Array.isArray(testResult.results) && (
-                      <div className="space-y-1.5 mt-2">
-                        {testResult.results.map((step: any, idx: number) => (
-                          <div
-                            key={idx}
-                            className="flex items-start gap-2 text-sm rounded-md bg-muted/50 p-2"
-                          >
-                            {step.success ? (
-                              <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
-                            ) : (
-                              <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium">
-                                {step.step_type === "agent" ? "סוכן AI" : step.action_type || step.step_type}
-                              </p>
-                              {step.output && (
-                                <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap break-words">
-                                  {typeof step.output === "string" ? step.output : JSON.stringify(step.output, null, 2)}
-                                </p>
-                              )}
-                              {step.error && (
-                                <p className="text-xs text-destructive mt-0.5">{step.error}</p>
-                              )}
-                            </div>
+                  <div className="divide-y">
+                    {filteredLeads.map((lead: any) => (
+                      <label
+                        key={lead.id}
+                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 cursor-pointer transition-colors"
+                      >
+                        <Checkbox
+                          checked={selectedLeadIds.has(lead.id)}
+                          onCheckedChange={() => toggleLead(lead.id)}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium truncate">{lead.company_name || "ללא שם"}</span>
+                            {lead.source && <Badge variant="outline" className="text-[10px] shrink-0">{lead.source}</Badge>}
                           </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Raw response fallback */}
-                    {!testResult.results && (
-                      <pre className="text-xs bg-muted rounded p-2 overflow-auto max-h-40" dir="ltr">
-                        {JSON.stringify(testResult, null, 2)}
-                      </pre>
-                    )}
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                            {lead.contact_name && <span>{lead.contact_name}</span>}
+                            {lead.phone && <span dir="ltr">{lead.phone}</span>}
+                            <span>{new Date(lead.created_at).toLocaleDateString("he-IL")}</span>
+                          </div>
+                        </div>
+                      </label>
+                    ))}
                   </div>
                 )}
+              </ScrollArea>
+            </div>
+
+            {/* Test Results */}
+            {testResults.length > 0 && (
+              <div className="rounded-lg border p-3 space-y-2">
+                <p className="text-sm font-medium">תוצאות הבדיקה ({testResults.filter(r => r.success).length}/{testResults.length} הצליחו):</p>
+                <ScrollArea className="max-h-[200px]">
+                  <div className="space-y-1.5">
+                    {testResults.map((result, idx) => (
+                      <div key={idx} className="flex items-start gap-2 text-sm rounded-md bg-muted/50 p-2">
+                        {result.success ? (
+                          <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                        ) : (
+                          <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium">{result.leadName}</p>
+                          {result.error && <p className="text-xs text-destructive mt-0.5">{result.error}</p>}
+                          {result.data?.results && Array.isArray(result.data.results) && (
+                            <div className="space-y-1 mt-1">
+                              {result.data.results.map((step: any, si: number) => (
+                                <div key={si} className="text-xs flex items-center gap-1">
+                                  {step.success ? <CheckCircle className="h-3 w-3 text-green-600" /> : <XCircle className="h-3 w-3 text-destructive" />}
+                                  <span>{step.step_type === "agent" ? "סוכן AI" : step.action_type || step.step_type}</span>
+                                  {step.error && <span className="text-destructive">- {step.error}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
               </div>
             )}
           </div>
@@ -536,12 +549,12 @@ export function TestFlowWithLeadDialog({
             {testMutation.isPending ? (
               <>
                 <Loader2 className="h-4 w-4 ml-2 animate-spin" />
-                מריץ...
+                מריץ {selectedLeadIds.size > 1 ? `(${selectedLeadIds.size})` : ""}...
               </>
             ) : (
               <>
                 <TestTube className="h-4 w-4 ml-2" />
-                הרץ טסט
+                הרץ {selectedLeadIds.size > 1 ? `על ${selectedLeadIds.size} לידים` : "טסט"}
               </>
             )}
           </Button>
