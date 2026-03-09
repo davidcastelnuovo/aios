@@ -26,6 +26,8 @@ const AVAILABLE_VARIABLES = [
   { key: "tasks_link", label: "קישור למשימות", example: "https://app.example.com/tasks" },
   { key: "leads_link", label: "קישור ללידים", example: "https://app.example.com/leads" },
   { key: "clients_link", label: "קישור ללקוחות", example: "https://app.example.com/clients" },
+  { key: "group_invite_link", label: "קישור לקבוצה", example: "https://chat.whatsapp.com/ABC123" },
+  { key: "group_name", label: "שם קבוצה", example: "קבוצת מכירות" },
 ];
 
 interface MessageTemplateBuilderProps {
