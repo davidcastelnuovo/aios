@@ -1752,6 +1752,48 @@ export type Database = {
           },
         ]
       }
+      flow_processed_leads: {
+        Row: {
+          automation_id: string
+          facebook_form_id: string | null
+          id: string
+          leadgen_id: string
+          processed_at: string | null
+          tenant_id: string
+        }
+        Insert: {
+          automation_id: string
+          facebook_form_id?: string | null
+          id?: string
+          leadgen_id: string
+          processed_at?: string | null
+          tenant_id: string
+        }
+        Update: {
+          automation_id?: string
+          facebook_form_id?: string | null
+          id?: string
+          leadgen_id?: string
+          processed_at?: string | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flow_processed_leads_automation_id_fkey"
+            columns: ["automation_id"]
+            isOneToOne: false
+            referencedRelation: "automations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flow_processed_leads_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       global_settings: {
         Row: {
           created_at: string
