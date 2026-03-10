@@ -631,6 +631,14 @@ serve(async (req) => {
             } catch (e) {
               console.error('Flow automation trigger error:', e);
             }
+            
+            // Record in flow_processed_leads for dedup
+            await supabase.from('flow_processed_leads').insert({
+              automation_id: info.automationId,
+              tenant_id: info.tenantId,
+              leadgen_id: leadgenId,
+              facebook_form_id: info.formId,
+            });
           }
         } catch (formError) {
           console.error(`Error processing flow form ${info.formId}:`, formError);
