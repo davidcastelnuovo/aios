@@ -489,10 +489,22 @@ serve(async (req) => {
           continue;
         }
         
-        // Use last_sync_at from the integration or default to 24h ago
+        // Get trigger step config for sync_since_date
+        const { data: triggerStep } = await supabase
+          .from('automation_flow_steps')
+          .select('configuration')
+          .eq('automation_id', info.automationId)
+          .eq('step_type', 'trigger')
+          .maybeSingle();
+        
+        const syncSinceDate = (triggerStep?.configuration as any)?.sync_since_date;
+        
+        // Use last_sync_at from the integration, or sync_since_date from config, or default to 24h ago
         const flowSinceDate = fbInt?.last_sync_at 
           ? new Date(fbInt.last_sync_at as string) 
-          : new Date(Date.now() - 24 * 60 * 60 * 1000);
+          : syncSinceDate 
+            ? new Date(syncSinceDate)
+            : new Date(Date.now() - 24 * 60 * 60 * 1000);
         const flowSinceTimestamp = Math.floor(flowSinceDate.getTime() / 1000);
         
         try {
