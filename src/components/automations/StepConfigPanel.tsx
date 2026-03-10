@@ -1642,6 +1642,20 @@ function LeadSourceConfig({
             </div>
           )}
 
+          {/* Sync since date */}
+          <div className="space-y-1">
+            <Label className="text-right block text-xs">משוך לידים החל מתאריך (אופציונלי)</Label>
+            <Input
+              type="date"
+              value={configuration?.sync_since_date || ""}
+              onChange={(e) => onConfigChange("sync_since_date", e.target.value || null)}
+              className="text-right text-sm"
+            />
+            <p className="text-[10px] text-muted-foreground text-right">
+              אם ריק — ימשוך רק מרגע ההפעלה
+            </p>
+          </div>
+
           {/* Pull existing lead with date range */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">

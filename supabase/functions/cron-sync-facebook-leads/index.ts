@@ -489,10 +489,22 @@ serve(async (req) => {
           continue;
         }
         
-        // Use last_sync_at from the integration or default to 24h ago
+        // Get trigger step config for sync_since_date
+        const { data: triggerStep } = await supabase
+          .from('automation_flow_steps')
+          .select('configuration')
+          .eq('automation_id', info.automationId)
+          .eq('step_type', 'trigger')
+          .maybeSingle();
+        
+        const syncSinceDate = (triggerStep?.configuration as any)?.sync_since_date;
+        
+        // Use last_sync_at from the integration, or sync_since_date from config, or default to 24h ago
         const flowSinceDate = fbInt?.last_sync_at 
           ? new Date(fbInt.last_sync_at as string) 
-          : new Date(Date.now() - 24 * 60 * 60 * 1000);
+          : syncSinceDate 
+            ? new Date(syncSinceDate)
+            : new Date(Date.now() - 24 * 60 * 60 * 1000);
         const flowSinceTimestamp = Math.floor(flowSinceDate.getTime() / 1000);
         
         try {
@@ -511,7 +523,20 @@ serve(async (req) => {
           for (const fbLead of leads) {
             const leadgenId = fbLead.id;
             
-            // Dedup check
+            // Dedup check: first check flow_processed_leads table (per-flow dedup)
+            const { data: alreadyProcessed } = await supabase
+              .from('flow_processed_leads')
+              .select('id')
+              .eq('automation_id', info.automationId)
+              .eq('leadgen_id', leadgenId)
+              .limit(1);
+            
+            if (alreadyProcessed && alreadyProcessed.length > 0) {
+              totalSkipped++;
+              continue;
+            }
+            
+            // Also check CRM leads table (backward compat)
             const { data: existing } = await supabase
               .from('leads')
               .select('id')
@@ -606,6 +631,14 @@ serve(async (req) => {
             } catch (e) {
               console.error('Flow automation trigger error:', e);
             }
+            
+            // Record in flow_processed_leads for dedup
+            await supabase.from('flow_processed_leads').insert({
+              automation_id: info.automationId,
+              tenant_id: info.tenantId,
+              leadgen_id: leadgenId,
+              facebook_form_id: info.formId,
+            });
           }
         } catch (formError) {
           console.error(`Error processing flow form ${info.formId}:`, formError);
