@@ -523,7 +523,20 @@ serve(async (req) => {
           for (const fbLead of leads) {
             const leadgenId = fbLead.id;
             
-            // Dedup check
+            // Dedup check: first check flow_processed_leads table (per-flow dedup)
+            const { data: alreadyProcessed } = await supabase
+              .from('flow_processed_leads')
+              .select('id')
+              .eq('automation_id', info.automationId)
+              .eq('leadgen_id', leadgenId)
+              .limit(1);
+            
+            if (alreadyProcessed && alreadyProcessed.length > 0) {
+              totalSkipped++;
+              continue;
+            }
+            
+            // Also check CRM leads table (backward compat)
             const { data: existing } = await supabase
               .from('leads')
               .select('id')
