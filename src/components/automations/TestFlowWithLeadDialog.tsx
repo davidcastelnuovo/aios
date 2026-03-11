@@ -286,17 +286,44 @@ export function TestFlowWithLeadDialog({
 
         // If trigger is Facebook/webhook, add fb_ prefixed fields to mimic real FB lead data
         if (isFacebookTrigger) {
-          if (manualData.phone) testData.fb_phone = manualData.phone;
-          if (manualData.contact_name) testData.fb_full_name = manualData.contact_name;
-          if (manualData.email) testData.fb_email = manualData.email;
-          if (manualData.company_name) testData.fb_company_name = manualData.company_name;
+          // Read actual form field names from trigger configuration
+          const formFields = (triggerConfig as any)?.facebook_form_fields as Array<{type: string; label: string; key: string}> | undefined;
+          
+          // Build a mapping from generic type to actual fb_ field key
+          const fieldMap: Record<string, string> = {
+            fb_phone: 'fb_phone',
+            fb_full_name: 'fb_full_name',
+            fb_email: 'fb_email',
+            fb_company_name: 'fb_company_name',
+          };
+          
+          if (formFields && formFields.length > 0) {
+            for (const field of formFields) {
+              const fbKey = `fb_${field.label || field.key}`;
+              const fieldType = (field.type || '').toUpperCase();
+              if (fieldType === 'PHONE' || fieldType.includes('PHONE')) {
+                fieldMap.fb_phone = fbKey;
+              } else if (fieldType === 'FULL_NAME' || fieldType.includes('NAME')) {
+                fieldMap.fb_full_name = fbKey;
+              } else if (fieldType === 'EMAIL' || fieldType.includes('EMAIL')) {
+                fieldMap.fb_email = fbKey;
+              } else if (fieldType === 'COMPANY_NAME' || fieldType.includes('COMPANY')) {
+                fieldMap.fb_company_name = fbKey;
+              }
+            }
+          }
+          
+          if (manualData.phone) testData[fieldMap.fb_phone] = manualData.phone;
+          if (manualData.contact_name) testData[fieldMap.fb_full_name] = manualData.contact_name;
+          if (manualData.email) testData[fieldMap.fb_email] = manualData.email;
+          if (manualData.company_name) testData[fieldMap.fb_company_name] = manualData.company_name;
 
           // Append fb_ fields to notes like real FB leads do
           const fbEntries = [
-            manualData.contact_name && `fb_full_name: ${manualData.contact_name}`,
-            manualData.phone && `fb_phone: ${manualData.phone}`,
-            manualData.email && `fb_email: ${manualData.email}`,
-            manualData.company_name && `fb_company_name: ${manualData.company_name}`,
+            manualData.contact_name && `${fieldMap.fb_full_name}: ${manualData.contact_name}`,
+            manualData.phone && `${fieldMap.fb_phone}: ${manualData.phone}`,
+            manualData.email && `${fieldMap.fb_email}: ${manualData.email}`,
+            manualData.company_name && `${fieldMap.fb_company_name}: ${manualData.company_name}`,
           ].filter(Boolean);
           if (fbEntries.length > 0) {
             testData.notes = (testData.notes ? testData.notes + "\n" : "") + fbEntries.join("\n");
