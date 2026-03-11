@@ -1,37 +1,24 @@
 
 
-# תיקון: משתני fb_ ריקים בטסט עם לידים שנמשכו
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## הבעיה
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-כשמריצים טסט על ליד שנמשך מהדאטאבייס, ה-payload שנשלח ל-`trigger-automation` מכיל רק שדות DB רגילים (company_name, phone, notes...) אבל **אין שדות `fb_*`**. לכן `{{fb_שם_מלא}}`, `{{fb_מספר_טלפון}}` וכו' נשארים כטקסט גולמי.
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-זה קורה כי:
-1. הסנכרון שומר את הליד בדאטאבייס בלי שדות fb_ (הם רק ב-notes כטקסט)
-2. הפרונטאנד שולח רק את מה שיש בדאטאבייס
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-## הפתרון
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-בפונקציה `trigger-automation`, לפני הרצת שלבי הפלוו (שורות ~400-420), כש:
-- `automation.is_flow === true`
-- `payloadData.test === true`  
-- `payloadData.lead_id` קיים
-- אין שדות `fb_*` ב-data
-- ה-notes מכיל `leadgen_id`
-
-→ לחלץ את ה-`leadgen_id` מה-notes, למצוא את ה-trigger step עם `facebook_form_id`, להשתמש ב-`facebook_integration_id` כדי לקבל token, לקרוא מ-Facebook Graph API (`/{leadgen_id}?access_token=...`), ולהעשיר את `payloadData` עם שדות `fb_*`.
-
-## שינויים
-
-### קובץ: `supabase/functions/trigger-automation/index.ts`
-בין שורה ~414 (אחרי שליפת ה-flow steps) לבין שורה ~420 (לפני הלולאה על ה-steps), להוסיף:
-
-1. בדיקה: `payloadData.test && !Object.keys(payloadData).some(k => k.startsWith('fb_'))`
-2. חילוץ `leadgen_id` מ-`payloadData.notes` (regex: `leadgen_id: (\d+)`)
-3. מציאת trigger step מתוך flowSteps
-4. שליפת token מ-`tenant_integrations` לפי `facebook_integration_id` (כולל shared)
-5. קריאה ל-Facebook: `GET https://graph.facebook.com/v19.0/{leadgen_id}?access_token={token}`
-6. פירוק `field_data` → `fb_{name}` ושילוב ב-`payloadData`
-
-כך גם טסט על ליד ישן יקבל את כל שדות הפייסבוק המקוריים.
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 

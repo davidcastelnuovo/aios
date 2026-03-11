@@ -413,6 +413,72 @@ Deno.serve(async (req) => {
 
             console.log(`Found ${flowSteps?.length || 0} flow steps`)
 
+            // === FB ENRICHMENT: If testing with an existing lead that has no fb_ fields, fetch them from Facebook ===
+            const hasFbFields = Object.keys(payloadData).some(k => k.startsWith('fb_'))
+            if (payloadData.test && !hasFbFields && payloadData.notes) {
+              const leadgenMatch = String(payloadData.notes).match(/leadgen_id:\s*(\d+)/)
+              if (leadgenMatch) {
+                const leadgenId = leadgenMatch[1]
+                console.log(`🔄 Test mode: enriching fb_ fields from Facebook for leadgen_id: ${leadgenId}`)
+                
+                // Find trigger step to get facebook_integration_id
+                const triggerStep = (flowSteps || []).find((s: any) => s.step_type === 'trigger')
+                const triggerConfig = triggerStep?.configuration || {}
+                const fbIntegrationId = triggerConfig.facebook_integration_id
+                
+                if (fbIntegrationId) {
+                  try {
+                    // Get access token from integration
+                    const { data: fbIntegration } = await supabase
+                      .from('tenant_integrations')
+                      .select('api_key, shared_from_integration_id')
+                      .eq('id', fbIntegrationId)
+                      .eq('is_active', true)
+                      .maybeSingle()
+                    
+                    let accessToken = fbIntegration?.api_key
+                    
+                    // If shared, get token from source
+                    if (!accessToken && fbIntegration?.shared_from_integration_id) {
+                      const { data: sourceInt } = await supabase
+                        .from('tenant_integrations')
+                        .select('api_key')
+                        .eq('id', fbIntegration.shared_from_integration_id)
+                        .eq('is_active', true)
+                        .maybeSingle()
+                      accessToken = sourceInt?.api_key
+                    }
+                    
+                    if (accessToken) {
+                      const fbRes = await fetch(`https://graph.facebook.com/v19.0/${leadgenId}?access_token=${accessToken}`)
+                      if (fbRes.ok) {
+                        const fbData = await fbRes.json()
+                        if (fbData.field_data && Array.isArray(fbData.field_data)) {
+                          for (const field of fbData.field_data) {
+                            const key = `fb_${field.name}`
+                            const value = Array.isArray(field.values) ? field.values[0] : field.values
+                            payloadData[key] = value || ''
+                            console.log(`  ✅ Enriched ${key} = ${value}`)
+                          }
+                          console.log(`🎉 Enriched ${fbData.field_data.length} fb_ fields from Facebook API`)
+                        }
+                      } else {
+                        const errText = await fbRes.text()
+                        console.error(`❌ Facebook API error: ${fbRes.status} ${errText}`)
+                      }
+                    } else {
+                      console.log('⚠️ No access token found for Facebook enrichment')
+                    }
+                  } catch (fbErr) {
+                    console.error('❌ Error enriching fb_ fields:', fbErr)
+                  }
+                } else {
+                  console.log('⚠️ No facebook_integration_id in trigger step config')
+                }
+              }
+            }
+            // === END FB ENRICHMENT ===
+
             let previousStepOutput: any = null
             const stepResults: any[] = []
             let actionCount = 0
