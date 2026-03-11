@@ -1,34 +1,24 @@
 
 
-# תיקון: משיכת לידים מהטופס המוגדר בפלוו בדיאלוג הטסט
+## הפיכת האפליקציה ל-PWA (Progressive Web App)
 
-## הבעיה
-דיאלוג הטסט מושך את **כל** הלידים מהמאגר ללא קשר לטופס הפייסבוק שמוגדר בפלוו. כתוצאה:
-1. מוצגים לידים לא רלוונטיים
-2. לידים ישנים שנוצרו דרך ה-Webhook עם הפורמט הישן לא מזוהים כבעלי שדות fb_
-3. התצוגה המקדימה מראה "לא נמצאו שדות fb_" כי הפרסור לא תופס את הפורמט הישן של ה-notes
+כרגע אין שום הגדרת PWA בפרויקט. צריך להוסיף 3 דברים:
 
-## הפתרון
+### 1. קובץ `public/manifest.json`
+- שם האפליקציה, צבעים, אייקונים, `display: standalone`, `start_url`, כיוון RTL
+- אייקונים בגדלים 192x192 ו-512x512 (נייצר מה-favicon הקיים)
 
-### קובץ: `src/components/automations/TestFlowWithLeadDialog.tsx`
+### 2. Service Worker — `public/sw.js`
+- Cache של קבצים סטטיים (HTML, CSS, JS, תמונות)
+- אסטרטגיית network-first כדי שהאפליקציה תעבוד גם אופליין חלקית
 
-**1. סינון לידים לפי הטופס המוגדר בפלוו**
-- לשלוף את `facebook_form_id` מה-`triggerStep.configuration`
-- אם קיים `facebook_form_id`, לסנן את שאילתת הלידים עם `.ilike("notes", `%${formId}%`)` — בדיוק כמו שעושים ב-`StepConfigPanel.handlePullLead`
-- להוסיף Badge שמציג שהלידים מסוננים לפי טופס ספציפי
+### 3. רישום ב-`index.html`
+- תג `<link rel="manifest">` ב-head
+- תגי `<meta>` ל-iOS (apple-mobile-web-app-capable, apple-touch-icon, theme-color)
+- סקריפט רישום Service Worker
 
-**2. שיפור פרסור ה-notes בתצוגה המקדימה**
-- הפרסור הנוכחי (שורות 611-633) כבר תומך בפורמט legacy, אבל יש לוודא שהוא גם תופס שורות `fb_key: value` בפורמט החדש **וגם** שורות אחרי ה-header בפורמט הישן
-- להוסיף גם פרסור של שורות `key: value` שנמצאות אחרי `Facebook Lead ID:` (שזה הפורמט של ה-webhook) — כלומר כל שורה שמתחילה ב-`fb_` תיתפס
-
-**3. העשרת ה-testData בשליחה**
-- בשורות 349-362 (lead-based batch test), לנתח את ה-notes של הליד ולהוסיף שדות `fb_*` ל-testData **לפני** השליחה, כך שגם ה-edge function יקבל אותם ישירות בלי לצטרך לפרסר
-
-שינויים ספציפיים:
-
-**שאילתת הלידים (~שורות 142-160):** הוספת `.ilike("notes", `%${formId}%`)` כשקיים `facebook_form_id` ב-triggerConfig
-
-**שליחת הטסט (~שורות 345-377):** הוספת לוגיקת פרסור fb_ מה-notes ושילוב ב-testData לפני הקריאה ל-trigger-automation
-
-**תצוגת רשימת הלידים (~שורות 574-596):** הצגת שם הליד גם מתוך ה-notes אם `company_name` הוא "ליד מפייסבוק" — ניסיון לחלץ שם מ-fb_ fields
+### תוצאה
+- באנדרואיד: המשתמשים יראו כפתור "Install" / "Add to Home Screen" בדפדפן
+- באייפון: Share → Add to Home Screen
+- האפליקציה תיפתח במסך מלא בלי שורת כתובת
 

@@ -138,9 +138,12 @@ export function TestFlowWithLeadDialog({
 
   const dateFilter = getDateFilter(dateRange, customFrom, customTo);
 
-  // Fetch leads with date filtering
+  // Extract facebook_form_id from trigger config for filtering
+  const facebookFormId = triggerConfig?.facebook_form_id || null;
+
+  // Fetch leads with date filtering and optional form ID filtering
   const { data: leads = [], isLoading: leadsLoading } = useQuery({
-    queryKey: ["leads-for-flow-test", tenantId, dateFilter.from, dateFilter.to],
+    queryKey: ["leads-for-flow-test", tenantId, dateFilter.from, dateFilter.to, facebookFormId],
     queryFn: async () => {
       if (!tenantId) return [];
       let query = supabase
@@ -151,6 +154,11 @@ export function TestFlowWithLeadDialog({
 
       if (dateFilter.from) query = query.gte("created_at", dateFilter.from);
       if (dateFilter.to) query = query.lt("created_at", dateFilter.to);
+
+      // Filter by facebook form ID if configured in the flow trigger
+      if (facebookFormId) {
+        query = query.ilike("notes", `%${facebookFormId}%`);
+      }
 
       const { data, error } = await query.limit(500);
       if (error) throw error;
@@ -360,6 +368,29 @@ export function TestFlowWithLeadDialog({
             manychat_subscriber_id: lead.manychat_subscriber_id,
             timestamp: new Date().toISOString(),
           };
+
+          // Enrich testData with fb_ fields parsed from notes
+          if (lead.notes) {
+            const noteLines = String(lead.notes).split('\n');
+            let inFbSection = false;
+            for (const line of noteLines) {
+              const fbMatch = line.match(/^(fb_[^:]+):\s*(.+)$/);
+              if (fbMatch) {
+                testData[fbMatch[1]] = fbMatch[2].trim();
+                continue;
+              }
+              if (line.includes('--- שדות טופס פייסבוק ---')) {
+                inFbSection = true;
+                continue;
+              }
+              if (inFbSection) {
+                const legacyMatch = line.match(/^([^:]+):\s*(.+)$/);
+                if (legacyMatch) {
+                  testData[`fb_${legacyMatch[1].trim()}`] = legacyMatch[2].trim();
+                }
+              }
+            }
+          }
 
           const response = await supabase.functions.invoke("trigger-automation", {
             body: { automationId, tenant_id: tenantId, data: testData },
@@ -572,7 +603,14 @@ export function TestFlowWithLeadDialog({
                       <div className="text-center py-8 text-sm text-muted-foreground">לא נמצאו לידים בטווח הנבחר</div>
                     ) : (
                       <div className="divide-y">
-                        {filteredLeads.map((lead: any) => (
+                        {filteredLeads.map((lead: any) => {
+                          // Try to extract a real name from fb_ fields if company_name is generic
+                          let displayName = lead.company_name || "ללא שם";
+                          if (displayName === "ליד מפייסבוק" && lead.notes) {
+                            const nameMatch = lead.notes.match(/fb_(?:שם_מלא|שם|full_name|name):\s*(.+)/i);
+                            if (nameMatch) displayName = `${nameMatch[1].trim()} (FB)`;
+                          }
+                          return (
                           <label
                             key={lead.id}
                             className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 cursor-pointer transition-colors"
@@ -583,8 +621,9 @@ export function TestFlowWithLeadDialog({
                             />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium truncate">{lead.company_name || "ללא שם"}</span>
+                                <span className="text-sm font-medium truncate">{displayName}</span>
                                 {lead.source && <Badge variant="outline" className="text-[10px] shrink-0">{lead.source}</Badge>}
+                                {facebookFormId && <Badge variant="secondary" className="text-[10px] shrink-0">טופס FB</Badge>}
                               </div>
                               <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                                 {lead.contact_name && <span>{lead.contact_name}</span>}
@@ -593,7 +632,8 @@ export function TestFlowWithLeadDialog({
                               </div>
                             </div>
                           </label>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </ScrollArea>
