@@ -199,34 +199,44 @@ serve(async (req) => {
                     flowFieldData[field.name] = field.values?.[0] || '';
                   }
                   
+                  // CUSTOM heuristic: detect name/phone/email from Hebrew labels
+                  let mappedName = flowFieldData.full_name || `${flowFieldData.first_name || ''} ${flowFieldData.last_name || ''}`.trim() || null;
+                  let mappedPhone = flowFieldData.phone_number || flowFieldData.phone || null;
+                  let mappedEmail = flowFieldData.email || null;
+                  
+                  // Check all field_data for CUSTOM-type fields with Hebrew labels
+                  for (const field of flowLeadData.field_data || []) {
+                    const val = field.values?.[0] || '';
+                    if (!val) continue;
+                    const lbl = (field.name || '').toLowerCase();
+                    if (!mappedName && (lbl.includes('שם') || lbl.includes('name'))) mappedName = val;
+                    if (!mappedPhone && (lbl.includes('טלפון') || lbl.includes('phone') || lbl.includes('נייד'))) mappedPhone = val;
+                    if (!mappedEmail && (lbl.includes('אימייל') || lbl.includes('דוא') || lbl.includes('email') || lbl.includes('mail'))) mappedEmail = val;
+                  }
+                  
+                  // Build notes with fb_ prefix for ALL fields
+                  const notesLines = [`leadgen_id: ${leadgenId}`, `Facebook Form: ${formId}`, `Source: Facebook Lead Ads (via Flow)`];
+                  for (const [k, v] of Object.entries(flowFieldData)) {
+                    if (v) notesLines.push(`fb_${k}: ${v}`);
+                  }
+                  
                   // Build lead record
                   const flowLeadRecord: Record<string, any> = {
-                    company_name: flowFieldData.full_name || flowFieldData.company || 'Facebook Lead',
-                    contact_name: flowFieldData.full_name || `${flowFieldData.first_name || ''} ${flowFieldData.last_name || ''}`.trim() || null,
-                    email: flowFieldData.email || null,
-                    phone: flowFieldData.phone_number || flowFieldData.phone || null,
+                    company_name: mappedName || flowFieldData.company || 'Facebook Lead',
+                    contact_name: mappedName || null,
+                    email: mappedEmail || null,
+                    phone: mappedPhone || null,
                     source: 'paid_ads',
                     status: 'new',
                     tenant_id: flowTenantId,
                     agency_id: stepConfig.agency_id || null,
-                    notes: `Facebook Lead ID: ${leadgenId}\nForm ID: ${formId}\nSource: Facebook Lead Ads (via Flow)`,
+                    notes: notesLines.join('\n'),
                   };
                   
-                  // Build fb_ prefixed fields
+                  // Build fb_ prefixed fields for trigger payload
                   const flowFbFields: Record<string, string> = {};
                   for (const [k, v] of Object.entries(flowFieldData)) {
                     flowFbFields[`fb_${k}`] = v;
-                  }
-                  
-                  // Append custom fields to notes
-                  const customLines: string[] = [];
-                  for (const [k, v] of Object.entries(flowFieldData)) {
-                    if (v && !['full_name', 'first_name', 'last_name', 'email', 'phone_number', 'phone'].includes(k)) {
-                      customLines.push(`${k}: ${v}`);
-                    }
-                  }
-                  if (customLines.length > 0) {
-                    flowLeadRecord.notes += '\n\n--- שדות טופס פייסבוק ---\n' + customLines.join('\n');
                   }
                   
                   // Insert lead
