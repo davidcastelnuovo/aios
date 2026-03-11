@@ -254,7 +254,7 @@ serve(async (req) => {
                   processedTenants.add(flowTenantId);
                   console.log('✅ Flow-based lead created:', newFlowLead.id, 'in tenant', flowTenantId);
                   
-                  // Trigger lead_created automation with facebook_form_id
+                  // Trigger flow automation directly by automationId (source: 'flow')
                   try {
                     await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
                       method: 'POST',
@@ -263,8 +263,8 @@ serve(async (req) => {
                         'Authorization': `Bearer ${supabaseServiceKey}`,
                       },
                       body: JSON.stringify({
-                        trigger_type: 'lead_created',
-                        tenant_id: flowTenantId,
+                        automationId: flowStep.automation_id,
+                        source: 'flow',
                         data: {
                           lead_id: newFlowLead.id,
                           contact_name: flowLeadRecord.contact_name || '',
@@ -280,39 +280,9 @@ serve(async (req) => {
                         },
                       }),
                     });
-                    console.log('🚀 Flow lead_created automation triggered for:', newFlowLead.id);
+                    console.log('🚀 Flow automation', flowStep.automation_id, 'triggered directly for:', newFlowLead.id);
                   } catch (e) {
                     console.error('Error triggering flow automation:', e);
-                  }
-                  
-                  // Also trigger inbound_webhook_lead
-                  try {
-                    await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${supabaseServiceKey}`,
-                      },
-                      body: JSON.stringify({
-                        trigger_type: 'inbound_webhook_lead',
-                        tenant_id: flowTenantId,
-                        data: {
-                          lead_id: newFlowLead.id,
-                          contact_name: flowLeadRecord.contact_name || '',
-                          company_name: flowLeadRecord.company_name || '',
-                          phone: flowLeadRecord.phone || '',
-                          email: flowLeadRecord.email || '',
-                          source: 'paid_ads',
-                          status: 'new',
-                          agency_id: flowLeadRecord.agency_id || '',
-                          notes: flowLeadRecord.notes || '',
-                          facebook_form_id: formId,
-                          ...flowFbFields,
-                        },
-                      }),
-                    });
-                  } catch (e) {
-                    console.error('Error triggering inbound_webhook_lead for flow:', e);
                   }
                 }
                 
