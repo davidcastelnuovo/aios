@@ -634,7 +634,7 @@ serve(async (req) => {
               fbFields[`fb_${k}`] = v;
             }
             
-            // Trigger automation
+            // Trigger automation — directly target the specific flow automation
             try {
               await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
                 method: 'POST',
@@ -643,7 +643,8 @@ serve(async (req) => {
                   'Authorization': `Bearer ${supabaseKey}`,
                 },
                 body: JSON.stringify({
-                  trigger_type: 'lead_created',
+                  automationId: info.automationId,
+                  source: 'flow',
                   data: {
                     id: newLead.id,
                     lead_id: newLead.id,
@@ -660,7 +661,7 @@ serve(async (req) => {
                   tenant_id: info.tenantId,
                 }),
               });
-              console.log(`✅ Flow lead_created automation triggered for ${newLead.id}`);
+              console.log(`✅ Flow automation ${info.automationId} triggered directly for ${newLead.id}`);
             } catch (e) {
               console.error('Flow automation trigger error:', e);
             }

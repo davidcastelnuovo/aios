@@ -594,11 +594,12 @@ serve(async (req) => {
                   }
                 }
 
-                // Trigger automations with lead_created event + all fb_ prefixed fields
+                // Trigger CRM automations only (source: 'crm') — flows are handled separately
                 try {
                   const triggerUrl = `${supabaseUrl}/functions/v1/trigger-automation`;
                   const triggerPayload = {
                     trigger_type: 'lead_created',
+                    source: 'crm',
                     tenant_id: integration.tenant_id,
                     data: {
                       lead_id: newLead.id,
@@ -616,7 +617,7 @@ serve(async (req) => {
                     },
                   };
                   
-                  console.log('🚀 Triggering automations for new Facebook lead:', newLead.id);
+                  console.log('🚀 Triggering CRM automations for new Facebook lead:', newLead.id);
                   const triggerRes = await fetch(triggerUrl, {
                     method: 'POST',
                     headers: {
@@ -627,17 +628,17 @@ serve(async (req) => {
                   });
                   
                   const triggerResult = await triggerRes.json();
-                  console.log('Automation trigger result:', triggerResult);
+                  console.log('CRM automation trigger result:', triggerResult);
                 } catch (triggerError) {
-                  console.error('Error triggering automations:', triggerError);
-                  // Don't fail the webhook if automation trigger fails
+                  console.error('Error triggering CRM automations:', triggerError);
                 }
 
-                // Also trigger inbound_webhook_lead (same as maskyoo-intake does)
+                // Also trigger inbound_webhook_lead with source: 'crm'
                 try {
                   const inboundTriggerUrl = `${supabaseUrl}/functions/v1/trigger-automation`;
                   const inboundTriggerPayload = {
                     trigger_type: 'inbound_webhook_lead',
+                    source: 'crm',
                     tenant_id: integration.tenant_id,
                     data: {
                       lead_id: newLead.id,
@@ -654,7 +655,7 @@ serve(async (req) => {
                     },
                   };
                   
-                  console.log('🚀 Triggering inbound_webhook_lead for Facebook lead:', newLead.id);
+                  console.log('🚀 Triggering inbound_webhook_lead (CRM) for Facebook lead:', newLead.id);
                   const inboundRes = await fetch(inboundTriggerUrl, {
                     method: 'POST',
                     headers: {
