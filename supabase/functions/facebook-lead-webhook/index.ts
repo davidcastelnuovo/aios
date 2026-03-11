@@ -254,7 +254,7 @@ serve(async (req) => {
                   processedTenants.add(flowTenantId);
                   console.log('✅ Flow-based lead created:', newFlowLead.id, 'in tenant', flowTenantId);
                   
-                  // Trigger lead_created automation with facebook_form_id
+                  // Trigger flow automation directly by automationId (source: 'flow')
                   try {
                     await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
                       method: 'POST',
@@ -263,8 +263,8 @@ serve(async (req) => {
                         'Authorization': `Bearer ${supabaseServiceKey}`,
                       },
                       body: JSON.stringify({
-                        trigger_type: 'lead_created',
-                        tenant_id: flowTenantId,
+                        automationId: flowStep.automation_id,
+                        source: 'flow',
                         data: {
                           lead_id: newFlowLead.id,
                           contact_name: flowLeadRecord.contact_name || '',
@@ -280,39 +280,9 @@ serve(async (req) => {
                         },
                       }),
                     });
-                    console.log('🚀 Flow lead_created automation triggered for:', newFlowLead.id);
+                    console.log('🚀 Flow automation', flowStep.automation_id, 'triggered directly for:', newFlowLead.id);
                   } catch (e) {
                     console.error('Error triggering flow automation:', e);
-                  }
-                  
-                  // Also trigger inbound_webhook_lead
-                  try {
-                    await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${supabaseServiceKey}`,
-                      },
-                      body: JSON.stringify({
-                        trigger_type: 'inbound_webhook_lead',
-                        tenant_id: flowTenantId,
-                        data: {
-                          lead_id: newFlowLead.id,
-                          contact_name: flowLeadRecord.contact_name || '',
-                          company_name: flowLeadRecord.company_name || '',
-                          phone: flowLeadRecord.phone || '',
-                          email: flowLeadRecord.email || '',
-                          source: 'paid_ads',
-                          status: 'new',
-                          agency_id: flowLeadRecord.agency_id || '',
-                          notes: flowLeadRecord.notes || '',
-                          facebook_form_id: formId,
-                          ...flowFbFields,
-                        },
-                      }),
-                    });
-                  } catch (e) {
-                    console.error('Error triggering inbound_webhook_lead for flow:', e);
                   }
                 }
                 
@@ -624,11 +594,12 @@ serve(async (req) => {
                   }
                 }
 
-                // Trigger automations with lead_created event + all fb_ prefixed fields
+                // Trigger CRM automations only (source: 'crm') — flows are handled separately
                 try {
                   const triggerUrl = `${supabaseUrl}/functions/v1/trigger-automation`;
                   const triggerPayload = {
                     trigger_type: 'lead_created',
+                    source: 'crm',
                     tenant_id: integration.tenant_id,
                     data: {
                       lead_id: newLead.id,
@@ -646,7 +617,7 @@ serve(async (req) => {
                     },
                   };
                   
-                  console.log('🚀 Triggering automations for new Facebook lead:', newLead.id);
+                  console.log('🚀 Triggering CRM automations for new Facebook lead:', newLead.id);
                   const triggerRes = await fetch(triggerUrl, {
                     method: 'POST',
                     headers: {
@@ -657,17 +628,17 @@ serve(async (req) => {
                   });
                   
                   const triggerResult = await triggerRes.json();
-                  console.log('Automation trigger result:', triggerResult);
+                  console.log('CRM automation trigger result:', triggerResult);
                 } catch (triggerError) {
-                  console.error('Error triggering automations:', triggerError);
-                  // Don't fail the webhook if automation trigger fails
+                  console.error('Error triggering CRM automations:', triggerError);
                 }
 
-                // Also trigger inbound_webhook_lead (same as maskyoo-intake does)
+                // Also trigger inbound_webhook_lead with source: 'crm'
                 try {
                   const inboundTriggerUrl = `${supabaseUrl}/functions/v1/trigger-automation`;
                   const inboundTriggerPayload = {
                     trigger_type: 'inbound_webhook_lead',
+                    source: 'crm',
                     tenant_id: integration.tenant_id,
                     data: {
                       lead_id: newLead.id,
@@ -684,7 +655,7 @@ serve(async (req) => {
                     },
                   };
                   
-                  console.log('🚀 Triggering inbound_webhook_lead for Facebook lead:', newLead.id);
+                  console.log('🚀 Triggering inbound_webhook_lead (CRM) for Facebook lead:', newLead.id);
                   const inboundRes = await fetch(inboundTriggerUrl, {
                     method: 'POST',
                     headers: {

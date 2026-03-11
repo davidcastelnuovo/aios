@@ -180,6 +180,8 @@ interface AutomationPayload {
   // Support direct automation execution by ID
   automationId?: string
   payload?: any
+  // Source separation: 'crm' = only CRM automations, 'flow' = only the specific flow
+  source?: 'crm' | 'flow'
 }
 
 Deno.serve(async (req) => {
@@ -312,69 +314,76 @@ Deno.serve(async (req) => {
 
       automations = foundAutomations || []
 
-      // 2. Also find flow automations whose trigger step has the matching action_type
-      const { data: flowTriggerSteps, error: flowError } = await supabase
-        .from('automation_flow_steps')
-        .select('automation_id, configuration')
-        .eq('tenant_id', payload.tenant_id)
-        .eq('step_type', 'trigger')
-        .eq('action_type', payload.trigger_type)
+      // 2. Also find flow automations — BUT ONLY if source is NOT 'crm'
+      // When source === 'crm', we skip flow lookup entirely to prevent CRM leads from triggering flows
+      if (payload.source !== 'crm') {
+        const { data: flowTriggerSteps, error: flowError } = await supabase
+          .from('automation_flow_steps')
+          .select('automation_id, configuration')
+          .eq('tenant_id', payload.tenant_id)
+          .eq('step_type', 'trigger')
+          .eq('action_type', payload.trigger_type)
 
-      if (flowError) {
-        console.error('Error fetching flow trigger steps:', flowError)
-      }
+        if (flowError) {
+          console.error('Error fetching flow trigger steps:', flowError)
+        }
 
-      if (flowTriggerSteps && flowTriggerSteps.length > 0) {
-        // Filter by trigger configuration BEFORE fetching automations
-        const matchingSteps = flowTriggerSteps.filter((step: any) => {
-          const config = step.configuration || {}
-          // Facebook form_id filter: if trigger step specifies a form, only match leads from that form
-          if (config.facebook_form_id && config.facebook_form_id !== payloadData?.facebook_form_id) return false
-          if (config.group_id && config.group_id !== payloadData.group_id) return false
-          if (config.connection_user_id && config.connection_user_id !== payloadData.connection_user_id) return false
-          if (config.keyword && payloadData.message_text) {
-            const keywords = config.keyword.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean)
-            const msgText = payloadData.message_text.toLowerCase()
-            const hasMatch = keywords.some((kw: string) => msgText.includes(kw))
-            if (!hasMatch) return false
-          } else if (config.keyword && !payloadData.message_text) {
-            return false
-          }
-          if (config.source_filter === 'group' && !payloadData.group_id) return false
-          if (config.source_filter === 'all_groups' && !payloadData.group_id) return false
-          if (config.source_filter === 'all_groups_except') {
-            if (!payloadData.group_id) return false
-            const excludedIds = config.excluded_group_ids || []
-            if (excludedIds.length > 0 && excludedIds.includes(payloadData.group_id)) return false
-          }
-          if (config.source_filter === 'multiple_groups') {
-            if (!payloadData.group_id) return false
-            const selectedIds = config.selected_group_ids || []
-            if (selectedIds.length > 0 && !selectedIds.includes(payloadData.group_id)) return false
-          }
-          if (config.source_filter === 'private' && payloadData.group_id) return false
-          return true
-        })
-        console.log(`Filtered ${flowTriggerSteps.length} trigger steps down to ${matchingSteps.length} matching steps`)
-        const flowAutomationIds = matchingSteps.map((s: any) => s.automation_id)
-        // Filter out IDs already found
-        const existingIds = new Set(automations.map((a: any) => a.id))
-        const newFlowIds = flowAutomationIds.filter((id: string) => !existingIds.has(id))
+        if (flowTriggerSteps && flowTriggerSteps.length > 0) {
+          // Filter by trigger configuration BEFORE fetching automations
+          const matchingSteps = flowTriggerSteps.filter((step: any) => {
+            const config = step.configuration || {}
+            // Facebook form_id filter: if trigger step specifies a form, only match leads from that form
+            if (config.facebook_form_id && config.facebook_form_id !== payloadData?.facebook_form_id) return false
+            if (config.group_id && config.group_id !== payloadData.group_id) return false
+            if (config.connection_user_id && config.connection_user_id !== payloadData.connection_user_id) return false
+            if (config.keyword && payloadData.message_text) {
+              const keywords = config.keyword.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean)
+              const msgText = payloadData.message_text.toLowerCase()
+              const hasMatch = keywords.some((kw: string) => msgText.includes(kw))
+              if (!hasMatch) return false
+            } else if (config.keyword && !payloadData.message_text) {
+              return false
+            }
+            if (config.source_filter === 'group' && !payloadData.group_id) return false
+            if (config.source_filter === 'all_groups' && !payloadData.group_id) return false
+            if (config.source_filter === 'all_groups_except') {
+              if (!payloadData.group_id) return false
+              const excludedIds = config.excluded_group_ids || []
+              if (excludedIds.length > 0 && excludedIds.includes(payloadData.group_id)) return false
+            }
+            if (config.source_filter === 'multiple_groups') {
+              if (!payloadData.group_id) return false
+              const selectedIds = config.selected_group_ids || []
+              if (selectedIds.length > 0 && !selectedIds.includes(payloadData.group_id)) return false
+            }
+            if (config.source_filter === 'private' && payloadData.group_id) return false
+            return true
+          })
+          console.log(`Filtered ${flowTriggerSteps.length} trigger steps down to ${matchingSteps.length} matching steps`)
+          const flowAutomationIds = matchingSteps.map((s: any) => s.automation_id)
+          // Filter out IDs already found
+          const existingIds = new Set(automations.map((a: any) => a.id))
+          const newFlowIds = flowAutomationIds.filter((id: string) => !existingIds.has(id))
 
-        if (newFlowIds.length > 0) {
-          const { data: flowAutomations, error: flowAutoError } = await supabase
-            .from('automations')
-            .select('*')
-            .in('id', newFlowIds)
-            .eq('active', true)
+          if (newFlowIds.length > 0) {
+            const { data: flowAutomations, error: flowAutoError } = await supabase
+              .from('automations')
+              .select('*')
+              .in('id', newFlowIds)
+              .eq('active', true)
 
-          if (flowAutoError) {
-            console.error('Error fetching flow automations:', flowAutoError)
-          } else if (flowAutomations) {
-            console.log(`Found ${flowAutomations.length} additional flow automation(s) via trigger steps`)
-            automations = [...automations, ...flowAutomations]
+            if (flowAutoError) {
+              console.error('Error fetching flow automations:', flowAutoError)
+            } else if (flowAutomations) {
+              console.log(`Found ${flowAutomations.length} additional flow automation(s) via trigger steps`)
+              automations = [...automations, ...flowAutomations]
+            }
           }
         }
+      } else {
+        console.log(`📌 Source is 'crm' — skipping flow trigger step lookup`)
+        // When source is 'crm', also filter out any flow automations that were found in CRM automations
+        automations = automations.filter((a: any) => !a.is_flow)
       }
     }
 
