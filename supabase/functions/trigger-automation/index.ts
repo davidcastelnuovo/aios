@@ -1873,9 +1873,18 @@ function replaceTemplateVariables(template: string, data: any, tenantSlug?: stri
     group_invite_link: data.group_invite_link || '',
   }
   
+  // Add all fb_ fields and any other dynamic fields from data
+  for (const [key, value] of Object.entries(data)) {
+    if (key.startsWith('fb_') && typeof value === 'string' && !(key in variables)) {
+      variables[key] = value
+    }
+  }
+  
   let result = template
   for (const [key, value] of Object.entries(variables)) {
-    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value)
+    // Escape special regex characters in key (Hebrew chars, ?, etc.)
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    result = result.replace(new RegExp(`\\{\\{${escapedKey}\\}\\}`, 'g'), value)
   }
   
   return result
