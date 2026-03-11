@@ -369,6 +369,29 @@ export function TestFlowWithLeadDialog({
             timestamp: new Date().toISOString(),
           };
 
+          // Enrich testData with fb_ fields parsed from notes
+          if (lead.notes) {
+            const noteLines = String(lead.notes).split('\n');
+            let inFbSection = false;
+            for (const line of noteLines) {
+              const fbMatch = line.match(/^(fb_[^:]+):\s*(.+)$/);
+              if (fbMatch) {
+                testData[fbMatch[1]] = fbMatch[2].trim();
+                continue;
+              }
+              if (line.includes('--- שדות טופס פייסבוק ---')) {
+                inFbSection = true;
+                continue;
+              }
+              if (inFbSection) {
+                const legacyMatch = line.match(/^([^:]+):\s*(.+)$/);
+                if (legacyMatch) {
+                  testData[`fb_${legacyMatch[1].trim()}`] = legacyMatch[2].trim();
+                }
+              }
+            }
+          }
+
           const response = await supabase.functions.invoke("trigger-automation", {
             body: { automationId, tenant_id: tenantId, data: testData },
           });
