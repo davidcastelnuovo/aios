@@ -603,7 +603,14 @@ export function TestFlowWithLeadDialog({
                       <div className="text-center py-8 text-sm text-muted-foreground">לא נמצאו לידים בטווח הנבחר</div>
                     ) : (
                       <div className="divide-y">
-                        {filteredLeads.map((lead: any) => (
+                        {filteredLeads.map((lead: any) => {
+                          // Try to extract a real name from fb_ fields if company_name is generic
+                          let displayName = lead.company_name || "ללא שם";
+                          if (displayName === "ליד מפייסבוק" && lead.notes) {
+                            const nameMatch = lead.notes.match(/fb_(?:שם_מלא|שם|full_name|name):\s*(.+)/i);
+                            if (nameMatch) displayName = `${nameMatch[1].trim()} (FB)`;
+                          }
+                          return (
                           <label
                             key={lead.id}
                             className="flex items-center gap-3 px-3 py-2.5 hover:bg-muted/50 cursor-pointer transition-colors"
@@ -614,8 +621,9 @@ export function TestFlowWithLeadDialog({
                             />
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium truncate">{lead.company_name || "ללא שם"}</span>
+                                <span className="text-sm font-medium truncate">{displayName}</span>
                                 {lead.source && <Badge variant="outline" className="text-[10px] shrink-0">{lead.source}</Badge>}
+                                {facebookFormId && <Badge variant="secondary" className="text-[10px] shrink-0">טופס FB</Badge>}
                               </div>
                               <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
                                 {lead.contact_name && <span>{lead.contact_name}</span>}
@@ -624,7 +632,8 @@ export function TestFlowWithLeadDialog({
                               </div>
                             </div>
                           </label>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </ScrollArea>
