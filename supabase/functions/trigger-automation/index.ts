@@ -419,12 +419,29 @@ Deno.serve(async (req) => {
               console.log('🔄 Test mode: parsing fb_ fields from notes')
               const lines = String(payloadData.notes).split('\n')
               let enrichedCount = 0
+              let inFbSection = false
               for (const line of lines) {
-                const match = line.match(/^(fb_[^:]+):\s*(.+)$/)
-                if (match) {
-                  payloadData[match[1]] = match[2].trim()
-                  console.log(`  ✅ Enriched ${match[1]} = ${match[2].trim()}`)
+                // New format: fb_key: value
+                const fbMatch = line.match(/^(fb_[^:]+):\s*(.+)$/)
+                if (fbMatch) {
+                  payloadData[fbMatch[1]] = fbMatch[2].trim()
+                  console.log(`  ✅ Enriched ${fbMatch[1]} = ${fbMatch[2].trim()}`)
                   enrichedCount++
+                  continue
+                }
+                // Legacy format: lines after "--- שדות טופס פייסבוק ---"
+                if (line.includes('--- שדות טופס פייסבוק ---')) {
+                  inFbSection = true
+                  continue
+                }
+                if (inFbSection) {
+                  const legacyMatch = line.match(/^([^:]+):\s*(.+)$/)
+                  if (legacyMatch) {
+                    const key = `fb_${legacyMatch[1].trim()}`
+                    payloadData[key] = legacyMatch[2].trim()
+                    console.log(`  ✅ Enriched (legacy) ${key} = ${legacyMatch[2].trim()}`)
+                    enrichedCount++
+                  }
                 }
               }
               if (enrichedCount > 0) {
