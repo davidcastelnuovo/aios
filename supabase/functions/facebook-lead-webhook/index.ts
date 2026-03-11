@@ -199,34 +199,44 @@ serve(async (req) => {
                     flowFieldData[field.name] = field.values?.[0] || '';
                   }
                   
+                  // CUSTOM heuristic: detect name/phone/email from Hebrew labels
+                  let mappedName = flowFieldData.full_name || `${flowFieldData.first_name || ''} ${flowFieldData.last_name || ''}`.trim() || null;
+                  let mappedPhone = flowFieldData.phone_number || flowFieldData.phone || null;
+                  let mappedEmail = flowFieldData.email || null;
+                  
+                  // Check all field_data for CUSTOM-type fields with Hebrew labels
+                  for (const field of flowLeadData.field_data || []) {
+                    const val = field.values?.[0] || '';
+                    if (!val) continue;
+                    const lbl = (field.name || '').toLowerCase();
+                    if (!mappedName && (lbl.includes('שם') || lbl.includes('name'))) mappedName = val;
+                    if (!mappedPhone && (lbl.includes('טלפון') || lbl.includes('phone') || lbl.includes('נייד'))) mappedPhone = val;
+                    if (!mappedEmail && (lbl.includes('אימייל') || lbl.includes('דוא') || lbl.includes('email') || lbl.includes('mail'))) mappedEmail = val;
+                  }
+                  
+                  // Build notes with fb_ prefix for ALL fields
+                  const notesLines = [`leadgen_id: ${leadgenId}`, `Facebook Form: ${formId}`, `Source: Facebook Lead Ads (via Flow)`];
+                  for (const [k, v] of Object.entries(flowFieldData)) {
+                    if (v) notesLines.push(`fb_${k}: ${v}`);
+                  }
+                  
                   // Build lead record
                   const flowLeadRecord: Record<string, any> = {
-                    company_name: flowFieldData.full_name || flowFieldData.company || 'Facebook Lead',
-                    contact_name: flowFieldData.full_name || `${flowFieldData.first_name || ''} ${flowFieldData.last_name || ''}`.trim() || null,
-                    email: flowFieldData.email || null,
-                    phone: flowFieldData.phone_number || flowFieldData.phone || null,
+                    company_name: mappedName || flowFieldData.company || 'Facebook Lead',
+                    contact_name: mappedName || null,
+                    email: mappedEmail || null,
+                    phone: mappedPhone || null,
                     source: 'paid_ads',
                     status: 'new',
                     tenant_id: flowTenantId,
                     agency_id: stepConfig.agency_id || null,
-                    notes: `Facebook Lead ID: ${leadgenId}\nForm ID: ${formId}\nSource: Facebook Lead Ads (via Flow)`,
+                    notes: notesLines.join('\n'),
                   };
                   
-                  // Build fb_ prefixed fields
+                  // Build fb_ prefixed fields for trigger payload
                   const flowFbFields: Record<string, string> = {};
                   for (const [k, v] of Object.entries(flowFieldData)) {
                     flowFbFields[`fb_${k}`] = v;
-                  }
-                  
-                  // Append custom fields to notes
-                  const customLines: string[] = [];
-                  for (const [k, v] of Object.entries(flowFieldData)) {
-                    if (v && !['full_name', 'first_name', 'last_name', 'email', 'phone_number', 'phone'].includes(k)) {
-                      customLines.push(`${k}: ${v}`);
-                    }
-                  }
-                  if (customLines.length > 0) {
-                    flowLeadRecord.notes += '\n\n--- שדות טופס פייסבוק ---\n' + customLines.join('\n');
                   }
                   
                   // Insert lead
@@ -364,16 +374,35 @@ serve(async (req) => {
               const salesPersonIds: string[] = formMappings.sales_person_ids 
                 || (formMappings.sales_person_id ? [formMappings.sales_person_id] : []);
 
-              // Map fields to lead record (use 'paid_ads' as source since it's a valid enum value)
-              // Primary sales_person_id for backwards compatibility
+              // CUSTOM heuristic: detect name/phone/email from Hebrew labels
+              let legacyMappedName: string | null = null;
+              let legacyMappedPhone: string | null = null;
+              let legacyMappedEmail: string | null = null;
+              
+              for (const field of leadData.field_data || []) {
+                const val = field.values?.[0] || '';
+                if (!val) continue;
+                const lbl = (field.name || '').toLowerCase();
+                if (!legacyMappedName && (lbl.includes('שם') || lbl.includes('name'))) legacyMappedName = val;
+                if (!legacyMappedPhone && (lbl.includes('טלפון') || lbl.includes('phone') || lbl.includes('נייד'))) legacyMappedPhone = val;
+                if (!legacyMappedEmail && (lbl.includes('אימייל') || lbl.includes('דוא') || lbl.includes('email') || lbl.includes('mail'))) legacyMappedEmail = val;
+              }
+              
+              // Build notes with fb_ prefix for ALL fields
+              const legacyNotesLines = [`leadgen_id: ${leadgenId}`, `Facebook Form: ${formId}`, `Source: Facebook Lead Ads`];
+              for (const [k, v] of Object.entries(fieldData)) {
+                if (v) legacyNotesLines.push(`fb_${k}: ${v}`);
+              }
+              
+              // Map fields to lead record
               const leadRecord: Record<string, any> = {
-                company_name: fieldData.company || fieldData.full_name || 'Facebook Lead',
+                company_name: fieldData.company || fieldData.full_name || legacyMappedName || 'Facebook Lead',
                 source: 'paid_ads',
                 status: 'new',
                 tenant_id: integration.tenant_id,
                 agency_id: formMappings.agency_id || null,
                 sales_person_id: salesPersonIds.length > 0 ? salesPersonIds[0] : null,
-                notes: `Facebook Lead ID: ${leadgenId}\nForm ID: ${formId}\nSource: Facebook Lead Ads`,
+                notes: legacyNotesLines.join('\n'),
               };
 
               // Apply field mappings
@@ -388,15 +417,16 @@ serve(async (req) => {
                 leadRecord.contact_name = fieldData.full_name 
                   || `${fieldData.first_name || ''} ${fieldData.last_name || ''}`.trim()
                   || fieldData.name
+                  || legacyMappedName
                   || null;
               }
               
-              // Fallback for email and phone
-              if (!leadRecord.email && fieldData.email) {
-                leadRecord.email = fieldData.email;
+              // Fallback for email and phone (use heuristic values too)
+              if (!leadRecord.email) {
+                leadRecord.email = fieldData.email || legacyMappedEmail || null;
               }
-              if (!leadRecord.phone && (fieldData.phone_number || fieldData.phone)) {
-                leadRecord.phone = fieldData.phone_number || fieldData.phone;
+              if (!leadRecord.phone) {
+                leadRecord.phone = fieldData.phone_number || fieldData.phone || legacyMappedPhone || null;
               }
 
               // ========== DEDUPLICATION LOGIC ==========
