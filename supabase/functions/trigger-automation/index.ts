@@ -1907,10 +1907,16 @@ async function executeGreenApiMessage(supabase: any, config: any, data: any, ten
   
   if (phone_mode === "manual" && manual_phone) {
     // New: manual phone mode from flow editor
-    const cleanPhone = manual_phone.replace(/\D/g, '')
-    const last9 = cleanPhone.slice(-9)
-    chatId = `972${last9}@c.us`
-    console.log(`Sending to manual phone (phone_mode): ${chatId}`)
+    // Check if it's a group chat ID (contains @g.us)
+    if (manual_phone.includes('@g.us')) {
+      chatId = manual_phone
+      console.log(`Sending to manual group (phone_mode): ${chatId}`)
+    } else {
+      const cleanPhone = manual_phone.replace(/\D/g, '')
+      const last9 = cleanPhone.slice(-9)
+      chatId = `972${last9}@c.us`
+      console.log(`Sending to manual phone (phone_mode): ${chatId}`)
+    }
   } else if (send_to_type === "manual_group" && manual_group_id) {
     // Send to manual group
     chatId = manual_group_id.includes("@g.us") ? manual_group_id : `${manual_group_id}@g.us`
