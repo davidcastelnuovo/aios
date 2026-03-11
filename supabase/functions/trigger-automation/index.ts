@@ -180,6 +180,8 @@ interface AutomationPayload {
   // Support direct automation execution by ID
   automationId?: string
   payload?: any
+  // Source separation: 'crm' = only CRM automations, 'flow' = only the specific flow
+  source?: 'crm' | 'flow'
 }
 
 Deno.serve(async (req) => {
