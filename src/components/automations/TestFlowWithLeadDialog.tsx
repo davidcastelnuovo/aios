@@ -598,6 +598,70 @@ export function TestFlowWithLeadDialog({
                     )}
                   </ScrollArea>
                 </div>
+
+                {/* Parameters Preview for selected lead */}
+                {selectedLeadIds.size === 1 && (() => {
+                  const selectedId = Array.from(selectedLeadIds)[0];
+                  const selectedLead = leads.find((l: any) => l.id === selectedId);
+                  if (!selectedLead) return null;
+                  
+                  const fbParams: Array<{key: string; value: string}> = [];
+                  const sysParams: Array<{key: string; value: string}> = [];
+                  
+                  // Parse fb_ fields from notes
+                  if (selectedLead.notes) {
+                    const lines = String(selectedLead.notes).split('\n');
+                    for (const line of lines) {
+                      const match = line.match(/^(fb_[^:]+):\s*(.+)$/);
+                      if (match) {
+                        fbParams.push({ key: match[1], value: match[2].trim() });
+                      }
+                    }
+                  }
+                  
+                  // System fields
+                  if (selectedLead.contact_name) sysParams.push({ key: 'contact_name', value: selectedLead.contact_name });
+                  if (selectedLead.company_name) sysParams.push({ key: 'company_name', value: selectedLead.company_name });
+                  if (selectedLead.phone) sysParams.push({ key: 'phone', value: selectedLead.phone });
+                  if (selectedLead.email) sysParams.push({ key: 'email', value: selectedLead.email });
+                  if (selectedLead.source) sysParams.push({ key: 'source', value: selectedLead.source });
+                  
+                  return (
+                    <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
+                      <p className="text-sm font-medium flex items-center gap-1.5">
+                        📋 פרמטרים שימשכו לטסט:
+                      </p>
+                      {fbParams.length > 0 ? (
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground font-medium">שדות פייסבוק:</p>
+                          {fbParams.map((p, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 rounded px-2 py-1">
+                              <span className="font-mono font-medium">{`{{${p.key}}}`}</span>
+                              <span className="text-muted-foreground">→</span>
+                              <span>{p.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded px-2 py-1.5">
+                          ⚠️ לא נמצאו שדות fb_ בהערות הליד. משתני פייסבוק לא יוחלפו.
+                        </div>
+                      )}
+                      {sysParams.length > 0 && (
+                        <div className="space-y-1">
+                          <p className="text-xs text-muted-foreground font-medium">שדות מערכת:</p>
+                          {sysParams.map((p, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1">
+                              <span className="font-mono font-medium">{`{{${p.key}}}`}</span>
+                              <span className="text-muted-foreground">→</span>
+                              <span>{p.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </TabsContent>
 
               <TabsContent value="manual" className="space-y-3 mt-3">

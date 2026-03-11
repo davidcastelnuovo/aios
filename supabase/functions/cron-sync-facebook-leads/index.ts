@@ -582,16 +582,30 @@ serve(async (req) => {
               if (ff.type === 'FULL_NAME') mappedName = val;
               else if (ff.type === 'PHONE') mappedPhone = val;
               else if (ff.type === 'EMAIL') mappedEmail = val;
+              else if (ff.type === 'CUSTOM') {
+                // Heuristic: check label/key for name/phone/email keywords
+                const lbl = (ff.label || ff.key || '').toLowerCase();
+                if (!mappedName && (lbl.includes('שם') || lbl.includes('name'))) mappedName = val;
+                if (!mappedPhone && (lbl.includes('טלפון') || lbl.includes('phone') || lbl.includes('נייד'))) mappedPhone = val;
+                if (!mappedEmail && (lbl.includes('אימייל') || lbl.includes('דוא') || lbl.includes('email') || lbl.includes('mail'))) mappedEmail = val;
+              }
             }
             
             const resolvedName = mappedName || fieldData.full_name || fieldData.company || fieldData.name || null;
             const resolvedContact = mappedName || fieldData.full_name || `${fieldData.first_name || ''} ${fieldData.last_name || ''}`.trim() || null;
             
+            // Build notes with actual field values for later enrichment
+            const notesLines = [`leadgen_id: ${leadgenId}`, `Facebook Form: ${info.formId}`];
+            for (const [k, v] of Object.entries(fieldData)) {
+              if (v) notesLines.push(`fb_${k}: ${v}`);
+            }
+            notesLines.push(`Created: ${fbLead.created_time || 'unknown'}`, 'Source: Flow-based sync');
+            
             const leadRecord: Record<string, any> = {
               tenant_id: info.tenantId,
               source: 'paid_ads',
               status: 'new',
-              notes: `leadgen_id: ${leadgenId}\nFacebook Form: ${info.formId}\nCreated: ${fbLead.created_time || 'unknown'}\nSource: Flow-based sync`,
+              notes: notesLines.join('\n'),
               company_name: resolvedName || 'ליד מפייסבוק',
               contact_name: resolvedContact,
               email: mappedEmail || fieldData.email || null,
