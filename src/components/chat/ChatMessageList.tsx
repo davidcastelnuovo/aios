@@ -88,7 +88,7 @@ export default function ChatMessageList({
   const lastContactId = useRef<string | undefined>(undefined);
   const lastMessageCount = useRef<number>(0);
   const isUserScrolling = useRef(false);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Build a color map for group members
   const senderColorMap = useMemo(() => {
