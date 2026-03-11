@@ -570,15 +570,32 @@ serve(async (req) => {
               }
             }
             
+            // Map fields by type using facebook_form_fields from trigger config
+            const formFields = (triggerStep?.configuration as any)?.facebook_form_fields || [];
+            let mappedName: string | null = null;
+            let mappedPhone: string | null = null;
+            let mappedEmail: string | null = null;
+            
+            for (const ff of formFields) {
+              const val = fieldData[ff.key] || fieldData[ff.label] || '';
+              if (!val) continue;
+              if (ff.type === 'FULL_NAME') mappedName = val;
+              else if (ff.type === 'PHONE') mappedPhone = val;
+              else if (ff.type === 'EMAIL') mappedEmail = val;
+            }
+            
+            const resolvedName = mappedName || fieldData.full_name || fieldData.company || fieldData.name || null;
+            const resolvedContact = mappedName || fieldData.full_name || `${fieldData.first_name || ''} ${fieldData.last_name || ''}`.trim() || null;
+            
             const leadRecord: Record<string, any> = {
               tenant_id: info.tenantId,
               source: 'paid_ads',
               status: 'new',
               notes: `leadgen_id: ${leadgenId}\nFacebook Form: ${info.formId}\nCreated: ${fbLead.created_time || 'unknown'}\nSource: Flow-based sync`,
-              company_name: fieldData.full_name || fieldData.company || fieldData.name || 'ליד מפייסבוק',
-              contact_name: fieldData.full_name || `${fieldData.first_name || ''} ${fieldData.last_name || ''}`.trim() || null,
-              email: fieldData.email || null,
-              phone: fieldData.phone_number || fieldData.phone || null,
+              company_name: resolvedName || 'ליד מפייסבוק',
+              contact_name: resolvedContact,
+              email: mappedEmail || fieldData.email || null,
+              phone: mappedPhone || fieldData.phone_number || fieldData.phone || null,
             };
             
             const { data: newLead, error: insertError } = await supabase
