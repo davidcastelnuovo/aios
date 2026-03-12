@@ -1060,6 +1060,28 @@ export function WeeklyTaskBoard() {
         <div className="flex flex-col md:hidden gap-2">
           {/* Header: Title + Navigation + Filters */}
           <div className="flex flex-wrap items-center gap-2 justify-between">
+            {/* Quick campaigner filter - mobile */}
+            <Select
+              value={filters.campaignerId}
+              onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
+            >
+              <SelectTrigger className="w-full gap-2">
+                <Users className="h-4 w-4 shrink-0" />
+                <SelectValue placeholder={t('role_campaigner')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mine">שלי בלבד</SelectItem>
+                <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
+                <SelectItem value="none">ללא שיוך</SelectItem>
+                {campaignersList.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 justify-between">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold">משימות</h1>
               <Button variant="outline" size="icon" onClick={goToPrev}>
