@@ -32,6 +32,7 @@ import { TaskBacklogPanel } from "./OverdueTasksPanel";
 import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useTerminology } from "@/hooks/useTerminology";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
 
