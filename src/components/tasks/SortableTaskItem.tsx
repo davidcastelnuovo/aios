@@ -2,8 +2,9 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Users, GripVertical } from "lucide-react";
+import { MessageSquare, Users, GripVertical, Calendar, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 interface SortableTaskItemProps {
   task: {
