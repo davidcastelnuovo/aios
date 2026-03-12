@@ -82,6 +82,22 @@ export function TaskDetailDialog({
   const [campaignerDropdownOpen, setCampaignerDropdownOpen] = useState(false);
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false);
   const [assignedCampaignerId, setAssignedCampaignerId] = useState("");
+  const [viewLeadOpen, setViewLeadOpen] = useState(false);
+
+  // Fetch full lead data for viewing
+  const { data: fullLeadData } = useQuery({
+    queryKey: ["lead-detail-for-task", leadId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("leads")
+        .select("*")
+        .eq("id", leadId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!leadId && open,
+  });
 
   // Reset form when task changes or dialog opens
   useEffect(() => {
