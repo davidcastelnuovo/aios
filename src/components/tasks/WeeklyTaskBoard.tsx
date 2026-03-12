@@ -994,6 +994,26 @@ export function WeeklyTaskBoard() {
               </Badge>
             )}
           </Button>
+          {/* Quick campaigner filter */}
+          <Select
+            value={filters.campaignerId}
+            onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
+          >
+            <SelectTrigger className="w-[180px] gap-2">
+              <Users className="h-4 w-4 shrink-0" />
+              <SelectValue placeholder={t('role_campaigner')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="mine">שלי בלבד</SelectItem>
+              <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
+              <SelectItem value="none">ללא שיוך</SelectItem>
+              {campaignersList.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.full_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             variant="outline"
             onClick={() => syncToCalendar.mutate()}
