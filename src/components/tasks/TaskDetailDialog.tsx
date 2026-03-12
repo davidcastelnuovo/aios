@@ -21,11 +21,12 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search, ListTodo } from "lucide-react";
+import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search, ListTodo, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { TimeSlotPicker } from "./TimeSlotPicker";
+import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 
 interface Task {
   id: string;
@@ -81,6 +82,22 @@ export function TaskDetailDialog({
   const [campaignerDropdownOpen, setCampaignerDropdownOpen] = useState(false);
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false);
   const [assignedCampaignerId, setAssignedCampaignerId] = useState("");
+  const [viewLeadOpen, setViewLeadOpen] = useState(false);
+
+  // Fetch full lead data for viewing
+  const { data: fullLeadData } = useQuery({
+    queryKey: ["lead-detail-for-task", leadId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("leads")
+        .select("*")
+        .eq("id", leadId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!leadId && open,
+  });
 
   // Reset form when task changes or dialog opens
   useEffect(() => {
@@ -317,6 +334,7 @@ export function TaskDetailDialog({
   );
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
@@ -398,7 +416,20 @@ export function TaskDetailDialog({
 
                 {/* Lead search combobox */}
                 <div className="space-y-2">
-                  <Label>שיוך לליד</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>שיוך לליד</Label>
+                    {leadId && fullLeadData && (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-xs gap-1"
+                        onClick={() => setViewLeadOpen(true)}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        צפה בליד
+                      </Button>
+                    )}
+                  </div>
                   <div className="relative">
                     <div className="relative">
                       <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -745,5 +776,14 @@ export function TaskDetailDialog({
         </div>
       </DialogContent>
     </Dialog>
+    
+    {fullLeadData && (
+      <EditLeadDialog
+        lead={fullLeadData}
+        open={viewLeadOpen}
+        onOpenChange={setViewLeadOpen}
+      />
+    )}
+    </>
   );
 }
