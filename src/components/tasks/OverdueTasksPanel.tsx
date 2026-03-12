@@ -98,8 +98,16 @@ function DraggableBacklogTask({
             </p>
           )}
           <div className="flex items-center gap-1 mt-1 flex-wrap">
-            {isOverdue && task.due_date && (
-              <Badge variant="outline" className="text-xs text-destructive border-destructive/50">
+            {task.due_date && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  "text-xs",
+                  isOverdue
+                    ? "text-destructive border-destructive/50"
+                    : "text-muted-foreground"
+                )}
+              >
                 <Clock className="h-3 w-3 mr-1" />
                 {new Date(task.due_date).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })}
               </Badge>
