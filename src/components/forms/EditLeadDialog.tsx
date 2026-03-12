@@ -254,23 +254,6 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
     staleTime: 60000,
   });
 
-  const { data: leadUpdates, refetch: refetchUpdates } = useQuery({
-    queryKey: ["lead-updates", lead.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("lead_updates")
-        .select(`
-          *,
-          profiles:user_id (full_name, email)
-        `)
-        .eq("lead_id", lead.id)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!lead.id && open,
-  });
-
 const updateMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       const safeCompanyName = (() => {
