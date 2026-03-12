@@ -76,9 +76,6 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange !== undefined ? onOpenChange : setInternalOpen;
   const [activeTab, setActiveTab] = useState("details");
-  const [newUpdate, setNewUpdate] = useState("");
-  const [editingUpdateId, setEditingUpdateId] = useState<string | null>(null);
-  const [editingUpdateContent, setEditingUpdateContent] = useState("");
   const [responseSelectOpen, setResponseSelectOpen] = useState(false);
   const [stageSelectOpen, setStageSelectOpen] = useState(false);
 
@@ -257,23 +254,6 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
     staleTime: 60000,
   });
 
-  const { data: leadUpdates, refetch: refetchUpdates } = useQuery({
-    queryKey: ["lead-updates", lead.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("lead_updates")
-        .select(`
-          *,
-          profiles:user_id (full_name, email)
-        `)
-        .eq("lead_id", lead.id)
-        .order("created_at", { ascending: true });
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!lead.id && open,
-  });
-
 const updateMutation = useMutation({
     mutationFn: async (values: FormValues) => {
       const safeCompanyName = (() => {
@@ -403,106 +383,6 @@ const updateMutation = useMutation({
     },
   });
 
-  const addUpdateMutation = useMutation({
-    mutationFn: async (content: string) => {
-      const { error } = await supabase
-        .from("lead_updates")
-        .insert({
-          lead_id: lead.id,
-          user_id: userId,
-          content,
-        });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      refetchUpdates();
-      setNewUpdate("");
-      sonnerToast.success("העדכון נוסף בהצלחה");
-    },
-    onError: (error: Error) => {
-      sonnerToast.error(`שגיאה בהוספת עדכון: ${error.message}`);
-    },
-  });
-
-  const updateUpdateMutation = useMutation({
-    mutationFn: async ({ id, content }: { id: string; content: string }) => {
-      const { error } = await supabase
-        .from("lead_updates")
-        .update({ content })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      refetchUpdates();
-      setEditingUpdateId(null);
-      setEditingUpdateContent("");
-      sonnerToast.success("העדכון עודכן בהצלחה");
-    },
-    onError: (error: Error) => {
-      sonnerToast.error(`שגיאה בעדכון: ${error.message}`);
-    },
-  });
-
-  const deleteUpdateMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("lead_updates")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      refetchUpdates();
-      sonnerToast.success("העדכון נמחק בהצלחה");
-    },
-    onError: (error: Error) => {
-      sonnerToast.error(`שגיאה במחיקת עדכון: ${error.message}`);
-    },
-  });
-
-  const onSubmit = (values: FormValues) => {
-    // Prevent "nothing happens" when a required field is visible but empty.
-    if (isFieldVisible('company_name') && !(values.company_name || '').trim()) {
-      sonnerToast.error("שם העסק הוא שדה חובה");
-      setActiveTab('details');
-      return;
-    }
-
-    updateMutation.mutate(values);
-  };
-
-  const onInvalid = () => {
-    sonnerToast.error("יש שדות חסרים/לא תקינים — בדוק את ההודעות בטופס");
-  };
-
-  const handleAddUpdate = () => {
-    if (!newUpdate.trim()) return;
-    addUpdateMutation.mutate(newUpdate);
-  };
-
-  const handleEditUpdate = (updateId: string, currentContent: string) => {
-    setEditingUpdateId(updateId);
-    setEditingUpdateContent(currentContent);
-  };
-
-  const handleSaveEdit = () => {
-    if (!editingUpdateContent.trim() || !editingUpdateId) return;
-    updateUpdateMutation.mutate({
-      id: editingUpdateId,
-      content: editingUpdateContent.trim(),
-    });
-  };
-
-  const handleCancelEdit = () => {
-    setEditingUpdateId(null);
-    setEditingUpdateContent("");
-  };
-
-  const handleDeleteUpdate = (updateId: string) => {
-    if (confirm("האם אתה בטוח שברצונך למחוק עדכון זה?")) {
-      deleteUpdateMutation.mutate(updateId);
-    }
-  };
 
   // Wrapper for scheduling meeting with lead details
   const handleScheduleMeeting = async () => {
@@ -515,6 +395,19 @@ const updateMutation = useMutation({
         queryClient.invalidateQueries({ queryKey: ["leads"] });
       },
     });
+  };
+
+  const onSubmit = (values: FormValues) => {
+    if (isFieldVisible('company_name') && !(values.company_name || '').trim()) {
+      sonnerToast.error("שם העסק הוא שדה חובה");
+      setActiveTab('details');
+      return;
+    }
+    updateMutation.mutate(values);
+  };
+
+  const onInvalid = () => {
+    sonnerToast.error("יש שדות חסרים/לא תקינים — בדוק את ההודעות בטופס");
   };
 
   const showLostReason = form.watch("status") === "closed";
@@ -574,12 +467,7 @@ const updateMutation = useMutation({
               className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
             >
               <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />
-              עדכונים
-              {leadUpdates && leadUpdates.length > 0 && (
-                <span className="mr-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-xs">
-                  {leadUpdates.length}
-                </span>
-              )}
+              משימות ועדכונים
             </TabsTrigger>
           </TabsList>
 
@@ -1354,116 +1242,9 @@ const updateMutation = useMutation({
                 </div>
               </TabsContent>
 
-              {/* Tab 4: Updates */}
-              <TabsContent value="updates" className="space-y-4 mt-0">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-medium">היסטוריית עדכונים</h4>
-                    <span className="text-xs text-muted-foreground">
-                      {leadUpdates?.length || 0} עדכונים
-                    </span>
-                  </div>
-
-                  {/* Updates List */}
-                  <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                    {leadUpdates?.map((update: any) => (
-                      <Card key={update.id} className="p-3">
-                        {editingUpdateId === update.id ? (
-                          <div className="space-y-2">
-                            <Textarea
-                              value={editingUpdateContent}
-                              onChange={(e) => setEditingUpdateContent(e.target.value)}
-                              rows={3}
-                              className="w-full text-right rounded-lg border-2 px-4 py-3"
-                              dir="rtl"
-                            />
-                            <div className="flex gap-2 justify-start">
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={handleSaveEdit}
-                                disabled={!editingUpdateContent.trim() || updateUpdateMutation.isPending}
-                              >
-                                שמור
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={handleCancelEdit}
-                              >
-                                ביטול
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 space-y-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-medium text-muted-foreground">
-                                  {update.profiles?.full_name || update.profiles?.email || "משתמש"}
-                                </span>
-                                <span className="text-[10px] text-muted-foreground">
-                                  {format(new Date(update.created_at), "d בMMMM, HH:mm", { locale: he })}
-                                </span>
-                              </div>
-                              <p className="text-sm whitespace-pre-wrap">
-                                {update.content}
-                              </p>
-                            </div>
-                            {update.user_id === userId && (
-                              <div className="flex gap-1">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={() => handleEditUpdate(update.id, update.content)}
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-destructive"
-                                  onClick={() => handleDeleteUpdate(update.id)}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </Card>
-                    ))}
-                    {(!leadUpdates || leadUpdates.length === 0) && (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        אין עדכונים עדיין
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Add New Update */}
-                  <div className="flex gap-2 pt-2 border-t">
-                    <Textarea
-                      value={newUpdate}
-                      onChange={(e) => setNewUpdate(e.target.value)}
-                      placeholder="הוסף עדכון חדש..."
-                      rows={3}
-                      className="flex-1 text-right rounded-lg border-2 px-4 py-3"
-                      dir="rtl"
-                    />
-                    <Button
-                      type="button"
-                      size="icon"
-                      onClick={handleAddUpdate}
-                      disabled={!newUpdate.trim() || addUpdateMutation.isPending}
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
+              {/* Tab 4: Tasks & Updates */}
+              <TabsContent value="updates" className="mt-0">
+                <LeadUpdatesTab leadId={lead.id} leadName={lead.company_name || lead.contact_name || ""} />
               </TabsContent>
             </form>
           </Form>
