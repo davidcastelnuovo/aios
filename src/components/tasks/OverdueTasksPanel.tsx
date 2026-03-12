@@ -108,7 +108,7 @@ function DraggableBacklogTask({
                     : "text-muted-foreground"
                 )}
               >
-                <Clock className="h-3 w-3 mr-1" />
+                <CalendarDays className="h-3 w-3 mr-1" />
                 {new Date(task.due_date).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })}
               </Badge>
             )}
