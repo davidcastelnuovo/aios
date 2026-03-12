@@ -1,6 +1,6 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ListTodo, MessageSquare, Users, Clock, ChevronLeft, ChevronRight, AlertTriangle, GripVertical } from "lucide-react";
+import { ListTodo, MessageSquare, Users, CalendarDays, Clock, ChevronLeft, ChevronRight, AlertTriangle, GripVertical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
@@ -108,7 +108,7 @@ function DraggableBacklogTask({
                     : "text-muted-foreground"
                 )}
               >
-                <Clock className="h-3 w-3 mr-1" />
+                <CalendarDays className="h-3 w-3 mr-1" />
                 {new Date(task.due_date).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })}
               </Badge>
             )}
