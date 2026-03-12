@@ -12,6 +12,8 @@ interface SortableTaskItemProps {
     title: string;
     status: string;
     client_id: string | null;
+    created_at?: string;
+    due_date?: string | null;
     duration_minutes?: number;
     clients?: { name: string } | null;
     task_updates?: { id: string }[];
