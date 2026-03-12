@@ -397,6 +397,19 @@ const updateMutation = useMutation({
     });
   };
 
+  const onSubmit = (values: FormValues) => {
+    if (isFieldVisible('company_name') && !(values.company_name || '').trim()) {
+      sonnerToast.error("שם העסק הוא שדה חובה");
+      setActiveTab('details');
+      return;
+    }
+    updateMutation.mutate(values);
+  };
+
+  const onInvalid = () => {
+    sonnerToast.error("יש שדות חסרים/לא תקינים — בדוק את ההודעות בטופס");
+  };
+
   const showLostReason = form.watch("status") === "closed";
 
   // Get available time slots from the meeting scheduler hook
