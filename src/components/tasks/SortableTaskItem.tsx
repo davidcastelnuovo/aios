@@ -152,6 +152,20 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
               {task.clients.name}
             </Badge>
           )}
+
+          {task.created_at && (
+            <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+              <Calendar className="h-3 w-3" />
+              {format(new Date(task.created_at), "dd/MM/yy")}
+            </span>
+          )}
+
+          {task.due_date && (
+            <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+              <CalendarClock className="h-3 w-3" />
+              {format(new Date(task.due_date), "dd/MM/yy")}
+            </span>
+          )}
           
           {updatesCount > 0 && (
             <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5">
