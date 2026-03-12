@@ -415,7 +415,20 @@ export function TaskDetailDialog({
 
                 {/* Lead search combobox */}
                 <div className="space-y-2">
-                  <Label>שיוך לליד</Label>
+                  <div className="flex items-center justify-between">
+                    <Label>שיוך לליד</Label>
+                    {leadId && fullLeadData && (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        className="h-auto p-0 text-xs gap-1"
+                        onClick={() => setViewLeadOpen(true)}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        צפה בליד
+                      </Button>
+                    )}
+                  </div>
                   <div className="relative">
                     <div className="relative">
                       <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
