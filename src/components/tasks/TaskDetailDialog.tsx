@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { TimeSlotPicker } from "./TimeSlotPicker";
+import { EditLeadDialog } from "@/components/forms/EditLeadDialog";
 
 interface Task {
   id: string;
