@@ -422,6 +422,79 @@ Deno.serve(async (req) => {
 
             console.log(`Found ${flowSteps?.length || 0} flow steps`)
 
+            // === CRITICAL: Validate trigger step matches incoming payload ===
+            const triggerStep = flowSteps?.find((s: any) => s.step_type === 'trigger')
+            if (triggerStep) {
+              // Check action_type match (e.g. whatsapp_message_received vs lead_created)
+              const triggerActionType = triggerStep.action_type
+              const incomingTriggerType = (requestBody as any).trigger_type || (requestBody as any).triggerType
+              if (triggerActionType && incomingTriggerType && triggerActionType !== incomingTriggerType) {
+                console.log(`⛔ Flow trigger type mismatch: flow expects '${triggerActionType}' but got '${incomingTriggerType}' — skipping automation ${automation.id}`)
+                return { skipped: true, reason: 'trigger_type_mismatch' }
+              }
+              // Also validate trigger step filters (group_id, keyword, etc.)
+              const config = triggerStep.configuration || {}
+              if (config.facebook_form_id && config.facebook_form_id !== payloadData?.facebook_form_id) {
+                console.log(`⛔ Flow facebook_form_id mismatch — skipping automation ${automation.id}`)
+                return { skipped: true, reason: 'facebook_form_id_mismatch' }
+              }
+              if (config.group_id && config.group_id !== payloadData?.group_id) {
+                console.log(`⛔ Flow group_id mismatch — skipping automation ${automation.id}`)
+                return { skipped: true, reason: 'group_id_mismatch' }
+              }
+              if (config.connection_user_id && config.connection_user_id !== payloadData?.connection_user_id) {
+                console.log(`⛔ Flow connection_user_id mismatch — skipping automation ${automation.id}`)
+                return { skipped: true, reason: 'connection_user_id_mismatch' }
+              }
+              if (config.keyword && payloadData?.message_text) {
+                const keywords = config.keyword.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean)
+                const msgText = payloadData.message_text.toLowerCase()
+                const hasMatch = keywords.some((kw: string) => msgText.includes(kw))
+                if (!hasMatch) {
+                  console.log(`⛔ Flow keyword mismatch — skipping automation ${automation.id}`)
+                  return { skipped: true, reason: 'keyword_mismatch' }
+                }
+              } else if (config.keyword && !payloadData?.message_text) {
+                console.log(`⛔ Flow requires keyword but no message_text in payload — skipping automation ${automation.id}`)
+                return { skipped: true, reason: 'keyword_no_message' }
+              }
+              if (config.source_filter === 'group' && !payloadData?.group_id) {
+                console.log(`⛔ Flow requires group but none in payload — skipping automation ${automation.id}`)
+                return { skipped: true, reason: 'source_filter_group' }
+              }
+              if (config.source_filter === 'all_groups' && !payloadData?.group_id) {
+                console.log(`⛔ Flow requires group (all_groups) but none in payload — skipping automation ${automation.id}`)
+                return { skipped: true, reason: 'source_filter_all_groups' }
+              }
+              if (config.source_filter === 'all_groups_except') {
+                if (!payloadData?.group_id) {
+                  console.log(`⛔ Flow requires group (all_groups_except) but none — skipping automation ${automation.id}`)
+                  return { skipped: true, reason: 'source_filter_all_groups_except' }
+                }
+                const excludedIds = config.excluded_group_ids || []
+                if (excludedIds.length > 0 && excludedIds.includes(payloadData.group_id)) {
+                  console.log(`⛔ Flow group is in excluded list — skipping automation ${automation.id}`)
+                  return { skipped: true, reason: 'group_excluded' }
+                }
+              }
+              if (config.source_filter === 'multiple_groups') {
+                if (!payloadData?.group_id) {
+                  console.log(`⛔ Flow requires specific groups but none — skipping automation ${automation.id}`)
+                  return { skipped: true, reason: 'source_filter_multiple_groups' }
+                }
+                const selectedIds = config.selected_group_ids || []
+                if (selectedIds.length > 0 && !selectedIds.includes(payloadData.group_id)) {
+                  console.log(`⛔ Flow group not in selected list — skipping automation ${automation.id}`)
+                  return { skipped: true, reason: 'group_not_selected' }
+                }
+              }
+              if (config.source_filter === 'private' && payloadData?.group_id) {
+                console.log(`⛔ Flow requires private chat but got group — skipping automation ${automation.id}`)
+                return { skipped: true, reason: 'source_filter_private' }
+              }
+              console.log(`✅ Flow trigger step validation passed for automation ${automation.id}`)
+            }
+
             // === FB ENRICHMENT: Parse fb_ fields from notes (saved during sync) ===
             const hasFbFields = Object.keys(payloadData).some(k => k.startsWith('fb_'))
             if (payloadData.test && !hasFbFields && payloadData.notes) {

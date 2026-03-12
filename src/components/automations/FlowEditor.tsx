@@ -141,6 +141,11 @@ export default function FlowEditor() {
     mutationFn: async () => {
       if (!automationId || !tenantId) throw new Error("Missing data");
 
+      // Sync trigger_type from the flow's trigger step so the main automations table
+      // reflects the actual trigger (e.g. 'whatsapp_message_received' instead of generic 'lead_created')
+      const triggerNode = nodes.find(n => n.step_type === 'trigger');
+      const flowTriggerType = triggerNode?.action_type || undefined;
+
       // Update automation
       await supabase
         .from("automations")
@@ -148,6 +153,7 @@ export default function FlowEditor() {
           name: automationName,
           active: automationActive,
           is_flow: true,
+          ...(flowTriggerType ? { trigger_type: flowTriggerType } : {}),
         } as any)
         .eq("id", automationId);
 
