@@ -260,8 +260,9 @@ export default function AddTaskForm({ clientId, leadId, agencyId, defaultCampaig
         if (selectedLead.agency_id) {
           finalAgencyId = selectedLead.agency_id;
         } else if (agencies && agencies.length > 0) {
-          // Fallback to first available agency
-          finalAgencyId = agencies[0].id;
+          // Fallback to default agency for current tenant, then first available
+          const defaultAgency = agencies.find(a => a.is_default === true && a.tenant_id === currentTenantId);
+          finalAgencyId = defaultAgency?.id || agencies.find(a => a.tenant_id === currentTenantId)?.id || agencies[0].id;
         }
         entityName = selectedLead.company_name || selectedLead.contact_name || 'ליד';
         if (!finalAgencyId) {
