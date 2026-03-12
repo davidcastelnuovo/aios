@@ -775,5 +775,14 @@ export function TaskDetailDialog({
         </div>
       </DialogContent>
     </Dialog>
+    
+    {fullLeadData && (
+      <EditLeadDialog
+        lead={fullLeadData}
+        open={viewLeadOpen}
+        onOpenChange={setViewLeadOpen}
+      />
+    )}
+    </>
   );
 }
