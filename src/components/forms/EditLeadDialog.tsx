@@ -574,12 +574,7 @@ const updateMutation = useMutation({
               className="flex items-center gap-1 sm:gap-2 data-[state=active]:bg-background data-[state=active]:shadow-md rounded-md transition-all text-xs sm:text-sm py-2"
             >
               <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4" />
-              עדכונים
-              {leadUpdates && leadUpdates.length > 0 && (
-                <span className="mr-1 rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-xs">
-                  {leadUpdates.length}
-                </span>
-              )}
+              משימות ועדכונים
             </TabsTrigger>
           </TabsList>
 
