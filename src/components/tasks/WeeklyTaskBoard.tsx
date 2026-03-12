@@ -264,8 +264,9 @@ export function WeeklyTaskBoard() {
       }
 
       const { data, error } = await query
-        .order("sort_order", { ascending: true })
-        .order("priority", { ascending: false });
+        .order("due_date", { ascending: true })
+        .order("created_at", { ascending: true })
+        .order("sort_order", { ascending: true });
 
       if (error) throw error;
       return data as FullTask[];
