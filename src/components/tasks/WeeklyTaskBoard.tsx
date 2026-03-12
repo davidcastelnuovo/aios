@@ -20,7 +20,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ChevronRight, ChevronLeft, CalendarDays, Filter, LayoutGrid, Calendar, List, Plus, RefreshCw, Users } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { DayColumn } from "./DayColumn";
 import { DailyView } from "./DailyView";
@@ -31,6 +32,7 @@ import { TaskBacklogPanel } from "./OverdueTasksPanel";
 import { CalendarEventEditDialog } from "./CalendarEventEditDialog";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
+import { useTerminology } from "@/hooks/useTerminology";
 import { toast } from "sonner";
 import confetti from "canvas-confetti";
 
@@ -72,6 +74,23 @@ export function WeeklyTaskBoard() {
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
   const { state: sidebarState } = useSidebar();
+  const { t } = useTerminology();
+
+  // Fetch campaigners for quick filter
+  const { data: campaignersList = [] } = useQuery({
+    queryKey: ["campaigners-for-task-filter", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaigners")
+        .select("id, full_name")
+        .eq("tenant_id", tenantId!)
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId,
+  });
 
   // Start from today instead of week start
   const [currentDate, setCurrentDate] = useState(() => startOfDay(new Date()));
@@ -883,9 +902,8 @@ export function WeeklyTaskBoard() {
     return isToday;
   });
 
-  // Count active filters
+  // Count active filters (exclude campaigner since it has its own selector in toolbar)
   const activeFiltersCount = [
-    filters.campaignerId !== "all",
     filters.taskType !== "all",
     filters.association !== "all",
     filters.startDate !== undefined,
@@ -975,6 +993,26 @@ export function WeeklyTaskBoard() {
               </Badge>
             )}
           </Button>
+          {/* Quick campaigner filter */}
+          <Select
+            value={filters.campaignerId}
+            onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
+          >
+            <SelectTrigger className="w-[180px] gap-2">
+              <Users className="h-4 w-4 shrink-0" />
+              <SelectValue placeholder={t('role_campaigner')} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="mine">שלי בלבד</SelectItem>
+              <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
+              <SelectItem value="none">ללא שיוך</SelectItem>
+              {campaignersList.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.full_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button
             variant="outline"
             onClick={() => syncToCalendar.mutate()}
@@ -1020,6 +1058,28 @@ export function WeeklyTaskBoard() {
         {/* Mobile Layout */}
         <div className="flex flex-col md:hidden gap-2">
           {/* Header: Title + Navigation + Filters */}
+          <div className="flex flex-wrap items-center gap-2 justify-between">
+            {/* Quick campaigner filter - mobile */}
+            <Select
+              value={filters.campaignerId}
+              onValueChange={(val) => setFilters((prev) => ({ ...prev, campaignerId: val }))}
+            >
+              <SelectTrigger className="w-full gap-2">
+                <Users className="h-4 w-4 shrink-0" />
+                <SelectValue placeholder={t('role_campaigner')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mine">שלי בלבד</SelectItem>
+                <SelectItem value="all">כל ה{t('role_campaigner', true)}</SelectItem>
+                <SelectItem value="none">ללא שיוך</SelectItem>
+                {campaignersList.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="flex flex-wrap items-center gap-2 justify-between">
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold">משימות</h1>
