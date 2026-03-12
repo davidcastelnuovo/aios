@@ -74,6 +74,23 @@ export function WeeklyTaskBoard() {
   const { tenantId } = useCurrentTenant();
   const { user } = useCurrentUser();
   const { state: sidebarState } = useSidebar();
+  const { t } = useTerminology();
+
+  // Fetch campaigners for quick filter
+  const { data: campaignersList = [] } = useQuery({
+    queryKey: ["campaigners-for-task-filter", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaigners")
+        .select("id, full_name")
+        .eq("tenant_id", tenantId!)
+        .eq("active", true)
+        .order("full_name");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId,
+  });
 
   // Start from today instead of week start
   const [currentDate, setCurrentDate] = useState(() => startOfDay(new Date()));
