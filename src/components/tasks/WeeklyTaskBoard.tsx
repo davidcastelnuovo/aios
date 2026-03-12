@@ -902,9 +902,8 @@ export function WeeklyTaskBoard() {
     return isToday;
   });
 
-  // Count active filters
+  // Count active filters (exclude campaigner since it has its own selector in toolbar)
   const activeFiltersCount = [
-    filters.campaignerId !== "all",
     filters.taskType !== "all",
     filters.association !== "all",
     filters.startDate !== undefined,
