@@ -76,9 +76,6 @@ export function EditLeadDialog({ lead: initialLead, open: controlledOpen, onOpen
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = onOpenChange !== undefined ? onOpenChange : setInternalOpen;
   const [activeTab, setActiveTab] = useState("details");
-  const [newUpdate, setNewUpdate] = useState("");
-  const [editingUpdateId, setEditingUpdateId] = useState<string | null>(null);
-  const [editingUpdateContent, setEditingUpdateContent] = useState("");
   const [responseSelectOpen, setResponseSelectOpen] = useState(false);
   const [stageSelectOpen, setStageSelectOpen] = useState(false);
 
