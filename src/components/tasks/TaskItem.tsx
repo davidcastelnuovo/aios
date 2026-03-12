@@ -1,8 +1,9 @@
 import { useDraggable } from "@dnd-kit/core";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Users, GripVertical } from "lucide-react";
+import { MessageSquare, Users, GripVertical, Calendar, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 
 interface TaskItemProps {
   task: {
@@ -10,6 +11,8 @@ interface TaskItemProps {
     title: string;
     status: string;
     client_id: string | null;
+    created_at?: string;
+    due_date?: string | null;
     clients?: { name: string } | null;
     task_updates?: { id: string }[];
     task_collaborators?: { id: string }[];
@@ -36,6 +39,9 @@ export function TaskItem({ task, onToggleComplete, onClick }: TaskItemProps) {
   const isCompleted = task.status === "done";
   const updatesCount = task.task_updates?.length || 0;
   const collaboratorsCount = task.task_collaborators?.length || 0;
+
+  const createdDate = task.created_at ? format(new Date(task.created_at), "dd/MM/yy") : null;
+  const dueDate = task.due_date ? format(new Date(task.due_date), "dd/MM/yy") : null;
 
   return (
     <div
@@ -79,6 +85,20 @@ export function TaskItem({ task, onToggleComplete, onClick }: TaskItemProps) {
             <Badge variant="secondary" className="text-xs px-1.5 py-0 h-5">
               {task.clients.name}
             </Badge>
+          )}
+
+          {createdDate && (
+            <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+              <Calendar className="h-3 w-3" />
+              {createdDate}
+            </span>
+          )}
+
+          {dueDate && (
+            <span className="flex items-center gap-0.5 text-[11px] text-muted-foreground">
+              <CalendarClock className="h-3 w-3" />
+              {dueDate}
+            </span>
           )}
           
           {updatesCount > 0 && (
