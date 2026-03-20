@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
-import { LogOut, Building2, Sparkles } from "lucide-react";
+import { LogOut, Building2, Sparkles, Monitor, Bot } from "lucide-react";
 import { AIOSDialog } from "@/components/AIOSDialog";
 import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui/button";
