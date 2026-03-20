@@ -20,6 +20,7 @@ import SignUp from "./pages/SignUp";
 import Setup from "./pages/Setup";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
+const AIOSDashboard = lazy(() => import("./pages/AIOSDashboard"));
 
 // Lazily loaded pages
 const Branding = lazy(() => import("./pages/Branding"));
