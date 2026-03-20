@@ -194,9 +194,9 @@ export function AppLayout({ children }: AppLayoutProps) {
             <ViewAsBanner />
             <header className="sticky top-0 z-50 h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 gap-2 md:gap-4 flex-shrink-0">
               <div className="flex items-center gap-2 md:gap-4 min-w-0">
-                <SidebarTrigger className="md:hidden" />
+                {mode === "classic" && <SidebarTrigger className="md:hidden" />}
                 <h1 className="text-sm md:text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
-                  מערכת ניהול סוכנויות
+                  {mode === "aios" ? "AIOS" : "מערכת ניהול סוכנויות"}
                 </h1>
               </div>
               <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
