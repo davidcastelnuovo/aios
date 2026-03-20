@@ -9,6 +9,7 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AgencyProvider } from "./contexts/AgencyContext";
 import { TenantProvider } from "./contexts/TenantContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { UIModeProvider } from "./contexts/UIModeContext";
 import { Suspense, lazy } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
