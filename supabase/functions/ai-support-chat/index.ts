@@ -49,10 +49,17 @@ ${memoryContext}
 2. **לידים** - יצירה, עדכון סטטוס, חיפוש, הצגת רשימות
 3. **לקוחות** - יצירה, הצגת מידע, הצגת רשימות
 4. **אוטומציות** - יצירת אוטומציות חדשות (trigger + action)
-5. **הודעות WhatsApp** - שליחת הודעות WhatsApp ללקוחות/לידים **וקריאת היסטוריית שיחות**
+- **הודעות WhatsApp** - שליחת הודעות WhatsApp ללקוחות/לידים **וקריאת היסטוריית שיחות**
 6. **חיפוש** - מציאת סוכנויות, לקוחות, קמפיינרים
 7. **אימיילים** - קריאה, שליחה, מחיקה של אימיילים מ-Gmail
 8. **זיכרון** - שמירה, שליפה ומחיקה של מידע לזיכרון ארוך טווח
+9. **תצוגת נתונים** - הצגת נתונים בממשק הויזואלי (טבלאות, כרטיסים, סטטיסטיקות)
+
+📊 **חשוב לגבי תצוגת נתונים (display_data):**
+- כשהמשתמש מבקש לראות רשימות (לידים, משימות, לקוחות) - **תמיד** השתמש ב-display_data אחרי שליפת הנתונים
+- בחר את view_type המתאים: "table" לרשימות, "stats" למספרים/סיכומים, "cards" לכרטיסי מידע
+- ציין columns בסדר הנכון עבור טבלאות
+- הנתונים יוצגו באזור הויזואלי ליד הצ'אט
 
 📅 **חשוב לגבי משימות ויומן:**
 - כשאתה יוצר או מעדכן משימה עם תאריך, תמיד נסה לסנכרן אותה ליומן
@@ -751,6 +758,23 @@ async function executeTool(
         };
       }
 
+      // === DISPLAY DATA TOOL ===
+      case 'display_data': {
+        const { view_type, title, columns, data } = toolCall.args;
+        // This tool doesn't execute anything - it signals the frontend to display data
+        // The result will be sent as a special SSE event
+        return {
+          success: true,
+          result: {
+            __display_data__: true,
+            view_type: view_type || 'table',
+            title: title || 'נתונים',
+            columns: columns || [],
+            data: data || [],
+          },
+        };
+      }
+
       // === MEMORY TOOLS ===
 
       case 'save_memory': {
@@ -1093,6 +1117,32 @@ const tools = [
       },
     },
   },
+  // === DISPLAY DATA TOOL ===
+  {
+    type: 'function',
+    function: {
+      name: 'display_data',
+      description: 'הצגת נתונים בממשק הויזואלי של המשתמש. השתמש אחרי שליפת נתונים כדי להציג אותם בצורה ויזואלית. view_type: "table" לטבלה, "stats" לסטטיסטיקות/מספרים, "cards" לכרטיסי מידע, "list" לרשימה.',
+      parameters: {
+        type: 'object',
+        properties: {
+          view_type: { type: 'string', enum: ['table', 'cards', 'stats', 'list'], description: 'סוג התצוגה' },
+          title: { type: 'string', description: 'כותרת הפאנל (לדוגמה: "לידים חדשים", "משימות פתוחות")' },
+          columns: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'שמות העמודות בעברית (רק עבור table/list). לדוגמה: ["שם", "טלפון", "סטטוס"]',
+          },
+          data: {
+            type: 'array',
+            items: { type: 'object' },
+            description: 'מערך אובייקטים עם הנתונים. המפתחות חייבים להתאים ל-columns. עבור stats: כל אובייקט עם label ו-value.',
+          },
+        },
+        required: ['view_type', 'title', 'data'],
+      },
+    },
+  },
   // === MEMORY TOOLS ===
   {
     type: 'function',
@@ -1341,6 +1391,12 @@ serve(async (req) => {
               controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'tool_call', tool: toolName, args: toolArgs })}\n\n`));
 
               const toolResult = await executeTool({ name: toolName, args: toolArgs }, supabaseClient, user.id, tenantId, token);
+
+              // If this is a display_data result, emit it as a special SSE event
+              if (toolResult.success && toolResult.result?.__display_data__) {
+                const { __display_data__, ...displayPayload } = toolResult.result;
+                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'display_data', data: displayPayload })}\n\n`));
+              }
 
               messages.push({ role: 'tool_call', tool: toolName, args: toolArgs, result: toolResult, timestamp: new Date().toISOString() });
 
