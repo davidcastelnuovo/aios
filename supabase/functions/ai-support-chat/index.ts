@@ -1117,6 +1117,32 @@ const tools = [
       },
     },
   },
+  // === DISPLAY DATA TOOL ===
+  {
+    type: 'function',
+    function: {
+      name: 'display_data',
+      description: 'הצגת נתונים בממשק הויזואלי של המשתמש. השתמש אחרי שליפת נתונים כדי להציג אותם בצורה ויזואלית. view_type: "table" לטבלה, "stats" לסטטיסטיקות/מספרים, "cards" לכרטיסי מידע, "list" לרשימה.',
+      parameters: {
+        type: 'object',
+        properties: {
+          view_type: { type: 'string', enum: ['table', 'cards', 'stats', 'list'], description: 'סוג התצוגה' },
+          title: { type: 'string', description: 'כותרת הפאנל (לדוגמה: "לידים חדשים", "משימות פתוחות")' },
+          columns: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'שמות העמודות בעברית (רק עבור table/list). לדוגמה: ["שם", "טלפון", "סטטוס"]',
+          },
+          data: {
+            type: 'array',
+            items: { type: 'object' },
+            description: 'מערך אובייקטים עם הנתונים. המפתחות חייבים להתאים ל-columns. עבור stats: כל אובייקט עם label ו-value.',
+          },
+        },
+        required: ['view_type', 'title', 'data'],
+      },
+    },
+  },
   // === MEMORY TOOLS ===
   {
     type: 'function',
