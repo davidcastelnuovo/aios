@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
+const AIOSDashboard = lazy(() => import("@/pages/AIOSDashboard"));
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import { LogOut, Building2, Sparkles, Monitor, Bot } from "lucide-react";
