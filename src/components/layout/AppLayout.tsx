@@ -42,6 +42,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
   const [aiosOpen, setAiosOpen] = useState(false);
+  const { mode, toggleMode } = useUIMode();
 
   // Fetch available tenants for the user
   const { data: userTenants } = useQuery({
