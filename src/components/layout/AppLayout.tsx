@@ -270,7 +270,9 @@ export function AppLayout({ children }: AppLayoutProps) {
               </div>
             </header>
           <main className="flex-1 min-h-0 overflow-hidden md:overflow-hidden overflow-y-auto">
-            {children}
+            {mode === "aios" ? (
+              <Suspense fallback={null}><AIOSDashboard /></Suspense>
+            ) : children}
           </main>
           </div>
           <AIOSDialog open={aiosOpen} onOpenChange={setAiosOpen} />
