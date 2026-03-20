@@ -758,6 +758,23 @@ async function executeTool(
         };
       }
 
+      // === DISPLAY DATA TOOL ===
+      case 'display_data': {
+        const { view_type, title, columns, data } = toolCall.args;
+        // This tool doesn't execute anything - it signals the frontend to display data
+        // The result will be sent as a special SSE event
+        return {
+          success: true,
+          result: {
+            __display_data__: true,
+            view_type: view_type || 'table',
+            title: title || 'נתונים',
+            columns: columns || [],
+            data: data || [],
+          },
+        };
+      }
+
       // === MEMORY TOOLS ===
 
       case 'save_memory': {
