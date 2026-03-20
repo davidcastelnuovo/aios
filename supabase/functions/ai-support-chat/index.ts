@@ -1392,6 +1392,12 @@ serve(async (req) => {
 
               const toolResult = await executeTool({ name: toolName, args: toolArgs }, supabaseClient, user.id, tenantId, token);
 
+              // If this is a display_data result, emit it as a special SSE event
+              if (toolResult.success && toolResult.result?.__display_data__) {
+                const { __display_data__, ...displayPayload } = toolResult.result;
+                controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ type: 'display_data', data: displayPayload })}\n\n`));
+              }
+
               messages.push({ role: 'tool_call', tool: toolName, args: toolArgs, result: toolResult, timestamp: new Date().toISOString() });
 
               toolCallsForMessage.push({ id: callId, type: 'function', function: { name: toolName, arguments: JSON.stringify(toolArgs) } });
