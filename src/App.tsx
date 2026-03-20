@@ -121,6 +121,7 @@ const App = () => (
         <Sonner />
         <TenantProvider>
           <ThemeProvider>
+            <UIModeProvider>
             <AgencyProvider>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
