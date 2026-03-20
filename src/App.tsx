@@ -135,8 +135,8 @@ const App = () => (
                   <Route path="/terms" element={<Terms />} />
                   
                   {/* Tenant-scoped routes */}
-                  <Route path="/t/:tenantSlug" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/dashboard" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><DashboardRouter /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/dashboard" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><DashboardRouter /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/agencies" element={<ProtectedRoute requiredPermission="agencies"><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/clients" element={<ProtectedRoute requiredPermission="clients"><AppLayout><Clients /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/campaigners" element={<ProtectedRoute requiredPermission="campaigners"><AppLayout><Campaigners /></AppLayout></ProtectedRoute>} />
