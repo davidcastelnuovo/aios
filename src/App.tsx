@@ -9,16 +9,18 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AgencyProvider } from "./contexts/AgencyContext";
 import { TenantProvider } from "./contexts/TenantContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { UIModeProvider } from "./contexts/UIModeContext";
 import { Suspense, lazy } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // Eagerly loaded pages (frequently accessed)
-import Dashboard from "./pages/Dashboard";
+import DashboardRouter from "./pages/DashboardRouter";
 import Auth from "./pages/Auth";
 import SignUp from "./pages/SignUp";
 import Setup from "./pages/Setup";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
+const AIOSDashboard = lazy(() => import("./pages/AIOSDashboard"));
 
 // Lazily loaded pages
 const Branding = lazy(() => import("./pages/Branding"));
@@ -119,6 +121,7 @@ const App = () => (
         <Sonner />
         <TenantProvider>
           <ThemeProvider>
+            <UIModeProvider>
             <AgencyProvider>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
@@ -132,8 +135,8 @@ const App = () => (
                   <Route path="/terms" element={<Terms />} />
                   
                   {/* Tenant-scoped routes */}
-                  <Route path="/t/:tenantSlug" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
-                  <Route path="/t/:tenantSlug/dashboard" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><DashboardRouter /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/dashboard" element={<ProtectedRoute requiredPermission="dashboard" redirectTo="/my-profile"><AppLayout><DashboardRouter /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/agencies" element={<ProtectedRoute requiredPermission="agencies"><AppLayout><Agencies /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/clients" element={<ProtectedRoute requiredPermission="clients"><AppLayout><Clients /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/campaigners" element={<ProtectedRoute requiredPermission="campaigners"><AppLayout><Campaigners /></AppLayout></ProtectedRoute>} />
@@ -157,7 +160,7 @@ const App = () => (
                   <Route path="/t/:tenantSlug/accounting-integrations" element={<ProtectedRoute requiredPermission="accounting"><AppLayout><AccountingIntegrations /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/accounting-settings" element={<ProtectedRoute requiredPermission="accounting"><AppLayout><AccountingSettings /></AppLayout></ProtectedRoute>} />
                   {/* AIOS is now accessed via header button, keeping route for backward compat */}
-                  <Route path="/t/:tenantSlug/ai-support" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+                  <Route path="/t/:tenantSlug/ai-support" element={<ProtectedRoute><AppLayout><DashboardRouter /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/menu-management" element={<ProtectedRoute requiredPermission="menu_management"><AppLayout><MenuManagement /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/fields-management" element={<ProtectedRoute requiredPermission="fields_management"><AppLayout><FieldsManagement /></AppLayout></ProtectedRoute>} />
                   <Route path="/t/:tenantSlug/dynamic-tables" element={<ProtectedRoute requiredPermission="branding"><AppLayout><DynamicTables /></AppLayout></ProtectedRoute>} />
@@ -198,6 +201,7 @@ const App = () => (
                 </Routes>
               </Suspense>
             </AgencyProvider>
+            </UIModeProvider>
           </ThemeProvider>
         </TenantProvider>
       </TooltipProvider>

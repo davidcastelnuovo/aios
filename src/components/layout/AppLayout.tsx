@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
-import { LogOut, Building2, Sparkles } from "lucide-react";
+import { LogOut, Building2, Sparkles, Monitor, Bot } from "lucide-react";
 import { AIOSDialog } from "@/components/AIOSDialog";
 import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useTenant } from "@/contexts/TenantContext";
 import { ViewAsProvider } from "@/contexts/ViewAsContext";
 import { ViewAsBanner } from "@/components/ViewAsBanner";
+import { useUIMode } from "@/contexts/UIModeContext";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,6 +42,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { userId } = useCurrentUser();
   const { currentTenantId, setCurrentTenantId, currentTenant } = useTenant();
   const [aiosOpen, setAiosOpen] = useState(false);
+  const { mode, toggleMode } = useUIMode();
 
   // Fetch available tenants for the user
   const { data: userTenants } = useQuery({
@@ -184,29 +187,51 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <ViewAsProvider>
-      <SidebarProvider defaultOpen={true}>
+      <SidebarProvider defaultOpen={mode === "classic"}>
         <div className="min-h-screen flex w-full overflow-x-hidden" dir="rtl">
-          <AppSidebar />
+          {mode === "classic" && <AppSidebar />}
           <div className="flex-1 flex flex-col overflow-x-hidden">
             <ViewAsBanner />
             <header className="sticky top-0 z-50 h-16 border-b bg-card flex items-center justify-between px-4 md:px-6 gap-2 md:gap-4 flex-shrink-0">
               <div className="flex items-center gap-2 md:gap-4 min-w-0">
-                <SidebarTrigger className="md:hidden" />
+                {mode === "classic" && <SidebarTrigger className="md:hidden" />}
                 <h1 className="text-sm md:text-xl font-bold bg-gradient-primary bg-clip-text text-transparent truncate">
-                  מערכת ניהול סוכנויות
+                  {mode === "aios" ? "AIOS" : "מערכת ניהול סוכנויות"}
                 </h1>
               </div>
               <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full relative group"
-                  onClick={() => setAiosOpen(true)}
-                  title="AIOS - עוזר AI"
-                >
-                  <Sparkles className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
-                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
-                </Button>
+                {/* Mode Toggle */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="rounded-full"
+                      onClick={toggleMode}
+                    >
+                      {mode === "aios" ? (
+                        <Monitor className="h-5 w-5 text-muted-foreground" />
+                      ) : (
+                        <Bot className="h-5 w-5 text-primary" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {mode === "aios" ? "עבור למוד קלאסי" : "עבור למוד AIOS"}
+                  </TooltipContent>
+                </Tooltip>
+                {mode === "classic" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full relative group"
+                    onClick={() => setAiosOpen(true)}
+                    title="AIOS - עוזר AI"
+                  >
+                    <Sparkles className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
+                    <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
+                  </Button>
+                )}
                 {agencies && agencies.length > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground hidden sm:inline">סוכנות:</span>
