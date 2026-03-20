@@ -14,7 +14,7 @@ import { Suspense, lazy } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // Eagerly loaded pages (frequently accessed)
-import Dashboard from "./pages/Dashboard";
+import DashboardRouter from "./pages/DashboardRouter";
 import Auth from "./pages/Auth";
 import SignUp from "./pages/SignUp";
 import Setup from "./pages/Setup";
