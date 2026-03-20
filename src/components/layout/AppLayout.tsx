@@ -200,16 +200,38 @@ export function AppLayout({ children }: AppLayoutProps) {
                 </h1>
               </div>
               <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full relative group"
-                  onClick={() => setAiosOpen(true)}
-                  title="AIOS - עוזר AI"
-                >
-                  <Sparkles className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
-                  <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
-                </Button>
+                {/* Mode Toggle */}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="rounded-full"
+                      onClick={toggleMode}
+                    >
+                      {mode === "aios" ? (
+                        <Monitor className="h-5 w-5 text-muted-foreground" />
+                      ) : (
+                        <Bot className="h-5 w-5 text-primary" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {mode === "aios" ? "עבור למוד קלאסי" : "עבור למוד AIOS"}
+                  </TooltipContent>
+                </Tooltip>
+                {mode === "classic" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-full relative group"
+                    onClick={() => setAiosOpen(true)}
+                    title="AIOS - עוזר AI"
+                  >
+                    <Sparkles className="h-5 w-5 text-primary group-hover:scale-110 transition-transform" />
+                    <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary animate-pulse" />
+                  </Button>
+                )}
                 {agencies && agencies.length > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground hidden sm:inline">סוכנות:</span>
