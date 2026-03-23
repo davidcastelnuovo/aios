@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MessageSquare, Users, GripVertical, Calendar, CalendarClock, Megaphone } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { MessageSquare, Users, GripVertical, Calendar, CalendarClock, Megaphone, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 
