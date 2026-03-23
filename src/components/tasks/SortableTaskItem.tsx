@@ -35,6 +35,9 @@ interface SortableTaskItemProps {
 }
 
 export function SortableTaskItem({ task, onToggleComplete, onClick, compact = false, slotHeight = 40, clientsList, campaignersList, onUpdateClient, onUpdateCampaigner }: SortableTaskItemProps) {
+  const [clientOpen, setClientOpen] = useState(false);
+  const [campaignerOpen, setCampaignerOpen] = useState(false);
+
   const {
     attributes,
     listeners,
