@@ -1,56 +1,26 @@
 
 
-# תוכנית: הרחבת AIOS לכל מודולי המערכת
+# עדכון ידע ה-AI על אינטגרציית Manus
 
-## מצב נוכחי
-הסוכן תומך ב: משימות, לידים, לקוחות, אוטומציות, Gmail, WhatsApp, זיכרון, display_data
+## הבעיה
+ה-system prompt מזכיר את Manus בשורה אחת בלבד (שורה 74): "Manus AI — יצירת משימות AI מורכבות (מחקר, מצגות, ניתוח), צפייה בתוצאות". ה-AI לא יודע מה Manus עושה, איך להשתמש בו, ומתי להציע אותו למשתמש.
 
-## מודולים חסרים להוספה
+## הפתרון
+הוספת בלוק ייעודי ל-system prompt ב-`buildSystemPrompt` שמסביר לסוכן:
 
-### קבוצה 1 — CRM בסיסי
-- **סוכנויות** — `list_agencies`, `get_agency_info`, `update_agency`
-- **קמפיינרים** — `list_campaigners`, `get_campaigner_info`
-- **ספקים** — `list_suppliers`, `create_supplier`, `get_supplier_info`
-- **אנשי מכירות** — `list_sales_people`, `get_sales_person_info`
-- **מוצרים** — `list_products`, `create_product`, `update_product`
+### תוכן הבלוק (יתווסף אחרי בלוק WhatsApp, שורה ~120):
+```
+🤖 **Manus AI — סוכן AI חיצוני:**
+- Manus הוא סוכן AI עצמאי שיכול לבצע משימות מורכבות: מחקר שוק, ניתוח מתחרים, יצירת מצגות, כתיבת תוכן, ניתוח נתונים, בניית אתרים ועוד
+- יש לך 3 כלים: create_manus_task (יצירה), list_manus_tasks (רשימה), get_manus_task_result (תוצאות)
+- משימות Manus רצות ברקע ולוקחות זמן (דקות עד שעות) — דווח למשתמש שהמשימה נשלחה ושיוכל לבדוק תוצאות אחר כך
+- הצע Manus כשמשתמש מבקש: מחקר לקוח/מתחרים, יצירת מצגת, ניתוח נתונים מורכב, כתיבת דוח, או כל משימה שדורשת עבודה ממושכת
+- מודלים: manus-1.6 (ברירת מחדל), manus-1.6-lite (מהיר), manus-1.6-max (מורכב)
+- מצבי עבודה: agent (ביצוע עצמאי), chat (שיחה), adaptive (אוטומטי)
+```
 
-### קבוצה 2 — פיננסי
-- **הוצאות/הכנסות** — `list_finance`, `create_finance_entry`, `get_finance_summary` (טבלת `finance` + `income_payments` + `expense_payments`)
-- **חשבוניות ספקים** — `list_supplier_invoices`
-
-### קבוצה 3 — תפעולי
-- **קליטת לקוחות** — `list_onboarding`, `update_onboarding_status` (טבלת `client_onboarding`)
-- **מעקב זמן** — `list_time_entries`, `clock_in`, `clock_out` (טבלת `time_entries`)
-- **יומן** — `list_calendar_events` (edge function `get-calendar-events` קיים)
-- **עדכוני לקוחות/לידים** — `add_client_update`, `add_lead_update`, `list_updates`
-
-### קבוצה 4 — נתונים ודוחות
-- **דשבורדים דינמיים** — `list_dynamic_tables`, `get_table_data` (טבלאות `crm_tables` + `crm_records`)
-- **דוחות ביצועים** — `get_performance_report` (אגרגציה של Facebook/Google data)
-- **הקלטות** — `list_recordings` (טבלת `zoom_recordings`)
-
-## שינויים טכניים
-
-### קובץ אחד בלבד: `supabase/functions/ai-support-chat/index.ts`
-1. **עדכון System Prompt** — הוספת כל המודולים החדשים לרשימת היכולות
-2. **הוספת ~20 כלים חדשים** (tool definitions) למערך `tools`
-3. **הוספת ~20 cases חדשים** ל-`executeTool` switch
-4. **הוספת entity invalidation** עבור כל ישות שמשתנה
-
-### תיקון Build Error (קובץ `notify-team-message/index.ts`)
-- שורה 233: `(err as Error).message`
-- שורה 331: `(err as Error).message`
-
-## סדר ביצוע
-1. תיקון build error ב-`notify-team-message`
-2. הוספת כלים של קבוצה 1 (CRM בסיסי) — ~300 שורות
-3. הוספת כלים של קבוצה 2 (פיננסי) — ~150 שורות
-4. הוספת כלים של קבוצה 3 (תפעולי) — ~200 שורות
-5. הוספת כלים של קבוצה 4 (נתונים ודוחות) — ~150 שורות
-6. עדכון system prompt עם כל היכולות
-
-## דגשים
-- כל כלי מסנן לפי `tenant_id` לאבטחת נתונים
-- כל פעולת כתיבה מעדכנת `modifiedEntities` לרענון UI
-- שימוש ב-`display_data` אוטומטית אחרי שליפת רשימות
+## שינוי טכני
+### `supabase/functions/ai-support-chat/index.ts`
+- הוספת ~10 שורות לפונקציית `buildSystemPrompt`, לפני שורת הסגירה (שורה ~120)
+- אין שינוי בכלים או בלוגיקת ביצוע — הם כבר קיימים ועובדים
 
