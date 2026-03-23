@@ -1,9 +1,10 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
-import { ListTodo, MessageSquare, Users, CalendarDays, Clock, ChevronLeft, ChevronRight, AlertTriangle, GripVertical } from "lucide-react";
+import { ListTodo, MessageSquare, Users, CalendarDays, Clock, ChevronLeft, ChevronRight, AlertTriangle, GripVertical, Megaphone } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import { QuickTaskInput } from "./QuickTaskInput";
@@ -21,7 +22,9 @@ interface Task {
   agency_id: string | null;
   campaigner_id: string | null;
   tenant_id: string | null;
+  created_at?: string;
   clients?: { name: string } | null;
+  campaigners?: { full_name: string } | null;
   task_updates?: { id: string }[];
   task_collaborators?: { id: string }[];
 }
@@ -32,6 +35,10 @@ interface TaskBacklogPanelProps {
   onTaskClick: (task: Task) => void;
   onAddTask?: (title: string) => void;
   isLoading?: boolean;
+  clientsList?: { id: string; name: string }[];
+  campaignersList?: { id: string; full_name: string }[];
+  onUpdateClient?: (taskId: string, clientId: string | null) => void;
+  onUpdateCampaigner?: (taskId: string, campaignerId: string | null) => void;
 }
 
 function DraggableBacklogTask({
@@ -39,11 +46,19 @@ function DraggableBacklogTask({
   onToggleComplete,
   onClick,
   isOverdue,
+  clientsList,
+  campaignersList,
+  onUpdateClient,
+  onUpdateCampaigner,
 }: {
   task: Task;
   onToggleComplete: (taskId: string, completed: boolean) => void;
   onClick: () => void;
   isOverdue: boolean;
+  clientsList?: { id: string; name: string }[];
+  campaignersList?: { id: string; full_name: string }[];
+  onUpdateClient?: (taskId: string, clientId: string | null) => void;
+  onUpdateCampaigner?: (taskId: string, campaignerId: string | null) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
@@ -83,21 +98,75 @@ function DraggableBacklogTask({
             }
           />
         </div>
-        <div className="flex-1 min-w-0" onClick={onClick}>
-          <p
-            className={cn(
-              "text-sm font-medium whitespace-normal break-words",
-              isCompleted && "line-through text-muted-foreground"
-            )}
-          >
-            {task.title}
-          </p>
-          {task.clients?.name && (
-            <p className="text-xs text-muted-foreground whitespace-normal break-words">
-              {task.clients.name}
+        <div className="flex-1 min-w-0">
+          <div onClick={onClick}>
+            <p
+              className={cn(
+                "text-sm font-medium whitespace-normal break-words",
+                isCompleted && "line-through text-muted-foreground"
+              )}
+            >
+              {task.title}
             </p>
+          </div>
+
+          {/* Inline client & campaigner selectors */}
+          {(onUpdateClient || onUpdateCampaigner) && (
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+              {onUpdateClient && clientsList && (
+                <Select
+                  value={task.client_id || "none"}
+                  onValueChange={(value) => onUpdateClient(task.id, value === "none" ? null : value)}
+                >
+                  <SelectTrigger className="h-6 text-[11px] w-[110px] px-1.5">
+                    <Users className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <SelectValue placeholder="לקוח" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="none">ללא לקוח</SelectItem>
+                    {clientsList.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {onUpdateCampaigner && campaignersList && (
+                <Select
+                  value={task.campaigner_id || "none"}
+                  onValueChange={(value) => onUpdateCampaigner(task.id, value === "none" ? null : value)}
+                >
+                  <SelectTrigger className="h-6 text-[11px] w-[110px] px-1.5">
+                    <Megaphone className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <SelectValue placeholder="קמפיינר" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="none">ללא קמפיינר</SelectItem>
+                    {campaignersList.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           )}
-          <div className="flex items-center gap-1 mt-1 flex-wrap">
+
+          <div className="flex items-center gap-1 mt-1 flex-wrap" onClick={onClick}>
+            {task.clients?.name && !onUpdateClient && (
+              <Badge variant="secondary" className="text-xs">
+                {task.clients.name}
+              </Badge>
+            )}
+            {task.campaigners?.full_name && (
+              <Badge variant="outline" className="text-xs">
+                <Megaphone className="h-3 w-3 mr-1" />
+                {task.campaigners.full_name}
+              </Badge>
+            )}
+            {task.created_at && (
+              <span className="text-[11px] text-muted-foreground">
+                נוצר {new Date(task.created_at).toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit" })}
+              </span>
+            )}
             {task.due_date && (
               <Badge
                 variant="outline"
@@ -137,6 +206,10 @@ export function TaskBacklogPanel({
   onTaskClick,
   onAddTask,
   isLoading,
+  clientsList,
+  campaignersList,
+  onUpdateClient,
+  onUpdateCampaigner,
 }: TaskBacklogPanelProps) {
   // Start collapsed if no tasks, expanded if there are tasks
   const [isExpanded, setIsExpanded] = useState(true);
@@ -261,6 +334,10 @@ export function TaskBacklogPanel({
                   onToggleComplete={onToggleComplete}
                   onClick={() => onTaskClick(task)}
                   isOverdue
+                  clientsList={clientsList}
+                  campaignersList={campaignersList}
+                  onUpdateClient={onUpdateClient}
+                  onUpdateCampaigner={onUpdateCampaigner}
                 />
               ))}
             </>
@@ -280,11 +357,15 @@ export function TaskBacklogPanel({
                   onToggleComplete={onToggleComplete}
                   onClick={() => onTaskClick(task)}
                   isOverdue={false}
+                  clientsList={clientsList}
+                  campaignersList={campaignersList}
+                  onUpdateClient={onUpdateClient}
+                  onUpdateCampaigner={onUpdateCampaigner}
                 />
               ))}
             </>
           )}
-          
+
           {/* Unscheduled section - no date at all */}
           {unscheduledCount > 0 && (
             <>
@@ -299,6 +380,10 @@ export function TaskBacklogPanel({
                   onToggleComplete={onToggleComplete}
                   onClick={() => onTaskClick(task)}
                   isOverdue={false}
+                  clientsList={clientsList}
+                  campaignersList={campaignersList}
+                  onUpdateClient={onUpdateClient}
+                  onUpdateCampaigner={onUpdateCampaigner}
                 />
               ))}
             </>

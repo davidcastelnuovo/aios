@@ -92,6 +92,21 @@ export function WeeklyTaskBoard() {
     enabled: !!tenantId,
   });
 
+  // Fetch clients for inline selector
+  const { data: clientsList = [] } = useQuery({
+    queryKey: ["clients-for-task-selector", tenantId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("id, name")
+        .eq("tenant_id", tenantId!)
+        .order("name");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!tenantId,
+  });
+
   // Start from today instead of week start
   const [currentDate, setCurrentDate] = useState(() => startOfDay(new Date()));
   const [viewMode, setViewMode] = useState<ViewMode>("weekly");
@@ -108,6 +123,7 @@ export function WeeklyTaskBoard() {
   // Full task type from DB
   type FullTask = Task & {
     clients?: { name: string } | null;
+    campaigners?: { full_name: string } | null;
     task_updates?: { id: string }[];
     task_collaborators?: { id: string }[];
   };
@@ -219,6 +235,7 @@ export function WeeklyTaskBoard() {
         .select(`
           *,
           clients (name),
+          campaigners (full_name),
           task_updates (id),
           task_collaborators (id)
         `)
@@ -570,6 +587,42 @@ export function WeeklyTaskBoard() {
     },
     onError: () => {
       toast.error("שגיאה בעדכון התאריך");
+    },
+  });
+
+  // Update client assignment
+  const updateTaskClient = useMutation({
+    mutationFn: async ({ taskId, clientId }: { taskId: string; clientId: string | null }) => {
+      const { error } = await supabase
+        .from("tasks")
+        .update({ client_id: clientId })
+        .eq("id", taskId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.success("הלקוח עודכן");
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון הלקוח");
+    },
+  });
+
+  // Update campaigner assignment
+  const updateTaskCampaigner = useMutation({
+    mutationFn: async ({ taskId, campaignerId }: { taskId: string; campaignerId: string | null }) => {
+      const { error } = await supabase
+        .from("tasks")
+        .update({ campaigner_id: campaignerId })
+        .eq("id", taskId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.success("הקמפיינר עודכן");
+    },
+    onError: () => {
+      toast.error("שגיאה בעדכון הקמפיינר");
     },
   });
 
@@ -1144,6 +1197,10 @@ export function WeeklyTaskBoard() {
               }}
               onAddTask={handleBacklogAddTask}
               isLoading={isLoading || addTask.isPending || !canQuickAddTask}
+              clientsList={clientsList}
+              campaignersList={campaignersList}
+              onUpdateClient={(taskId, clientId) => updateTaskClient.mutate({ taskId, clientId })}
+              onUpdateCampaigner={(taskId, campaignerId) => updateTaskCampaigner.mutate({ taskId, campaignerId })}
             />
           </div>
           
