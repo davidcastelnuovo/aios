@@ -2,27 +2,30 @@ import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
-import { AIOSChatBar, type AIOSMessage, type DisplayData } from "@/components/aios/AIOSChatBar";
+import { AIOSCommandBar } from "@/components/aios/AIOSCommandBar";
 import { DataCanvas } from "@/components/aios/DataCanvas";
+import type { DisplayData } from "@/components/aios/AIOSChatBar";
 import { useQueryClient } from "@tanstack/react-query";
 
 export default function AIOSDashboard() {
   const { userId } = useCurrentUser();
   const { tenantId } = useCurrentTenant();
   const queryClient = useQueryClient();
-  const [messages, setMessages] = useState<AIOSMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [streamingContent, setStreamingContent] = useState("");
+  const [statusText, setStatusText] = useState("");
   const [dataPanels, setDataPanels] = useState<DisplayData[]>([]);
+  // Keep conversation history for context but don't show it
+  const [history, setHistory] = useState<{ role: string; content: string }[]>([]);
 
   const handleSend = useCallback(async (text: string) => {
     if (!userId || !tenantId) return;
 
-    const userMessage: AIOSMessage = { role: "user", content: text };
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
+    const updatedHistory = [...history, { role: "user", content: text }];
+    setHistory(updatedHistory);
     setIsLoading(true);
-    setStreamingContent("");
+    setStatusText("");
+    // Clear previous panels for new request
+    setDataPanels([]);
 
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -70,43 +73,36 @@ export default function AIOSDashboard() {
           try {
             const parsed = JSON.parse(jsonStr);
 
-            // Handle display_data events
             if (parsed.type === "display_data" && parsed.data) {
               setDataPanels((prev) => [...prev, parsed.data as DisplayData]);
               continue;
             }
 
-            // Handle invalidate events
             if (parsed.type === "invalidate" && parsed.entity) {
               queryClient.invalidateQueries({ queryKey: [parsed.entity] });
               continue;
             }
 
-            // Handle token content
             if (parsed.type === "token" && parsed.content) {
               fullContent += parsed.content;
-              setStreamingContent(fullContent);
+              setStatusText(fullContent);
             }
           } catch {
-            // skip unparseable lines
+            // skip
           }
         }
       }
 
       if (fullContent) {
-        setMessages((prev) => [...prev, { role: "assistant", content: fullContent }]);
+        setHistory((prev) => [...prev, { role: "assistant", content: fullContent }]);
       }
     } catch (error) {
-      console.error("AIOS chat error:", error);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: "מצטער, אירעה שגיאה. נסה שוב." },
-      ]);
+      console.error("AIOS error:", error);
+      setStatusText("מצטער, אירעה שגיאה. נסה שוב.");
     } finally {
       setIsLoading(false);
-      setStreamingContent("");
     }
-  }, [userId, tenantId, messages, queryClient]);
+  }, [userId, tenantId, history, queryClient]);
 
   const handleRemovePanel = (index: number) => {
     setDataPanels((prev) => prev.filter((_, i) => i !== index));
@@ -114,22 +110,16 @@ export default function AIOSDashboard() {
 
   return (
     <div className="flex flex-col h-full" dir="rtl">
-      {/* Split layout: Chat on right, Data on left */}
-      <div className="flex flex-1 min-h-0">
-        {/* Data Canvas - takes most space */}
-        <div className="flex-1 min-w-0 border-l border-border">
-          <DataCanvas panels={dataPanels} onRemovePanel={handleRemovePanel} />
-        </div>
+      {/* Command bar at top */}
+      <AIOSCommandBar
+        onSend={handleSend}
+        isLoading={isLoading}
+        statusText={statusText}
+      />
 
-        {/* Chat Panel - fixed width on side */}
-        <div className="w-[400px] flex-shrink-0 flex flex-col bg-background border-border">
-          <AIOSChatBar
-            messages={messages}
-            onSend={handleSend}
-            isLoading={isLoading}
-            streamingContent={streamingContent}
-          />
-        </div>
+      {/* Data output - full area */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <DataCanvas panels={dataPanels} onRemovePanel={handleRemovePanel} />
       </div>
     </div>
   );
