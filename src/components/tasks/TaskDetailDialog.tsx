@@ -22,7 +22,7 @@ import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search, ListTodo, ExternalLink } from "lucide-react";
+import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search, ListTodo, ExternalLink, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
