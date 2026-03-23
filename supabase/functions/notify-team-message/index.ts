@@ -230,7 +230,7 @@ Deno.serve(async (req) => {
         }
       } catch (err) {
         console.error(`❌ Error ${label}:`, err)
-        errors.push(`${label}: ${err.message}`)
+        errors.push(`${label}: ${(err as Error).message}`)
       }
     }
 
@@ -328,7 +328,7 @@ Deno.serve(async (req) => {
 
   } catch (err) {
     console.error('❌ Unexpected error:', err)
-    return new Response(JSON.stringify({ error: err.message }), {
+    return new Response(JSON.stringify({ error: (err as Error).message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
