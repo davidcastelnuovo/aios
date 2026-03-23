@@ -1,57 +1,19 @@
 
 
-# התראות ווטסאפ על קמפיינים בפייסבוק — טריגר אוטומציה חדש
+# הוספת שיוך לקוח ישירות מרשימת המשימות (דסקטופ)
 
-## מה ייבנה
-טריגר חדש באוטומציות: **"התראת דוח פייסבוק"** (`report_alert_triggered`) — כשהסנכרון היומי של פייסבוק מזהה קמפיין חסום/מושהה או עלייה בעלויות, הוא יפעיל אוטומציה שתשלח התראה לווטסאפ.
+## הבעיה
+ה-TaskBacklogPanel בתצוגת הדסקטופ (שורה 1275) לא מעביר את ה-props הנדרשים לשיוך לקוח/קמפיינר, בעוד שבתצוגת המובייל (שורה 1189) הם כבר מועברים ועובדים.
 
-## איך זה עובד
+## הפתרון
+שינוי אחד בקובץ `src/components/tasks/WeeklyTaskBoard.tsx` — הוספת 4 props חסרים ל-`TaskBacklogPanel` בגרסת הדסקטופ (שורה ~1286):
 
-```text
-┌──────────────────────┐     ┌──────────────────────┐     ┌──────────────┐
-│ Cron Sync Facebook   │────▶│ בדיקת התראות פעילות  │────▶│ trigger-     │
-│ (כל כמה שעות)        │     │ (report_alerts)       │     │ automation   │
-└──────────────────────┘     └──────────────────────┘     └──────┬───────┘
-                                                                 │
-                                                          ┌──────▼───────┐
-                                                          │ שליחת הודעה  │
-                                                          │ ווטסאפ       │
-                                                          └──────────────┘
+```tsx
+clientsList={clientsList}
+campaignersList={campaignersList}
+onUpdateClient={(taskId, clientId) => updateTaskClient.mutate({ taskId, clientId })}
+onUpdateCampaigner={(taskId, campaignerId) => updateTaskCampaigner.mutate({ taskId, campaignerId })}
 ```
 
-## שינויים טכניים
-
-### 1. הוספת trigger type חדש: `report_alert_triggered`
-- **`AddAutomationForm.tsx`** + **`EditAutomationForm.tsx`** — הוספת האפשרות לרשימת הטריגרים
-- **`trigger-automation/index.ts`** — תמיכה בטריגר החדש (כבר גנרי מספיק, רק צריך לוודא שהוא עובר)
-
-### 2. לוגיקת בדיקת התראות בסנכרון — `cron-sync-facebook-insights/index.ts`
-אחרי שהסנכרון מסתיים בהצלחה לכל טבלה:
-- שליפת `report_alerts` הפעילות לאותה טבלה
-- חישוב האם התנאים מתקיימים (קמפיין חסום, עלייה בעלות לליד, וכו')
-- אם כן — קריאה ל-`trigger-automation` עם `trigger_type: 'report_alert_triggered'` + פרטי ההתראה (שם קמפיין, סוג בעיה, ערכים)
-- שמירת `last_alert_sent_at` כדי למנוע התראות חוזרות באותו יום
-
-### 3. משתנים זמינים בתבנית ההודעה
-בהגדרת פעולת הווטסאפ, המשתמש יוכל להשתמש ב:
-- `{{alert_name}}` — שם ההתראה
-- `{{campaign_name}}` — שם הקמפיין
-- `{{alert_type}}` — סוג (חסימה / עלייה בעלות / ירידה בלידים)
-- `{{current_value}}` — ערך נוכחי
-- `{{previous_value}}` — ערך קודם
-- `{{change_percent}}` — אחוז שינוי
-- `{{table_name}}` — שם הדוח/לקוח
-
-### 4. מניעת spam
-- התראה תישלח פעם אחת ליום לכל קמפיין+התראה (טבלת `report_alert_history` או שדה JSONB)
-- עמודה `last_triggered_at` בטבלת `report_alerts`
-
-## שינויי DB (מיגרציה)
-- הוספת עמודה `last_triggered_at` ו-`last_triggered_data` (JSONB) לטבלת `report_alerts`
-
-## סדר ביצוע
-1. מיגרציית DB — עמודות חדשות ב-`report_alerts`
-2. עדכון טפסי אוטומציה — trigger type חדש
-3. עדכון `cron-sync-facebook-insights` — לוגיקת בדיקה והפעלת trigger
-4. עדכון תבניות הודעה — משתנים חדשים
+זה יאפשר את ה-Select dropdown של לקוח וקמפיינר ישירות על כרטיס המשימה ברשימה, כפי שכבר עובד במובייל.
 
