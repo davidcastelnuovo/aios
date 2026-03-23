@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Send, Loader2 } from "lucide-react";
+import { Send, Loader2, Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import ReactMarkdown from "react-markdown";
@@ -28,6 +28,8 @@ export function AIOSCommandBar({ onSend, isLoading, statusText }: AIOSCommandBar
     }
   };
 
+  const showThinking = isLoading && !statusText;
+
   return (
     <div className="border-b bg-card px-4 py-3 space-y-2">
       <div className="flex items-center gap-2 max-w-3xl mx-auto">
@@ -54,9 +56,29 @@ export function AIOSCommandBar({ onSend, isLoading, statusText }: AIOSCommandBar
         </Button>
       </div>
 
+      {/* Thinking animation */}
+      {showThinking && (
+        <div className="max-w-3xl mx-auto flex items-center gap-3 py-2 animate-fade-in">
+          <div className="relative flex items-center justify-center">
+            <div className="absolute h-8 w-8 rounded-full bg-primary/20 animate-ping" />
+            <div className="relative h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+              <Brain className="h-4 w-4 text-primary animate-pulse" />
+            </div>
+          </div>
+          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <span>המערכת חושבת</span>
+            <span className="inline-flex gap-0.5">
+              <span className="animate-bounce [animation-delay:0ms]">.</span>
+              <span className="animate-bounce [animation-delay:150ms]">.</span>
+              <span className="animate-bounce [animation-delay:300ms]">.</span>
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Status text - shows AI text response inline */}
       {statusText && (
-        <div className="max-w-3xl mx-auto text-sm text-muted-foreground">
+        <div className="max-w-3xl mx-auto text-sm text-muted-foreground animate-fade-in">
           <div className="prose prose-sm dark:prose-invert max-w-none" dir="rtl">
             <ReactMarkdown>{statusText}</ReactMarkdown>
           </div>

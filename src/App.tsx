@@ -10,6 +10,7 @@ import { AgencyProvider } from "./contexts/AgencyContext";
 import { TenantProvider } from "./contexts/TenantContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { UIModeProvider } from "./contexts/UIModeContext";
+import { AIOSProvider } from "./contexts/AIOSContext";
 import { Suspense, lazy } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -124,6 +125,7 @@ const App = () => (
         <TenantProvider>
           <ThemeProvider>
             <UIModeProvider>
+            <AIOSProvider>
             <AgencyProvider>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
@@ -205,6 +207,7 @@ const App = () => (
                 </Routes>
               </Suspense>
             </AgencyProvider>
+            </AIOSProvider>
             </UIModeProvider>
           </ThemeProvider>
         </TenantProvider>
