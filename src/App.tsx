@@ -77,6 +77,8 @@ const GmailSettings = lazy(() => import("./pages/GmailSettings"));
 const Gmail = lazy(() => import("./pages/Gmail"));
 const Signatures = lazy(() => import("./pages/Signatures"));
 const SignDocument = lazy(() => import("./pages/SignDocument"));
+const ManusSettings = lazy(() => import("./pages/ManusSettings"));
+const ManusTasksPage = lazy(() => import("./pages/ManusTasksPage"));
 
 // QueryClient with optimized defaults for better caching
 const queryClient = new QueryClient({
