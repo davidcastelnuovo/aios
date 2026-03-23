@@ -50,6 +50,7 @@ const formSchema = z.object({
     "task_overdue",
     "inbound_webhook_task",
     "inbound_webhook_lead",
+    "report_alert_triggered",
   ]),
   action_type: z.enum(["webhook", "email", "notification", "update_status", "send_whatsapp", "create_manychat_subscriber", "send_greenapi_message", "send_greenapi_to_campaigner", "add_lead_update", "add_client_update", "create_task", "create_lead"]),
   // Green API connection selection
