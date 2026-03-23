@@ -474,6 +474,20 @@ export default function Integrations() {
       route: "gmail-settings",
       gradient: "bg-gradient-to-r from-red-500 to-red-700",
     },
+    {
+      icon: <Brain className="h-6 w-6" />,
+      title: "Manus AI",
+      description: "סוכן AI מתקדם לביצוע משימות מורכבות — מחקר, מצגות, ניתוח נתונים",
+      features: [
+        "מחקר מעמיק מהאינטרנט",
+        "יצירת מצגות ומסמכים",
+        "ניתוח נתונים ודוחות",
+        "חיבור ל-AIOS",
+      ],
+      isConnected: !!manusIntegration,
+      route: "manus-settings",
+      gradient: "bg-gradient-to-r from-violet-500 to-indigo-700",
+    },
   ];
 
   return (
