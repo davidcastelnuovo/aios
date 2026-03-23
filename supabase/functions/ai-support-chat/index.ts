@@ -835,6 +835,270 @@ async function executeTool(
         return { success: true, result: { deleted: true, category, key } };
       }
 
+      // === GROUP 1: CRM BASIC ===
+
+      case 'list_agencies': {
+        const { limit = 20 } = toolCall.args;
+        const { data, error } = await supabaseClient.from('agencies').select('id, name, status, contact_name, email, phone, is_default').eq('tenant_id', tenantId).order('name').limit(limit);
+        if (error) throw error;
+        return { success: true, result: { count: data.length, agencies: data } };
+      }
+
+      case 'get_agency_info': {
+        const { agency_id } = toolCall.args;
+        const { data, error } = await supabaseClient.from('agencies').select('*').eq('id', agency_id).eq('tenant_id', tenantId).single();
+        if (error) throw error;
+        return { success: true, result: data };
+      }
+
+      case 'update_agency': {
+        const { agency_id, ...updates } = toolCall.args;
+        const allowed = ['name', 'contact_name', 'email', 'phone', 'status', 'notes'];
+        const updateData: Record<string, any> = {};
+        for (const k of allowed) if (updates[k] !== undefined) updateData[k] = updates[k];
+        if (!Object.keys(updateData).length) return { success: false, error: 'לא נשלחו שדות לעדכון' };
+        const { data, error } = await supabaseClient.from('agencies').update(updateData).eq('id', agency_id).eq('tenant_id', tenantId).select('id, name, status').single();
+        if (error) throw error;
+        modifiedEntities.add('agencies');
+        return { success: true, result: data };
+      }
+
+      case 'list_campaigners': {
+        const { active, limit = 30 } = toolCall.args;
+        let query = supabaseClient.from('campaigners').select('id, full_name, email, phone, role, active').eq('tenant_id', tenantId).order('full_name').limit(limit);
+        if (active !== undefined) query = query.eq('active', active);
+        const { data, error } = await query;
+        if (error) throw error;
+        return { success: true, result: { count: data.length, campaigners: data } };
+      }
+
+      case 'get_campaigner_info': {
+        const { campaigner_id } = toolCall.args;
+        const { data, error } = await supabaseClient.from('campaigners').select('*, campaigner_agencies(agency_id, agencies(name))').eq('id', campaigner_id).eq('tenant_id', tenantId).single();
+        if (error) throw error;
+        return { success: true, result: data };
+      }
+
+      case 'list_suppliers': {
+        const { limit = 20 } = toolCall.args;
+        const { data, error } = await supabaseClient.from('suppliers').select('id, name, contact_name, email, phone, category, status').eq('tenant_id', tenantId).order('name').limit(limit);
+        if (error) throw error;
+        return { success: true, result: { count: data.length, suppliers: data } };
+      }
+
+      case 'create_supplier': {
+        const { name, contact_name, email, phone, category, notes } = toolCall.args;
+        const { data, error } = await supabaseClient.from('suppliers').insert({ name, contact_name, email, phone, category, notes, tenant_id: tenantId }).select('id, name').single();
+        if (error) throw error;
+        modifiedEntities.add('suppliers');
+        return { success: true, result: data };
+      }
+
+      case 'get_supplier_info': {
+        const { supplier_id } = toolCall.args;
+        const { data, error } = await supabaseClient.from('suppliers').select('*').eq('id', supplier_id).eq('tenant_id', tenantId).single();
+        if (error) throw error;
+        return { success: true, result: data };
+      }
+
+      case 'list_sales_people': {
+        const { limit = 20 } = toolCall.args;
+        const { data, error } = await supabaseClient.from('sales_people').select('id, full_name, email, phone, active').eq('tenant_id', tenantId).order('full_name').limit(limit);
+        if (error) throw error;
+        return { success: true, result: { count: data.length, sales_people: data } };
+      }
+
+      case 'get_sales_person_info': {
+        const { sales_person_id } = toolCall.args;
+        const { data, error } = await supabaseClient.from('sales_people').select('*').eq('id', sales_person_id).eq('tenant_id', tenantId).single();
+        if (error) throw error;
+        return { success: true, result: data };
+      }
+
+      case 'list_products': {
+        const { limit = 30 } = toolCall.args;
+        const { data, error } = await supabaseClient.from('products').select('id, name, description, price, is_active, category').eq('tenant_id', tenantId).order('name').limit(limit);
+        if (error) throw error;
+        return { success: true, result: { count: data.length, products: data } };
+      }
+
+      case 'create_product': {
+        const { name, description, price, category } = toolCall.args;
+        const { data, error } = await supabaseClient.from('products').insert({ name, description, price, category, tenant_id: tenantId, is_active: true }).select('id, name, price').single();
+        if (error) throw error;
+        modifiedEntities.add('products');
+        return { success: true, result: data };
+      }
+
+      case 'update_product': {
+        const { product_id, ...updates } = toolCall.args;
+        const allowed = ['name', 'description', 'price', 'is_active', 'category'];
+        const updateData: Record<string, any> = {};
+        for (const k of allowed) if (updates[k] !== undefined) updateData[k] = updates[k];
+        const { data, error } = await supabaseClient.from('products').update(updateData).eq('id', product_id).eq('tenant_id', tenantId).select('id, name, price').single();
+        if (error) throw error;
+        modifiedEntities.add('products');
+        return { success: true, result: data };
+      }
+
+      // === GROUP 2: FINANCE ===
+
+      case 'list_finance': {
+        const { type, limit = 30, month } = toolCall.args;
+        let query = supabaseClient.from('finance').select('id, type, amount, date, category, notes, clients(name), agencies(name), suppliers(name)').eq('tenant_id', tenantId).order('date', { ascending: false }).limit(limit);
+        if (type) query = query.eq('type', type);
+        if (month) {
+          const start = `${month}-01`;
+          const endDate = new Date(parseInt(month.split('-')[0]), parseInt(month.split('-')[1]), 0);
+          const end = `${month}-${String(endDate.getDate()).padStart(2, '0')}`;
+          query = query.gte('date', start).lte('date', end);
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        return { success: true, result: { count: data.length, entries: data.map((f: any) => ({ id: f.id, type: f.type, amount: f.amount, date: f.date, category: f.category, notes: f.notes, client_name: f.clients?.name, agency_name: f.agencies?.name, supplier_name: f.suppliers?.name })) } };
+      }
+
+      case 'create_finance_entry': {
+        const { type, amount, date, category, notes, client_id, agency_id, supplier_id } = toolCall.args;
+        // Get default agency/client if not provided
+        let finalAgencyId = agency_id;
+        let finalClientId = client_id;
+        if (!finalAgencyId) {
+          const { data: ag } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).eq('is_default', true).limit(1).single();
+          finalAgencyId = ag?.id;
+          if (!finalAgencyId) {
+            const { data: ag2 } = await supabaseClient.from('agencies').select('id').eq('tenant_id', tenantId).limit(1).single();
+            finalAgencyId = ag2?.id;
+          }
+        }
+        if (!finalClientId) {
+          const { data: cl } = await supabaseClient.from('clients').select('id').eq('tenant_id', tenantId).limit(1).single();
+          finalClientId = cl?.id;
+        }
+        if (!finalAgencyId || !finalClientId) return { success: false, error: 'חסר סוכנות או לקוח' };
+        const { data, error } = await supabaseClient.from('finance').insert({ type, amount, date, category, notes, client_id: finalClientId, agency_id: finalAgencyId, supplier_id, tenant_id: tenantId }).select('id, type, amount, date').single();
+        if (error) throw error;
+        modifiedEntities.add('finance');
+        return { success: true, result: data };
+      }
+
+      case 'get_finance_summary': {
+        const { month } = toolCall.args;
+        const start = `${month}-01`;
+        const endDate = new Date(parseInt(month.split('-')[0]), parseInt(month.split('-')[1]), 0);
+        const end = `${month}-${String(endDate.getDate()).padStart(2, '0')}`;
+        const { data, error } = await supabaseClient.from('finance').select('type, amount').eq('tenant_id', tenantId).gte('date', start).lte('date', end);
+        if (error) throw error;
+        let totalIncome = 0, totalExpense = 0;
+        for (const f of data || []) {
+          if (f.type === 'income') totalIncome += f.amount;
+          else totalExpense += f.amount;
+        }
+        return { success: true, result: { month, total_income: totalIncome, total_expense: totalExpense, profit: totalIncome - totalExpense, entries_count: data?.length || 0 } };
+      }
+
+      case 'list_supplier_invoices': {
+        const { limit = 20 } = toolCall.args;
+        const { data, error } = await supabaseClient.from('supplier_invoices').select('id, invoice_name, amount, supplier_name, supplier_id, file_url, created_at').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
+        if (error) throw error;
+        return { success: true, result: { count: data.length, invoices: data } };
+      }
+
+      // === GROUP 3: OPERATIONS ===
+
+      case 'list_onboarding': {
+        const { status, limit = 20 } = toolCall.args;
+        let query = supabaseClient.from('client_onboarding').select('id, title, status, due_date, notes, clients(name), agencies(name), campaigners(full_name)').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
+        if (status) query = query.eq('status', status);
+        const { data, error } = await query;
+        if (error) throw error;
+        return { success: true, result: { count: data.length, onboarding: data.map((o: any) => ({ id: o.id, title: o.title, status: o.status, due_date: o.due_date, client_name: o.clients?.name, agency_name: o.agencies?.name, campaigner_name: o.campaigners?.full_name })) } };
+      }
+
+      case 'update_onboarding_status': {
+        const { onboarding_id, status } = toolCall.args;
+        const { data, error } = await supabaseClient.from('client_onboarding').update({ status }).eq('id', onboarding_id).eq('tenant_id', tenantId).select('id, title, status').single();
+        if (error) throw error;
+        modifiedEntities.add('client_onboarding');
+        return { success: true, result: data };
+      }
+
+      case 'list_time_entries': {
+        const { date, limit = 30 } = toolCall.args;
+        let query = supabaseClient.from('time_entries').select('id, user_id, clock_in, clock_out, notes, profiles(full_name)').eq('tenant_id', tenantId).order('clock_in', { ascending: false }).limit(limit);
+        if (date) {
+          query = query.gte('clock_in', `${date}T00:00:00`).lte('clock_in', `${date}T23:59:59`);
+        }
+        const { data, error } = await query;
+        if (error) throw error;
+        return { success: true, result: { count: data.length, entries: data.map((e: any) => ({ id: e.id, user_name: e.profiles?.full_name, clock_in: e.clock_in, clock_out: e.clock_out, notes: e.notes })) } };
+      }
+
+      case 'clock_in': {
+        const { notes } = toolCall.args;
+        const { data, error } = await supabaseClient.from('time_entries').insert({ user_id: userId, tenant_id: tenantId, clock_in: new Date().toISOString(), notes }).select('id, clock_in').single();
+        if (error) throw error;
+        modifiedEntities.add('time_entries');
+        return { success: true, result: { entry_id: data.id, clock_in: data.clock_in } };
+      }
+
+      case 'clock_out': {
+        const { data: openEntry, error: findErr } = await supabaseClient.from('time_entries').select('id').eq('user_id', userId).eq('tenant_id', tenantId).is('clock_out', null).order('clock_in', { ascending: false }).limit(1).single();
+        if (findErr || !openEntry) return { success: false, error: 'לא נמצאה כניסה פתוחה' };
+        const { data, error } = await supabaseClient.from('time_entries').update({ clock_out: new Date().toISOString() }).eq('id', openEntry.id).select('id, clock_in, clock_out').single();
+        if (error) throw error;
+        modifiedEntities.add('time_entries');
+        return { success: true, result: data };
+      }
+
+      case 'add_client_update': {
+        const { client_id, content } = toolCall.args;
+        const { data, error } = await supabaseClient.from('client_updates').insert({ client_id, user_id: userId, tenant_id: tenantId, content }).select('id').single();
+        if (error) throw error;
+        modifiedEntities.add('client_updates');
+        return { success: true, result: { update_id: data.id } };
+      }
+
+      case 'add_lead_update': {
+        const { lead_id, content } = toolCall.args;
+        const { data, error } = await supabaseClient.from('lead_updates').insert({ lead_id, user_id: userId, tenant_id: tenantId, content }).select('id').single();
+        if (error) throw error;
+        modifiedEntities.add('lead_updates');
+        return { success: true, result: { update_id: data.id } };
+      }
+
+      case 'list_updates': {
+        const { entity_type, entity_id, limit = 20 } = toolCall.args;
+        const table = entity_type === 'client' ? 'client_updates' : 'lead_updates';
+        const fk = entity_type === 'client' ? 'client_id' : 'lead_id';
+        const { data, error } = await supabaseClient.from(table).select('id, content, created_at, profiles(full_name)').eq(fk, entity_id).eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
+        if (error) throw error;
+        return { success: true, result: { count: data.length, updates: data.map((u: any) => ({ id: u.id, content: u.content, created_at: u.created_at, user_name: u.profiles?.full_name })) } };
+      }
+
+      // === GROUP 4: DATA & REPORTS ===
+
+      case 'list_dynamic_tables': {
+        const { data, error } = await supabaseClient.from('crm_tables').select('id, name, slug, description, icon, category, integration_type, last_sync_at').eq('tenant_id', tenantId).order('name');
+        if (error) throw error;
+        return { success: true, result: { count: data.length, tables: data } };
+      }
+
+      case 'get_table_data': {
+        const { table_id, limit = 50 } = toolCall.args;
+        const { data: fields } = await supabaseClient.from('crm_fields').select('key, name, type, position').eq('table_id', table_id).order('position');
+        const { data: records, error } = await supabaseClient.from('crm_records').select('id, data, created_at').eq('table_id', table_id).eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
+        if (error) throw error;
+        return { success: true, result: { fields: fields || [], record_count: records?.length || 0, records: (records || []).map((r: any) => ({ id: r.id, ...r.data, created_at: r.created_at })) } };
+      }
+
+      case 'list_recordings': {
+        const { limit = 20 } = toolCall.args;
+        const { data, error } = await supabaseClient.from('zoom_recordings').select('id, topic, start_time, duration, recording_url, transcription_status').eq('tenant_id', tenantId).order('start_time', { ascending: false }).limit(limit);
+        if (error) throw error;
+        return { success: true, result: { count: data.length, recordings: data } };
+      }
+
       default:
         return { success: false, error: `Unknown tool: ${toolCall.name}` };
     }
