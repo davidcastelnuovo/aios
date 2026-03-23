@@ -1283,6 +1283,10 @@ export function WeeklyTaskBoard() {
                 }}
                 onAddTask={handleBacklogAddTask}
                 isLoading={isLoading || addTask.isPending || !canQuickAddTask}
+                clientsList={clientsList}
+                campaignersList={campaignersList}
+                onUpdateClient={(taskId, clientId) => updateTaskClient.mutate({ taskId, clientId })}
+                onUpdateCampaigner={(taskId, campaignerId) => updateTaskCampaigner.mutate({ taskId, campaignerId })}
               />
             </div>
 
