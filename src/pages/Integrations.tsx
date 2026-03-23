@@ -270,6 +270,23 @@ export default function Integrations() {
     },
   });
 
+  // Check Manus integration status
+  const { data: manusIntegration } = useQuery({
+    queryKey: ['manus-integration', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .eq('integration_type', 'manus')
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   const integrations: IntegrationCardProps[] = [
     {
       icon: <Webhook className="h-6 w-6" />,
