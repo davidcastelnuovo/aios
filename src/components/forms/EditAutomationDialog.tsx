@@ -419,6 +419,7 @@ export function EditAutomationDialog({ automation, open, onOpenChange }: EditAut
                       <SelectItem value="task_overdue">משימה לא הושלמה בזמן</SelectItem>
                       <SelectItem value="inbound_webhook_task">קבלת משימה מ-Webhook</SelectItem>
                       <SelectItem value="inbound_webhook_lead">קליטת ליד מ-Webhook</SelectItem>
+                      <SelectItem value="report_alert_triggered">התראת דוח פייסבוק</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />
