@@ -207,6 +207,7 @@ const App = () => (
                 </Routes>
               </Suspense>
             </AgencyProvider>
+            </AIOSProvider>
             </UIModeProvider>
           </ThemeProvider>
         </TenantProvider>
