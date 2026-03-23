@@ -5,7 +5,6 @@ import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useTenant } from "@/contexts/TenantContext";
 import { useAgency } from "@/contexts/AgencyContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -16,29 +15,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { toast } from "sonner";
 import { 
   Users, 
-  Package, 
   Search, 
-  Building2,
   TrendingUp,
   TrendingDown,
   DollarSign,
-  Check,
-  History,
-  Trash2,
-  CreditCard,
   Pencil,
   Plus,
-  Receipt
+  Trash2,
+  CalendarIcon
 } from "lucide-react";
 import { Label } from "@/components/ui/label";
-import { CreatePaymentLinkDialog } from "@/components/forms/CreatePaymentLinkDialog";
-import { SupplierInvoicesDialog } from "@/components/forms/SupplierInvoicesDialog";
-import { EditCampaignerDialog } from "@/components/forms/EditCampaignerDialog";
 import { EditClientDialog } from "@/components/forms/EditClientDialog";
 import { format, subMonths } from "date-fns";
 import { he } from "date-fns/locale";
 
-// Helper function to get month options
 const getMonthOptions = () => {
   const months = [];
   for (let i = 0; i < 12; i++) {
@@ -58,46 +48,20 @@ export default function AccountingIntegrations() {
   const queryClient = useQueryClient();
   
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedTab, setSelectedTab] = useState("clients");
   const [agencyFilter, setAgencyFilter] = useState<string>("all");
   const [clientStatusFilter, setClientStatusFilter] = useState<string>("active_relevant");
-  
-  // Payment tracking state
   const [selectedMonth, setSelectedMonth] = useState(() => format(subMonths(new Date(), 1), "yyyy-MM"));
-  const [confirmDialog, setConfirmDialog] = useState<{
-    open: boolean;
-    type: 'expense' | 'income';
-    id: string;
-    name: string;
-    amount: number;
-    expenseType?: 'supplier' | 'campaigner';
-  } | null>(null);
-  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
-  const [paymentLinkClient, setPaymentLinkClient] = useState<{
-    id: string;
-    name: string;
-    email?: string;
-    phone?: string;
-    retainer?: number;
-  } | null>(null);
-  
-  // Edit dialog states
-  const [editingSupplier, setEditingSupplier] = useState<any | null>(null);
-  const [editingCampaigner, setEditingCampaigner] = useState<any | null>(null);
   const [editingClient, setEditingClient] = useState<any | null>(null);
   
-  // One-time income state
+  // One-time income dialog
   const [addOneTimeIncomeOpen, setAddOneTimeIncomeOpen] = useState(false);
   const [oneTimeIncomeForm, setOneTimeIncomeForm] = useState({
     client_id: "",
     product_name: "",
     amount: "",
-    payment_month: "",
+    income_date: "",
     notes: "",
-    supplier_id: "",
-    expense_amount: ""
   });
-  const [editingOneTimeIncome, setEditingOneTimeIncome] = useState<any | null>(null);
 
   const monthOptions = useMemo(() => getMonthOptions(), []);
 
@@ -116,289 +80,7 @@ export default function AccountingIntegrations() {
     enabled: !!currentTenantId,
   });
 
-  // Fetch expense payments for selected month
-  const { data: expensePayments } = useQuery({
-    queryKey: ["expense-payments", currentTenantId, selectedMonth],
-    queryFn: async () => {
-      if (!currentTenantId) return [];
-      const { data, error } = await supabase
-        .from("expense_payments")
-        .select("*")
-        .eq("tenant_id", currentTenantId)
-        .eq("payment_month", selectedMonth);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenantId,
-  });
-
-  // Fetch income payments for selected month
-  const { data: incomePayments } = useQuery({
-    queryKey: ["income-payments", currentTenantId, selectedMonth],
-    queryFn: async () => {
-      if (!currentTenantId) return [];
-      const { data, error } = await supabase
-        .from("income_payments")
-        .select("*")
-        .eq("tenant_id", currentTenantId)
-        .eq("payment_month", selectedMonth);
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenantId,
-  });
-
-  // Fetch all payment history
-  const { data: paymentHistory } = useQuery({
-    queryKey: ["payment-history", currentTenantId],
-    queryFn: async () => {
-      if (!currentTenantId) return { expenses: [], incomes: [] };
-      
-      const [expenseRes, incomeRes] = await Promise.all([
-        supabase
-          .from("expense_payments")
-          .select("*")
-          .eq("tenant_id", currentTenantId)
-          .order("paid_at", { ascending: false })
-          .limit(100),
-        supabase
-          .from("income_payments")
-          .select("*")
-          .eq("tenant_id", currentTenantId)
-          .order("received_at", { ascending: false })
-          .limit(100)
-      ]);
-      
-      return {
-        expenses: expenseRes.data || [],
-        incomes: incomeRes.data || []
-      };
-    },
-    enabled: !!currentTenantId && historyDialogOpen,
-  });
-
-  // Create expense payment mutation
-  const createExpensePayment = useMutation({
-    mutationFn: async (data: { 
-      expense_type: 'supplier' | 'campaigner';
-      expense_id: string;
-      expense_name: string;
-      amount: number;
-    }) => {
-      const { error } = await supabase
-        .from("expense_payments")
-        .insert({
-          tenant_id: currentTenantId,
-          expense_type: data.expense_type,
-          expense_id: data.expense_id,
-          expense_name: data.expense_name,
-          amount: data.amount,
-          payment_month: selectedMonth,
-        });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expense-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["payment-history"] });
-      toast.success("התשלום סומן כשולם");
-      setConfirmDialog(null);
-    },
-    onError: () => {
-      toast.error("שגיאה בשמירת התשלום");
-    }
-  });
-
-  // Create income payment mutation
-  const createIncomePayment = useMutation({
-    mutationFn: async (data: { 
-      client_id: string;
-      client_name: string;
-      amount: number;
-    }) => {
-      const { error } = await supabase
-        .from("income_payments")
-        .insert({
-          tenant_id: currentTenantId,
-          client_id: data.client_id,
-          client_name: data.client_name,
-          amount: data.amount,
-          payment_month: selectedMonth,
-        });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["income-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["payment-history"] });
-      toast.success("התשלום סומן כהתקבל");
-      setConfirmDialog(null);
-    },
-    onError: () => {
-      toast.error("שגיאה בשמירת התשלום");
-    }
-  });
-
-  // Delete expense payment mutation
-  const deleteExpensePayment = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("expense_payments")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expense-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["payment-history"] });
-      toast.success("התשלום בוטל");
-    },
-    onError: () => {
-      toast.error("שגיאה במחיקת התשלום");
-    }
-  });
-
-  // Delete income payment mutation
-  const deleteIncomePayment = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("income_payments")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["income-payments"] });
-      queryClient.invalidateQueries({ queryKey: ["payment-history"] });
-      toast.success("התשלום בוטל");
-    },
-    onError: () => {
-      toast.error("שגיאה במחיקת התשלום");
-    }
-  });
-
-  // Fetch one-time incomes for selected month
-  const { data: oneTimeIncomes, isLoading: oneTimeIncomesLoading } = useQuery({
-    queryKey: ["one-time-incomes", currentTenantId, selectedMonth],
-    queryFn: async () => {
-      if (!currentTenantId) return [];
-      const { data, error } = await supabase
-        .from("one_time_incomes")
-        .select("*, clients(name), suppliers(name)")
-        .eq("tenant_id", currentTenantId)
-        .eq("payment_month", selectedMonth)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!currentTenantId,
-  });
-
-  // Create one-time income mutation
-  const createOneTimeIncome = useMutation({
-    mutationFn: async (data: {
-      client_id: string;
-      product_name: string;
-      amount: number;
-      payment_month: string;
-      notes?: string;
-      supplier_id?: string;
-      expense_amount?: number;
-    }) => {
-      const insertData: any = {
-        tenant_id: currentTenantId,
-        client_id: data.client_id,
-        product_name: data.product_name,
-        amount: data.amount,
-        payment_month: data.payment_month,
-        notes: data.notes || null,
-        expense_amount: data.expense_amount || 0,
-      };
-      if (data.supplier_id) {
-        insertData.supplier_id = data.supplier_id;
-      }
-      const { error } = await supabase
-        .from("one_time_incomes")
-        .insert(insertData);
-      if (error) throw error;
-      return data.payment_month;
-    },
-    onSuccess: (payment_month) => {
-      if (payment_month) {
-        setSelectedMonth(payment_month);
-      }
-      queryClient.invalidateQueries({ queryKey: ["one-time-incomes"] });
-      toast.success("הכנסה חד פעמית נוספה בהצלחה");
-      setAddOneTimeIncomeOpen(false);
-      setOneTimeIncomeForm({ client_id: "", product_name: "", amount: "", payment_month: "", notes: "", supplier_id: "", expense_amount: "" });
-    },
-    onError: () => {
-      toast.error("שגיאה בשמירת ההכנסה");
-    }
-  });
-
-  // Toggle one-time income paid status
-  const toggleOneTimeIncomePaid = useMutation({
-    mutationFn: async ({ id, is_paid }: { id: string; is_paid: boolean }) => {
-      const { error } = await supabase
-        .from("one_time_incomes")
-        .update({ 
-          is_paid, 
-          paid_at: is_paid ? new Date().toISOString() : null 
-        })
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["one-time-incomes"] });
-      toast.success("סטטוס תשלום עודכן");
-    },
-    onError: () => {
-      toast.error("שגיאה בעדכון סטטוס");
-    }
-  });
-
-  // Delete one-time income
-  const deleteOneTimeIncome = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("one_time_incomes")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["one-time-incomes"] });
-      toast.success("הכנסה חד פעמית נמחקה");
-    },
-    onError: () => {
-      toast.error("שגיאה במחיקה");
-    }
-  });
-
-  // Check if expense is paid
-  const isExpensePaid = (expenseId: string, expenseType: 'supplier' | 'campaigner') => {
-    return expensePayments?.some(
-      p => p.expense_id === expenseId && p.expense_type === expenseType
-    );
-  };
-
-  // Check if client payment received
-  const isIncomeReceived = (clientId: string) => {
-    return incomePayments?.some(p => p.client_id === clientId);
-  };
-
-  // Get expense payment record
-  const getExpensePayment = (expenseId: string, expenseType: 'supplier' | 'campaigner') => {
-    return expensePayments?.find(
-      p => p.expense_id === expenseId && p.expense_type === expenseType
-    );
-  };
-
-  // Get income payment record
-  const getIncomePayment = (clientId: string) => {
-    return incomePayments?.find(p => p.client_id === clientId);
-  };
-
-  // Fetch clients with financial data from client_tenant_financial_data
+  // Fetch clients
   const { data: clients, isLoading: clientsLoading } = useQuery({
     queryKey: ["accounting-clients", currentTenantId, agencyFilter],
     queryFn: async () => {
@@ -407,16 +89,8 @@ export default function AccountingIntegrations() {
       let query = supabase
         .from("clients")
         .select(`
-          id,
-          name,
-          contact_name,
-          email,
-          phone,
-          status,
-          retainer,
-          monthly_budget,
-          agency_id,
-          updated_at,
+          id, name, contact_name, email, phone, status, retainer, monthly_budget,
+          agency_id, updated_at,
           agencies (id, name)
         `)
         .eq("tenant_id", currentTenantId);
@@ -428,7 +102,6 @@ export default function AccountingIntegrations() {
       const { data: clientsData, error } = await query;
       if (error) throw error;
       
-      // Fetch tenant-specific financial data
       const clientIds = (clientsData || []).map(c => c.id);
       const { data: financialData } = await supabase
         .from("client_tenant_financial_data")
@@ -436,12 +109,10 @@ export default function AccountingIntegrations() {
         .eq("tenant_id", currentTenantId)
         .in("client_id", clientIds);
       
-      // Create a map for quick lookup
       const financialMap = new Map(
         (financialData || []).map(f => [f.client_id, f])
       );
       
-      // Map data to use financial data from tenant-specific table
       return (clientsData || []).map(client => ({
         ...client,
         retainer: financialMap.get(client.id)?.retainer ?? client.retainer,
@@ -451,133 +122,85 @@ export default function AccountingIntegrations() {
     enabled: !!currentTenantId,
   });
 
-  // Fetch suppliers
-  const { data: suppliers, isLoading: suppliersLoading } = useQuery({
-    queryKey: ["accounting-suppliers", currentTenantId, agencyFilter],
-    queryFn: async () => {
-      if (!currentTenantId) return [];
-      const { data, error } = await supabase
-        .from("suppliers")
-        .select(`
-          id,
-          name,
-          phone,
-          email,
-          type,
-          folder_link,
-          notes,
-          related_campaigner_id,
-          agency_id_1,
-          agency_id_2,
-          agency_id_3,
-          payment_1,
-          payment_2,
-          payment_3
-        `)
-        .eq("tenant_id", currentTenantId);
-      if (error) throw error;
-      
-      // Filter suppliers by agency filter if not "all"
-      if (agencyFilter && agencyFilter !== "all") {
-        return (data || []).filter(s => 
-          s.agency_id_1 === agencyFilter || 
-          s.agency_id_2 === agencyFilter || 
-          s.agency_id_3 === agencyFilter
-        );
-      }
-      
-      return data || [];
-    },
-    enabled: !!currentTenantId,
-  });
-
   // Fetch campaigner payments from client_team
-  const { data: campaignerPayments, isLoading: campaignerPaymentsLoading } = useQuery({
+  const { data: campaignerPayments } = useQuery({
     queryKey: ["accounting-campaigner-payments", currentTenantId, agencyFilter],
     queryFn: async () => {
       if (!currentTenantId) return [];
       
-      // Get agencies for this tenant
       const { data: ownedAgencies } = await supabase
-        .from("agencies")
-        .select("id")
-        .eq("tenant_id", currentTenantId);
-      
+        .from("agencies").select("id").eq("tenant_id", currentTenantId);
       const { data: sharedAgencies } = await supabase
-        .from("agency_tenant_access")
-        .select("agency_id")
-        .eq("accessing_tenant_id", currentTenantId);
+        .from("agency_tenant_access").select("agency_id").eq("accessing_tenant_id", currentTenantId);
       
       let agencyIds = [
         ...(ownedAgencies || []).map(a => a.id),
         ...(sharedAgencies || []).map(a => a.agency_id)
       ];
-
-      // Filter by agency filter if not "all"
       if (agencyFilter && agencyFilter !== "all") {
         agencyIds = agencyIds.filter(id => id === agencyFilter);
       }
-
       if (agencyIds.length === 0) return [];
 
-      // Get client IDs for these agencies
       const { data: clientsData } = await supabase
-        .from("clients")
-        .select("id")
-        .in("agency_id", agencyIds)
-        .in("status", ["active", "onboarding"]);
-
+        .from("clients").select("id").in("agency_id", agencyIds).in("status", ["active", "onboarding"]);
       const clientIds = (clientsData || []).map(c => c.id);
       if (clientIds.length === 0) return [];
 
-      // Get all team assignments for these clients
       const { data, error } = await supabase
         .from("client_team")
-        .select(`
-          id,
-          campaigner_payment,
-          campaigner_id,
-          client_id,
-          campaigners (id, full_name),
-          clients (id, name, agency_id)
-        `)
+        .select(`id, campaigner_payment, campaigner_id, client_id, campaigners (id, full_name), clients (id, name, agency_id)`)
         .in("client_id", clientIds);
-      
       if (error) throw error;
       return data || [];
     },
     enabled: !!currentTenantId,
   });
 
+  // Fetch suppliers for expense calculation per client
+  const { data: suppliers } = useQuery({
+    queryKey: ["accounting-suppliers", currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      const { data, error } = await supabase
+        .from("suppliers")
+        .select("id, name, payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3, related_campaigner_id")
+        .eq("tenant_id", currentTenantId);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenantId,
+  });
 
-  // Fetch finance summary - income from retainers (directly from clients table), expenses from suppliers
+  // Fetch one-time incomes
+  const { data: oneTimeIncomes } = useQuery({
+    queryKey: ["one-time-incomes-all", currentTenantId, selectedMonth],
+    queryFn: async () => {
+      if (!currentTenantId) return [];
+      const { data, error } = await supabase
+        .from("one_time_incomes")
+        .select("*, clients(name)")
+        .eq("tenant_id", currentTenantId)
+        .eq("payment_month", selectedMonth)
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!currentTenantId,
+  });
+
+  // Fetch finance summary
   const { data: financeData } = useQuery({
     queryKey: ["finance-summary", currentTenantId, agencyFilter, clientStatusFilter],
     queryFn: async () => {
       if (!currentTenantId) return { income: 0, expenses: 0 };
       
-      // Get all agencies for this tenant (owned + shared)
-      const { data: ownedAgencies } = await supabase
-        .from("agencies")
-        .select("id")
-        .eq("tenant_id", currentTenantId);
+      const { data: ownedAgencies } = await supabase.from("agencies").select("id").eq("tenant_id", currentTenantId);
+      const { data: sharedAgencies } = await supabase.from("agency_tenant_access").select("agency_id").eq("accessing_tenant_id", currentTenantId);
       
-      const { data: sharedAgencies } = await supabase
-        .from("agency_tenant_access")
-        .select("agency_id")
-        .eq("accessing_tenant_id", currentTenantId);
+      let agencyIds = [...(ownedAgencies || []).map(a => a.id), ...(sharedAgencies || []).map(a => a.agency_id)];
+      if (agencyFilter && agencyFilter !== "all") agencyIds = agencyIds.filter(id => id === agencyFilter);
       
-      let agencyIds = [
-        ...(ownedAgencies || []).map(a => a.id),
-        ...(sharedAgencies || []).map(a => a.agency_id)
-      ];
-      
-      // Filter by agency filter if not "all"
-      if (agencyFilter && agencyFilter !== "all") {
-        agencyIds = agencyIds.filter(id => id === agencyFilter);
-      }
-      
-      // Determine which statuses to filter
       type ClientStatus = "active" | "ended" | "onboarding" | "paused";
       const getStatusFilter = (): ClientStatus[] | null => {
         if (clientStatusFilter === "all") return null;
@@ -585,119 +208,138 @@ export default function AccountingIntegrations() {
         if (clientStatusFilter === "active_onboarding") return ["active", "onboarding"];
         return [clientStatusFilter as ClientStatus];
       };
-      
       const statusFilter = getStatusFilter();
       
       let income = 0;
       if (agencyIds.length > 0) {
-        let clientsQuery = supabase
-          .from("clients")
-          .select("id, retainer, status, updated_at")
-          .in("agency_id", agencyIds);
+        let clientsQuery = supabase.from("clients").select("id, retainer, status, updated_at").in("agency_id", agencyIds);
+        if (statusFilter) clientsQuery = clientsQuery.in("status", statusFilter);
+        const { data: clientsData } = await clientsQuery;
         
-        if (statusFilter) {
-          clientsQuery = clientsQuery.in("status", statusFilter);
-        }
-        
-        const { data: clientsData, error: clientsError } = await clientsQuery;
-        
-        if (clientsError) throw clientsError;
-        
-        // For active_relevant, filter paused clients by date
         let filteredClients = clientsData || [];
         if (clientStatusFilter === "active_relevant") {
           const thirtyDaysAgo = new Date();
           thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
           filteredClients = filteredClients.filter(c => {
-            if (c.status === "paused") {
-              return c.updated_at && new Date(c.updated_at) >= thirtyDaysAgo;
-            }
+            if (c.status === "paused") return c.updated_at && new Date(c.updated_at) >= thirtyDaysAgo;
             return true;
           });
         }
         
-        // Fetch tenant-specific financial data to get correct retainer values
         const clientIds = filteredClients.map(c => c.id);
         if (clientIds.length > 0) {
           const { data: financialData } = await supabase
-            .from("client_tenant_financial_data")
-            .select("client_id, retainer")
-            .eq("tenant_id", currentTenantId)
-            .in("client_id", clientIds);
-          
-          const financialMap = new Map(
-            (financialData || []).map(f => [f.client_id, f.retainer])
-          );
-          
-          // Use tenant-specific retainer if available, otherwise fall back to client retainer
-          income = filteredClients.reduce((sum, c) => {
-            const tenantRetainer = financialMap.get(c.id);
-            return sum + (tenantRetainer ?? c.retainer ?? 0);
-          }, 0);
+            .from("client_tenant_financial_data").select("client_id, retainer").eq("tenant_id", currentTenantId).in("client_id", clientIds);
+          const financialMap = new Map((financialData || []).map(f => [f.client_id, f.retainer]));
+          income = filteredClients.reduce((sum, c) => sum + (financialMap.get(c.id) ?? c.retainer ?? 0), 0);
         }
       }
       
-      // Get expenses from suppliers (sum of payments, filtered by agency)
-      const { data: suppliersData, error: suppliersError } = await supabase
-        .from("suppliers")
-        .select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3")
-        .eq("tenant_id", currentTenantId);
-      
-      if (suppliersError) throw suppliersError;
-      
+      // Supplier expenses
+      const { data: suppliersData } = await supabase.from("suppliers").select("payment_1, payment_2, payment_3, agency_id_1, agency_id_2, agency_id_3").eq("tenant_id", currentTenantId);
       let supplierExpenses = 0;
       suppliersData?.forEach(s => {
         if (agencyFilter && agencyFilter !== "all") {
-          // Only sum payments for the selected agency
           if (s.agency_id_1 === agencyFilter) supplierExpenses += (s.payment_1 || 0);
           if (s.agency_id_2 === agencyFilter) supplierExpenses += (s.payment_2 || 0);
           if (s.agency_id_3 === agencyFilter) supplierExpenses += (s.payment_3 || 0);
         } else {
-          // Sum all payments
           supplierExpenses += (s.payment_1 || 0) + (s.payment_2 || 0) + (s.payment_3 || 0);
         }
       });
       
-      // Get campaigner payments from client_team (only active + onboarding clients)
+      // Campaigner expenses
       let campaignerExpenses = 0;
       if (agencyIds.length > 0) {
-        // For campaigner expenses, we use the status filter but treat active_relevant like active_onboarding
-        const campaignerStatusFilter: ("active" | "onboarding")[] = ["active", "onboarding"];
-        
-        const { data: clientsForTeam, error: clientsForTeamError } = await supabase
-          .from("clients")
-          .select("id")
-          .in("agency_id", agencyIds)
-          .in("status", campaignerStatusFilter);
-
-        if (clientsForTeamError) throw clientsForTeamError;
-
+        const { data: clientsForTeam } = await supabase.from("clients").select("id").in("agency_id", agencyIds).in("status", ["active", "onboarding"]);
         const clientIds = (clientsForTeam || []).map(c => c.id);
         if (clientIds.length > 0) {
-          const { data: teamData, error: teamError } = await supabase
-            .from("client_team")
-            .select("campaigner_payment")
-            .in("client_id", clientIds)
-            .gt("campaigner_payment", 0);
-
-          if (teamError) throw teamError;
-
-          campaignerExpenses =
-            teamData?.reduce((sum, t) => sum + (t.campaigner_payment || 0), 0) || 0;
+          const { data: teamData } = await supabase.from("client_team").select("campaigner_payment").in("client_id", clientIds).gt("campaigner_payment", 0);
+          campaignerExpenses = teamData?.reduce((sum, t) => sum + (t.campaigner_payment || 0), 0) || 0;
         }
       }
 
-      const expenses = supplierExpenses + campaignerExpenses;
-
-      return { income, expenses };
+      return { income, expenses: supplierExpenses + campaignerExpenses };
     },
     enabled: !!currentTenantId,
   });
 
-  // Filter functions
+  // Create one-time income
+  const createOneTimeIncome = useMutation({
+    mutationFn: async (data: { client_id: string; product_name: string; amount: number; payment_month: string; notes?: string; }) => {
+      const { error } = await supabase.from("one_time_incomes").insert({
+        tenant_id: currentTenantId,
+        client_id: data.client_id,
+        product_name: data.product_name,
+        amount: data.amount,
+        payment_month: data.payment_month,
+        notes: data.notes || null,
+      });
+      if (error) throw error;
+      return data.payment_month;
+    },
+    onSuccess: (payment_month) => {
+      if (payment_month) setSelectedMonth(payment_month);
+      queryClient.invalidateQueries({ queryKey: ["one-time-incomes-all"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
+      toast.success("הכנסה חד פעמית נוספה");
+      setAddOneTimeIncomeOpen(false);
+      setOneTimeIncomeForm({ client_id: "", product_name: "", amount: "", income_date: "", notes: "" });
+    },
+    onError: () => toast.error("שגיאה בשמירה"),
+  });
+
+  // Delete one-time income
+  const deleteOneTimeIncome = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("one_time_incomes").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["one-time-incomes-all"] });
+      toast.success("נמחק");
+    },
+  });
+
+  // Update client status
+  const updateClientStatus = useMutation({
+    mutationFn: async ({ clientId, status }: { clientId: string; status: string }) => {
+      const { error } = await supabase.from("clients").update({ status: status as any }).eq("id", clientId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounting-clients"] });
+      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
+      toast.success("סטטוס עודכן");
+    },
+  });
+
+  // Compute per-client expenses
+  const clientExpensesMap = useMemo(() => {
+    const map = new Map<string, number>();
+    // Campaigner payments per client
+    campaignerPayments?.forEach(p => {
+      if (p.campaigner_payment && p.campaigner_payment > 0) {
+        map.set(p.client_id, (map.get(p.client_id) || 0) + p.campaigner_payment);
+      }
+    });
+    return map;
+  }, [campaignerPayments]);
+
+  // One-time incomes grouped by client
+  const clientOneTimeMap = useMemo(() => {
+    const map = new Map<string, Array<any>>();
+    oneTimeIncomes?.forEach(oti => {
+      const list = map.get(oti.client_id) || [];
+      list.push(oti);
+      map.set(oti.client_id, list);
+    });
+    return map;
+  }, [oneTimeIncomes]);
+
+  // Filter clients
   const filteredClients = useMemo(() => {
     if (!clients) return [];
-    
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     
@@ -707,14 +349,11 @@ export default function AccountingIntegrations() {
         client.contact_name?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesAgency = agencyFilter === "all" || client.agency_id === agencyFilter;
       
-      // Status filter logic
       let matchesStatus = true;
       if (clientStatusFilter === "active_relevant") {
-        // Show active, onboarding, OR paused that changed in last 30 days
         const isActiveOrOnboarding = client.status === "active" || client.status === "onboarding";
-        const isPausedRecently = client.status === "paused" && 
-          client.updated_at && new Date(client.updated_at) >= thirtyDaysAgo;
-        matchesStatus = isActiveOrOnboarding || isPausedRecently;
+        const isPausedRecently = client.status === "paused" && client.updated_at && new Date(client.updated_at) >= thirtyDaysAgo;
+        matchesStatus = isActiveOrOnboarding || !!isPausedRecently;
       } else if (clientStatusFilter === "active_onboarding") {
         matchesStatus = client.status === "active" || client.status === "onboarding";
       } else if (clientStatusFilter !== "all") {
@@ -724,108 +363,6 @@ export default function AccountingIntegrations() {
       return matchesSearch && matchesAgency && matchesStatus;
     });
   }, [clients, searchQuery, agencyFilter, clientStatusFilter]);
-
-  // Filter suppliers - only show those with payments
-  const filteredSuppliers = useMemo(() => {
-    if (!suppliers) return [];
-    return suppliers.filter(supplier => {
-      const hasPayments = (supplier.payment_1 || 0) + (supplier.payment_2 || 0) + (supplier.payment_3 || 0) > 0;
-      if (!hasPayments) return false;
-      
-      const matchesSearch = supplier.name?.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesAgency = agencyFilter === "all" || 
-        supplier.agency_id_1 === agencyFilter ||
-        supplier.agency_id_2 === agencyFilter ||
-        supplier.agency_id_3 === agencyFilter;
-      return matchesSearch && matchesAgency;
-    });
-  }, [suppliers, searchQuery, agencyFilter]);
-
-  // Combined expenses list (suppliers + team with payments)
-  const combinedExpenses = useMemo(() => {
-    const expenses: Array<{
-      id: string;
-      name: string;
-      type: 'supplier' | 'campaigner';
-      totalPayment: number;
-      details?: string;
-      originalId: string;
-    }> = [];
-
-    // Add suppliers with payments
-    filteredSuppliers.forEach(supplier => {
-      const total = (supplier.payment_1 || 0) + (supplier.payment_2 || 0) + (supplier.payment_3 || 0);
-      if (total > 0) {
-        expenses.push({
-          id: supplier.id,
-          originalId: supplier.id,
-          name: supplier.name,
-          type: 'supplier',
-          totalPayment: total,
-        });
-      }
-    });
-
-    // Add campaigner payments - aggregate by campaigner
-    if (campaignerPayments && campaignerPayments.length > 0) {
-      const campaignerTotals = new Map<string, { name: string; total: number; clients: string[] }>();
-      
-      campaignerPayments.forEach(payment => {
-        if (!payment.campaigner_payment || payment.campaigner_payment <= 0) return;
-        
-        const campaignerId = payment.campaigner_id;
-        const campaignerName = (payment.campaigners as any)?.full_name || 'קמפיינר לא ידוע';
-        const clientName = (payment.clients as any)?.name || '';
-        const clientAgencyId = (payment.clients as any)?.agency_id;
-        
-        // Filter by agency if needed
-        if (agencyFilter !== "all" && clientAgencyId !== agencyFilter) {
-          return;
-        }
-        
-        // Filter by search
-        if (searchQuery && !campaignerName.toLowerCase().includes(searchQuery.toLowerCase())) {
-          return;
-        }
-        
-        const existing = campaignerTotals.get(campaignerId);
-        if (existing) {
-          existing.total += payment.campaigner_payment || 0;
-          if (clientName) existing.clients.push(clientName);
-        } else {
-          campaignerTotals.set(campaignerId, {
-            name: campaignerName,
-            total: payment.campaigner_payment || 0,
-            clients: clientName ? [clientName] : []
-          });
-        }
-      });
-      
-      campaignerTotals.forEach((data, id) => {
-        if (data.total > 0) {
-          expenses.push({
-            id: `campaigner-${id}`,
-            originalId: id,
-            name: data.name,
-            type: 'campaigner',
-            totalPayment: data.total,
-            details: `${data.clients.length} לקוחות`
-          });
-        }
-      });
-    }
-
-    return expenses.sort((a, b) => b.totalPayment - a.totalPayment);
-  }, [filteredSuppliers, campaignerPayments, agencyFilter, searchQuery]);
-
-  // Calculate paid amounts for summary
-  const paidExpensesTotal = useMemo(() => {
-    return expensePayments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
-  }, [expensePayments]);
-
-  const receivedIncomeTotal = useMemo(() => {
-    return incomePayments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
-  }, [incomePayments]);
 
   const formatCurrency = (amount: number | null) => {
     if (amount === null || amount === undefined) return "-";
@@ -842,8 +379,6 @@ export default function AccountingIntegrations() {
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
       active: { variant: "default", label: "פעיל" },
-      inactive: { variant: "secondary", label: "לא פעיל" },
-      pending: { variant: "outline", label: "ממתין" },
       onboarding: { variant: "outline", label: "בקליטה" },
       paused: { variant: "secondary", label: "מושהה" },
       ended: { variant: "destructive", label: "סיים" },
@@ -852,64 +387,27 @@ export default function AccountingIntegrations() {
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-  const updateClientStatus = useMutation({
-    mutationFn: async ({ clientId, status }: { clientId: string; status: string }) => {
-      const { error } = await supabase
-        .from("clients")
-        .update({ status: status as any })
-        .eq("id", clientId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["accounting-clients"] });
-      queryClient.invalidateQueries({ queryKey: ["clients"] });
-      queryClient.invalidateQueries({ queryKey: ["finance-summary"] });
-      toast.success("סטטוס הלקוח עודכן בהצלחה");
-    },
-    onError: () => {
-      toast.error("שגיאה בעדכון סטטוס הלקוח");
-    },
-  });
-
   const profit = (financeData?.income || 0) - (financeData?.expenses || 0);
-
   const selectedMonthLabel = monthOptions.find(m => m.value === selectedMonth)?.label || selectedMonth;
 
-  // Handle expense edit click
-  const handleEditExpense = async (expense: { type: 'supplier' | 'campaigner'; originalId: string }) => {
-    if (expense.type === 'supplier') {
-      const supplier = suppliers?.find(s => s.id === expense.originalId);
-      if (supplier) setEditingSupplier(supplier);
-    } else {
-      // Fetch full campaigner data
-      const { data: campaignerData } = await supabase
-        .from("campaigners")
-        .select(`
-          id, full_name, phone, email, folder_link, notes, active, role, whatsapp_group_id,
-          campaigner_agencies (agencies (name))
-        `)
-        .eq("id", expense.originalId)
-        .single();
-      if (campaignerData) setEditingCampaigner(campaignerData);
-    }
-  };
+  // Totals
+  const totalRetainer = filteredClients.reduce((sum, c) => sum + (c.retainer || 0), 0);
+  const totalExpenses = filteredClients.reduce((sum, c) => sum + (clientExpensesMap.get(c.id) || 0), 0);
+  const totalOneTime = filteredClients.reduce((sum, c) => {
+    const items = clientOneTimeMap.get(c.id) || [];
+    return sum + items.reduce((s: number, i: any) => s + (i.amount || 0), 0);
+  }, 0);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">הנהלת חשבונות</h1>
-          <p className="text-muted-foreground mt-2">
-            ניהול פיננסי של לקוחות, ספקים וצוות
-          </p>
+          <p className="text-muted-foreground mt-2">ניהול פיננסי של לקוחות, ספקים וצוות</p>
         </div>
-        <Button variant="outline" onClick={() => setHistoryDialogOpen(true)}>
-          <History className="h-4 w-4 ml-2" />
-          היסטוריית תשלומים
-        </Button>
       </div>
 
-      {/* Financial Summary */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -917,12 +415,8 @@ export default function AccountingIntegrations() {
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {formatCurrency(financeData?.income || 0)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              התקבל ב{selectedMonthLabel}: {formatCurrency(receivedIncomeTotal)}
-            </p>
+            <div className="text-2xl font-bold text-green-600">{formatCurrency(financeData?.income || 0)}</div>
+            <p className="text-xs text-muted-foreground mt-1">חד פעמי ב{selectedMonthLabel}: {formatCurrency(totalOneTime)}</p>
           </CardContent>
         </Card>
 
@@ -932,12 +426,7 @@ export default function AccountingIntegrations() {
             <TrendingDown className="h-4 w-4 text-red-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              {formatCurrency(financeData?.expenses || 0)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              שולם ב{selectedMonthLabel}: {formatCurrency(paidExpensesTotal)}
-            </p>
+            <div className="text-2xl font-bold text-red-600">{formatCurrency(financeData?.expenses || 0)}</div>
           </CardContent>
         </Card>
 
@@ -957,58 +446,61 @@ export default function AccountingIntegrations() {
       {/* Filters */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex flex-wrap gap-3 items-center">
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="w-full md:w-[200px]">
-                <SelectValue placeholder="בחר חודש" />
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {monthOptions.map((month) => (
-                  <SelectItem key={month.value} value={month.value}>
-                    {month.label}
-                  </SelectItem>
+                  <SelectItem key={month.value} value={month.value}>{month.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
-            <Select value={agencyFilter} onValueChange={setAgencyFilter}>
-              <SelectTrigger className="w-full md:w-[200px]">
-                <Building2 className="h-4 w-4 ml-2" />
-                <SelectValue placeholder="כל הסוכנויות" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">כל הסוכנויות</SelectItem>
-                {agencies?.map((agency) => (
-                  <SelectItem key={agency.id} value={agency.id}>
-                    {agency.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-            {selectedTab === "clients" && (
-              <Select value={clientStatusFilter} onValueChange={setClientStatusFilter}>
-                <SelectTrigger className="w-full md:w-[220px]">
-                  <Users className="h-4 w-4 ml-2" />
-                  <SelectValue placeholder="סטטוס לקוחות" />
+            {agencies && agencies.length > 1 && (
+              <Select value={agencyFilter} onValueChange={setAgencyFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="כל הסוכנויות" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="active_relevant">פעילים + עזבו ב-30 יום</SelectItem>
-                  <SelectItem value="all">כל הסטטוסים</SelectItem>
-                  <SelectItem value="active_onboarding">פעילים + בקליטה</SelectItem>
-                  <SelectItem value="active">פעילים בלבד</SelectItem>
-                  <SelectItem value="onboarding">בקליטה</SelectItem>
-                  <SelectItem value="paused">מושהים</SelectItem>
-                  <SelectItem value="ended">סיימו</SelectItem>
+                  <SelectItem value="all">כל הסוכנויות</SelectItem>
+                  {agencies.map((agency) => (
+                    <SelectItem key={agency.id} value={agency.id}>{agency.name}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             )}
+
+            <Select value={clientStatusFilter} onValueChange={setClientStatusFilter}>
+              <SelectTrigger className="w-[200px]">
+                <Users className="h-4 w-4 ml-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">כל הלקוחות</SelectItem>
+                <SelectItem value="active_relevant">פעילים + עזבו ב-30 יום</SelectItem>
+                <SelectItem value="active_onboarding">פעילים + בקליטה</SelectItem>
+                <SelectItem value="active">פעילים בלבד</SelectItem>
+                <SelectItem value="onboarding">בקליטה</SelectItem>
+                <SelectItem value="paused">מושהים</SelectItem>
+                <SelectItem value="ended">סיימו</SelectItem>
+              </SelectContent>
+            </Select>
             
             <Badge variant="secondary" className="whitespace-nowrap">
               {filteredClients.length} לקוחות
             </Badge>
+
+            <Button size="sm" onClick={() => {
+              setOneTimeIncomeForm({ client_id: "", product_name: "", amount: "", income_date: "", notes: "" });
+              setAddOneTimeIncomeOpen(true);
+            }}>
+              <Plus className="h-4 w-4 ml-2" />
+              הכנסה חד פעמית
+            </Button>
             
-            <div className="relative flex-1">
+            <div className="relative flex-1 min-w-[150px]">
               <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="חיפוש..."
@@ -1021,375 +513,170 @@ export default function AccountingIntegrations() {
         </CardContent>
       </Card>
 
-      {/* Tabs */}
-      <Tabs value={selectedTab} onValueChange={setSelectedTab} dir="rtl">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="clients" className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            לקוחות ({filteredClients.length})
-          </TabsTrigger>
-          <TabsTrigger value="expenses" className="flex items-center gap-2">
-            <Package className="h-4 w-4" />
-            הוצאות ({combinedExpenses.length})
-          </TabsTrigger>
-          <TabsTrigger value="one_time" className="flex items-center gap-2">
-            <Receipt className="h-4 w-4" />
-            הכנסות חד פעמי ({oneTimeIncomes?.length || 0})
-          </TabsTrigger>
-        </TabsList>
+      {/* Unified Client Table */}
+      <Card>
+        <CardContent className="pt-6">
+          {clientsLoading ? (
+            <div className="space-y-4">
+              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-right">שם לקוח</TableHead>
+                    <TableHead className="text-right">סוכנות</TableHead>
+                    <TableHead className="text-right">צוות</TableHead>
+                    <TableHead className="text-right">ריטיינר</TableHead>
+                    <TableHead className="text-right">הוצאות קבועות</TableHead>
+                    <TableHead className="text-right">הכנסה חד פעמית</TableHead>
+                    <TableHead className="text-right">סטטוס</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredClients.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground">
+                        לא נמצאו לקוחות
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredClients.map((client) => {
+                      const clientTeam = campaignerPayments?.filter(p => p.client_id === client.id) || [];
+                      const teamCount = clientTeam.length;
+                      const teamCost = clientTeam.reduce((sum, p) => sum + (p.campaigner_payment || 0), 0);
+                      const fixedExpenses = clientExpensesMap.get(client.id) || 0;
+                      const oneTimeItems = clientOneTimeMap.get(client.id) || [];
+                      const oneTimeTotal = oneTimeItems.reduce((s: number, i: any) => s + (i.amount || 0), 0);
 
-        {/* Clients Tab */}
-        <TabsContent value="clients">
-          <Card>
-            <CardContent className="pt-6">
-              {clientsLoading ? (
-                <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-right">שם לקוח</TableHead>
-                        <TableHead className="text-right">סוכנות</TableHead>
-                        <TableHead className="text-right">צוות</TableHead>
-                        <TableHead className="text-right">ריטיינר חודשי</TableHead>
-                        <TableHead className="text-right">תקציב חודשי</TableHead>
-                        <TableHead className="text-right">סטטוס</TableHead>
-                        <TableHead className="text-right">התקבל תשלום</TableHead>
-                        <TableHead className="text-right">קישור תשלום</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredClients.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={8} className="text-center text-muted-foreground">
-                            לא נמצאו לקוחות
+                      return (
+                        <TableRow key={client.id}>
+                          <TableCell className="font-medium text-right">
+                            <Button
+                              variant="link"
+                              className="p-0 h-auto font-medium text-foreground hover:underline"
+                              onClick={() => setEditingClient(client)}
+                            >
+                              {client.name}
+                              <Pencil className="h-3 w-3 mr-1 opacity-50" />
+                            </Button>
                           </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredClients.map((client) => {
-                          const isPaid = isIncomeReceived(client.id);
-                          const payment = getIncomePayment(client.id);
-                          const clientTeam = campaignerPayments?.filter(p => p.client_id === client.id) || [];
-                          const teamCount = clientTeam.length;
-                          const teamCost = clientTeam.reduce((sum, p) => sum + (p.campaigner_payment || 0), 0);
-                          return (
-                            <TableRow key={client.id}>
-                              <TableCell className="font-medium text-right">
-                                <Button
-                                  variant="link"
-                                  className="p-0 h-auto font-medium text-foreground hover:underline"
-                                  onClick={() => setEditingClient(client)}
-                                >
-                                  {client.name}
-                                  <Pencil className="h-3 w-3 mr-1 opacity-50" />
-                                </Button>
-                              </TableCell>
-                              <TableCell className="text-right">{(client.agencies as any)?.name || "-"}</TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-xs h-auto p-1"
-                                  onClick={() => setEditingClient(client)}
-                                >
-                                  {teamCount > 0 ? (
-                                    <span className="flex items-center gap-1">
-                                      <Users className="h-3 w-3" />
-                                      {teamCount} ({formatCurrency(teamCost)})
-                                    </span>
-                                  ) : (
-                                    <span className="text-muted-foreground">+ שייך</span>
-                                  )}
-                                </Button>
-                              </TableCell>
-                              <TableCell className="text-right">{formatCurrency(client.retainer)}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(client.monthly_budget)}</TableCell>
-                              <TableCell className="text-right">
-                                <Select
-                                  value={client.status}
-                                  onValueChange={(value) => updateClientStatus.mutate({ clientId: client.id, status: value })}
-                                >
-                                  <SelectTrigger className="h-7 w-[100px] text-xs border-none bg-transparent p-0 focus:ring-0 focus:ring-offset-0">
-                                    <SelectValue>{getStatusBadge(client.status)}</SelectValue>
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-popover z-[9999]">
-                                    {clientStatusOptions.map((opt) => (
-                                      <SelectItem key={opt.value} value={opt.value}>
-                                        <div className="flex items-center gap-2">
-                                          <span className={`h-2 w-2 rounded-full ${opt.color}`} />
-                                          {opt.label}
-                                        </div>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {isPaid ? (
-                                  <div className="flex items-center gap-2">
-                                    <Badge variant="default" className="bg-green-600">
-                                      <Check className="h-3 w-3 ml-1" />
-                                      התקבל
-                                    </Badge>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => payment && deleteIncomePayment.mutate(payment.id)}
-                                    >
-                                      <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setConfirmDialog({
-                                      open: true,
-                                      type: 'income',
-                                      id: client.id,
-                                      name: client.name,
-                                      amount: client.retainer || 0
-                                    })}
-                                    disabled={!client.retainer}
-                                  >
-                                    סמן התקבל
-                                  </Button>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => setPaymentLinkClient({
-                                    id: client.id,
-                                    name: client.name,
-                                    email: client.email || undefined,
-                                    phone: client.phone || undefined,
-                                    retainer: client.retainer || undefined
-                                  })}
-                                  disabled={!client.retainer}
-                                  className="gap-1"
-                                >
-                                  <CreditCard className="h-4 w-4" />
-                                  שלח קישור
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Expenses Tab - Combined Suppliers & Team */}
-        <TabsContent value="expenses">
-          <Card>
-            <CardContent className="pt-6">
-              {(suppliersLoading || campaignerPaymentsLoading) ? (
-                <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-right">שם</TableHead>
-                        <TableHead className="text-right">סוג</TableHead>
-                        <TableHead className="text-right">פרטים</TableHead>
-                        <TableHead className="text-right">סכום לתשלום</TableHead>
-                        <TableHead className="text-right">סטטוס תשלום</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {combinedExpenses.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center text-muted-foreground">
-                            לא נמצאו הוצאות
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        combinedExpenses.map((expense) => {
-                          const isPaid = isExpensePaid(expense.originalId, expense.type);
-                          const payment = getExpensePayment(expense.originalId, expense.type);
-                          return (
-                            <TableRow key={expense.id}>
-                              <TableCell className="font-medium text-right">
-                                <Button
-                                  variant="link"
-                                  className="p-0 h-auto font-medium text-foreground hover:underline"
-                                  onClick={() => handleEditExpense(expense)}
-                                >
-                                  {expense.name}
-                                  <Pencil className="h-3 w-3 mr-1 opacity-50" />
-                                </Button>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <Badge variant={expense.type === 'campaigner' ? 'default' : 'outline'}>
-                                  {expense.type === 'supplier' ? 'ספק' : 'קמפיינר'}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right text-muted-foreground">
-                                {expense.details || '-'}
-                              </TableCell>
-                              <TableCell className="text-right font-medium text-red-600">
-                                {formatCurrency(expense.totalPayment)}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {isPaid ? (
-                                  <div className="flex items-center gap-2">
-                                    <Badge variant="default" className="bg-green-600">
-                                      <Check className="h-3 w-3 ml-1" />
-                                      שולם
-                                    </Badge>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => payment && deleteExpensePayment.mutate(payment.id)}
-                                    >
-                                      <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setConfirmDialog({
-                                      open: true,
-                                      type: 'expense',
-                                      id: expense.originalId,
-                                      name: expense.name,
-                                      amount: expense.totalPayment,
-                                      expenseType: expense.type
-                                    })}
-                                  >
-                                    סמן שולם
-                                  </Button>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* One-Time Income Tab */}
-        <TabsContent value="one_time">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">הכנסות חד פעמיות</h3>
-                <Button onClick={() => {
-                  setOneTimeIncomeForm({ client_id: "", product_name: "", amount: "", payment_month: selectedMonth, notes: "", supplier_id: "", expense_amount: "" });
-                  setEditingOneTimeIncome(null);
-                  setAddOneTimeIncomeOpen(true);
-                }}>
-                  <Plus className="h-4 w-4 ml-2" />
-                  הוסף הכנסה
-                </Button>
-              </div>
-              {oneTimeIncomesLoading ? (
-                <div className="space-y-4">
-                  {[...Array(3)].map((_, i) => (
-                    <Skeleton key={i} className="h-12 w-full" />
-                  ))}
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-right">שם מוצר/שירות</TableHead>
-                        <TableHead className="text-right">לקוח</TableHead>
-                        <TableHead className="text-right">סכום</TableHead>
-                        <TableHead className="text-right">ספק</TableHead>
-                        <TableHead className="text-right">הוצאה</TableHead>
-                        <TableHead className="text-right">חודש</TableHead>
-                        <TableHead className="text-right">הערות</TableHead>
-                        <TableHead className="text-right">סטטוס תשלום</TableHead>
-                        <TableHead className="text-right">פעולות</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(!oneTimeIncomes || oneTimeIncomes.length === 0) ? (
-                        <TableRow>
-                          <TableCell colSpan={9} className="text-center text-muted-foreground">
-                            אין הכנסות חד פעמיות לחודש זה
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        oneTimeIncomes.map((income: any) => (
-                          <TableRow key={income.id}>
-                            <TableCell className="font-medium text-right">{income.product_name}</TableCell>
-                            <TableCell className="text-right">{income.clients?.name || '-'}</TableCell>
-                            <TableCell className="text-right font-medium text-green-600">{formatCurrency(income.amount)}</TableCell>
-                            <TableCell className="text-right">{income.suppliers?.name || '-'}</TableCell>
-                            <TableCell className="text-right">{income.expense_amount ? formatCurrency(income.expense_amount) : '-'}</TableCell>
-                            <TableCell className="text-right">{income.payment_month}</TableCell>
-                            <TableCell className="text-right text-muted-foreground">{income.notes || '-'}</TableCell>
-                            <TableCell className="text-right">
-                              {income.is_paid ? (
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="default" className="bg-green-600">
-                                    <Check className="h-3 w-3 ml-1" />
-                                    שולם
-                                  </Badge>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => toggleOneTimeIncomePaid.mutate({ id: income.id, is_paid: false })}
-                                  >
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                                </div>
+                          <TableCell className="text-right">{(client.agencies as any)?.name || "-"}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs h-auto p-1"
+                              onClick={() => setEditingClient(client)}
+                            >
+                              {teamCount > 0 ? (
+                                <span className="flex items-center gap-1">
+                                  <Users className="h-3 w-3" />
+                                  {teamCount} ({formatCurrency(teamCost)})
+                                </span>
                               ) : (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => toggleOneTimeIncomePaid.mutate({ id: income.id, is_paid: true })}
-                                >
-                                  סמן שולם
-                                </Button>
+                                <span className="text-muted-foreground">+ שייך</span>
                               )}
-                            </TableCell>
-                            <TableCell className="text-right">
+                            </Button>
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            {formatCurrency(client.retainer)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {fixedExpenses > 0 ? (
+                              <span className="text-red-600 font-medium">{formatCurrency(fixedExpenses)}</span>
+                            ) : (
+                              <span className="text-muted-foreground">-</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {oneTimeItems.length > 0 ? (
+                              <div className="space-y-1">
+                                {oneTimeItems.map((oti: any) => (
+                                  <div key={oti.id} className="flex items-center gap-2 text-sm">
+                                    <span className="text-green-600 font-medium">{formatCurrency(oti.amount)}</span>
+                                    <span className="text-muted-foreground truncate max-w-[120px]">{oti.product_name}</span>
+                                    {oti.payment_month && (
+                                      <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                                        <CalendarIcon className="h-3 w-3" />
+                                        {oti.payment_month}
+                                      </span>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-5 w-5 p-0"
+                                      onClick={() => deleteOneTimeIncome.mutate(oti.id)}
+                                    >
+                                      <Trash2 className="h-3 w-3 text-destructive" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => deleteOneTimeIncome.mutate(income.id)}
+                                className="text-xs h-auto p-1 text-muted-foreground"
+                                onClick={() => {
+                                  setOneTimeIncomeForm({
+                                    client_id: client.id,
+                                    product_name: "",
+                                    amount: "",
+                                    income_date: selectedMonth,
+                                    notes: "",
+                                  });
+                                  setAddOneTimeIncomeOpen(true);
+                                }}
                               >
-                                <Trash2 className="h-4 w-4 text-destructive" />
+                                <Plus className="h-3 w-3 ml-1" />
+                                הוסף
                               </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Select
+                              value={client.status}
+                              onValueChange={(value) => updateClientStatus.mutate({ clientId: client.id, status: value })}
+                            >
+                              <SelectTrigger className="h-7 w-[100px] text-xs border-none bg-transparent p-0 focus:ring-0 focus:ring-offset-0">
+                                <SelectValue>{getStatusBadge(client.status)}</SelectValue>
+                              </SelectTrigger>
+                              <SelectContent className="bg-popover z-[9999]">
+                                {clientStatusOptions.map((opt) => (
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    <div className="flex items-center gap-2">
+                                      <span className={`h-2 w-2 rounded-full ${opt.color}`} />
+                                      {opt.label}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                  {/* Totals Row */}
+                  {filteredClients.length > 0 && (
+                    <TableRow className="bg-muted/50 font-bold">
+                      <TableCell className="text-right">סה״כ</TableCell>
+                      <TableCell />
+                      <TableCell className="text-right">{formatCurrency(totalExpenses)}</TableCell>
+                      <TableCell className="text-right">{formatCurrency(totalRetainer)}</TableCell>
+                      <TableCell className="text-right text-red-600">{formatCurrency(totalExpenses)}</TableCell>
+                      <TableCell className="text-right text-green-600">{formatCurrency(totalOneTime)}</TableCell>
+                      <TableCell />
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Add One-Time Income Dialog */}
       <Dialog open={addOneTimeIncomeOpen} onOpenChange={setAddOneTimeIncomeOpen}>
@@ -1430,8 +717,8 @@ export default function AccountingIntegrations() {
               />
             </div>
             <div className="space-y-2">
-              <Label>חודש שיוך</Label>
-              <Select value={oneTimeIncomeForm.payment_month} onValueChange={(val) => setOneTimeIncomeForm(f => ({...f, payment_month: val}))}>
+              <Label>תאריך / חודש שיוך</Label>
+              <Select value={oneTimeIncomeForm.income_date} onValueChange={(val) => setOneTimeIncomeForm(f => ({...f, income_date: val}))}>
                 <SelectTrigger>
                   <SelectValue placeholder="בחר חודש" />
                 </SelectTrigger>
@@ -1443,33 +730,11 @@ export default function AccountingIntegrations() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>ספק (אופציונלי)</Label>
-              <Select value={oneTimeIncomeForm.supplier_id} onValueChange={(val) => setOneTimeIncomeForm(f => ({...f, supplier_id: val}))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="בחר ספק" />
-                </SelectTrigger>
-                <SelectContent>
-                  {suppliers?.map((supplier: any) => (
-                    <SelectItem key={supplier.id} value={supplier.id}>{supplier.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>סכום הוצאה לספק (אופציונלי)</Label>
-              <Input
-                type="number"
-                value={oneTimeIncomeForm.expense_amount}
-                onChange={(e) => setOneTimeIncomeForm(f => ({...f, expense_amount: e.target.value}))}
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>הערות</Label>
+              <Label>הערות (אופציונלי)</Label>
               <Input
                 value={oneTimeIncomeForm.notes}
                 onChange={(e) => setOneTimeIncomeForm(f => ({...f, notes: e.target.value}))}
-                placeholder="הערות (אופציונלי)"
+                placeholder="הערות"
               />
             </div>
           </div>
@@ -1477,7 +742,7 @@ export default function AccountingIntegrations() {
             <Button variant="outline" onClick={() => setAddOneTimeIncomeOpen(false)}>ביטול</Button>
             <Button 
               onClick={() => {
-                if (!oneTimeIncomeForm.client_id || !oneTimeIncomeForm.product_name || !oneTimeIncomeForm.amount || !oneTimeIncomeForm.payment_month) {
+                if (!oneTimeIncomeForm.client_id || !oneTimeIncomeForm.product_name || !oneTimeIncomeForm.amount || !oneTimeIncomeForm.income_date) {
                   toast.error("נא למלא את כל השדות");
                   return;
                 }
@@ -1485,10 +750,8 @@ export default function AccountingIntegrations() {
                   client_id: oneTimeIncomeForm.client_id,
                   product_name: oneTimeIncomeForm.product_name,
                   amount: parseFloat(oneTimeIncomeForm.amount),
-                  payment_month: oneTimeIncomeForm.payment_month,
+                  payment_month: oneTimeIncomeForm.income_date,
                   notes: oneTimeIncomeForm.notes,
-                  supplier_id: oneTimeIncomeForm.supplier_id || undefined,
-                  expense_amount: oneTimeIncomeForm.expense_amount ? parseFloat(oneTimeIncomeForm.expense_amount) : undefined,
                 });
               }}
               disabled={createOneTimeIncome.isPending}
@@ -1498,189 +761,6 @@ export default function AccountingIntegrations() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Confirm Payment Dialog */}
-      <Dialog open={!!confirmDialog?.open} onOpenChange={(open) => !open && setConfirmDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {confirmDialog?.type === 'expense' ? 'אישור תשלום' : 'אישור קבלת תשלום'}
-            </DialogTitle>
-            <DialogDescription>
-              {confirmDialog?.type === 'expense' 
-                ? `האם לסמן תשלום עבור ${confirmDialog?.name}?`
-                : `האם לסמן שהתקבל תשלום מ${confirmDialog?.name}?`
-              }
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <div className="flex justify-between items-center p-4 bg-muted rounded-lg">
-              <span className="font-medium">סכום:</span>
-              <span className="text-xl font-bold">{formatCurrency(confirmDialog?.amount || 0)}</span>
-            </div>
-            <div className="flex justify-between items-center p-4 mt-2">
-              <span className="font-medium">עבור חודש:</span>
-              <span>{selectedMonthLabel}</span>
-            </div>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setConfirmDialog(null)}>
-              ביטול
-            </Button>
-            <Button
-              onClick={() => {
-                if (confirmDialog?.type === 'expense' && confirmDialog.expenseType) {
-                  createExpensePayment.mutate({
-                    expense_type: confirmDialog.expenseType,
-                    expense_id: confirmDialog.id,
-                    expense_name: confirmDialog.name,
-                    amount: confirmDialog.amount
-                  });
-                } else if (confirmDialog?.type === 'income') {
-                  createIncomePayment.mutate({
-                    client_id: confirmDialog.id,
-                    client_name: confirmDialog.name,
-                    amount: confirmDialog.amount
-                  });
-                }
-              }}
-              disabled={createExpensePayment.isPending || createIncomePayment.isPending}
-            >
-              {confirmDialog?.type === 'expense' ? 'אישור תשלום' : 'אישור קבלה'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Payment History Dialog */}
-      <Dialog open={historyDialogOpen} onOpenChange={setHistoryDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>היסטוריית תשלומים</DialogTitle>
-          </DialogHeader>
-          <Tabs defaultValue="expenses" dir="rtl">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="expenses">תשלומים ששולמו</TabsTrigger>
-              <TabsTrigger value="incomes">תשלומים שהתקבלו</TabsTrigger>
-            </TabsList>
-            <TabsContent value="expenses">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-right">שם</TableHead>
-                    <TableHead className="text-right">סוג</TableHead>
-                    <TableHead className="text-right">סכום</TableHead>
-                    <TableHead className="text-right">חודש</TableHead>
-                    <TableHead className="text-right">תאריך תשלום</TableHead>
-                    <TableHead className="text-right">פעולות</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paymentHistory?.expenses.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground">
-                        אין היסטוריית תשלומים
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paymentHistory?.expenses.map((payment: any) => (
-                      <TableRow key={payment.id}>
-                        <TableCell className="font-medium text-right">{payment.expense_name}</TableCell>
-                        <TableCell className="text-right">
-                          <Badge variant={payment.expense_type === 'campaigner' ? 'default' : 'outline'}>
-                            {payment.expense_type === 'supplier' ? 'ספק' : 'קמפיינר'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right">{formatCurrency(payment.amount)}</TableCell>
-                        <TableCell className="text-right">{payment.payment_month}</TableCell>
-                        <TableCell className="text-right">
-                          {format(new Date(payment.paid_at), "dd/MM/yyyy HH:mm", { locale: he })}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteExpensePayment.mutate(payment.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TabsContent>
-            <TabsContent value="incomes">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-right">לקוח</TableHead>
-                    <TableHead className="text-right">סכום</TableHead>
-                    <TableHead className="text-right">חודש</TableHead>
-                    <TableHead className="text-right">תאריך קבלה</TableHead>
-                    <TableHead className="text-right">פעולות</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paymentHistory?.incomes.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground">
-                        אין היסטוריית תשלומים
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paymentHistory?.incomes.map((payment: any) => (
-                      <TableRow key={payment.id}>
-                        <TableCell className="font-medium text-right">{payment.client_name}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(payment.amount)}</TableCell>
-                        <TableCell className="text-right">{payment.payment_month}</TableCell>
-                        <TableCell className="text-right">
-                          {format(new Date(payment.received_at), "dd/MM/yyyy HH:mm", { locale: he })}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteIncomePayment.mutate(payment.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </TabsContent>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
-
-      {/* Payment Link Dialog */}
-      <CreatePaymentLinkDialog
-        open={!!paymentLinkClient}
-        onOpenChange={(open) => !open && setPaymentLinkClient(null)}
-        client={paymentLinkClient}
-      />
-
-      {/* Supplier Invoices Dialog */}
-      {editingSupplier && (
-        <SupplierInvoicesDialog
-          supplier={editingSupplier}
-          open={!!editingSupplier}
-          onOpenChange={(open) => !open && setEditingSupplier(null)}
-        />
-      )}
-
-      {/* Edit Campaigner Dialog */}
-      {editingCampaigner && (
-        <EditCampaignerDialog
-          campaigner={editingCampaigner}
-          open={!!editingCampaigner}
-          onOpenChange={(open) => !open && setEditingCampaigner(null)}
-        />
-      )}
 
       {/* Edit Client Dialog */}
       {editingClient && (
