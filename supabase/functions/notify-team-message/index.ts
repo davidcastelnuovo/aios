@@ -230,7 +230,7 @@ Deno.serve(async (req) => {
         }
       } catch (err) {
         console.error(`❌ Error ${label}:`, err)
-        errors.push(`${label}: ${err.message}`)
+        errors.push(`${label}: ${(err as Error).message}`)
       }
     }
 
