@@ -3595,6 +3595,8 @@ export type Database = {
           id: string
           is_active: boolean | null
           is_percentage: boolean | null
+          last_triggered_at: string | null
+          last_triggered_data: Json | null
           metric: string
           name: string
           operator: string
@@ -3610,6 +3612,8 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_percentage?: boolean | null
+          last_triggered_at?: string | null
+          last_triggered_data?: Json | null
           metric: string
           name: string
           operator: string
@@ -3625,6 +3629,8 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_percentage?: boolean | null
+          last_triggered_at?: string | null
+          last_triggered_data?: Json | null
           metric?: string
           name?: string
           operator?: string

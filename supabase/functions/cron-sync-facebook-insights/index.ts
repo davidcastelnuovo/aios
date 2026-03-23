@@ -347,6 +347,131 @@ Deno.serve(async (req) => {
         console.log(`✅ Successfully synced ${insights.length} records for ${table.name}`);
         results.synced++;
 
+        // === Check report_alerts and trigger automations ===
+        try {
+          const { data: alerts } = await supabase
+            .from('report_alerts')
+            .select('*')
+            .eq('table_id', table.id)
+            .eq('tenant_id', table.tenant_id)
+            .eq('is_active', true);
+
+          if (alerts && alerts.length > 0) {
+            console.log(`🔔 Checking ${alerts.length} active alerts for ${table.name}`);
+
+            // Aggregate campaign data for alert evaluation
+            const campaignAggregates: Record<string, { spend: number; leads: number; cost_per_lead: number; impressions: number; clicks: number; effective_status: string; campaign_name: string }> = {};
+            for (const insight of insights) {
+              if (!campaignAggregates[insight.campaign_id]) {
+                campaignAggregates[insight.campaign_id] = { spend: 0, leads: 0, cost_per_lead: 0, impressions: 0, clicks: 0, effective_status: insight.effective_status || '', campaign_name: insight.campaign_name };
+              }
+              const agg = campaignAggregates[insight.campaign_id];
+              agg.spend += insight.spend;
+              agg.leads += insight.leads;
+              agg.impressions += insight.impressions;
+              agg.clicks += insight.clicks;
+              agg.effective_status = insight.effective_status || agg.effective_status;
+            }
+            // Compute CPL
+            for (const cid of Object.keys(campaignAggregates)) {
+              const agg = campaignAggregates[cid];
+              agg.cost_per_lead = agg.leads > 0 ? agg.spend / agg.leads : 0;
+            }
+
+            for (const alert of alerts) {
+              // Rate-limit: once per 24h per alert
+              if (alert.last_triggered_at) {
+                const lastTriggered = new Date(alert.last_triggered_at);
+                const hoursSince = (Date.now() - lastTriggered.getTime()) / (1000 * 60 * 60);
+                if (hoursSince < 24) {
+                  console.log(`⏭️ Alert "${alert.name}" already triggered ${hoursSince.toFixed(1)}h ago, skipping`);
+                  continue;
+                }
+              }
+
+              // Evaluate alert against each campaign
+              for (const [campaignId, agg] of Object.entries(campaignAggregates)) {
+                const metric = alert.metric; // e.g. 'cost_per_lead', 'spend', 'effective_status'
+                let currentValue: number | string = 0;
+
+                if (metric === 'effective_status') {
+                  // Status-based alert: check for blocked/paused campaigns
+                  const problemStatuses = ['DISAPPROVED', 'WITH_ISSUES', 'PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED'];
+                  if (!problemStatuses.includes(agg.effective_status)) continue;
+                  currentValue = agg.effective_status;
+                } else {
+                  currentValue = (agg as any)[metric] || 0;
+                  const threshold = alert.threshold;
+                  const op = alert.operator; // '>', '<', '>=', '<='
+                  let triggered = false;
+                  if (op === '>' && (currentValue as number) > threshold) triggered = true;
+                  if (op === '<' && (currentValue as number) < threshold) triggered = true;
+                  if (op === '>=' && (currentValue as number) >= threshold) triggered = true;
+                  if (op === '<=' && (currentValue as number) <= threshold) triggered = true;
+                  if (!triggered) continue;
+                }
+
+                console.log(`🚨 Alert "${alert.name}" triggered for campaign "${agg.campaign_name}" (${metric}: ${currentValue})`);
+
+                // Get table name for context
+                const tableName = table.name;
+
+                // Determine alert type description
+                let alertType = metric === 'effective_status' ? 'חסימת קמפיין' : metric === 'cost_per_lead' ? 'עלייה בעלות לליד' : metric === 'spend' ? 'חריגה בהוצאות' : metric;
+
+                // Call trigger-automation
+                const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+                const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+                await fetch(`${supabaseUrl}/functions/v1/trigger-automation`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${supabaseKey}`,
+                  },
+                  body: JSON.stringify({
+                    trigger_type: 'report_alert_triggered',
+                    tenant_id: table.tenant_id,
+                    data: {
+                      alert_name: alert.name,
+                      campaign_name: agg.campaign_name,
+                      campaign_id: campaignId,
+                      alert_type: alertType,
+                      current_value: String(currentValue),
+                      previous_value: '',
+                      change_percent: '',
+                      table_name: tableName,
+                      metric,
+                      spend: agg.spend,
+                      leads: agg.leads,
+                      cost_per_lead: agg.cost_per_lead,
+                    },
+                  }),
+                });
+
+                // Update last_triggered_at
+                await supabase
+                  .from('report_alerts')
+                  .update({
+                    last_triggered_at: new Date().toISOString(),
+                    last_triggered_data: {
+                      campaign_name: agg.campaign_name,
+                      campaign_id: campaignId,
+                      metric,
+                      value: currentValue,
+                      triggered_at: new Date().toISOString(),
+                    },
+                  })
+                  .eq('id', alert.id);
+
+                // Break after first triggered campaign per alert to avoid spam
+                break;
+              }
+            }
+          }
+        } catch (alertError: any) {
+          console.error(`⚠️ Error checking alerts for ${table.name}:`, alertError.message);
+        }
+
       } catch (tableError: any) {
         console.error(`❌ Error syncing table ${table.name}:`, tableError.message);
         results.failed++;
