@@ -125,6 +125,7 @@ const App = () => (
         <TenantProvider>
           <ThemeProvider>
             <UIModeProvider>
+            <AIOSProvider>
             <AgencyProvider>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
