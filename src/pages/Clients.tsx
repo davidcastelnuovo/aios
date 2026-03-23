@@ -588,6 +588,10 @@ export default function Clients() {
           
           <div className="h-8 w-px bg-border"></div>
           
+          <Button variant="outline" onClick={handleExportToExcel}>
+            <Download className="ml-2 h-4 w-4" />
+            ייצוא לאקסל
+          </Button>
           <ImportClientsCSV />
           <ImportClientsSheet />
           <AddClientForm />
