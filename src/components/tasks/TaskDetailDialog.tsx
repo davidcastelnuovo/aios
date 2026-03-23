@@ -16,12 +16,13 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { he } from "date-fns/locale";
-import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search, ListTodo, ExternalLink } from "lucide-react";
+import { CalendarIcon, Save, Trash2, UserPlus, X, Send, Search, ListTodo, ExternalLink, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCurrentTenant } from "@/hooks/useCurrentTenant";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
@@ -636,21 +637,39 @@ export function TaskDetailDialog({
               <div className="space-y-2">
                 <Label>הוסף איש צוות למשימה</Label>
                 <div className="flex gap-2">
-                  <Select
-                    value={selectedCollaborator}
-                    onValueChange={setSelectedCollaborator}
-                  >
-                    <SelectTrigger className="flex-1">
-                      <SelectValue placeholder="בחר איש צוות" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableCollaborators?.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className={cn("flex-1 justify-between", !selectedCollaborator && "text-muted-foreground")}
+                      >
+                        {selectedCollaborator
+                          ? availableCollaborators?.find(c => c.id === selectedCollaborator)?.full_name || "בחר איש צוות"
+                          : "בחר איש צוות"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[250px] p-0 z-50" align="start">
+                      <Command>
+                        <CommandInput placeholder="חיפוש איש צוות..." />
+                        <CommandList>
+                          <CommandEmpty>לא נמצא</CommandEmpty>
+                          <CommandGroup>
+                            {availableCollaborators?.map((c) => (
+                              <CommandItem
+                                key={c.id}
+                                value={c.full_name}
+                                onSelect={() => setSelectedCollaborator(c.id)}
+                              >
+                                <Check className={cn("h-4 w-4 mr-2", selectedCollaborator === c.id ? "opacity-100" : "opacity-0")} />
+                                {c.full_name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                   <Button
                     onClick={() => addCollaborator.mutate(selectedCollaborator)}
                     disabled={!selectedCollaborator || addCollaborator.isPending}
