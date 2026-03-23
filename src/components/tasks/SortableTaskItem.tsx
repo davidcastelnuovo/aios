@@ -200,7 +200,7 @@ export function SortableTaskItem({ task, onToggleComplete, onClick, compact = fa
             </Badge>
           )}
 
-          {task.campaigners?.full_name && (
+          {task.campaigners?.full_name && !onUpdateCampaigner && (
             <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-0.5">
               <Megaphone className="h-3 w-3" />
               {task.campaigners.full_name}
