@@ -407,6 +407,32 @@ export default function Clients() {
     ? searchedClients?.filter(client => client.status === "active" || client.status === "onboarding")
     : searchedClients;
 
+  const handleExportToExcel = () => {
+    if (!visibleClients || visibleClients.length === 0) {
+      toast.error("אין לקוחות לייצוא");
+      return;
+    }
+    import("xlsx").then((XLSX) => {
+      const exportData = visibleClients.map((client: any) => ({
+        "שם הלקוח": client.name,
+        "סוכנות": agencies?.find((a: any) => a.id === client.agency_id)?.name || "",
+        "סטטוס": getStatusText(client.status),
+        "ריטיינר": client.retainer || "",
+        "תקציב חודשי": client.monthly_budget || "",
+        "טלפון": client.phone || "",
+        "אימייל": client.email || "",
+        "אתר": client.website || "",
+        "איש קשר": client.contact_name || "",
+        "הערות": client.notes || "",
+      }));
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "לקוחות");
+      XLSX.writeFile(wb, "לקוחות.xlsx");
+      toast.success(`יוצאו ${exportData.length} לקוחות`);
+    });
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
