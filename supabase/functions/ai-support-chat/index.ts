@@ -1099,6 +1099,39 @@ async function executeTool(
         return { success: true, result: { count: data.length, recordings: data } };
       }
 
+      case 'create_manus_task': {
+        const { prompt, agentProfile, taskMode } = toolCall.args;
+        if (!prompt) return { success: false, error: 'prompt is required' };
+        const { data: manusResult, error: manusErr } = await supabaseClient.functions.invoke('manus-api', {
+          body: { action: 'create_task', tenantId, prompt, agentProfile: agentProfile || 'manus-1.6', taskMode: taskMode || 'agent' },
+        });
+        if (manusErr) throw manusErr;
+        if (manusResult?.error) throw new Error(manusResult.error);
+        modifiedEntities.add('manus_tasks');
+        return { success: true, result: manusResult };
+      }
+
+      case 'list_manus_tasks': {
+        const { limit = 10, status: mStatus } = toolCall.args;
+        let query = supabaseClient.from('manus_tasks').select('id, task_id, title, prompt, status, task_url, credit_usage, created_at').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
+        if (mStatus) query = query.eq('status', mStatus);
+        const { data, error } = await query;
+        if (error) throw error;
+        return { success: true, result: { count: data.length, tasks: data } };
+      }
+
+      case 'get_manus_task_result': {
+        const { taskId } = toolCall.args;
+        if (!taskId) return { success: false, error: 'taskId is required' };
+        const { data: manusResult, error: manusErr } = await supabaseClient.functions.invoke('manus-api', {
+          body: { action: 'get_task', tenantId, taskId },
+        });
+        if (manusErr) throw manusErr;
+        if (manusResult?.error) throw new Error(manusResult.error);
+        modifiedEntities.add('manus_tasks');
+        return { success: true, result: manusResult };
+      }
+
       default:
         return { success: false, error: `Unknown tool: ${toolCall.name}` };
     }
