@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink } from "lucide-react";
+import { Users, Building2, Globe, Coins, Phone, Mail, LayoutGrid, Table as TableIcon, Edit, Search, Plus, Trash2, FolderOpen, ExternalLink, Download } from "lucide-react";
 import { AddClientForm } from "@/components/forms/AddClientForm";
 import { ImportClientsSheet } from "@/components/forms/ImportClientsSheet";
 import { ImportClientsCSV } from "@/components/forms/ImportClientsCSV";
@@ -407,6 +407,32 @@ export default function Clients() {
     ? searchedClients?.filter(client => client.status === "active" || client.status === "onboarding")
     : searchedClients;
 
+  const handleExportToExcel = () => {
+    if (!visibleClients || visibleClients.length === 0) {
+      toast.error("אין לקוחות לייצוא");
+      return;
+    }
+    import("xlsx").then((XLSX) => {
+      const exportData = visibleClients.map((client: any) => ({
+        "שם הלקוח": client.name,
+        "סוכנות": agencies?.find((a: any) => a.id === client.agency_id)?.name || "",
+        "סטטוס": getStatusText(client.status),
+        "ריטיינר": client.retainer || "",
+        "תקציב חודשי": client.monthly_budget || "",
+        "טלפון": client.phone || "",
+        "אימייל": client.email || "",
+        "אתר": client.website || "",
+        "איש קשר": client.contact_name || "",
+        "הערות": client.notes || "",
+      }));
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "לקוחות");
+      XLSX.writeFile(wb, "לקוחות.xlsx");
+      toast.success(`יוצאו ${exportData.length} לקוחות`);
+    });
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "active":
@@ -562,6 +588,10 @@ export default function Clients() {
           
           <div className="h-8 w-px bg-border"></div>
           
+          <Button variant="outline" onClick={handleExportToExcel}>
+            <Download className="ml-2 h-4 w-4" />
+            ייצוא לאקסל
+          </Button>
           <ImportClientsCSV />
           <ImportClientsSheet />
           <AddClientForm />
