@@ -1469,6 +1469,38 @@ const tools = [
       },
     },
   },
+  // === GROUP 1: CRM BASIC TOOLS ===
+  { type: 'function', function: { name: 'list_agencies', description: 'הצגת רשימת סוכנויות', parameters: { type: 'object', properties: { limit: { type: 'integer', description: 'מקסימום (ברירת מחדל: 20)' } } } } },
+  { type: 'function', function: { name: 'get_agency_info', description: 'מידע מפורט על סוכנות', parameters: { type: 'object', properties: { agency_id: { type: 'string', description: 'UUID' } }, required: ['agency_id'] } } },
+  { type: 'function', function: { name: 'update_agency', description: 'עדכון סוכנות', parameters: { type: 'object', properties: { agency_id: { type: 'string' }, name: { type: 'string' }, contact_name: { type: 'string' }, email: { type: 'string' }, phone: { type: 'string' }, status: { type: 'string' }, notes: { type: 'string' } }, required: ['agency_id'] } } },
+  { type: 'function', function: { name: 'list_campaigners', description: 'הצגת רשימת קמפיינרים', parameters: { type: 'object', properties: { active: { type: 'boolean' }, limit: { type: 'integer' } } } } },
+  { type: 'function', function: { name: 'get_campaigner_info', description: 'מידע מפורט על קמפיינר', parameters: { type: 'object', properties: { campaigner_id: { type: 'string' } }, required: ['campaigner_id'] } } },
+  { type: 'function', function: { name: 'list_suppliers', description: 'הצגת רשימת ספקים', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } } },
+  { type: 'function', function: { name: 'create_supplier', description: 'יצירת ספק חדש', parameters: { type: 'object', properties: { name: { type: 'string' }, contact_name: { type: 'string' }, email: { type: 'string' }, phone: { type: 'string' }, category: { type: 'string' }, notes: { type: 'string' } }, required: ['name'] } } },
+  { type: 'function', function: { name: 'get_supplier_info', description: 'מידע על ספק', parameters: { type: 'object', properties: { supplier_id: { type: 'string' } }, required: ['supplier_id'] } } },
+  { type: 'function', function: { name: 'list_sales_people', description: 'הצגת רשימת אנשי מכירות', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } } },
+  { type: 'function', function: { name: 'get_sales_person_info', description: 'מידע על איש מכירות', parameters: { type: 'object', properties: { sales_person_id: { type: 'string' } }, required: ['sales_person_id'] } } },
+  { type: 'function', function: { name: 'list_products', description: 'הצגת רשימת מוצרים', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } } },
+  { type: 'function', function: { name: 'create_product', description: 'יצירת מוצר חדש', parameters: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' }, price: { type: 'number' }, category: { type: 'string' } }, required: ['name'] } } },
+  { type: 'function', function: { name: 'update_product', description: 'עדכון מוצר', parameters: { type: 'object', properties: { product_id: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' }, price: { type: 'number' }, is_active: { type: 'boolean' }, category: { type: 'string' } }, required: ['product_id'] } } },
+  // === GROUP 2: FINANCE TOOLS ===
+  { type: 'function', function: { name: 'list_finance', description: 'הצגת תנועות כספיות (הכנסות/הוצאות)', parameters: { type: 'object', properties: { type: { type: 'string', enum: ['income', 'expense'] }, month: { type: 'string', description: 'YYYY-MM' }, limit: { type: 'integer' } } } } },
+  { type: 'function', function: { name: 'create_finance_entry', description: 'יצירת רשומה כספית', parameters: { type: 'object', properties: { type: { type: 'string', enum: ['income', 'expense'] }, amount: { type: 'number' }, date: { type: 'string', format: 'date' }, category: { type: 'string' }, notes: { type: 'string' }, client_id: { type: 'string' }, agency_id: { type: 'string' }, supplier_id: { type: 'string' } }, required: ['type', 'amount', 'date'] } } },
+  { type: 'function', function: { name: 'get_finance_summary', description: 'סיכום כספי לחודש (הכנסות, הוצאות, רווח)', parameters: { type: 'object', properties: { month: { type: 'string', description: 'YYYY-MM' } }, required: ['month'] } } },
+  { type: 'function', function: { name: 'list_supplier_invoices', description: 'הצגת חשבוניות ספקים', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } } },
+  // === GROUP 3: OPERATIONS TOOLS ===
+  { type: 'function', function: { name: 'list_onboarding', description: 'הצגת תהליכי קליטת לקוחות', parameters: { type: 'object', properties: { status: { type: 'string', description: 'סטטוס: research_meeting, kickoff_meeting, setup, campaign_live' }, limit: { type: 'integer' } } } } },
+  { type: 'function', function: { name: 'update_onboarding_status', description: 'עדכון סטטוס קליטה', parameters: { type: 'object', properties: { onboarding_id: { type: 'string' }, status: { type: 'string' } }, required: ['onboarding_id', 'status'] } } },
+  { type: 'function', function: { name: 'list_time_entries', description: 'הצגת רשומות נוכחות', parameters: { type: 'object', properties: { date: { type: 'string', format: 'date' }, limit: { type: 'integer' } } } } },
+  { type: 'function', function: { name: 'clock_in', description: 'רישום כניסה (שעון נוכחות)', parameters: { type: 'object', properties: { notes: { type: 'string' } } } } },
+  { type: 'function', function: { name: 'clock_out', description: 'רישום יציאה (שעון נוכחות)', parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: { name: 'add_client_update', description: 'הוספת עדכון ללקוח', parameters: { type: 'object', properties: { client_id: { type: 'string' }, content: { type: 'string' } }, required: ['client_id', 'content'] } } },
+  { type: 'function', function: { name: 'add_lead_update', description: 'הוספת עדכון לליד', parameters: { type: 'object', properties: { lead_id: { type: 'string' }, content: { type: 'string' } }, required: ['lead_id', 'content'] } } },
+  { type: 'function', function: { name: 'list_updates', description: 'הצגת עדכונים של לקוח/ליד', parameters: { type: 'object', properties: { entity_type: { type: 'string', enum: ['client', 'lead'] }, entity_id: { type: 'string' }, limit: { type: 'integer' } }, required: ['entity_type', 'entity_id'] } } },
+  // === GROUP 4: DATA & REPORTS TOOLS ===
+  { type: 'function', function: { name: 'list_dynamic_tables', description: 'הצגת רשימת טבלאות דינמיות (CRM)', parameters: { type: 'object', properties: {} } } },
+  { type: 'function', function: { name: 'get_table_data', description: 'שליפת נתונים מטבלה דינמית', parameters: { type: 'object', properties: { table_id: { type: 'string' }, limit: { type: 'integer' } }, required: ['table_id'] } } },
+  { type: 'function', function: { name: 'list_recordings', description: 'הצגת הקלטות Zoom', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } } },
 ];
 
 serve(async (req) => {
