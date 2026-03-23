@@ -2904,6 +2904,62 @@ export type Database = {
           },
         ]
       }
+      manus_tasks: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          credit_usage: number | null
+          id: string
+          output: Json | null
+          prompt: string
+          share_url: string | null
+          status: string
+          task_id: string
+          task_url: string | null
+          tenant_id: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          credit_usage?: number | null
+          id?: string
+          output?: Json | null
+          prompt: string
+          share_url?: string | null
+          status?: string
+          task_id: string
+          task_url?: string | null
+          tenant_id: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          credit_usage?: number | null
+          id?: string
+          output?: Json | null
+          prompt?: string
+          share_url?: string | null
+          status?: string
+          task_id?: string
+          task_url?: string | null
+          tenant_id?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manus_tasks_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       menu_items: {
         Row: {
           badge: string | null

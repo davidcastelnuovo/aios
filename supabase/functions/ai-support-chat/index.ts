@@ -71,6 +71,7 @@ ${memoryContext}
 17. **מעקב זמן** - רשימה, כניסה, יציאה
 18. **טבלאות דינמיות** - רשימה, נתונים
 19. **עדכוני לקוחות/לידים** - הוספה, רשימה
+20. **Manus AI** - יצירת משימות AI מורכבות (מחקר, מצגות, ניתוח), צפייה בתוצאות
 
 📊 **חשוב לגבי תצוגת נתונים (display_data):**
 - כשהמשתמש מבקש לראות רשימות (לידים, משימות, לקוחות) - **תמיד** השתמש ב-display_data אחרי שליפת הנתונים
@@ -1099,6 +1100,39 @@ async function executeTool(
         return { success: true, result: { count: data.length, recordings: data } };
       }
 
+      case 'create_manus_task': {
+        const { prompt, agentProfile, taskMode } = toolCall.args;
+        if (!prompt) return { success: false, error: 'prompt is required' };
+        const { data: manusResult, error: manusErr } = await supabaseClient.functions.invoke('manus-api', {
+          body: { action: 'create_task', tenantId, prompt, agentProfile: agentProfile || 'manus-1.6', taskMode: taskMode || 'agent' },
+        });
+        if (manusErr) throw manusErr;
+        if (manusResult?.error) throw new Error(manusResult.error);
+        modifiedEntities.add('manus_tasks');
+        return { success: true, result: manusResult };
+      }
+
+      case 'list_manus_tasks': {
+        const { limit = 10, status: mStatus } = toolCall.args;
+        let query = supabaseClient.from('manus_tasks').select('id, task_id, title, prompt, status, task_url, credit_usage, created_at').eq('tenant_id', tenantId).order('created_at', { ascending: false }).limit(limit);
+        if (mStatus) query = query.eq('status', mStatus);
+        const { data, error } = await query;
+        if (error) throw error;
+        return { success: true, result: { count: data.length, tasks: data } };
+      }
+
+      case 'get_manus_task_result': {
+        const { taskId } = toolCall.args;
+        if (!taskId) return { success: false, error: 'taskId is required' };
+        const { data: manusResult, error: manusErr } = await supabaseClient.functions.invoke('manus-api', {
+          body: { action: 'get_task', tenantId, taskId },
+        });
+        if (manusErr) throw manusErr;
+        if (manusResult?.error) throw new Error(manusResult.error);
+        modifiedEntities.add('manus_tasks');
+        return { success: true, result: manusResult };
+      }
+
       default:
         return { success: false, error: `Unknown tool: ${toolCall.name}` };
     }
@@ -1501,6 +1535,9 @@ const tools = [
   { type: 'function', function: { name: 'list_dynamic_tables', description: 'הצגת רשימת טבלאות דינמיות (CRM)', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'get_table_data', description: 'שליפת נתונים מטבלה דינמית', parameters: { type: 'object', properties: { table_id: { type: 'string' }, limit: { type: 'integer' } }, required: ['table_id'] } } },
   { type: 'function', function: { name: 'list_recordings', description: 'הצגת הקלטות Zoom', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } } },
+  { type: 'function', function: { name: 'create_manus_task', description: 'יצירת משימה חדשה ב-Manus AI - סוכן שיכול לבצע מחקר, ליצור מצגות, לנתח נתונים ועוד', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור המשימה ל-Manus' }, agentProfile: { type: 'string', enum: ['manus-1.6', 'manus-1.6-lite', 'manus-1.6-max'], description: 'מודל (ברירת מחדל: manus-1.6)' }, taskMode: { type: 'string', enum: ['agent', 'chat', 'adaptive'], description: 'מצב עבודה (ברירת מחדל: agent)' } }, required: ['prompt'] } } },
+  { type: 'function', function: { name: 'list_manus_tasks', description: 'הצגת רשימת משימות Manus AI', parameters: { type: 'object', properties: { limit: { type: 'integer' }, status: { type: 'string', enum: ['pending', 'running', 'completed', 'failed'] } } } } },
+  { type: 'function', function: { name: 'get_manus_task_result', description: 'שליפת תוצאות של משימת Manus לפי מזהה', parameters: { type: 'object', properties: { taskId: { type: 'string', description: 'מזהה המשימה ב-Manus' } }, required: ['taskId'] } } },
 ];
 
 serve(async (req) => {

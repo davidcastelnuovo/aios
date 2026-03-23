@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video, Mail } from "lucide-react";
+import { Webhook, Facebook, MessageCircle, ArrowLeft, Settings, TrendingUp, Calculator, Zap, Search, Video, Mail, Brain } from "lucide-react";
 import { useTenantPath } from "@/hooks/useTenantPath";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -270,6 +270,23 @@ export default function Integrations() {
     },
   });
 
+  // Check Manus integration status
+  const { data: manusIntegration } = useQuery({
+    queryKey: ['manus-integration', currentTenantId],
+    queryFn: async () => {
+      if (!currentTenantId) return null;
+      const { data } = await supabase
+        .from('tenant_integrations')
+        .select('*')
+        .eq('tenant_id', currentTenantId)
+        .eq('integration_type', 'manus')
+        .eq('is_active', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!currentTenantId,
+  });
+
   const integrations: IntegrationCardProps[] = [
     {
       icon: <Webhook className="h-6 w-6" />,
@@ -456,6 +473,20 @@ export default function Integrations() {
       isConnected: !!gmailStatus?.connected,
       route: "gmail-settings",
       gradient: "bg-gradient-to-r from-red-500 to-red-700",
+    },
+    {
+      icon: <Brain className="h-6 w-6" />,
+      title: "Manus AI",
+      description: "סוכן AI מתקדם לביצוע משימות מורכבות — מחקר, מצגות, ניתוח נתונים",
+      features: [
+        "מחקר מעמיק מהאינטרנט",
+        "יצירת מצגות ומסמכים",
+        "ניתוח נתונים ודוחות",
+        "חיבור ל-AIOS",
+      ],
+      isConnected: !!manusIntegration,
+      route: "manus-settings",
+      gradient: "bg-gradient-to-r from-violet-500 to-indigo-700",
     },
   ];
 
