@@ -1534,6 +1534,9 @@ const tools = [
   { type: 'function', function: { name: 'list_dynamic_tables', description: 'הצגת רשימת טבלאות דינמיות (CRM)', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'get_table_data', description: 'שליפת נתונים מטבלה דינמית', parameters: { type: 'object', properties: { table_id: { type: 'string' }, limit: { type: 'integer' } }, required: ['table_id'] } } },
   { type: 'function', function: { name: 'list_recordings', description: 'הצגת הקלטות Zoom', parameters: { type: 'object', properties: { limit: { type: 'integer' } } } } },
+  { type: 'function', function: { name: 'create_manus_task', description: 'יצירת משימה חדשה ב-Manus AI - סוכן שיכול לבצע מחקר, ליצור מצגות, לנתח נתונים ועוד', parameters: { type: 'object', properties: { prompt: { type: 'string', description: 'תיאור המשימה ל-Manus' }, agentProfile: { type: 'string', enum: ['manus-1.6', 'manus-1.6-lite', 'manus-1.6-max'], description: 'מודל (ברירת מחדל: manus-1.6)' }, taskMode: { type: 'string', enum: ['agent', 'chat', 'adaptive'], description: 'מצב עבודה (ברירת מחדל: agent)' } }, required: ['prompt'] } } },
+  { type: 'function', function: { name: 'list_manus_tasks', description: 'הצגת רשימת משימות Manus AI', parameters: { type: 'object', properties: { limit: { type: 'integer' }, status: { type: 'string', enum: ['pending', 'running', 'completed', 'failed'] } } } } },
+  { type: 'function', function: { name: 'get_manus_task_result', description: 'שליפת תוצאות של משימת Manus לפי מזהה', parameters: { type: 'object', properties: { taskId: { type: 'string', description: 'מזהה המשימה ב-Manus' } }, required: ['taskId'] } } },
 ];
 
 serve(async (req) => {
