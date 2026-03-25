@@ -561,7 +561,17 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
                     </Pie>
                     <Tooltip 
                       formatter={(value: number) => formatNumber(value)}
-                      contentStyle={{ direction: 'rtl', textAlign: 'right' }}
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const d = payload[0].payload;
+                        return (
+                          <div className="bg-background border rounded-lg p-2 shadow-lg text-sm" dir="rtl">
+                            <p className="font-medium">{d.name}</p>
+                            <p>סשנים: {formatNumber(d.value)}</p>
+                            {d.purchaseValue > 0 && <p>שווי רכישות: {formatCurrency(d.purchaseValue)}</p>}
+                          </div>
+                        );
+                      }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
