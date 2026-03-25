@@ -660,7 +660,7 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
         <CardContent>
           <div className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={trafficSources.slice(0, 10)} layout="vertical" margin={{ left: 150, right: 20 }}>
+              <BarChart data={trafficSources.slice(0, 10)} layout="vertical" margin={{ left: 20, right: 160 }}>
                 <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                 <XAxis type="number" fontSize={12} />
                 <YAxis 
