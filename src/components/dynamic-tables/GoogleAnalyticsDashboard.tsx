@@ -67,8 +67,24 @@ interface DateRange {
   to: Date | undefined;
 }
 
-export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardProps) {
-  const [datePreset, setDatePreset] = useState<DateRangePreset>('last_30_days');
+export function GoogleAnalyticsDashboard({ records, externalDateFilter }: GoogleAnalyticsDashboardProps) {
+  const mapExternalPreset = (ext?: string): DateRangePreset => {
+    if (!ext) return 'last_30_days';
+    const map: Record<string, DateRangePreset> = {
+      'all': 'last_90_days',
+      'today': 'today',
+      'yesterday': 'yesterday',
+      'last_7_days': 'last_7_days',
+      'last_14_days': 'last_14_days',
+      'last_30_days': 'last_30_days',
+      'this_month': 'this_month',
+      'last_month': 'last_month',
+      'last_90_days': 'last_90_days',
+    };
+    return map[ext] || 'last_30_days';
+  };
+
+  const [datePreset, setDatePreset] = useState<DateRangePreset>(mapExternalPreset(externalDateFilter));
   const [customDateRange, setCustomDateRange] = useState<DateRange>({ from: undefined, to: undefined });
   const [showComparison, setShowComparison] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
