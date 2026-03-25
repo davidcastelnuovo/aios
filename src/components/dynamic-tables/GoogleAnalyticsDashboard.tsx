@@ -44,6 +44,7 @@ interface CrmRecord {
 interface GoogleAnalyticsDashboardProps {
   records: CrmRecord[];
   externalDateFilter?: string;
+  externalCustomDateRange?: { from: Date | undefined; to: Date | undefined };
 }
 
 // Explicit colorful chart colors
