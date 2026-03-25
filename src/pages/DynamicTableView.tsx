@@ -186,30 +186,105 @@ export default function DynamicTableView() {
     enabled: !!table?.id,
   });
 
-  const { data: records, isLoading: recordsLoading } = useQuery({
-    queryKey: ['crm-records', table?.id, dateFilter, customDateRange.from?.toISOString(), customDateRange.to?.toISOString()],
+  // Fetch ALL records once - no date filter sent to server
+  const { data: allRecords, isLoading: recordsLoading } = useQuery({
+    queryKey: ['crm-records', table?.id],
     queryFn: async () => {
       if (!table?.id) return [];
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       const params = new URLSearchParams({ table_id: table.id });
-      if (dateFilter === 'custom' && customDateRange.from && customDateRange.to) {
-        params.append('date_filter', 'custom');
-        params.append('date_from', format(customDateRange.from, 'yyyy-MM-dd'));
-        params.append('date_to', format(customDateRange.to, 'yyyy-MM-dd'));
-      } else if (dateFilter !== 'all') {
-        params.append('date_filter', dateFilter);
-      }
       const response = await supabase.functions.invoke(`crm-records?${params.toString()}`, {
         method: 'GET',
       });
       if (response.error) throw response.error;
-      // Ensure we always return an array
       return Array.isArray(response.data) ? response.data as CrmRecord[] : [];
     },
-    enabled: !!table?.id && (dateFilter !== 'custom' || (!!customDateRange.from && !!customDateRange.to)),
-    placeholderData: (previousData) => previousData, // Keep previous data while loading to prevent UI flash
+    enabled: !!table?.id,
+    placeholderData: (previousData) => previousData,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
+
+  // Client-side date filtering
+  const records = useMemo(() => {
+    if (!allRecords) return allRecords;
+    if (dateFilter === 'all') return allRecords;
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let startDate: string | null = null;
+    let endDate: string | null = null;
+
+    switch (dateFilter) {
+      case 'today':
+        startDate = endDate = format(today, 'yyyy-MM-dd');
+        break;
+      case 'yesterday': {
+        const d = subDays(today, 1);
+        startDate = endDate = format(d, 'yyyy-MM-dd');
+        break;
+      }
+      case 'this_week':
+        startDate = format(startOfWeek(today, { weekStartsOn: 0 }), 'yyyy-MM-dd');
+        endDate = format(today, 'yyyy-MM-dd');
+        break;
+      case 'last_week': {
+        const endLW = subDays(startOfWeek(today, { weekStartsOn: 0 }), 1);
+        startDate = format(subDays(endLW, 6), 'yyyy-MM-dd');
+        endDate = format(endLW, 'yyyy-MM-dd');
+        break;
+      }
+      case 'last_7_days':
+        startDate = format(subDays(today, 7), 'yyyy-MM-dd');
+        endDate = format(today, 'yyyy-MM-dd');
+        break;
+      case 'last_14_days':
+        startDate = format(subDays(today, 14), 'yyyy-MM-dd');
+        endDate = format(today, 'yyyy-MM-dd');
+        break;
+      case 'last_30_days':
+        startDate = format(subDays(today, 30), 'yyyy-MM-dd');
+        endDate = format(today, 'yyyy-MM-dd');
+        break;
+      case 'this_month':
+        startDate = format(new Date(now.getFullYear(), now.getMonth(), 1), 'yyyy-MM-dd');
+        endDate = format(today, 'yyyy-MM-dd');
+        break;
+      case 'last_month': {
+        const lm = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        startDate = format(lm, 'yyyy-MM-dd');
+        endDate = format(new Date(now.getFullYear(), now.getMonth(), 0), 'yyyy-MM-dd');
+        break;
+      }
+      case 'last_90_days':
+        startDate = format(subDays(today, 90), 'yyyy-MM-dd');
+        endDate = format(today, 'yyyy-MM-dd');
+        break;
+      case 'last_180_days':
+        startDate = format(subDays(today, 180), 'yyyy-MM-dd');
+        endDate = format(today, 'yyyy-MM-dd');
+        break;
+      case 'last_365_days':
+        startDate = format(subDays(today, 365), 'yyyy-MM-dd');
+        endDate = format(today, 'yyyy-MM-dd');
+        break;
+      case 'custom':
+        if (customDateRange.from && customDateRange.to) {
+          startDate = format(customDateRange.from, 'yyyy-MM-dd');
+          endDate = format(customDateRange.to, 'yyyy-MM-dd');
+        }
+        break;
+    }
+
+    if (!startDate) return allRecords;
+
+    return allRecords.filter(record => {
+      const recordDate = record.data?.date;
+      if (!recordDate) return true; // Keep non-dated records
+      if (endDate) return recordDate >= startDate! && recordDate <= endDate;
+      return recordDate >= startDate!;
+    });
+  }, [allRecords, dateFilter, customDateRange.from, customDateRange.to]);
 
   // Filter records by campaign name search
   const filteredRecords = useMemo(() => {
