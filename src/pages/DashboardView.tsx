@@ -49,7 +49,7 @@ const getCampaignType = (integrationType?: string | null, integrationSettings?: 
 
 const getSpendFromData = (data: any) => Number(data?.spend) || Number(data?.cost) || 0;
 const getRevenueFromData = (data: any) =>
-  Number(data?.purchase_value) || Number(data?.conversions_value) || Number(data?.conversion_value) || 0;
+  Number(data?.purchase_value) || Number(data?.purchaseRevenue) || Number(data?.conversions_value) || Number(data?.conversion_value) || 0;
 
 const getLeadsFromData = (data: any) =>
   Number(data?.leads) ||
@@ -61,7 +61,12 @@ const getLeadsFromData = (data: any) =>
   Number(data?.lead) ||
   0;
 
-const getPurchasesFromData = (data: any) => Number(data?.purchases) || 0;
+const getPurchasesFromData = (data: any) => Number(data?.purchases) || Number(data?.ecommercePurchases) || Number(data?.transactions) || 0;
+const getSessionsFromData = (data: any) => Number(data?.sessions) || 0;
+const getAddToCartFromData = (data: any) => Number(data?.add_to_cart) || Number(data?.addToCarts) || 0;
+
+const isAdsPlatform = (source: string) => ['facebook_insights', 'facebook_ecommerce', 'google_ads'].includes(source);
+const isAnalyticsPlatform = (source: string) => source === 'google_analytics';
 
 export default function DashboardView() {
   const { dashboardId } = useParams();
@@ -176,8 +181,10 @@ export default function DashboardView() {
           spend: 0,
           impressions: 0,
           clicks: 0,
+          sessions: 0,
           results: 0,
           revenue: 0,
+          addToCart: 0,
           roas: 0,
           cpl: 0,
           recordCount: 0,
@@ -187,16 +194,24 @@ export default function DashboardView() {
       const data = record.data || {};
       const campaignType: CampaignType = campaignTypeByPlatform[source] || record._campaignType || 'leads';
 
-      // Spend
-      platforms[source].spend += getSpendFromData(data);
-      platforms[source].impressions += Number(data.impressions) || 0;
-      platforms[source].clicks += Number(data.clicks) || 0;
-
-      if (campaignType === 'ecommerce') {
+      if (isAnalyticsPlatform(source)) {
+        // Google Analytics data
+        platforms[source].sessions += getSessionsFromData(data);
         platforms[source].results += getPurchasesFromData(data);
         platforms[source].revenue += getRevenueFromData(data);
+        platforms[source].addToCart += getAddToCartFromData(data);
       } else {
-        platforms[source].results += getLeadsFromData(data);
+        // Ads platforms
+        platforms[source].spend += getSpendFromData(data);
+        platforms[source].impressions += Number(data.impressions) || 0;
+        platforms[source].clicks += Number(data.clicks) || 0;
+
+        if (campaignType === 'ecommerce') {
+          platforms[source].results += getPurchasesFromData(data);
+          platforms[source].revenue += getRevenueFromData(data);
+        } else {
+          platforms[source].results += getLeadsFromData(data);
+        }
       }
 
       platforms[source].recordCount += 1;
@@ -204,6 +219,10 @@ export default function DashboardView() {
 
     // Calculate ROAS/CPL for each platform
     Object.keys(platforms).forEach(key => {
+      if (isAnalyticsPlatform(key)) {
+        // Analytics doesn't have its own ROAS (no spend)
+        return;
+      }
       const ct: CampaignType = campaignTypeByPlatform[key] || 'leads';
       if (ct === 'ecommerce') {
         platforms[key].roas = platforms[key].spend > 0 ? platforms[key].revenue / platforms[key].spend : 0;
@@ -215,26 +234,42 @@ export default function DashboardView() {
     return platforms;
   }, [allRecords, campaignTypeByPlatform]);
 
-  // Calculate total summary (respect dashboard campaign type)
+  // Calculate total summary - ROAS uses Analytics revenue and Ads spend only
   const totalSummary = useMemo(() => {
-    return Object.entries(summaryByPlatform).reduce(
-      (acc: any, [platform, data]: [string, any]) => {
-        const ct: CampaignType = campaignTypeByPlatform[platform] || 'leads';
-        if (dashboardCampaignType === 'ecommerce' && ct !== 'ecommerce') return acc;
+    let totalSpend = 0;
+    let totalImpressions = 0;
+    let totalClicks = 0;
+    let totalResults = 0;
+    let adsSpend = 0; // FB + Google Ads spend for ROAS denominator
+    let analyticsRevenue = 0; // Analytics revenue for ROAS numerator
+    let analyticsPurchases = 0;
 
-        return {
-          spend: acc.spend + data.spend,
-          impressions: acc.impressions + data.impressions,
-          clicks: acc.clicks + data.clicks,
-          results: acc.results + data.results,
-          revenue: acc.revenue + (ct === 'ecommerce' ? data.revenue : 0),
-          roas_spend: acc.roas_spend + (ct === 'ecommerce' ? data.spend : 0),
-          roas_value: acc.roas_value + (ct === 'ecommerce' ? data.revenue : 0),
-        };
-      },
-      { spend: 0, impressions: 0, clicks: 0, results: 0, revenue: 0, roas_spend: 0, roas_value: 0 }
-    );
-  }, [summaryByPlatform, campaignTypeByPlatform, dashboardCampaignType]);
+    Object.entries(summaryByPlatform).forEach(([platform, data]: [string, any]) => {
+      if (isAnalyticsPlatform(platform)) {
+        // Analytics provides the "real" revenue
+        analyticsRevenue += data.revenue;
+        analyticsPurchases += data.results;
+      } else if (isAdsPlatform(platform)) {
+        // Ads platforms provide spend
+        totalSpend += data.spend;
+        totalImpressions += data.impressions;
+        totalClicks += data.clicks;
+        totalResults += data.results;
+        adsSpend += data.spend;
+      }
+    });
+
+    return {
+      spend: totalSpend,
+      impressions: totalImpressions,
+      clicks: totalClicks,
+      results: totalResults,
+      revenue: analyticsRevenue,
+      roas_spend: adsSpend,
+      roas_value: analyticsRevenue,
+      analyticsPurchases,
+    };
+  }, [summaryByPlatform]);
 
   const combinedRoas = totalSummary.roas_spend > 0 ? totalSummary.roas_value / totalSummary.roas_spend : 0;
   const combinedCpl = totalSummary.results > 0 ? totalSummary.spend / totalSummary.results : 0;
@@ -282,6 +317,14 @@ export default function DashboardView() {
             <path d="M3.654 14.916l6.26-10.857c.68-1.18 2.184-1.59 3.361-.916l.004.003c1.178.68 1.586 2.184.909 3.361l-6.26 10.857c-.68 1.18-2.184 1.59-3.361.916l-.004-.003c-1.178-.68-1.586-2.184-.909-3.361z" fill="#FBBC04"/>
             <path d="M14.088 14.916l6.26-10.857c.68-1.18.27-2.684-.909-3.361l-.004-.003c-1.177-.674-2.681-.264-3.361.916l-6.26 10.857c-.68 1.18-.27 2.684.909 3.361l.004.003c1.177.674 2.681.264 3.361-.916z" fill="#4285F4"/>
             <circle cx="6" cy="18" r="3.5" fill="#34A853"/>
+          </svg>
+        );
+      case 'google_analytics':
+        return (
+          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+            <path d="M20.5 18.5v-13c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v13c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z" fill="#F9AB00"/>
+            <path d="M13.5 18.5v-7c0-1.1-.9-2-2-2h-1c-1.1 0-2 .9-2 2v7c0 1.1.9 2 2 2h1c1.1 0 2-.9 2-2z" fill="#E37400"/>
+            <circle cx="5" cy="18.5" r="2.5" fill="#E37400"/>
           </svg>
         );
       default:
@@ -451,15 +494,15 @@ export default function DashboardView() {
               <>
                 <Card className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950 dark:to-green-900">
                   <CardContent className="p-6">
-                    <p className="text-sm text-muted-foreground">הכנסות</p>
+                    <p className="text-sm text-muted-foreground">הכנסות (Analytics)</p>
                     <p className="text-3xl font-bold mt-2">{formatCurrency(totalSummary.revenue)}</p>
                   </CardContent>
                 </Card>
 
                 <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950 dark:to-purple-900">
                   <CardContent className="p-6">
-                    <p className="text-sm text-muted-foreground">רכישות</p>
-                    <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.results)}</p>
+                    <p className="text-sm text-muted-foreground">רכישות (Analytics)</p>
+                    <p className="text-3xl font-bold mt-2">{formatNumber(totalSummary.analyticsPurchases || totalSummary.results)}</p>
                   </CardContent>
                 </Card>
 
@@ -517,7 +560,7 @@ export default function DashboardView() {
                     <TableRow>
                       <TableHead className="text-right">פלטפורמה</TableHead>
                       <TableHead className="text-right">הוצאה</TableHead>
-                      <TableHead className="text-right">חשיפות</TableHead>
+                      <TableHead className="text-right">חשיפות / סשנים</TableHead>
                       <TableHead className="text-right">קליקים</TableHead>
                       {dashboardCampaignType === 'ecommerce' ? (
                         <>
@@ -536,8 +579,7 @@ export default function DashboardView() {
                   <TableBody>
                     {Object.entries(summaryByPlatform).map(([platform, metrics]: [string, any]) => {
                       const config = PLATFORM_CONFIG[platform] || { name: platform, color: 'text-gray-600' };
-                      const ct: CampaignType = campaignTypeByPlatform[platform] || 'leads';
-                      if (dashboardCampaignType === 'ecommerce' && ct !== 'ecommerce') return null;
+                      const isAnalytics = isAnalyticsPlatform(platform);
 
                       return (
                         <TableRow key={platform}>
@@ -547,38 +589,50 @@ export default function DashboardView() {
                               <span className={config.color}>{config.name}</span>
                             </div>
                           </TableCell>
-                          <TableCell>{formatCurrency(metrics.spend)}</TableCell>
-                          <TableCell>{formatNumber(metrics.impressions)}</TableCell>
-                          <TableCell>{formatNumber(metrics.clicks)}</TableCell>
+                          <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.spend)}</TableCell>
+                          <TableCell>{formatNumber(isAnalytics ? metrics.sessions : metrics.impressions)}</TableCell>
+                          <TableCell>{isAnalytics ? '-' : formatNumber(metrics.clicks)}</TableCell>
 
                           {dashboardCampaignType === 'ecommerce' ? (
                             <>
                               <TableCell>{formatNumber(metrics.results)}</TableCell>
                               <TableCell>{formatCurrency(metrics.revenue)}</TableCell>
                               <TableCell>
-                                <span className={metrics.roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
-                                  {metrics.roas.toFixed(2)}
-                                </span>
+                                {isAnalytics ? (
+                                  <span className="text-muted-foreground">-</span>
+                                ) : (
+                                  <span className={metrics.roas >= 1 ? 'text-green-600 font-semibold' : 'text-red-600'}>
+                                    {metrics.roas.toFixed(2)}
+                                  </span>
+                                )}
                               </TableCell>
                             </>
                           ) : (
                             <>
                               <TableCell>{formatNumber(metrics.results)}</TableCell>
-                              <TableCell>{formatCurrency(metrics.cpl)}</TableCell>
+                              <TableCell>{isAnalytics ? '-' : formatCurrency(metrics.cpl)}</TableCell>
                             </>
                           )}
                         </TableRow>
                       );
                     })}
-                    <TableRow className="bg-muted/50 font-bold">
-                      <TableCell>סה"כ</TableCell>
+                    {/* Total row: spend from ads, revenue from analytics */}
+                    <TableRow className="bg-muted/50 font-bold border-t-2">
+                      <TableCell>
+                        סה"כ
+                        {dashboardCampaignType === 'ecommerce' && summaryByPlatform['google_analytics'] && (
+                          <span className="text-xs font-normal text-muted-foreground block">
+                            הכנסות מ-Analytics / הוצאות פרסום
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell>{formatCurrency(totalSummary.spend)}</TableCell>
                       <TableCell>{formatNumber(totalSummary.impressions)}</TableCell>
                       <TableCell>{formatNumber(totalSummary.clicks)}</TableCell>
 
                       {dashboardCampaignType === 'ecommerce' ? (
                         <>
-                          <TableCell>{formatNumber(totalSummary.results)}</TableCell>
+                          <TableCell>{formatNumber(totalSummary.analyticsPurchases || totalSummary.results)}</TableCell>
                           <TableCell>{formatCurrency(totalSummary.revenue)}</TableCell>
                           <TableCell>
                             <span className={combinedRoas >= 1 ? 'text-green-600' : 'text-red-600'}>
@@ -632,34 +686,49 @@ export default function DashboardView() {
                       const dayMetrics = records.reduce(
                         (acc: any, r: any) => {
                           const data = r.data || {};
+                          const source = r._source || 'unknown';
+
+                          if (isAnalyticsPlatform(source)) {
+                            // Analytics: only take revenue and purchases
+                            const purchases = getPurchasesFromData(data);
+                            const revenue = getRevenueFromData(data);
+                            return {
+                              ...acc,
+                              analyticsRevenue: acc.analyticsRevenue + revenue,
+                              analyticsPurchases: acc.analyticsPurchases + purchases,
+                            };
+                          }
+
+                          // Ads platforms: spend, impressions, clicks
                           const spend = getSpendFromData(data);
                           const impressions = Number(data.impressions) || 0;
                           const clicks = Number(data.clicks) || 0;
 
                           if (dashboardCampaignType === 'ecommerce') {
                             const purchases = getPurchasesFromData(data);
-                            const revenue = getRevenueFromData(data);
                             return {
+                              ...acc,
                               spend: acc.spend + spend,
                               impressions: acc.impressions + impressions,
                               clicks: acc.clicks + clicks,
                               results: acc.results + purchases,
-                              revenue: acc.revenue + revenue,
                             };
                           }
 
                           const leads = getLeadsFromData(data);
                           return {
+                            ...acc,
                             spend: acc.spend + spend,
                             impressions: acc.impressions + impressions,
                             clicks: acc.clicks + clicks,
                             results: acc.results + leads,
                           };
                         },
-                        { spend: 0, impressions: 0, clicks: 0, results: 0, revenue: 0 }
+                        { spend: 0, impressions: 0, clicks: 0, results: 0, analyticsRevenue: 0, analyticsPurchases: 0 }
                       );
 
-                      const dayRoas = dayMetrics.spend > 0 ? dayMetrics.revenue / dayMetrics.spend : 0;
+                      // ROAS = Analytics revenue / Ads spend
+                      const dayRoas = dayMetrics.spend > 0 ? dayMetrics.analyticsRevenue / dayMetrics.spend : 0;
                       const dayCpl = dayMetrics.results > 0 ? dayMetrics.spend / dayMetrics.results : 0;
 
                       return (
@@ -673,8 +742,8 @@ export default function DashboardView() {
 
                           {dashboardCampaignType === 'ecommerce' ? (
                             <>
-                              <TableCell>{formatNumber(dayMetrics.results)}</TableCell>
-                              <TableCell>{formatCurrency(dayMetrics.revenue)}</TableCell>
+                              <TableCell>{formatNumber(dayMetrics.analyticsPurchases || dayMetrics.results)}</TableCell>
+                              <TableCell>{formatCurrency(dayMetrics.analyticsRevenue)}</TableCell>
                               <TableCell>
                                 <span className={dayRoas >= 1 ? 'text-green-600' : 'text-red-600'}>
                                   {dayRoas.toFixed(2)}
