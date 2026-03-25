@@ -81,6 +81,7 @@ const SignDocument = lazy(() => import("./pages/SignDocument"));
 const ManusSettings = lazy(() => import("./pages/ManusSettings"));
 const ManusTasksPage = lazy(() => import("./pages/ManusTasksPage"));
 const AgentHub = lazy(() => import("./pages/AgentHub"));
+const SharedDashboard = lazy(() => import("./pages/SharedDashboard"));
 
 // QueryClient with optimized defaults for better caching
 const queryClient = new QueryClient({
