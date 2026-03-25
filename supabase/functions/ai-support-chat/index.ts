@@ -1476,6 +1476,20 @@ const tools = [
   {
     type: 'function',
     function: {
+      name: 'get_recent_inbound_messages',
+      description: 'סריקת כל ההודעות הנכנסות האחרונות מכל השיחות (לקוחות, לידים, קבוצות, לא משויכים). השתמש כששואלים "מי חיפש אותי?", "מה ההודעה האחרונה?", "מישהו כתב לי?" וכו\'.',
+      parameters: {
+        type: 'object',
+        properties: {
+          hours: { type: 'number', description: 'חלון זמן בשעות לסריקה (ברירת מחדל: 2)' },
+          limit: { type: 'integer', description: 'מספר הודעות מקסימלי (ברירת מחדל: 30)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'list_emails',
       description: 'שליפת רשימת אימיילים מ-Gmail. אפשר לסנן לפי query או תאריך.',
       parameters: {
