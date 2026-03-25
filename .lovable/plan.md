@@ -1,19 +1,22 @@
 
 
-# הוספת שיוך לקוח ישירות מרשימת המשימות (דסקטופ)
+# ייצוא כל הטבלאות מהדאטהבייס
 
-## הבעיה
-ה-TaskBacklogPanel בתצוגת הדסקטופ (שורה 1275) לא מעביר את ה-props הנדרשים לשיוך לקוח/קמפיינר, בעוד שבתצוגת המובייל (שורה 1189) הם כבר מועברים ועובדים.
+## מה ייעשה
+ייצוא של כל 100+ הטבלאות מהדאטהבייס לקבצי CSV בתיקייה אחת, ארוזים בקובץ ZIP אחד להורדה.
 
-## הפתרון
-שינוי אחד בקובץ `src/components/tasks/WeeklyTaskBoard.tsx` — הוספת 4 props חסרים ל-`TaskBacklogPanel` בגרסת הדסקטופ (שורה ~1286):
+## שיטה
+סקריפט Python שירוץ ישירות (לא UI):
+1. שליפת רשימת כל הטבלאות מ-`information_schema`
+2. לכל טבלה — `COPY ... TO STDOUT WITH CSV HEADER` דרך `psql`
+3. ארגון הקבצים בתיקייה `/mnt/documents/db_export/`
+4. יצירת קובץ ZIP אחד: `/mnt/documents/db_export.zip`
 
-```tsx
-clientsList={clientsList}
-campaignersList={campaignersList}
-onUpdateClient={(taskId, clientId) => updateTaskClient.mutate({ taskId, clientId })}
-onUpdateCampaigner={(taskId, campaignerId) => updateTaskCampaigner.mutate({ taskId, campaignerId })}
-```
+## טבלאות (108 טבלאות)
+כולל: agencies, clients, leads, tasks, campaigners, automations, chat_messages, finance, products, suppliers, ועוד.
 
-זה יאפשר את ה-Select dropdown של לקוח וקמפיינר ישירות על כרטיס המשימה ברשימה, כפי שכבר עובד במובייל.
+## הערות
+- טבלאות גדולות (כמו `chat_messages`, `site_events`) עלולות לקחת כמה שניות
+- הייצוא כולל את כל הנתונים ללא סינון tenant
+- קבצים ריקים יווצרו גם לטבלאות ריקות (עם שורת כותרת בלבד)
 
