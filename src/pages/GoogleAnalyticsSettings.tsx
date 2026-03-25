@@ -26,22 +26,24 @@ export default function GoogleAnalyticsSettings() {
   // Webhook URL for Make.com
   const webhookUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/webhook-google-analytics-sync`;
 
-  // Get direct API integration status
-  const { data: integration, isLoading } = useQuery({
-    queryKey: ['google-analytics-integration', currentTenantId],
+  // Get ALL direct API integrations (multiple accounts)
+  const { data: integrations = [], isLoading } = useQuery({
+    queryKey: ['google-analytics-integrations', currentTenantId],
     queryFn: async () => {
-      if (!currentTenantId) return null;
-      const { data } = await supabase
+      if (!currentTenantId) return [];
+      const { data, error } = await supabase
         .from('tenant_integrations')
         .select('*')
         .eq('tenant_id', currentTenantId)
         .eq('integration_type', 'google_analytics')
-        .eq('is_active', true)
-        .maybeSingle();
-      return data;
+        .eq('is_active', true);
+      if (error) throw error;
+      return data || [];
     },
     enabled: !!currentTenantId,
   });
+
+  const hasAnyDirectConnection = integrations.length > 0;
 
   // Get Make.com integration status
   const { data: makeIntegration, isLoading: makeLoading } = useQuery({
@@ -65,7 +67,7 @@ export default function GoogleAnalyticsSettings() {
   const hasGaTemplate = !!(makeSettings?.google_analytics_template_scenario_id);
 
   // Connect to Google Analytics (direct API)
-  const handleConnect = async () => {
+  const handleConnect = async (addNew = false) => {
     if (!currentTenantId || !userId) {
       toast.error("נא להתחבר למערכת");
       return;
@@ -79,7 +81,7 @@ export default function GoogleAnalyticsSettings() {
       }
 
       const response = await supabase.functions.invoke('google-analytics-auth?action=authorize', {
-        body: { tenantId: currentTenantId, userId },
+        body: { tenantId: currentTenantId, userId, addNew },
         headers: { Authorization: `Bearer ${session.session.access_token}` },
         method: 'POST',
       });
@@ -98,18 +100,18 @@ export default function GoogleAnalyticsSettings() {
 
   // Disconnect direct API integration
   const disconnectMutation = useMutation({
-    mutationFn: async () => {
-      if (!integration?.id) throw new Error("No integration to disconnect");
+    mutationFn: async (integrationId: string) => {
+      if (!integrationId) throw new Error("No integration to disconnect");
       
       const { error } = await supabase
         .from('tenant_integrations')
         .update({ is_active: false })
-        .eq('id', integration.id);
+        .eq('id', integrationId);
       
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['google-analytics-integration'] });
+      queryClient.invalidateQueries({ queryKey: ['google-analytics-integrations'] });
       toast.success("החיבור ל-Google Analytics נותק");
     },
     onError: (error) => {
@@ -125,7 +127,6 @@ export default function GoogleAnalyticsSettings() {
     setTimeout(() => setWebhookCopied(false), 2000);
   };
 
-  const settings = integration?.settings as Record<string, unknown> | null;
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -335,47 +336,63 @@ export default function GoogleAnalyticsSettings() {
                     חיבור דרך OAuth - דורש הגדרה ב-Google Cloud Console
                   </CardDescription>
                 </div>
-                <Badge variant={integration ? "default" : "secondary"} className={integration ? "bg-green-500" : ""}>
-                  {integration ? "מחובר" : "לא מחובר"}
+                <Badge variant={hasAnyDirectConnection ? "default" : "secondary"} className={hasAnyDirectConnection ? "bg-green-500" : ""}>
+                  {hasAnyDirectConnection ? `${integrations.length} חשבונות מחוברים` : "לא מחובר"}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              {isLoading ? (
+            {isLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
-              ) : integration ? (
+              ) : hasAnyDirectConnection ? (
                 <div className="space-y-4">
-                  <Alert className="bg-green-50 border-green-200">
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    <AlertDescription className="text-green-800">
-                      Google Analytics מחובר בהצלחה
-                      {settings?.connected_at && (
-                        <span className="block text-sm mt-1">
-                          חובר בתאריך: {new Date(settings.connected_at as string).toLocaleDateString('he-IL')}
-                        </span>
-                      )}
-                    </AlertDescription>
-                  </Alert>
+                  {/* List connected accounts */}
+                  {integrations.map((integ) => {
+                    const s = integ.settings as Record<string, unknown> | null;
+                    const email = (s?.google_email as string) || 'חשבון לא ידוע';
+                    return (
+                      <div key={integ.id} className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0" />
+                          <div>
+                            <p className="font-medium text-sm">{email}</p>
+                            {s?.connected_at && (
+                              <p className="text-xs text-muted-foreground">
+                                חובר: {new Date(s.connected_at as string).toLocaleDateString('he-IL')}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => disconnectMutation.mutate(integ.id)}
+                            disabled={disconnectMutation.isPending}
+                          >
+                            נתק
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
 
-                  <div className="flex gap-3">
-                    <Button 
-                      variant="outline" 
-                      onClick={handleConnect}
-                      disabled={isConnecting}
-                    >
-                      <RefreshCw className={`h-4 w-4 ml-2 ${isConnecting ? 'animate-spin' : ''}`} />
-                      חיבור מחדש
-                    </Button>
-                    <Button 
-                      variant="destructive"
-                      onClick={() => disconnectMutation.mutate()}
-                      disabled={disconnectMutation.isPending}
-                    >
-                      נתק חיבור
-                    </Button>
-                  </div>
+                  {/* Add another account */}
+                  <Button 
+                    variant="outline" 
+                    onClick={() => handleConnect(true)}
+                    disabled={isConnecting}
+                    className="w-full border-dashed"
+                  >
+                    {isConnecting ? (
+                      <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+                    ) : (
+                      <ExternalLink className="h-4 w-4 ml-2" />
+                    )}
+                    + חבר חשבון Google נוסף
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -387,7 +404,7 @@ export default function GoogleAnalyticsSettings() {
                   </Alert>
 
                   <Button 
-                    onClick={handleConnect} 
+                    onClick={() => handleConnect(false)} 
                     disabled={isConnecting}
                     className="bg-orange-500 hover:bg-orange-600"
                   >
