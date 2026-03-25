@@ -44,6 +44,7 @@ interface CrmRecord {
 interface GoogleAnalyticsDashboardProps {
   records: CrmRecord[];
   externalDateFilter?: string;
+  externalCustomDateRange?: { from: Date | undefined; to: Date | undefined };
 }
 
 // Explicit colorful chart colors
@@ -81,7 +82,11 @@ interface DateRange {
   to: Date | undefined;
 }
 
-export function GoogleAnalyticsDashboard({ records, externalDateFilter }: GoogleAnalyticsDashboardProps) {
+export function GoogleAnalyticsDashboard({
+  records,
+  externalDateFilter,
+  externalCustomDateRange,
+}: GoogleAnalyticsDashboardProps) {
   const mapExternalPreset = (ext?: string): DateRangePreset => {
     if (!ext) return 'last_30_days';
     const map: Record<string, DateRangePreset> = {
@@ -103,6 +108,7 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
     return map[ext] || 'last_30_days';
   };
 
+  const usesExternalFilter = typeof externalDateFilter === 'string';
   const [datePreset, setDatePreset] = useState<DateRangePreset>(mapExternalPreset(externalDateFilter));
   const [customDateRange, setCustomDateRange] = useState<DateRange>({ from: undefined, to: undefined });
 
@@ -174,6 +180,9 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
       case 'last_365_days':
         return { start: subDays(today, 364), end: today };
       case 'custom':
+        if (usesExternalFilter && externalCustomDateRange?.from && externalCustomDateRange?.to) {
+          return { start: externalCustomDateRange.from, end: externalCustomDateRange.to };
+        }
         if (customDateRange.from && customDateRange.to) {
           return { start: customDateRange.from, end: customDateRange.to };
         }
@@ -488,19 +497,25 @@ export function GoogleAnalyticsDashboard({ records, externalDateFilter }: Google
       <div className="flex flex-wrap items-center gap-4 p-4 bg-muted/30 rounded-lg">
         <div className="flex items-center gap-2">
           <Label className="text-sm font-medium">תקופה:</Label>
-          <Select value={datePreset} onValueChange={(v) => setDatePreset(v as DateRangePreset)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {datePresetOptions.map(option => (
-                <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {usesExternalFilter ? (
+            <Badge variant="outline" className="text-xs">
+              {datePresetOptions.find((option) => option.value === datePreset)?.label || '30 יום אחרונים'}
+            </Badge>
+          ) : (
+            <Select value={datePreset} onValueChange={(v) => setDatePreset(v as DateRangePreset)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {datePresetOptions.map(option => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
-        {datePreset === 'custom' && (
+        {!usesExternalFilter && datePreset === 'custom' && (
           <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="gap-2">

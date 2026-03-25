@@ -139,6 +139,64 @@ export default function DynamicTableView() {
     { value: "all_history", label: "כל ההיסטוריה" },
   ];
 
+  const isDateRangeReadyForSync = dateFilter !== 'custom' || (!!customDateRange.from && !!customDateRange.to);
+
+  const getMainFilterSyncRange = () => {
+    const today = new Date();
+    const endDate = format(today, 'yyyy-MM-dd');
+
+    switch (dateFilter) {
+      case 'all':
+        return { startDate: '2020-01-01', endDate };
+      case 'today': {
+        const day = format(today, 'yyyy-MM-dd');
+        return { startDate: day, endDate: day };
+      }
+      case 'yesterday': {
+        const day = format(subDays(today, 1), 'yyyy-MM-dd');
+        return { startDate: day, endDate: day };
+      }
+      case 'this_week':
+        return { startDate: format(startOfWeek(today, { weekStartsOn: 0 }), 'yyyy-MM-dd'), endDate };
+      case 'last_week': {
+        const lastWeekDate = subWeeks(today, 1);
+        return {
+          startDate: format(startOfWeek(lastWeekDate, { weekStartsOn: 0 }), 'yyyy-MM-dd'),
+          endDate: format(endOfWeek(lastWeekDate, { weekStartsOn: 0 }), 'yyyy-MM-dd'),
+        };
+      }
+      case 'last_7_days':
+        return { startDate: format(subDays(today, 7), 'yyyy-MM-dd'), endDate };
+      case 'last_14_days':
+        return { startDate: format(subDays(today, 14), 'yyyy-MM-dd'), endDate };
+      case 'last_30_days':
+        return { startDate: format(subDays(today, 30), 'yyyy-MM-dd'), endDate };
+      case 'this_month':
+        return { startDate: format(new Date(today.getFullYear(), today.getMonth(), 1), 'yyyy-MM-dd'), endDate };
+      case 'last_month':
+        return {
+          startDate: format(new Date(today.getFullYear(), today.getMonth() - 1, 1), 'yyyy-MM-dd'),
+          endDate: format(new Date(today.getFullYear(), today.getMonth(), 0), 'yyyy-MM-dd'),
+        };
+      case 'last_90_days':
+        return { startDate: format(subDays(today, 90), 'yyyy-MM-dd'), endDate };
+      case 'last_180_days':
+        return { startDate: format(subDays(today, 180), 'yyyy-MM-dd'), endDate };
+      case 'last_365_days':
+        return { startDate: format(subDays(today, 365), 'yyyy-MM-dd'), endDate };
+      case 'custom':
+        if (customDateRange.from && customDateRange.to) {
+          return {
+            startDate: format(customDateRange.from, 'yyyy-MM-dd'),
+            endDate: format(customDateRange.to, 'yyyy-MM-dd'),
+          };
+        }
+        throw new Error('יש לבחור טווח תאריכים מלא לפני סנכרון');
+      default:
+        return { startDate: format(subDays(today, 30), 'yyyy-MM-dd'), endDate };
+    }
+  };
+
   const { data: tables, isLoading: tablesLoading } = useQuery({
     queryKey: ['crm-tables'],
     queryFn: async () => {
@@ -817,41 +875,8 @@ export default function DynamicTableView() {
   const syncGoogleAnalyticsMutation = useMutation({
     mutationFn: async () => {
       if (!table?.id) throw new Error('No table');
-      
-      // Calculate date range based on selected option
-      const endDate = new Date().toISOString().split('T')[0];
-      let startDate: string;
-      
-      switch (selectedSyncDateRange) {
-        case 'last_7_days':
-          startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          break;
-        case 'last_14_days':
-          startDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          break;
-        case 'last_30_days':
-          startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          break;
-        case 'last_90_days':
-          startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          break;
-        case 'last_180_days':
-          startDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          break;
-        case 'last_365_days':
-          startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          break;
-        case 'last_730_days':
-          startDate = new Date(Date.now() - 730 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          break;
-        case 'all_history':
-          // GA4 supports data from July 2020 onwards, use a safe early date
-          startDate = '2020-01-01';
-          break;
-        default:
-          startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      }
-      
+      const { startDate, endDate } = getMainFilterSyncRange();
+
       const response = await supabase.functions.invoke('sync-google-analytics-data', {
         method: 'POST',
         body: { tableId: table.id, startDate, endDate },
@@ -873,41 +898,8 @@ export default function DynamicTableView() {
   const syncGoogleSearchConsoleMutation = useMutation({
     mutationFn: async () => {
       if (!table?.id) throw new Error('No table');
-      
-      // Calculate date range based on selectedSyncDateRange
-      const endDate = new Date().toISOString().split('T')[0];
-      let startDate: string;
-      
-      switch (selectedSyncDateRange) {
-        case 'last_7_days':
-          startDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          break;
-        case 'last_14_days':
-          startDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          break;
-        case 'last_30_days':
-          startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          break;
-        case 'last_90_days':
-          startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          break;
-        case 'last_180_days':
-          startDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          break;
-        case 'last_365_days':
-          startDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          break;
-        case 'last_730_days':
-          startDate = new Date(Date.now() - 730 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-          break;
-        case 'all_history':
-          // Search Console API limits to ~16 months of data
-          startDate = '2020-01-01';
-          break;
-        default:
-          startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      }
-      
+      const { startDate, endDate } = getMainFilterSyncRange();
+
       const response = await supabase.functions.invoke('sync-google-search-console-data', {
         method: 'POST',
         body: { tableId: table.id, startDate, endDate },
@@ -1590,27 +1582,15 @@ export default function DynamicTableView() {
           {/* Google Analytics Sync Controls */}
           {hasGoogleAnalytics && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center">
-              <Select value={selectedSyncDateRange} onValueChange={setSelectedSyncDateRange}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="תקופת סנכרון" />
-                </SelectTrigger>
-                <SelectContent>
-                  {syncDateRangeOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
               <Button 
                 variant="outline" 
                 onClick={() => syncGoogleAnalyticsMutation.mutate()}
-                disabled={syncGoogleAnalyticsMutation.isPending}
+                disabled={syncGoogleAnalyticsMutation.isPending || !isDateRangeReadyForSync}
                 className="flex-1 md:flex-none gap-2"
               >
                 <BarChart3 className="h-4 w-4 text-orange-500" />
                 <RefreshCw className={`h-4 w-4 ${syncGoogleAnalyticsMutation.isPending ? 'animate-spin' : ''}`} />
-                {syncGoogleAnalyticsMutation.isPending ? 'מסנכרן Analytics...' : 'סנכרן Analytics'}
+                {syncGoogleAnalyticsMutation.isPending ? 'מסנכרן Analytics...' : 'סנכרן Analytics לפי הטווח שנבחר'}
               </Button>
             </div>
           )}
@@ -1618,27 +1598,15 @@ export default function DynamicTableView() {
           {/* Google Search Console Sync Controls */}
           {hasGoogleSearchConsole && (
             <div className="flex items-center gap-2 w-full md:w-auto justify-center flex-wrap">
-              <Select value={selectedSyncDateRange} onValueChange={setSelectedSyncDateRange}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="בחר תקופה לסנכרון" />
-                </SelectTrigger>
-                <SelectContent>
-                  {syncDateRangeOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
               <Button 
                 variant="outline" 
                 onClick={() => syncGoogleSearchConsoleMutation.mutate()}
-                disabled={syncGoogleSearchConsoleMutation.isPending}
+                disabled={syncGoogleSearchConsoleMutation.isPending || !isDateRangeReadyForSync}
                 className="flex-1 md:flex-none gap-2"
               >
                 <Search className="h-4 w-4 text-green-600" />
                 <RefreshCw className={`h-4 w-4 ${syncGoogleSearchConsoleMutation.isPending ? 'animate-spin' : ''}`} />
-                {syncGoogleSearchConsoleMutation.isPending ? 'מסנכרן...' : 'סנכרן Search Console'}
+                {syncGoogleSearchConsoleMutation.isPending ? 'מסנכרן...' : 'סנכרן Search Console לפי הטווח שנבחר'}
               </Button>
             </div>
           )}
@@ -2237,7 +2205,11 @@ export default function DynamicTableView() {
 
       {/* Google Analytics Dashboard */}
       {hasGoogleAnalytics && filteredRecords && filteredRecords.length > 0 && (
-        <GoogleAnalyticsDashboard records={filteredRecords} externalDateFilter={dateFilter} />
+        <GoogleAnalyticsDashboard
+          records={filteredRecords}
+          externalDateFilter={dateFilter}
+          externalCustomDateRange={customDateRange}
+        />
       )}
 
       {/* Google Search Console Dashboard */}
