@@ -45,18 +45,18 @@ interface GoogleAnalyticsDashboardProps {
   records: CrmRecord[];
 }
 
-// Theme-aware chart colors
+// Explicit colorful chart colors
 const COLORS = [
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
-  'hsl(var(--primary))',
-  'hsl(var(--secondary-foreground))',
-  'hsl(var(--accent-foreground))',
-  'hsl(var(--muted-foreground))',
-  'hsl(var(--foreground))',
+  '#3B82F6', // blue
+  '#10B981', // emerald
+  '#F59E0B', // amber
+  '#EF4444', // red
+  '#8B5CF6', // violet
+  '#EC4899', // pink
+  '#06B6D4', // cyan
+  '#F97316', // orange
+  '#14B8A6', // teal
+  '#6366F1', // indigo
 ];
 
 type DateRangePreset = 'today' | 'yesterday' | 'last_7_days' | 'last_14_days' | 'last_30_days' | 'this_month' | 'last_month' | 'last_90_days' | 'custom';
