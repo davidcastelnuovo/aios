@@ -45,18 +45,18 @@ interface GoogleAnalyticsDashboardProps {
   records: CrmRecord[];
 }
 
-// Theme-aware chart colors
+// Explicit colorful chart colors
 const COLORS = [
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
-  'hsl(var(--primary))',
-  'hsl(var(--secondary-foreground))',
-  'hsl(var(--accent-foreground))',
-  'hsl(var(--muted-foreground))',
-  'hsl(var(--foreground))',
+  '#3B82F6', // blue
+  '#10B981', // emerald
+  '#F59E0B', // amber
+  '#EF4444', // red
+  '#8B5CF6', // violet
+  '#EC4899', // pink
+  '#06B6D4', // cyan
+  '#F97316', // orange
+  '#14B8A6', // teal
+  '#6366F1', // indigo
 ];
 
 type DateRangePreset = 'today' | 'yesterday' | 'last_7_days' | 'last_14_days' | 'last_30_days' | 'this_month' | 'last_month' | 'last_90_days' | 'custom';
@@ -580,14 +580,14 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
             </div>
             {/* Legend Below */}
             {pieData.length > 0 && (
-              <div className="flex flex-wrap justify-center gap-3 mt-4">
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-4">
                 {pieData.map((entry, index) => (
-                  <div key={index} className="flex items-center gap-2 text-sm">
+                  <div key={index} className="flex items-center gap-1.5 text-xs whitespace-nowrap">
                     <div 
-                      className="w-3 h-3 rounded-full" 
+                      className="w-2.5 h-2.5 rounded-full shrink-0" 
                       style={{ backgroundColor: entry.fill }}
                     />
-                    <span>{entry.name}</span>
+                    <span className="truncate max-w-[120px]">{entry.name}</span>
                     <span className="text-muted-foreground">({formatNumber(entry.value)})</span>
                   </div>
                 ))}
@@ -633,7 +633,7 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
                     type="monotone" 
                     dataKey="pageviews" 
                     name="צפיות"
-                    stroke="hsl(var(--chart-3))" 
+                    stroke="#F59E0B" 
                     strokeWidth={2}
                     dot={false}
                   />
@@ -641,7 +641,7 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
                     type="monotone" 
                     dataKey="purchases" 
                     name="רכישות"
-                    stroke="hsl(var(--chart-4))" 
+                    stroke="#EF4444" 
                     strokeWidth={2}
                     dot={false}
                   />
@@ -660,7 +660,7 @@ export function GoogleAnalyticsDashboard({ records }: GoogleAnalyticsDashboardPr
         <CardContent>
           <div className="h-[400px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={trafficSources.slice(0, 10)} layout="vertical" margin={{ left: 150, right: 20 }}>
+              <BarChart data={trafficSources.slice(0, 10)} layout="vertical" margin={{ left: 20, right: 160 }}>
                 <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                 <XAxis type="number" fontSize={12} />
                 <YAxis 
